@@ -21,6 +21,7 @@ from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
+from apps.carts.models import QuoteLine
 from apps.commerce.models import Booking
 from apps.fulfilment.models import (
     BookingStatusHistory,
@@ -33,6 +34,7 @@ from apps.fulfilment.models import (
     WorkTask,
 )
 from apps.payouts.models import PartnerLedgerEntry
+from apps.payouts.services import estimated_booking_earning
 
 
 class VersionedCommandSerializer(serializers.Serializer[dict[str, Any]]):
@@ -401,6 +403,24 @@ class PartnerBookingEarningSerializer(serializers.Serializer[dict[str, object]])
     calculation_snapshot = serializers.JSONField()
 
 
+class PartnerBookingEstimatedEarningSerializer(serializers.Serializer[dict[str, object]]):
+    """The booked-scope estimate, before completion determines the final ledger earning."""
+
+    gross_paise = serializers.IntegerField(min_value=0)
+    commission_paise = serializers.IntegerField(min_value=0)
+    net_paise = serializers.IntegerField(min_value=0)
+    currency = serializers.CharField(max_length=3)
+
+
+class PartnerBookingServiceLineSerializer(serializers.Serializer[dict[str, object]]):
+    """One immutable service line carried from the offer into the accepted job."""
+
+    line_id = serializers.UUIDField()
+    service_label = serializers.CharField()
+    quantity = serializers.IntegerField(min_value=1)
+    scope = serializers.DictField(child=serializers.JSONField())
+
+
 class PartnerBookingListQuerySerializer(serializers.Serializer[dict[str, object]]):
     """Which shelf of the Partner's work to read.
 
@@ -419,16 +439,22 @@ class PartnerBookingListQuerySerializer(serializers.Serializer[dict[str, object]
 class PartnerBookingSerializer(serializers.ModelSerializer[Booking]):
     """The same visit, as the Partner assigned to it sees it.
 
-    Deliberately does not carry `order_id`, any sibling unit, or any money beyond the per-task
-    amounts the Partner is working to. The Booking Group is not addressable from here at all:
-    `G7` requires that a Partner cannot reach a sibling unit's scope or earnings, and the
-    cheapest way to guarantee that is to never publish the identifier that would let them try.
+    Deliberately does not carry `order_id`, any sibling unit, the Customer's invoice, or their
+    exact address. Its estimate and settled earning are this Partner's own money for this one
+    unit. The Booking Group is not addressable from here at all: `G7` requires that a Partner
+    cannot reach a sibling unit's scope or earnings, and the cheapest way to guarantee that is to
+    never publish the identifier that would let them try.
     """
 
     fulfilment_unit_id = serializers.UUIDField(read_only=True, allow_null=True)
+    display_title = serializers.SerializerMethodField()
+    approximate_area = serializers.SerializerMethodField()
+    service_lines = serializers.SerializerMethodField()
+    requirements = serializers.SerializerMethodField()
     work_tasks = serializers.SerializerMethodField()
     evidence = serializers.SerializerMethodField()
     active_amendment = serializers.SerializerMethodField()
+    estimated_earning = serializers.SerializerMethodField()
     earning = serializers.SerializerMethodField()
     server_now = serializers.SerializerMethodField()
 
@@ -437,6 +463,10 @@ class PartnerBookingSerializer(serializers.ModelSerializer[Booking]):
         fields = (
             "id",
             "fulfilment_unit_id",
+            "display_title",
+            "approximate_area",
+            "service_lines",
+            "requirements",
             "status",
             "version",
             "scheduled_start",
@@ -448,10 +478,77 @@ class PartnerBookingSerializer(serializers.ModelSerializer[Booking]):
             "work_tasks",
             "evidence",
             "active_amendment",
+            "estimated_earning",
             "earning",
             "server_now",
         )
         read_only_fields = fields
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_display_title(self, booking: Booking) -> str | None:
+        """Name the immutable booked service even before operational tasks are materialized."""
+
+        unit = booking.fulfilment_unit
+        if unit is None:
+            return None
+        labels = [line.label for line in unit.lines.all() if line.kind == QuoteLine.Kind.SERVICE]
+        if not labels:
+            return None
+        return labels[0] if len(labels) == 1 else f"{labels[0]} +{len(labels) - 1} more"
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_approximate_area(self, booking: Booking) -> str | None:
+        """Area already disclosed with the accepted offer; never the Customer's exact address."""
+
+        unit = booking.fulfilment_unit
+        return None if unit is None else unit.service_area.name
+
+    @extend_schema_field(PartnerBookingServiceLineSerializer(many=True))
+    def get_service_lines(self, booking: Booking) -> list[dict[str, object]]:
+        """Publish the accepted service scope before start-OTP materializes work tasks."""
+
+        unit = booking.fulfilment_unit
+        if unit is None:
+            return []
+        result: list[dict[str, object]] = []
+        for line in unit.lines.all():
+            if line.kind != QuoteLine.Kind.SERVICE:
+                continue
+            snapshot = line.snapshot if isinstance(line.snapshot, dict) else {}
+            raw_scope = snapshot.get("scope", {})
+            scope = raw_scope if isinstance(raw_scope, dict) else {}
+            result.append(
+                {
+                    "line_id": str(line.id),
+                    "service_label": line.label,
+                    "quantity": line.quantity,
+                    "scope": scope,
+                }
+            )
+        return result
+
+    @extend_schema_field(serializers.ListField(child=serializers.CharField()))
+    def get_requirements(self, booking: Booking) -> list[str]:
+        """Tools frozen with the booked configuration, matching the accepted offer."""
+
+        unit = booking.fulfilment_unit
+        if unit is None:
+            return []
+        requirements: set[str] = set()
+        for line in unit.lines.all():
+            if line.kind != QuoteLine.Kind.SERVICE:
+                continue
+            snapshot = line.snapshot if isinstance(line.snapshot, dict) else {}
+            raw_configuration = snapshot.get("configuration", {})
+            if not isinstance(raw_configuration, dict):
+                continue
+            raw_requirements = raw_configuration.get("required_equipment", [])
+            if not isinstance(raw_requirements, list):
+                continue
+            requirements.update(
+                item.strip() for item in raw_requirements if isinstance(item, str) and item.strip()
+            )
+        return sorted(requirements)
 
     @extend_schema_field(WorkTaskSerializer(many=True))
     def get_work_tasks(self, instance: Booking) -> Any:
@@ -471,10 +568,22 @@ class PartnerBookingSerializer(serializers.ModelSerializer[Booking]):
         )
         return None if amendment is None else ScopeAmendmentSerializer(amendment).data
 
-    @extend_schema_field(serializers.DateTimeField())
-    @staticmethod
+    @extend_schema_field(PartnerBookingEstimatedEarningSerializer(allow_null=True))
+    def get_estimated_earning(self, booking: Booking) -> dict[str, object] | None:
+        """The offer-equivalent estimate; final settlement remains `earning`."""
+
+        estimate = estimated_booking_earning(booking)
+        if estimate is None:
+            return None
+        return {
+            "gross_paise": estimate.gross_paise,
+            "commission_paise": estimate.commission_paise,
+            "net_paise": estimate.net_paise,
+            "currency": estimate.currency,
+        }
+
     @extend_schema_field(PartnerBookingEarningSerializer(allow_null=True))
-    def get_earning(booking: Booking) -> dict[str, object] | None:
+    def get_earning(self, booking: Booking) -> dict[str, object] | None:
         """What **this Partner** earns from this job, once it has settled.
 
         Their own ledger line, not the Customer's invoice. The two are different
@@ -508,6 +617,7 @@ class PartnerBookingSerializer(serializers.ModelSerializer[Booking]):
             "calculation_snapshot": entry.calculation_snapshot,
         }
 
+    @extend_schema_field(serializers.DateTimeField())
     def get_server_now(self, _instance: Booking) -> str:
         return timezone.now().isoformat()
 

@@ -6,6 +6,11 @@ import {
   readVendorIdentity,
   type CustomerProposal,
   type CustomerQuoteList,
+  type EstimateType,
+  type ProposalItemLine,
+  type ProposalLabourLine,
+  type ProposalMaterialLine,
+  type ProposalOtherCharge,
   type ProposalSelection,
   type ProposalStage,
 } from "@vsolve/query";
@@ -63,6 +68,139 @@ function toStageViews(stages: readonly ProposalStage[]): readonly QuoteStageView
   }));
 }
 
+/**
+ * One material line on an estimate.
+ *
+ * These were being dropped. `CustomerProposal.material_lines` has been published
+ * since the A5 estimate surface landed, the vendor sends it, and the vendor's own
+ * read-back renders it — but this adapter never mapped it and `QuoteCardView` had
+ * nowhere to put it. The amounts are inside `total_paise`, so a Customer was being
+ * charged for materials the app never showed them. That is the kind of gap that
+ * reads as overcharging rather than as a missing feature.
+ *
+ * `unit` is a free string on the wire with a blank default, so a line that carries
+ * a quantity and no unit renders the bare number rather than inventing "Nos".
+ */
+export interface QuoteMaterialView {
+  title: string;
+  /** e.g. "2 bags", or "2" where the vendor set no unit. Null when quantity is 1. */
+  quantityLabel: string | null;
+  /** Null when the vendor has listed the material but not yet priced it. */
+  amountLabel: string | null;
+}
+
+function toMaterialViews(
+  materials: readonly ProposalMaterialLine[],
+): readonly QuoteMaterialView[] {
+  return materials.map((material) => {
+    const unit = material.unit.trim();
+    // `quantity` is a decimal STRING at 1.44.0, not a number: a material can be
+    // 2.5 kg, and a float here would eventually render 2.5000000000000004.
+    // Trailing zeros are trimmed because the server sends "1.000" and nobody
+    // writes that on a shopping list.
+    const quantity = material.quantity.replace(/\.0+$/u, "").replace(/(\.\d*[1-9])0+$/u, "$1");
+    return {
+      title: material.title.trim(),
+      // A quantity of one adds nothing a reader does not already assume, and
+      // "1 ×" beside every row is noise on the one screen that has to stay
+      // scannable.
+      quantityLabel:
+        quantity === "1" ? null : unit === "" ? quantity : `${quantity} ${unit}`,
+      // Optional at 1.44.0 — the server computes it from rate x quantity, and a
+      // line the vendor has not priced yet has none. `total_due_paise` is the
+      // tax-inclusive figure and is deliberately NOT used here: this row sits
+      // inside a total that is already tax-inclusive, and showing the grossed-up
+      // amount per line would double-count it to the reader.
+      amountLabel: material.amount_paise === undefined ? null : formatMoney(material.amount_paise),
+    };
+  });
+}
+
+/* --------------------------------------------------------------------------
+   Priced lines — how the vendor built the number
+   -------------------------------------------------------------------------- */
+
+/**
+ * The vendor's own unit vocabulary, in the reader's words. The wire's `UnitEnum`
+ * is closed, so an unknown code cannot arrive — but the fallback renders the raw
+ * code rather than dropping the quantity, because a quantity with an odd unit
+ * still says more than no quantity at all.
+ */
+const UNIT_LABELS: Record<string, string> = {
+  each: "Nos",
+  job: "Job",
+  hour: "Hours",
+  day: "Days",
+  sq_ft: "Sq ft",
+  running_ft: "Running ft",
+  metre: "Metre",
+  kg: "Kg",
+  litre: "Litre",
+  set: "Set",
+};
+
+/** "1.000" → "1", "2.500" → "2.5" — same trim `toMaterialViews` performs. */
+function trimQuantity(quantity: string): string {
+  return quantity.replace(/\.0+$/u, "").replace(/(\.\d*[1-9])0+$/u, "$1");
+}
+
+export interface QuoteItemLineView {
+  category: string;
+  title: string;
+  /** "5 Sq ft × ₹80" — null for a single whole-job line, whose rate IS its amount. */
+  quantityLabel: string | null;
+  amountLabel: string;
+}
+
+function toItemLineViews(lines: readonly ProposalItemLine[]): readonly QuoteItemLineView[] {
+  return lines.map((line) => {
+    const quantity = trimQuantity(line.quantity);
+    const unit = UNIT_LABELS[line.unit] ?? line.unit;
+    return {
+      category: line.category.trim(),
+      title: line.title.trim(),
+      quantityLabel:
+        quantity === "1" && line.unit === "job"
+          ? null
+          : `${quantity} ${unit} × ${formatMoney(line.rate_paise)}`,
+      amountLabel: formatMoney(line.amount_paise),
+    };
+  });
+}
+
+export interface QuoteLabourLineView {
+  role: string;
+  team: string | null;
+  /** "2 people × 3 days × ₹900/day" — the arithmetic behind the amount, spelt out. */
+  crewLabel: string;
+  amountLabel: string;
+}
+
+function toLabourLineViews(lines: readonly ProposalLabourLine[]): readonly QuoteLabourLineView[] {
+  return lines.map((line) => ({
+    role: line.role.trim(),
+    team: line.team.trim() === "" ? null : line.team.trim(),
+    crewLabel: [
+      line.member_count === 1 ? "1 person" : `${line.member_count} people`,
+      line.day_count === 1 ? "1 day" : `${line.day_count} days`,
+      `${formatMoney(line.rate_paise_per_day)}/day`,
+    ].join(" × "),
+    amountLabel: formatMoney(line.amount_paise),
+  }));
+}
+
+export interface QuoteChargeView {
+  label: string;
+  amountLabel: string;
+}
+
+function toChargeViews(charges: readonly ProposalOtherCharge[]): readonly QuoteChargeView[] {
+  return charges.map((charge) => ({
+    label: charge.label.trim(),
+    amountLabel: formatMoney(charge.amount_paise),
+  }));
+}
+
 export interface QuoteCardView {
   proposalId: string;
   /** The vendor, as much as the fee bought. Contact is never here. */
@@ -91,22 +229,31 @@ export interface QuoteCardView {
   minimumDays: number | null;
   workerCount: number | null;
 
+  /**
+   * How the vendor priced the work. `ITEM_WISE` fills `itemLines`, `LABOUR_WISE`
+   * fills `labourLines` — the server refuses a mix, so at most one is non-empty.
+   * A3 quotes and older tap estimates carry neither; the default is `LABOUR_WISE`
+   * and means nothing on its own, so render from the arrays, never the flag.
+   */
+  estimateType: EstimateType;
+  itemLines: readonly QuoteItemLineView[];
+  labourLines: readonly QuoteLabourLineView[];
+  /** Named charges (transport, disposal…) — inside the total, like materials. */
+  otherCharges: readonly QuoteChargeView[];
+
   /** A5 only. Empty on a workforce quote. */
   stages: readonly QuoteStageView[];
+
+  /**
+   * Materials the vendor priced into this estimate. Empty on a workforce quote
+   * and on any estimate that quoted labour alone. Their amounts are already
+   * inside `totalLabel` — this exists so the Customer can see what they are.
+   */
+  materials: readonly QuoteMaterialView[];
 
   inclusions: readonly string[];
   exclusions: readonly string[];
   warrantyTerms: string | null;
-  /**
-   * How platform commission is treated, stated rather than implied.
-   *
-   * An immutable field on every proposal and a free-text one on the wire —
-   * `Proposal.commission_treatment` is a `CharField` with no choices and no
-   * published vocabulary. Rendered verbatim where the vendor set it and named as
-   * unstated where they did not, because inventing a code here would be this
-   * client authoring the vocabulary Finance reports on.
-   */
-  commissionTreatment: string | null;
   validUntil: string | null;
   submittedAt: string;
 
@@ -164,13 +311,17 @@ export function toQuoteCard(proposal: CustomerProposal): QuoteCardView {
     minimumDays: proposal.minimum_days,
     workerCount: proposal.worker_count,
 
+    estimateType: proposal.estimate_type,
+    itemLines: toItemLineViews(proposal.item_lines),
+    labourLines: toLabourLineViews(proposal.labour_lines),
+    otherCharges: toChargeViews(proposal.other_charges),
+
     stages: toStageViews(proposal.stages),
+    materials: toMaterialViews(proposal.material_lines),
 
     inclusions: readLines(proposal.inclusions),
     exclusions: readLines(proposal.exclusions),
     warrantyTerms: proposal.warranty_terms.trim() === "" ? null : proposal.warranty_terms,
-    commissionTreatment:
-      proposal.commission_treatment.trim() === "" ? null : proposal.commission_treatment,
     validUntil: proposal.valid_until,
     submittedAt: proposal.submitted_at,
 
@@ -350,6 +501,20 @@ export function toComparisonRows(cards: readonly QuoteCardView[]): readonly Comp
       ),
     },
     {
+      // From the arrays, not `estimateType`: the flag defaults to LABOUR_WISE on
+      // quotes that priced neither way (A3, older tap estimates), and claiming a
+      // pricing style nobody used would be the table inventing a difference.
+      label: "How it is priced",
+      equivalent: true,
+      values: cards.map((card) =>
+        card.itemLines.length > 0
+          ? `Item-wise (${card.itemLines.length} ${card.itemLines.length === 1 ? "item" : "items"})`
+          : card.labourLines.length > 0
+            ? `Labour-wise (${card.labourLines.length} ${card.labourLines.length === 1 ? "role" : "roles"})`
+            : null,
+      ),
+    },
+    {
       label: "Valid until",
       equivalent: true,
       values: cards.map((card) => card.validUntil),
@@ -374,13 +539,11 @@ export function toComparisonRows(cards: readonly QuoteCardView[]): readonly Comp
       caveat: "Warranty terms are the vendor's own words, not a platform promise.",
       values: cards.map((card) => card.warrantyTerms),
     },
-    {
-      label: "Commission treatment",
-      equivalent: false,
-      caveat:
-        "Whether our commission sits inside the quoted price or on top of it. Stated by the vendor, and not something we normalise.",
-      values: cards.map((card) => card.commissionTreatment),
-    },
+    // "Commission treatment" was a row here until 1.44.0. It was vendor-authored
+    // free text, and BE-5A took it off the proposal entirely: commission is
+    // policy, decided by an approved Operations version, not something a vendor
+    // states differently from the vendor beside them. A comparison row whose
+    // whole point was that the two answers might differ has nothing left to say.
   ];
 
   return rows.filter((row) => row.values.some((value) => value !== null));

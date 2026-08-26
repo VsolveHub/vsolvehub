@@ -30,6 +30,9 @@ class PartnerBusinessProfileSerializer(serializers.ModelSerializer[PartnerBusine
             "registration_number",
             "gst_registered",
             "gstin",
+            "gstin_verified_at",
+            "registered_state_code",
+            "tax_profile_effective_from",
             "years_in_operation",
             "upi_vpa",
             "updated_at",
@@ -59,6 +62,12 @@ class PartnerBusinessProfileWriteSerializer(serializers.Serializer[dict[str, obj
     #: that is where Vsolve pays somebody and this is where somebody else pays them. Blank is the
     #: ordinary state — the deep link is simply not offered and the published amount still is.
     upi_vpa = serializers.CharField(required=False, allow_blank=True, max_length=120, default="")
+
+
+class OperationsTaxProfileVerifySerializer(serializers.Serializer[dict[str, object]]):
+    registered_state_code = serializers.CharField(
+        required=False, allow_blank=True, max_length=8, default=""
+    )
 
 
 class BusinessTypeOptionSerializer(serializers.Serializer[dict[str, object]]):

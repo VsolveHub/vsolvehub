@@ -1,7 +1,7 @@
 "use client";
 
 import { Badge, Card } from "@vsolve/ui";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, MapPin } from "lucide-react";
 import Link from "next/link";
 
 import { shortDate } from "@/lib/format";
@@ -17,13 +17,8 @@ import { EnquiryDeadlineInline } from "./enquiry-deadline";
  *
  * ## What is deliberately not here
  *
- * **The area.** `M2-FE-301` asks for it and no Partner-facing read publishes it.
- * `EnquirySummarySerializer` carries the snapshot's schedule, language and
- * budget; the requirement's address is withheld at every status, and the service
- * area is not published at all. Vendors are matched on `PartnerServiceArea`, so
- * every enquiry is inside an area this vendor already serves — but *which* one
- * is the biggest decision input on this row and it is missing. Requested in
- * `frontend-execution-plan.md` §7. Nothing stands in for it.
+ * **Only a locality.** The area is useful for the travel decision; the street,
+ * building, coordinates, customer identity and contact details are withheld.
  *
  * **A fit summary.** Also asked for, also unpublished. The ranking that produced
  * the invitation is recorded in `VendorInvitation.ranking_provenance` and never
@@ -88,6 +83,13 @@ export function EnquiryCard({ enquiry, basePath }: EnquiryCardProps) {
                 and saying so beats an empty line the reader has to interpret. */}
             {schedule === "" ? "No dates given" : schedule}
           </span>
+
+          {enquiry.approximateArea.trim() === "" ? null : (
+            <span className="flex items-center gap-1.5 text-xs font-medium text-text-secondary">
+              <MapPin size={14} aria-hidden className="shrink-0 text-action-secondary" />
+              <span className="truncate">Near {enquiry.approximateArea}</span>
+            </span>
+          )}
 
           <EnquiryDeadlineInline respondsBy={enquiry.respondsBy} />
         </span>

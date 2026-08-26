@@ -1,111 +1,124 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { EmptyState, Skeleton } from "@vsolve/ui";
 
-import { getCategories } from "@/features/catalog/queries";
+import { CatalogCategoryRows } from "@/features/catalog/components/catalog-category-rows";
+import { SearchResults } from "@/features/catalog/components/search-results";
+import { CatalogueHeader } from "@/features/catalog/icon-catalogue/catalogue-header";
+import { getCategories, getServicesByCategory } from "@/features/catalog/queries";
+import { rankCatalogMatches } from "@/features/catalog/search";
 
 /**
- * Catalog index — every service category.
+ * The service catalogue, progressively disclosed by category.
  *
- * A Server Component because the whole page is public, identical for everyone,
- * and needs to be indexable. There is no interactivity here worth shipping
- * JavaScript for, so none is shipped.
+ * The default page shows one image-led row of subcategories per main category.
+ * It does not download or render the hundreds of services and variants beneath
+ * them. A subcategory opens the existing narrowed category route; "See all"
+ * opens that category's complete subcategory grid. Search remains an explicit
+ * accelerator and may return individual services because the customer asked
+ * for one by name.
  *
- * Successor to the Prisma-backed `/services` tree; that route stays until
- * cutover (plan 05, Phase 8), at which point this moves to `/services` and the
- * legacy pages are deleted.
+ * ## No route-level `revalidate`
+ *
+ * Every fetch underneath carries the catalogue cache policy and the `catalog`
+ * tag already, so a publish invalidates this page through the same path as
+ * every other public read. Repeating a literal here would be a second number to
+ * keep in step with `CATALOG_REVALIDATE_SECONDS` — and the two disagreeing is
+ * how a page serves five-minute-old data that the data cache already refreshed.
+ *
+ * ## Why `connection()`
+ *
+ * A frontend build must not require a live backend. Without this the route
+ * prerenders at build time, and a Django that is merely asleep fails the whole
+ * build with a fetch stack trace that reads like a frontend defect. Nothing is
+ * lost in steady state: the page renders on the first request after a deploy
+ * and is then cached by the data-cache policy underneath.
  */
 
 export const metadata: Metadata = {
   title: "All services",
   description:
-    "Book verified electricians, plumbers, cleaners and appliance technicians in Hyderabad. Transparent pricing, no call-out surprises.",
+    "Browse V Solve Hub services by category, from electrical and plumbing to beauty, cleaning and project work.",
   alternates: { canonical: "/catalog" },
 };
 
-/**
- * Catalog changes only when Operations publishes an update.
- *
- * Must be a literal: Next statically analyses segment config at build time and
- * cannot resolve an imported constant. Keep in step with
- * `CATALOG_REVALIDATE_SECONDS` in lib/api/config.ts, which governs the
- * corresponding fetch-level cache policy.
- */
-export const revalidate = 300;
-
-function CategoryGridSkeleton() {
-  return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {Array.from({ length: 6 }, (_, index) => (
-        <Skeleton key={index} className="h-28 w-full" />
-      ))}
-    </div>
-  );
-}
-
-async function CategoryGrid() {
+async function Catalogue() {
   const categories = await getCategories();
+  return <CatalogCategoryRows categories={categories} />;
+}
 
-  if (categories.length === 0) {
-    // Honest, not decorative. An empty catalogue is an operational problem, and
-    // saying so beats rendering sample categories that do not exist.
-    return (
-      <EmptyState
-        title="No services are published yet"
-        description="Our catalogue is being set up. Please check back shortly."
-      />
-    );
-  }
+async function CatalogueSearchResults({ query }: { query: string }) {
+  const categories = await getCategories();
+  const servicesByCategory = await getServicesByCategory(categories);
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {categories.map((category) => (
-        <Link
-          key={category.id}
-          href={`/catalog/${category.slug}`}
-          className="group flex flex-col rounded-card border border-line bg-surface p-5 transition-colors hover:border-line-strong hover:bg-surface-hover"
-        >
-          <h2 className="font-semibold text-text group-hover:text-text-link">{category.name}</h2>
-          <p className="mt-1 line-clamp-2 text-sm text-text-secondary">{category.description}</p>
-          {category.subcategories.length > 0 ? (
-            <p className="mt-3 text-xs text-text-muted">
-              {category.subcategories
-                .slice(0, 3)
-                .map((sub) => sub.name)
-                .join(" · ")}
-              {category.subcategories.length > 3 ? " and more" : ""}
-            </p>
-          ) : null}
-        </Link>
+    <SearchResults query={query} results={rankCatalogMatches(categories, servicesByCategory, query)} />
+  );
+}
+
+function GridSkeleton() {
+  return (
+    <div className="flex flex-col gap-8 pt-4">
+      {Array.from({ length: 3 }, (_, row) => (
+        <section key={row} className="animate-pulse motion-reduce:animate-none">
+          <div className="mb-3 h-11 border-b border-line/70">
+            <div className="h-5 w-32 rounded-control bg-surface-sunken" />
+          </div>
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+            {Array.from({ length: 6 }, (_, tile) => (
+              <div
+                key={tile}
+                className={`${previewSkeletonVisibility(tile)} flex-col gap-2`}
+              >
+                <div className="aspect-square rounded-card bg-surface-sunken" />
+                <div className="mx-auto h-3 w-4/5 rounded-control bg-surface-sunken" />
+              </div>
+            ))}
+          </div>
+        </section>
       ))}
     </div>
   );
 }
 
-export default async function CatalogPage() {
-  // The catalogue is server-rendered, but a frontend build must not require a
-  // live Django deployment. The request boundary skips build-time prerendering;
-  // the fetch below still uses its explicit five-minute Data Cache policy.
+function previewSkeletonVisibility(index: number): string {
+  if (index < 3) return "flex";
+  if (index === 3) return "hidden sm:flex";
+  return "hidden lg:flex";
+}
+
+export default async function CatalogPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string | string[] }>;
+}) {
   await connection();
+  const { q } = await searchParams;
+  // Kept in the reader's own casing: it is quoted back to them in the results
+  // heading and in the "nothing matches" state. `rankCatalogMatches` normalises
+  // it for matching, which is the only place case is irrelevant.
+  const query = typeof q === "string" && q.trim() !== "" ? q.trim() : null;
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
-      <header className="pb-6">
-        <h1 className="text-2xl font-bold text-text sm:text-3xl">All services</h1>
-        <p className="mt-2 max-w-prose text-text-secondary">
-          Verified professionals, priced up front. Choose a category to see what each visit costs
-          and how long it usually takes.
-        </p>
-      </header>
-
-      {/* Suspense is inside the page so the heading renders immediately and only
-          the data-dependent region streams in. Failures propagate to error.tsx,
-          which keeps them out of the route cache. */}
-      <Suspense fallback={<CategoryGridSkeleton />}>
-        <CategoryGrid />
+    <main className="mx-auto w-full max-w-5xl px-4 py-4 sm:px-6 sm:py-6">
+      {/* `useSearchParams` inside; the boundary keeps the static shell honest. */}
+      <Suspense fallback={<div className="h-11" />}>
+        <CatalogueHeader />
       </Suspense>
+
+      {query === null ? (
+        <div className="pt-3">
+          <Suspense fallback={<GridSkeleton />}>
+            <Catalogue />
+          </Suspense>
+        </div>
+      ) : (
+        <div className="pt-3">
+          <Suspense key={query} fallback={<GridSkeleton />}>
+            <CatalogueSearchResults query={query} />
+          </Suspense>
+        </div>
+      )}
     </main>
   );
 }

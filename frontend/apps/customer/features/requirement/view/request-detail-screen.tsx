@@ -1,6 +1,5 @@
 "use client";
 
-import type { Schemas } from "@vsolve/api-client";
 import { isFreelyEditable } from "@vsolve/query";
 import { buttonStyles, formatMoney } from "@vsolve/ui";
 import Link from "next/link";
@@ -20,8 +19,6 @@ import {
 } from "@/lib/routes";
 import { toArchetype, toRequestHeader, toServerAttachmentRows, toTimelineEvents } from "../adapters";
 import {
-  isAlreadyRemoved,
-  useRemoveAttachment,
   useRequirement,
   useRequirementTimeline,
 } from "../queries";
@@ -64,7 +61,7 @@ export interface RequestDetailScreenProps {
  * are what somebody checks when they want to confirm it is the right site.
  */
 function addressSummary(
-  addresses: readonly Schemas["Address"][],
+  addresses: readonly { id: string; line1: string; locality: string; city: string; postal_code: string }[],
   addressId: string | null,
 ): string | null {
   if (addressId === null) return null;
@@ -130,7 +127,6 @@ export function RequestDetailScreen({ requirementId }: RequestDetailScreenProps)
   const router = useRouter();
   const requirementQuery = useRequirement(requirementId);
   const timelineQuery = useRequirementTimeline(requirementId);
-  const removeAttachment = useRemoveAttachment();
 
   const draft = requirementQuery.data ?? null;
   useEffect(() => {
@@ -297,23 +293,13 @@ export function RequestDetailScreen({ requirementId }: RequestDetailScreenProps)
         attachments={
           draft === null ? null : (
             <div className="flex flex-col gap-6">
-              {/* The removal affordance the server keeps open in every status,
-                  for the one case it keeps it open for: a file the malware scan
-                  rejected. See `RequestAttachments`. */}
+              {/* Read-only since contract 1.44.0. The requirement media-upload
+                  and removal operations were retired with the media step, so
+                  these rows are history: still worth showing on an older
+                  request, with nothing left to press. */}
               <RequestAttachments
                 rows={toServerAttachmentRows(draft.attachments)}
                 isDraft={isFreelyEditable(draft.status)}
-                onRemove={(attachmentId) =>
-                  removeAttachment.mutate({ requirementId, attachmentId })
-                }
-                isRemoving={removeAttachment.isPending}
-                // Already gone is the outcome that was asked for, so it is not
-                // shown as a failure — the refetch that follows drops the row.
-                removeError={
-                  removeAttachment.error !== null && !isAlreadyRemoved(removeAttachment.error)
-                    ? removeAttachment.error
-                    : null
-                }
               />
 
             </div>

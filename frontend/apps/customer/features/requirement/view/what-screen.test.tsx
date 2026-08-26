@@ -5,6 +5,16 @@ import type { RequirementQuestionView } from "../adapters";
 import { RequirementProvider } from "./requirement-context";
 import { WhatScreen } from "./what-screen";
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: vi.fn(),
+    back: vi.fn(),
+  }),
+  usePathname: () => "/",
+  useSearchParams: () => new URLSearchParams(),
+}));
+
 const FIT_OUT_QUESTION: RequirementQuestionView = {
   code: "fit_out_style",
   label: "What kind of fit-out do you need?",

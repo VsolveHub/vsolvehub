@@ -22,6 +22,7 @@ export type { ChoiceChipOption, ChoiceChipsProps } from "./choice-chips";
 
 // Containers
 export { Card, StatCard } from "./card";
+export type { CardProps } from "./card";
 export { Dialog, Sheet } from "./dialog";
 // The two-column booking shape and the pieces that fill its rail. Used by the
 // crew form, the matching screen, the confirmation, the project brief and the
@@ -70,6 +71,16 @@ export type {
   AttachmentListProps,
   AttachmentStatus,
 } from "./attachment-list";
+// The M2 estimate kit: the three shapes every priced screen repeats. Built once
+// here so nine parallel screen builds compose the same row, band and dock rather
+// than each inventing one.
+export { SectionBand } from "./section-band";
+export type { SectionBandProps } from "./section-band";
+export { FactTile } from "./fact-tile";
+export type { FactTileProps } from "./fact-tile";
+export { StepDock } from "./step-dock";
+export type { StepDockProps } from "./step-dock";
+
 export { AddressSummary, ScheduleSummary, PersonCount, FactList } from "./summary";
 export type {
   AddressSummaryProps,

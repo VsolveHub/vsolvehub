@@ -170,8 +170,8 @@ export function Dialog({
       }}
       className={cn(
         "m-auto w-[calc(100vw-2rem)] max-w-lg rounded-card p-0",
-        "bg-surface text-text shadow-overlay",
-        "backdrop:bg-navy-900/40",
+        "bg-surface text-text shadow-overlay border border-line/60",
+        "backdrop:bg-navy-900/50 backdrop:backdrop-blur-sm",
         className,
       )}
     >
@@ -227,9 +227,9 @@ export function Sheet({
         if (dismissable && event.target === event.currentTarget) onOpenChange(false);
       }}
       className={cn(
-        // Docked to the bottom edge and full width; `mt-auto` pushes it down
-        // because a modal `<dialog>` is centred by default.
-        "mx-auto mb-0 mt-auto w-full max-w-xl rounded-b-none rounded-t-card p-0",
+        // Override the UA's centred modal placement — anchor to the bottom edge.
+        "fixed inset-x-0 bottom-0 top-auto m-0 mx-auto h-auto w-full max-w-xl",
+        "max-h-[85vh] rounded-b-none rounded-t-card border border-line/60 p-0",
         "bg-surface text-text shadow-overlay",
         "backdrop:bg-navy-900/40",
         className,
@@ -238,7 +238,7 @@ export function Sheet({
       <div className="flex max-h-[85vh] flex-col">
         {/* Grab handle: signals draggability affordance and gives a thumb a
             target that is not the close button. Decorative. */}
-        <div aria-hidden className="flex justify-center pb-1 pt-3">
+        <div aria-hidden className="flex justify-center pb-1 pt-3 md:hidden">
           <span className="h-1 w-10 rounded-full bg-line-strong" />
         </div>
 

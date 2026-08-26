@@ -23,13 +23,17 @@ export function enquirySummary(
     // Required since 1.26.0. The inbox titled rows by de-slugging until the
     // server started sending the name it should always have sent.
     service_name: "Housekeeping staff",
+    approximate_area: "Kukatpally, Hyderabad",
     archetype: "A3_TIME_BLOCK",
     requirement_status: "MATCHING",
     status: "INVITED",
     wave: 1,
     requested_start: "2026-08-20T03:30:00Z",
     service_by: "2026-08-25",
-    language: "en-IN",
+    fixed_visit_start: null,
+    fixed_visit_duration_minutes: null,
+    fixed_visit_earning_paise: null,
+    fixed_visit_status: null,
     responds_by: "2026-08-14T09:00:00Z",
     latest_proposal_status: null,
     latest_proposal_rejection_reason: null,
@@ -45,7 +49,6 @@ export function enquiryDetail(
     ...enquirySummary(),
     service_name: "Housekeeping staff",
     answers: { worker_count: 6, duration_days: 4, site_access: "Service lift after 8am" },
-    additional_details: "Two floors, deep clean before a handover.",
     budget_min_paise: null,
     budget_max_paise: 4_000_000,
     // Blank is the ordinary state: no vendor has quoted yet, so no basis is
@@ -55,6 +58,7 @@ export function enquiryDetail(
     proposals: [],
     questions: [],
     site_visits: [],
+    site_address: null,
     server_now: "2026-08-13T06:00:00Z",
     ...overrides,
   };
@@ -134,6 +138,23 @@ export function proposal(overrides: Partial<Schemas["Proposal"]> = {}): Schemas[
     // once `status` is REJECTED, which this fixture is not.
     rejection_reason: "NOT_CHOSEN",
     site_visit: null,
+    // Required from contract 1.44.0: the estimate shape, and the money Django
+    // now derives rather than accepting from the vendor.
+    estimate_type: "ITEM_WISE",
+    item_lines: [],
+    labour_lines: [],
+    other_charges: [],
+    calculation_snapshot: null,
+    line_subtotal_paise: 0,
+    authorized_charges_paise: 0,
+    taxable_value_paise: 0,
+    partner_quote_total_paise: 0,
+    platform_fee_paise: 0,
+    platform_fee_tax_paise: 0,
+    customer_total_paise: 0,
+    commission_paise: 0,
+    withholding_paise: 0,
+    partner_net_paise: 0,
     revalidation_requested_at: null,
     rate_paise_per_worker_day: 90_000,
     minimum_days: 4,

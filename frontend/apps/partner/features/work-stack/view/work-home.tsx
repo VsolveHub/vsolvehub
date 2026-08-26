@@ -513,6 +513,35 @@ function whenLabel(item: WorkItem): string | null {
   ).format(at);
 }
 
+function dateLabel(item: WorkItem): string | null {
+  if (item.whenIso === null) return null;
+  const at = new Date(item.whenIso);
+  if (Number.isNaN(at.getTime())) return null;
+  return new Intl.DateTimeFormat("en-IN", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  }).format(at);
+}
+
+function startTimeLabel(item: WorkItem): string | null {
+  if (item.whenIso === null || item.whenIsDay) return null;
+  const at = new Date(item.whenIso);
+  if (Number.isNaN(at.getTime())) return null;
+  return new Intl.DateTimeFormat("en-IN", {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(at);
+}
+
+function durationLabel(minutes: number | null): string | null {
+  if (minutes === null) return null;
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return remainder === 0 ? `${hours} ${hours === 1 ? "hr" : "hrs"}` : `${hours} hr ${remainder} min`;
+}
+
 /** The headline number, or the canvas's "₹ ?" for something not yet priced. */
 function money(amountPaise: number | null): string {
   return amountPaise === null ? "₹ ?" : formatMoney(amountPaise);
@@ -528,14 +557,58 @@ function money(amountPaise: number | null): string {
  * than decides. So an engagement's figure is announced as the agreement's
  * value, never as money this Partner will receive.
  */
-function spokenAmount(item: WorkItem): string {
-  if (item.amountPaise === null) return "no price yet";
+function spokenAmount(item: WorkItem): string | null {
+  if (item.amountPaise === null) return null;
   const amount = formatMoney(item.amountPaise);
-  return item.kind === "engagement" ? `agreed total ${amount}` : amount;
+  return item.amountLabel === null ? amount : `${item.amountLabel.toLowerCase()} ${amount}`;
 }
 
 function cardLabel(item: WorkItem): string {
-  return `${item.accessibleName}, ${spokenAmount(item)}`;
+  const facts = [item.accessibleName];
+  const amount = spokenAmount(item);
+  if (amount !== null) facts.push(amount);
+  const date = dateLabel(item);
+  const starts = startTimeLabel(item);
+  const duration = durationLabel(item.durationMinutes);
+  if (date !== null) facts.push(`date ${date}`);
+  if (starts !== null) facts.push(`starts ${starts}`);
+  if (duration !== null) facts.push(`duration ${duration}`);
+  if (item.areaLabel !== null && item.areaLabel !== item.stateLabel) {
+    facts.push(`area ${item.areaLabel}`);
+  }
+  return facts.join(", ");
+}
+
+function ScheduleFacts({ item }: { readonly item: WorkItem }) {
+  const date = dateLabel(item);
+  const starts = startTimeLabel(item);
+  const duration = durationLabel(item.durationMinutes);
+  if (date === null && starts === null && duration === null && item.areaLabel === null) return null;
+
+  return (
+    <span className="grid grid-cols-2 gap-x-4 gap-y-2">
+      {date === null ? null : (
+        <Fact name="date" label="Date">
+          {date}
+        </Fact>
+      )}
+      {starts === null ? null : (
+        <Fact name="time" label="Starts">
+          {starts}
+        </Fact>
+      )}
+      {duration === null ? null : (
+        <Fact name="time" label="Duration">
+          {duration}
+        </Fact>
+      )}
+      {item.areaLabel === null ? null : (
+        <Fact name="distance" label="Area">
+          {item.areaLabel}
+        </Fact>
+      )}
+    </span>
+  );
 }
 
 /**
@@ -584,19 +657,24 @@ function LiveOfferCard({ item }: { item: WorkItem }) {
 
         <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-text">
           <CardTitle item={item} />
-          <span className="text-[1.875rem] font-extrabold leading-none tracking-[-0.02em]">
-            {money(item.amountPaise)}
+          <span className="flex items-baseline gap-2">
+            <span className="text-[1.875rem] font-extrabold leading-none tracking-[-0.02em]">
+              {money(item.amountPaise)}
+            </span>
+            {item.amountLabel === null ? null : (
+              <span className="text-[0.6875rem] font-bold uppercase tracking-[0.04em] opacity-70">
+                {item.amountLabel}
+              </span>
+            )}
           </span>
         </span>
 
         {countdown && !lapsed ? <CountdownDial countdown={countdown} /> : null}
       </span>
 
-      {item.areaLabel ? (
-        <span className="text-text">
-          <Fact name="distance">{item.areaLabel}</Fact>
-        </span>
-      ) : null}
+      <span className="text-text">
+        <ScheduleFacts item={item} />
+      </span>
 
       <span className={cn(BAR, "bg-surface")}>
         <Pictogram name="yes" size="md" className="text-success-text" />
@@ -674,29 +752,26 @@ function NeedsPriceCard({ item }: { item: WorkItem }) {
 
         <span className="flex min-w-0 flex-1 flex-col gap-0.75">
           <CardTitle item={item} />
-          <span className="flex items-baseline gap-2">
-            <span className="text-[1.875rem] font-extrabold leading-none tracking-[-0.02em] text-signal-700">
-              {money(item.amountPaise)}
-            </span>
-            {item.amountPaise === null ? (
-              <span className="text-[0.8125rem] font-semibold text-text-muted">
-                no price yet
-              </span>
+          <span className="flex flex-col gap-1 text-text-secondary">
+            {item.areaLabel ? (
+              <Fact name="distance" label="Near">
+                {item.areaLabel}
+              </Fact>
             ) : null}
-          </span>
-          {at ? (
-            <span className="text-text-secondary">
-              <Fact name={item.whenIsDay ? "date" : "time"} label="Starts">
+            {at ? (
+              <Fact name={item.whenIsDay ? "date" : "time"} label="Requested">
                 {at}
               </Fact>
-            </span>
-          ) : null}
+            ) : null}
+          </span>
         </span>
       </span>
 
       <span className={cn(BAR, "bg-action shadow-[0_2px_0_var(--color-action-active)]")}>
-        <Pictogram name="price" size="md" className="text-action-text" />
-        <span className="text-base font-bold text-action-text">Send a price</span>
+        <Pictogram name="go" size="md" className="text-action-text" />
+        <span className="text-base font-bold text-action-text">
+          {item.actionLabel ?? "Review request"}
+        </span>
       </span>
     </Link>
   );
@@ -718,8 +793,6 @@ function NeedsPriceCard({ item }: { item: WorkItem }) {
  * glyph beside the number says which is which.
  */
 function DoingCard({ item }: { item: WorkItem }) {
-  const at = whenLabel(item);
-
   return (
     <Link
       href={item.href}
@@ -741,17 +814,26 @@ function DoingCard({ item }: { item: WorkItem }) {
 
         <span className="flex min-w-0 flex-1 flex-col gap-1 text-text">
           <CardTitle item={item} />
-          <span className="flex min-w-0 items-center gap-3 text-action-secondary">
-            {at ? <Fact name={item.whenIsDay ? "date" : "time"}>{at}</Fact> : null}
-            {item.areaLabel ? <Fact name="distance">{item.areaLabel}</Fact> : null}
-            {at === null && item.areaLabel === null ? (
+          {item.amountPaise === null ? null : (
+            <span className="flex items-baseline gap-2">
               <span className="text-[1.5rem] font-extrabold leading-none tracking-[-0.02em] text-text">
                 {money(item.amountPaise)}
               </span>
-            ) : null}
-          </span>
+              {item.amountLabel === null ? null : (
+                <span className="text-[0.6875rem] font-bold uppercase tracking-[0.04em] text-text-muted">
+                  {item.amountLabel}
+                </span>
+              )}
+            </span>
+          )}
         </span>
       </span>
+
+      {item.whenIso !== null || item.durationMinutes !== null || item.areaLabel !== null ? (
+        <span className="rounded-xl bg-surface-sunken px-3 py-2.5 text-action-secondary">
+          <ScheduleFacts item={item} />
+        </span>
+      ) : null}
 
       <span
         className={cn(BAR, "bg-action-secondary shadow-[0_2px_0_var(--color-navy-900)]")}
@@ -771,6 +853,9 @@ function DoingCard({ item }: { item: WorkItem }) {
  * off the one figure that is not a payout.
  */
 function SettledCard({ item }: { item: WorkItem }) {
+  const date = dateLabel(item);
+  const starts = startTimeLabel(item);
+
   return (
     <Link
       href={item.href}
@@ -787,14 +872,23 @@ function SettledCard({ item }: { item: WorkItem }) {
         <span className="truncate text-[0.9375rem] font-semibold leading-snug">
           {item.title}
         </span>
+        {date === null ? null : (
+          <span className="flex items-center gap-1 truncate text-xs font-semibold opacity-75">
+            <Pictogram name="time" size="xs" className="shrink-0" />
+            {date}
+            {starts === null ? null : ` · ${starts}`}
+          </span>
+        )}
         <span className="flex items-center gap-1 text-xs font-semibold opacity-75">
           <Pictogram name="held" size="xs" className="shrink-0" />
           Held until payout
         </span>
       </span>
-      <span className="text-[1.375rem] font-extrabold leading-none tracking-[-0.02em] text-success-text">
-        {money(item.amountPaise)}
-      </span>
+      {item.amountPaise === null ? null : (
+        <span className="text-[1.375rem] font-extrabold leading-none tracking-[-0.02em] text-success-text">
+          {money(item.amountPaise)}
+        </span>
+      )}
     </Link>
   );
 }

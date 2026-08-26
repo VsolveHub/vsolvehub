@@ -9,7 +9,7 @@ const routerReplace = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({
   usePathname: () => "/requests/new/interior-fit-out-project",
   useRouter: () => ({ replace: routerReplace }),
-  useSearchParams: () => new URLSearchParams("step=review&selected_service=office-fit-out"),
+  useSearchParams: () => new URLSearchParams("step=where_when&selected_service=office-fit-out"),
 }));
 
 const SLUG = "interior-fit-out-project";
@@ -26,6 +26,8 @@ function seedIntent() {
       requestedStart: "2026-09-14",
       serviceBy: "2026-10-30",
       flexibilityDays: 7,
+      // Keys older builds persisted. They must parse without breaking the
+      // restore — what is no longer collected is simply no longer read.
       additionalDetails: "Work around the occupied east wing.",
       language: "en-IN",
       optionalDetails: { access: { instructions: "Use loading gate B" } },
@@ -58,10 +60,7 @@ describe("requirement reload persistence", () => {
     expect(result.current.state.requestedStart).toBe("2026-09-14");
     expect(result.current.state.serviceBy).toBe("2026-10-30");
     expect(result.current.state.flexibilityDays).toBe(7);
-    expect(result.current.state.additionalDetails).toBe(
-      "Work around the occupied east wing.",
-    );
-    expect(result.current.state.screen).toBe("review");
+    expect(result.current.state.screen).toBe("where_when");
   });
 
   it("does not overwrite restored intent with the empty hydration state", () => {
@@ -96,6 +95,7 @@ describe("requirement reload persistence", () => {
         categorySlug: SLUG,
         answers: { fit_out_style: "office-fit-out" },
         addressId: "address-legacy",
+        // From a build that still captured free text. Tolerated, unread.
         additionalDetails: "",
         language: null,
       }),

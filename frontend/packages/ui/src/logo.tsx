@@ -17,8 +17,8 @@ export function Logo({ className, dark = false }: { className?: string; dark?: b
       >
         <img src="/logo-mark.png" alt="V Solve Hub" className="h-full w-full object-contain" />
       </span>
-      <span className={cn(dark ? "text-white" : "text-ink-900")}>
-        V Solve <span className="text-brand-600">Hub</span>
+      <span className={cn("font-sans font-extrabold tracking-tight text-[1.15rem]", dark ? "text-white" : "text-navy-900")}>
+        V Solve <span className={dark ? "text-[#FF8F50]" : "text-[#EA580C]"}>Hub</span>
       </span>
     </span>
   );

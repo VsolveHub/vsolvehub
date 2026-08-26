@@ -10,7 +10,12 @@ import { Segmented } from "@/features/booking/view/parts/segmented";
 import { AnsweredOptionalRow, OptionalRow } from "./parts/optional-row";
 
 /**
- * A5 · 2 — Where and when.
+ * Step 2 of 2 — Where and when.
+ *
+ * The last screen since the M2-revamp removed the review step: the estimate
+ * count is chosen here (the container mounts the chooser into
+ * `visitPlanChooser`) and the docked action sends the brief. There is nothing
+ * to review because everything being sent is on this screen or one tap back.
  *
  * ## The deadline is an optional row, not a required field
  *

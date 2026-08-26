@@ -86,6 +86,8 @@ export interface WorkItem {
    * "this is what you will be paid" for an engagement.
    */
   readonly amountPaise: number | null;
+  /** Short visible label that says whether the amount is estimated, final, or agreed. */
+  readonly amountLabel: string | null;
   readonly urgency: WorkUrgency;
   /**
    * ISO deadline for a card that is racing a clock (an offer's
@@ -111,13 +113,15 @@ export interface WorkItem {
    * mis-render the one job that really does start then.
    */
   readonly whenIsDay: boolean;
+  /** Published duration for a scheduled A1 offer or visit. `null` when the source has none. */
+  readonly durationMinutes: number | null;
   /**
-   * The published area label, when the source type carries one. This is
-   * NOT a distance — no Partner-facing field publishes distance today (see
-   * plan Deviation 1). `null` where the source type has no area field
-   * (enquiries and engagements do not).
+   * A published locality or service-area label, never a measured distance or
+   * exact street address. `null` where the source type has no area field.
    */
   readonly areaLabel: string | null;
+  /** The next useful action when this card needs a source-specific verb. */
+  readonly actionLabel?: string;
   /**
    * What the work **is**, and nothing else — the card's visible title.
    *
@@ -174,15 +178,16 @@ function engagementTitle(engagement: Engagement): string {
 }
 
 /**
- * What to call a booking: the work its first task names.
+ * What to call a booking: its durable booked-scope title.
  *
- * `PartnerBooking` publishes no service name, but `work_tasks[].label` is the
- * real description of the work and `VisitJobView` titles its own screen from
- * the same field — so the card and the screen it opens say the same thing. A
- * booking with no tasks is a real state (`canReport` documents it), and gets the
- * generic noun rather than an empty title.
+ * `display_title` exists before operational tasks are materialized, which keeps
+ * a confirmed booking from collapsing to "Job". The work-task label remains a
+ * compatibility fallback for older records, and the generic noun is reserved
+ * for a record that genuinely publishes neither.
  */
 function jobTitle(job: PartnerVisit): string {
+  const durableTitle = blankToNull(job.display_title);
+  if (durableTitle !== null) return durableTitle;
   const [first, ...rest] = job.work_tasks;
   if (first === undefined) return "Job";
   return rest.length === 0 ? first.label : `${first.label} +${rest.length}`;
@@ -260,10 +265,12 @@ function fromCrewOffers(offers: readonly CrewOffer[], serverNow: string): WorkIt
         // it is never reconstructed from a rate card here (`offer-state.ts`
         // rule 1).
         amountPaise: offer.lead_total_receipt_paise,
+        amountLabel: "Your payout",
         urgency: "live" as const,
         respondsBy: offer.responds_by,
         whenIso: offer.requested_start,
         whenIsDay: false,
+        durationMinutes: null,
         areaLabel: area,
         ...named(
           `Crew offer · ${offer.headcount} ${helperNoun(offer.headcount)}`,
@@ -328,6 +335,7 @@ function fromDirectOffers(offers: readonly Offer[]): WorkItem[] {
         // `estimated_net` is the server's own gross-minus-commission figure.
         // Null before the projection has priced the unit.
         amountPaise: offer.estimated_net?.amount_paise ?? null,
+        amountLabel: "Est. payout",
         urgency: "live" as const,
         // `undo_deadline` first, because once the offer is `ACCEPTED_PENDING_UNDO`
         // that is the clock actually running — `expires_at` is the window the
@@ -337,6 +345,7 @@ function fromDirectOffers(offers: readonly Offer[]): WorkItem[] {
         respondsBy: offer.undo_deadline ?? offer.expires_at,
         whenIso: offer.starts_at,
         whenIsDay: false,
+        durationMinutes: offer.estimated_duration_minutes,
         areaLabel: area,
         ...named(label, area),
       };
@@ -372,6 +381,7 @@ function fromEnquiries(enquiries: readonly EnquirySummary[]): WorkItem[] {
     key: `enquiry:${enquiry.id}`,
     href: ENQUIRY_HREF(enquiry.id),
     amountPaise: null,
+    amountLabel: null,
     urgency: "needs_price" as const,
     // Both are published non-nullable on `EnquirySummary`, so neither is
     // defaulted. `responds_by` is a business-hours deadline rather than a
@@ -381,7 +391,16 @@ function fromEnquiries(enquiries: readonly EnquirySummary[]): WorkItem[] {
     whenIso: enquiry.requested_start,
     // The customer picked a day, not a time — see `whenIsDay`.
     whenIsDay: true,
-    areaLabel: null,
+    durationMinutes: null,
+    areaLabel: enquiry.approximate_area.trim() || null,
+    actionLabel:
+      enquiry.archetype === "A5_CUSTOM_PROJECT"
+        ? enquiry.status === "INVITED"
+          ? "Review & book visit"
+          : "Book visit"
+        : enquiry.status === "INVITED"
+          ? "Review request"
+          : "Prepare quote",
     // An `INVITED` enquiry has not been accepted yet, so "needs a price" would
     // be the wrong state for it even though it shares the `needs_price`
     // urgency. The urgency is the card's colour; this is the chip.
@@ -428,12 +447,14 @@ function fromQuotedEnquiries(enquiries: readonly EnquirySummary[]): WorkItem[] {
         key: `enquiry:${enquiry.id}`,
         href: ENQUIRY_HREF(enquiry.id),
         amountPaise: null,
+        amountLabel: null,
         urgency:
           outcome === "waiting" ? "answered" : outcome === "not_chosen" ? "not_chosen" : "closed",
         respondsBy: null,
         whenIso: enquiry.requested_start,
         whenIsDay: true,
-        areaLabel: null,
+        durationMinutes: null,
+        areaLabel: enquiry.approximate_area.trim() || null,
         ...named(
           enquiry.service_name,
           outcome === "waiting" ? "quote sent" : outcome === "not_chosen" ? "not chosen" : "cancelled",
@@ -495,6 +516,7 @@ function fromEngagements(engagements: readonly Engagement[]): WorkItem[] {
       // This is the one kind whose amount is **not** a net payout figure. See
       // `WorkItem.amountPaise` for what `commission_treatment` leaves undecided.
       amountPaise: engagement.staged_total_paise,
+      amountLabel: "Agreed total",
       urgency: "doing" as const,
       // An engagement publishes no schedule of its own — its stages carry
       // `scheduled_on`, the agreement does not — so there is nothing honest to
@@ -503,6 +525,7 @@ function fromEngagements(engagements: readonly Engagement[]): WorkItem[] {
       respondsBy: null,
       whenIso: null,
       whenIsDay: false,
+      durationMinutes: null,
       areaLabel: null,
       /*
         `Engagement` publishes no service name — only `archetype`, a
@@ -595,19 +618,20 @@ function fromJobs(jobs: readonly PartnerVisit[]): WorkItem[] {
       kind: "job" as const,
       key: `job:${job.id}`,
       href: JOB_HREF(job.id),
-      // `PartnerBookingEarning` is documented on the wire as "one Partner's own
-      // money for one job — never the Customer's invoice", and `net_paise` is
-      // the figure after commission. Null until Django has settled the job.
-      amountPaise: job.earning?.net_paise ?? null,
+      // Both figures are server-calculated after commission and scoped to this
+      // Partner. The ledger earning wins once settlement makes it authoritative;
+      // before then, the immutable booked-scope estimate keeps the fare visible.
+      amountPaise: job.earning?.net_paise ?? job.estimated_earning?.net_paise ?? null,
+      amountLabel: job.earning === null ? "Est. payout" : "You earned",
       urgency: (SETTLED_VISIT_STATUS.has(job.status) ? "settled" : "doing") as WorkUrgency,
       respondsBy: null,
       whenIso: job.scheduled_start,
       // A real slot on the availability grid, unlike an enquiry's requested day.
       whenIsDay: false,
-      areaLabel: null,
-      // The first work task's own `label` — the only field on `PartnerBooking`
-      // that names the work. `VisitJobView` titles the job screen from the same
-      // place, so the card and the screen it opens agree.
+      durationMinutes: job.estimated_duration_minutes,
+      areaLabel: blankToNull(job.approximate_area),
+      // `display_title` names the booked scope before tasks exist. `jobTitle`
+      // retains task labels only as compatibility for older projections.
       ...named(jobTitle(job), SETTLED_VISIT_STATUS.has(job.status) ? "done" : null),
     }));
 }

@@ -157,7 +157,10 @@ describe("the detail header", () => {
     // from the list cache would show a deadline read at some earlier moment as
     // though it had just been confirmed, on the one screen whose job is to be
     // truthful about a promise with a clock on it.
-    const header = toRequestHeader(draft(), "Housekeeping staff");
+    const header = toRequestHeader(
+      draft({ quote_delivery_deadline_at: undefined }),
+      "Housekeeping staff",
+    );
 
     expect(header?.deadlineAt).toBeNull();
     expect(header?.teaserCount).toBe(0);

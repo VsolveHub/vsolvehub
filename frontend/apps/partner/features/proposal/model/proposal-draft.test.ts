@@ -164,9 +164,12 @@ describe("A5 validation", () => {
 });
 
 describe("what goes on the wire", () => {
-  it("sends the computed total, never a typed one", () => {
+  it("does not restate the total, because Django now derives it", () => {
+    // Contract 1.44.0 took `total_paise` off the request. The vendor sends the
+    // rate, the days and the headcount; the server multiplies. A client that
+    // still posted a total would be asking to be trusted about money.
     const body = toA3Request({ invitationId: "inv-1", draft: a3() });
-    expect(body.total_paise).toBe(90_000 * 4 * 6);
+    expect("total_paise" in body).toBe(false);
   });
 
   it("never sends stages on a workforce quote", () => {
@@ -176,12 +179,17 @@ describe("what goes on the wire", () => {
     expect(body.stages).toBeUndefined();
   });
 
-  it("zeroes the tax when the price already includes it", () => {
+  it("sends no tax of its own, whatever the vendor typed", () => {
+    // `tax_paise` and `tax_basis` left the request at 1.44.0 with the total.
+    // Tax is now the tax profile's answer, not the quoting vendor's. The draft
+    // still carries the fields because the composer still shows them and
+    // `validateA3` still refuses an impossible pair — they just stop here.
     const body = toA3Request({
       invitationId: "inv-1",
       draft: a3({ taxBasis: "INCLUSIVE", taxPaise: 5_000 }),
     });
-    expect(body.tax_paise).toBe(0);
+    expect("tax_paise" in body).toBe(false);
+    expect("tax_basis" in body).toBe(false);
   });
 
   it("drops blank inclusion lines rather than sending empty strings", () => {
@@ -195,7 +203,10 @@ describe("what goes on the wire", () => {
   it("sends stage amounts that reconcile with the total", () => {
     const body = toA5Request({ invitationId: "inv-1", draft: a5() });
     const stages = body.stages as { amount_paise: number }[];
-    expect(stages.reduce((sum, stage) => sum + stage.amount_paise, 0)).toBe(body.total_paise);
+    // The stages still have to add up to what the vendor priced. What changed is
+    // that nothing restates that sum on the wire for Django to take on trust,
+    // so the draft's own total is the thing to reconcile against.
+    expect(stages.reduce((sum, stage) => sum + stage.amount_paise, 0)).toBe(a5Total(a5()));
   });
 
   it("refuses to build a request out of an incomplete draft", () => {
@@ -210,7 +221,7 @@ describe("what goes on the wire", () => {
     // vocabulary and no M2 policy behind it. A made-up code would be compared
     // against codes other clients made up differently.
     const body = toA3Request({ invitationId: "inv-1", draft: a3() });
-    expect(body.commission_treatment).toBeUndefined();
+    expect("commission_treatment" in body).toBe(false);
   });
 });
 

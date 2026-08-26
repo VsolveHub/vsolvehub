@@ -23,27 +23,40 @@ live map of their competitors' diaries.
 
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
+from itertools import pairwise
 from typing import Any
 from uuid import UUID
 
 from django.conf import settings
 from django.core import signing
+from django.db import transaction
 from django.utils import timezone
 
 from apps.carts.availability import load_snapshot
 from apps.carts.services import BookingWindows, build_arrival_window_grid
+from apps.identity.models import User
 from apps.locations.models import ServiceArea
 from apps.requirements.exceptions import (
     PolicyUnavailableError,
+    RequirementNotFoundError,
+    VisitSlotExpiredError,
     VisitSlotUnavailableError,
 )
-from apps.requirements.models import CustomerRequirement, SiteVisit, VendorInvitation
+from apps.requirements.models import (
+    CustomerRequirement,
+    SiteVisit,
+    VendorInvitation,
+    VisitPlan,
+    VisitPlanShare,
+)
 
 #: Signed-token salt and version, mirroring `carts.services.WINDOW_SIGNING_SALT`. The version is
 #: checked on redemption so a token issued before a change in what it carries is refused rather
 #: than read with a missing field.
 VISIT_SLOT_SIGNING_SALT = "m2.visit-slot"
 VISIT_SLOT_SIGNING_VERSION = 1
+CUSTOMER_VISIT_SLOT_SIGNING_SALT = "m2.customer-visit-slot"
+CUSTOMER_VISIT_SLOT_SIGNING_VERSION = 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,6 +110,8 @@ def read_visit_slot(*, slot_id: str, invitation_id: UUID) -> VisitSlotChoice:
             salt=VISIT_SLOT_SIGNING_SALT,
             max_age=settings.M2_VISIT_SLOT_TOKEN_TTL_SECONDS,
         )
+    except signing.SignatureExpired as exc:
+        raise VisitSlotExpiredError() from exc
     except signing.BadSignature as exc:
         raise VisitSlotUnavailableError(
             "That time is no longer available. Refresh and pick another.",
@@ -113,6 +128,209 @@ def read_visit_slot(*, slot_id: str, invitation_id: UUID) -> VisitSlotChoice:
         starts_at=datetime.fromisoformat(str(payload["starts_at"])),
         duration_minutes=int(payload["duration_minutes"]),
     )
+
+
+def sign_customer_visit_slot(
+    *, requirement_id: UUID, starts_at: datetime, duration_minutes: int
+) -> str:
+    """Sign a candidate start for the Customer-owned requirement, never a free-form time."""
+
+    return signing.dumps(
+        {
+            "v": CUSTOMER_VISIT_SLOT_SIGNING_VERSION,
+            "requirement_id": str(requirement_id),
+            "starts_at": starts_at.isoformat(),
+            "duration_minutes": int(duration_minutes),
+        },
+        salt=CUSTOMER_VISIT_SLOT_SIGNING_SALT,
+        compress=True,
+    )
+
+
+def read_customer_visit_slot(*, slot_id: str, requirement_id: UUID) -> VisitSlotChoice:
+    """Redeem a Customer slot token without disclosing why an invalid token failed."""
+
+    try:
+        payload = signing.loads(
+            slot_id,
+            salt=CUSTOMER_VISIT_SLOT_SIGNING_SALT,
+            max_age=settings.M2_VISIT_SLOT_TOKEN_TTL_SECONDS,
+        )
+        if (
+            not isinstance(payload, dict)
+            or payload.get("v") != CUSTOMER_VISIT_SLOT_SIGNING_VERSION
+            or payload.get("requirement_id") != str(requirement_id)
+        ):
+            raise ValueError
+        starts_at = datetime.fromisoformat(str(payload["starts_at"]))
+        duration_minutes = int(payload["duration_minutes"])
+        if timezone.is_naive(starts_at) or duration_minutes <= 0:
+            raise ValueError
+    except signing.SignatureExpired as exc:
+        raise VisitSlotExpiredError() from exc
+    except (signing.BadSignature, TypeError, ValueError) as exc:
+        raise VisitSlotUnavailableError(
+            "That time is no longer available. Refresh and choose another.",
+        ) from exc
+    return VisitSlotChoice(starts_at=starts_at, duration_minutes=duration_minutes)
+
+
+def _customer_snapshot(requirement: CustomerRequirement, *, start: datetime, end: datetime) -> Any:
+    area_id = requirement.service_area_id
+    if area_id is None:
+        raise VisitSlotUnavailableError(
+            "Add a serviceable address before choosing visit times.",
+        )
+    area = ServiceArea.objects.prefetch_related(
+        "operating_windows",
+        "operating_exceptions",
+    ).get(id=area_id)
+    return load_snapshot(
+        variant_ids={requirement.variant_id},
+        area=area,
+        horizon_start=start,
+        horizon_end=end,
+        destination=requirement.address,
+    )
+
+
+def candidate_customer_visit_starts(*, requirement: CustomerRequirement) -> BookingWindows:
+    """Candidate starts shared by all currently eligible Partners for this Customer request."""
+
+    duration = visit_duration_minutes(requirement)
+    now = timezone.now()
+    horizon_end = now + timedelta(days=settings.M1_SCHEDULED_MAX_DAYS + 1)
+    snapshot = _customer_snapshot(requirement, start=now, end=horizon_end)
+    return build_arrival_window_grid(
+        area=snapshot.area,
+        snapshot=snapshot,
+        duration=duration,
+        now=now,
+        window_id=lambda starts_at, _window_minutes: sign_customer_visit_slot(
+            requirement_id=requirement.id,
+            starts_at=starts_at,
+            duration_minutes=duration,
+        ),
+    )
+
+
+def _choices_do_not_overlap(choices: list[VisitSlotChoice]) -> bool:
+    occupied = sorted(occupied_range_bounds(choice) for choice in choices)
+    return all(previous[1] <= current[0] for previous, current in pairwise(occupied))
+
+
+def _customer_choice_is_still_available(
+    *, requirement: CustomerRequirement, choice: VisitSlotChoice
+) -> bool:
+    snapshot = _customer_snapshot(
+        requirement,
+        start=choice.starts_at,
+        end=choice.starts_at + timedelta(minutes=choice.duration_minutes + 24 * 60),
+    )
+    return bool(
+        snapshot.free_partner_ids(
+            starts_at=choice.starts_at,
+            duration_minutes=choice.duration_minutes,
+        )
+    )
+
+
+@transaction.atomic
+def choose_customer_visit_slots(
+    *, requirement_id: UUID, actor: User, slot_ids: list[str]
+) -> tuple[VisitPlanShare, ...]:
+    """Store exactly one signed, non-overlapping Customer choice per visit-plan share."""
+
+    requirement = (
+        CustomerRequirement.objects.select_for_update(of=("self",))
+        .select_related("address", "service_area", "configuration")
+        .filter(pk=requirement_id, customer=actor)
+        .first()
+    )
+    if requirement is None:
+        raise RequirementNotFoundError()
+    if requirement.status != CustomerRequirement.Status.DRAFT:
+        raise VisitSlotUnavailableError("Only an unsent request can choose all visit times.")
+    plan = VisitPlan.objects.select_for_update().filter(requirement=requirement).first()
+    if plan is None or plan.status != VisitPlan.Status.CHOSEN:
+        raise VisitSlotUnavailableError("Choose the number of estimates first.")
+    if len(slot_ids) != plan.plan_size:
+        raise VisitSlotUnavailableError(
+            f"Choose exactly {plan.plan_size} visit time(s) for this plan.",
+        )
+    choices = [
+        read_customer_visit_slot(slot_id=slot_id, requirement_id=requirement.id)
+        for slot_id in slot_ids
+    ]
+    if len({choice.starts_at for choice in choices}) != len(choices) or not _choices_do_not_overlap(
+        choices
+    ):
+        raise VisitSlotUnavailableError("Choose different, non-overlapping visit times.")
+    if any(choice.starts_at <= timezone.now() for choice in choices):
+        raise VisitSlotUnavailableError("One of those times has passed. Refresh and choose again.")
+    if any(
+        not _customer_choice_is_still_available(requirement=requirement, choice=choice)
+        for choice in choices
+    ):
+        raise VisitSlotUnavailableError()
+
+    shares = list(plan.shares.select_for_update().order_by("position"))
+    for share, choice in zip(shares, choices, strict=True):
+        share.requested_start = choice.starts_at
+        share.duration_minutes = choice.duration_minutes
+        share.matching_status = VisitPlanShare.MatchingStatus.SEARCHING
+        share.save(
+            update_fields=(
+                "requested_start",
+                "duration_minutes",
+                "matching_status",
+                "updated_at",
+            )
+        )
+    return tuple(shares)
+
+
+@transaction.atomic
+def replace_customer_visit_slot(
+    *, requirement_id: UUID, share_id: UUID, actor: User, slot_id: str
+) -> VisitPlanShare:
+    """Replace one exhausted slot without disturbing held or booked siblings."""
+
+    requirement = (
+        CustomerRequirement.objects.select_for_update(of=("self",))
+        .select_related("address", "service_area", "configuration")
+        .filter(pk=requirement_id, customer=actor)
+        .first()
+    )
+    if requirement is None:
+        raise RequirementNotFoundError()
+    share = (
+        VisitPlanShare.objects.select_for_update()
+        .select_related("plan")
+        .get(pk=share_id, plan__requirement=requirement)
+    )
+    if share.matching_status != VisitPlanShare.MatchingStatus.NO_PROFESSIONAL_FOUND:
+        raise VisitSlotUnavailableError("Only an unmatched visit time can be replaced.")
+    choice = read_customer_visit_slot(slot_id=slot_id, requirement_id=requirement.id)
+    sibling_choices = [
+        VisitSlotChoice(row.requested_start, int(row.duration_minutes))
+        for row in share.plan.shares.exclude(pk=share.pk)
+        if row.requested_start is not None and row.duration_minutes is not None
+    ]
+    if not _choices_do_not_overlap([*sibling_choices, choice]):
+        raise VisitSlotUnavailableError("That time overlaps another visit in this plan.")
+    if choice.starts_at <= timezone.now() or not _customer_choice_is_still_available(
+        requirement=requirement,
+        choice=choice,
+    ):
+        raise VisitSlotUnavailableError()
+    share.requested_start = choice.starts_at
+    share.duration_minutes = choice.duration_minutes
+    share.matching_status = VisitPlanShare.MatchingStatus.SEARCHING
+    share.save(
+        update_fields=("requested_start", "duration_minutes", "matching_status", "updated_at")
+    )
+    return share
 
 
 def candidate_visit_starts(*, invitation: VendorInvitation) -> BookingWindows:

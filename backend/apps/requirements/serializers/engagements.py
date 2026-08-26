@@ -32,7 +32,14 @@ from apps.requirements.models import (
 )
 from apps.requirements.selectors import access_receipt_for
 
-from .enquiries import ProposalMaterialLineSerializer, ProposalStageSerializer, SiteVisitSerializer
+from .enquiries import (
+    ProposalItemLineSerializer,
+    ProposalLabourLineSerializer,
+    ProposalMaterialLineSerializer,
+    ProposalOtherChargeSerializer,
+    ProposalStageSerializer,
+    SiteVisitSerializer,
+)
 
 # ---------------------------------------------------------------------------
 # Wave C2: the two front doors, selection and the engagement
@@ -115,6 +122,9 @@ class VisitPlanShareSerializer(serializers.ModelSerializer[VisitPlanShare]):
             "id",
             "position",
             "status",
+            "matching_status",
+            "requested_start",
+            "duration_minutes",
             "amount_paise",
             "vendor_payout_paise",
             "platform_share_paise",
@@ -252,6 +262,9 @@ class CustomerProposalSerializer(serializers.ModelSerializer[Proposal]):
     vendor = serializers.SerializerMethodField()
     stages = ProposalStageSerializer(many=True, read_only=True)
     material_lines = ProposalMaterialLineSerializer(many=True, read_only=True)
+    item_lines = ProposalItemLineSerializer(many=True, read_only=True)
+    labour_lines = ProposalLabourLineSerializer(many=True, read_only=True)
+    other_charges = ProposalOtherChargeSerializer(many=True, read_only=True)
     site_visit = SiteVisitSerializer(read_only=True, allow_null=True)
 
     class Meta:
@@ -268,10 +281,21 @@ class CustomerProposalSerializer(serializers.ModelSerializer[Proposal]):
             "rate_paise_per_worker_day",
             "minimum_days",
             "worker_count",
+            "estimate_type",
+            "item_lines",
+            "labour_lines",
+            "other_charges",
             "total_paise",
             "tax_paise",
             "tax_basis",
-            "commission_treatment",
+            "calculation_snapshot",
+            "line_subtotal_paise",
+            "authorized_charges_paise",
+            "taxable_value_paise",
+            "partner_quote_total_paise",
+            "platform_fee_paise",
+            "platform_fee_tax_paise",
+            "customer_total_paise",
             "inclusions",
             "exclusions",
             "stages",
@@ -507,6 +531,7 @@ class EngagementStageSerializer(serializers.ModelSerializer[EngagementStage]):
     evidence = StageEvidenceSerializer(many=True, read_only=True)
     starts_on = serializers.SerializerMethodField()
     duration_days = serializers.SerializerMethodField()
+    funding_breakdown = serializers.SerializerMethodField()
 
     class Meta:
         model = EngagementStage
@@ -515,6 +540,7 @@ class EngagementStageSerializer(serializers.ModelSerializer[EngagementStage]):
             "position",
             "label",
             "amount_paise",
+            "funding_breakdown",
             #: `WORK` or `MATERIAL_ADVANCE`. Read it before rendering a stage: a material advance
             #: is money spent on goods, not a milestone somebody performs, and it does not refund
             #: like unearned work.
@@ -549,6 +575,19 @@ class EngagementStageSerializer(serializers.ModelSerializer[EngagementStage]):
     @extend_schema_field(serializers.IntegerField(allow_null=True))
     def get_duration_days(self, obj: EngagementStage) -> int | None:
         return _stage_schedule(obj)[1]
+
+    @extend_schema_field(serializers.JSONField())
+    def get_funding_breakdown(self, obj: EngagementStage) -> dict[str, int]:
+        terms = obj.original_terms if isinstance(obj.original_terms, dict) else {}
+        return {
+            "partner_service_amount_paise": int(
+                terms.get("partner_service_amount_paise") or obj.amount_paise
+            ),
+            "tax_paise": int(terms.get("tax_paise") or 0),
+            "platform_fee_paise": int(terms.get("platform_fee_paise") or 0),
+            "platform_fee_tax_paise": int(terms.get("platform_fee_tax_paise") or 0),
+            "total_due_paise": obj.amount_paise,
+        }
 
 
 class AccessReceiptSerializer(serializers.Serializer[dict[str, Any]]):

@@ -1,18 +1,27 @@
-import { firstInvalidOptionalDetail } from "./optional-details";
 import { type Screen, nextScreen, screenIndex } from "./screens";
 
 /**
  * The requirement draft, and the guards that protect every step forward.
  *
  * Same discipline as the M1 booking reducer: this stores Customer *intent* and
- * *server verdicts*, never server payloads. What the Customer typed lives here;
+ * *server verdicts*, never server payloads. What the Customer tapped lives here;
  * what the server derived from it — the inferred lifecycle, the plain-language
  * explanation, which answers are still missing — is held as a verdict and never
  * recomputed locally.
  *
- * That split is what keeps the four-screen flow honest. The client does not own
+ * That split is what keeps the two-screen flow honest. The client does not own
  * the question schema, so it cannot disagree with the server about whether a
  * requirement is complete; it can only be out of date, which is visible.
+ *
+ * ## The Customer never describes anything
+ *
+ * The M2-revamp removed every free-text seam from capture: no
+ * `additional_details` paragraph, no voice note, no photos. The category
+ * questions collect facts — choices, numbers, yes/no — and the vendor prices on
+ * the visit. The attachment *types* below survive because historical drafts and
+ * submitted requirements still hold stored attachments the detail screens
+ * render; nothing in this flow creates new ones, and the whole layer goes when
+ * BE-1 retires the upload endpoints.
  *
  * ## Nothing here costs money
  *
@@ -192,12 +201,11 @@ export interface RequirementDraftState {
    */
   flexibilityDays: number;
 
+  /**
+   * Stored attachments on a resumed historical draft. Nothing in the two-screen
+   * flow adds to this — capture was removed — and the guards ignore it.
+   */
   attachments: readonly DraftAttachment[];
-  /** BCP-47, captured with the voice note so matching can route by language. */
-  language: string | null;
-  additionalDetails: string;
-
-  optionalDetails: Readonly<Record<string, unknown>>;
 
   /**
    * Whether the Customer has been shown, and dismissed, the duplicate warning.
@@ -222,9 +230,6 @@ export function initialDraftState(categorySlug: string): RequirementDraftState {
     serviceBy: null,
     flexibilityDays: 0,
     attachments: [],
-    language: null,
-    additionalDetails: "",
-    optionalDetails: {},
     duplicateOverridden: false,
   };
 }
@@ -240,7 +245,6 @@ export type BlockReason =
   | "ADDRESS_NOT_CHOSEN"
   | "START_DATE_NOT_CHOSEN"
   | "START_DATE_IN_PAST"
-  | "SERVICE_DATE_NOT_CHOSEN"
   | "SERVICE_DATE_IN_PAST"
   /**
    * The needed-by date is before the start date.
@@ -252,27 +256,9 @@ export type BlockReason =
    * someone submit.
    */
   | "SERVICE_DATE_BEFORE_START"
-  | "ATTACHMENT_STILL_UPLOADING"
-  | "ATTACHMENT_FAILED"
-  /**
-   * A file came back from the malware scan as rejected.
-   *
-   * Its own reason rather than folded into `ATTACHMENT_FAILED`, because the two
-   * instructions differ: a failed upload is retried, a rejected file can only
-   * be removed. Blocking on it is deliberate — `DELETE` is permitted in any
-   * requirement status precisely so an infected file never gets stuck on a live
-   * requirement, and the cheapest way to keep that promise is to not let one
-   * travel past the draft in the first place.
-   */
-  | "ATTACHMENT_REJECTED"
-  | "DUPLICATE_NOT_RESOLVED"
-  /**
-   * An optional extra was opened and left half-said.
-   *
-   * Reachable only from review, and only for someone who opened a panel — see
-   * `firstInvalidOptionalDetail`. Leaving all four alone can never produce this.
-   */
-  | "OPTIONAL_DETAIL_INCOMPLETE";
+  | "VISIT_PLAN_NOT_CHOSEN"
+  | "VISIT_SLOTS_NOT_CHOSEN"
+  | "DUPLICATE_NOT_RESOLVED";
 
 /** True when `value` counts as an answer. Empty string, empty array and blank do not. */
 export function isAnswered(value: unknown): boolean {
@@ -297,56 +283,7 @@ export function isServiceDateUsable(serviceBy: string, today: string): boolean {
 }
 
 /**
- * Attachments that are neither finished nor abandoned.
- *
- * Submitting while one is in flight would drop it silently, which for a photo of
- * the actual problem is the difference between a useful quote and a guess.
- */
-export function hasAttachmentInFlight(state: RequirementDraftState): boolean {
-  return state.attachments.some(
-    (attachment) => attachment.state === "queued" || attachment.state === "uploading",
-  );
-}
-
-export function hasFailedAttachment(state: RequirementDraftState): boolean {
-  return state.attachments.some((attachment) => attachment.state === "failed");
-}
-
-/**
- * A file the malware scan rejected.
- *
- * Separate from `hasFailedAttachment` because the recovery is different and the
- * guard's copy has to say which. Checked *before* the general failure so a
- * Customer holding one rejected file and one flaky upload is told about the one
- * they cannot retry.
- */
-export function hasRejectedAttachment(state: RequirementDraftState): boolean {
-  return state.attachments.some((attachment) => attachment.failure === "INFECTED");
-}
-
-/**
- * Attachment rules, in one place, read by both the screen-3 guard and the
- * submit guard on review.
- *
- * Shared for the same reason `blockedDates` is: review re-asserts the earlier
- * screens, and a scan verdict can land *while the Customer is on review* —
- * which is the one path by which a rejected file reaches the submit button at
- * all. Two copies of this ordering is how the two screens stop agreeing.
- */
-function blockedAttachments(state: RequirementDraftState): BlockReason | null {
-  if (hasAttachmentInFlight(state)) return "ATTACHMENT_STILL_UPLOADING";
-  if (hasRejectedAttachment(state)) return "ATTACHMENT_REJECTED";
-  if (hasFailedAttachment(state)) return "ATTACHMENT_FAILED";
-  return null;
-}
-
-/**
  * The two dates and the one relationship between them, in one place.
- *
- * Shared by the `where_when` guard and the submit guard on review rather than
- * written twice: the review guard is a *re-assertion* of the earlier screens
- * (the Customer can go back and change either date), and two copies of a
- * three-clause rule is how the two stop agreeing.
  *
  * Ordered so the Customer is told about the field they are most likely looking
  * at. A missing start date is a blank control; a needed-by date before it is a
@@ -403,40 +340,32 @@ export function blockedReason(
     }
 
     case "where_when": {
-      const dates = blockedDates(state, today);
-      if (state.addressId === null) return "ADDRESS_NOT_CHOSEN";
-      if (dates !== null) return dates;
-      if (hasUnresolvedDuplicate && !state.duplicateOverridden) return "DUPLICATE_NOT_RESOLVED";
-      return null;
-    }
-
-    case "details":
-      // Attachments are optional; an attachment that is *mid-flight* is not, and
-      // neither is one that came back rejected.
-      return blockedAttachments(state);
-
-    case "review": {
-      // Re-asserted rather than trusted from the earlier screens, because the
-      // Customer can go back and change any of it between there and here. This
-      // is the submit guard, and it is the last one.
       if (state.addressId === null) return "ADDRESS_NOT_CHOSEN";
       const dates = blockedDates(state, today);
       if (dates !== null) return dates;
-      const attachments = blockedAttachments(state);
-      if (attachments !== null) return attachments;
       if (state.verdict !== null) {
         const unanswered = state.verdict.missingRequiredAnswers.some(
           (code) => !isAnswered(state.answers[code]),
         );
         if (unanswered) return "REQUIRED_ANSWER_MISSING";
       }
-      // Checked last, because it is the only guard here a Customer can reach
-      // without ever having been asked anything — and it is checked at all
-      // because a half-said access constraint reaches the vendor looking
-      // complete. `M2-FE-207`.
-      if (firstInvalidOptionalDetail(state.optionalDetails) !== null) {
-        return "OPTIONAL_DETAIL_INCOMPLETE";
+      if (hasUnresolvedDuplicate && !state.duplicateOverridden) return "DUPLICATE_NOT_RESOLVED";
+      return null;
+    }
+
+    case "visits_send": {
+      // Step 3 (Choose visits & send) is the submit screen.
+      // Re-asserts screen 1 and screen 2 rules.
+      if (state.addressId === null) return "ADDRESS_NOT_CHOSEN";
+      const dates = blockedDates(state, today);
+      if (dates !== null) return dates;
+      if (state.verdict !== null) {
+        const unanswered = state.verdict.missingRequiredAnswers.some(
+          (code) => !isAnswered(state.answers[code]),
+        );
+        if (unanswered) return "REQUIRED_ANSWER_MISSING";
       }
+      if (hasUnresolvedDuplicate && !state.duplicateOverridden) return "DUPLICATE_NOT_RESOLVED";
       return null;
     }
 
@@ -454,25 +383,12 @@ export function canAdvance(
 }
 
 /** The three brief sections, in the order the page renders them. */
-export const BRIEF_SECTIONS = ["what", "where_when", "details"] as const;
+export const BRIEF_SECTIONS = ["what", "where_when", "visits_send"] as const;
 
 export type BriefSection = (typeof BRIEF_SECTIONS)[number];
 
 /**
  * What is still missing in each section of the one-page brief.
- *
- * The desktop brief shows all three capture screens at once, so "can I continue"
- * stops being one question about the current screen and becomes three questions
- * about three sections. Rather than write a second set of rules — which is how
- * the page and the wizard end up disagreeing about whether a brief is complete —
- * this asks `blockedReason` the same question once per section, by handing it a
- * state that claims to be on that screen.
- *
- * Safe because `blockedReason` is pure and reads `screen` only to choose a
- * branch. The synthetic value never reaches the reducer.
- *
- * `review` is deliberately not a section: it is the act of sending, not a part
- * of the brief, and its guard re-asserts all three of these anyway.
  */
 export function briefSectionBlocks(
   state: RequirementDraftState,
@@ -486,7 +402,11 @@ export function briefSectionBlocks(
       today,
       hasUnresolvedDuplicate,
     ),
-    details: blockedReason({ ...state, screen: "details" }, today, hasUnresolvedDuplicate),
+    visits_send: blockedReason(
+      { ...state, screen: "visits_send" },
+      today,
+      hasUnresolvedDuplicate,
+    ),
   };
 }
 
@@ -494,7 +414,7 @@ export function briefSectionBlocks(
  * Whether `target` is reachable by navigation.
  *
  * Backwards to a visited screen is always allowed and never loses input —
- * `M2-FE-209`. Forwards is not: jumping to review would skip a guard, and the
+ * `M2-FE-209`. Forwards is not: jumping ahead would skip a guard, and the
  * guards are the only thing standing between a Customer and a requirement no
  * vendor can quote.
  *
@@ -512,7 +432,8 @@ export function canNavigateTo(state: RequirementDraftState, target: Screen): boo
  * Steps forward one screen, recording the one just left as visited.
  *
  * Returns the state unchanged at the end of the sequence rather than throwing:
- * review has no successor, and "submit" is a different action with its own guard.
+ * the last screen has no successor, and "submit" is a different action with its
+ * own guard.
  */
 export function advance(state: RequirementDraftState): RequirementDraftState {
   const next = nextScreen(state.screen);

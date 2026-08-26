@@ -181,6 +181,7 @@
   --font-sans: var(--font-app), "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
   --font-devanagari: "Mukta", var(--font-sans);
   --font-telugu: "Hind Guntur", var(--font-sans);
+  --font-serif: var(--font-serif-app, "Playfair Display"), Georgia, serif;
 
   /* ---------------------------------------------------------------------
      Shape, elevation, motion
@@ -191,9 +192,10 @@
   --radius-plate: 0.25rem; /* readout plates stay near-square, like a meter face */
 
   /* Warm-tinted shadows; a neutral grey shadow reads dirty over warm surfaces. */
-  --shadow-card: 0 1px 2px rgb(69 63 55 / 0.06), 0 1px 3px rgb(69 63 55 / 0.08);
-  --shadow-raised: 0 4px 12px rgb(69 63 55 / 0.1);
-  --shadow-overlay: 0 16px 48px rgb(0 17 46 / 0.22);
+  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+  --shadow-raised: 0 10px 25px -5px rgb(0 17 46 / 0.08), 0 8px 10px -6px rgb(0 17 46 / 0.04);
+  --shadow-overlay: 0 20px 50px -12px rgb(0 17 46 / 0.25);
+  --shadow-glass: 0 8px 32px 0 rgba(0, 17, 46, 0.06);
 
   /* Plan 03: purposeful transitions, 150-300ms. */
   --duration-fast: 150ms;

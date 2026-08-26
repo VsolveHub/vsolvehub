@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
+import type { Schemas } from "@vsolve/api-client";
 
 import {
   isWizardActionPending,
   isWorkspaceAdvancingForScreen,
+  persistCustomerVisitSlotsForSubmit,
   persistVisitPlanSelectionForSubmit,
   prepareRequirementForSubmit,
   toPlaceAndDateSaveInput,
@@ -62,26 +64,28 @@ describe("requirement flow saving state", () => {
     ).toBe(true);
   });
 
-  it("does not busy Send request for a background draft restore", () => {
+  it("does not busy the send CTA for a background draft restore", () => {
     expect(
       isWizardActionPending({
-        screen: "review",
+        screen: "visits_send",
         isAdvancingCurrentScreen: false,
         isPreparingSubmit: false,
         isSubmittingRequirement: false,
         isChoosingPlan: false,
+        isChoosingSlots: false,
       }),
     ).toBe(false);
   });
 
-  it("keeps Send request busy for the writes started by that button", () => {
+  it("keeps the send CTA busy for the writes started by that button", () => {
     expect(
       isWizardActionPending({
-        screen: "review",
+        screen: "visits_send",
         isAdvancingCurrentScreen: false,
         isPreparingSubmit: true,
         isSubmittingRequirement: false,
         isChoosingPlan: false,
+        isChoosingSlots: false,
       }),
     ).toBe(true);
   });
@@ -120,6 +124,71 @@ describe("place and date persistence", () => {
 });
 
 describe("requirement submission preparation", () => {
+  it("refreshes signed visit tokens and saves them before submit", async () => {
+    const writes: string[] = [];
+    const slotGrid: Schemas["VisitSlotGrid"] = {
+      server_now: "2026-08-25T10:00:00Z",
+      visit_duration_minutes: 120,
+      availability_is_preliminary: true,
+      timezone: "Asia/Kolkata",
+      days: [
+        {
+          date: "2026-09-02",
+          is_today: false,
+          slots: [
+            {
+              id: "fresh-signed-token",
+              starts_at: "2026-09-02T03:30:00Z",
+              ends_at: "2026-09-02T05:30:00Z",
+              is_available: true,
+              unavailable_reason: null,
+            },
+          ],
+        },
+      ],
+    };
+
+    await persistCustomerVisitSlotsForSubmit({
+      requirementId: "requirement-42",
+      planSize: 1,
+      selectedStarts: ["2026-09-02T03:30:00Z"],
+      refreshGrid: async () => {
+        writes.push("refresh-slots");
+        return slotGrid;
+      },
+      choose: async (input) => {
+        writes.push(`choose-slots:${input.slotIds.join(",")}`);
+      },
+    });
+    writes.push("submit");
+
+    expect(writes).toEqual([
+      "refresh-slots",
+      "choose-slots:fresh-signed-token",
+      "submit",
+    ]);
+  });
+
+  it("stops before matching when a selected visit disappeared on refresh", async () => {
+    const slotGrid: Schemas["VisitSlotGrid"] = {
+      server_now: "2026-08-25T10:00:00Z",
+      visit_duration_minutes: 120,
+      availability_is_preliminary: true,
+      timezone: "Asia/Kolkata",
+      days: [],
+    };
+
+    await expect(
+      persistCustomerVisitSlotsForSubmit({
+        requirementId: "requirement-42",
+        planSize: 1,
+        selectedStarts: ["2026-09-02T03:30:00Z"],
+        refreshGrid: async () => slotGrid,
+        choose: async () => undefined,
+      }),
+    ).rejects.toThrow("no longer available");
+  });
+
   it("persists the final visible partner count before opening matching", async () => {
     const writes: string[] = [];
 
@@ -153,47 +222,48 @@ describe("requirement submission preparation", () => {
     expect(writes).toBe(0);
   });
 
-  it("saves every restored review section before returning the draft to submit", async () => {
+  it("saves the answers and then the place before returning the draft to submit", async () => {
     const writes: string[] = [];
 
-    const requirementId = await prepareRequirementForSubmit({
+    const prepared = await prepareRequirementForSubmit({
       saveAnswers: async () => {
         writes.push("answers");
-        return "requirement-42";
+        return { requirementId: "requirement-42", isA5: true };
       },
       savePlaceAndDates: async (id) => {
         writes.push(`place:${id}`);
         return true;
       },
-      saveDetails: async (id) => {
-        writes.push(`details:${id}`);
-        return true;
-      },
       onPlaceAndDateFailure: () => writes.push("show-place"),
     });
 
-    expect(requirementId).toBe("requirement-42");
-    expect(writes).toEqual([
-      "answers",
-      "place:requirement-42",
-      "details:requirement-42",
-    ]);
+    expect(prepared).toEqual({ requirementId: "requirement-42", isA5: true });
+    expect(writes).toEqual(["answers", "place:requirement-42"]);
   });
 
   it("stops submission and returns to location when that section cannot be saved", async () => {
     const writes: string[] = [];
 
-    const requirementId = await prepareRequirementForSubmit({
-      saveAnswers: async () => "requirement-42",
+    const prepared = await prepareRequirementForSubmit({
+      saveAnswers: async () => ({ requirementId: "requirement-42", isA5: false }),
       savePlaceAndDates: async () => false,
-      saveDetails: async () => {
-        writes.push("details");
-        return true;
-      },
       onPlaceAndDateFailure: () => writes.push("show-place"),
     });
 
-    expect(requirementId).toBeNull();
+    expect(prepared).toBeNull();
     expect(writes).toEqual(["show-place"]);
+  });
+
+  it("carries the saved draft's lifecycle so a first send can stop for the plan", async () => {
+    // The submit path decides "does this need an estimate count?" from the
+    // response to the save it just made — the render that started the send may
+    // predate the draft existing at all.
+    const prepared = await prepareRequirementForSubmit({
+      saveAnswers: async () => ({ requirementId: "requirement-7", isA5: true }),
+      savePlaceAndDates: async () => true,
+      onPlaceAndDateFailure: () => undefined,
+    });
+
+    expect(prepared?.isA5).toBe(true);
   });
 });

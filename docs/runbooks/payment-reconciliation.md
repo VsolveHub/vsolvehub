@@ -18,6 +18,29 @@ integer paise and is checked against the immutable Booking Group quote and Fulfi
 Production startup fails closed when these settings are absent or insecure. The `fake` provider is
 for local development and tests only and is never selected as a fallback.
 
+## Razorpay test-mode milestone smoke
+
+Use a newly rotated test key after any credential has appeared in chat, logs or screen sharing.
+Store values only in local/staging secret storage; do not paste them into a committed file or a
+frontend environment variable. Configure the backend with:
+
+- `PAYMENT_PROVIDER=razorpay`
+- test-mode `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET`
+- `RAZORPAY_API_BASE_URL=https://api.razorpay.com/v1`
+- a separate random `PAYMENT_WEBHOOK_SECRET` of at least 32 characters
+- `PAYMENTS_ALLOW_SIMULATED_CAPTURE=false`
+
+In the Razorpay test dashboard, send only `payment.authorized`, `payment.captured`,
+`payment.failed`, `refund.processed` and `refund.failed` to the public HTTPS
+`/api/v1/payment-webhooks/razorpay/` endpoint. Collections credentials are not RazorpayX payout
+credentials and must not share permissions or secret records.
+
+Record only local attempt IDs and shortened provider references for the staging evidence. Exercise
+visit-plan checkout, first-installment funding, Checkout dismissal/retry, duplicate and
+out-of-order callbacks, an amount mismatch, partial refund and pull reconciliation. Browser
+success remains `Processing` until Django observes a verified callback or reconciliation result.
+Automated suites continue using the fake provider boundary and never call Razorpay.
+
 ## Normal flow and invariants
 
 1. Payment can start only after every required Fulfilment Unit has a live tentative Partner hold.

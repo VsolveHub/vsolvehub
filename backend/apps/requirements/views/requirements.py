@@ -112,7 +112,6 @@ class RequirementCollectionView(APIView):
                 customer=cast(User, request.user),
                 variant=variant,
                 answers=serializer.validated_data.get("answers") or {},
-                language=serializer.validated_data["language"],
             )
         except RequirementDomainError as exc:
             _raise_api_error(exc)
@@ -199,8 +198,6 @@ class RequirementDetailView(APIView):
                 service_by=values.get("service_by"),
                 budget_min_paise=values.get("budget_min_paise"),
                 budget_max_paise=values.get("budget_max_paise"),
-                additional_details=values.get("additional_details"),
-                language=values.get("language"),
             )
         except RequirementDomainError as exc:
             _raise_api_error(exc)

@@ -35,11 +35,15 @@ function card(overrides: Partial<QuoteCardView> = {}): QuoteCardView {
     rateLabel: null,
     minimumDays: null,
     workerCount: null,
+    estimateType: "LABOUR_WISE",
+    itemLines: [],
+    labourLines: [],
+    otherCharges: [],
     stages: [],
+    materials: [],
     inclusions: [],
     exclusions: [],
     warrantyTerms: null,
-    commissionTreatment: null,
     validUntil: null,
     submittedAt: "2026-08-20T10:00:00.000Z",
     siteVisitId: "v1",
@@ -129,6 +133,29 @@ describe("toComparisonRows", () => {
     // would begin. The vendor dated their stages; this reads the last of them.
     const timeline = rows.find((row) => row.label === "Timeline");
     expect(timeline?.values[0]).toBe("Ends 2026-11-12");
+  });
+
+  it("names the pricing style from the arrays, never the flag", () => {
+    // `estimateType` defaults to LABOUR_WISE on quotes that priced neither way
+    // (every A3 quote, and tap estimates that only staged the work). The row
+    // must stay silent for those rather than claim a style nobody used.
+    const rows = toComparisonRows([
+      card({
+        itemLines: [
+          { category: "Work", title: "Wall tiling", quantityLabel: "40 Sq ft × ₹80", amountLabel: "₹3,200" },
+        ],
+      }),
+      card({
+        labourLines: [
+          { role: "Mason", team: null, crewLabel: "2 people × 3 days × ₹900/day", amountLabel: "₹5,400" },
+        ],
+      }),
+      card({ estimateType: "LABOUR_WISE" }),
+    ]);
+
+    const priced = rows.find((row) => row.label === "How it is priced");
+    expect(priced?.values).toEqual(["Item-wise (1 item)", "Labour-wise (1 role)", null]);
+    expect(priced?.equivalent).toBe(true);
   });
 
   it("keeps assumptions out of the ranked rows", () => {

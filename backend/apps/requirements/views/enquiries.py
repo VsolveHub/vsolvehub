@@ -22,7 +22,7 @@ from apps.identity.models import User
 from apps.partners.capabilities import assert_capability_active, assert_kyc_complete
 from apps.partners.exceptions import PartnerDomainError
 from apps.partners.permissions import IsPartnerUser
-from apps.requirements import attachments, matching, proposals
+from apps.requirements import access, attachments, matching, proposals
 from apps.requirements.exceptions import RequirementDomainError, RequirementNotFoundError
 from apps.requirements.models import SiteVisit
 from apps.requirements.selectors import (
@@ -119,7 +119,8 @@ class PartnerEnquiryAcceptView(ThrottledWriteMixin, APIView):
             404: ApiErrorSerializer,
             409: OpenApiResponse(
                 response=ApiErrorSerializer,
-                description="`m2_invitation_expired`, `m2_invitation_slots_exhausted`, "
+                description="`slot_taken` when another professional accepted the same fixed "
+                "visit first; `m2_invitation_expired`, `m2_invitation_slots_exhausted`, "
                 "`m2_proposal_slot_conflict` when a linked account already holds a slot, or "
                 "`m2_capacity_unavailable` when the vendor already has work booked on these "
                 "dates — either another M2 enquiry they accepted or an A1 booking on the shared "
@@ -147,9 +148,14 @@ class PartnerEnquiryAcceptView(ThrottledWriteMixin, APIView):
                 # a quote slot.
                 service_area=requirement.service_area,
                 on_day=(
-                    requirement.requested_start.date()
-                    if requirement.requested_start is not None
-                    else None
+                    invitation.requested_visit_share.requested_start.date()
+                    if invitation.requested_visit_share is not None
+                    and invitation.requested_visit_share.requested_start is not None
+                    else (
+                        requirement.requested_start.date()
+                        if requirement.requested_start is not None
+                        else None
+                    )
                 ),
             )
         except (RequirementDomainError, PartnerDomainError) as exc:
@@ -157,7 +163,14 @@ class PartnerEnquiryAcceptView(ThrottledWriteMixin, APIView):
 
         def command() -> tuple[int, dict[str, object]]:
             try:
-                accepted = matching.accept_invitation(invitation_id=invitation.id)
+                if invitation.requested_visit_share_id is not None:
+                    access.accept_fixed_visit_offer(invitation_id=invitation.id)
+                    accepted = invitation_for_partner(
+                        partner=profile,
+                        invitation_id=invitation.id,
+                    )
+                else:
+                    accepted = matching.accept_invitation(invitation_id=invitation.id)
             except RequirementDomainError as exc:
                 _raise_api_error(exc)
 
@@ -210,6 +223,10 @@ class PartnerEnquiryDeclineView(ThrottledWriteMixin, APIView):
                     invitation_id=invitation.id,
                     reason_code=serializer.validated_data["reason_code"],
                 )
+                if declined.requested_visit_share_id is not None:
+                    matching.settle_customer_visit_offer_exhaustion(
+                        share_id=declined.requested_visit_share_id
+                    )
             except RequirementDomainError as exc:
                 _raise_api_error(exc)
 

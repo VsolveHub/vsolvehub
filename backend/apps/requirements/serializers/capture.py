@@ -29,7 +29,9 @@ from apps.requirements.selectors import (
 class RequirementCreateSerializer(serializers.Serializer[dict[str, Any]]):
     variant_id = serializers.UUIDField()
     answers = serializers.JSONField(required=False, default=dict)
-    language = serializers.CharField(max_length=16, required=False, default="en-IN")
+    # Accepted only for rolling compatibility with an older deployed client. New requirements do
+    # not use language, media or narrative detail for matching.
+    language = serializers.CharField(max_length=16, required=False, write_only=True)
 
 
 class RequirementUpdateSerializer(serializers.Serializer[dict[str, Any]]):
@@ -50,8 +52,9 @@ class RequirementUpdateSerializer(serializers.Serializer[dict[str, Any]]):
         required=False,
         allow_blank=True,
         max_length=4000,
+        write_only=True,
     )
-    language = serializers.CharField(required=False, max_length=16)
+    language = serializers.CharField(required=False, max_length=16, write_only=True)
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         low = attrs.get("budget_min_paise")

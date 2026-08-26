@@ -4,6 +4,7 @@ import type { RequirementQuestionView } from "@/features/requirement/adapters";
 import {
   crewDetailQuestions,
   hiddenCrewQuestionCodes,
+  initialCrewBookingStep,
   resumeCrewBookingStep,
   selectedWorkLabel,
   workTypeQuestion,
@@ -47,6 +48,16 @@ describe("crew booking flow", () => {
     const work = workTypeQuestion(questions);
     expect(resumeCrewBookingStep(work, {})).toBe("work");
     expect(resumeCrewBookingStep(work, { work_type: "retired-option" })).toBe("work");
+  });
+
+  it("skips the work picker entirely when the catalogue asks no work question", () => {
+    // A specific day-hire — "Electrician by the day" — publishes only the sizing
+    // questions. The customer answered "what work?" by choosing the service, so
+    // the flow must open on planning and never resume back into a picker that
+    // has nothing to pick.
+    expect(initialCrewBookingStep(null)).toBe("details");
+    expect(resumeCrewBookingStep(null, {})).toBe("details");
+    expect(initialCrewBookingStep(workTypeQuestion(questions))).toBe("work");
   });
 
   it("shows free text only behind Something else", () => {

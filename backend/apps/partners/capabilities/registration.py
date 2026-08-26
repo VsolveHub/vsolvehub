@@ -14,6 +14,8 @@ from datetime import date
 from django.db import transaction
 from django.utils import timezone
 
+from apps.foundation.services import enqueue_outbox_event
+from apps.identity.models import User
 from apps.partners.exceptions import (
     BusinessTypeInvalidError,
     CrewRosterRequiredError,
@@ -122,16 +124,73 @@ def upsert_business_profile(
             field="upi_vpa",
         )
 
+    existing = PartnerBusinessProfile.objects.filter(partner=partner).first()
+    tax_identity_changed = existing is None or (
+        existing.legal_name != legal_name
+        or existing.gst_registered != gst_registered
+        or existing.gstin != gstin
+    )
+    defaults: dict[str, object] = {
+        "business_type": business_type,
+        "legal_name": legal_name,
+        "registration_number": registration_number,
+        "gst_registered": gst_registered,
+        "gstin": gstin,
+        "years_in_operation": years_in_operation,
+        "upi_vpa": handle,
+    }
+    if tax_identity_changed:
+        defaults.update(
+            {
+                "gstin_verified_at": None,
+                "registered_state_code": "",
+                "tax_profile_effective_from": timezone.localdate(),
+            }
+        )
     profile, _created = PartnerBusinessProfile.objects.update_or_create(
         partner=partner,
-        defaults={
-            "business_type": business_type,
-            "legal_name": legal_name,
-            "registration_number": registration_number,
-            "gst_registered": gst_registered,
-            "gstin": gstin,
-            "years_in_operation": years_in_operation,
-            "upi_vpa": handle,
+        defaults=defaults,
+    )
+    return profile
+
+
+@transaction.atomic
+def verify_business_tax_profile(
+    *, partner: PartnerProfile, actor: User, registered_state_code: str = ""
+) -> PartnerBusinessProfile:
+    """Operations verifies the canonical tax identity outside the estimate composer."""
+
+    profile = PartnerBusinessProfile.objects.select_for_update().filter(partner=partner).first()
+    if profile is None or profile.tax_profile_effective_from is None:
+        raise BusinessTypeInvalidError(
+            "The Partner must complete a business profile before tax verification.",
+            field="tax_profile",
+        )
+    state_code = registered_state_code.strip().upper()
+    if profile.gst_registered and (not profile.gstin or not state_code):
+        raise BusinessTypeInvalidError(
+            "A registered Partner needs a GSTIN and registration state.",
+            field="registered_state_code",
+        )
+    if not profile.gst_registered:
+        state_code = ""
+    if profile.gstin_verified_at is not None and profile.registered_state_code == state_code:
+        return profile
+    profile.registered_state_code = state_code
+    profile.gstin_verified_at = timezone.now() if profile.gst_registered else None
+    profile.save(update_fields=("registered_state_code", "gstin_verified_at", "updated_at"))
+    enqueue_outbox_event(
+        aggregate_type="partner_business_profile",
+        aggregate_id=profile.id,
+        event_type="partner.tax_profile.verified",
+        idempotency_key=(
+            f"partner-tax-profile-verified:{profile.id}:{profile.tax_profile_effective_from}"
+        ),
+        payload={
+            "partner_id": str(partner.id),
+            "verified_by": str(actor.id),
+            "registration_status": "REGISTERED" if profile.gst_registered else "UNREGISTERED",
+            "effective_from": profile.tax_profile_effective_from.isoformat(),
         },
     )
     return profile

@@ -45,6 +45,10 @@ const devOrigins = [
 ];
 
 const nextConfig: NextConfig = {
+  // The indicator floats above the customer's fixed mobile tab bar. Build and
+  // runtime errors remain visible in the terminal and browser console without
+  // covering navigation during local demos.
+  devIndicators: false,
   // Workspace packages ship TypeScript source rather than a build step, so Next
   // has to compile them alongside the app.
   transpilePackages: ["@vsolve/ui", "@vsolve/api-client", "@vsolve/query"],

@@ -1,10 +1,14 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useEffect } from "react";
+import { usePathname } from "next/navigation";
 
 import { useIsViewportClaimed } from "@/lib/focus-mode";
 
 import { BottomNav, SiteHeader } from "./site-header";
+import { SiteFooter } from "./site-footer";
+import { appChromeLayout, CUSTOMER_VIEWPORT_WIDTH_CLASS } from "./app-chrome-layout";
 
 /**
  * The app's navigation, except where a screen has taken the viewport.
@@ -29,18 +33,43 @@ import { BottomNav, SiteHeader } from "./site-header";
  */
 export function AppChrome({ children }: { children: ReactNode }) {
   const claimed = useIsViewportClaimed();
+  const pathname = usePathname();
+  const chromeLayout = appChromeLayout(pathname);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0 });
+  }, [pathname]);
 
   // A focused screen supplies its own header, its own scroll region and its own
   // docked action. It gets the viewport untouched — no chrome, and no padding
   // reserved for chrome that is not there.
-  if (claimed) return <>{children}</>;
+  //
+  // The design gallery is the same case reached a different way: each page there
+  // renders a whole artboard, app bar and tab bar included, so the real chrome
+  // around it would draw a second header above the drawn one and a second tab
+  // bar below it. It is a path check rather than a `claimViewport()` call
+  // because those pages are server components with nothing to run the claim.
+  if (claimed || pathname.startsWith("/design/")) return <>{children}</>;
 
   return (
     <>
       <SiteHeader />
       {/* Clears the fixed tab bar (56px) plus whatever the device reserves for
           its home indicator. Above `md` the bar is gone and so is the padding. */}
-      <div className="pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0">{children}</div>
+      <div
+        className={`${CUSTOMER_VIEWPORT_WIDTH_CLASS} pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0`}
+      >
+        <div className={chromeLayout.contentMinHeightClass}>
+          {children}
+        </div>
+        {chromeLayout.hideMobileFooter ? (
+          <div className="hidden md:block">
+            <SiteFooter />
+          </div>
+        ) : (
+          <SiteFooter />
+        )}
+      </div>
       <BottomNav />
     </>
   );

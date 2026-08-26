@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.39.0
+  version: 1.45.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -5522,6 +5522,44 @@ paths:
               schema:
                 $ref: '#/components/schemas/Offer'
           description: ''
+  /api/v1/operations/commercial-policies/activate/:
+    post:
+      operationId: m2_operations_commercial_policy_activate
+      tags:
+      - M2 - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommercialPolicyActivateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CommercialPolicyActivateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CommercialPolicyActivateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommercialPolicy'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/operations/compatibility-rules/:
     get:
       operationId: operations_compatibility_rule_list
@@ -6799,6 +6837,50 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: ''
         '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/partners/{partner_id}/tax-profile/verify/:
+    post:
+      operationId: operations_partner_tax_profile_verify
+      parameters:
+      - in: path
+        name: partner_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations - Partners
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationsTaxProfileVerifyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperationsTaxProfileVerifyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperationsTaxProfileVerifyRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerBusinessProfile'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
           content:
             application/json:
               schema:
@@ -9924,58 +10006,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: '`m2_invitation_expired`, `m2_invitation_slots_exhausted`,
+          description: '`slot_taken` when another professional accepted the same fixed
+            visit first; `m2_invitation_expired`, `m2_invitation_slots_exhausted`,
             `m2_proposal_slot_conflict` when a linked account already holds a slot,
             or `m2_capacity_unavailable` when the vendor already has work booked on
             these dates — either another M2 enquiry they accepted or an A1 booking
             on the shared availability grid.'
-  /api/v1/partner/enquiries/{invitation_id}/attachments/:
-    get:
-      operationId: m2_partner_enquiry_attachment_list
-      description: 'Short-lived signed links to the requirement''s **checked** attachments.
-        Access lasts as long as the invitation holds a quote slot, and ends when it
-        is declined, expired or withdrawn — only the selected vendor keeps it. Expiry
-        is reported as `has_access: false` on a `200`, not as an error: the vendor
-        still owns their enquiry record, and an empty list without that flag would
-        read as ''the Customer attached nothing''. No link is minted once access has
-        lapsed, because a signed URL is a bearer credential and hiding a button is
-        not revocation.'
-      parameters:
-      - in: path
-        name: invitation_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - M2 - Partner enquiries
-      security:
-      - cookieAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VendorAttachmentList'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: ''
-        '503':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: '`m2_attachment_unavailable` when the storage adapter is down.'
   /api/v1/partner/enquiries/{invitation_id}/decline/:
     post:
       operationId: m2_partner_enquiry_decline
@@ -10140,127 +10176,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
-  /api/v1/partner/enquiries/{invitation_id}/visit-slots/:
-    get:
-      operationId: m2_visit_slot_list
-      description: |-
-        The visit times this vendor may confirm, drawn from the **same `carts.availability` grid the A1 technician flow reads** and narrowed to this one invited vendor. Same payload shape as `POST /api/v1/booking/windows/` minus `capacity`, which on a single-vendor grid would be a readout of that vendor's own diary depth.
-
-        Each `id` is a **signed token** bound to this invitation and this start; it is the only thing the confirm command accepts, so a vendor cannot book a time the grid never offered or a slot drawn for a competitor. Tokens expire, so a picker left open must re-read rather than post a stale one.
-
-        An ineligible vendor receives a grid in which every slot reads `NO_CAPACITY` rather than an error — that is the truth and it is renderable, where a refusal would leave the screen with nothing to say.
-      parameters:
-      - in: path
-        name: invitation_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - M2 - Visit slots
-      security:
-      - cookieAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VisitSlotGrid'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: ''
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: '`m2_policy_unavailable` when the owner has not set how long
-            a visit takes for this service — the grid cannot be drawn at an invented
-            width; `m2_visit_slot_unavailable` when the request has no serviceable
-            area.'
-    post:
-      operationId: m2_visit_slot_confirm
-      description: |-
-        Commit to being on site at a specific time. **This is A5 acceptance** — it takes the quote slot and the soft capacity hold, and then a hard slot on the shared availability grid, so a visit and an A1 booking cannot double-book the same vendor.
-
-        The **first** confirmation on an unpaid plan holds its slot and opens the Customer's checkout (`opens_plan_checkout: true`); the visit reads `REQUESTED` until that payment is verified, and the hold lapses harmlessly if it never is. Later slots on a paid plan are confirmed outright.
-      parameters:
-      - in: header
-        name: Idempotency-Key
-        schema:
-          type: string
-        description: Stable opaque key for this logical command. Reuse it only when
-          retrying the identical request; using it with a different payload returns
-          409.
-        required: true
-      - in: path
-        name: invitation_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - M2 - Visit slots
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/VisitSlotConfirmRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/VisitSlotConfirmRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/VisitSlotConfirmRequest'
-        required: true
-      security:
-      - cookieAuth: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VisitSlotConfirmation'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: '`m2_lifecycle_not_supported` — only project requests book
-            visit slots.'
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: ''
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: '`m2_visit_slot_unavailable` when the slot has gone, the token
-            is stale or the start has passed — the availability grid''s exclusion
-            constraint is the final authority and this is what losing that race reads
-            as; `m2_visit_plan_required` when no plan is live; `m2_capacity_unavailable`
-            and `m2_invitation_slots_exhausted` from the acceptance underneath.'
   /api/v1/partner/gates/:
     get:
       operationId: m2_partner_gate_list
@@ -11561,6 +11476,58 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/proposals/preview/:
+    post:
+      operationId: m2_proposal_price_preview
+      description: Debounced, server-authoritative financial preview for the Partner
+        composer.
+      tags:
+      - M2 - Proposals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProposalPreviewRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProposalPreviewRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProposalPreviewRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProposalFinancialSummary'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/quotes/:
     post:
       operationId: quotes_create
@@ -11770,186 +11737,6 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: '`m2_requirement_locked` once the requirement has left DRAFT
             and vendors have seen it.'
-  /api/v1/requirements/{requirement_id}/attachments/:
-    post:
-      operationId: m2_requirement_attachment_finalize
-      description: Turn a completed upload into an attachment, after verifying what
-        actually arrived.
-      parameters:
-      - in: header
-        name: Idempotency-Key
-        schema:
-          type: string
-        description: Stable opaque key for this logical command. Reuse it only when
-          retrying the identical request; using it with a different payload returns
-          409.
-        required: true
-      - in: path
-        name: requirement_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - M2 - Requirements
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AttachmentFinalizeRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/AttachmentFinalizeRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/AttachmentFinalizeRequest'
-        required: true
-      security:
-      - cookieAuth: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RequirementAttachment'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: '`m2_attachment_invalid` when the stored object does not match
-            the size, media type or checksum the client declared, when the upload
-            expired, or when it has already been finalized.'
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: ''
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: ''
-        '503':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: ''
-  /api/v1/requirements/{requirement_id}/attachments/{attachment_id}/:
-    delete:
-      operationId: m2_requirement_attachment_remove
-      description: Remove an attachment and delete the stored object. Refused after
-        the requirement leaves DRAFT, because a vendor was invited against a snapshot
-        and removing a photograph they quoted on rewrites the question after the answer.
-        An `INFECTED` attachment is removable in any state.
-      parameters:
-      - in: path
-        name: attachment_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      - in: path
-        name: requirement_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - M2 - Requirements
-      security:
-      - cookieAuth: []
-      responses:
-        '204':
-          description: Removed.
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: ''
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: ''
-  /api/v1/requirements/{requirement_id}/attachments/uploads/:
-    post:
-      operationId: m2_requirement_attachment_upload_create
-      description: Ask for a signed upload URL. The server names the object key and
-        records the size, media type and SHA-256 the client declares; finalization
-        streams the stored object back and refuses anything that does not match. `scan_status`
-        is `PENDING` on arrival because the object does not exist yet.
-      parameters:
-      - in: path
-        name: requirement_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - M2 - Requirements
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AttachmentUploadRequestRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/AttachmentUploadRequestRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/AttachmentUploadRequestRequest'
-        required: true
-      security:
-      - cookieAuth: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AttachmentUploadGrant'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: '`m2_attachment_invalid` for an unsupported media type, an
-            oversized file, a malformed checksum, or more attachments than one requirement
-            may carry.'
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: ''
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: '`m2_requirement_locked` once the requirement has left DRAFT
-            — a photograph appearing after a vendor quoted is a scope change, not
-            an attachment.'
-        '503':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError'
-          description: '`m2_attachment_unavailable` when the storage adapter is down.
-            Retryable, and the only retryable error on this path.'
   /api/v1/requirements/{requirement_id}/booking-fee/cancel/:
     post:
       operationId: m2_booking_fee_cancel
@@ -13274,6 +13061,162 @@ paths:
           description: '`m2_visit_plan_not_chargeable` when no vendor holds a slot
             yet, when the plan is already paid for, or when a reclassification credit
             already covers it; `m2_visit_plan_required` when no plan has been chosen.'
+  /api/v1/requirements/{requirement_id}/visit-slots/:
+    get:
+      operationId: m2_customer_visit_slot_list
+      description: Customer availability grid and the complete signed slot selection.
+      parameters:
+      - in: path
+        name: requirement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Visit slots
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisitSlotGrid'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+    post:
+      operationId: m2_customer_visit_slot_choose
+      description: Customer availability grid and the complete signed slot selection.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: requirement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Visit slots
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerVisitSlotChoiceRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CustomerVisitSlotChoiceRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CustomerVisitSlotChoiceRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerRequestedVisitSlots'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`slot_expired` for an expired signed token; otherwise the
+            slot is unavailable or the plan shape no longer permits the selection.'
+  /api/v1/requirements/{requirement_id}/visit-slots/{share_id}/replace/:
+    post:
+      operationId: m2_customer_visit_slot_replace
+      description: Replace one exhausted Customer slot while preserving every successful
+        sibling.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: requirement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: share_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Visit slots
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerVisitSlotReplaceRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CustomerVisitSlotReplaceRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CustomerVisitSlotReplaceRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerRequestedVisitSlots'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`slot_expired` for an expired signed token; `no_professional_found`
+            is the prior share state that makes replacement valid.'
   /api/v1/requirements/duplicate-check/:
     get:
       operationId: m2_requirement_duplicate_check
@@ -13649,6 +13592,22 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/services/:
+    get:
+      operationId: catalog_service_index
+      tags:
+      - Catalog
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ServiceIndexItem'
           description: ''
   /api/v1/services/{service_slug}/:
     get:
@@ -14465,15 +14424,6 @@ components:
         invitation_id:
           type: string
           format: uuid
-        total_paise:
-          type: integer
-          minimum: 1
-        tax_basis:
-          $ref: '#/components/schemas/ProposalTaxBasisEnum'
-        tax_paise:
-          type: integer
-          minimum: 0
-          default: 0
         rate_paise_per_worker_day:
           type: integer
           minimum: 1
@@ -14494,6 +14444,20 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ProposalMaterialLineRequest'
+        estimate_type:
+          $ref: '#/components/schemas/EstimateTypeEnum'
+        item_lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalItemLineRequest'
+        labour_lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalLabourLineRequest'
+        other_charges:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalOtherChargeRequest'
         inclusions:
           type: array
           items:
@@ -14513,9 +14477,6 @@ components:
           type: string
           format: date-time
           nullable: true
-        commission_treatment:
-          type: string
-          maxLength: 24
         site_visit_id:
           type: string
           format: uuid
@@ -14525,8 +14486,6 @@ components:
           default: false
       required:
       - invitation_id
-      - tax_basis
-      - total_paise
     AssistedStartRequestRequest:
       type: object
       description: |-
@@ -14546,83 +14505,6 @@ components:
       required:
       - expected_version
       - outage_reason
-    AttachmentFinalizeRequest:
-      type: object
-      properties:
-        upload_id:
-          type: string
-          format: uuid
-      required:
-      - upload_id
-    AttachmentUploadGrant:
-      type: object
-      description: The signed-upload grant. Bytes go to storage, never through Django.
-      properties:
-        id:
-          type: string
-          format: uuid
-          readOnly: true
-        kind:
-          type: string
-          readOnly: true
-        upload_url:
-          type: string
-          format: uri
-          readOnly: true
-        upload_token:
-          type: string
-          readOnly: true
-        upload_expires_at:
-          type: string
-          format: date-time
-          readOnly: true
-        scan_status:
-          type: string
-          readOnly: true
-        server_now:
-          type: string
-          format: date-time
-          readOnly: true
-      required:
-      - id
-      - kind
-      - scan_status
-      - server_now
-      - upload_expires_at
-      - upload_token
-      - upload_url
-    AttachmentUploadRequestRequest:
-      type: object
-      description: |-
-        What the client declares before any bytes exist.
-
-        The checksum is required, and it is the point of the whole handshake: finalization streams the
-        stored object back and compares it against these three values, so an upload that swapped the
-        file after presigning is refused rather than stored. Without them "verify the upload" would mean
-        "believe the client".
-      properties:
-        kind:
-          $ref: '#/components/schemas/RequirementAttachmentKindEnum'
-        content_type:
-          type: string
-          minLength: 1
-          maxLength: 120
-        size_bytes:
-          type: integer
-          minimum: 1
-        sha256:
-          type: string
-          minLength: 64
-          maxLength: 64
-        language:
-          type: string
-          default: ''
-          maxLength: 16
-      required:
-      - content_type
-      - kind
-      - sha256
-      - size_bytes
     AttendanceResponseEnum:
       enum:
       - CONFIRM
@@ -15833,6 +15715,10 @@ components:
         icon_key:
           type: string
           readOnly: true
+        image_url:
+          type: string
+          format: uri
+          readOnly: true
         subcategories:
           type: array
           items:
@@ -15842,6 +15728,7 @@ components:
       - description
       - icon_key
       - id
+      - image_url
       - name
       - slug
       - subcategories
@@ -15937,6 +15824,245 @@ components:
         * `REPLAN_REQUIRED` - Replan required
         * `CANCELLED` - Cancelled
         * `EXPIRED` - Expired
+    CodeEnum:
+      enum:
+      - CUSTOM
+      - DISPOSAL
+      - EQUIPMENT_DELIVERY
+      - LOADING_UNLOADING
+      - PERMIT
+      - TRANSPORT
+      type: string
+      description: |-
+        * `CUSTOM` - CUSTOM
+        * `DISPOSAL` - DISPOSAL
+        * `EQUIPMENT_DELIVERY` - EQUIPMENT_DELIVERY
+        * `LOADING_UNLOADING` - LOADING_UNLOADING
+        * `PERMIT` - PERMIT
+        * `TRANSPORT` - TRANSPORT
+    CommercialAmountBasisEnum:
+      enum:
+      - PARTNER_QUOTE
+      - TAXABLE_VALUE
+      - NONE
+      type: string
+      description: |-
+        * `PARTNER_QUOTE` - Partner quote total
+        * `TAXABLE_VALUE` - Taxable value
+        * `NONE` - Not applicable
+    CommercialPolicy:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/CommercialPolicyStatusEnum'
+          readOnly: true
+        approval_reference:
+          type: string
+          readOnly: true
+        effective_from:
+          type: string
+          format: date-time
+          readOnly: true
+        effective_until:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        approved_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        supplier_of_record:
+          allOf:
+          - $ref: '#/components/schemas/CommercialSupplierOfRecordEnum'
+          readOnly: true
+        material_supplier_of_record:
+          allOf:
+          - $ref: '#/components/schemas/CommercialSupplierOfRecordEnum'
+          readOnly: true
+        visit_supplier_of_record:
+          allOf:
+          - $ref: '#/components/schemas/CommercialSupplierOfRecordEnum'
+          readOnly: true
+        tax_basis:
+          allOf:
+          - $ref: '#/components/schemas/CommercialPolicyTaxBasisEnum'
+          readOnly: true
+        tax_rates_bps:
+          readOnly: true
+        material_tax_category:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        charge_tax_categories:
+          readOnly: true
+        platform_fee_treatment:
+          allOf:
+          - $ref: '#/components/schemas/PlatformFeeTreatmentEnum'
+          readOnly: true
+        platform_fee_bps:
+          type: integer
+          readOnly: true
+          nullable: true
+        platform_fee_tax_bps:
+          type: integer
+          readOnly: true
+          nullable: true
+        commission_bps:
+          type: integer
+          readOnly: true
+          nullable: true
+        commission_basis:
+          allOf:
+          - $ref: '#/components/schemas/CommercialAmountBasisEnum'
+          readOnly: true
+        withholding_bps:
+          type: integer
+          readOnly: true
+          nullable: true
+        withholding_basis:
+          allOf:
+          - $ref: '#/components/schemas/CommercialAmountBasisEnum'
+          readOnly: true
+      required:
+      - approval_reference
+      - approved_at
+      - charge_tax_categories
+      - commission_basis
+      - commission_bps
+      - effective_from
+      - effective_until
+      - id
+      - material_supplier_of_record
+      - material_tax_category
+      - platform_fee_bps
+      - platform_fee_tax_bps
+      - platform_fee_treatment
+      - status
+      - supplier_of_record
+      - tax_basis
+      - tax_rates_bps
+      - version
+      - visit_supplier_of_record
+      - withholding_basis
+      - withholding_bps
+    CommercialPolicyActivateRequest:
+      type: object
+      properties:
+        version:
+          type: integer
+          minimum: 1
+        approval_reference:
+          type: string
+          minLength: 1
+          maxLength: 120
+        effective_from:
+          type: string
+          format: date-time
+        effective_until:
+          type: string
+          format: date-time
+          nullable: true
+        supplier_of_record:
+          $ref: '#/components/schemas/CommercialSupplierOfRecordEnum'
+        material_supplier_of_record:
+          $ref: '#/components/schemas/CommercialSupplierOfRecordEnum'
+        visit_supplier_of_record:
+          $ref: '#/components/schemas/CommercialSupplierOfRecordEnum'
+        tax_basis:
+          $ref: '#/components/schemas/CommercialPolicyTaxBasisEnum'
+        tax_rates_bps:
+          type: object
+          additionalProperties:
+            type: integer
+            maximum: 10000
+            minimum: 0
+        material_tax_category:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: ^[-a-zA-Z0-9_]+$
+        charge_tax_categories:
+          type: object
+          additionalProperties:
+            type: string
+            minLength: 1
+            maxLength: 100
+            pattern: ^[-a-zA-Z0-9_]+$
+        platform_fee_treatment:
+          $ref: '#/components/schemas/PlatformFeeTreatmentEnum'
+        platform_fee_bps:
+          type: integer
+          maximum: 10000
+          minimum: 0
+        platform_fee_tax_bps:
+          type: integer
+          maximum: 10000
+          minimum: 0
+        commission_bps:
+          type: integer
+          maximum: 10000
+          minimum: 0
+        commission_basis:
+          $ref: '#/components/schemas/CommercialAmountBasisEnum'
+        withholding_bps:
+          type: integer
+          maximum: 10000
+          minimum: 0
+        withholding_basis:
+          $ref: '#/components/schemas/CommercialAmountBasisEnum'
+      required:
+      - approval_reference
+      - commission_basis
+      - commission_bps
+      - effective_from
+      - material_supplier_of_record
+      - material_tax_category
+      - platform_fee_bps
+      - platform_fee_tax_bps
+      - platform_fee_treatment
+      - supplier_of_record
+      - tax_basis
+      - tax_rates_bps
+      - version
+      - visit_supplier_of_record
+      - withholding_basis
+      - withholding_bps
+    CommercialPolicyStatusEnum:
+      enum:
+      - DRAFT
+      - ACTIVE
+      - RETIRED
+      type: string
+      description: |-
+        * `DRAFT` - Draft
+        * `ACTIVE` - Active
+        * `RETIRED` - Retired
+    CommercialPolicyTaxBasisEnum:
+      enum:
+      - INCLUSIVE
+      - EXCLUSIVE
+      type: string
+      description: |-
+        * `INCLUSIVE` - Included in Partner rates
+        * `EXCLUSIVE` - Added to Partner rates
+    CommercialSupplierOfRecordEnum:
+      enum:
+      - PARTNER
+      - VSOLVE
+      type: string
+      description: |-
+        * `PARTNER` - Partner
+        * `VSOLVE` - V Solve Hub
     CommunicationPreference:
       type: object
       properties:
@@ -16902,6 +17028,25 @@ components:
           type: integer
           readOnly: true
           nullable: true
+        estimate_type:
+          allOf:
+          - $ref: '#/components/schemas/EstimateTypeEnum'
+          readOnly: true
+        item_lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalItemLine'
+          readOnly: true
+        labour_lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalLabourLine'
+          readOnly: true
+        other_charges:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalOtherCharge'
+          readOnly: true
         total_paise:
           type: integer
           readOnly: true
@@ -16912,8 +17057,28 @@ components:
           allOf:
           - $ref: '#/components/schemas/ProposalTaxBasisEnum'
           readOnly: true
-        commission_treatment:
-          type: string
+        calculation_snapshot:
+          readOnly: true
+        line_subtotal_paise:
+          type: integer
+          readOnly: true
+        authorized_charges_paise:
+          type: integer
+          readOnly: true
+        taxable_value_paise:
+          type: integer
+          readOnly: true
+        partner_quote_total_paise:
+          type: integer
+          readOnly: true
+        platform_fee_paise:
+          type: integer
+          readOnly: true
+        platform_fee_tax_paise:
+          type: integer
+          readOnly: true
+        customer_total_paise:
+          type: integer
           readOnly: true
         inclusions:
           readOnly: true
@@ -16942,12 +17107,22 @@ components:
           format: date-time
           readOnly: true
       required:
-      - commission_treatment
+      - authorized_charges_paise
+      - calculation_snapshot
+      - customer_total_paise
+      - estimate_type
       - exclusions
       - id
       - inclusions
+      - item_lines
+      - labour_lines
+      - line_subtotal_paise
       - material_lines
       - minimum_days
+      - other_charges
+      - partner_quote_total_paise
+      - platform_fee_paise
+      - platform_fee_tax_paise
       - rate_paise_per_worker_day
       - rejection_reason
       - revalidation_requested_at
@@ -16958,6 +17133,7 @@ components:
       - submitted_at
       - tax_basis
       - tax_paise
+      - taxable_value_paise
       - total_paise
       - usability
       - valid_until
@@ -16984,6 +17160,44 @@ components:
       - non_responsive_rejections_remaining
       - quotes
       - server_now
+    CustomerRequestedVisitSlots:
+      type: object
+      properties:
+        slots:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisitPlanShare'
+          readOnly: true
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - server_now
+      - slots
+    CustomerVisitSlotChoiceRequest:
+      type: object
+      description: Exactly one signed grid token per estimate requested by the Customer.
+      properties:
+        slot_ids:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 2000
+          maxItems: 3
+          minItems: 1
+      required:
+      - slot_ids
+    CustomerVisitSlotReplaceRequest:
+      type: object
+      properties:
+        slot_id:
+          type: string
+          minLength: 1
+          maxLength: 2000
+      required:
+      - slot_id
     DaySettlement:
       type: object
       description: |-
@@ -17815,6 +18029,8 @@ components:
         amount_paise:
           type: integer
           readOnly: true
+        funding_breakdown:
+          readOnly: true
         kind:
           allOf:
           - $ref: '#/components/schemas/EngagementStageKindEnum'
@@ -17917,6 +18133,7 @@ components:
       - evidence_submitted_at
       - funded_at
       - funded_paise
+      - funding_breakdown
       - funding_state
       - id
       - kind
@@ -18005,7 +18222,8 @@ components:
 
         Reads the **snapshot**, not the live requirement: the snapshot is what this vendor was invited
         against, and re-reading the requirement would silently move the goalposts under a quote in
-        progress. Customer identity and address are absent before acceptance by design.
+        progress. Customer identity and the exact address are absent from this list by design; only a
+        locality-level area is published.
       properties:
         id:
           type: string
@@ -18020,6 +18238,9 @@ components:
           readOnly: true
           pattern: ^[-a-zA-Z0-9_]+$
         service_name:
+          type: string
+          readOnly: true
+        approximate_area:
           type: string
           readOnly: true
         archetype:
@@ -18043,9 +18264,23 @@ components:
           type: string
           format: date
           readOnly: true
-        language:
+        fixed_visit_start:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        fixed_visit_duration_minutes:
+          type: integer
+          readOnly: true
+          nullable: true
+        fixed_visit_earning_paise:
+          type: integer
+          readOnly: true
+          nullable: true
+        fixed_visit_status:
           type: string
           readOnly: true
+          nullable: true
         responds_by:
           type: string
           format: date-time
@@ -18063,9 +18298,6 @@ components:
           format: date-time
           readOnly: true
         answers:
-          readOnly: true
-        additional_details:
-          type: string
           readOnly: true
         budget_min_paise:
           type: integer
@@ -18098,20 +18330,28 @@ components:
           items:
             $ref: '#/components/schemas/SiteVisit'
           readOnly: true
+        site_address:
+          allOf:
+          - $ref: '#/components/schemas/PartnerSiteAddress'
+          nullable: true
+          readOnly: true
         server_now:
           type: string
           readOnly: true
       required:
-      - additional_details
       - answers
+      - approximate_area
       - archetype
       - budget_max_paise
       - budget_min_paise
       - category_slug
       - created_at
       - decline_reason_code
+      - fixed_visit_duration_minutes
+      - fixed_visit_earning_paise
+      - fixed_visit_start
+      - fixed_visit_status
       - id
-      - language
       - latest_proposal_rejection_reason
       - latest_proposal_status
       - proposals
@@ -18124,6 +18364,7 @@ components:
       - server_now
       - service_by
       - service_name
+      - site_address
       - site_visits
       - status
       - wave
@@ -18134,7 +18375,8 @@ components:
 
         Reads the **snapshot**, not the live requirement: the snapshot is what this vendor was invited
         against, and re-reading the requirement would silently move the goalposts under a quote in
-        progress. Customer identity and address are absent before acceptance by design.
+        progress. Customer identity and the exact address are absent from this list by design; only a
+        locality-level area is published.
       properties:
         id:
           type: string
@@ -18149,6 +18391,9 @@ components:
           readOnly: true
           pattern: ^[-a-zA-Z0-9_]+$
         service_name:
+          type: string
+          readOnly: true
+        approximate_area:
           type: string
           readOnly: true
         archetype:
@@ -18172,9 +18417,23 @@ components:
           type: string
           format: date
           readOnly: true
-        language:
+        fixed_visit_start:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        fixed_visit_duration_minutes:
+          type: integer
+          readOnly: true
+          nullable: true
+        fixed_visit_earning_paise:
+          type: integer
+          readOnly: true
+          nullable: true
+        fixed_visit_status:
           type: string
           readOnly: true
+          nullable: true
         responds_by:
           type: string
           format: date-time
@@ -18192,11 +18451,15 @@ components:
           format: date-time
           readOnly: true
       required:
+      - approximate_area
       - archetype
       - category_slug
       - created_at
+      - fixed_visit_duration_minutes
+      - fixed_visit_earning_paise
+      - fixed_visit_start
+      - fixed_visit_status
       - id
-      - language
       - latest_proposal_rejection_reason
       - latest_proposal_status
       - requested_start
@@ -18243,6 +18506,14 @@ components:
       required:
       - expected_version
       - severity
+    EstimateTypeEnum:
+      enum:
+      - ITEM_WISE
+      - LABOUR_WISE
+      type: string
+      description: |-
+        * `ITEM_WISE` - Item-wise
+        * `LABOUR_WISE` - Labour-wise
     EvidenceFinalizeRequestRequest:
       type: object
       description: |-
@@ -18935,6 +19206,98 @@ components:
             $ref: '#/components/schemas/DeliverableInputRequest'
       required:
       - items
+    IconKeyEnum:
+      enum:
+      - service
+      - electrical
+      - plumbing
+      - carpentry
+      - air-conditioning
+      - water-purifier
+      - internet-wifi
+      - gas-stove
+      - computer
+      - mobile
+      - security-camera
+      - locksmith
+      - home-automation
+      - fire-safety
+      - face-care
+      - beauty-treatment
+      - waxing
+      - threading
+      - hair-care
+      - nail-care
+      - makeup
+      - mehendi
+      - body-care
+      - skin-care
+      - home-cleaning
+      - sofa-carpet
+      - pest-control
+      - water-tank
+      - septic-tank
+      - laundry
+      - gardening
+      - swimming-pool
+      - chimney-exhaust
+      - home-organization
+      - home-inspection
+      - home-maintenance
+      - pet-grooming
+      - veterinary
+      - pet-walking
+      - pet-sitting
+      - pet-training
+      - pet-photography
+      - workforce
+      - custom-project
+      type: string
+      description: |-
+        * `service` - Generic service
+        * `electrical` - Electrical
+        * `plumbing` - Plumbing
+        * `carpentry` - Carpentry
+        * `air-conditioning` - Air conditioning
+        * `water-purifier` - Water purifier
+        * `internet-wifi` - Internet and Wi-Fi
+        * `gas-stove` - Gas stove
+        * `computer` - Computer
+        * `mobile` - Mobile
+        * `security-camera` - Security camera
+        * `locksmith` - Locksmith
+        * `home-automation` - Home automation
+        * `fire-safety` - Fire safety
+        * `face-care` - Face care
+        * `beauty-treatment` - Beauty treatment
+        * `waxing` - Waxing
+        * `threading` - Threading
+        * `hair-care` - Hair care
+        * `nail-care` - Nail care
+        * `makeup` - Makeup
+        * `mehendi` - Mehendi
+        * `body-care` - Body care
+        * `skin-care` - Advanced skin care
+        * `home-cleaning` - Home cleaning
+        * `sofa-carpet` - Sofa and carpet cleaning
+        * `pest-control` - Pest control
+        * `water-tank` - Water tank
+        * `septic-tank` - Septic tank
+        * `laundry` - Laundry
+        * `gardening` - Gardening
+        * `swimming-pool` - Swimming pool
+        * `chimney-exhaust` - Chimney and exhaust
+        * `home-organization` - Home organization
+        * `home-inspection` - Home inspection
+        * `home-maintenance` - Home maintenance
+        * `pet-grooming` - Pet grooming
+        * `veterinary` - Veterinary
+        * `pet-walking` - Pet walking
+        * `pet-sitting` - Pet sitting
+        * `pet-training` - Pet training
+        * `pet-photography` - Pet photography
+        * `workforce` - Workforce
+        * `custom-project` - Custom project
     IntendedRoleEnum:
       enum:
       - partner
@@ -19128,6 +19491,26 @@ components:
         all:
           type: boolean
           default: false
+    MatchingStatusEnum:
+      enum:
+      - SEARCHING
+      - HELD
+      - BOOKED
+      - VISITED
+      - ESTIMATE_RECEIVED
+      - NO_PROFESSIONAL_FOUND
+      - CANCELLED
+      - RECOVERY
+      type: string
+      description: |-
+        * `SEARCHING` - Searching
+        * `HELD` - Professional held while payment is pending
+        * `BOOKED` - Booked
+        * `VISITED` - Visited
+        * `ESTIMATE_RECEIVED` - Estimate received
+        * `NO_PROFESSIONAL_FOUND` - No professional found
+        * `CANCELLED` - Cancelled
+        * `RECOVERY` - Recovery
     ModeEnum:
       enum:
       - SAME_PARTNER_SEQUENTIAL
@@ -20412,6 +20795,13 @@ components:
       required:
       - decision
       - reason
+    OperationsTaxProfileVerifyRequest:
+      type: object
+      properties:
+        registered_state_code:
+          type: string
+          default: ''
+          maxLength: 8
     OperationsTouch:
       type: object
       properties:
@@ -20938,10 +21328,11 @@ components:
       description: |-
         The same visit, as the Partner assigned to it sees it.
 
-        Deliberately does not carry `order_id`, any sibling unit, or any money beyond the per-task
-        amounts the Partner is working to. The Booking Group is not addressable from here at all:
-        `G7` requires that a Partner cannot reach a sibling unit's scope or earnings, and the
-        cheapest way to guarantee that is to never publish the identifier that would let them try.
+        Deliberately does not carry `order_id`, any sibling unit, the Customer's invoice, or their
+        exact address. Its estimate and settled earning are this Partner's own money for this one
+        unit. The Booking Group is not addressable from here at all: `G7` requires that a Partner
+        cannot reach a sibling unit's scope or earnings, and the cheapest way to guarantee that is to
+        never publish the identifier that would let them try.
       properties:
         id:
           type: string
@@ -20952,6 +21343,24 @@ components:
           format: uuid
           readOnly: true
           nullable: true
+        display_title:
+          type: string
+          nullable: true
+          readOnly: true
+        approximate_area:
+          type: string
+          nullable: true
+          readOnly: true
+        service_lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerBookingServiceLine'
+          readOnly: true
+        requirements:
+          type: array
+          items:
+            type: string
+          readOnly: true
         status:
           allOf:
           - $ref: '#/components/schemas/BookingStatusEnum'
@@ -21001,6 +21410,11 @@ components:
           - $ref: '#/components/schemas/ScopeAmendment'
           nullable: true
           readOnly: true
+        estimated_earning:
+          allOf:
+          - $ref: '#/components/schemas/PartnerBookingEstimatedEarning'
+          nullable: true
+          readOnly: true
         earning:
           allOf:
           - $ref: '#/components/schemas/PartnerBookingEarning'
@@ -21008,20 +21422,26 @@ components:
           readOnly: true
         server_now:
           type: string
+          format: date-time
           readOnly: true
       required:
       - active_amendment
+      - approximate_area
       - arrived_at
       - customer_unavailable_wait_started_at
+      - display_title
       - earning
       - en_route_at
       - estimated_duration_minutes
+      - estimated_earning
       - evidence
       - fulfilment_unit_id
       - id
       - late_declared_at
+      - requirements
       - scheduled_start
       - server_now
+      - service_lines
       - status
       - version
       - work_tasks
@@ -21047,6 +21467,28 @@ components:
       - gross_paise
       - net_paise
       - status
+    PartnerBookingEstimatedEarning:
+      type: object
+      description: The booked-scope estimate, before completion determines the final
+        ledger earning.
+      properties:
+        gross_paise:
+          type: integer
+          minimum: 0
+        commission_paise:
+          type: integer
+          minimum: 0
+        net_paise:
+          type: integer
+          minimum: 0
+        currency:
+          type: string
+          maxLength: 3
+      required:
+      - commission_paise
+      - currency
+      - gross_paise
+      - net_paise
     PartnerBookingPage:
       type: object
       properties:
@@ -21070,6 +21512,27 @@ components:
       - previous
       - results
       - server_now
+    PartnerBookingServiceLine:
+      type: object
+      description: One immutable service line carried from the offer into the accepted
+        job.
+      properties:
+        line_id:
+          type: string
+          format: uuid
+        service_label:
+          type: string
+        quantity:
+          type: integer
+          minimum: 1
+        scope:
+          type: object
+          additionalProperties: {}
+      required:
+      - line_id
+      - quantity
+      - scope
+      - service_label
     PartnerBusinessProfile:
       type: object
       properties:
@@ -21089,6 +21552,19 @@ components:
         gstin:
           type: string
           readOnly: true
+        gstin_verified_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        registered_state_code:
+          type: string
+          readOnly: true
+        tax_profile_effective_from:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
         years_in_operation:
           type: integer
           readOnly: true
@@ -21103,8 +21579,11 @@ components:
       - business_type
       - gst_registered
       - gstin
+      - gstin_verified_at
       - legal_name
+      - registered_state_code
       - registration_number
+      - tax_profile_effective_from
       - updated_at
       - upi_vpa
       - years_in_operation
@@ -22026,6 +22505,36 @@ components:
       - name
       - slug
       - timezone
+    PartnerSiteAddress:
+      type: object
+      description: |-
+        The visit destination, disclosed only once the paid visit is genuinely scheduled.
+
+        Customer identity and contact remain absent. Coordinates remain absent too: the Partner needs
+        a destination, not a reusable precision-location feed.
+      properties:
+        line1:
+          type: string
+        line2:
+          type: string
+        landmark:
+          type: string
+        locality:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        postal_code:
+          type: string
+      required:
+      - city
+      - landmark
+      - line1
+      - line2
+      - locality
+      - postal_code
+      - state
     PartnerSkillChip:
       type: object
       description: A code/name pair, for the chips the directory renders.
@@ -22337,9 +22846,11 @@ components:
           nullable: true
         additional_details:
           type: string
+          writeOnly: true
           maxLength: 4000
         language:
           type: string
+          writeOnly: true
           minLength: 1
           maxLength: 16
     PaymentAllocation:
@@ -22883,6 +23394,16 @@ components:
       - quantity
       - scope_snapshot
       - variant_snapshot
+    PlatformFeeTreatmentEnum:
+      enum:
+      - NONE
+      - CUSTOMER
+      - PARTNER
+      type: string
+      description: |-
+        * `NONE` - Not applicable
+        * `CUSTOMER` - Charged separately to Customer
+        * `PARTNER` - Deducted from Partner proceeds
     PreferredStartRequest:
       type: object
       description: One visit's chosen start, keyed by the scheduling group it belongs
@@ -23672,6 +24193,25 @@ components:
           type: integer
           readOnly: true
           nullable: true
+        estimate_type:
+          allOf:
+          - $ref: '#/components/schemas/EstimateTypeEnum'
+          readOnly: true
+        item_lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalItemLine'
+          readOnly: true
+        labour_lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalLabourLine'
+          readOnly: true
+        other_charges:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalOtherCharge'
+          readOnly: true
         total_paise:
           type: integer
           readOnly: true
@@ -23684,6 +24224,38 @@ components:
           readOnly: true
         commission_treatment:
           type: string
+          readOnly: true
+        calculation_snapshot:
+          readOnly: true
+        line_subtotal_paise:
+          type: integer
+          readOnly: true
+        authorized_charges_paise:
+          type: integer
+          readOnly: true
+        taxable_value_paise:
+          type: integer
+          readOnly: true
+        partner_quote_total_paise:
+          type: integer
+          readOnly: true
+        platform_fee_paise:
+          type: integer
+          readOnly: true
+        platform_fee_tax_paise:
+          type: integer
+          readOnly: true
+        customer_total_paise:
+          type: integer
+          readOnly: true
+        commission_paise:
+          type: integer
+          readOnly: true
+        withholding_paise:
+          type: integer
+          readOnly: true
+        partner_net_paise:
+          type: integer
           readOnly: true
         inclusions:
           readOnly: true
@@ -23717,13 +24289,26 @@ components:
           format: date-time
           readOnly: true
       required:
+      - authorized_charges_paise
+      - calculation_snapshot
+      - commission_paise
       - commission_treatment
+      - customer_total_paise
+      - estimate_type
       - exclusions
       - id
       - inclusions
       - invitation
+      - item_lines
+      - labour_lines
+      - line_subtotal_paise
       - material_lines
       - minimum_days
+      - other_charges
+      - partner_net_paise
+      - partner_quote_total_paise
+      - platform_fee_paise
+      - platform_fee_tax_paise
       - rate_paise_per_worker_day
       - rejection_reason
       - requirement
@@ -23736,11 +24321,13 @@ components:
       - submitted_at
       - tax_basis
       - tax_paise
+      - taxable_value_paise
       - total_paise
       - usability
       - valid_until
       - vendor_confirmed_at
       - warranty_terms
+      - withholding_paise
       - worker_count
     ProposalCreateRequest:
       type: object
@@ -23755,15 +24342,6 @@ components:
         invitation_id:
           type: string
           format: uuid
-        total_paise:
-          type: integer
-          minimum: 1
-        tax_basis:
-          $ref: '#/components/schemas/ProposalTaxBasisEnum'
-        tax_paise:
-          type: integer
-          minimum: 0
-          default: 0
         rate_paise_per_worker_day:
           type: integer
           minimum: 1
@@ -23784,6 +24362,20 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ProposalMaterialLineRequest'
+        estimate_type:
+          $ref: '#/components/schemas/EstimateTypeEnum'
+        item_lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalItemLineRequest'
+        labour_lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalLabourLineRequest'
+        other_charges:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalOtherChargeRequest'
         inclusions:
           type: array
           items:
@@ -23803,17 +24395,212 @@ components:
           type: string
           format: date-time
           nullable: true
-        commission_treatment:
-          type: string
-          maxLength: 24
         site_visit_id:
           type: string
           format: uuid
           nullable: true
       required:
       - invitation_id
+    ProposalFinancialSummary:
+      type: object
+      properties:
+        estimate_type:
+          $ref: '#/components/schemas/EstimateTypeEnum'
+        item_lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalItemLine'
+        labour_lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalLabourLine'
+        material_lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalMaterialLine'
+        other_charges:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalOtherCharge'
+        stages:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalStage'
+        line_subtotal_paise:
+          type: integer
+          minimum: 0
+        material_total_paise:
+          type: integer
+          minimum: 0
+        authorized_charges_paise:
+          type: integer
+          minimum: 0
+        taxable_value_paise:
+          type: integer
+          minimum: 0
+        partner_service_tax_paise:
+          type: integer
+          minimum: 0
+        partner_quote_total_paise:
+          type: integer
+          minimum: 0
+        platform_fee_paise:
+          type: integer
+          minimum: 0
+        platform_fee_tax_paise:
+          type: integer
+          minimum: 0
+        customer_total_paise:
+          type: integer
+          minimum: 0
+        commission_paise:
+          type: integer
+          minimum: 0
+        withholding_paise:
+          type: integer
+          minimum: 0
+        partner_net_paise:
+          type: integer
+          minimum: 0
+        tax_basis:
+          $ref: '#/components/schemas/ProposalTaxBasisEnum'
+        policy_version:
+          type: integer
+          minimum: 1
+        calculation_snapshot: {}
+      required:
+      - authorized_charges_paise
+      - calculation_snapshot
+      - commission_paise
+      - customer_total_paise
+      - estimate_type
+      - item_lines
+      - labour_lines
+      - line_subtotal_paise
+      - material_lines
+      - material_total_paise
+      - other_charges
+      - partner_net_paise
+      - partner_quote_total_paise
+      - partner_service_tax_paise
+      - platform_fee_paise
+      - platform_fee_tax_paise
+      - policy_version
+      - stages
       - tax_basis
-      - total_paise
+      - taxable_value_paise
+      - withholding_paise
+    ProposalItemLine:
+      type: object
+      properties:
+        category:
+          type: string
+          maxLength: 80
+        title:
+          type: string
+          maxLength: 200
+        unit:
+          $ref: '#/components/schemas/UnitEnum'
+        quantity:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,9}(?:\.\d{0,3})?$
+        rate_paise:
+          type: integer
+          minimum: 1
+        amount_paise:
+          type: integer
+          readOnly: true
+      required:
+      - amount_paise
+      - category
+      - quantity
+      - rate_paise
+      - title
+      - unit
+    ProposalItemLineRequest:
+      type: object
+      properties:
+        category:
+          type: string
+          minLength: 1
+          maxLength: 80
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        unit:
+          $ref: '#/components/schemas/UnitEnum'
+        quantity:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,9}(?:\.\d{0,3})?$
+        rate_paise:
+          type: integer
+          minimum: 1
+      required:
+      - category
+      - quantity
+      - rate_paise
+      - title
+      - unit
+    ProposalLabourLine:
+      type: object
+      properties:
+        role:
+          type: string
+          maxLength: 120
+        team:
+          type: string
+          default: ''
+          maxLength: 120
+        member_count:
+          type: integer
+          maximum: 10000
+          minimum: 1
+        day_count:
+          type: integer
+          maximum: 3650
+          minimum: 1
+        rate_paise_per_day:
+          type: integer
+          minimum: 1
+        amount_paise:
+          type: integer
+          readOnly: true
+      required:
+      - amount_paise
+      - day_count
+      - member_count
+      - rate_paise_per_day
+      - role
+    ProposalLabourLineRequest:
+      type: object
+      properties:
+        role:
+          type: string
+          minLength: 1
+          maxLength: 120
+        team:
+          type: string
+          default: ''
+          maxLength: 120
+        member_count:
+          type: integer
+          maximum: 10000
+          minimum: 1
+        day_count:
+          type: integer
+          maximum: 3650
+          minimum: 1
+        rate_paise_per_day:
+          type: integer
+          minimum: 1
+      required:
+      - day_count
+      - member_count
+      - rate_paise_per_day
+      - role
     ProposalMaterialLine:
       type: object
       description: |-
@@ -23836,19 +24623,38 @@ components:
           type: string
           maxLength: 200
         quantity:
-          type: integer
-          minimum: 1
-          default: 1
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,9}(?:\.\d{0,3})?$
+          default: '1.000'
         unit:
           type: string
           default: ''
           maxLength: 32
+        rate_paise:
+          type: integer
+          minimum: 1
         amount_paise:
           type: integer
-          minimum: 0
+          minimum: 1
+        tax_paise:
+          type: integer
+          readOnly: true
+        platform_fee_paise:
+          type: integer
+          readOnly: true
+        platform_fee_tax_paise:
+          type: integer
+          readOnly: true
+        total_due_paise:
+          type: integer
+          readOnly: true
       required:
-      - amount_paise
+      - platform_fee_paise
+      - platform_fee_tax_paise
+      - tax_paise
       - title
+      - total_due_paise
     ProposalMaterialLineRequest:
       type: object
       description: |-
@@ -23872,19 +24678,53 @@ components:
           minLength: 1
           maxLength: 200
         quantity:
-          type: integer
-          minimum: 1
-          default: 1
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,9}(?:\.\d{0,3})?$
+          default: '1.000'
         unit:
           type: string
           default: ''
           maxLength: 32
+        rate_paise:
+          type: integer
+          minimum: 1
         amount_paise:
           type: integer
-          minimum: 0
+          minimum: 1
+      required:
+      - title
+    ProposalOtherCharge:
+      type: object
+      properties:
+        code:
+          $ref: '#/components/schemas/CodeEnum'
+        label:
+          type: string
+          maxLength: 120
+        amount_paise:
+          type: integer
+          minimum: 1
       required:
       - amount_paise
-      - title
+      - code
+      - label
+    ProposalOtherChargeRequest:
+      type: object
+      properties:
+        code:
+          $ref: '#/components/schemas/CodeEnum'
+        label:
+          type: string
+          minLength: 1
+          maxLength: 120
+        amount_paise:
+          type: integer
+          minimum: 1
+      required:
+      - amount_paise
+      - code
+      - label
     ProposalPage:
       type: object
       properties:
@@ -23904,6 +24744,78 @@ components:
       - next
       - previous
       - results
+    ProposalPreviewRequest:
+      type: object
+      description: |-
+        Both composers in one shape; the domain validates which fields the archetype requires.
+
+        Deliberately not two serializers. `proposals.submit_proposal` already runs `_assert_a3_shape`
+        or `_assert_a5_shape` against the requirement's own archetype, and a second archetype check
+        here would be a copy of that rule which could disagree with it. A vendor sending A5 stages on
+        an A3 requirement gets one refusal, from the layer that knows.
+      properties:
+        invitation_id:
+          type: string
+          format: uuid
+        rate_paise_per_worker_day:
+          type: integer
+          minimum: 1
+          nullable: true
+        minimum_days:
+          type: integer
+          minimum: 1
+          nullable: true
+        worker_count:
+          type: integer
+          minimum: 1
+          nullable: true
+        stages:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalStageRequest'
+        material_lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalMaterialLineRequest'
+        estimate_type:
+          $ref: '#/components/schemas/EstimateTypeEnum'
+        item_lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalItemLineRequest'
+        labour_lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalLabourLineRequest'
+        other_charges:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalOtherChargeRequest'
+        inclusions:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 200
+        exclusions:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 200
+        warranty_terms:
+          type: string
+          maxLength: 4000
+        valid_until:
+          type: string
+          format: date-time
+          nullable: true
+        site_visit_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - invitation_id
     ProposalRejectRequest:
       type: object
       properties:
@@ -24012,7 +24924,22 @@ components:
           maxLength: 2000
         amount_paise:
           type: integer
-          minimum: 0
+          minimum: 1
+        position:
+          type: integer
+          readOnly: true
+        tax_paise:
+          type: integer
+          readOnly: true
+        platform_fee_paise:
+          type: integer
+          readOnly: true
+        platform_fee_tax_paise:
+          type: integer
+          readOnly: true
+        total_due_paise:
+          type: integer
+          readOnly: true
         starts_on:
           type: string
           format: date
@@ -24028,7 +24955,12 @@ components:
           nullable: true
       required:
       - amount_paise
+      - platform_fee_paise
+      - platform_fee_tax_paise
+      - position
+      - tax_paise
       - title
+      - total_due_paise
     ProposalStageRequest:
       type: object
       description: |-
@@ -24052,7 +24984,7 @@ components:
           maxLength: 2000
         amount_paise:
           type: integer
-          minimum: 0
+          minimum: 1
         starts_on:
           type: string
           format: date
@@ -25448,8 +26380,8 @@ components:
         answers: {}
         language:
           type: string
+          writeOnly: true
           minLength: 1
-          default: en-IN
           maxLength: 16
       required:
       - variant_id
@@ -25868,6 +26800,10 @@ components:
         description:
           type: string
           readOnly: true
+        image_url:
+          type: string
+          format: uri
+          readOnly: true
         fulfilment_archetype:
           type: string
           readOnly: true
@@ -25881,6 +26817,7 @@ components:
       - description
       - fulfilment_archetype
       - id
+      - image_url
       - name
       - questions
     RescheduleBookingRequestRequest:
@@ -26421,6 +27358,10 @@ components:
         name:
           type: string
           readOnly: true
+        icon_key:
+          allOf:
+          - $ref: '#/components/schemas/IconKeyEnum'
+          readOnly: true
         short_description:
           type: string
           readOnly: true
@@ -26454,6 +27395,7 @@ components:
       - bookable_variant_id
       - category_slug
       - cover
+      - icon_key
       - id
       - name
       - request_archetypes
@@ -26474,6 +27416,10 @@ components:
           pattern: ^[-a-zA-Z0-9_]+$
         name:
           type: string
+          readOnly: true
+        icon_key:
+          allOf:
+          - $ref: '#/components/schemas/IconKeyEnum'
           readOnly: true
         short_description:
           type: string
@@ -26530,6 +27476,7 @@ components:
       - bookable_variant_id
       - category_slug
       - cover
+      - icon_key
       - id
       - media
       - name
@@ -26541,6 +27488,68 @@ components:
       - starting_price
       - subcategory_slug
       - variants
+    ServiceIndexItem:
+      type: object
+      description: The complete icon catalogue's intentionally small row contract.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        slug:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          readOnly: true
+        icon_key:
+          allOf:
+          - $ref: '#/components/schemas/IconKeyEnum'
+          readOnly: true
+        display_order:
+          type: integer
+          readOnly: true
+        category_id:
+          type: string
+          format: uuid
+          readOnly: true
+        category_slug:
+          type: string
+          readOnly: true
+        category_name:
+          type: string
+          readOnly: true
+        category_display_order:
+          type: integer
+          readOnly: true
+        subcategory_id:
+          type: string
+          format: uuid
+          readOnly: true
+        subcategory_slug:
+          type: string
+          readOnly: true
+        subcategory_name:
+          type: string
+          readOnly: true
+        subcategory_display_order:
+          type: integer
+          readOnly: true
+      required:
+      - category_display_order
+      - category_id
+      - category_name
+      - category_slug
+      - display_order
+      - icon_key
+      - id
+      - name
+      - slug
+      - subcategory_display_order
+      - subcategory_id
+      - subcategory_name
+      - subcategory_slug
     ServiceMedia:
       type: object
       properties:
@@ -26734,6 +27743,10 @@ components:
         description:
           type: string
           readOnly: true
+        image_url:
+          type: string
+          format: uri
+          readOnly: true
         fulfilment_archetype:
           type: string
           readOnly: true
@@ -26764,6 +27777,7 @@ components:
       - description
       - fulfilment_archetype
       - id
+      - image_url
       - minimum_service_subtotal
       - name
       - questions
@@ -27618,10 +28632,24 @@ components:
         description:
           type: string
           readOnly: true
+        icon_key:
+          type: string
+          readOnly: true
+        image_url:
+          type: string
+          format: uri
+          readOnly: true
+        service_count:
+          type: integer
+          readOnly: true
+          default: 0
       required:
       - description
+      - icon_key
       - id
+      - image_url
       - name
+      - service_count
       - slug
     SubjectKindEnum:
       enum:
@@ -27928,6 +28956,30 @@ components:
       - fulfilment_unit_id
       - outcome
       - refund_ids
+    UnitEnum:
+      enum:
+      - day
+      - each
+      - hour
+      - job
+      - kg
+      - litre
+      - metre
+      - running_ft
+      - set
+      - sq_ft
+      type: string
+      description: |-
+        * `day` - day
+        * `each` - each
+        * `hour` - hour
+        * `job` - job
+        * `kg` - kg
+        * `litre` - litre
+        * `metre` - metre
+        * `running_ft` - running_ft
+        * `set` - set
+        * `sq_ft` - sq_ft
     UnitRescheduleOutcome:
       type: object
       properties:
@@ -28079,68 +29131,6 @@ components:
       - id
       - is_current
       - last_seen_at
-    VendorAttachment:
-      type: object
-      description: |-
-        One of the Customer's checked files, as a short-lived signed link.
-
-        `download_url` is a bearer credential — anyone holding it holds the file — which is why it is
-        minted per read and expires in minutes rather than being stored anywhere.
-      properties:
-        id:
-          type: string
-          format: uuid
-          readOnly: true
-        kind:
-          type: string
-          readOnly: true
-        size_bytes:
-          type: integer
-          readOnly: true
-        language:
-          type: string
-          readOnly: true
-        download_url:
-          type: string
-          format: uri
-          readOnly: true
-        expires_at:
-          type: string
-          format: date-time
-          readOnly: true
-      required:
-      - download_url
-      - expires_at
-      - id
-      - kind
-      - language
-      - size_bytes
-    VendorAttachmentList:
-      type: object
-      description: |-
-        Attachments this vendor may see, and whether they still may.
-
-        `has_access` is `false` once the invitation was declined, expired or withdrawn and this vendor
-        was not selected. It is published as a state on a `200` rather than as an error because the
-        vendor is entitled to their own enquiry record either way, and because "there are no
-        photographs" and "you may no longer see the photographs" are different things to render.
-      properties:
-        has_access:
-          type: boolean
-          readOnly: true
-        attachments:
-          type: array
-          items:
-            $ref: '#/components/schemas/VendorAttachment'
-          readOnly: true
-        server_now:
-          type: string
-          format: date-time
-          readOnly: true
-      required:
-      - attachments
-      - has_access
-      - server_now
     VendorCard:
       type: object
       description: |-
@@ -28441,6 +29431,19 @@ components:
           allOf:
           - $ref: '#/components/schemas/VisitPlanShareStatusEnum'
           readOnly: true
+        matching_status:
+          allOf:
+          - $ref: '#/components/schemas/MatchingStatusEnum'
+          readOnly: true
+        requested_start:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        duration_minutes:
+          type: integer
+          readOnly: true
+          nullable: true
         amount_paise:
           type: integer
           readOnly: true
@@ -28472,11 +29475,14 @@ components:
       required:
       - amount_paise
       - committed_at
+      - duration_minutes
       - earned_at
       - id
+      - matching_status
       - platform_share_paise
       - position
       - refunded_at
+      - requested_start
       - settlement_reason_code
       - status
       - vendor_payout_paise
@@ -28601,38 +29607,6 @@ components:
       - is_available
       - starts_at
       - unavailable_reason
-    VisitSlotConfirmRequest:
-      type: object
-      properties:
-        slot_id:
-          type: string
-          minLength: 1
-          maxLength: 2000
-      required:
-      - slot_id
-    VisitSlotConfirmation:
-      type: object
-      properties:
-        visit:
-          allOf:
-          - $ref: '#/components/schemas/SiteVisit'
-          readOnly: true
-        share:
-          allOf:
-          - $ref: '#/components/schemas/VisitPlanShare'
-          readOnly: true
-        opens_plan_checkout:
-          type: boolean
-          readOnly: true
-        server_now:
-          type: string
-          format: date-time
-          readOnly: true
-      required:
-      - opens_plan_checkout
-      - server_now
-      - share
-      - visit
     VisitSlotDay:
       type: object
       properties:

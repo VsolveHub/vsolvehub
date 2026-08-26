@@ -350,7 +350,9 @@ function MaterialBreakdown({ lines }: { readonly lines: Proposal["material_lines
       <ul className="flex list-none flex-col gap-2 p-0">
         {lines.map((line, index) => {
           const measure = [
-            line.quantity > 1 ? String(line.quantity) : null,
+            // A decimal string at 1.44.0. Compared numerically so "1.000" still
+            // reads as one and is left off the row.
+            Number(line.quantity) > 1 ? line.quantity.replace(/\.0+$/u, "") : null,
             line.unit.trim() === "" ? null : line.unit.trim(),
           ]
             .filter((part): part is string => part !== null)
@@ -370,7 +372,7 @@ function MaterialBreakdown({ lines }: { readonly lines: Proposal["material_lines
                 )}
               </div>
               <span className="shrink-0 text-sm font-semibold text-text">
-                {formatMoney(line.amount_paise)}
+                {line.amount_paise === undefined ? "—" : formatMoney(line.amount_paise)}
               </span>
             </li>
           );

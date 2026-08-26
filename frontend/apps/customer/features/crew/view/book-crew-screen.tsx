@@ -50,12 +50,14 @@ import {
   WORK_DESCRIPTION_CODE,
   crewDetailQuestions,
   hiddenCrewQuestionCodes,
+  initialCrewBookingStep,
   resumeCrewBookingStep,
   selectedWorkLabel,
   selectedWorkValue,
   workTypeQuestion,
   type CrewBookingStep,
 } from "../model/booking-flow";
+import { CrewAboutPanel } from "./crew-about-panel";
 import { initialAnswers, presetSize, type PresetSize } from "../model/size";
 import { useBookAtPublishedRate, useRateCardPreview } from "../queries";
 import { CrewAddressPicker } from "./crew-address-picker";
@@ -197,9 +199,14 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
    * Which stage is showing on both phone and desktop.
    *
    * Held here rather than in a view so a resize does not reset the Customer's
-   * progress or create a second source of truth for navigation.
+   * progress or create a second source of truth for navigation. A service whose
+   * catalogue publishes no work question opens straight on planning — the
+   * customer chose "Electrician by the day"; asking what electricians do would
+   * be the form forgetting what they just tapped.
    */
-  const [bookingStep, setBookingStep] = useState<CrewBookingStep>("work");
+  const [bookingStep, setBookingStep] = useState<CrewBookingStep>(() =>
+    initialCrewBookingStep(workTypeQuestion(toQuestionSet(variant).questions)),
+  );
   /** Incremented to ask the address dialog to open. See `AddressStage`. */
   const [addressSignal, setAddressSignal] = useState(0);
   /**
@@ -257,7 +264,7 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
         setRequestedStart(intent.requestedStart);
         setRequirementId(intent.requirementId);
         setBookingStep(
-          intent.step === "work" || resumableStep === "work"
+          workQuestion !== null && (intent.step === "work" || resumableStep === "work")
             ? "work"
             : "details",
         );
@@ -455,7 +462,7 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
     />
   );
 
-  if (bookingStep === "work") {
+  if (bookingStep === "work" && workQuestion !== null) {
     return (
       <WorkPickerScreen
         serviceName={service.name}
@@ -496,9 +503,11 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
         saveError={
           writeErrorMessage === null ? undefined : <JobFormError message={writeErrorMessage} />
         }
-        selectedWorkLabel={workLabel ?? "Selected work"}
-        onChangeWork={() => setBookingStep("work")}
-        onBack={() => setBookingStep("work")}
+        stepLabel={workQuestion === null ? "Step 1 of 2" : "Step 2 of 3"}
+        selectedWorkLabel={workQuestion === null ? null : (workLabel ?? "Selected work")}
+        onChangeWork={workQuestion === null ? undefined : () => setBookingStep("work")}
+        aboutPanel={workQuestion === null ? <CrewAboutPanel service={service} /> : null}
+        onBack={workQuestion === null ? () => router.back() : () => setBookingStep("work")}
       />
     ) : (
       <RateScreen
@@ -532,6 +541,7 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
       <DesktopBookingHero
         serviceName={service.name}
         step={bookingStep}
+        hasWorkStep={workQuestion !== null}
         count={size?.headcount ?? 1}
         days={size?.days ?? 1}
       />
@@ -554,25 +564,34 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
       {bookingStep === "details" ? (
         <div className="grid items-start gap-7 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="flex flex-col gap-6">
-            <button
-              type="button"
-              onClick={() => setBookingStep("work")}
-              className="group flex min-h-20 items-center gap-4 rounded-[20px] border border-selected-line bg-selected-surface p-4 text-left transition-[border-color,box-shadow,transform] duration-base hover:-translate-y-0.5 hover:border-selected hover:shadow-raised active:translate-y-0 active:scale-[0.99] motion-reduce:transform-none"
-            >
-              <span className="grid size-12 shrink-0 place-items-center rounded-[14px] bg-navy-900 text-signal-300">
-                <WorkTypeIcon code={workValue ?? "other"} />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-xs font-bold uppercase tracking-[0.11em] text-text-muted">
-                  Work selected
+            {workQuestion !== null ? (
+              <button
+                type="button"
+                onClick={() => setBookingStep("work")}
+                className="group flex min-h-20 items-center gap-4 rounded-[20px] border border-selected-line bg-selected-surface p-4 text-left transition-[border-color,box-shadow,transform] duration-base hover:-translate-y-0.5 hover:border-selected hover:shadow-raised active:translate-y-0 active:scale-[0.99] motion-reduce:transform-none"
+              >
+                <span className="grid size-12 shrink-0 place-items-center rounded-[14px] bg-navy-900 text-signal-300">
+                  <WorkTypeIcon code={workValue ?? "other"} />
                 </span>
-                <span className="mt-1 block text-lg font-bold text-text">{workLabel}</span>
-              </span>
-              <span className="text-sm font-bold text-text-link group-hover:underline">Change</span>
-            </button>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-xs font-bold uppercase tracking-[0.11em] text-text-muted">
+                    Work selected
+                  </span>
+                  <span className="mt-1 block text-lg font-bold text-text">{workLabel}</span>
+                </span>
+                <span className="text-sm font-bold text-text-link group-hover:underline">Change</span>
+              </button>
+            ) : (
+              // The service IS the work: the flow opens on what a day of it covers.
+              <CrewAboutPanel service={service} />
+            )}
 
           <section className="rounded-[20px] border border-line bg-surface p-5 shadow-sm sm:p-6">
-            <SectionLabel number="2" title="How much help do you need?" caption="Set the crew and duration" />
+            <SectionLabel
+              number={workQuestion === null ? "1" : "2"}
+              title="How much help do you need?"
+              caption="Set the crew and duration"
+            />
             <PresetQuestions
               questions={detailQuestions}
               answers={answers}
@@ -582,7 +601,11 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
           </section>
 
           <section className="rounded-[20px] border border-line bg-surface p-5 shadow-sm sm:p-6">
-            <SectionLabel number="3" title="Where and when?" caption="Date and saved address" />
+            <SectionLabel
+              number={workQuestion === null ? "2" : "3"}
+              title="Where and when?"
+              caption="Date and saved address"
+            />
             <div className="flex flex-col gap-5">
               <Field
                 label="Start from"
@@ -638,7 +661,10 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
             <p className="text-xs font-bold uppercase tracking-[0.14em] text-signal-300">Crew plan</p>
             <CrewConstellation count={size?.headcount ?? 1} days={size?.days ?? 1} compact />
             <dl className="mt-5 divide-y divide-white/10 border-y border-white/10 text-sm">
-              <PlanLine label="Work" value={workLabel ?? "Choose work"} />
+              <PlanLine
+                label="Work"
+                value={workQuestion === null ? service.name : (workLabel ?? "Choose work")}
+              />
               <PlanLine label="Start" value={requestedStart === "" ? "Choose date" : formatShortDate(requestedStart)} />
               <PlanLine label="Site" value={address === null ? "Add an address" : addressSummaryLine(address)} />
             </dl>
@@ -683,7 +709,11 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
               <p className="text-xs font-bold uppercase tracking-[0.14em] text-signal-700">Ready to review</p>
               <h2 className="mt-2 text-2xl font-bold tracking-tight text-text">Your crew, at a glance</h2>
               <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                <ReviewTile label="Work" value={workLabel ?? "Selected work"} icon={<WorkTypeIcon code={workValue ?? "other"} />} />
+                <ReviewTile
+                  label="Work"
+                  value={workQuestion === null ? service.name : (workLabel ?? "Selected work")}
+                  icon={<WorkTypeIcon code={workValue ?? "other"} />}
+                />
                 <ReviewTile label="Crew" value={`${size?.headcount ?? 1} ${(size?.headcount ?? 1) === 1 ? "person" : "people"} × ${size?.days ?? 1} ${(size?.days ?? 1) === 1 ? "day" : "days"}`} icon={<CrewIcon />} />
                 <ReviewTile label="Starts" value={requestedStart === "" ? "Not chosen" : formatShortDate(requestedStart)} icon={<CalendarIcon />} />
                 <ReviewTile label="Site" value={address === null ? "Not chosen" : addressSummaryLine(address)} icon={<PinIcon />} />
@@ -709,22 +739,28 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
 function DesktopBookingHero({
   serviceName,
   step,
+  hasWorkStep,
   count,
   days,
 }: {
   serviceName: string;
   step: CrewBookingStep;
+  hasWorkStep: boolean;
   count: number;
   days: number;
 }) {
-  const activeIndex = step === "work" ? 0 : step === "details" ? 1 : 2;
+  // A service that publishes no work question has a two-step flow: the picker
+  // pill disappears rather than showing a step nobody will visit.
+  const labels = hasWorkStep ? ["Choose work", "Plan crew", "Review rate"] : ["Plan crew", "Review rate"];
+  const activeIndex =
+    step === "rate" ? labels.length - 1 : step === "details" ? labels.length - 2 : 0;
   return (
     <header className="relative mb-7 overflow-hidden rounded-[28px] bg-navy-900 px-6 py-7 text-white sm:px-8 sm:py-9">
       <div aria-hidden className="absolute -right-16 -top-24 size-64 rounded-full bg-signal-500/20 blur-3xl" />
       <div className="relative grid items-center gap-7 md:grid-cols-[1fr_300px]">
         <div>
           <Link
-            href="/catalog/workforce-and-projects"
+            href="/catalog"
             className="inline-flex min-h-11 items-center text-sm font-semibold text-white/75 transition-colors duration-base hover:text-white focus-visible:outline-white"
           >
             <svg viewBox="0 0 20 20" fill="none" className="mr-1 size-4" aria-hidden>
@@ -738,10 +774,12 @@ function DesktopBookingHero({
           <h1 className="mt-2 max-w-xl text-balance text-3xl font-bold tracking-tight sm:text-4xl">
             {step === "rate"
               ? "One last look before you book."
-              : `Build your ${serviceName.toLowerCase()} crew`}
+              : hasWorkStep
+                ? `Build your ${serviceName.toLowerCase()} crew`
+                : serviceName}
           </h1>
           <div className="mt-5 flex flex-wrap items-center gap-2 text-sm text-white/80">
-            {["Choose work", "Plan crew", "Review rate"].map((label, index) => (
+            {labels.map((label, index) => (
               <span key={label} className="contents">
                 {index > 0 ? <span aria-hidden className="text-white/30">&rarr;</span> : null}
                 <FlowPill

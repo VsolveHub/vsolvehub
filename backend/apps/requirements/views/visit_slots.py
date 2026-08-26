@@ -23,7 +23,7 @@ from apps.partners.capabilities import assert_kyc_complete, workspace_grants
 from apps.partners.exceptions import PartnerDomainError
 from apps.partners.permissions import IsPartnerUser
 from apps.partners.selectors import partner_profile_for_user
-from apps.requirements import access, visit_slots
+from apps.requirements import access, matching, visit_slots
 from apps.requirements.exceptions import (
     RequirementDomainError,
     RequirementNotFoundError,
@@ -33,9 +33,13 @@ from apps.requirements.models import SiteVisit
 from apps.requirements.selectors import (
     demand_preview,
     invitation_for_partner,
+    requirement_for_customer,
     site_visit_for_participant,
 )
 from apps.requirements.serializers import (
+    CustomerRequestedVisitSlotsSerializer,
+    CustomerVisitSlotChoiceSerializer,
+    CustomerVisitSlotReplaceSerializer,
     DemandPreviewSerializer,
     SiteVisitSerializer,
     VisitArrivalCodeEntrySerializer,
@@ -50,6 +54,140 @@ from apps.requirements.views.base import _idempotency_key, _partner_profile, _ra
 from common.errors.serializers import ApiErrorSerializer
 from common.schema import IDEMPOTENCY_KEY_HEADER
 from common.throttling import ThrottledWriteMixin
+
+
+class CustomerRequirementVisitSlotView(ThrottledWriteMixin, APIView):
+    """Customer availability grid and the complete signed slot selection."""
+
+    permission_classes = (IsAuthenticated,)
+    throttle_scope = "m2_quote_action"
+
+    @extend_schema(
+        tags=["M2 - Visit slots"],
+        operation_id="m2_customer_visit_slot_list",
+        responses={200: VisitSlotGridSerializer, 404: ApiErrorSerializer, 409: ApiErrorSerializer},
+    )
+    def get(self, request: Request, requirement_id: uuid.UUID) -> Response:
+        try:
+            requirement = requirement_for_customer(
+                customer=cast(User, request.user),
+                requirement_id=requirement_id,
+            )
+            grid = visit_slots.candidate_customer_visit_starts(requirement=requirement)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        return Response(VisitSlotGridSerializer(visit_slots.as_wire(grid)).data)
+
+    @extend_schema(
+        tags=["M2 - Visit slots"],
+        operation_id="m2_customer_visit_slot_choose",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=CustomerVisitSlotChoiceSerializer,
+        responses={
+            200: CustomerRequestedVisitSlotsSerializer,
+            400: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`slot_expired` for an expired signed token; otherwise the slot is "
+                "unavailable or the plan shape no longer permits the selection.",
+            ),
+        },
+    )
+    def post(self, request: Request, requirement_id: uuid.UUID) -> Response:
+        serializer = CustomerVisitSlotChoiceSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                shares = visit_slots.choose_customer_visit_slots(
+                    requirement_id=requirement_id,
+                    actor=actor,
+                    slot_ids=serializer.validated_data["slot_ids"],
+                )
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            body = CustomerRequestedVisitSlotsSerializer(
+                {"slots": shares, "server_now": timezone.now()}
+            ).data
+            return status.HTTP_200_OK, cast(dict[str, object], body)
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.customer_visit_slots.choose",
+            key=key,
+            request_payload={
+                "requirement_id": str(requirement_id),
+                **serializer.validated_data,
+            },
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class CustomerRequirementVisitSlotReplaceView(ThrottledWriteMixin, APIView):
+    """Replace one exhausted Customer slot while preserving every successful sibling."""
+
+    permission_classes = (IsAuthenticated,)
+    throttle_scope = "m2_quote_action"
+
+    @extend_schema(
+        tags=["M2 - Visit slots"],
+        operation_id="m2_customer_visit_slot_replace",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=CustomerVisitSlotReplaceSerializer,
+        responses={
+            200: CustomerRequestedVisitSlotsSerializer,
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`slot_expired` for an expired signed token; "
+                "`no_professional_found` is the prior share state that makes replacement valid.",
+            ),
+        },
+    )
+    def post(
+        self,
+        request: Request,
+        requirement_id: uuid.UUID,
+        share_id: uuid.UUID,
+    ) -> Response:
+        serializer = CustomerVisitSlotReplaceSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                share = visit_slots.replace_customer_visit_slot(
+                    requirement_id=requirement_id,
+                    share_id=share_id,
+                    actor=actor,
+                    slot_id=serializer.validated_data["slot_id"],
+                )
+                matching.dispatch_customer_visit_share(share_id=share.id)
+                slots = share.plan.shares.order_by("position")
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            body = CustomerRequestedVisitSlotsSerializer(
+                {"slots": slots, "server_now": timezone.now()}
+            ).data
+            return status.HTTP_200_OK, cast(dict[str, object], body)
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.customer_visit_slots.replace",
+            key=key,
+            request_payload={
+                "requirement_id": str(requirement_id),
+                "share_id": str(share_id),
+                **serializer.validated_data,
+            },
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
 
 
 class PartnerEnquiryVisitSlotView(ThrottledWriteMixin, APIView):

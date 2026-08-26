@@ -11,11 +11,10 @@ import {
 /**
  * The guards between the Customer and a requirement no vendor can quote.
  *
- * The date block is the one worth the most here, and it is new: `_assert_
- * submittable` refuses a requirement without a start ("when it should start"),
- * and `find_probable_duplicate` matches within ±3 days of it — so before the
- * 1.21.0 re-point this flow could reach review, submit, and be refused for a
- * field that was never on any screen.
+ * `where_when` is the last screen since the M2-revamp removed review, so its
+ * guard is also the submit guard: it re-asserts screen 1's rule as well as its
+ * own, because the Customer can go back and change an answer between there and
+ * the send.
  */
 
 const TODAY = "2026-08-12";
@@ -56,7 +55,19 @@ describe("screen 2 — where and when", () => {
     expect(blockedReason(draft({ screen: "where_when" }), TODAY)).toBe("ADDRESS_NOT_CHOSEN");
   });
 
-  it("refuses without a start date, which the submit command requires", () => {
+  it("refuses without a start date", () => {
+    expect(blockedReason(draft(base), TODAY)).toBe("START_DATE_NOT_CHOSEN");
+  });
+});
+
+describe("screen 3 — visits_send, which is the final submit guard", () => {
+  const base = { screen: "visits_send" as const, addressId: "addr-1" };
+
+  it("refuses without an address", () => {
+    expect(blockedReason(draft({ screen: "visits_send" }), TODAY)).toBe("ADDRESS_NOT_CHOSEN");
+  });
+
+  it("refuses without a start date", () => {
     expect(blockedReason(draft(base), TODAY)).toBe("START_DATE_NOT_CHOSEN");
   });
 
@@ -66,24 +77,37 @@ describe("screen 2 — where and when", () => {
     expect(blockedReason(state, TODAY)).toBe("START_DATE_IN_PAST");
   });
 
-  it("refuses without the needed-by date, which is what closes the requirement", () => {
+  it("treats an absent deadline as the ordinary answer", () => {
     const state = draft({ ...base, requestedStart: "2026-08-20" });
 
-    expect(blockedReason(state, TODAY)).toBe("SERVICE_DATE_NOT_CHOSEN");
+    expect(blockedReason(state, TODAY)).toBeNull();
   });
 
   it("refuses a needed-by date before the work starts", () => {
-    // A typo the Customer can see and fix, between two controls on one screen.
     const state = draft({ ...base, requestedStart: "2026-08-20", serviceBy: "2026-08-18" });
 
     expect(blockedReason(state, TODAY)).toBe("SERVICE_DATE_BEFORE_START");
   });
 
   it("allows the two dates on the same day", () => {
-    // A one-day job is a real requirement, not an error.
     const state = draft({ ...base, requestedStart: "2026-08-20", serviceBy: "2026-08-20" });
 
     expect(blockedReason(state, TODAY)).toBeNull();
+  });
+
+  it("re-asserts screen 1's rule, because the answers can change after leaving it", () => {
+    const state = draft({
+      ...base,
+      requestedStart: "2026-08-20",
+      answers: { worker_count: 4 },
+      verdict: {
+        lifecycle: "A3_TIME_BLOCK",
+        explanation: "You are hiring people for a period of time.",
+        missingRequiredAnswers: ["duration_days"],
+      },
+    });
+
+    expect(blockedReason(state, TODAY)).toBe("REQUIRED_ANSWER_MISSING");
   });
 
   it("refuses while a duplicate is on screen and unanswered", () => {
@@ -104,35 +128,13 @@ describe("screen 2 — where and when", () => {
   });
 });
 
-describe("screen 4 — review, where every date guard is re-asserted", () => {
-  it("re-checks the dates, because the Customer can go back and change them", () => {
-    // The submit guard is the last one. Trusting screen 2 would mean a
-    // requirement whose needed-by date was moved before its start after the
-    // fact reaches the server.
-    const state = draft({
-      screen: "review",
-      addressId: "addr-1",
-      requestedStart: "2026-08-20",
-      serviceBy: "2026-08-18",
-    });
-
-    expect(blockedReason(state, TODAY)).toBe("SERVICE_DATE_BEFORE_START");
-  });
-
-  it("refuses a review with no start date at all", () => {
-    const state = draft({ screen: "review", addressId: "addr-1", serviceBy: "2026-08-24" });
-
-    expect(blockedReason(state, TODAY)).toBe("START_DATE_NOT_CHOSEN");
-  });
-});
-
 describe("navigation", () => {
   it("refuses a jump forward, because a jump skips a guard", () => {
-    expect(canNavigateTo(draft(), "review")).toBe(false);
+    expect(canNavigateTo(draft(), "where_when")).toBe(false);
   });
 
   it("allows going back to a screen already visited", () => {
-    const state = draft({ screen: "details", visited: ["what", "where_when"] });
+    const state = draft({ screen: "where_when", visited: ["what"] });
 
     expect(canNavigateTo(state, "what")).toBe(true);
   });
@@ -177,9 +179,6 @@ describe("the invalidation cascade", () => {
       days: 7,
     });
 
-    // One date, not two. "Needed by" was removed from capture — the server derives
-    // the closing date from the start day — so the start date and the flexibility
-    // flag are now the whole of what this screen collects about timing.
     expect(flexible.verdict).toEqual(verdict);
     expect(flexible.requestedStart).toBe("2026-08-20");
   });
@@ -212,8 +211,6 @@ describe("the invalidation cascade", () => {
       requestedStart: "2026-08-25",
       serviceBy: "2026-08-28",
       flexibilityDays: 2,
-      additionalDetails: "Bring safety shoes",
-      language: "en-IN",
     });
 
     expect(next).toMatchObject({
@@ -223,8 +220,6 @@ describe("the invalidation cascade", () => {
       requestedStart: "2026-08-25",
       serviceBy: "2026-08-28",
       flexibilityDays: 2,
-      additionalDetails: "Bring safety shoes",
-      language: "en-IN",
     });
   });
 });
@@ -234,59 +229,48 @@ describe("the invalidation cascade", () => {
  *
  * `GO_TO` refuses any screen not already in `visited`, which is right for the
  * phone wizard and was wrong for the rail: the rail *is* the navigation, so
- * every forward click and the `review` move at the end of a successful send were
- * silently refused. `OPEN` is the navigation that answers to the container's
- * guard rather than to `visited`.
- *
- * The mobile flow never hit any of this because it moves with `ADVANCE`, which
- * records `visited` as it steps — which is exactly why the bug read as
- * "desktop broken, mobile fine".
+ * every forward click was silently refused. `OPEN` is the navigation that
+ * answers to the container's guard rather than to `visited`.
  */
 describe("OPEN — the brief's own navigation", () => {
-  const atWhereWhen = (): RequirementDraftState => ({
+  const atWhat = (): RequirementDraftState => ({
     ...initialDraftState("interior-fit-out-project"),
-    screen: "where_when",
-    // What `RESTORE_SCREEN` produces for `?step=where_when`: the screens before
-    // it, and nothing after.
-    visited: ["what"],
+    screen: "what",
+    visited: [],
   });
 
   it("reaches a section the customer has never visited", () => {
-    const next = requirementReducer(atWhereWhen(), { type: "OPEN", screen: "details" });
+    const state = atWhat();
 
-    expect(next.screen).toBe("details");
-  });
-
-  it("reaches review, which GO_TO refused after three good writes", () => {
-    const state = atWhereWhen();
-
-    expect(requirementReducer(state, { type: "GO_TO", screen: "review" }).screen).toBe(
+    expect(requirementReducer(state, { type: "GO_TO", screen: "where_when" }).screen).toBe(
+      "what",
+    );
+    expect(requirementReducer(state, { type: "OPEN", screen: "where_when" }).screen).toBe(
       "where_when",
     );
-    expect(requirementReducer(state, { type: "OPEN", screen: "review" }).screen).toBe("review");
   });
 
   it("records the screen it leaves, so Back still works from where it lands", () => {
-    const next = requirementReducer(atWhereWhen(), { type: "OPEN", screen: "details" });
+    const next = requirementReducer(atWhat(), { type: "OPEN", screen: "where_when" });
 
-    expect(next.visited).toContain("where_when");
-    expect(requirementReducer(next, { type: "BACK" }).screen).toBe("where_when");
+    expect(next.visited).toContain("what");
+    expect(requirementReducer(next, { type: "BACK" }).screen).toBe("what");
   });
 
   it("leaves the per-screen guards alone", () => {
     // Reaching a screen has never been what lets somebody past a rule. An empty
-    // draft opened straight at review is still blocked, by the same reason it
-    // would have been blocked for on the screen that owns it.
-    const opened = requirementReducer(atWhereWhen(), { type: "OPEN", screen: "review" });
+    // draft opened straight at the last screen is still blocked, by the same
+    // reason it would have been blocked for on the screen that owns it.
+    const opened = requirementReducer(atWhat(), { type: "OPEN", screen: "where_when" });
 
     expect(blockedReason(opened, TODAY)).not.toBeNull();
   });
 
   it("ignores a screen that is not in the sequence", () => {
-    const state = atWhereWhen();
+    const state = atWhat();
 
     expect(
       requirementReducer(state, { type: "OPEN", screen: "nowhere" as never }).screen,
-    ).toBe("where_when");
+    ).toBe("what");
   });
 });

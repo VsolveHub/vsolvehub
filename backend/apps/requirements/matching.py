@@ -24,6 +24,8 @@ from django.utils import timezone
 
 from apps.carts.availability import (
     earliest_reachable_by_partner_ids,
+    load_snapshot,
+    reachability_by_partner,
     reserved_partner_ids,
     usable_location_fix,
 )
@@ -32,8 +34,6 @@ from apps.foundation.services import enqueue_outbox_event
 from apps.partners.capabilities import (
     capability_serves_area,
     clustered_partner_ids,
-    language_subtag,
-    partner_language_subtags,
     partner_unavailable_on,
 )
 from apps.partners.models import (
@@ -57,15 +57,17 @@ from apps.requirements.models import (
     RequirementSnapshot,
     VendorInvitation,
     VisitPlan,
+    VisitPlanShare,
 )
 from apps.requirements.sla import add_business_hours
 
-MATCHING_POLICY: Final[str] = "m2_capability_area_language_travel_capacity_responsiveness"
+MATCHING_POLICY: Final[str] = "m2_capability_area_travel_capacity_responsiveness"
 #: Bumped from 1 when eligibility gained language, travel feasibility, calendar availability and
-#: the A1 reservation grid, and ordering stopped being a stable sort on Partner id. An invitation
-#: written under version 1 was decided by different rules, and Operations explaining a past
-#: decision needs to know which.
-MATCHING_POLICY_VERSION: Final[int] = 2
+#: the A1 reservation grid, and ordering stopped being a stable sort on Partner id. Version 3
+#: corrects the travel boundary from midnight at the start of the Customer's chosen day to the end
+#: of that day. An invitation written under an older version was decided by different rules, and
+#: Operations explaining a past decision needs to know which.
+MATCHING_POLICY_VERSION: Final[int] = 4
 
 #: A vendor who has not opened the app in this long is not invited. Every wave spent on a dormant
 #: account burns the Customer's delivery promise.
@@ -218,14 +220,12 @@ def snapshot_requirement(requirement: CustomerRequirement) -> RequirementSnapsho
     payload = {
         "archetype": requirement.archetype,
         "answers": requirement.answers,
-        "additional_details": requirement.additional_details,
         "requested_start": (
             requirement.requested_start.isoformat() if requirement.requested_start else None
         ),
         "service_by": requirement.service_by.isoformat() if requirement.service_by else None,
         "budget_min_paise": requirement.budget_min_paise,
         "budget_max_paise": requirement.budget_max_paise,
-        "language": requirement.language,
     }
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
     content_hash = hashlib.sha256(encoded.encode()).hexdigest()
@@ -240,19 +240,23 @@ def snapshot_requirement(requirement: CustomerRequirement) -> RequirementSnapsho
         requirement=requirement,
         archetype=requirement.archetype,
         answers=requirement.answers,
-        additional_details=requirement.additional_details,
+        additional_details="",
         requested_start=requirement.requested_start,
         service_by=requirement.service_by,
         budget_min_paise=requirement.budget_min_paise,
         budget_max_paise=requirement.budget_max_paise,
-        language=requirement.language,
+        language="und",
         content_hash=content_hash,
     )
 
 
 def _requested_days(requirement: CustomerRequirement) -> tuple[date, date]:
+    area = requirement.service_area
+    zone = ZoneInfo(area.timezone) if area is not None else timezone.get_current_timezone()
     start = (
-        requirement.requested_start.date() if requirement.requested_start else timezone.localdate()
+        requirement.requested_start.astimezone(zone).date()
+        if requirement.requested_start
+        else timezone.now().astimezone(zone).date()
     )
     duration = int(requirement.answers.get("duration_days") or 1)
     return start, start + timedelta(days=max(duration - 1, 0))
@@ -272,6 +276,20 @@ def occupied_span(requirement: CustomerRequirement) -> tuple[datetime, datetime]
     start = datetime.combine(starts_on, datetime.min.time(), tzinfo=zone)
     end = datetime.combine(ends_on + timedelta(days=1), datetime.min.time(), tzinfo=zone)
     return start, end
+
+
+def _requested_day_end(requirement: CustomerRequirement) -> datetime:
+    """The first instant after the Customer's requested start day, in the area's timezone.
+
+    Capture stores a chosen *day* in the `requested_start` DateTimeField as local midnight. It is
+    not an appointment at 00:00. Travel eligibility asks whether the Partner can reach the site at
+    any point on that day, so comparing arrival to the stored midnight excludes every candidate
+    when a Customer submits later that same day.
+    """
+    starts_on, _ends_on = _requested_days(requirement)
+    area = requirement.service_area
+    zone = ZoneInfo(area.timezone) if area is not None else timezone.get_current_timezone()
+    return datetime.combine(starts_on + timedelta(days=1), datetime.min.time(), tzinfo=zone)
 
 
 def _held_capacity_partner_ids(
@@ -405,7 +423,6 @@ class _PoolFacts:
     starts_on: date
     requested_crew: int
     fresh_since: datetime
-    requirement_language: str
     invited_partner_ids: set[uuid.UUID]
     held_clusters: set[str]
     committed: set[uuid.UUID]
@@ -461,11 +478,6 @@ def _coverage_exclusions(
     ):
         reasons.append(ExclusionReason.CALENDAR_UNAVAILABLE)
 
-    # An undeclared language is not a mismatch. Excluding on silence would empty the pool for every
-    # vendor who registered before the field existed.
-    declared_languages = partner_language_subtags(partner)
-    if declared_languages and pool.requirement_language not in declared_languages:
-        reasons.append(ExclusionReason.LANGUAGE_MISMATCH)
     return reasons
 
 
@@ -490,7 +502,7 @@ def _exclusions_for(*, partner: PartnerProfile, pool: _PoolFacts) -> list[str]:
     if (
         requirement.requested_start is not None
         and earliest is not None
-        and earliest > requirement.requested_start
+        and earliest >= _requested_day_end(requirement)
     ):
         reasons.append(ExclusionReason.TRAVEL_NOT_FEASIBLE)
 
@@ -507,6 +519,8 @@ def evaluate_candidates(
     *,
     requirement: CustomerRequirement,
     candidates: Sequence[PartnerProfile] | None = None,
+    ignore_previous_invitations: bool = False,
+    starts_on_override: date | None = None,
 ) -> RequirementMatching:
     """Classify the pool, then order the survivors on recorded signals.
 
@@ -522,14 +536,18 @@ def evaluate_candidates(
         candidates = list(PartnerProfile.objects.filter(id__in=list(partner_ids)))
 
     candidate_ids = [partner.id for partner in candidates]
-    starts_on, _ends_on = _requested_days(requirement)
+    requested_starts_on, _ends_on = _requested_days(requirement)
+    starts_on = starts_on_override or requested_starts_on
     requested_crew = int(requirement.answers.get("worker_count") or 0)
     fresh_since = timezone.now() - timedelta(days=RESPONSIVENESS_WINDOW_DAYS)
-    requirement_language = language_subtag(requirement.language)
 
-    invited_partner_ids = set(
-        VendorInvitation.objects.filter(requirement=requirement).values_list(
-            "partner_id", flat=True
+    invited_partner_ids = (
+        set()
+        if ignore_previous_invitations
+        else set(
+            VendorInvitation.objects.filter(requirement=requirement).values_list(
+                "partner_id", flat=True
+            )
         )
     )
     held_clusters = set(
@@ -564,7 +582,6 @@ def evaluate_candidates(
         starts_on=starts_on,
         requested_crew=requested_crew,
         fresh_since=fresh_since,
-        requirement_language=requirement_language,
         invited_partner_ids=invited_partner_ids,
         held_clusters=held_clusters,
         committed=committed,
@@ -671,6 +688,184 @@ def _max_slots(requirement: CustomerRequirement) -> int:
             return plan.plan_size
     configuration = requirement.configuration
     return configuration.max_quotes if configuration is not None else 3
+
+
+@transaction.atomic
+def dispatch_customer_visit_share(*, share_id: uuid.UUID) -> list[VendorInvitation]:
+    """Broadcast one immutable Customer-selected time to every eligible, available Partner."""
+
+    share = (
+        VisitPlanShare.objects.select_for_update(of=("self",))
+        .select_related(
+            "plan__requirement__address",
+            "plan__requirement__service_area",
+            "plan__requirement__configuration",
+        )
+        .get(pk=share_id)
+    )
+    requirement = share.plan.requirement
+    if requirement.status not in CustomerRequirement.LIVE_STATUSES:
+        return []
+    if share.matching_status != VisitPlanShare.MatchingStatus.SEARCHING:
+        return []
+    if share.requested_start is None or share.duration_minutes is None:
+        raise InvitationTransitionError("The Customer has not chosen this visit time yet.")
+    area = requirement.service_area
+    if area is None:
+        raise InvitationTransitionError("This request has no serviceable area.")
+
+    starts_at = share.requested_start
+    duration_minutes = int(share.duration_minutes)
+    snapshot = load_snapshot(
+        variant_ids={requirement.variant_id},
+        area=area,
+        horizon_start=starts_at,
+        horizon_end=starts_at + timedelta(minutes=duration_minutes + 24 * 60),
+        destination=requirement.address,
+    )
+    free_ids = set(
+        snapshot.free_partner_ids(
+            starts_at=starts_at,
+            duration_minutes=duration_minutes,
+        )
+    )
+    reachable = reachability_by_partner(snapshot=snapshot, now=timezone.now())
+    free_ids = {
+        partner_id
+        for partner_id in free_ids
+        if reachable.get(partner_id, starts_at + timedelta(seconds=1)) <= starts_at
+    }
+    candidates = list(PartnerProfile.objects.filter(pk__in=free_ids))
+    evaluation = evaluate_candidates(
+        requirement=requirement,
+        candidates=candidates,
+        ignore_previous_invitations=True,
+        starts_on_override=starts_at.astimezone(ZoneInfo(area.timezone)).date(),
+    )
+    exhausted_partner_ids = set(
+        VendorInvitation.objects.filter(
+            requested_visit_share=share,
+            status__in=(
+                VendorInvitation.Status.INVITED,
+                VendorInvitation.Status.DECLINED,
+                VendorInvitation.Status.EXPIRED,
+            ),
+        ).values_list("partner_id", flat=True)
+    )
+    already_holding_ids = set(
+        share.plan.shares.filter(
+            status=VisitPlanShare.Status.COMMITTED,
+            partner__isnull=False,
+        ).values_list("partner_id", flat=True)
+    )
+    snapshot_row = snapshot_requirement(requirement)
+    wave = (
+        VendorInvitation.objects.filter(requested_visit_share=share).aggregate(
+            highest=models.Max("wave")
+        )["highest"]
+        or 0
+    ) + 1
+    policy_deadline = _invitation_deadline(requirement)
+    latest_deadline = starts_at - timedelta(minutes=15)
+    responds_by = min(policy_deadline, latest_deadline) if policy_deadline else latest_deadline
+    responds_by = max(timezone.now(), responds_by)
+    invitations: list[VendorInvitation] = []
+    for partner in evaluation.ordered:
+        if partner.id in exhausted_partner_ids or partner.id in already_holding_ids:
+            continue
+        invitation = VendorInvitation.objects.create(
+            requirement=requirement,
+            partner=partner,
+            snapshot=snapshot_row,
+            requested_visit_share=share,
+            cluster_key=_cluster_key(partner),
+            wave=wave,
+            responds_by=responds_by,
+            ranking_provenance={
+                **evaluation.provenance(requirement=requirement),
+                "requested_visit_share_id": str(share.id),
+                "visit_start": starts_at.isoformat(),
+                "duration_minutes": duration_minutes,
+            },
+        )
+        enqueue_outbox_event(
+            aggregate_type="vendor_invitation",
+            aggregate_id=invitation.id,
+            event_type="m2.fixed_visit_offer.received",
+            idempotency_key=f"fixed-visit-offer:{invitation.id}",
+            payload={
+                "requirement_id": str(requirement.id),
+                "vendor_invitation_id": str(invitation.id),
+                "requested_visit_share_id": str(share.id),
+                "partner_id": str(partner.id),
+                "visit_start": starts_at.isoformat(),
+                "duration_minutes": duration_minutes,
+                "visit_earning_paise": share.vendor_payout_paise,
+                "responds_by": responds_by.isoformat() if responds_by is not None else None,
+            },
+        )
+        invitations.append(invitation)
+
+    if (
+        not invitations
+        and not VendorInvitation.objects.filter(
+            requested_visit_share=share,
+            status=VendorInvitation.Status.INVITED,
+        ).exists()
+    ):
+        share.matching_status = VisitPlanShare.MatchingStatus.NO_PROFESSIONAL_FOUND
+        share.save(update_fields=("matching_status", "updated_at"))
+        enqueue_outbox_event(
+            aggregate_type="visit_plan_share",
+            aggregate_id=share.id,
+            event_type="m2.fixed_visit_offer.exhausted",
+            idempotency_key=f"fixed-visit-exhausted:{share.id}:{share.requested_start.isoformat()}",
+            payload={
+                "requirement_id": str(requirement.id),
+                "requested_visit_share_id": str(share.id),
+            },
+        )
+    return invitations
+
+
+def dispatch_customer_visit_plan(*, requirement_id: uuid.UUID) -> list[VendorInvitation]:
+    """Open every independent Customer-selected slot after submission."""
+
+    invitations: list[VendorInvitation] = []
+    shares = VisitPlanShare.objects.filter(
+        plan__requirement_id=requirement_id,
+        matching_status=VisitPlanShare.MatchingStatus.SEARCHING,
+    ).order_by("position")
+    for share in shares:
+        invitations.extend(dispatch_customer_visit_share(share_id=share.id))
+    return invitations
+
+
+@transaction.atomic
+def settle_customer_visit_offer_exhaustion(*, share_id: uuid.UUID) -> VisitPlanShare:
+    """Publish an explicit terminal supply state once no live offer remains."""
+
+    share = VisitPlanShare.objects.select_for_update().get(pk=share_id)
+    if share.matching_status != VisitPlanShare.MatchingStatus.SEARCHING:
+        return share
+    if VendorInvitation.objects.filter(
+        requested_visit_share=share,
+        status=VendorInvitation.Status.INVITED,
+    ).exists():
+        return share
+    share.matching_status = VisitPlanShare.MatchingStatus.NO_PROFESSIONAL_FOUND
+    share.save(update_fields=("matching_status", "updated_at"))
+    enqueue_outbox_event(
+        aggregate_type="visit_plan_share",
+        aggregate_id=share.id,
+        event_type="m2.fixed_visit_offer.exhausted",
+        idempotency_key=f"fixed-visit-exhausted:{share.id}:{share.requested_start}",
+        payload={
+            "requirement_id": str(share.plan.requirement_id),
+            "requested_visit_share_id": str(share.id),
+        },
+    )
+    return share
 
 
 @transaction.atomic
@@ -957,6 +1152,10 @@ def expire_invitation_and_replace(*, invitation_id: uuid.UUID) -> list[VendorInv
 
     expire_invitation(invitation_id=locked.pk)
 
+    if locked.requested_visit_share_id is not None:
+        settle_customer_visit_offer_exhaustion(share_id=locked.requested_visit_share_id)
+        return []
+
     requirement = CustomerRequirement.objects.get(pk=locked.requirement_id)
     if requirement.status not in CustomerRequirement.LIVE_STATUSES:
         # Nothing to replace on a closed or already-selected requirement. `invite_wave` refuses
@@ -971,9 +1170,10 @@ def expired_invitation_ids(*, at: datetime | None = None) -> list[uuid.UUID]:
     moment = at or timezone.now()
     return list(
         VendorInvitation.objects.filter(
-            status__in=(
-                VendorInvitation.Status.INVITED,
-                VendorInvitation.Status.ACCEPTED,
+            models.Q(status=VendorInvitation.Status.INVITED)
+            | models.Q(
+                status=VendorInvitation.Status.ACCEPTED,
+                requested_visit_share__isnull=True,
             ),
             responds_by__isnull=False,
             responds_by__lt=moment,
@@ -1006,9 +1206,11 @@ def open_matching_on_submission(*, requirement_id: uuid.UUID) -> list[VendorInvi
     """
     if RateCardBooking.objects.filter(requirement_id=requirement_id).exists():
         return []
-    if VendorInvitation.objects.filter(requirement_id=requirement_id).exists():
-        return []
     requirement = CustomerRequirement.objects.filter(pk=requirement_id).first()
     if requirement is None or requirement.status not in CustomerRequirement.LIVE_STATUSES:
+        return []
+    if requirement.archetype == ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT:
+        return dispatch_customer_visit_plan(requirement_id=requirement_id)
+    if VendorInvitation.objects.filter(requirement_id=requirement_id).exists():
         return []
     return invite_wave(requirement_id=requirement_id)

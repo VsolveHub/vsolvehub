@@ -42,11 +42,28 @@ export function selectedWorkLabel(
   return question.options?.find((option) => option.value === value)?.label ?? null;
 }
 
+/**
+ * Where the flow opens: the work picker only when the catalogue actually asks
+ * what the work is.
+ *
+ * A specific day-hire ("Electrician by the day") publishes no `work_type`
+ * question — the customer answered it by choosing the service — so its flow
+ * opens straight on planning. Only the generic labour service, whose crew
+ * genuinely does different things on different days, still starts with the
+ * picker.
+ */
+export function initialCrewBookingStep(
+  question: RequirementQuestionView | null,
+): CrewBookingStep {
+  return question === null ? "details" : "work";
+}
+
 /** A restored draft with a recognised work choice resumes at crew planning. */
 export function resumeCrewBookingStep(
   question: RequirementQuestionView | null,
   answers: Readonly<Record<string, unknown>>,
 ): CrewBookingStep {
+  if (question === null) return "details";
   return selectedWorkLabel(question, answers) === null ? "work" : "details";
 }
 

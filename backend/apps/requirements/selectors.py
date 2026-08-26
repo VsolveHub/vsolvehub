@@ -213,7 +213,13 @@ def confirmed_teaser_count(requirement: CustomerRequirement) -> int:
 def partner_invitations(partner: PartnerProfile) -> QuerySet[VendorInvitation]:
     return (
         VendorInvitation.objects.filter(partner=partner)
-        .select_related("requirement__variant__service", "snapshot")
+        .select_related(
+            "requirement__address",
+            "requirement__service_area",
+            "requirement__variant__service",
+            "requested_visit_share",
+            "snapshot",
+        )
         .prefetch_related(
             Prefetch(
                 "proposals",
@@ -230,15 +236,19 @@ def invitation_for_partner(
 ) -> VendorInvitation:
     invitation = (
         VendorInvitation.objects.select_related(
+            "requirement__address",
+            "requirement__service_area",
             "requirement__variant__service",
+            "requested_visit_share",
             "snapshot",
         )
         .prefetch_related(
+            "site_visits",
             Prefetch(
                 "proposals",
                 queryset=Proposal.objects.order_by("-revision"),
                 to_attr="ordered_proposals",
-            )
+            ),
         )
         .filter(partner=partner, id=invitation_id)
         .first()
@@ -284,12 +294,17 @@ def demand_preview_id(requirement_id: uuid.UUID) -> str:
     return keyed_hash(f"m2-demand-preview:{requirement_id}")[:32]
 
 
-def _area_label(requirement: CustomerRequirement) -> str:
+def requirement_area_label(requirement: CustomerRequirement) -> str:
+    """A useful locality for Partner decisions, never the Customer's street address."""
+
     address = requirement.address
     if address is None:
         area = requirement.service_area
         return area.name if area is not None else ""
-    parts = [part for part in (address.locality, address.city) if part]
+    parts: list[str] = []
+    for part in (address.locality, address.city):
+        if part and part.casefold() not in {existing.casefold() for existing in parts}:
+            parts.append(part)
     return ", ".join(parts)
 
 
@@ -328,7 +343,7 @@ def demand_preview(partner: PartnerProfile) -> tuple[list[DemandSummary], int]:
         DemandSummary(
             id=demand_preview_id(requirement.id),
             headline=requirement_summary_text(requirement),
-            area_label=_area_label(requirement),
+            area_label=requirement_area_label(requirement),
             starts_on=(
                 requirement.requested_start.date()
                 if requirement.requested_start is not None

@@ -204,6 +204,7 @@ describe("screen 1's questions", () => {
       code: "standard",
       name: "Standard",
       description: "",
+      image_url: "",
       fulfilment_archetype: "A3_TIME_BLOCK",
       starting_price: { amount_paise: 0, currency: "INR" } as Schemas["Money"],
       minimum_service_subtotal: { amount_paise: 0, currency: "INR" } as Schemas["Money"],

@@ -309,6 +309,18 @@ class VisitPlanShare(models.Model):
         REFUNDED = "REFUNDED", "Refunded to the Customer"
         REPLACED = "REPLACED", "Awaiting a free replacement visit"
 
+    class MatchingStatus(models.TextChoices):
+        """Customer-visible supply state for this independently requested visit."""
+
+        SEARCHING = "SEARCHING", "Searching"
+        HELD = "HELD", "Professional held while payment is pending"
+        BOOKED = "BOOKED", "Booked"
+        VISITED = "VISITED", "Visited"
+        ESTIMATE_RECEIVED = "ESTIMATE_RECEIVED", "Estimate received"
+        NO_PROFESSIONAL_FOUND = "NO_PROFESSIONAL_FOUND", "No professional found"
+        CANCELLED = "CANCELLED", "Cancelled"
+        RECOVERY = "RECOVERY", "Recovery"
+
     #: Statuses from which a settlement sweep may still move a share.
     OPEN_STATUSES = (Status.OPEN, Status.COMMITTED, Status.REPLACED)
 
@@ -321,6 +333,13 @@ class VisitPlanShare(models.Model):
     vendor_payout_paise = models.PositiveBigIntegerField()
     platform_share_paise = models.PositiveBigIntegerField()
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.OPEN)
+    matching_status = models.CharField(
+        max_length=24,
+        choices=MatchingStatus.choices,
+        default=MatchingStatus.SEARCHING,
+    )
+    requested_start = models.DateTimeField(null=True, blank=True)
+    duration_minutes = models.PositiveIntegerField(null=True, blank=True)
     partner = models.ForeignKey(
         PartnerProfile,
         null=True,
@@ -368,6 +387,13 @@ class VisitPlanShare(models.Model):
             models.CheckConstraint(
                 condition=models.Q(amount_paise__gt=0),
                 name="requirements_visit_share_positive",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(requested_start__isnull=True, duration_minutes__isnull=True)
+                    | models.Q(requested_start__isnull=False, duration_minutes__isnull=False)
+                ),
+                name="requirements_visit_share_requested_slot_complete",
             ),
         ]
         indexes = [

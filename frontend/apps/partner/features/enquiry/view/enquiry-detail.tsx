@@ -10,7 +10,7 @@ import { A3Composer } from "@/features/proposal/view/a3-composer";
 import { ProposalStatus } from "@/features/proposal/view/proposal-status";
 import type { Proposal } from "@/features/proposal/model/proposal-state";
 import { VisitDayPanel } from "@/features/visit/view/visit-day-panel";
-import { VisitResponse } from "@/features/visit/view/visit-response";
+import { FixedTimeOffer } from "@/features/visit/view/fixed-time-offer";
 import { WORKFORCE_WORKSPACE, PROJECT_WORKSPACE } from "@/features/workspace/registry";
 
 import { describeStatus, permissionsFor } from "../model/enquiry-state";
@@ -161,7 +161,7 @@ export function EnquiryDetail({ invitationId, basePath, backLabel }: EnquiryDeta
 
       {isProject ? (
         <>
-          <VisitResponse enquiry={enquiry} />
+          <FixedTimeOffer enquiry={enquiry} />
           <VisitDayPanel
             enquiry={enquiry}
             estimateHref={estimateHref}

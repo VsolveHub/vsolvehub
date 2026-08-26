@@ -11,6 +11,7 @@ from apps.partners.views import (
     OperationsPartnerDocumentAccessView,
     OperationsPartnerDocumentReviewView,
     OperationsPartnerScheduleView,
+    OperationsPartnerTaxProfileVerificationView,
     PartnerApplicationSubmitView,
     PartnerApplicationView,
     PartnerBusinessProfileView,
@@ -166,5 +167,10 @@ urlpatterns = [
         "operations/partners/<uuid:partner_id>/availability/",
         OperationsPartnerScheduleView.as_view(),
         name="operations-partner-schedule",
+    ),
+    path(
+        "operations/partners/<uuid:partner_id>/tax-profile/verify/",
+        OperationsPartnerTaxProfileVerificationView.as_view(),
+        name="operations-partner-tax-profile-verify",
     ),
 ]

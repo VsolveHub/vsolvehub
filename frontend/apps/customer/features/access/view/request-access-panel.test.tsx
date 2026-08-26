@@ -25,6 +25,12 @@ function share(position = 0): Schemas["VisitPlanShare"] {
     id: `share-${position + 1}`,
     position,
     status: "OPEN",
+    // New at 1.44.0: a share now carries its own matching state and the slot
+    // the customer picked, so a partially matched plan can be rendered one
+    // slot at a time instead of collapsing to a single plan-level status.
+    matching_status: "SEARCHING",
+    requested_start: "2026-08-24T04:30:00Z",
+    duration_minutes: 120,
     amount_paise: 4950,
     vendor_payout_paise: 4000,
     platform_share_paise: 950,

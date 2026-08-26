@@ -9,6 +9,7 @@ from django.core.management.base import BaseCommand, CommandParser
 from django.db import transaction
 
 from apps.carts.models import ServiceCompatibilityRule
+from apps.catalog.icons import service_icon_for_subcategory
 from apps.catalog.models import (
     A1VariantConfiguration,
     Category,
@@ -17,7 +18,7 @@ from apps.catalog.models import (
     ServiceVariant,
     Subcategory,
 )
-from apps.catalog.seed_content import category_for_trade
+from apps.catalog.seed_content import TILE_FOR_M1_SERVICE, category_for_trade
 from apps.locations.models import (
     PostalCode,
     ServiceArea,
@@ -244,11 +245,26 @@ class Command(BaseCommand):
                 },
             )
             for service_order, seed in enumerate(services, start=1):
+                # A service whose trade was split into browse tiles files under its tile
+                # when the tile already exists (i.e. `seed_task_catalog` has run). On a
+                # bare M1 database the tile does not exist yet and the trade subcategory
+                # is the honest home — `seed_task_catalog._refile_m1_services` moves it
+                # the moment the tiles are seeded. One shared map decides; see
+                # `TILE_FOR_M1_SERVICE`.
+                target_subcategory = subcategory
+                tile = TILE_FOR_M1_SERVICE.get(seed.slug)
+                if tile is not None:
+                    tile_row = Subcategory.objects.filter(
+                        category__slug=tile[0], slug=tile[1]
+                    ).first()
+                    if tile_row is not None:
+                        target_subcategory = tile_row
                 service, _ = Service.objects.update_or_create(
                     slug=seed.slug,
                     defaults={
-                        "subcategory": subcategory,
+                        "subcategory": target_subcategory,
                         "name": seed.name,
+                        "icon_key": service_icon_for_subcategory(subcategory_slug),
                         "short_description": seed.description,
                         "description": seed.description,
                         "status": Service.Status.ACTIVE,

@@ -109,76 +109,55 @@ export function StatusCard({
   railedAbove,
   className,
 }: StatusCardProps) {
-  // `lg:hidden` rather than a JS breakpoint check: the server renders this, and
-  // a hook-driven answer would flash the wrong half on first paint.
   const handedOff = railedAbove === "lg" ? "lg:hidden" : null;
-
-  // A disclosure that opens onto nothing is worse than no disclosure. The
-  // headline can be the whole of what a state has to say — "This request was
-  // cancelled." is complete — and in that case the card simply ends.
   const hasMore =
     explanation.trim().length > 0 || nextStep !== null || supportAction !== undefined;
   return (
     <section
       aria-label={label}
       className={cn(
-        "flex flex-col rounded-card border bg-surface shadow-card",
+        "flex flex-col rounded-card border bg-surface shadow-card transition-shadow duration-fast",
         EDGE[tone],
         className,
       )}
     >
-      <div className="flex flex-col gap-3 p-4 sm:p-5 lg:pb-0">
-        <Badge tone={tone} dot className="self-start">
+      <div className="flex flex-col gap-3.5 p-5 sm:p-6 lg:pb-1">
+        <Badge tone={tone} dot className="self-start shadow-2xs">
           {label}
         </Badge>
 
-        <h2 className="max-w-[44ch] text-lg font-bold leading-snug tracking-tight text-text sm:text-xl">
+        <h2 className="max-w-[44ch] text-lg font-extrabold leading-snug tracking-tight text-navy-900 sm:text-xl">
           {headline}
         </h2>
 
         {readout ? <div className={cn("mt-0.5", handedOff)}>{readout}</div> : null}
 
         {action ? (
-          <div className={cn("mt-1 flex flex-col gap-2", handedOff)}>{action}</div>
+          <div className={cn("mt-1.5 flex flex-col gap-2", handedOff)}>{action}</div>
         ) : null}
       </div>
 
       {hasMore ? (
         <>
-      {/* ## Why the same words render two ways
-       *
-       * On a phone the explanation is behind a disclosure, because the screen
-       * is 390px and the headline plus one control is already most of the fold
-       * — a paragraph there pushes the action off it.
-       *
-       * On a wide viewport there is no such competition: the card sits in a
-       * column beside a rail, and hiding three sentences that fit comfortably
-       * would be ceremony rather than restraint. So above `lg` the same text is
-       * simply open.
-       *
-       * Both branches render the identical strings from the state table. This
-       * is a layout decision about *where* the words go, never about which
-       * words a reader is trusted with — a reader on a phone can reach every
-       * sentence a reader on a laptop can, in one tap. */}
-      <div className="border-t border-line px-4 pb-4 pt-3 sm:px-5 lg:hidden">
-        <Disclosure summary="What this means">
-          <p className="text-pretty">{explanation}</p>
-          {nextStep === null ? null : (
-            <p className="mt-2.5 font-semibold text-text">{nextStep}</p>
-          )}
-          {supportAction ? <div className="mt-3">{supportAction}</div> : null}
-        </Disclosure>
-      </div>
+          <div className="border-t border-line/80 px-4 pb-4 pt-3 sm:px-5 lg:hidden">
+            <Disclosure summary="What this means">
+              <p className="text-pretty text-sm leading-relaxed text-text-secondary">{explanation}</p>
+              {nextStep === null ? null : (
+                <p className="mt-2.5 font-bold text-navy-900">{nextStep}</p>
+              )}
+              {supportAction ? <div className="mt-3">{supportAction}</div> : null}
+            </Disclosure>
+          </div>
 
-      <div className="hidden px-4 pb-5 sm:px-5 lg:block">
-        <p className="max-w-prose text-pretty text-sm leading-6 text-text-secondary">
-          {explanation}
-        </p>
-        {nextStep === null ? null : (
-          <p className="mt-2.5 max-w-prose text-sm font-bold leading-6 text-text">{nextStep}</p>
-        )}
-        {supportAction ? <div className="mt-3">{supportAction}</div> : null}
-      </div>
+          <div className="hidden px-5 pb-6 sm:px-6 lg:block">
+            <p className="max-w-prose text-pretty text-sm leading-relaxed text-text-secondary">
+              {explanation}
+            </p>
+            {nextStep === null ? null : (
+              <p className="mt-2.5 max-w-prose text-sm font-bold leading-relaxed text-navy-900">{nextStep}</p>
+            )}
+            {supportAction ? <div className="mt-3">{supportAction}</div> : null}
+          </div>
         </>
       ) : null}
     </section>

@@ -1,39 +1,24 @@
 "use client";
 
-import { useLogout } from "@vsolve/query";
-import { Button, Logo, cn } from "@vsolve/ui";
+// The namespace import is load-bearing: `PATHS`/`MOBILE_PATHS` name `React.ReactNode`,
+// and the test runner's JSX transform resolves elements through the `React` binding.
+import * as React from "react";
+import { useState, useEffect } from "react";
+import { useLogout, useAuthGuard, useOtpFlow } from "@vsolve/query";
+import { Button, Logo, Dialog, OtpForm, cn } from "@vsolve/ui";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
 import { NotificationBell } from "@/features/notifications/view/notification-bell";
 import { getApiClient } from "@/lib/api/browser";
+import { useCart } from "@/features/checkout/queries";
 
 import { useCustomerSession } from "../queries";
 import { ProfileMark, profileName } from "./profile-mark";
+import { CUSTOMER_VIEWPORT_WIDTH_CLASS } from "./app-chrome-layout";
 
 /**
  * The Customer app's top bar.
- *
- * ## What changed, and why the hamburger is gone
- *
- * This header used to carry seven links and collapse them into a hamburger
- * below `md`, because seven links wrap to three rows on a phone. The seven are
- * now three (`NAV_TARGETS` below), and on a phone they live in a tab bar at the
- * bottom of the viewport where a thumb can reach them — so the hamburger has
- * nothing left to hide and is deleted rather than kept as a second way to reach
- * the same three places. The profile avatar owns personal settings.
- *
- * On a phone this bar is therefore identity and alerts only: who you are signed
- * in as, and whether anything has happened. Where you can go is the bar below.
- *
- * ## Why the session states are not collapsed
- *
- * `isResolving` renders neither "Log in" nor an account link. Showing "Log in"
- * while the answer is in flight makes a signed-in customer's own header tell
- * them they are signed out on every cold load, and the flicker back is worse
- * than the wait. `isUnavailable` is treated as signed-out for *navigation* only:
- * the links still work, Django still refuses what it should, and nobody is shown
- * a login wall because a request failed.
  */
 export function SiteHeader() {
   const session = useCustomerSession();
@@ -41,19 +26,53 @@ export function SiteHeader() {
   const pathname = usePathname();
   const router = useRouter();
 
+  const cartQuery = useCart();
+  const cartCount = cartQuery.data?.items.reduce((sum, item) => sum + item.quantity, 0) ?? 0;
+
+  // Global login dialog state
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
+  const guard = useAuthGuard(getApiClient());
+  const flow = useOtpFlow(getApiClient(), {
+    onAuthenticated: () => {
+      setIsLoginOpen(false);
+      router.refresh();
+    },
+  });
+
+  // Listen to custom window event to trigger login popup from other parts of the app
+  useEffect(() => {
+    const handleOpen = () => setIsLoginOpen(true);
+    window.addEventListener("open-login-popup", handleOpen);
+    return () => window.removeEventListener("open-login-popup", handleOpen);
+  }, []);
+
+  const loginDialogOpen = isLoginOpen && guard.status !== "authenticated";
+
+  const handleOpenChange = (open: boolean) => {
+    setIsLoginOpen(open);
+    if (!open) {
+      flow.reset();
+    }
+  };
+
   const targets = NAV_TARGETS.filter(
     (target) => !target.private || session.isAuthenticated,
   );
 
   return (
-    <header className="sticky top-0 z-20 border-b border-line bg-surface">
-      <div className="mx-auto flex min-h-16 w-full max-w-[1216px] items-center gap-x-7 px-4 py-3 sm:px-6 lg:px-0">
+    <header className={cn(
+      CUSTOMER_VIEWPORT_WIDTH_CLASS,
+      "sticky top-0 z-20 transition-colors",
+      pathname === "/"
+        ? "bg-[#FAF9F7] md:bg-surface md:border-b md:border-line"
+        : "bg-surface border-b border-line"
+    )}>
+      {/* Desktop Header Layout */}
+      <div className="hidden md:flex mx-auto min-h-16 w-full max-w-[1216px] items-center gap-x-7 px-4 py-3 sm:px-6 lg:px-0">
         <Link href="/" aria-label="V Solve Hub home" className="shrink-0">
           <Logo className="h-7 w-auto" />
         </Link>
 
-        {/* Below `md` the tab bar owns navigation, so this is deliberately
-            absent rather than collapsed behind a control. */}
         <nav aria-label="Main" className="hidden flex-1 items-center gap-x-1 md:flex">
           {targets.map((target) => {
             const current = isCurrentTarget(target.href, pathname);
@@ -62,15 +81,18 @@ export function SiteHeader() {
                 key={target.href}
                 href={target.href}
                 aria-current={current ? "page" : undefined}
+                onClick={(e) => {
+                  if (target.href === "/activity" && !session.isAuthenticated) {
+                    e.preventDefault();
+                    setIsLoginOpen(true);
+                  }
+                }}
                 className={cn(
                   "inline-flex h-9 items-center whitespace-nowrap rounded-control px-3.5 text-sm",
                   "transition-colors duration-fast",
                   "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring",
                   current
-                    ? // A tinted plate rather than an underline: it survives
-                      // greyscale, and it matches the phone bar's own cue so the
-                      // two chromes read as one app.
-                      "bg-action-surface font-extrabold text-text"
+                    ? "bg-action-surface font-extrabold text-text"
                     : "font-semibold text-text-secondary hover:bg-surface-hover hover:text-text",
                 )}
               >
@@ -80,103 +102,153 @@ export function SiteHeader() {
           })}
         </nav>
 
-        <div className="flex-1 md:hidden" />
-
-        {/* Resolving shows nothing rather than guessing. */}
-        {session.isResolving ? null : session.isAuthenticated ? (
-          <div className="flex items-center gap-2 sm:gap-3">
-            {/* Inside the authenticated cluster and nowhere else. The bell polls
-                an `IsAuthenticated` endpoint, so mounting it for a visitor would
-                start a minute-long poll against a refusal — and mounting it
-                while the session is still resolving would do the same on every
-                cold load, which is the same flicker this branch exists to
-                avoid. Its being rendered *is* the session gate; the component
-                itself asks no question about who is signed in. */}
-            <NotificationBell />
-            <Link
-              href="/account"
-              aria-label="Open profile"
-              title={profileName(session) ?? "Profile"}
-              className="rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-            >
-              <ProfileMark identity={session} className="size-10 text-xs" />
-            </Link>
-            {/* Sign out is a desktop affordance. On a phone it lives on the
-                profile screen reached through the avatar. */}
-            <Button
-              variant="ghost"
-              className="hidden md:inline-flex"
-              onClick={() =>
-                logout.mutate(undefined, {
-                  onSuccess: () => {
-                    router.replace("/login");
-                    router.refresh();
-                  },
-                })
-              }
-              loading={logout.isPending}
-              loadingLabel="Signing out"
-            >
-              Sign out
-            </Button>
-          </div>
-        ) : (
+        {/* Right side actions on desktop */}
+        <div className="flex items-center gap-3">
+          {/* Cart Icon Link */}
           <Link
-            href="/login"
-            className="text-sm font-semibold text-text-link hover:underline"
+            href="/cart"
+            aria-label="View basket"
+            title="Basket"
+            className={cn(
+              "relative flex size-10 items-center justify-center rounded-full text-text-secondary hover:bg-surface-hover hover:text-text transition-colors",
+              "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring",
+              isCurrentTarget("/cart", pathname) && "bg-action-surface text-text font-bold"
+            )}
           >
-            Log in
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.9}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="size-5"
+            >
+              <circle cx="8" cy="21" r="1" />
+              <circle cx="19" cy="21" r="1" />
+              <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" />
+            </svg>
+            {cartCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#EA580C] px-1 text-[10px] font-extrabold text-white ring-2 ring-white">
+                {cartCount}
+              </span>
+            )}
           </Link>
-        )}
+
+          {session.isResolving ? null : session.isAuthenticated ? (
+            <div className="flex items-center gap-2 sm:gap-3">
+              <NotificationBell />
+              <Link
+                href="/account"
+                aria-label="Open profile"
+                title={profileName(session) ?? "Profile"}
+                className="rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+              >
+                <ProfileMark identity={session} className="size-10 text-xs" />
+              </Link>
+              <Button
+                variant="ghost"
+                className="hidden md:inline-flex"
+                onClick={() =>
+                  logout.mutate(undefined, {
+                    onSuccess: () => {
+                      router.replace("/login");
+                      router.refresh();
+                    },
+                  })
+                }
+                loading={logout.isPending}
+                loadingLabel="Signing out"
+              >
+                Sign out
+              </Button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setIsLoginOpen(true)}
+              className="text-sm font-semibold text-text-link hover:underline cursor-pointer bg-transparent border-none p-0 focus:outline-none"
+            >
+              Log in
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Mobile Header Layout */}
+      <div className="flex md:hidden items-center justify-between px-4 py-3 min-h-16 w-full gap-2">
+        <Link href="/" aria-label="V Solve Hub home" className="shrink-0">
+          <Logo className="h-7 w-auto" />
+        </Link>
+        <div className="flex-1" />
+        <div className="flex items-center gap-2">
+          <Link
+            href="/cart"
+            aria-label="View basket"
+            className="relative flex size-8 items-center justify-center rounded-full text-text-secondary hover:bg-surface-hover hover:text-text transition-colors"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className="size-4.5">
+              <circle cx="8" cy="21" r="1" />
+              <circle cx="19" cy="21" r="1" />
+              <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" />
+            </svg>
+            {cartCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-[#EA580C] px-0.5 text-[8px] font-extrabold text-white ring-1.5 ring-[#FAF9F7]">
+                {cartCount}
+              </span>
+            )}
+          </Link>
+          {session.isResolving ? null : session.isAuthenticated ? (
+            <>
+              <NotificationBell />
+              <Link
+                href="/account"
+                aria-label="Open profile"
+                className="rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+              >
+                <ProfileMark identity={session} className="size-8.5 text-xs" />
+              </Link>
+            </>
+          ) : (
+            <button
+              onClick={() => setIsLoginOpen(true)}
+              className="text-xs font-bold text-[#EA580C] hover:text-[#C2410C] cursor-pointer bg-transparent border-none p-0 focus:outline-none"
+            >
+              Log in
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Global Interactive Login Dialog Modal */}
+      <Dialog
+        open={loginDialogOpen}
+        onOpenChange={handleOpenChange}
+        title="Log in to V Solve Hub"
+        description="Verify your mobile number to view bookings and checkout"
+      >
+        <div className="py-2 flex flex-col gap-4">
+          <Logo className="h-8 w-auto self-start" />
+          <p className="text-xs text-text-secondary">
+            Use the mobile number you book with. We will text you a code — there is no password.
+          </p>
+          <OtpForm
+            {...flow}
+            heading="Your mobile number"
+            headingLevel={2}
+            description="We will text you a code. There is no password."
+            verifyLabel="Verify and continue"
+          />
+        </div>
+      </Dialog>
     </header>
   );
 }
 
-
-/**
- * The Customer app's navigation, in one list.
- *
- * ## Why there are three
- *
- * There were seven: Services, Basket, My bookings, My requests, My projects,
- * Account, and a sign-out control — plus `/bookings/workforce` reachable only
- * from a sentence at the bottom of the bookings page. Three of those seven were
- * the same question filed three ways. A Customer who wanted "the job I am
- * waiting on" had to know whether it was a booking, a request or a project,
- * which is our word for it and not theirs.
- *
- * So the three collapse into `Activity`, which segments them internally. The
- * segments stay, because the distinction between them is real — an A3 booking
- * and an A5 project make different promises about who holds the money, and
- * `engagement-list-screen.tsx` is explicit that one noun over both would
- * misstate that. What goes away is being asked to make that distinction before
- * you have found the thing.
- *
- * ## Why the whole navigation is one file
- *
- * Two chromes render this list — the desktop bar above and the phone tab bar
- * below — and they must not be able to disagree about what the app contains.
- * They were briefly three modules plus a glyph set; that is four files for one
- * question, and four places for the answer to drift. The list, the current-item
- * rule, the icons and both bars live together because they are one concern.
- */
-
 export interface NavTarget {
   href: string;
-  /** What the desktop bar shows. */
   label: string;
-  /**
-   * What the phone tab bar shows under the icon. Shorter where the full label
-   * would wrap in a quarter of a 390px viewport.
-   */
   shortLabel: string;
-  /** One of the drawn glyphs in `NavIcon` below. */
   icon: "home" | "activity" | "basket";
-  /**
-   * Requires a session. An anonymous visitor is never shown a link that bounces
-   * them to login — the tab bar substitutes a Log in target instead.
-   */
   private: boolean;
 }
 
@@ -184,27 +256,23 @@ export const NAV_TARGETS: readonly NavTarget[] = [
   // Deliberately first and deliberately public: the catalog and the anonymous
   // basket are real surfaces for somebody who has never signed in.
   { href: "/catalog", label: "Services", shortLabel: "Services", icon: "home", private: false },
-  { href: "/activity", label: "Bookings", shortLabel: "Bookings", icon: "activity", private: true },
-  { href: "/cart", label: "Basket", shortLabel: "Basket", icon: "basket", private: false },
+  { href: "/activity", label: "Bookings", shortLabel: "Bookings", icon: "activity", private: false },
 ];
 
 /**
  * The paths each target owns, beyond its own href.
  *
- * `startsWith` on the href alone would leave the whole `/requests/{id}` tree
- * with no indication of where the reader is, because those routes did not move
- * when the nav item did. Activity is the front door for three record types and
- * every screen under them, so it claims their trees explicitly.
+ * `/catalog` owns the shopping flow: a visitor moving from the catalogue into
+ * the basket and on to checkout has not left "Services", and a nav that lights
+ * nothing there has stopped answering "where am I".
  */
 const OWNED: Record<string, readonly string[]> = {
+  "/catalog": ["/catalog", "/book", "/cart", "/checkout"],
   "/activity": ["/activity", "/bookings", "/requests", "/projects", "/engagements"],
 };
 
 /**
  * Whether `pathname` is inside `href`'s territory.
- *
- * Exported and pure so the two chromes cannot drift, and so the rule is
- * testable without rendering a header.
  */
 export function isCurrentTarget(href: string, pathname: string): boolean {
   const owned = OWNED[href] ?? [href];
@@ -213,15 +281,6 @@ export function isCurrentTarget(href: string, pathname: string): boolean {
 
 /**
  * The three navigation glyphs, drawn.
- *
- * Stroke-based on a 24px grid at 1.9 units, which is the weight the rest of the
- * app's inline icons use. Drawn rather than emoji or an icon font for the reason
- * this product runs on mid-range Android in daylight: a glyph we control scales,
- * recolours with `currentColor`, and costs no network request that can fail and
- * leave a row of empty boxes where the navigation was.
- *
- * Every one is `aria-hidden`. The label under it carries the meaning, and a
- * screen reader announcing "house" before "Services" is noise.
  */
 export function NavIcon({ name, className }: { name: NavTarget["icon"]; className?: string }) {
   return (
@@ -241,19 +300,16 @@ export function NavIcon({ name, className }: { name: NavTarget["icon"]; classNam
 }
 
 const PATHS: Record<NavTarget["icon"], React.ReactNode> = {
-  // A roof over a structure — the logo's own motif, reduced to two strokes.
   home: (
     <>
       <path d="M3 10.5 12 3l9 7.5" />
       <path d="M5.5 9.5V20h13V9.5" />
     </>
   ),
-  // Two stacked bands: a list of things, not a chart. Deliberately not a bell
-  // or a clock — neither of those is what Activity holds.
   activity: (
     <>
-      <rect x="3" y="4" width="18" height="6" rx="1.5" />
-      <rect x="3" y="14" width="18" height="6" rx="1.5" />
+      <rect x="4" y="4" width="16" height="16" rx="2" />
+      <path d="M9 9h6M9 13h6M9 17h6" />
     </>
   ),
   basket: (
@@ -264,37 +320,72 @@ const PATHS: Record<NavTarget["icon"], React.ReactNode> = {
   ),
 };
 
-/**
- * The phone navigation: a tab bar at the bottom of the viewport.
- *
- * ## Why the bottom
- *
- * The old phone navigation was a hamburger in the top-left — the furthest point
- * on the screen from a thumb holding the device, behind a tap, and announcing
- * nothing about where the reader currently is. Every destination in this app
- * cost two taps and a guess. Four targets sitting where the thumb already rests
- * cost one tap and no guess, and the current one is legible without opening
- * anything.
- *
- * ## Why an anonymous visitor sees three
- *
- * One of the three needs a session. The header's existing rule — never show a
- * link that bounces to login — is the right one and it survives here, so an
- * anonymous visitor gets Services, Basket and a Log in target. Three tabs is a
- * legitimate tab bar; a tab that throws you to a login wall is not.
- *
- * ## Why nothing renders while the session resolves
- *
- * Same reason the header does it: guessing "signed out" for the half second
- * before Django answers means a signed-in Customer watches their own navigation
- * change shape on every cold load. The bar reserves its space (the layout
- * padding is unconditional) and fills in.
- */
+interface MobileNavTarget {
+  href: string;
+  label: string;
+  shortLabel: string;
+  icon: "home" | "search" | "activity" | "profile";
+  private: boolean;
+}
+
+const MOBILE_TARGETS: readonly MobileNavTarget[] = [
+  { href: "/", label: "Home", shortLabel: "Home", icon: "home", private: false },
+  { href: "/catalog", label: "Services", shortLabel: "Services", icon: "search", private: false },
+  { href: "/activity", label: "Bookings", shortLabel: "Bookings", icon: "activity", private: false },
+  { href: "/account", label: "Profile", shortLabel: "Profile", icon: "profile", private: false },
+];
+
+const MOBILE_PATHS: Record<string, React.ReactNode> = {
+  home: (
+    <>
+      <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      <polyline points="9 22 9 12 15 12 15 22" />
+    </>
+  ),
+  search: (
+    <>
+      <circle cx="11" cy="11" r="8" />
+      <path d="m21 21-4.3-4.3" />
+    </>
+  ),
+  activity: (
+    <>
+      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+      <line x1="16" x2="16" y1="2" y2="6" />
+      <line x1="8" x2="8" y1="2" y2="6" />
+      <line x1="3" x2="21" y1="10" y2="10" />
+    </>
+  ),
+  profile: (
+    <>
+      <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </>
+  ),
+};
+
+function NavIconMobile({ name, className }: { name: string; className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.9}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      {MOBILE_PATHS[name]}
+    </svg>
+  );
+}
+
 export function BottomNav() {
   const session = useCustomerSession();
   const pathname = usePathname();
 
-  const targets = NAV_TARGETS.filter(
+  const targets = MOBILE_TARGETS.filter(
     (target) => !target.private || session.isAuthenticated,
   );
 
@@ -302,15 +393,12 @@ export function BottomNav() {
     <nav
       aria-label="Main"
       className={cn(
-        "fixed inset-x-0 bottom-0 z-30 md:hidden",
-        "border-t border-line bg-surface",
-        // The home indicator on a modern phone sits over the bottom ~20px. The
-        // viewport meta is `viewport-fit=cover`, so this is the inset that keeps
-        // the labels off it.
-        "pb-[env(safe-area-inset-bottom)]",
+        "fixed inset-x-0 bottom-0 z-50 md:hidden",
+        "border-t border-line/80 bg-white/95 pb-[env(safe-area-inset-bottom)]",
+        "shadow-[0_-4px_16px_rgba(0,0,0,0.06)] backdrop-blur"
       )}
     >
-      <div className="flex items-stretch px-1">
+      <div className="flex h-14 w-full items-stretch px-1">
         {targets.map((target) => {
           const current = isCurrentTarget(target.href, pathname);
           return (
@@ -318,26 +406,35 @@ export function BottomNav() {
               key={target.href}
               href={target.href}
               aria-current={current ? "page" : undefined}
+              onClick={(e) => {
+                if (target.href === "/activity" && !session.isAuthenticated) {
+                  e.preventDefault();
+                  window.dispatchEvent(new CustomEvent("open-login-popup"));
+                } else if (target.href === "/account" && !session.isAuthenticated) {
+                  e.preventDefault();
+                  window.dispatchEvent(new CustomEvent("open-login-popup"));
+                }
+              }}
               className={cn(
-                "flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 pt-2",
+                "group flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-0.5",
                 "focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring",
-                current ? "text-text" : "text-text-muted",
               )}
+              aria-label={target.label}
             >
-              {/* The pill is the current-state cue that survives greyscale and
-                  colour blindness — the weight change alone would not. */}
               <span
                 className={cn(
-                  "flex h-7 w-13 items-center justify-center rounded-full transition-colors duration-fast",
-                  current ? "bg-action-surface" : null,
+                  "flex size-8 shrink-0 items-center justify-center rounded-full transition-colors",
+                  current
+                    ? "bg-action text-white shadow-sm"
+                    : "text-text-secondary group-hover:text-navy-900",
                 )}
               >
-                <NavIcon name={target.icon} className="size-[1.375rem]" />
+                <NavIconMobile name={target.icon} className="size-[1.125rem]" />
               </span>
               <span
                 className={cn(
-                  "text-[0.65625rem] leading-none",
-                  current ? "font-extrabold" : "font-semibold",
+                  "max-w-full truncate text-[10px] leading-none",
+                  current ? "font-bold text-action" : "font-semibold text-text-secondary",
                 )}
               >
                 {target.shortLabel}
@@ -347,14 +444,15 @@ export function BottomNav() {
         })}
 
         {session.isResolving || session.isAuthenticated ? null : (
-          <Link
-            href="/login"
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent("open-login-popup"))}
             className={cn(
-              "flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 pt-2 text-text-link",
+              "flex h-full min-w-0 flex-1 cursor-pointer flex-col items-center justify-center gap-0.5 border-none bg-transparent p-0",
               "focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring",
             )}
+            aria-label="Log in"
           >
-            <span className="flex h-7 w-13 items-center justify-center">
+            <span className="flex size-8 shrink-0 items-center justify-center text-text-secondary transition-colors hover:text-navy-900">
               <svg
                 viewBox="0 0 24 24"
                 aria-hidden
@@ -363,14 +461,16 @@ export function BottomNav() {
                 strokeWidth={1.9}
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                className="size-[1.375rem]"
+                className="size-[1.125rem]"
               >
                 <path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4" />
                 <path d="M10 16l4-4-4-4M14 12H3.5" />
               </svg>
             </span>
-            <span className="text-[0.65625rem] font-semibold leading-none">Log in</span>
-          </Link>
+            <span className="max-w-full truncate text-[10px] font-semibold leading-none text-text-secondary">
+              Log in
+            </span>
+          </button>
         )}
       </div>
     </nav>

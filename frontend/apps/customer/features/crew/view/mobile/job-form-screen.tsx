@@ -67,9 +67,17 @@ export interface JobFormScreenProps {
   onContinue: () => void;
   saveError?: ReactNode;
   onBack: () => void;
-  /** The work chosen on step one, shown as a compact editable summary. */
-  selectedWorkLabel: string;
-  onChangeWork: () => void;
+  /** "Step 1 of 2" for a service with no work picker, "Step 2 of 3" behind one. */
+  stepLabel?: string;
+  /**
+   * The work chosen on step one, shown as a compact editable summary — or null
+   * for a service whose catalogue asks no work question, where the service name
+   * in the heading already says what the crew does.
+   */
+  selectedWorkLabel: string | null;
+  onChangeWork?: () => void;
+  /** What's included / what's not, rendered when this screen is the flow's first. */
+  aboutPanel?: ReactNode;
 }
 
 /** The day, in the customer's own locale. Built from parts, never from `new Date(iso)`. */
@@ -106,8 +114,10 @@ export function JobFormScreen({
   onContinue,
   saveError,
   onBack,
+  stepLabel = "Step 2 of 3",
   selectedWorkLabel,
   onChangeWork,
+  aboutPanel,
 }: JobFormScreenProps) {
   const [dateOpen, setDateOpen] = useState(false);
 
@@ -124,7 +134,7 @@ export function JobFormScreen({
     <MobileScreen
       title="Book a crew"
       onBack={onBack}
-      step="Step 2 of 3"
+      step={stepLabel}
       reassurance="Free. Nothing is booked yet."
       action={
         <Button
@@ -142,21 +152,25 @@ export function JobFormScreen({
       <div className="crew-stage-enter flex flex-col gap-4">
         <ScreenHeading eyebrow={serviceName} title="Plan the crew" />
 
-        <button
-          type="button"
-          onClick={onChangeWork}
-          className="flex min-h-14 items-center justify-between gap-3 rounded-[14px] border border-selected-line bg-selected-surface px-3.5 py-3 text-left transition-[border-color,transform] duration-base hover:-translate-y-0.5 hover:border-selected active:translate-y-0 active:scale-[0.99] focus-visible:outline-focus-ring motion-reduce:transform-none"
-        >
-          <span className="min-w-0">
-            <span className="block text-[11px] font-bold uppercase tracking-[0.1em] text-text-muted">
-              Work selected
+        {selectedWorkLabel !== null && onChangeWork !== undefined ? (
+          <button
+            type="button"
+            onClick={onChangeWork}
+            className="flex min-h-14 items-center justify-between gap-3 rounded-[14px] border border-selected-line bg-selected-surface px-3.5 py-3 text-left transition-[border-color,transform] duration-base hover:-translate-y-0.5 hover:border-selected active:translate-y-0 active:scale-[0.99] focus-visible:outline-focus-ring motion-reduce:transform-none"
+          >
+            <span className="min-w-0">
+              <span className="block text-[11px] font-bold uppercase tracking-[0.1em] text-text-muted">
+                Work selected
+              </span>
+              <span className="mt-0.5 block text-sm font-bold leading-5 text-text">
+                {selectedWorkLabel}
+              </span>
             </span>
-            <span className="mt-0.5 block text-sm font-bold leading-5 text-text">
-              {selectedWorkLabel}
-            </span>
-          </span>
-          <span className="shrink-0 text-xs font-bold text-text-link">Change</span>
-        </button>
+            <span className="shrink-0 text-xs font-bold text-text-link">Change</span>
+          </button>
+        ) : (
+          aboutPanel
+        )}
 
       {others.map((question) => (
         <div key={question.code}>

@@ -59,6 +59,7 @@ from .registration import (
     declare_insurance,
     live_insurance_declaration,
     upsert_business_profile,
+    verify_business_tax_profile,
 )
 from .vendor_records import (
     WageFloorCheck,
@@ -118,5 +119,6 @@ __all__ = [
     "unavailable_crew_membership_ids",
     "update_crew_member",
     "upsert_business_profile",
+    "verify_business_tax_profile",
     "workspace_grants",
 ]

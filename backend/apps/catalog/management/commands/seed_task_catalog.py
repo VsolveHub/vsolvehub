@@ -61,27 +61,30 @@ reviewed decision per pair, not a bulk import.
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from itertools import combinations
-from uuid import UUID
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.db.models import Count, F, Q
 
 from apps.carts.models import ServiceCompatibilityRule
+from apps.catalog.icons import SERVICE_ICON_BY_SUBCATEGORY
 from apps.catalog.models import (
     A1VariantConfiguration,
     Category,
     Service,
+    ServiceMedia,
     ServicePolicy,
     ServiceVariant,
     Subcategory,
 )
 from apps.catalog.seed_content import (
     SERVICE_VARIANTS,
+    TILE_FOR_M1_SERVICE,
     VariantSeed,
     category_for_trade,
     content_for_trade,
 )
+from apps.catalog.seed_images import image_for
 from apps.locations.models import ServiceArea, ServiceAreaService
 from apps.pricing.models import ServiceRate, TaskRate
 
@@ -100,7 +103,19 @@ class TaskSeed:
 
 @dataclass(frozen=True, slots=True)
 class TradeSeed:
-    """One subcategory. `slug` is also the `required_skill_code` dispatch matches on."""
+    """One subcategory tile.
+
+    `slug` is the subcategory the customer browses. Dispatch matches on `dispatch_skill`:
+    historically the two were the same string, but a trade split into browse tiles
+    ("Switch & socket", "Fans") keeps ONE skill across all of them — an electrician holds
+    the `electrician` skill, never a `switch-socket` skill. `skill_code` names that trade
+    when it differs from the tile slug; content templates and wage/dispatch logic key off
+    `dispatch_skill`, never off the tile.
+
+    `image_subject` keys into `seed_images.SEED_IMAGE_POOLS` for the tile photo and the
+    covers of the services underneath it; blank means no photo (the client falls back to
+    the icon, which is honest — a wrong photo is worse than none).
+    """
 
     name: str
     slug: str
@@ -108,6 +123,12 @@ class TradeSeed:
     equipment: tuple[str, ...]
     unsafe: tuple[str, ...]
     tasks: tuple[TaskSeed, ...]
+    skill_code: str | None = None
+    image_subject: str = ""
+
+    @property
+    def dispatch_skill(self) -> str:
+        return self.skill_code or self.slug
 
 
 ELECTRICAL_KIT = (
@@ -134,25 +155,50 @@ PLUMBING_UNSAFE = (
 #: is shared with `seed_technician_catalog`, and a trade listed in one and moved in the other
 #: is exactly the drift that would duplicate a subcategory.
 _TECHNICIAN_SOURCE: tuple[TradeSeed, ...] = (
+    # The electrician trade, filed as the browse tiles a customer actually thinks in
+    # ("my fan is broken", not "I need an electrician-general-works"). One trade, one
+    # skill: every tile carries skill_code="electrician", the same bag and the same
+    # unsafe list, because the tile split is merchandising and the trade is real.
     TradeSeed(
-        "Electrician",
-        "electrician",
+        "Switch & socket",
+        "switch-socket",
         10,
         (*ELECTRICAL_KIT, "drill", "ladder"),
         ELECTRICAL_UNSAFE,
         (
-            TaskSeed("General Electrical Works", "electrician-general-works", 9_900, 30),
             TaskSeed("Switch Board Repair", "electrician-switch-board-repair", 12_900, 30),
             TaskSeed(
                 "Switch Board Replacement", "electrician-switch-board-replacement", 14_900, 45
             ),
             TaskSeed("Plug Point Fixing", "electrician-plug-point-fixing", 9_900, 30),
-            TaskSeed("Door Bell Installation", "electrician-door-bell-installation", 9_900, 30),
+            TaskSeed("Junction Box Fixing", "electrician-junction-box-fixing", 9_900, 30),
+        ),
+        skill_code="electrician",
+        image_subject="switch-socket",
+    ),
+    TradeSeed(
+        "Fans",
+        "fans",
+        10,
+        (*ELECTRICAL_KIT, "drill", "ladder"),
+        ELECTRICAL_UNSAFE,
+        (
             TaskSeed("Wall Fan Installation", "electrician-wall-fan-installation", 19_900, 45),
             TaskSeed(
                 "Exhaust Fan Installation", "electrician-exhaust-fan-installation", 14_900, 45
             ),
             TaskSeed("Fan Repair", "electrician-fan-repair", 14_900, 45),
+        ),
+        skill_code="electrician",
+        image_subject="ceiling-fan",
+    ),
+    TradeSeed(
+        "Lights",
+        "lighting",
+        10,
+        (*ELECTRICAL_KIT, "drill", "ladder"),
+        ELECTRICAL_UNSAFE,
+        (
             TaskSeed(
                 "Decorative Light Installation",
                 "electrician-decorative-light-installation",
@@ -160,58 +206,150 @@ _TECHNICIAN_SOURCE: tuple[TradeSeed, ...] = (
                 90,
             ),
             TaskSeed("Chandelier Installation", "electrician-chandelier-installation", 49_900, 90),
-            TaskSeed("Junction Box Fixing", "electrician-junction-box-fixing", 9_900, 30),
-            TaskSeed("DB Board Installation", "electrician-db-board-installation", 49_900, 90),
-            TaskSeed("DB Board Repair", "electrician-db-board-repair", 29_900, 60),
+        ),
+        skill_code="electrician",
+        image_subject="decorative-light",
+    ),
+    TradeSeed(
+        "MCB, fuse & inverter",
+        "mcb-fuse-inverter",
+        10,
+        (*ELECTRICAL_KIT, "drill", "ladder"),
+        ELECTRICAL_UNSAFE,
+        (
             TaskSeed("MCB Installation", "electrician-mcb-installation", 14_900, 30),
             TaskSeed("Fuse Replacement", "electrician-fuse-replacement", 9_900, 20),
+            TaskSeed("DB Board Installation", "electrician-db-board-installation", 49_900, 90),
+            TaskSeed("DB Board Repair", "electrician-db-board-repair", 29_900, 60),
             TaskSeed("Main Board Installation", "electrician-main-board-installation", 49_900, 90),
             TaskSeed("Load Distribution Setup", "electrician-load-distribution-setup", 79_900, 120),
+            TaskSeed("Inverter Installation", "electrician-inverter-installation", 49_900, 90),
+            TaskSeed("UPS Setup", "electrician-ups-setup", 39_900, 60),
+            TaskSeed("Generator Connection", "electrician-generator-connection", 99_900, 120),
+        ),
+        skill_code="electrician",
+        image_subject="breaker-panel",
+    ),
+    TradeSeed(
+        "Motors & pumps",
+        "motors-pumps",
+        10,
+        (*ELECTRICAL_KIT, "drill", "ladder"),
+        ELECTRICAL_UNSAFE,
+        (
             TaskSeed("Water Motor Wiring", "electrician-water-motor-wiring", 29_900, 60),
             TaskSeed("Pump Connection", "electrician-pump-connection", 29_900, 60),
             TaskSeed("Bore Motor Connection", "electrician-bore-motor-connection", 49_900, 90),
             TaskSeed("Starter Panel Setup", "electrician-starter-panel-setup", 59_900, 90),
-            TaskSeed("Inverter Installation", "electrician-inverter-installation", 49_900, 90),
-            TaskSeed("UPS Setup", "electrician-ups-setup", 39_900, 60),
-            TaskSeed("Generator Connection", "electrician-generator-connection", 99_900, 120),
+        ),
+        skill_code="electrician",
+        image_subject="water-pump",
+    ),
+    TradeSeed(
+        "Doorbell & security",
+        "doorbell-security",
+        10,
+        (*ELECTRICAL_KIT, "drill", "ladder"),
+        ELECTRICAL_UNSAFE,
+        (TaskSeed("Door Bell Installation", "electrician-door-bell-installation", 9_900, 30),),
+        skill_code="electrician",
+        image_subject="doorbell",
+    ),
+    TradeSeed(
+        "Power problems",
+        "power-problems",
+        10,
+        (*ELECTRICAL_KIT, "drill", "ladder"),
+        ELECTRICAL_UNSAFE,
+        (
             TaskSeed("Power Issue Check", "electrician-power-issue-check", 14_900, 30),
             TaskSeed("Short Circuit Fix", "electrician-short-circuit-fix", 19_900, 45),
             TaskSeed("Voltage Issue Fix", "electrician-voltage-issue-fix", 14_900, 45),
             TaskSeed("Trip Problem Fix", "electrician-trip-problem-fix", 14_900, 45),
+            TaskSeed("General Electrical Works", "electrician-general-works", 9_900, 30),
         ),
+        skill_code="electrician",
+        image_subject="electrical-testing",
     ),
+    # The plumber trade, split into browse tiles the same way — one `plumber` skill.
     TradeSeed(
-        "Plumber",
-        "plumber",
+        "Taps & showers",
+        "taps-showers",
         10,
         (*PLUMBING_KIT, "drain auger", "bucket and floor sheet"),
         PLUMBING_UNSAFE,
         (
             TaskSeed("Tap Replacement", "plumber-tap-replacement", 19_900, 45),
-            TaskSeed("Pipe Leakage Fix", "plumber-pipe-leakage-fix", 14_900, 45),
-            TaskSeed("Pipe Joint Repair", "plumber-pipe-joint-repair", 14_900, 45),
-            TaskSeed("Shower Repair", "plumber-shower-repair", 14_900, 45),
-            TaskSeed("Drain Block Removal", "plumber-drain-block-removal", 19_900, 60),
             TaskSeed("Tap Installation", "plumber-tap-installation", 14_900, 30),
+            TaskSeed("Shower Repair", "plumber-shower-repair", 14_900, 45),
             TaskSeed("Shower Installation", "plumber-shower-installation", 14_900, 45),
-            TaskSeed("WC Installation", "plumber-wc-installation", 49_900, 120),
-            TaskSeed("Basin Installation", "plumber-basin-installation", 29_900, 90),
-            TaskSeed("Sink Installation", "plumber-sink-installation", 29_900, 90),
             TaskSeed(
                 "Health Faucet Installation", "plumber-health-faucet-installation", 14_900, 30
             ),
-            TaskSeed("Overhead Tank Connection", "plumber-overhead-tank-connection", 39_900, 90),
-            TaskSeed("Bore Connection", "plumber-bore-connection", 49_900, 120),
-            TaskSeed("Full Bathroom Plumbing", "plumber-full-bathroom-plumbing", 99_900, 240),
-            TaskSeed("Geyser Pipe Connection", "plumber-geyser-pipe-connection", 29_900, 60),
+        ),
+        skill_code="plumber",
+        image_subject="faucet",
+    ),
+    TradeSeed(
+        "Toilet & bathroom fittings",
+        "bathroom-fittings",
+        10,
+        (*PLUMBING_KIT, "drain auger", "bucket and floor sheet"),
+        PLUMBING_UNSAFE,
+        (
+            TaskSeed("WC Installation", "plumber-wc-installation", 49_900, 120),
+            TaskSeed("Basin Installation", "plumber-basin-installation", 29_900, 90),
+            TaskSeed("Sink Installation", "plumber-sink-installation", 29_900, 90),
             TaskSeed("Bathroom Fitting Setup", "plumber-bathroom-fitting-setup", 99_900, 240),
+            TaskSeed("Full Bathroom Plumbing", "plumber-full-bathroom-plumbing", 99_900, 240),
+        ),
+        skill_code="plumber",
+        image_subject="bathroom-fittings",
+    ),
+    TradeSeed(
+        "Blockage & drainage",
+        "blockage-drainage",
+        10,
+        (*PLUMBING_KIT, "drain auger", "bucket and floor sheet"),
+        PLUMBING_UNSAFE,
+        (
+            TaskSeed("Drain Block Removal", "plumber-drain-block-removal", 19_900, 60),
             TaskSeed("Chamber Cleaning", "plumber-chamber-cleaning", 29_900, 60),
+        ),
+        skill_code="plumber",
+        image_subject="drainage",
+    ),
+    TradeSeed(
+        "Leaks & pressure",
+        "leaks-pressure",
+        10,
+        (*PLUMBING_KIT, "drain auger", "bucket and floor sheet"),
+        PLUMBING_UNSAFE,
+        (
+            TaskSeed("Pipe Leakage Fix", "plumber-pipe-leakage-fix", 14_900, 45),
+            TaskSeed("Pipe Joint Repair", "plumber-pipe-joint-repair", 14_900, 45),
             TaskSeed("Water Pressure Fix", "plumber-water-pressure-fix", 19_900, 45),
             TaskSeed("Tank Overflow Fix", "plumber-tank-overflow-fix", 19_900, 45),
             TaskSeed("General Plumbing Check", "plumber-general-check", 14_900, 30),
+        ),
+        skill_code="plumber",
+        image_subject="pipe-repair",
+    ),
+    TradeSeed(
+        "Tanks & motors",
+        "tanks-motors",
+        10,
+        (*PLUMBING_KIT, "drain auger", "bucket and floor sheet"),
+        PLUMBING_UNSAFE,
+        (
+            TaskSeed("Overhead Tank Connection", "plumber-overhead-tank-connection", 39_900, 90),
+            TaskSeed("Bore Connection", "plumber-bore-connection", 49_900, 120),
+            TaskSeed("Geyser Pipe Connection", "plumber-geyser-pipe-connection", 29_900, 60),
             TaskSeed("Motor Installation", "plumber-motor-installation", 49_900, 120),
             TaskSeed("Motor Repair", "plumber-motor-repair", 49_900, 120),
         ),
+        skill_code="plumber",
+        image_subject="water-tank",
     ),
     TradeSeed(
         "Carpenter",
@@ -245,9 +383,46 @@ _TECHNICIAN_SOURCE: tuple[TradeSeed, ...] = (
             TaskSeed("Cabinet Installation", "carpenter-cabinet-installation", 49_900, 120),
         ),
     ),
+    # The AC trade, split into browse tiles — one `ac-technician` skill.
     TradeSeed(
-        "AC Technician",
-        "ac-technician",
+        "Service & cleaning",
+        "ac-service-cleaning",
+        15,
+        ("gauge manifold", "vacuum pump", "flaring tool", "drill", "ladder", "jet wash pump"),
+        (
+            "refrigerant leak in an unventilated room",
+            "unsafe mounting bracket or wall condition",
+            "live exposed conductors at the isolator",
+        ),
+        (
+            TaskSeed("AC General Service", "ac-general-service", 49_900, 60),
+            TaskSeed("AC Deep Cleaning", "ac-deep-cleaning", 99_900, 90),
+            TaskSeed("AC Jet Wash", "ac-jet-wash", 119_900, 90),
+        ),
+        skill_code="ac-technician",
+        image_subject="ac-service",
+    ),
+    TradeSeed(
+        "Repair & gas",
+        "ac-repair-gas",
+        15,
+        ("gauge manifold", "vacuum pump", "flaring tool", "drill", "ladder", "jet wash pump"),
+        (
+            "refrigerant leak in an unventilated room",
+            "unsafe mounting bracket or wall condition",
+            "live exposed conductors at the isolator",
+        ),
+        (
+            TaskSeed("Gas Filling", "ac-gas-filling", 249_900, 90),
+            TaskSeed("Cooling Issue Repair", "ac-cooling-issue-repair", 29_900, 60),
+            TaskSeed("Water Leakage Fix", "ac-water-leakage-fix", 29_900, 60),
+        ),
+        skill_code="ac-technician",
+        image_subject="ac-repair",
+    ),
+    TradeSeed(
+        "Install, uninstall & shifting",
+        "ac-install-shifting",
         15,
         ("gauge manifold", "vacuum pump", "flaring tool", "drill", "ladder", "jet wash pump"),
         (
@@ -260,14 +435,10 @@ _TECHNICIAN_SOURCE: tuple[TradeSeed, ...] = (
             TaskSeed("Window AC Installation", "ac-window-installation", 99_900, 90),
             TaskSeed("AC Uninstallation", "ac-uninstallation", 49_900, 60),
             TaskSeed("AC Reinstallation", "ac-reinstallation", 149_900, 120),
-            TaskSeed("AC General Service", "ac-general-service", 49_900, 60),
-            TaskSeed("AC Deep Cleaning", "ac-deep-cleaning", 99_900, 90),
-            TaskSeed("AC Jet Wash", "ac-jet-wash", 119_900, 90),
-            TaskSeed("Gas Filling", "ac-gas-filling", 249_900, 90),
-            TaskSeed("Cooling Issue Repair", "ac-cooling-issue-repair", 29_900, 60),
-            TaskSeed("Water Leakage Fix", "ac-water-leakage-fix", 29_900, 60),
             TaskSeed("AC Shifting", "ac-shifting", 199_900, 180),
         ),
+        skill_code="ac-technician",
+        image_subject="ac-install",
     ),
     TradeSeed(
         "RO Technician",
@@ -446,13 +617,70 @@ BEAUTY_UNSAFE = (
 
 
 def _trades_for(category_slug: str) -> tuple[TradeSeed, ...]:
-    """The Technician-origin trades that belong to one category."""
+    """The Technician-origin trades that belong to one category.
+
+    Keyed on `dispatch_skill`, not the tile slug: the electrician tiles all carry
+    `skill_code="electrician"`, and it is the trade that decides the category.
+    """
 
     return tuple(
         trade
         for trade in _TECHNICIAN_SOURCE
-        if category_for_trade(trade.slug, "technician") == category_slug
+        if category_for_trade(trade.dispatch_skill, "technician") == category_slug
     )
+
+
+#: Tile photo subjects for the trades whose `TradeSeed` predates `image_subject`.
+#: Read through `_image_subject_for`; a slug in neither place seeds no photo, which the
+#: client renders as the icon fallback.
+IMAGE_SUBJECT_BY_TILE: dict[str, str] = {
+    "carpenter": "carpentry",
+    "ro-technician": "drinking-water",
+    "internet-technician": "wifi-router",
+    "gas-stove-technician": "gas-stove",
+    "computer-technician": "computer-repair",
+    "mobile-technician": "phone-repair",
+    "cctv-technician": "cctv",
+    "locksmith": "locksmith",
+    "home-automation-technician": "home-theater",
+    "fire-safety-technician": "fire-safety",
+    "face-care": "facial",
+    "bleach-detan": "facial",
+    "waxing": "spa-massage",
+    "threading": "facial",
+    "hair-services": "hair-salon",
+    "manicure-pedicure": "manicure",
+    "makeup": "makeup",
+    "mehendi": "mehendi",
+    "body-care": "spa-massage",
+    "advanced-skin-care": "facial",
+    "home-cleaning": "home-cleaning",
+    "sofa-carpet-cleaning": "sofa-cleaning",
+    "pest-control": "pest-control",
+    "water-tank-cleaning": "water-tank",
+    "septic-tank-services": "water-tank",
+    "laundry-services": "laundry",
+    "gardening": "gardening",
+    "pet-grooming": "pet-care",
+    "veterinary": "veterinary",
+    "pet-walking": "dog-walking",
+    "pet-sitting": "pet-care",
+    "pet-training": "dog-walking",
+    "pet-photography": "pet-photography",
+}
+
+
+def _image_subject_for(trade: TradeSeed) -> str:
+    return trade.image_subject or IMAGE_SUBJECT_BY_TILE.get(trade.slug, "")
+
+
+#: What to call the person in service copy once the subcategory stopped being the trade.
+#: Only the split trades need naming; an unsplit trade's tile name IS the trade name.
+TRADE_NOUN_BY_SKILL: dict[str, str] = {
+    "electrician": "Electrician",
+    "plumber": "Plumber",
+    "ac-technician": "AC Technician",
+}
 
 
 ELECTRICIAN_TRADES = _trades_for("electrician")
@@ -968,7 +1196,7 @@ PET_TRADES: tuple[TradeSeed, ...] = (
     ),
 )
 
-CATALOG: tuple[tuple[str, str, str, str, str, tuple[TradeSeed, ...]], ...] = (
+CATALOG: tuple[tuple[str, str, str, str, str, tuple[TradeSeed, ...], str], ...] = (
     (
         "technician",
         "Technician",
@@ -976,6 +1204,7 @@ CATALOG: tuple[tuple[str, str, str, str, str, tuple[TradeSeed, ...]], ...] = (
         "wrench",
         "technician-home-service",
         TECHNICIAN_TRADES,
+        "technician",
     ),
     (
         "electrician",
@@ -984,6 +1213,7 @@ CATALOG: tuple[tuple[str, str, str, str, str, tuple[TradeSeed, ...]], ...] = (
         "zap",
         "technician-home-service",
         ELECTRICIAN_TRADES,
+        "electrician",
     ),
     (
         "plumber",
@@ -992,6 +1222,7 @@ CATALOG: tuple[tuple[str, str, str, str, str, tuple[TradeSeed, ...]], ...] = (
         "droplet",
         "technician-home-service",
         PLUMBER_TRADES,
+        "plumber",
     ),
     (
         "ac-services",
@@ -1000,6 +1231,7 @@ CATALOG: tuple[tuple[str, str, str, str, str, tuple[TradeSeed, ...]], ...] = (
         "wind",
         "technician-home-service",
         AC_TRADES,
+        "air-conditioner",
     ),
     (
         "beautician",
@@ -1008,6 +1240,7 @@ CATALOG: tuple[tuple[str, str, str, str, str, tuple[TradeSeed, ...]], ...] = (
         "sparkles",
         "beauty-personal-care",
         BEAUTICIAN_TRADES,
+        "beautician",
     ),
     (
         "home-services",
@@ -1016,6 +1249,7 @@ CATALOG: tuple[tuple[str, str, str, str, str, tuple[TradeSeed, ...]], ...] = (
         "home",
         "home-care-service",
         HOME_TRADES,
+        "home-cleaning",
     ),
     (
         "pet-services",
@@ -1024,6 +1258,7 @@ CATALOG: tuple[tuple[str, str, str, str, str, tuple[TradeSeed, ...]], ...] = (
         "paw-print",
         "pet-care-service",
         PET_TRADES,
+        "pet-care",
     ),
 )
 
@@ -1036,23 +1271,31 @@ class Command(BaseCommand):
         variants: list[ServiceVariant] = []
 
         for category_order, entry in enumerate(CATALOG, start=1):
-            slug, name, description, icon_key, tax_code, trades = entry
+            slug, name, description, icon_key, tax_code, trades, category_subject = entry
             category, _ = Category.objects.update_or_create(
                 slug=slug,
                 defaults={
                     "name": name,
                     "description": description,
                     "icon_key": icon_key,
+                    "image_url": image_for(category_subject),
                     "display_order": category_order,
                     "is_active": True,
                 },
             )
             for trade_order, trade in enumerate(trades, start=1):
+                tile_subject = _image_subject_for(trade)
                 subcategory, _ = Subcategory.objects.update_or_create(
                     category=category,
                     slug=trade.slug,
                     defaults={
                         "name": trade.name,
+                        "icon_key": str(
+                            SERVICE_ICON_BY_SUBCATEGORY.get(trade.slug)
+                            or SERVICE_ICON_BY_SUBCATEGORY.get(trade.dispatch_skill)
+                            or ""
+                        ),
+                        "image_url": image_for(tile_subject) if tile_subject else "",
                         "display_order": trade_order,
                         "is_active": True,
                     },
@@ -1069,6 +1312,7 @@ class Command(BaseCommand):
                     )
 
         variants.extend(self._adopt_services_owned_elsewhere())
+        self._refile_m1_services()
         self._retire_stale_task_codes()
         self._retire_empty_subcategories()
         self._link_service_area(variants)
@@ -1090,12 +1334,18 @@ class Command(BaseCommand):
         order: int,
         tax_code: str,
     ) -> list[ServiceVariant]:
-        description = f"{task.name} carried out at your address by a verified {trade.name}."
+        # The trade noun, not the tile noun: "a verified Fans" is not a person.
+        trade_noun = TRADE_NOUN_BY_SKILL.get(trade.dispatch_skill, trade.name)
+        description = f"{task.name} carried out at your address by a verified {trade_noun}."
         service, _ = Service.objects.update_or_create(
             slug=task.slug,
             defaults={
                 "subcategory": subcategory,
                 "name": task.name,
+                "icon_key": (
+                    SERVICE_ICON_BY_SUBCATEGORY.get(trade.slug)
+                    or SERVICE_ICON_BY_SUBCATEGORY[trade.dispatch_skill]
+                ),
                 "short_description": description,
                 "description": description,
                 "status": Service.Status.ACTIVE,
@@ -1103,6 +1353,13 @@ class Command(BaseCommand):
             },
         )
         self._seed_service_content(service=service, trade=trade)
+        tile_subject = _image_subject_for(trade)
+        if tile_subject:
+            self._seed_service_cover(
+                service=service,
+                url=image_for(tile_subject, order),
+                alt_text=task.name,
+            )
 
         # A service with declared variants is sold as those and nothing else; one without keeps
         # the single `standard` variant it has always had. `/book/[service]` resolves
@@ -1158,9 +1415,10 @@ class Command(BaseCommand):
                 "recommended_duration_minutes": option.minutes,
                 "duration_increment_minutes": option.minutes,
                 "maximum_duration_minutes": option.minutes,
-                # Dispatch matches on this. It is the subcategory slug, so a Partner who holds
-                # the "electrician" skill is eligible for every electrician task and nothing else.
-                "required_skill_code": skill_code or trade.slug,
+                # Dispatch matches on this. It is the TRADE, not the browse tile: every
+                # electrician tile carries skill_code="electrician", so a Partner who holds
+                # that skill is eligible for every electrician task and nothing else.
+                "required_skill_code": skill_code or trade.dispatch_skill,
                 "tax_category_code": tax_code,
                 "is_active": True,
             },
@@ -1254,6 +1512,9 @@ class Command(BaseCommand):
                 equipment=(),
                 unsafe=(),
                 tasks=(),
+                # The adopted service may already sit under a browse tile; the trade for
+                # content and dispatch purposes is whatever its live variant dispatches on.
+                skill_code=existing.required_skill_code,
             )
             self._seed_service_content(service=service, trade=trade)
 
@@ -1286,6 +1547,36 @@ class Command(BaseCommand):
             )
 
         return adopted
+
+    @staticmethod
+    def _seed_service_cover(*, service: Service, url: str, alt_text: str) -> None:
+        """One verified COVER photo per service (2026-08-26 owner decision: images, not icons).
+
+        `(service, kind)` carries no unique constraint, so this updates the first COVER row
+        rather than `update_or_create` — a second run must refresh the photo, never stack a
+        twin beside it.
+        """
+
+        cover = (
+            ServiceMedia.objects.filter(service=service, kind=ServiceMedia.Kind.COVER)
+            .order_by("display_order", "id")
+            .first()
+        )
+        if cover is None:
+            ServiceMedia.objects.create(
+                service=service,
+                kind=ServiceMedia.Kind.COVER,
+                url=url,
+                alt_text=alt_text,
+                display_order=1,
+                is_active=True,
+            )
+            return
+        if cover.url != url or cover.alt_text != alt_text or not cover.is_active:
+            cover.url = url
+            cover.alt_text = alt_text
+            cover.is_active = True
+            cover.save(update_fields=("url", "alt_text", "is_active"))
 
     @staticmethod
     def _retire_stale_task_codes() -> None:
@@ -1336,9 +1627,13 @@ class Command(BaseCommand):
                 is_active=True, service__status=Service.Status.ACTIVE
             ).select_related("service")
         )
-        by_trade: dict[UUID, list[ServiceVariant]] = {}
+        # Grouped by the dispatch skill, NOT the subcategory. The subcategory became a
+        # browse tile when the trades were split ("Fans", "Switch & socket"), and grouping
+        # by it would stop pairing a fan job with a switch job — two tasks one electrician
+        # genuinely does in one visit, which is the fact this rule restates.
+        by_trade: dict[str, list[ServiceVariant]] = {}
         for variant in variants:
-            by_trade.setdefault(variant.service.subcategory_id, []).append(variant)
+            by_trade.setdefault(variant.required_skill_code, []).append(variant)
 
         for trade_variants in by_trade.values():
             for first, second in combinations(trade_variants, 2):
@@ -1368,6 +1663,32 @@ class Command(BaseCommand):
                 )
                 created += int(was_created)
         return created
+
+    @staticmethod
+    def _refile_m1_services() -> None:
+        """File the six `seed_technician_catalog` services under their browse tiles.
+
+        Those services predate the tile split and their own command files them under the
+        flat trade subcategory. Both commands read `TILE_FOR_M1_SERVICE`, so whichever
+        runs second leaves them in the right place; this side also seeds their cover
+        photo, since their own command predates images entirely.
+        """
+
+        for service_slug, (category_slug, tile_slug, subject) in TILE_FOR_M1_SERVICE.items():
+            service = Service.objects.filter(slug=service_slug).first()
+            if service is None:
+                continue
+            tile = Subcategory.objects.filter(category__slug=category_slug, slug=tile_slug).first()
+            if tile is None:
+                continue
+            if service.subcategory_id != tile.id:
+                service.subcategory = tile
+                service.save(update_fields=("subcategory", "updated_at"))
+            Command._seed_service_cover(
+                service=service,
+                url=image_for(subject, service.display_order),
+                alt_text=service.name,
+            )
 
     @staticmethod
     def _retire_empty_subcategories() -> None:
@@ -1403,7 +1724,9 @@ class Command(BaseCommand):
         was shown when they booked, and a dispute is argued from it.
         """
 
-        content = content_for_trade(trade.slug)
+        # Keyed on the trade, never the tile: `content_for_trade("fans")` would fall
+        # through to the personal-care template and describe a facial on a fan repair.
+        content = content_for_trade(trade.dispatch_skill)
         ServicePolicy.objects.filter(service=service).update(is_active=False)
 
         rows: list[tuple[str, str, str, int]] = [

@@ -48,19 +48,30 @@ export interface EnquiryRow {
    * format it into a title.
    */
   readonly serviceName: string;
+  /** Locality-level location only. Never a street, building or coordinate. */
+  readonly approximateArea: string;
   /** The server's archetype for this record. Decides which composer opens. */
   readonly archetype: string;
   readonly status: EnquiryStatus;
   readonly requestedStart: string | null;
   readonly serviceBy: string | null;
   readonly respondsBy: string | null;
-  readonly language: string;
   readonly createdAt: string;
 }
 
 export interface EnquiryRecord extends EnquiryRow {
   readonly answers: AnswerMap;
-  readonly additionalDetails: string;
+  /**
+   * The visit the customer already chose, published from contract 1.44.0.
+   *
+   * Null until they pick one. The partner never sets these — BE-2 moved the
+   * choice to the customer, and the slot-selection endpoints this app used to
+   * call were removed in the same release.
+   */
+  readonly fixedVisitStart: string | null;
+  readonly fixedVisitDurationMinutes: number | null;
+  readonly fixedVisitEarningPaise: number | null;
+  readonly fixedVisitStatus: string | null;
   readonly budgetMinPaise: number | null;
   readonly budgetMaxPaise: number | null;
   /**
@@ -76,6 +87,8 @@ export interface EnquiryRecord extends EnquiryRow {
   readonly declineReasonCode: string;
   readonly questions: readonly Schemas["RequirementQuestion"][];
   readonly siteVisits: readonly Schemas["SiteVisit"][];
+  /** Exact visit destination, released only once a paid visit is scheduled. */
+  readonly siteAddress: Schemas["PartnerSiteAddress"] | null;
   /**
    * The server's own clock at the moment this enquiry was read (1.24.0).
    *
@@ -102,12 +115,12 @@ export function readEnquiryRow(summary: Schemas["EnquirySummary"]): EnquiryRow {
     id: summary.id,
     requirementId: summary.requirement_id,
     serviceName: summary.service_name,
+    approximateArea: summary.approximate_area,
     archetype: summary.archetype,
     status: summary.status,
     requestedStart: nullableInstant(summary.requested_start),
     serviceBy: nullableInstant(summary.service_by),
     respondsBy: nullableInstant(summary.responds_by),
-    language: summary.language,
     createdAt: summary.created_at,
   };
 }
@@ -116,13 +129,17 @@ export function readEnquiryRecord(detail: Schemas["EnquiryDetail"]): EnquiryReco
   return {
     ...readEnquiryRow(detail),
     answers: readAnswers(detail.answers),
-    additionalDetails: detail.additional_details,
+    fixedVisitStart: detail.fixed_visit_start,
+    fixedVisitDurationMinutes: detail.fixed_visit_duration_minutes,
+    fixedVisitEarningPaise: detail.fixed_visit_earning_paise,
+    fixedVisitStatus: detail.fixed_visit_status,
     budgetMinPaise: detail.budget_min_paise,
     budgetMaxPaise: detail.budget_max_paise,
     requiredTaxBasis: detail.required_tax_basis,
     declineReasonCode: detail.decline_reason_code,
     questions: detail.questions,
     siteVisits: detail.site_visits,
+    siteAddress: detail.site_address,
     serverNow: detail.server_now,
   };
 }

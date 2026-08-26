@@ -92,6 +92,7 @@ from .enquiries import (
     SiteVisitCompleteView,
     SiteVisitScheduleView,
 )
+from .financial_policy import OperationsCommercialPolicyActivateView
 from .operations_requests import (
     OperationsAssistedClarificationView,
     OperationsAssistedProposalView,
@@ -126,6 +127,7 @@ from .projects import (
 from .proposals import (
     PartnerProposalCollectionView,
     PartnerProposalDetailView,
+    PartnerProposalPreviewView,
     PartnerProposalWithdrawView,
 )
 from .quote_access import (
@@ -198,6 +200,8 @@ from .stages import (
     _customer_stage_command,
 )
 from .visit_slots import (
+    CustomerRequirementVisitSlotReplaceView,
+    CustomerRequirementVisitSlotView,
     PartnerDemandPreviewView,
     PartnerEnquiryVisitSlotView,
     PartnerWorkspaceListView,
@@ -210,6 +214,8 @@ __all__ = [
     "CancellationDecisionView",
     "CaseAppealView",
     "CaseEvidenceView",
+    "CustomerRequirementVisitSlotReplaceView",
+    "CustomerRequirementVisitSlotView",
     "DomainError",
     "EngagementAmendmentCollectionView",
     "EngagementAmendmentDecisionView",
@@ -252,6 +258,7 @@ __all__ = [
     "OperationsAssistedClarificationView",
     "OperationsAssistedProposalView",
     "OperationsChargebackView",
+    "OperationsCommercialPolicyActivateView",
     "OperationsCrewVerificationQueueView",
     "OperationsCrewVerificationView",
     "OperationsDeadlineView",
@@ -281,6 +288,7 @@ __all__ = [
     "PartnerProjectCompletionView",
     "PartnerProposalCollectionView",
     "PartnerProposalDetailView",
+    "PartnerProposalPreviewView",
     "PartnerProposalWithdrawView",
     "PartnerQuestionAnswerView",
     "PartnerWorkspaceListView",

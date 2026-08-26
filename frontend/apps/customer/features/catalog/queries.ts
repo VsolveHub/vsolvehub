@@ -26,6 +26,18 @@ export type Category = Schemas["Category"];
 export type ServiceCard = Schemas["ServiceCard"];
 export type ServiceDetail = Schemas["ServiceDetail"];
 export type ServiceVariantConfiguration = Schemas["ServiceVariantConfiguration"];
+/**
+ * The backend-owned icon vocabulary, published at contract 1.43.0.
+ *
+ * Exported as a type so `icon-catalogue/service-icon.ts` can key an exhaustive
+ * `Record` on it — the point being that a value added to `IconKeyEnum` breaks
+ * that file's compilation until somebody maps it. A type-only import is erased,
+ * so this stays reachable from client components despite the `server-only` at
+ * the top of this file.
+ */
+export type IconKey = Schemas["IconKeyEnum"];
+/** One row of the compact catalogue: identity, ordering and an icon key. No media. */
+export type ServiceIndexItem = Schemas["ServiceIndexItem"];
 
 const catalogPolicy = (tags: string[]) => ({
   revalidate: CATALOG_REVALIDATE_SECONDS,
@@ -107,3 +119,62 @@ export const getCategory = cache(async (slug: string): Promise<Category | null> 
   const categories = await getCategories();
   return categories.find((category) => category.slug === slug) ?? null;
 });
+
+/**
+ * A category's services with their full variant lists, for the category page.
+ *
+ * The category listing shows every *variant* — the priced A1 tasks and the
+ * quote-based A3/A5 requirement variants — and only `ServiceDetail` carries
+ * both halves. There is no bulk endpoint for it, so this fans out one detail
+ * request per service, together rather than in sequence. Each request is the
+ * same Data Cache entry the service's own page warms (same tag, same policy),
+ * so a customer browsing category → service pays for the detail read once.
+ *
+ * `null` means the category itself does not exist (propagated from
+ * `getCategoryServices`) and the page must 404. A service that 404s *inside*
+ * the fan-out — deactivated between the two reads, mid-publish — is dropped
+ * rather than crashing the whole category: the row simply is not listed, which
+ * is also what the next revalidation would show.
+ */
+export const getCategoryServiceDetails = cache(
+  async (categorySlug: string): Promise<ServiceDetail[] | null> => {
+    const services = await getCategoryServices(categorySlug);
+    if (services === null) return null;
+
+    const details = await Promise.all(services.map((service) => getService(service.slug)));
+    return details.filter((detail): detail is ServiceDetail => detail !== null);
+  },
+);
+
+/**
+ * Every published service, indexed by the category it belongs to.
+ *
+ * One request per category, issued together rather than in sequence — the
+ * catalogue has a handful of categories and serialising them would put the
+ * whole fan-out on the critical path of the search page.
+ *
+ * Each call goes through `getCategoryServices`, so it shares the `cache()`
+ * dedupe and the Data Cache entry a category page already warms. Searching does
+ * not pay for data the browse pages have.
+ *
+ * A category that fails to load is **omitted, not empty** — `getCategoryServices`
+ * returns `null` only for a 404, and anything else still throws through to
+ * `error.tsx`. A category that genuinely has no services and one that could not
+ * be read must not look the same to the ranker.
+ */
+export const getServicesByCategory = cache(
+  async (categories: readonly Category[]): Promise<Map<string, ServiceCard[]>> => {
+    const loaded = await Promise.all(
+      categories.map(async (category) => {
+        const services = await getCategoryServices(category.slug);
+        return [category.slug, services] as const;
+      }),
+    );
+
+    const index = new Map<string, ServiceCard[]>();
+    for (const [slug, services] of loaded) {
+      if (services !== null) index.set(slug, services);
+    }
+    return index;
+  },
+);

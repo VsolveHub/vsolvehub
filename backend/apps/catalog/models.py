@@ -6,6 +6,8 @@ from typing import Final
 from django.conf import settings
 from django.db import models
 
+from apps.catalog.icons import ServiceIconKey
+
 
 class Category(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -13,6 +15,9 @@ class Category(models.Model):
     name = models.CharField(max_length=120)
     description = models.TextField(blank=True)
     icon_key = models.CharField(max_length=80, blank=True)
+    #: Photographic tile for browse surfaces (2026-08-26 owner decision: images, not icons).
+    #: Blank is honest — the client falls back to the icon rather than a wrong picture.
+    image_url = models.URLField(max_length=500, blank=True, default="")
     display_order = models.PositiveSmallIntegerField(default=0)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -36,6 +41,12 @@ class Subcategory(models.Model):
     slug = models.SlugField(max_length=100)
     name = models.CharField(max_length=120)
     description = models.TextField(blank=True)
+    #: The "Select a service" tile. Subcategories are the tile level of the browse
+    #: hierarchy (category page -> tile grid -> that tile's services), so they carry
+    #: their own glyph and photo; a free CharField like `Category.icon_key`, not the
+    #: constrained `ServiceIconKey`, because tiles outnumber the curated glyph set.
+    icon_key = models.CharField(max_length=80, blank=True, default="")
+    image_url = models.URLField(max_length=500, blank=True, default="")
     display_order = models.PositiveSmallIntegerField(default=0)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -69,6 +80,11 @@ class Service(models.Model):
     )
     slug = models.SlugField(max_length=140, unique=True)
     name = models.CharField(max_length=160)
+    icon_key = models.CharField(
+        max_length=40,
+        choices=ServiceIconKey.choices,
+        default=ServiceIconKey.SERVICE,
+    )
     short_description = models.CharField(max_length=240)
     description = models.TextField(blank=True)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.DRAFT)
@@ -78,6 +94,12 @@ class Service(models.Model):
 
     class Meta:
         ordering = ("display_order", "name")
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(icon_key__in=ServiceIconKey.values),
+                name="catalog_service_icon_key_supported",
+            ),
+        ]
 
     def __str__(self) -> str:
         return self.name
@@ -112,6 +134,9 @@ class ServiceVariant(models.Model):
     maximum_duration_minutes = models.PositiveSmallIntegerField(default=480)
     required_skill_code = models.SlugField(max_length=100)
     tax_category_code = models.SlugField(max_length=100)
+    #: Variant-level photo (an AC tonnage, a hair length). Blank falls back to the
+    #: service's COVER media on the client, so only genuinely distinct variants need one.
+    image_url = models.URLField(max_length=500, blank=True, default="")
     display_order = models.PositiveSmallIntegerField(default=0)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)

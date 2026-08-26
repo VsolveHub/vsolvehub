@@ -43,6 +43,15 @@ body {
   }
 }
 
+@keyframes reviews-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
 .crew-stage-enter {
   animation: crew-stage-enter 280ms var(--ease-out) backwards;
 }
@@ -55,6 +64,31 @@ body {
   .crew-stage-enter,
   .crew-option-enter {
     animation-delay: 0ms !important;
+  }
+}
+
+.reviews-marquee-track {
+  display: flex;
+  width: max-content;
+  animation: reviews-marquee 55s linear infinite;
+}
+
+.reviews-marquee-track:hover {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reviews-marquee-track {
+    animation: none;
+  }
+
+  .reviews-marquee-shell {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .reviews-marquee-shell::-webkit-scrollbar {
+    display: none;
   }
 }
 

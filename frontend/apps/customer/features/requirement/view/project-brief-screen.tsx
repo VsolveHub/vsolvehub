@@ -11,12 +11,10 @@ import { BLOCK_COPY } from "./block-copy";
  *
  * ## Why the wizard became a page, and then the page became a rail
  *
- * The four screens are right on a phone and wrong on a 1440 display, so this
- * stopped being a stepper. But stacking all three sections in one column was the
- * other extreme: on a wide screen it produced a single scroll long enough that
- * the rail's checklist was describing sections nobody could see, and the address
- * dialog, the date fields and the attachment grid all competed for the same
- * vertical run.
+ * The phone's stepper is right on a phone and wrong on a 1440 display, so this
+ * stopped being a stepper. But stacking every section in one column was the
+ * other extreme: a single scroll long enough that the rail's checklist was
+ * describing sections nobody could see.
  *
  * So the rail became the navigation rather than a read-out beside it. One
  * section is on screen at a time and the rail says which, what is done and what
@@ -25,25 +23,22 @@ import { BLOCK_COPY } from "./block-copy";
  *
  * ## Why every section stays reachable
  *
- * The rail rows are buttons and none of them is ever disabled. All three write to
- * one draft, in any order, and gating section 3 behind section 1 would rebuild
- * the property that made the wizard wrong on desktop: somebody who knows the
- * dates but not the finish would be unable to enter the thing they came to
- * enter. The guards still hold at the *send*, where they belong, and the rail
- * says which section is holding it up.
+ * The rail rows are buttons and none of them is ever disabled. Both sections
+ * write to one draft, in any order, and gating section 2 behind section 1 would
+ * rebuild the property that made the wizard wrong on desktop: somebody who
+ * knows the dates but not the finish would be unable to enter the thing they
+ * came to enter. The guards still hold at the *send*, where they belong, and
+ * the rail says which section is holding it up.
  *
- * ## The four screens are not gone
+ * ## There is no review step
  *
- * `SCREENS` is unchanged and so is the reducer. This renders the same three
- * capture screens simultaneously and **`review` is still a step** — it is the
- * act of sending rather than a part of the brief, and collapsing it into this
- * page would remove the one screen whose whole job is letting somebody check
- * what they are about to send.
- *
- * So the writes are unchanged too: pressing the CTA runs the same three saves
- * the wizard ran, in the same order, and only then moves to review. Nothing here
- * autosaves on a keystroke — the flow's own note explains why that would make
- * the lifecycle verdict rewrite itself while somebody types.
+ * The M2-revamp removed it: both sections are on this page, the estimate-count
+ * chooser sits inside "Where and when", and the CTA sends. A review would
+ * restate a page the Customer is already looking at. The writes are unchanged:
+ * pressing the CTA runs the same ordered saves the wizard runs and then
+ * submits. Nothing here autosaves on a keystroke — the flow's own note
+ * explains why that would make the lifecycle verdict rewrite itself while
+ * somebody types.
  */
 
 export interface BriefSectionSpec {
@@ -73,8 +68,10 @@ export interface ProjectBriefScreenProps {
    */
   activeIndex: number;
   onSelectSection: (index: number) => void;
-  /** Moves to review. Runs the section saves first — see the flow container. */
-  onReviewAndSend: () => void;
+  /** Sends the brief. Runs the section saves first — see the flow container. */
+  onSend: () => void;
+  /** The CTA's label — "Send to 2 professionals", from the chosen plan. */
+  sendLabel: string;
   isSaving: boolean;
   /** What is stopping the send, from the reducer's own guard. */
   blocked: BlockReason | null;
@@ -88,7 +85,8 @@ export function ProjectBriefScreen({
   sections,
   activeIndex,
   onSelectSection,
-  onReviewAndSend,
+  onSend,
+  sendLabel,
   isSaving,
   blocked,
   notice,
@@ -139,12 +137,12 @@ export function ProjectBriefScreen({
             <Button
               block
               size="lg"
-              onClick={onReviewAndSend}
+              onClick={onSend}
               disabled={blocked !== null}
               loading={isSaving}
-              loadingLabel="Saving your brief"
+              loadingLabel="Sending your brief"
             >
-              Review and send
+              {sendLabel}
             </Button>
 
             {/* A disabled button with no explanation is the most common way a
@@ -194,12 +192,12 @@ export function ProjectBriefScreen({
 
             {isLast ? (
               <Button
-                onClick={onReviewAndSend}
+                onClick={onSend}
                 disabled={blocked !== null}
                 loading={isSaving}
-                loadingLabel="Saving your brief"
+                loadingLabel="Sending your brief"
               >
-                Review and send
+                {sendLabel}
               </Button>
             ) : (
               // Never disabled by the section's own guard. Section 2 is not the
@@ -351,7 +349,7 @@ function WhatHappensNext() {
       </h2>
       <ol className="mt-2 flex list-decimal flex-col gap-1.5 pl-4 text-sm leading-5 text-text-secondary">
         <li>Pros near you read the brief.</li>
-        <li>You pick how many should visit, and pay once.</li>
+        <li>You pay once, when the first pro confirms a visit.</li>
         <li>They measure, then price it in writing.</li>
       </ol>
     </section>
