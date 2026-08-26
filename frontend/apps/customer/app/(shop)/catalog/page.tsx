@@ -2,29 +2,21 @@ import type { Metadata } from "next";
 import { connection } from "next/server";
 import { Suspense } from "react";
 
+import { CatalogCategoryRows } from "@/features/catalog/components/catalog-category-rows";
 import { SearchResults } from "@/features/catalog/components/search-results";
-import { CategoryRail } from "@/features/catalog/icon-catalogue/category-rail";
 import { CatalogueHeader } from "@/features/catalog/icon-catalogue/catalogue-header";
-import { groupServiceIndex } from "@/features/catalog/icon-catalogue/grouping";
-import { getServiceIndex } from "@/features/catalog/icon-catalogue/queries";
-import { getServiceHrefs } from "@/features/catalog/icon-catalogue/service-links";
-import { ServiceGrid } from "@/features/catalog/icon-catalogue/service-grid";
 import { getCategories, getServicesByCategory } from "@/features/catalog/queries";
 import { rankCatalogMatches } from "@/features/catalog/search";
 
 /**
- * The services listing — the Catalogue screen from the M2 artboards.
+ * The service catalogue, progressively disclosed by category.
  *
- * One page, every published service: an "All services" app bar with search
- * folded behind an icon, a category chip rail, then a section per trade with a
- * three-column grid of icon-and-name tiles. A customer picking "Full Bathroom
- * Plumbing" taps it here and lands directly in the quote brief; nobody first
- * chooses "Workforce & Projects", then "Interior Fit Out", then the service.
- * The old merchandised category cards, their stock photography and their
- * price copy are gone — this flat catalogue *is* the Services tab.
- *
- * Category pages (`/catalog/[category]`) and service pages survive for deep
- * links; they are simply no longer on the browsing path.
+ * The default page shows one image-led row of subcategories per main category.
+ * It does not download or render the hundreds of services and variants beneath
+ * them. A subcategory opens the existing narrowed category route; "See all"
+ * opens that category's complete subcategory grid. Search remains an explicit
+ * accelerator and may return individual services because the customer asked
+ * for one by name.
  *
  * ## No route-level `revalidate`
  *
@@ -46,25 +38,13 @@ import { rankCatalogMatches } from "@/features/catalog/search";
 export const metadata: Metadata = {
   title: "All services",
   description:
-    "The complete V Solve Hub catalogue — every electrical, plumbing, appliance, cleaning and project service we publish, grouped by trade.",
+    "Browse V Solve Hub services by category, from electrical and plumbing to beauty, cleaning and project work.",
   alternates: { canonical: "/catalog" },
 };
 
 async function Catalogue() {
-  // The index paints the grid; the href map decides where each tile goes. The
-  // fan-out behind the map shares its cache entries with search and the
-  // category pages, so this is not a second copy of the catalogue.
-  const [index, hrefs] = await Promise.all([getServiceIndex(), getServiceHrefs()]);
-  const categories = groupServiceIndex(index);
-
-  return (
-    <>
-      <CategoryRail categories={categories} />
-      <div className="pt-4">
-        <ServiceGrid categories={categories} hrefs={hrefs} />
-      </div>
-    </>
-  );
+  const categories = await getCategories();
+  return <CatalogCategoryRows categories={categories} />;
 }
 
 async function CatalogueSearchResults({ query }: { query: string }) {
@@ -78,12 +58,33 @@ async function CatalogueSearchResults({ query }: { query: string }) {
 
 function GridSkeleton() {
   return (
-    <div className="grid grid-cols-3 gap-2.5 pt-4 sm:grid-cols-4 md:grid-cols-6">
-      {Array.from({ length: 12 }, (_, index) => (
-        <div key={index} className="min-h-24 animate-pulse rounded-card bg-surface-sunken" />
+    <div className="flex flex-col gap-8 pt-4">
+      {Array.from({ length: 3 }, (_, row) => (
+        <section key={row} className="animate-pulse motion-reduce:animate-none">
+          <div className="mb-3 h-11 border-b border-line/70">
+            <div className="h-5 w-32 rounded-control bg-surface-sunken" />
+          </div>
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+            {Array.from({ length: 6 }, (_, tile) => (
+              <div
+                key={tile}
+                className={`${previewSkeletonVisibility(tile)} flex-col gap-2`}
+              >
+                <div className="aspect-square rounded-card bg-surface-sunken" />
+                <div className="mx-auto h-3 w-4/5 rounded-control bg-surface-sunken" />
+              </div>
+            ))}
+          </div>
+        </section>
       ))}
     </div>
   );
+}
+
+function previewSkeletonVisibility(index: number): string {
+  if (index < 3) return "flex";
+  if (index === 3) return "hidden sm:flex";
+  return "hidden lg:flex";
 }
 
 export default async function CatalogPage({

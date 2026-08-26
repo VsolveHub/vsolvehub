@@ -117,6 +117,32 @@ def test_public_catalog_uses_current_effective_rate() -> None:
     assert "recommended_duration_minutes" not in variant_payload
 
 
+def test_category_subcategories_follow_their_merchandising_order() -> None:
+    category = Category.objects.create(slug="electrician", name="Electrician")
+    expected = (
+        ("switch-socket", "Switch & socket"),
+        ("fans", "Fans"),
+        ("lighting", "Lights"),
+        ("wiring", "Wiring"),
+        ("doorbell-security", "Doorbell & security"),
+        ("mcb-fuse", "MCB & fuse"),
+    )
+    for display_order, (slug, name) in reversed(tuple(enumerate(expected, start=1))):
+        Subcategory.objects.create(
+            category=category,
+            slug=slug,
+            name=name,
+            display_order=display_order,
+        )
+
+    response = APIClient().get("/api/v1/categories/")
+
+    assert response.status_code == HTTPStatus.OK
+    assert [item["slug"] for item in response.json()[0]["subcategories"]] == [
+        slug for slug, _name in expected
+    ]
+
+
 def test_configuration_contains_questions_options_and_policies() -> None:
     service, variant = _service()
     ServiceRate.objects.create(variant=variant, amount_paise=19_900)

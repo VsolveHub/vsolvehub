@@ -166,12 +166,14 @@ def public_categories() -> QuerySet[Category]:
             # `service_count` feeds the tile grid. ACTIVE services, not the stricter
             # offerability gate — a tile count is merchandising, and the offerable
             # check would drag per-variant rate joins into the cheapest read we have.
-            queryset=Subcategory.objects.filter(is_active=True).annotate(
+            queryset=Subcategory.objects.filter(is_active=True)
+            .annotate(
                 service_count=Count(
                     "services",
                     filter=Q(services__status=Service.Status.ACTIVE),
                 )
-            ),
+            )
+            .order_by("display_order", "name"),
         ),
     )
 
