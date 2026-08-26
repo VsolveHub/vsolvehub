@@ -354,7 +354,11 @@ function EditorDock({
     dock disappear on its own when the step unmounts. Nothing has to remember to
     withdraw it.
 
-    `null` until the shell's container has mounted; one render, invisible.
+    See `useApplyDockTarget` for why there are three cases: no shell renders the
+    bar in place, a shell whose container has not attached yet renders nothing
+    for one frame, and an element portals.
   */
-  return target === null ? null : createPortal(dock, target);
+  if (target === undefined) return dock;
+  if (target === null) return null;
+  return createPortal(dock, target);
 }

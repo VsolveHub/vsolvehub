@@ -162,9 +162,15 @@ function Standing({ application }: { application: Application }) {
               </li>
             ))}
           </ul>
+          {/* The app's primary action treatment, not a darker shade of the
+              banner it sits in. `bg-warning-text` is #8a5200 — a brown that
+              reads as mud on the warning surface and, being a *text* role,
+              carries no guarantee of contrast as a fill. This is the one thing
+              on the screen the applicant must do next; it should look like
+              every other primary action in the product. */}
           <Link
             href="/apply/documents"
-            className="mt-3 inline-flex h-11 items-center rounded-control bg-warning-text px-4 text-[0.875rem] font-bold text-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+            className="mt-3 inline-flex h-12 items-center rounded-control bg-action px-5 text-[0.9375rem] font-bold text-action-text hover:bg-action-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
           >
             Upload replacements
           </Link>

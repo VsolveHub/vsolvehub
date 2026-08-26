@@ -66,10 +66,17 @@ export interface StepProgress extends ApplicationStep {
 const WAYPOINTS: readonly string[] = ["/apply", "/apply/review"];
 
 export function stepProgress(application: Application | null): StepProgress[] {
-  // Before there is an application there is nothing on the record, so every
-  // collecting step is outstanding. That is honest rather than pessimistic: a
-  // brand-new applicant has genuinely done none of it.
-  const met = application === null ? [] : requirements(application);
+  /*
+    `requirements` takes `null` directly and reports everything unmet.
+
+    This used to substitute an empty array for the no-application case, which
+    silently broke the grouping below: with nothing to group, every step matched
+    zero requirements and therefore fell through to `optional` — so a brand-new
+    applicant saw a bar reading "everything is filled in". Asking the one source
+    of truth what an application *needs*, rather than inferring it from what one
+    *has*, removes that whole class of mistake.
+  */
+  const met = requirements(application);
 
   return APPLICATION_STEPS.map((step) => {
     const mine = met.filter((requirement) => requirement.href === step.href);

@@ -53,8 +53,7 @@ import { usePartnerApplication } from "../queries";
  */
 
 /**
- * The element a step portals its action bar into, or `null` before the shell
- * has mounted one.
+ * Where a step portals its action bar.
  *
  * A portal target rather than a `setDock(node)` callback, and that is not a
  * style preference — the callback version is an infinite loop. A step would
@@ -62,8 +61,22 @@ import { usePartnerApplication } from "../queries";
  * state, the resulting re-render would create another element, and so on. A DOM
  * node captured once by a callback ref is a stable value that never re-triggers
  * anything.
+ *
+ * ## Three states, not two
+ *
+ * `undefined` means **no shell above me** — there is no provider at all. A step
+ * rendered on its own (a test, or a future screen that reuses
+ * `ApplicationEditor` outside this tree) should still show its own action bar
+ * rather than silently losing the only way to save. It falls back to rendering
+ * in place.
+ *
+ * `null` means the shell is here but its container has not attached yet. That
+ * lasts exactly one render, and rendering the bar in place for that one frame
+ * would make it visibly jump into the dock. Nothing is drawn instead.
+ *
+ * An element is the steady state.
  */
-const DockContext = createContext<HTMLElement | null>(null);
+const DockContext = createContext<HTMLElement | null | undefined>(undefined);
 
 /**
  * Lets a step hand its action bar to the shell.
@@ -72,7 +85,7 @@ const DockContext = createContext<HTMLElement | null>(null);
  * screens end up with five slightly different bars and one of them forgets the
  * safe-area inset.
  */
-export function useApplyDockTarget(): HTMLElement | null {
+export function useApplyDockTarget(): HTMLElement | null | undefined {
   return useContext(DockContext);
 }
 
