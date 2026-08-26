@@ -17,7 +17,7 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
-from apps.carts.item_inputs import validate_scope
+from apps.carts.item_inputs import configured_scope, validate_scope
 from apps.catalog.models import M2VariantConfiguration, ServiceVariant
 from apps.foundation.services import enqueue_outbox_event
 from apps.identity.models import User
@@ -131,7 +131,7 @@ def create_draft(
     language: str = "en-IN",
 ) -> CustomerRequirement:
     configuration = active_configuration(variant)
-    answers = answers or {}
+    answers = configured_scope(schema=configuration.question_schema, scope=answers or {})
     requirement = CustomerRequirement.objects.create(
         customer=customer,
         variant=variant,
@@ -217,8 +217,15 @@ def update_draft(
         )
 
     if answers is not None:
-        requirement.answers = answers
-        requirement.archetype = infer_archetype(variant=requirement.variant, answers=answers)
+        configuration = requirement.configuration or active_configuration(requirement.variant)
+        requirement.answers = configured_scope(
+            schema=configuration.question_schema,
+            scope=answers,
+        )
+        requirement.archetype = infer_archetype(
+            variant=requirement.variant,
+            answers=requirement.answers,
+        )
     for field, value in (
         ("address", address),
         ("service_area", service_area),

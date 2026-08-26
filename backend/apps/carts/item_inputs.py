@@ -22,7 +22,8 @@ from apps.pricing.models import TaskRate
 from apps.pricing.selectors import current_task_rate
 
 
-def validate_scope(*, schema: dict[str, object], scope: dict[str, object]) -> None:
+def _scope_definitions(schema: dict[str, object]) -> dict[str, dict[str, object]]:
+    """Return the configured questions after checking the shared schema shape."""
     questions = schema.get("questions")
     if not isinstance(questions, list):
         raise ValueError("The selected task has an invalid scope configuration.")
@@ -31,6 +32,23 @@ def validate_scope(*, schema: dict[str, object], scope: dict[str, object]) -> No
         if not isinstance(question, dict) or not isinstance(question.get("code"), str):
             raise ValueError("The selected task has an invalid scope configuration.")
         definitions[question["code"]] = question
+    return definitions
+
+
+def configured_scope(*, schema: dict[str, object], scope: dict[str, object]) -> dict[str, object]:
+    """Keep only answers authored by this configuration.
+
+    Draft forms may survive a catalogue refresh or a route change in browser state. Filtering at
+    the draft write boundary prevents an answer from the previous variant becoming part of this
+    variant's request. Final validation remains strict: unknown data already stored by another
+    writer is still refused by ``validate_scope``.
+    """
+    definitions = _scope_definitions(schema)
+    return {code: value for code, value in scope.items() if code in definitions}
+
+
+def validate_scope(*, schema: dict[str, object], scope: dict[str, object]) -> None:
+    definitions = _scope_definitions(schema)
     unknown = set(scope).difference(definitions)
     if unknown:
         raise ValueError("Scope includes a question that is not configured for this task.")
