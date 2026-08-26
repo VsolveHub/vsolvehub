@@ -64,6 +64,7 @@ from apps.catalog.models import (
     M2VariantConfiguration,
     Service,
     ServiceMedia,
+    ServicePolicy,
     ServiceQuestion,
     ServiceQuestionOption,
     ServiceVariant,
@@ -418,6 +419,9 @@ class ProjectSeed:
     #: Key into `catalog.seed_images.SEED_IMAGE_POOLS` for the tile photo and this
     #: service's cover. Blank seeds no photo and the client falls back to the icon.
     image_subject: str = ""
+    #: The sentence on the service card and at the top of the brief. Author it —
+    #: a customer never reads "(development fixture)".
+    short_description: str = ""
 
 
 #: Every A5 project the demo catalogue publishes. The design walkthrough follows
@@ -438,6 +442,10 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
         subcategory_display_order=20,
         questions=A5_QUESTIONS,
         image_subject="interior-fit-out",
+        short_description=(
+            "A full interior fit-out, measured on site and priced in writing by up to "
+            "three verified professionals."
+        ),
     ),
     ProjectSeed(
         slug="full-bathroom-renovation",
@@ -480,6 +488,10 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
             ),
         ),
         image_subject="bathroom-renovation",
+        short_description=(
+            "Strip-out to finish: your bathroom rebuilt, measured on site and priced in "
+            "writing before any work starts."
+        ),
     ),
     ProjectSeed(
         slug="full-home-painting",
@@ -530,6 +542,10 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
             ),
         ),
         image_subject="painting",
+        short_description=(
+            "Whole-home painting, measured on site — surface prep, paint and finish "
+            "priced in writing before a brush touches a wall."
+        ),
     ),
     ProjectSeed(
         slug="modular-kitchen-fit-out",
@@ -572,6 +588,10 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
             ),
         ),
         image_subject="modular-kitchen",
+        short_description=(
+            "A modular kitchen designed around your layout, measured on site and priced "
+            "in writing per unit and finish."
+        ),
     ),
     ProjectSeed(
         slug="full-home-rewiring",
@@ -606,6 +626,10 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
             ),
         ),
         image_subject="house-wiring",
+        short_description=(
+            "Complete rewiring for a home or shop — points, boards and safety checks, "
+            "measured on site and priced in writing."
+        ),
     ),
     ProjectSeed(
         slug="event-catering",
@@ -643,6 +667,10 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
             ),
         ),
         image_subject="catering",
+        short_description=(
+            "Menus priced per plate for your guest count — caterers visit, taste-plan "
+            "with you and quote in writing."
+        ),
     ),
     # ------------------------------------------------------------------
     # 2026-08-26: quote-priced work in EVERY category, so no trade is a
@@ -686,6 +714,10 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
             ),
         ),
         image_subject="consultation",
+        short_description=(
+            "Not sure what the job needs? A verified electrician visits, inspects and "
+            "gives you a written estimate — the visit fee is all you pay."
+        ),
     ),
     ProjectSeed(
         slug="plumber-consultation",
@@ -724,6 +756,10 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
             ),
         ),
         image_subject="consultation",
+        short_description=(
+            "Not sure what the job needs? A verified plumber visits, inspects and gives "
+            "you a written estimate — the visit fee is all you pay."
+        ),
     ),
     ProjectSeed(
         slug="custom-furniture-work",
@@ -764,6 +800,10 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
             ("piece_count", "How many pieces?", ServiceQuestion.Kind.NUMBER, True, 1, None),
         ),
         image_subject="carpentry",
+        short_description=(
+            "Wardrobes, units and tables built to your measurements — a carpenter "
+            "measures on site and quotes in writing per piece."
+        ),
     ),
     ProjectSeed(
         slug="central-ac-ducting",
@@ -798,6 +838,10 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
             ),
         ),
         image_subject="hvac-duct",
+        short_description=(
+            "Ducted and multi-room cooling designed for your space — surveyed on site "
+            "and priced in writing per tonne and run."
+        ),
     ),
     ProjectSeed(
         slug="bridal-event-makeup",
@@ -833,6 +877,10 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
             ),
         ),
         image_subject="bridal-makeup",
+        short_description=(
+            "Bridal and occasion makeup as a package — artists consult first, then quote "
+            "in writing for the day, trials included if you want them."
+        ),
     ),
     ProjectSeed(
         slug="home-demolition",
@@ -867,6 +915,10 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
             ),
         ),
         image_subject="demolition",
+        short_description=(
+            "Safe demolition with optional debris removal — assessed on site and priced "
+            "in writing before anything comes down."
+        ),
     ),
     ProjectSeed(
         slug="tiling-flooring-work",
@@ -901,6 +953,10 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
             ),
         ),
         image_subject="tiling",
+        short_description=(
+            "Floor and wall tiling measured on site — laying, grouting and finishing "
+            "priced in writing per square foot."
+        ),
     ),
     ProjectSeed(
         slug="terrace-waterproofing",
@@ -936,6 +992,10 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
             ),
         ),
         image_subject="terrace",
+        short_description=(
+            "Leaks found and sealed for good — terrace, bathroom or tank waterproofing, "
+            "inspected on site and priced in writing."
+        ),
     ),
     ProjectSeed(
         slug="event-lighting-decor",
@@ -971,6 +1031,10 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
             ),
         ),
         image_subject="event-decor",
+        short_description=(
+            "Lighting, stage and decor planned around your venue — decorators visit and "
+            "quote in writing for the whole event."
+        ),
     ),
 )
 
@@ -1281,6 +1345,17 @@ _C6_RECOVERY_POLICY: dict[str, Any] = {
 #: standing in for the ADR-0009 phone survey, exactly like the construction-helper constants
 #: above — the per-trade spreads (an electrician's day costs more than a helper's) are shaped
 #: plausibly so the demo reads sensibly, and nothing more.
+#:
+#: ## Everything the customer reads is per service, never shared
+#:
+#: The first cut of this table shared `A3_QUESTIONS`, `RATE_CARD_INCLUSIONS` and the shifting
+#: add-ons across all five services — so "Event staff by the day" opened on "What will they be
+#: doing?" with masonry and demolition cards, and its rate promised "loading, carrying and
+#: unloading". A customer who picked a specific trade already answered the work question by
+#: picking it: only the generic helpers service keeps a work chooser, and every service carries
+#: its own questions, its own rate inclusions, its own included/excluded policy copy and its own
+#: add-on rates. The booking flow renders whatever is published here, so wrong words in this
+#: table ARE the broken screen.
 @dataclass(frozen=True)
 class DaySeed:
     slug: str
@@ -1299,6 +1374,36 @@ class DaySeed:
     worker_day_wage_paise: int
     supervision_margin_paise: int
     overtime_hourly_paise: int
+    #: What the customer is asked. Must include `worker_count` and `duration_days` — the two
+    #: codes `rate_cards.preset_size`, matching and the shift-day engine all read.
+    questions: tuple[QuestionSeed, ...]
+    #: Price-moving facts for the instant path. Empty publishes `{"questions": []}` — a real,
+    #: present preset with nothing extra to ask — never `{}`, which the reader refuses.
+    preset_questions: tuple[QuestionSeed, ...]
+    #: Printed on the rate card and echoed on the customer's live-rate screen.
+    rate_inclusions: tuple[str, ...]
+    #: Published extras priced through the amendment engine. Empty means no billable extras.
+    add_on_rates: dict[str, int]
+    #: The catalogue's What's-included / What's-not page for this service.
+    short_description: str
+    included: tuple[str, ...]
+    excluded: tuple[str, ...]
+
+
+#: The two sizing questions every day-hire form ends with, labelled per trade. The codes are
+#: load-bearing (`preset_size` reads exactly these); only the label varies.
+def _size_questions(people_label: str) -> tuple[QuestionSeed, ...]:
+    return (
+        (
+            "worker_count",
+            people_label,
+            ServiceQuestion.Kind.NUMBER,
+            True,
+            1,
+            None,
+        ),
+        ("duration_days", "Days", ServiceQuestion.Kind.NUMBER, True, 1, None),
+    )
 
 
 A3_DAY_SEEDS: tuple[DaySeed, ...] = (
@@ -1319,6 +1424,28 @@ A3_DAY_SEEDS: tuple[DaySeed, ...] = (
         worker_day_wage_paise=RATE_CARD_WORKER_DAY_WAGE_PAISE,
         supervision_margin_paise=RATE_CARD_SUPERVISION_MARGIN_PAISE,
         overtime_hourly_paise=RATE_CARD_OVERTIME_HOURLY_PAISE,
+        # Generic labour is the ONE service where "what will they be doing?" is a real
+        # question — helpers shift, clear, mix and carry, and the lead needs to know which.
+        questions=A3_QUESTIONS,
+        preset_questions=A3_PRESET_QUESTIONS,
+        rate_inclusions=RATE_CARD_INCLUSIONS,
+        add_on_rates=dict(RATE_CARD_ADD_ON_RATES),
+        short_description=(
+            "General site labour by the day — loading, shifting, clearing and helper work, "
+            "with a supervisor on site for the whole shift."
+        ),
+        included=(
+            "One 8-hour shift per worker, including a 30-minute break.",
+            "A working supervisor on site for the whole shift.",
+            "Loading, carrying, clearing and helper work as directed by you.",
+            "Basic hand tools — crowbars, shovels, gamelas and ropes.",
+        ),
+        excluded=(
+            "Skilled trade work — masonry, electrical, plumbing and carpentry are their own "
+            "services.",
+            "Transport vehicles and debris haulage — the crew loads, you arrange the vehicle.",
+            "Materials and consumables of any kind.",
+        ),
     ),
     DaySeed(
         slug="electrician-by-the-day",
@@ -1337,6 +1464,32 @@ A3_DAY_SEEDS: tuple[DaySeed, ...] = (
         worker_day_wage_paise=110_000,
         supervision_margin_paise=20_000,
         overtime_hourly_paise=20_000,
+        # No work chooser: the customer picked "Electrician by the day", and that IS the work.
+        questions=_size_questions("Electricians"),
+        preset_questions=(),
+        rate_inclusions=(
+            "One 8-hour day per electrician, including a 30-minute break.",
+            "Own hand tools, tester and multimeter.",
+            "Minor consumables — insulation tape, wire connectors, screws.",
+            "Overtime is charged only after you approve it in the app.",
+        ),
+        add_on_rates={},
+        short_description=(
+            "A verified electrician at your site for a full working day — wiring, fittings, "
+            "repairs and finishing work under your direction."
+        ),
+        included=(
+            "One 8-hour day per electrician, including a 30-minute break.",
+            "Wiring, fitting, repair and finishing work as you direct it on site.",
+            "Own hand tools, tester and multimeter.",
+            "Minor consumables like insulation tape and connectors.",
+        ),
+        excluded=(
+            "Wires, switches, MCBs, lights and other materials — you buy them, or the "
+            "electrician buys them with your approval.",
+            "Civil work such as wall chasing beyond minor cutting.",
+            "Electricity-board liaison for new connections or load changes.",
+        ),
     ),
     DaySeed(
         slug="plumber-by-the-day",
@@ -1355,6 +1508,31 @@ A3_DAY_SEEDS: tuple[DaySeed, ...] = (
         worker_day_wage_paise=100_000,
         supervision_margin_paise=20_000,
         overtime_hourly_paise=18_000,
+        questions=_size_questions("Plumbers"),
+        preset_questions=(),
+        rate_inclusions=(
+            "One 8-hour day per plumber, including a 30-minute break.",
+            "Own hand tools — wrenches, cutters, sealing kit.",
+            "Minor consumables — thread tape, sealant.",
+            "Overtime is charged only after you approve it in the app.",
+        ),
+        add_on_rates={},
+        short_description=(
+            "A verified plumber at your site for a full working day — lines, fittings, "
+            "repairs and bathroom work under your direction."
+        ),
+        included=(
+            "One 8-hour day per plumber, including a 30-minute break.",
+            "Pipe, fitting, repair and installation work as you direct it on site.",
+            "Own hand tools and sealing kit.",
+            "Minor consumables like thread tape and sealant.",
+        ),
+        excluded=(
+            "Pipes, taps, sanitaryware and other materials — you buy them, or the plumber "
+            "buys them with your approval.",
+            "Civil work such as breaking tiles or walls beyond minor cutting.",
+            "Water-board liaison for new connections.",
+        ),
     ),
     DaySeed(
         slug="painter-by-the-day",
@@ -1373,6 +1551,30 @@ A3_DAY_SEEDS: tuple[DaySeed, ...] = (
         worker_day_wage_paise=80_000,
         supervision_margin_paise=15_000,
         overtime_hourly_paise=14_000,
+        questions=_size_questions("Painters"),
+        preset_questions=(),
+        rate_inclusions=(
+            "One 8-hour day per painter, including a 30-minute break.",
+            "Brushes, rollers and trays.",
+            "Masking and floor protection with your materials.",
+            "Overtime is charged only after you approve it in the app.",
+        ),
+        add_on_rates={},
+        short_description=(
+            "A verified painter at your site for a full working day — preparation, "
+            "painting and finishing with the paint you choose."
+        ),
+        included=(
+            "One 8-hour day per painter, including a 30-minute break.",
+            "Surface preparation, masking, painting and finishing as you direct it.",
+            "Brushes, rollers and trays.",
+        ),
+        excluded=(
+            "Paint, putty, primer and masking materials — you buy them, or the painter "
+            "buys them with your approval.",
+            "Exterior work at height needing scaffolding.",
+            "Wall repairs beyond minor filling.",
+        ),
     ),
     DaySeed(
         slug="event-staff-by-the-day",
@@ -1391,18 +1593,50 @@ A3_DAY_SEEDS: tuple[DaySeed, ...] = (
         worker_day_wage_paise=70_000,
         supervision_margin_paise=15_000,
         overtime_hourly_paise=12_000,
+        questions=_size_questions("Staff"),
+        preset_questions=(),
+        rate_inclusions=(
+            "One 8-hour day per staff member, including a 30-minute break.",
+            "Clean, presentable dress code.",
+            "Serving, clearing, guest support and setup help through the event.",
+            "Overtime is charged only after you approve it in the app.",
+        ),
+        add_on_rates={},
+        short_description=(
+            "Trained serving and support staff for your event, by the day — serving, "
+            "clearing, setup and guest support, with a supervisor on duty."
+        ),
+        included=(
+            "One 8-hour day per staff member, including a 30-minute break.",
+            "Serving, clearing, guest support and setup or teardown help.",
+            "A supervisor on duty for the whole event.",
+            "Clean, presentable dress code.",
+        ),
+        excluded=(
+            "Food, beverages and catering — see Event catering for that.",
+            "Crockery, cutlery, furniture and decor.",
+            "Bartending with licensed liquor service.",
+        ),
     ),
 )
 
 
 def _matches_seeded_rate(card: RateCard, seed: DaySeed) -> bool:
-    """Whether a published card already carries exactly the components this seed would write."""
+    """Whether a published card already carries exactly what this seed would write.
+
+    The words are compared as well as the money: the printed inclusions render verbatim on
+    the customer's live-rate screen, so a card whose components match but whose inclusions
+    still describe another trade's day ("loading and unloading" on event staff) is a card
+    this seed exists to correct — skipping it would leave the wrong promise published.
+    """
     return (
         card.worker_day_wage_paise == seed.worker_day_wage_paise
         and card.supervision_margin_paise == seed.supervision_margin_paise
         and card.booking_fee_paise == RATE_CARD_BOOKING_FEE_PAISE
         and card.standard_day_hours == RATE_CARD_STANDARD_DAY_HOURS
         and card.overtime_hourly_paise == seed.overtime_hourly_paise
+        and list(card.inclusions) == list(seed.rate_inclusions)
+        and dict(card.add_on_rates) == dict(seed.add_on_rates)
     )
 
 
@@ -1458,16 +1692,27 @@ class Command(BaseCommand):
                 service_name=day.name,
                 variant_name=day.variant_name,
                 archetype=ServiceVariant.BookingArchetype.A3_TIME_BLOCK,
-                questions=A3_QUESTIONS,
+                questions=day.questions,
                 icon_key=day.icon_key,
                 category_slug=day.category_slug,
                 subcategory_slug=day.subcategory_slug,
                 subcategory_name=day.subcategory_name,
                 subcategory_display_order=day.subcategory_display_order,
                 image_subject=day.image_subject,
+                short_description=day.short_description,
             )
             a3_variants.append(a3_variant)
-            self._seed_a3_configuration(variant=a3_variant, skill=skill)
+            self._seed_service_policies(
+                service=a3_variant.service,
+                included=day.included,
+                excluded=day.excluded,
+            )
+            self._seed_a3_configuration(
+                variant=a3_variant,
+                skill=skill,
+                preset_questions=day.preset_questions,
+                questions=day.questions,
+            )
             wage_floors_written += int(self._seed_wage_floor(skill=skill, seed=day))
             rate_cards_published += int(self._seed_rate_card(area=area, skill=skill, seed=day))
 
@@ -1488,6 +1733,7 @@ class Command(BaseCommand):
                 subcategory_name=project.subcategory_name,
                 subcategory_display_order=project.subcategory_display_order,
                 image_subject=project.image_subject,
+                short_description=project.short_description,
             )
             for project in A5_PROJECT_SEEDS
         )
@@ -1498,8 +1744,8 @@ class Command(BaseCommand):
                 defaults={"is_active": True},
             )
 
-        for a5_variant in a5_variants:
-            self._seed_a5_configuration(variant=a5_variant)
+        for a5_variant, project in zip(a5_variants, A5_PROJECT_SEEDS, strict=True):
+            self._seed_a5_configuration(variant=a5_variant, questions=project.questions)
         prices_written, prices_skipped = self._seed_access_prices()
 
         vendors = self._seed_vendors(
@@ -1631,6 +1877,7 @@ class Command(BaseCommand):
         subcategory_name: str,
         subcategory_display_order: int,
         image_subject: str = "",
+        short_description: str = "",
     ) -> ServiceVariant:
         # The trade category the customer actually browses. A slug outside the authored map is a
         # typo, and a typo here would quietly invent a category — so it refuses instead.
@@ -1674,7 +1921,11 @@ class Command(BaseCommand):
                 "subcategory": subcategory,
                 "name": service_name,
                 "icon_key": icon_key,
-                "short_description": f"{service_name} (development fixture).",
+                # Real customer-facing copy, never a "(development fixture)" stub — this
+                # sentence renders on every service card and at the top of the booking flow.
+                "short_description": short_description
+                or f"{service_name}, priced by the professionals who quote for it.",
+                "description": short_description,
                 "status": Service.Status.ACTIVE,
             },
         )
@@ -1751,6 +2002,46 @@ class Command(BaseCommand):
         return variant
 
     @staticmethod
+    def _seed_service_policies(
+        *,
+        service: Service,
+        included: tuple[str, ...],
+        excluded: tuple[str, ...],
+    ) -> None:
+        """The What's-included / What's-not page for a day-hire service.
+
+        Same rewrite-on-every-run contract as `seed_task_catalog._seed_service_content`: the
+        authored tuples above are the whole list, so a line removed there disappears from the
+        page, and rows are deactivated rather than deleted because a policy line is the wording
+        a customer was shown when they booked.
+        """
+
+        ServicePolicy.objects.filter(service=service).update(is_active=False)
+        rows: list[tuple[str, str, int]] = [
+            (ServicePolicy.Kind.INCLUDED, text, order)
+            for order, text in enumerate(included, start=1)
+        ]
+        rows += [
+            (ServicePolicy.Kind.EXCLUDED, text, order)
+            for order, text in enumerate(excluded, start=1)
+        ]
+        rows.append(
+            (
+                ServicePolicy.Kind.GOOD_TO_KNOW,
+                "You pay the crew directly after each day. Vsolve charges only the booking "
+                "fee shown before you confirm.",
+                1,
+            )
+        )
+        for kind, text, order in rows:
+            ServicePolicy.objects.update_or_create(
+                service=service,
+                kind=kind,
+                display_order=order,
+                defaults={"title": "", "text": text, "is_active": True},
+            )
+
+    @staticmethod
     def _seed_service_cover(*, service: Service, url: str, alt_text: str) -> None:
         """One verified COVER photo per service — same contract as `seed_task_catalog`'s.
 
@@ -1781,10 +2072,21 @@ class Command(BaseCommand):
 
     # -- the owner-blocked configuration -----------------------------------
 
-    def _seed_a3_configuration(self, *, variant: ServiceVariant, skill: Skill) -> None:
+    def _seed_a3_configuration(
+        self,
+        *,
+        variant: ServiceVariant,
+        skill: Skill,
+        preset_questions: tuple[QuestionSeed, ...],
+        questions: tuple[QuestionSeed, ...],
+    ) -> None:
         self._upsert_configuration(
             variant=variant,
-            questions=A3_QUESTIONS,
+            # The SAME tuple the catalogue publishes for this service, per the §7 rule:
+            # the validation schema and screen one must always be derived from one table.
+            # Hardcoding A3_QUESTIONS here would demand a `work_type` answer from services
+            # whose form never asks one, refusing every submission.
+            questions=questions,
             registration_questions=A3_REGISTRATION_QUESTIONS,
             extra={
                 "wage_floor_skill": skill,
@@ -1798,7 +2100,12 @@ class Command(BaseCommand):
                 # `requirements.rate_cards`, so until they are written here the instant path
                 # refuses with `m2_policy_unavailable` on every request — the preset schema and
                 # the cascade policy are both consulted before the card itself is.
-                "a3_preset_question_schema": _question_schema(A3_PRESET_QUESTIONS),
+                #
+                # Per service since 2026-08-26: the floor/lift/carry facts are shifting facts,
+                # and publishing them on "Event staff by the day" asked about lifts at a
+                # wedding. An empty tuple publishes `{"questions": []}` — a real preset with
+                # nothing extra to ask — never `{}`, which `preset_question_schema` refuses.
+                "a3_preset_question_schema": _question_schema(preset_questions),
                 "crew_wave_size": CREW_WAVE_SIZE,
                 "crew_wave_widening_step": CREW_WAVE_WIDENING_STEP,
                 "crew_offer_timeout_seconds": CREW_OFFER_TIMEOUT_SECONDS,
@@ -1823,10 +2130,18 @@ class Command(BaseCommand):
             },
         )
 
-    def _seed_a5_configuration(self, *, variant: ServiceVariant) -> None:
+    def _seed_a5_configuration(
+        self,
+        *,
+        variant: ServiceVariant,
+        questions: tuple[QuestionSeed, ...],
+    ) -> None:
         self._upsert_configuration(
             variant=variant,
-            questions=A5_QUESTIONS,
+            # Per project, per the §7 rule — the fit-out's questions hardcoded here would
+            # demand `fit_out_style` from a bathroom renovation whose brief never asks it,
+            # refusing the submission its own first screen collected.
+            questions=questions,
             registration_questions=(),
             extra={
                 # Reconfirmation reuses `first_quote_sla_hours`, so an A5 variant needs it too —
@@ -1961,8 +2276,11 @@ class Command(BaseCommand):
             booking_fee_paise=RATE_CARD_BOOKING_FEE_PAISE,
             standard_day_hours=RATE_CARD_STANDARD_DAY_HOURS,
             overtime_hourly_paise=seed.overtime_hourly_paise,
-            inclusions=list(RATE_CARD_INCLUSIONS),
-            add_on_rates=dict(RATE_CARD_ADD_ON_RATES),
+            # The card's own words, per trade: the printed inclusions surface verbatim on
+            # the customer's live-rate screen, and "loading and unloading" on an event-staff
+            # rate was this table's most visible lie.
+            inclusions=list(seed.rate_inclusions),
+            add_on_rates=dict(seed.add_on_rates),
             effective_from=DEV_SEED_EFFECTIVE_FROM,
             actor=None,
             source_reference=(

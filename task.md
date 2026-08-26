@@ -743,6 +743,34 @@ Run the relevant Vitest and Playwright suites for every changed Customer/Partner
   service cover); `CategoryVariantList` is unmounted but kept; `/catalog` flat index still
   icon-based by design.
 
+**2026-08-26 — Claude (owner-directed): per-service crew flows fixed. Owner verification pending.**
+
+- **Bug (owner-reported):** every A3 day-hire shared one generic question set, so "Event staff
+  by the day" opened on "What will they be doing?" with loading/masonry/demolition cards, one
+  construction rate-card inclusion list ("loading, carrying and unloading") and shifting
+  add-ons (floor/lift/carry) on every trade. Two deeper drifts found in the audit: the M2
+  **validation** schema hardcoded the same shared set for all A3s (a submission without
+  `work_type` would be refused) and all A5s validated against the fit-out's questions — every
+  non-fit-out brief would have refused its own answers at submit.
+- **Fix:** `DaySeed` now carries per-service questions, preset questions, rate-card
+  inclusions, add-on rates, short description and included/excluded policy copy. Only
+  `construction-helpers` (generic labour) keeps the work chooser and shifting presets; the
+  four trade day-hires ask just People + Days. `_seed_a3_configuration` and
+  `_seed_a5_configuration` now derive the validation schema from the same per-service tuple
+  the catalogue publishes (the §7 one-table rule). Rate-card matcher now compares inclusions
+  and add-ons too, so wording changes republish.
+- **Flow (owner-specified):** picking a specific day-hire opens on **What's included /
+  What's not included** (new `CrewAboutPanel` reading `ServicePolicy` rows, seeded per
+  service) with the People/Days steppers directly below — a 2-step flow (plan → live rate).
+  The work-picker step renders only when the catalogue publishes a `work_type` question.
+  Step pills, section numbers, plan rail and review tiles all adapt.
+- All 15 A5 services got real short descriptions (the "(development fixture)" stub is gone —
+  it was rendering on every tile card).
+- **Verified against the dev DB** (seed re-run + scripted audit over all 20 M2 services):
+  schema==catalogue for every service, per-trade rate inclusions live, policies + covers
+  present. Static gates green. No test suite executed; `booking-flow.test.ts` extended for
+  the skip-work-picker rule (owner runs it).
+
 ## Out of scope
 
 - Mixed Item-wise + Labour-wise estimates.
