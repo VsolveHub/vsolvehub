@@ -157,6 +157,17 @@ export default async function ServiceDetailPage({ params }: PageProps) {
                           Get quotes instead
                         </Link>
                       </>
+                    ) : service.request_archetypes.length > 0 && service.bookable_variant_id ? (
+                      <>
+                        {/* The hybrid: a published fixed price AND a quote path. Both are
+                            real ways to buy this and neither is hidden behind the other. */}
+                        <Link href={`/book/${service.slug}`} className="flex h-[3.25rem] w-full items-center justify-center rounded-md bg-action px-6 text-[0.95rem] font-bold text-white shadow-sm transition-all hover:bg-[#d65f1a] active:scale-[0.98]">
+                          Book at the fixed price <span aria-hidden="true" className="ml-2">&rarr;</span>
+                        </Link>
+                        <Link href={`/requests/new/${service.slug}`} className="flex h-[3.25rem] w-full items-center justify-center rounded-md border-2 border-line bg-transparent px-6 text-[0.95rem] font-bold text-navy-900 transition-all hover:border-navy-900 active:scale-[0.98]">
+                          Get a free quote after a site visit
+                        </Link>
+                      </>
                     ) : service.request_archetypes.length > 0 ? (
                       <Link href={`/requests/new/${service.slug}`} className="flex h-[3.25rem] w-full items-center justify-center rounded-md bg-action px-6 text-[0.95rem] font-bold text-white shadow-sm transition-all hover:bg-[#d65f1a] active:scale-[0.98]">
                         Tell us what you need <span aria-hidden="true" className="ml-2">&rarr;</span>

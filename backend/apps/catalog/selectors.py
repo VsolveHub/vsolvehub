@@ -5,7 +5,7 @@ from typing import Protocol, cast
 from uuid import UUID
 
 from django.db import models
-from django.db.models import Exists, OuterRef, Prefetch, QuerySet
+from django.db.models import Count, Exists, OuterRef, Prefetch, Q, QuerySet
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework.exceptions import NotFound
@@ -163,7 +163,15 @@ def public_categories() -> QuerySet[Category]:
     return Category.objects.filter(is_active=True).prefetch_related(
         Prefetch(
             "subcategories",
-            queryset=Subcategory.objects.filter(is_active=True),
+            # `service_count` feeds the tile grid. ACTIVE services, not the stricter
+            # offerability gate — a tile count is merchandising, and the offerable
+            # check would drag per-variant rate joins into the cheapest read we have.
+            queryset=Subcategory.objects.filter(is_active=True).annotate(
+                service_count=Count(
+                    "services",
+                    filter=Q(services__status=Service.Status.ACTIVE),
+                )
+            ),
         ),
     )
 

@@ -35,7 +35,7 @@ Implementation tracker for the Customer and Partner flow redesign.
 - [x] Use the existing frontend colors, semantic tokens, typography, components and Lucide icon language. Do not introduce a new visual theme or hardcoded colors.
 - [x] Global Partner navigation appears only on top-level destinations. Focused task screens use a back button and page title without the persistent top/bottom navbar.
 - [x] On mobile, Customer and Partner journeys must feel like an app: compact app bars, bottom actions, touch-first controls, visual status rails and focused screens instead of marketing-page layouts.
-- [x] Customer service discovery lists every published service as **icon + text**. Service-list images are removed; search is optional and never required to discover a service.
+- [x] ~~Customer service discovery lists every published service as **icon + text**. Service-list images are removed.~~ **REVERSED by the owner 2026-08-26:** discovery is image-led (Urban-Company style) — photographic tiles for categories and subcategories, cover photos on service cards, `image_url` fields on Category/Subcategory/ServiceVariant plus `ServiceMedia` COVER rows. Icons remain the fallback for anything without a photo. Search stays optional and never required to discover a service.
 - [x] Keep the current fonts. Typography work is limited to the existing scale, weights and spacing.
 - [x] Antigravity may add purposeful motion using the existing visual system, with reduced-motion support and no layout-shifting animation.
 - [x] For this milestone, Codex and Antigravity are authorized to run their backend and frontend test suites and must report the actual results.
@@ -702,6 +702,46 @@ Run the relevant Vitest and Playwright suites for every changed Customer/Partner
   `seed_m2_demo --i-understand-this-is-dev-only`; browse `/catalog` (no Workforce & Projects
   section, projects under trades); submit a detailed item-wise and a labour-wise estimate as a
   partner; read both on the customer quotes screen; run the frontend and backend test suites.
+
+**2026-08-26 — Claude (owner-directed): UC-style tile catalog, image fields, A1+A3+A5 in every category. Owner verification pending.**
+
+- **DB (catalog 0016):** `Category.image_url`, `Subcategory.icon_key` + `image_url`,
+  `ServiceVariant.image_url`; services keep `ServiceMedia` COVER as their photo channel.
+  Contract bumped to **1.45.0** (subcategory tiles now publish icon/image/`service_count`;
+  variant serializers publish `image_url`); OpenAPI + TS client regenerated.
+- **Tiles are subcategories.** `seed_task_catalog` splits the flat trades into browse tiles —
+  electrician → 7 (Switch & socket, Fans, Lights, MCB fuse & inverter, Motors & pumps,
+  Doorbell & security, Power problems), plumber → 5, AC → 3 — with `TradeSeed.skill_code`
+  keeping dispatch on the TRADE (`required_skill_code` unchanged), cart same-partner pairing
+  regrouped by skill (was subcategory — would have broken cross-tile merges), and the six M1
+  services re-filed through the shared `TILE_FOR_M1_SERVICE` map both commands read.
+- **Every category now sells all three models.** `seed_m2_demo` adds A5 quote services across
+  the catalogue (consultations for electrician/plumber, custom furniture, central AC & ducting,
+  bridal & event makeup, demolition, tiling & flooring, waterproofing, event lighting & decor)
+  and A3 day-hire (`electrician/plumber/painter/event-staff-by-the-day`) — each A3 with its own
+  skill row, wage floor, rate card (all dev-seed-marked inventions) and configuration; demo
+  vendors hold every capability.
+- **Images are real and verified.** `apps/catalog/seed_images.py` is the one pool both seed
+  commands read: every URL extracted from live Unsplash search pages by alt text, all 155
+  HEAD-checked, sample visually confirmed; premium (watermarking) URLs excluded. Never invent a
+  photo id — the module docstring carries the rule.
+- **Customer UI:** `/catalog/[category]` is the "Select a service" photo-tile grid;
+  `?tile=<slug>` shows that tile's services as image cards with honest price lines ("Starts at
+  ₹X" / "Free quote after a site visit" / "Booked by the day"); a one-service tile (Book a
+  consultation) taps straight into its flow. Hybrid services (fixed price + quote) now route to
+  the service page, which offers both CTAs — previously the fixed price was unreachable. Home
+  page category tiles (desktop + mobile) are API-driven with `image_url`; the 3-slug hardcode
+  is gone.
+- Gates: backend quality-static (ruff/mypy strict/migration check/schema + contract drift)
+  and frontend typecheck + eslint all green. **No tests executed** per the verification
+  convention.
+- Owner verification: `python manage.py migrate`, then re-run `seed_technician_catalog`,
+  `seed_task_catalog`, `seed_m2_demo --i-understand-this-is-dev-only`; browse home → category →
+  tile → service on mobile width; book a fixed task, a consultation, and a day-hire; check the
+  partner side still receives dispatch for re-tiled A1 services (skill codes unchanged).
+- Known follow-ups: per-variant photos are seeded blank (field exists; UI falls back to the
+  service cover); `CategoryVariantList` is unmounted but kept; `/catalog` flat index still
+  icon-based by design.
 
 ## Out of scope
 

@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.44.0
+  version: 1.45.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -15715,6 +15715,10 @@ components:
         icon_key:
           type: string
           readOnly: true
+        image_url:
+          type: string
+          format: uri
+          readOnly: true
         subcategories:
           type: array
           items:
@@ -15724,6 +15728,7 @@ components:
       - description
       - icon_key
       - id
+      - image_url
       - name
       - slug
       - subcategories
@@ -26795,6 +26800,10 @@ components:
         description:
           type: string
           readOnly: true
+        image_url:
+          type: string
+          format: uri
+          readOnly: true
         fulfilment_archetype:
           type: string
           readOnly: true
@@ -26808,6 +26817,7 @@ components:
       - description
       - fulfilment_archetype
       - id
+      - image_url
       - name
       - questions
     RescheduleBookingRequestRequest:
@@ -27733,6 +27743,10 @@ components:
         description:
           type: string
           readOnly: true
+        image_url:
+          type: string
+          format: uri
+          readOnly: true
         fulfilment_archetype:
           type: string
           readOnly: true
@@ -27763,6 +27777,7 @@ components:
       - description
       - fulfilment_archetype
       - id
+      - image_url
       - minimum_service_subtotal
       - name
       - questions
@@ -28617,10 +28632,24 @@ components:
         description:
           type: string
           readOnly: true
+        icon_key:
+          type: string
+          readOnly: true
+        image_url:
+          type: string
+          format: uri
+          readOnly: true
+        service_count:
+          type: integer
+          readOnly: true
+          default: 0
       required:
       - description
+      - icon_key
       - id
+      - image_url
       - name
+      - service_count
       - slug
     SubjectKindEnum:
       enum:

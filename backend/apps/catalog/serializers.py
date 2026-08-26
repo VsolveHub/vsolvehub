@@ -38,9 +38,14 @@ def _public_variants(service: Service) -> list[ServiceVariant]:
 
 
 class SubcategorySerializer(serializers.ModelSerializer[Subcategory]):
+    #: Count of ACTIVE services filed under this tile, annotated by `public_categories()`.
+    #: A merchandising number for the tile grid — it deliberately does not re-run the
+    #: stricter offerability gate, which needs per-variant rate and configuration joins.
+    service_count = serializers.IntegerField(read_only=True, default=0)
+
     class Meta:
         model = Subcategory
-        fields = ("id", "slug", "name", "description")
+        fields = ("id", "slug", "name", "description", "icon_key", "image_url", "service_count")
         read_only_fields = fields
 
 
@@ -49,7 +54,15 @@ class CategorySerializer(serializers.ModelSerializer[Category]):
 
     class Meta:
         model = Category
-        fields = ("id", "slug", "name", "description", "icon_key", "subcategories")
+        fields = (
+            "id",
+            "slug",
+            "name",
+            "description",
+            "icon_key",
+            "image_url",
+            "subcategories",
+        )
         read_only_fields = fields
 
 
@@ -118,6 +131,7 @@ class ServiceVariantSummarySerializer(serializers.ModelSerializer[ServiceVariant
             "code",
             "name",
             "description",
+            "image_url",
             "fulfilment_archetype",
             "starting_price",
             "minimum_service_subtotal",
@@ -330,6 +344,7 @@ class RequirementVariantSerializer(serializers.ModelSerializer[ServiceVariant]):
             "code",
             "name",
             "description",
+            "image_url",
             "fulfilment_archetype",
             "questions",
         )

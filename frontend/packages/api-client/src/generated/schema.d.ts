@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.44.0)
- * Checksum: 94768dc05dc5a418
+ * Source:   contracts/openapi/v1.yaml (version 1.45.0)
+ * Checksum: 2986258af2cda2b0
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -5903,6 +5903,8 @@ export interface components {
             readonly name: string;
             readonly description: string;
             readonly icon_key: string;
+            /** Format: uri */
+            readonly image_url: string;
             readonly subcategories: components["schemas"]["Subcategory"][];
         };
         /**
@@ -10358,6 +10360,8 @@ export interface components {
             readonly code: string;
             readonly name: string;
             readonly description: string;
+            /** Format: uri */
+            readonly image_url: string;
             readonly fulfilment_archetype: string;
             readonly questions: components["schemas"]["ServiceQuestion"][];
         };
@@ -10711,6 +10715,8 @@ export interface components {
             readonly code: string;
             readonly name: string;
             readonly description: string;
+            /** Format: uri */
+            readonly image_url: string;
             readonly fulfilment_archetype: string;
             readonly starting_price: components["schemas"]["Money"];
             readonly minimum_service_subtotal: components["schemas"]["Money"];
@@ -11098,6 +11104,11 @@ export interface components {
             readonly slug: string;
             readonly name: string;
             readonly description: string;
+            readonly icon_key: string;
+            /** Format: uri */
+            readonly image_url: string;
+            /** @default 0 */
+            readonly service_count: number;
         };
         /**
          * @description * `CATALOG_BOOKING` - CATALOG_BOOKING

@@ -15,6 +15,9 @@ class Category(models.Model):
     name = models.CharField(max_length=120)
     description = models.TextField(blank=True)
     icon_key = models.CharField(max_length=80, blank=True)
+    #: Photographic tile for browse surfaces (2026-08-26 owner decision: images, not icons).
+    #: Blank is honest — the client falls back to the icon rather than a wrong picture.
+    image_url = models.URLField(max_length=500, blank=True, default="")
     display_order = models.PositiveSmallIntegerField(default=0)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -38,6 +41,12 @@ class Subcategory(models.Model):
     slug = models.SlugField(max_length=100)
     name = models.CharField(max_length=120)
     description = models.TextField(blank=True)
+    #: The "Select a service" tile. Subcategories are the tile level of the browse
+    #: hierarchy (category page -> tile grid -> that tile's services), so they carry
+    #: their own glyph and photo; a free CharField like `Category.icon_key`, not the
+    #: constrained `ServiceIconKey`, because tiles outnumber the curated glyph set.
+    icon_key = models.CharField(max_length=80, blank=True, default="")
+    image_url = models.URLField(max_length=500, blank=True, default="")
     display_order = models.PositiveSmallIntegerField(default=0)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -125,6 +134,9 @@ class ServiceVariant(models.Model):
     maximum_duration_minutes = models.PositiveSmallIntegerField(default=480)
     required_skill_code = models.SlugField(max_length=100)
     tax_category_code = models.SlugField(max_length=100)
+    #: Variant-level photo (an AC tonnage, a hair length). Blank falls back to the
+    #: service's COVER media on the client, so only genuinely distinct variants need one.
+    image_url = models.URLField(max_length=500, blank=True, default="")
     display_order = models.PositiveSmallIntegerField(default=0)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)

@@ -70,6 +70,14 @@ function CategoryGridSkeleton() {
   );
 }
 
+/**
+ * Every published category, from the API (2026-08-26). The previous grid
+ * hardcoded three trades — names, Unsplash URLs and copy inline — so nothing
+ * new could ever surface on home without a code change. Now the first category
+ * is the featured photo card and the rest follow, each on its own published
+ * `image_url` with the bordered card as the fallback for a category without a
+ * photo yet.
+ */
 async function CategoryGrid() {
   const categories = await getCategories();
 
@@ -82,107 +90,118 @@ async function CategoryGrid() {
     );
   }
 
-  // Fallbacks if we don't have exactly 3 categories
-  const cat0 = categories.find((c) => c.slug === "electrician") || categories[0] || { slug: 'electrician', name: 'Master Electricians', id: '1' };
-  const cat1 = categories.find((c) => c.slug === "plumber") || categories[1] || { slug: 'plumber', name: 'Plumbing', id: '2' };
-  const cat2 = categories.find((c) => c.slug === "technician") || categories[2] || { slug: 'technician', name: 'Technician Services', id: '3' };
+  const [featured, ...rest] = categories;
 
   return (
     <>
-      {/* Desktop Layout (Preserved) */}
+      {/* Desktop: one featured photo card, then the rest of the catalogue. */}
       <div className="hidden md:grid grid-cols-3 gap-6">
-        <Link href={`/catalog/${cat0.slug}`} className="col-span-2 row-span-2 min-h-[24rem] rounded-card overflow-hidden relative group shadow-xl hover:shadow-2xl flex flex-col">
-          <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1621905252507-b35492cc74b4?q=80&w=1600&auto=format&fit=crop')] bg-cover bg-center group-hover:scale-105 transition-transform duration-700 ease-out" />
-          <div className="absolute inset-0 bg-navy-900/80 mix-blend-multiply" />
-          <div className="absolute inset-0 bg-gradient-to-t from-navy-900/90 via-navy-900/60 to-navy-900/40" />
-          <div className="relative flex flex-col p-10 h-full justify-start">
-            <h3 className="text-[1.75rem] font-bold text-white mb-3">Master Electricians</h3>
-            <p className="text-base leading-relaxed text-white/80 max-w-md">From smart home integration to complex rewiring, our certified artisans handle it all with precision.</p>
-          </div>
-        </Link>
-        <CategoryCard href={`/catalog/${cat1.slug}`} name={cat1.name} description="Professional plumbing, tap repairs, leaks, and sanitary fittings handled." titleAs="h3" variant="standard" />
-        <CategoryCard href={`/catalog/${cat2.slug}`} name={cat2.name} description="Carpentry repairs, furniture assembly, lock fittings, and custom woodworks." titleAs="h3" variant="standard" />
+        {featured ? (
+          <Link
+            href={`/catalog/${featured.slug}`}
+            className="col-span-2 row-span-2 min-h-[24rem] rounded-card overflow-hidden relative group shadow-xl hover:shadow-2xl flex flex-col focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+          >
+            {featured.image_url !== "" ? (
+              <div
+                className="absolute inset-0 bg-cover bg-center group-hover:scale-105 transition-transform duration-700 ease-out"
+                style={{ backgroundImage: `url('${featured.image_url}')` }}
+              />
+            ) : (
+              <div className="absolute inset-0 bg-navy-900" />
+            )}
+            <div className="absolute inset-0 bg-navy-900/60 mix-blend-multiply" />
+            <div className="absolute inset-0 bg-gradient-to-t from-navy-900/90 via-navy-900/50 to-navy-900/30" />
+            <div className="relative flex flex-col p-10 h-full justify-start">
+              <h3 className="text-[1.75rem] font-bold text-white mb-3">{featured.name}</h3>
+              <p className="text-base leading-relaxed text-white/80 max-w-md">
+                {featured.description}
+              </p>
+            </div>
+          </Link>
+        ) : null}
+        {rest.map((category) =>
+          category.image_url !== "" ? (
+            <Link
+              key={category.id}
+              href={`/catalog/${category.slug}`}
+              className="relative min-h-[10rem] rounded-card overflow-hidden group shadow-sm hover:shadow-md transition-shadow flex flex-col justify-end p-5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+            >
+              <div
+                className="absolute inset-0 bg-cover bg-center group-hover:scale-105 transition-transform duration-700 ease-out"
+                style={{ backgroundImage: `url('${category.image_url}')` }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-navy-900/85 via-navy-900/40 to-transparent" />
+              <div className="relative z-10">
+                <h3 className="text-white font-bold text-[1.1rem]">{category.name}</h3>
+                <p className="mt-1 line-clamp-2 text-[0.8rem] leading-relaxed text-white/80">
+                  {category.description}
+                </p>
+              </div>
+            </Link>
+          ) : (
+            <CategoryCard
+              key={category.id}
+              href={`/catalog/${category.slug}`}
+              name={category.name}
+              description={category.description}
+              titleAs="h3"
+              variant="standard"
+            />
+          ),
+        )}
       </div>
 
-      {/* Mobile Layout (Screenshot Exact Match, filtered to the 3 active categories) */}
-      <div className="flex md:hidden flex-col gap-4">
-        {/* 1. Master Electricians (Tall) */}
-        <Link href={`/catalog/${cat0.slug}`} className="min-h-[20rem] rounded-[1.5rem] overflow-hidden relative shadow-lg flex flex-col">
-          <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1621905252507-b35492cc74b4?q=80&w=1600&auto=format&fit=crop')] bg-cover bg-center" />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#0A1526] via-[#0A1526]/80 to-transparent" />
-          <div className="relative flex flex-col p-6 h-full mt-auto justify-end">
-            <div className="flex size-8 items-center justify-center rounded-full bg-white/10 text-white mb-3 backdrop-blur-sm border border-white/20">
-              <svg viewBox="0 0 24 24" fill="none" className="size-4" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 22v-4M9 8V3M15 8V3M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z" />
-              </svg>
-            </div>
-            <h3 className="text-2xl font-bold text-white mb-2">Master Electricians</h3>
-            <p className="text-sm leading-relaxed text-white/80 max-w-[280px]">
-              From smart home integration to complex rewiring, our certified artisans handle it all with precision.
-            </p>
-            <div className="mt-5 self-start bg-white rounded-full px-5 py-2.5 flex items-center gap-2 text-sm font-bold text-navy-900 shadow-sm">
-              Book Service
-              <svg viewBox="0 0 20 20" fill="none" className="size-3.5" aria-hidden="true">
-                <path d="M5 15l10-10M15 5v10M15 5H5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </div>
-          </div>
-        </Link>
-
-        {/* 2. Plumber (Wide) */}
-        <Link href={`/catalog/${cat1.slug}`} className="rounded-[1.5rem] bg-[#111C30] border border-white/10 min-h-[14rem] relative shadow-lg overflow-hidden flex flex-col justify-end p-5">
-          <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1504307651254-35680f356dfd?q=80&w=1600&auto=format&fit=crop')] bg-cover bg-center opacity-70" />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#0A1526] via-[#0A1526]/70 to-transparent" />
-          <div className="relative z-10">
-            <h3 className="text-white font-bold text-[1.35rem]">Plumbing Repairs</h3>
-            <p className="text-white/80 text-[0.8rem] mt-1.5 leading-relaxed max-w-[260px]">Taps, leaks, blockages, and full sanitary fitting services handled cleanly.</p>
-            <div className="flex items-center gap-1.5 mt-3 text-xs font-bold text-white">
-              Explore
-              <svg viewBox="0 0 20 20" fill="none" className="size-3" aria-hidden="true">
-                <path d="M4 10h11m-4-4 4 4-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </div>
-          </div>
-        </Link>
-
-        {/* 3. Carpenter (Wide) */}
-        <Link href={`/catalog/${cat2.slug}`} className="rounded-[1.5rem] bg-[#111C30] border border-white/10 min-h-[14rem] relative shadow-lg overflow-hidden flex flex-col justify-end p-5">
-          <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=2070&auto=format&fit=crop')] bg-cover bg-center opacity-70" />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#0A1526] via-[#0A1526]/70 to-transparent" />
-          <div className="relative z-10">
-            <h3 className="text-white font-bold text-[1.35rem]">Carpentry & Technicians</h3>
-            <p className="text-white/80 text-[0.8rem] mt-1.5 leading-relaxed max-w-[260px]">Cupboards, doors, hinges, and flatpack furniture assembly by verified pros.</p>
-            <div className="flex items-center gap-1.5 mt-3 text-xs font-bold text-white">
-              Explore
-              <svg viewBox="0 0 20 20" fill="none" className="size-3" aria-hidden="true">
-                <path d="M4 10h11m-4-4 4 4-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </div>
-          </div>
-        </Link>
-      </div>
+      {/* Mobile: the whole catalogue as photo tiles, three across. */}
+      <ul className="grid md:hidden list-none grid-cols-3 gap-3 p-0">
+        {categories.map((category) => (
+          <li key={category.id} className="min-w-0">
+            <Link
+              href={`/catalog/${category.slug}`}
+              className="flex flex-col items-center gap-2 rounded-card focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+            >
+              {category.image_url !== "" ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={category.image_url}
+                  alt=""
+                  loading="lazy"
+                  className="aspect-square w-full rounded-[1.25rem] bg-surface-sunken object-cover shadow-xs"
+                />
+              ) : (
+                <span
+                  aria-hidden
+                  className="grid aspect-square w-full place-items-center rounded-[1.25rem] bg-navy-50 text-navy-700 shadow-xs"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="size-6"
+                  >
+                    <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                  </svg>
+                </span>
+              )}
+              <span className="line-clamp-2 w-full text-center text-[11px] font-bold leading-tight text-[#00112e]">
+                {category.name}
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
     </>
   );
 }
 
 export default async function HomePage() {
   await connection();
-  const rawCategories = await getCategories();
-  const categories = rawCategories.filter(
-    (c) => c.slug === "electrician" || c.slug === "plumber" || c.slug === "technician"
-  );
-
-  // Helper to dynamically extract category slugs or fallback safely
-  const getSlug = (key: string, fallback: string) => {
-    const found = categories.find(
-      (c) => c.slug?.toLowerCase() === key.toLowerCase()
-    );
-    return found ? `/catalog/${found.slug}` : `/catalog/${fallback}`;
-  };
-
-  const electricianSlug = getSlug("electrician", "electrician");
-  const plumberSlug = getSlug("plumbing", "plumber");
-  const carpenterSlug = getSlug("technician", "technician");
+  // The whole published catalogue, unfiltered (2026-08-26): the old page kept a
+  // three-slug allowlist here, so no new category could ever reach the home
+  // screen without a code change.
+  const categories = await getCategories();
 
   return (
     <main className="bg-[#FAF9F7] md:bg-transparent min-h-screen pb-20 md:pb-0 overflow-x-hidden">
@@ -347,38 +366,46 @@ export default async function HomePage() {
                 See All
               </Link>
             </div>
-            <div className="grid grid-cols-3 gap-3">
-              {/* Card 1: Electrician */}
-              <Link href={electricianSlug} className="bg-white border border-[#e7e2da]/40 rounded-[1.25rem] p-3 flex flex-col items-center justify-center text-center shadow-xs h-28 hover:shadow-md transition-shadow">
-                <div className="flex size-11 items-center justify-center rounded-full bg-navy-50 text-navy-700 mb-2.5 shrink-0">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-5">
-                    <path d="M18 10V6a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v4a4 4 0 0 0 4 4h4a4 4 0 0 0 4-4zM12 14v4M10 22h4M9 2h2M13 2h2" />
-                  </svg>
-                </div>
-                <span className="text-[11px] font-bold text-[#00112e] tracking-tight leading-tight">Electrician</span>
-              </Link>
-
-              {/* Card 2: Plumber */}
-              <Link href={plumberSlug} className="bg-white border border-[#e7e2da]/40 rounded-[1.25rem] p-3 flex flex-col items-center justify-center text-center shadow-xs h-28 hover:shadow-md transition-shadow">
-                <div className="flex size-11 items-center justify-center rounded-full bg-navy-50 text-navy-700 mb-2.5 shrink-0">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-5">
-                    <path d="M7 10h5M12 10V6a3 3 0 0 1 6 0v4M12 10h4M12 14a4 4 0 1 0 8 0v-4" />
-                    <path d="M4 10a2 2 0 0 1 2-2h1M4 10v6a4 4 0 0 0 4 4h4" />
-                  </svg>
-                </div>
-                <span className="text-[11px] font-bold text-[#00112e] tracking-tight leading-tight">Plumber</span>
-              </Link>
-
-              {/* Card 3: Carpenter */}
-              <Link href={carpenterSlug} className="bg-white border border-[#e7e2da]/40 rounded-[1.25rem] p-3 flex flex-col items-center justify-center text-center shadow-xs h-28 hover:shadow-md transition-shadow">
-                <div className="flex size-11 items-center justify-center rounded-full bg-navy-50 text-navy-700 mb-2.5 shrink-0">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-5">
-                    <path d="M18 22l-8-8 3-3 8 8-3 3zM14.5 18.5L9 13l-4 4 5.5 5.5 4-4zM8 12L3.5 7.5a2.12 2.12 0 1 1 3-3L11 9" />
-                  </svg>
-                </div>
-                <span className="text-[11px] font-bold text-[#00112e] tracking-tight leading-tight">Carpenter</span>
-              </Link>
-            </div>
+            <ul className="grid list-none grid-cols-3 gap-3 p-0">
+              {categories.map((category) => (
+                <li key={category.id} className="min-w-0">
+                  <Link
+                    href={`/catalog/${category.slug}`}
+                    className="flex flex-col items-center gap-2 rounded-card focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+                  >
+                    {category.image_url !== "" ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={category.image_url}
+                        alt=""
+                        loading="lazy"
+                        className="aspect-square w-full rounded-[1.25rem] bg-surface-sunken object-cover shadow-xs"
+                      />
+                    ) : (
+                      <span
+                        aria-hidden
+                        className="grid aspect-square w-full place-items-center rounded-[1.25rem] bg-navy-50 text-navy-700 shadow-xs"
+                      >
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="size-6"
+                        >
+                          <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                        </svg>
+                      </span>
+                    )}
+                    <span className="line-clamp-2 w-full text-center text-[11px] font-bold leading-tight text-[#00112e]">
+                      {category.name}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </div>
 
           {/* Interactive sliders, guides, and diagnostic grids */}

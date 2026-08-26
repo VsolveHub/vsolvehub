@@ -63,11 +63,13 @@ from apps.catalog.models import (
     Category,
     M2VariantConfiguration,
     Service,
+    ServiceMedia,
     ServiceQuestion,
     ServiceQuestionOption,
     ServiceVariant,
     Subcategory,
 )
+from apps.catalog.seed_images import image_for
 from apps.identity.models import Role, User, UserRole
 from apps.locations.models import (
     PostalCode,
@@ -122,48 +124,68 @@ STATE_CODE = "TG"
 #: only so the migration and this command agree on what to retire.
 LEGACY_CATEGORY_SLUG = "workforce-and-projects"
 
-#: slug -> (name, description, icon_key, display_order).
+#: slug -> (name, description, icon_key, display_order, seed-image subject).
 #:
-#: The four trade rows are byte-for-byte copies of `seed_task_catalog.CATALOG`, because
+#: The trade rows are byte-for-byte copies of `seed_task_catalog.CATALOG`, because
 #: `Category.objects.update_or_create` merges on slug: two commands that disagree about what
 #: "plumber" is called would fight over the row, last writer winning. The two new rows are
 #: customer-comprehensible nouns replacing the retired umbrella.
-M2_CATEGORY_SEEDS: dict[str, tuple[str, str, str, int]] = {
+M2_CATEGORY_SEEDS: dict[str, tuple[str, str, str, int, str]] = {
     "technician": (
         "Technician",
         "Reviewed one-person Technician task visits.",
         "wrench",
         1,
+        "technician",
     ),
     "electrician": (
         "Electrician",
         "Wiring, fittings, fans and power faults, fixed in one visit.",
         "zap",
         2,
+        "electrician",
     ),
     "plumber": (
         "Plumber",
         "Taps, leaks, drains and fittings, fixed in one visit.",
         "droplet",
         3,
+        "plumber",
+    ),
+    "ac-services": (
+        "AC Services",
+        "Installation, servicing, gas and repair for split and window units.",
+        "wind",
+        4,
+        "air-conditioner",
+    ),
+    "beautician": (
+        "Beautician",
+        "Salon-grade beauty and grooming services delivered at home.",
+        "sparkles",
+        5,
+        "beautician",
     ),
     "home-services": (
         "Home Services",
         "Cleaning, pest control and upkeep delivered at your address.",
         "home",
         6,
+        "home-cleaning",
     ),
     "construction": (
         "Construction",
         "Site labour and construction projects, priced on site.",
         "hard-hat",
         8,
+        "construction",
     ),
     "events": (
         "Events",
         "Catering and event services, priced per plate or per event.",
         "party-popper",
         9,
+        "catering",
     ),
 }
 
@@ -393,6 +415,9 @@ class ProjectSeed:
     subcategory_name: str
     subcategory_display_order: int
     questions: tuple[QuestionSeed, ...]
+    #: Key into `catalog.seed_images.SEED_IMAGE_POOLS` for the tile photo and this
+    #: service's cover. Blank seeds no photo and the client falls back to the icon.
+    image_subject: str = ""
 
 
 #: Every A5 project the demo catalogue publishes. The design walkthrough follows
@@ -412,6 +437,7 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
         subcategory_name="Interior fit-outs",
         subcategory_display_order=20,
         questions=A5_QUESTIONS,
+        image_subject="interior-fit-out",
     ),
     ProjectSeed(
         slug="full-bathroom-renovation",
@@ -453,6 +479,7 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
                 None,
             ),
         ),
+        image_subject="bathroom-renovation",
     ),
     ProjectSeed(
         slug="full-home-painting",
@@ -502,6 +529,7 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
                 None,
             ),
         ),
+        image_subject="painting",
     ),
     ProjectSeed(
         slug="modular-kitchen-fit-out",
@@ -543,6 +571,7 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
                 None,
             ),
         ),
+        image_subject="modular-kitchen",
     ),
     ProjectSeed(
         slug="full-home-rewiring",
@@ -576,6 +605,7 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
                 None,
             ),
         ),
+        image_subject="house-wiring",
     ),
     ProjectSeed(
         slug="event-catering",
@@ -612,6 +642,335 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
                 ),
             ),
         ),
+        image_subject="catering",
+    ),
+    # ------------------------------------------------------------------
+    # 2026-08-26: quote-priced work in EVERY category, so no trade is a
+    # fixed-price-only storefront. Same icon-tile question discipline: choices,
+    # numbers and yes/no only — the customer never types a description.
+    # ------------------------------------------------------------------
+    ProjectSeed(
+        slug="electrician-consultation",
+        name="Book an electrician consultation",
+        variant_name="On-site consultation and estimate",
+        icon_key=ServiceIconKey.ELECTRICAL,
+        category_slug="electrician",
+        subcategory_slug="consultation",
+        subcategory_name="Book a consultation",
+        subcategory_display_order=99,
+        questions=(
+            (
+                "work_type",
+                "What kind of work is it?",
+                ServiceQuestion.Kind.SINGLE_CHOICE,
+                True,
+                None,
+                (
+                    ("new-wiring", "New wiring or points", ""),
+                    ("repairs", "Repairs and faults", ""),
+                    ("renovation", "Renovation work", ""),
+                    ("not-sure", "Not sure yet", ""),
+                ),
+            ),
+            (
+                "property_type",
+                "What is the property?",
+                ServiceQuestion.Kind.SINGLE_CHOICE,
+                True,
+                None,
+                (
+                    ("apartment", "Apartment", ""),
+                    ("independent-house", "Independent house", ""),
+                    ("shop-office", "Shop or office", ""),
+                ),
+            ),
+        ),
+        image_subject="consultation",
+    ),
+    ProjectSeed(
+        slug="plumber-consultation",
+        name="Book a plumber consultation",
+        variant_name="On-site consultation and estimate",
+        icon_key=ServiceIconKey.PLUMBING,
+        category_slug="plumber",
+        subcategory_slug="consultation",
+        subcategory_name="Book a consultation",
+        subcategory_display_order=99,
+        questions=(
+            (
+                "work_type",
+                "What kind of work is it?",
+                ServiceQuestion.Kind.SINGLE_CHOICE,
+                True,
+                None,
+                (
+                    ("new-plumbing", "New plumbing lines", ""),
+                    ("repairs", "Repairs and leaks", ""),
+                    ("renovation", "Bathroom or kitchen renovation", ""),
+                    ("not-sure", "Not sure yet", ""),
+                ),
+            ),
+            (
+                "property_type",
+                "What is the property?",
+                ServiceQuestion.Kind.SINGLE_CHOICE,
+                True,
+                None,
+                (
+                    ("apartment", "Apartment", ""),
+                    ("independent-house", "Independent house", ""),
+                    ("shop-office", "Shop or office", ""),
+                ),
+            ),
+        ),
+        image_subject="consultation",
+    ),
+    ProjectSeed(
+        slug="custom-furniture-work",
+        name="Custom furniture & woodwork",
+        variant_name="Furniture, priced on site",
+        icon_key=ServiceIconKey.CARPENTRY,
+        category_slug="technician",
+        subcategory_slug="renovation-projects",
+        subcategory_name="Renovation projects",
+        subcategory_display_order=30,
+        questions=(
+            (
+                "furniture_type",
+                "What are we building?",
+                ServiceQuestion.Kind.SINGLE_CHOICE,
+                True,
+                None,
+                (
+                    ("wardrobe", "Wardrobe", ""),
+                    ("tv-unit", "TV unit", ""),
+                    ("study-table", "Study table or desk", ""),
+                    ("full-set", "Several pieces", ""),
+                ),
+            ),
+            (
+                "material_preference",
+                "Which material?",
+                ServiceQuestion.Kind.SINGLE_CHOICE,
+                True,
+                None,
+                (
+                    ("plywood", "Plywood with laminate", ""),
+                    ("mdf", "MDF", ""),
+                    ("solid-wood", "Solid wood", ""),
+                    ("not-sure", "Not sure yet", ""),
+                ),
+            ),
+            ("piece_count", "How many pieces?", ServiceQuestion.Kind.NUMBER, True, 1, None),
+        ),
+        image_subject="carpentry",
+    ),
+    ProjectSeed(
+        slug="central-ac-ducting",
+        name="Central AC & ducting work",
+        variant_name="Ducted cooling, priced on site",
+        icon_key=ServiceIconKey.AIR_CONDITIONING,
+        category_slug="ac-services",
+        subcategory_slug="ac-projects",
+        subcategory_name="AC projects",
+        subcategory_display_order=30,
+        questions=(
+            (
+                "property_type",
+                "Where is the system going?",
+                ServiceQuestion.Kind.SINGLE_CHOICE,
+                True,
+                None,
+                (
+                    ("home", "Home", ""),
+                    ("office", "Office", ""),
+                    ("shop", "Shop or showroom", ""),
+                ),
+            ),
+            ("area_sqft", "Roughly how big, in sq ft?", ServiceQuestion.Kind.NUMBER, True, 1, None),
+            (
+                "existing_ducting",
+                "Is there existing ducting?",
+                ServiceQuestion.Kind.BOOLEAN,
+                True,
+                None,
+                None,
+            ),
+        ),
+        image_subject="hvac-duct",
+    ),
+    ProjectSeed(
+        slug="bridal-event-makeup",
+        name="Bridal & event makeup",
+        variant_name="Package, priced after consultation",
+        icon_key=ServiceIconKey.MAKEUP,
+        category_slug="beautician",
+        subcategory_slug="bridal-events",
+        subcategory_name="Bridal & events",
+        subcategory_display_order=90,
+        questions=(
+            (
+                "occasion",
+                "What is the occasion?",
+                ServiceQuestion.Kind.SINGLE_CHOICE,
+                True,
+                None,
+                (
+                    ("wedding", "Wedding", ""),
+                    ("reception", "Reception", ""),
+                    ("engagement", "Engagement", ""),
+                    ("party", "Party or shoot", ""),
+                ),
+            ),
+            ("people_count", "For how many people?", ServiceQuestion.Kind.NUMBER, True, 1, None),
+            (
+                "trial_needed",
+                "Do you want a trial session first?",
+                ServiceQuestion.Kind.BOOLEAN,
+                True,
+                None,
+                None,
+            ),
+        ),
+        image_subject="bridal-makeup",
+    ),
+    ProjectSeed(
+        slug="home-demolition",
+        name="Demolition & debris removal",
+        variant_name="Demolition, priced on site",
+        icon_key=ServiceIconKey.CUSTOM_PROJECT,
+        category_slug="construction",
+        subcategory_slug="demolition",
+        subcategory_name="Demolition",
+        subcategory_display_order=40,
+        questions=(
+            (
+                "demolition_scope",
+                "What is coming down?",
+                ServiceQuestion.Kind.SINGLE_CHOICE,
+                True,
+                None,
+                (
+                    ("single-wall", "A wall or two", ""),
+                    ("one-room", "One room", ""),
+                    ("full-floor", "A full floor", ""),
+                    ("full-structure", "A full structure", ""),
+                ),
+            ),
+            (
+                "debris_removal",
+                "Should we take the debris away?",
+                ServiceQuestion.Kind.BOOLEAN,
+                True,
+                None,
+                None,
+            ),
+        ),
+        image_subject="demolition",
+    ),
+    ProjectSeed(
+        slug="tiling-flooring-work",
+        name="Tiling & flooring work",
+        variant_name="Tiling, priced on site",
+        icon_key=ServiceIconKey.CUSTOM_PROJECT,
+        category_slug="construction",
+        subcategory_slug="tiling-flooring",
+        subcategory_name="Tiling & flooring",
+        subcategory_display_order=50,
+        questions=(
+            (
+                "surface",
+                "What are we tiling?",
+                ServiceQuestion.Kind.SINGLE_CHOICE,
+                True,
+                None,
+                (
+                    ("floor", "Floors", ""),
+                    ("wall", "Walls", ""),
+                    ("both", "Floors and walls", ""),
+                ),
+            ),
+            ("area_sqft", "Roughly how big, in sq ft?", ServiceQuestion.Kind.NUMBER, True, 1, None),
+            (
+                "material_provided",
+                "Are you supplying the tiles?",
+                ServiceQuestion.Kind.BOOLEAN,
+                True,
+                None,
+                None,
+            ),
+        ),
+        image_subject="tiling",
+    ),
+    ProjectSeed(
+        slug="terrace-waterproofing",
+        name="Terrace & bathroom waterproofing",
+        variant_name="Waterproofing, priced on site",
+        icon_key=ServiceIconKey.CUSTOM_PROJECT,
+        category_slug="construction",
+        subcategory_slug="waterproofing",
+        subcategory_name="Waterproofing",
+        subcategory_display_order=60,
+        questions=(
+            (
+                "surface",
+                "Where is the problem?",
+                ServiceQuestion.Kind.SINGLE_CHOICE,
+                True,
+                None,
+                (
+                    ("terrace", "Terrace or roof", ""),
+                    ("bathroom", "Bathroom", ""),
+                    ("water-tank", "Water tank", ""),
+                    ("basement", "Basement or wall", ""),
+                ),
+            ),
+            ("area_sqft", "Roughly how big, in sq ft?", ServiceQuestion.Kind.NUMBER, True, 1, None),
+            (
+                "leakage_active",
+                "Is it leaking right now?",
+                ServiceQuestion.Kind.BOOLEAN,
+                True,
+                None,
+                None,
+            ),
+        ),
+        image_subject="terrace",
+    ),
+    ProjectSeed(
+        slug="event-lighting-decor",
+        name="Event lighting & decor",
+        variant_name="Decor, priced per event",
+        icon_key=ServiceIconKey.SERVICE,
+        category_slug="events",
+        subcategory_slug="lighting-decor",
+        subcategory_name="Lighting & decor",
+        subcategory_display_order=50,
+        questions=(
+            (
+                "event_type",
+                "What is the event?",
+                ServiceQuestion.Kind.SINGLE_CHOICE,
+                True,
+                None,
+                (
+                    ("wedding", "Wedding", ""),
+                    ("birthday", "Birthday", ""),
+                    ("corporate", "Corporate event", ""),
+                    ("festival", "Festival or pooja", ""),
+                ),
+            ),
+            ("guest_count", "Roughly how many guests?", ServiceQuestion.Kind.NUMBER, True, 1, None),
+            (
+                "venue_booked",
+                "Is the venue already booked?",
+                ServiceQuestion.Kind.BOOLEAN,
+                True,
+                None,
+                None,
+            ),
+        ),
+        image_subject="event-decor",
     ),
 )
 
@@ -917,14 +1276,133 @@ _C6_RECOVERY_POLICY: dict[str, Any] = {
 }
 
 
-def _matches_seeded_rate(card: RateCard) -> bool:
+#: One A3 day-hire service: the catalog placement plus the money rows (skill, wage floor,
+#: rate card) the instant path fails closed without. **Every money figure is an invention**
+#: standing in for the ADR-0009 phone survey, exactly like the construction-helper constants
+#: above — the per-trade spreads (an electrician's day costs more than a helper's) are shaped
+#: plausibly so the demo reads sensibly, and nothing more.
+@dataclass(frozen=True)
+class DaySeed:
+    slug: str
+    name: str
+    variant_name: str
+    icon_key: str
+    category_slug: str
+    subcategory_slug: str
+    subcategory_name: str
+    subcategory_display_order: int
+    image_subject: str
+    skill_code: str
+    skill_name: str
+    skill_description: str
+    wage_floor_paise: int
+    worker_day_wage_paise: int
+    supervision_margin_paise: int
+    overtime_hourly_paise: int
+
+
+A3_DAY_SEEDS: tuple[DaySeed, ...] = (
+    DaySeed(
+        slug=A3_SERVICE_SLUG,
+        name="Construction helpers",
+        variant_name="Helpers by the day",
+        icon_key=ServiceIconKey.WORKFORCE,
+        category_slug="construction",
+        subcategory_slug="construction-labour",
+        subcategory_name="Construction labour",
+        subcategory_display_order=10,
+        image_subject="construction",
+        skill_code="construction-helper",
+        skill_name="Construction helper",
+        skill_description="Unskilled site labour. A wage classification, not a trade slug.",
+        wage_floor_paise=WAGE_FLOOR_PAISE_PER_DAY,
+        worker_day_wage_paise=RATE_CARD_WORKER_DAY_WAGE_PAISE,
+        supervision_margin_paise=RATE_CARD_SUPERVISION_MARGIN_PAISE,
+        overtime_hourly_paise=RATE_CARD_OVERTIME_HOURLY_PAISE,
+    ),
+    DaySeed(
+        slug="electrician-by-the-day",
+        name="Electrician by the day",
+        variant_name="Full-day electrician",
+        icon_key=ServiceIconKey.ELECTRICAL,
+        category_slug="electrician",
+        subcategory_slug="hire-by-the-day",
+        subcategory_name="Hire by the day",
+        subcategory_display_order=95,
+        image_subject="electrician",
+        skill_code="electrician",
+        skill_name="Electrician",
+        skill_description="Licensed electrical trade work, hired by the day.",
+        wage_floor_paise=90_000,
+        worker_day_wage_paise=110_000,
+        supervision_margin_paise=20_000,
+        overtime_hourly_paise=20_000,
+    ),
+    DaySeed(
+        slug="plumber-by-the-day",
+        name="Plumber by the day",
+        variant_name="Full-day plumber",
+        icon_key=ServiceIconKey.PLUMBING,
+        category_slug="plumber",
+        subcategory_slug="hire-by-the-day",
+        subcategory_name="Hire by the day",
+        subcategory_display_order=95,
+        image_subject="plumber",
+        skill_code="plumber",
+        skill_name="Plumber",
+        skill_description="Plumbing trade work, hired by the day.",
+        wage_floor_paise=85_000,
+        worker_day_wage_paise=100_000,
+        supervision_margin_paise=20_000,
+        overtime_hourly_paise=18_000,
+    ),
+    DaySeed(
+        slug="painter-by-the-day",
+        name="Painter by the day",
+        variant_name="Full-day painter",
+        icon_key=ServiceIconKey.CUSTOM_PROJECT,
+        category_slug="home-services",
+        subcategory_slug="hire-by-the-day",
+        subcategory_name="Hire by the day",
+        subcategory_display_order=95,
+        image_subject="painting",
+        skill_code="painter",
+        skill_name="Painter",
+        skill_description="Wall and surface painting work, hired by the day.",
+        wage_floor_paise=70_000,
+        worker_day_wage_paise=80_000,
+        supervision_margin_paise=15_000,
+        overtime_hourly_paise=14_000,
+    ),
+    DaySeed(
+        slug="event-staff-by-the-day",
+        name="Event staff by the day",
+        variant_name="Full-day event staff",
+        icon_key=ServiceIconKey.SERVICE,
+        category_slug="events",
+        subcategory_slug="event-staff",
+        subcategory_name="Event staff",
+        subcategory_display_order=60,
+        image_subject="event-staff",
+        skill_code="event-staff",
+        skill_name="Event staff",
+        skill_description="Serving and support staff for events, hired by the day.",
+        wage_floor_paise=60_000,
+        worker_day_wage_paise=70_000,
+        supervision_margin_paise=15_000,
+        overtime_hourly_paise=12_000,
+    ),
+)
+
+
+def _matches_seeded_rate(card: RateCard, seed: DaySeed) -> bool:
     """Whether a published card already carries exactly the components this seed would write."""
     return (
-        card.worker_day_wage_paise == RATE_CARD_WORKER_DAY_WAGE_PAISE
-        and card.supervision_margin_paise == RATE_CARD_SUPERVISION_MARGIN_PAISE
+        card.worker_day_wage_paise == seed.worker_day_wage_paise
+        and card.supervision_margin_paise == seed.supervision_margin_paise
         and card.booking_fee_paise == RATE_CARD_BOOKING_FEE_PAISE
         and card.standard_day_hours == RATE_CARD_STANDARD_DAY_HOURS
-        and card.overtime_hourly_paise == RATE_CARD_OVERTIME_HOURLY_PAISE
+        and card.overtime_hourly_paise == seed.overtime_hourly_paise
     )
 
 
@@ -964,19 +1442,35 @@ class Command(BaseCommand):
         call_command("seed_partner_reference_data")
 
         area = self._seed_service_area()
-        skill = self._seed_wage_floor_skill()
-        a3_variant = self._seed_variant(
-            service_slug=A3_SERVICE_SLUG,
-            service_name="Construction helpers",
-            variant_name="Helpers by the day",
-            archetype=ServiceVariant.BookingArchetype.A3_TIME_BLOCK,
-            questions=A3_QUESTIONS,
-            icon_key=ServiceIconKey.WORKFORCE,
-            category_slug="construction",
-            subcategory_slug="construction-labour",
-            subcategory_name="Construction labour",
-            subcategory_display_order=10,
-        )
+
+        # Day-hire (A3) in every category that can honestly sell a day of one trade. Each
+        # seed carries its own wage classification, floor and rate card, because the instant
+        # path fails closed per skill: a card for helpers says nothing about electricians.
+        a3_variants: list[ServiceVariant] = []
+        skills: list[Skill] = []
+        wage_floors_written = 0
+        rate_cards_published = 0
+        for day in A3_DAY_SEEDS:
+            skill = self._seed_skill(day)
+            skills.append(skill)
+            a3_variant = self._seed_variant(
+                service_slug=day.slug,
+                service_name=day.name,
+                variant_name=day.variant_name,
+                archetype=ServiceVariant.BookingArchetype.A3_TIME_BLOCK,
+                questions=A3_QUESTIONS,
+                icon_key=day.icon_key,
+                category_slug=day.category_slug,
+                subcategory_slug=day.subcategory_slug,
+                subcategory_name=day.subcategory_name,
+                subcategory_display_order=day.subcategory_display_order,
+                image_subject=day.image_subject,
+            )
+            a3_variants.append(a3_variant)
+            self._seed_a3_configuration(variant=a3_variant, skill=skill)
+            wage_floors_written += int(self._seed_wage_floor(skill=skill, seed=day))
+            rate_cards_published += int(self._seed_rate_card(area=area, skill=skill, seed=day))
+
         # Every A5 project in the catalogue, not just the fit-out. One variant, one area
         # activation and one ACTIVE configuration each — a project seeded without any one of the
         # three renders in the catalogue and then refuses at the brief, which reads as a broken
@@ -993,33 +1487,31 @@ class Command(BaseCommand):
                 subcategory_slug=project.subcategory_slug,
                 subcategory_name=project.subcategory_name,
                 subcategory_display_order=project.subcategory_display_order,
+                image_subject=project.image_subject,
             )
             for project in A5_PROJECT_SEEDS
         )
-        for variant in (a3_variant, *a5_variants):
+        for variant in (*a3_variants, *a5_variants):
             ServiceAreaService.objects.update_or_create(
                 service_area=area,
                 variant=variant,
                 defaults={"is_active": True},
             )
 
-        self._seed_a3_configuration(variant=a3_variant, skill=skill)
         for a5_variant in a5_variants:
             self._seed_a5_configuration(variant=a5_variant)
-        wage_floor_written = self._seed_wage_floor(skill=skill)
-        rate_card_published = self._seed_rate_card(area=area, skill=skill)
         prices_written, prices_skipped = self._seed_access_prices()
 
         vendors = self._seed_vendors(
             area=area,
-            variants=(a3_variant, *a5_variants),
-            skill=skill,
+            variants=(*a3_variants, *a5_variants),
+            skills=tuple(skills),
             count=max(1, int(options["vendors"])),
         )
 
         self._report(
-            wage_floor_written=wage_floor_written,
-            rate_card_published=rate_card_published,
+            wage_floors_written=wage_floors_written,
+            rate_cards_published=rate_cards_published,
             prices_written=prices_written,
             prices_skipped=prices_skipped,
             vendors=vendors,
@@ -1106,18 +1598,20 @@ class Command(BaseCommand):
         return area
 
     @staticmethod
-    def _seed_wage_floor_skill() -> Skill:
+    def _seed_skill(day: DaySeed) -> Skill:
         """The statutory wage classification, which is not the dispatch trade slug.
 
         `M2VariantConfiguration.wage_floor_skill` exists precisely so a legal floor is not tied to
-        `ServiceVariant.required_skill_code`, which is a merchandising decision. This is its own
-        skill row for the same reason.
+        `ServiceVariant.required_skill_code`, which is a merchandising decision. Codes like
+        `electrician` deliberately merge with the trade skill `seed_partner_reference_data`
+        authors — one row serves as both the trade a Partner holds and the classification a
+        floor is filed under, and two rows with one code would be a drift bug.
         """
         skill, _ = Skill.objects.update_or_create(
-            code="construction-helper",
+            code=day.skill_code,
             defaults={
-                "name": "Construction helper",
-                "description": "Unskilled site labour. A wage classification, not a trade slug.",
+                "name": day.skill_name,
+                "description": day.skill_description,
                 "is_active": True,
             },
         )
@@ -1136,6 +1630,7 @@ class Command(BaseCommand):
         subcategory_slug: str,
         subcategory_name: str,
         subcategory_display_order: int,
+        image_subject: str = "",
     ) -> ServiceVariant:
         # The trade category the customer actually browses. A slug outside the authored map is a
         # typo, and a typo here would quietly invent a category — so it refuses instead.
@@ -1144,15 +1639,20 @@ class Command(BaseCommand):
                 f"Unknown category slug {category_slug!r} for service {service_slug!r}; "
                 "add it to M2_CATEGORY_SEEDS or fix the seed."
             )
-        category_name, category_description, category_icon, category_order = M2_CATEGORY_SEEDS[
-            category_slug
-        ]
+        (
+            category_name,
+            category_description,
+            category_icon,
+            category_order,
+            category_subject,
+        ) = M2_CATEGORY_SEEDS[category_slug]
         category, _ = Category.objects.update_or_create(
             slug=category_slug,
             defaults={
                 "name": category_name,
                 "description": category_description,
                 "icon_key": category_icon,
+                "image_url": image_for(category_subject),
                 "is_active": True,
                 "display_order": category_order,
             },
@@ -1162,6 +1662,8 @@ class Command(BaseCommand):
             slug=subcategory_slug,
             defaults={
                 "name": subcategory_name,
+                "icon_key": icon_key,
+                "image_url": image_for(image_subject) if image_subject else "",
                 "display_order": subcategory_display_order,
                 "is_active": True,
             },
@@ -1176,6 +1678,14 @@ class Command(BaseCommand):
                 "status": Service.Status.ACTIVE,
             },
         )
+        if image_subject:
+            # Position 1, so a one-service tile does not show the identical photo twice
+            # (the tile itself uses position 0); a single-photo pool wraps back to it.
+            self._seed_service_cover(
+                service=service,
+                url=image_for(image_subject, 1),
+                alt_text=service_name,
+            )
         variant, _ = ServiceVariant.objects.update_or_create(
             service=service,
             code="standard",
@@ -1239,6 +1749,35 @@ class Command(BaseCommand):
                         is_active=True,
                     )
         return variant
+
+    @staticmethod
+    def _seed_service_cover(*, service: Service, url: str, alt_text: str) -> None:
+        """One verified COVER photo per service — same contract as `seed_task_catalog`'s.
+
+        `(service, kind)` carries no unique constraint, so the first COVER row is updated in
+        place rather than `update_or_create`, which would stack a twin on a rerun.
+        """
+
+        cover = (
+            ServiceMedia.objects.filter(service=service, kind=ServiceMedia.Kind.COVER)
+            .order_by("display_order", "id")
+            .first()
+        )
+        if cover is None:
+            ServiceMedia.objects.create(
+                service=service,
+                kind=ServiceMedia.Kind.COVER,
+                url=url,
+                alt_text=alt_text,
+                display_order=1,
+                is_active=True,
+            )
+            return
+        if cover.url != url or cover.alt_text != alt_text or not cover.is_active:
+            cover.url = url
+            cover.alt_text = alt_text
+            cover.is_active = True
+            cover.save(update_fields=("url", "alt_text", "is_active"))
 
     # -- the owner-blocked configuration -----------------------------------
 
@@ -1356,7 +1895,7 @@ class Command(BaseCommand):
         )
         return configuration
 
-    def _seed_wage_floor(self, *, skill: Skill) -> bool:
+    def _seed_wage_floor(self, *, skill: Skill, seed: DaySeed) -> bool:
         existing = MinimumWageFloor.objects.filter(
             state_code=STATE_CODE,
             skill=skill,
@@ -1373,7 +1912,7 @@ class Command(BaseCommand):
             skill=skill,
             effective_from=DEV_SEED_EFFECTIVE_FROM,
             defaults={
-                "floor_paise_per_day": WAGE_FLOOR_PAISE_PER_DAY,
+                "floor_paise_per_day": seed.wage_floor_paise,
                 "source_reference": (
                     f"{DEV_SEED_MARKER}. Owner decision 7: the statutory floor source and its "
                     "enforcement per state and skill are unresolved. No gazette was consulted."
@@ -1382,7 +1921,7 @@ class Command(BaseCommand):
         )
         return True
 
-    def _seed_rate_card(self, *, area: ServiceArea, skill: Skill) -> bool:
+    def _seed_rate_card(self, *, area: ServiceArea, skill: Skill, seed: DaySeed) -> bool:
         """The A3 published day rate — the row without which the instant path is shut.
 
         Published through `rate_cards.publish_rate_card` rather than written straight to the
@@ -1411,17 +1950,17 @@ class Command(BaseCommand):
         # the second run of an "idempotent" seed failed hard the moment anybody had booked at this
         # rate — which is every environment the seed is useful in. Skipping an unchanged card keeps
         # the guard doing its real job, which is catching a *changed* price landing under live work.
-        if existing is not None and _matches_seeded_rate(existing):
+        if existing is not None and _matches_seeded_rate(existing, seed):
             self.stdout.write(f"  {label}: already published, unchanged")
             return True
         publish_rate_card(
             service_area_id=area.id,
             skill_id=skill.id,
-            worker_day_wage_paise=RATE_CARD_WORKER_DAY_WAGE_PAISE,
-            supervision_margin_paise=RATE_CARD_SUPERVISION_MARGIN_PAISE,
+            worker_day_wage_paise=seed.worker_day_wage_paise,
+            supervision_margin_paise=seed.supervision_margin_paise,
             booking_fee_paise=RATE_CARD_BOOKING_FEE_PAISE,
             standard_day_hours=RATE_CARD_STANDARD_DAY_HOURS,
-            overtime_hourly_paise=RATE_CARD_OVERTIME_HOURLY_PAISE,
+            overtime_hourly_paise=seed.overtime_hourly_paise,
             inclusions=list(RATE_CARD_INCLUSIONS),
             add_on_rates=dict(RATE_CARD_ADD_ON_RATES),
             effective_from=DEV_SEED_EFFECTIVE_FROM,
@@ -1497,7 +2036,7 @@ class Command(BaseCommand):
         *,
         area: ServiceArea,
         variants: tuple[ServiceVariant, ...],
-        skill: Skill,
+        skills: tuple[Skill, ...],
         count: int,
     ) -> list[str]:
         """Approved A3 and A5 vendors, with everything matching actually filters on.
@@ -1571,11 +2110,12 @@ class Command(BaseCommand):
                     "upi_vpa": f"m2demo{index}@{DEMO_UPI_VPA_DOMAIN}",
                 },
             )
-            PartnerSkill.objects.update_or_create(
-                partner=partner,
-                skill=skill,
-                defaults={"is_active": True},
-            )
+            for vendor_skill in skills:
+                PartnerSkill.objects.update_or_create(
+                    partner=partner,
+                    skill=vendor_skill,
+                    defaults={"is_active": True},
+                )
             PartnerLanguage.objects.update_or_create(
                 partner=partner,
                 language_tag="en",
@@ -1859,33 +2399,29 @@ class Command(BaseCommand):
     def _report(
         self,
         *,
-        wage_floor_written: bool,
-        rate_card_published: bool,
+        wage_floors_written: int,
+        rate_cards_published: int,
         prices_written: int,
         prices_skipped: int,
         vendors: list[str],
     ) -> None:
-        day_rate_paise = (
-            RATE_CARD_WORKER_DAY_WAGE_PAISE
-            + RATE_CARD_SUPERVISION_MARGIN_PAISE
-            + RATE_CARD_BOOKING_FEE_PAISE
-        )
         self.stdout.write("")
         self.stdout.write(self.style.SUCCESS("M2 demo configuration loaded."))
-        self.stdout.write(
-            f"  A3 service : /{A3_SERVICE_SLUG}  (unlock INR {A3_UNLOCK_PAISE / 100:.0f} on the "
-            "thin-supply fallback)"
-        )
-        if rate_card_published:
-            self.stdout.write(
-                f"  A3 rate    : INR {day_rate_paise / 100:.0f} per worker per "
-                f"{RATE_CARD_STANDARD_DAY_HOURS}-hour day "
-                f"(wage {RATE_CARD_WORKER_DAY_WAGE_PAISE / 100:.0f} + margin "
-                f"{RATE_CARD_SUPERVISION_MARGIN_PAISE / 100:.0f} + fee "
-                f"{RATE_CARD_BOOKING_FEE_PAISE / 100:.0f})"
+        for day in A3_DAY_SEEDS:
+            day_rate_paise = (
+                day.worker_day_wage_paise
+                + day.supervision_margin_paise
+                + RATE_CARD_BOOKING_FEE_PAISE
             )
-        else:
-            self.stdout.write("  A3 rate    : left alone; a real card is already published")
+            self.stdout.write(
+                f"  A3 service : /{day.slug}  INR {day_rate_paise / 100:.0f} per worker per "
+                f"{RATE_CARD_STANDARD_DAY_HOURS}-hour day ({day.category_slug})"
+            )
+        self.stdout.write(
+            f"  A3 unlock  : INR {A3_UNLOCK_PAISE / 100:.0f} on the thin-supply fallback; "
+            f"{wage_floors_written} wage floors and {rate_cards_published} rate cards written "
+            "(the rest were real rows, left alone)"
+        )
         tiers = ", ".join(
             f"{size}x INR {A5_TIER_PAISE[size] / 100:.0f}" for size in sorted(A5_TIER_PAISE)
         )
@@ -1897,8 +2433,6 @@ class Command(BaseCommand):
         self.stdout.write(
             f"  Prices     : {prices_written} written, {prices_skipped} left alone as real values"
         )
-        if not wage_floor_written:
-            self.stdout.write("  Wage floor : left alone; a real value is already loaded")
         self.stdout.write("")
         self.stdout.write(
             self.style.WARNING(

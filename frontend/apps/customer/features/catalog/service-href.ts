@@ -41,6 +41,14 @@ import type { ServiceCard } from "./queries";
 const A3_TIME_BLOCK = "A3_TIME_BLOCK";
 
 export function serviceHref(service: ServiceCard, categorySlug: string): string {
+  // A hybrid — a fixed price AND a quote path — goes to the service page, which
+  // is the only screen that can offer both. Routing it straight into the brief
+  // (the pre-2026-08-26 behaviour) hid the fixed price entirely: the customer
+  // was sent to describe a job the platform already knew how to price.
+  const hasFixedPrice = service.starting_price !== null || service.bookable_variant_id !== null;
+  if (service.request_archetypes.length > 0 && hasFixedPrice) {
+    return `/catalog/${categorySlug}/${service.slug}`;
+  }
   if (service.request_archetypes.includes(A3_TIME_BLOCK)) {
     return `/requests/book/${service.slug}`;
   }

@@ -4,30 +4,35 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { Skeleton } from "@vsolve/ui";
 
-import { CategoryVariantList } from "@/features/catalog/components/category-variant-list";
-import { getCategory, getCategoryServiceDetails } from "@/features/catalog/queries";
+import { CategoryTileBrowser } from "@/features/catalog/components/category-tile-browser";
+import { getCategory, getCategoryServices } from "@/features/catalog/queries";
 
 type PageProps = {
   params: Promise<{ category: string }>;
+  searchParams: Promise<{ tile?: string }>;
 };
 
 /**
- * One trade, in full: every service in the category with every variant listed
- * under it — the priced A1 tasks with their starting prices, the A3 crew
- * variants at a day rate, the A5 projects priced on site. The catalogue's tile
- * answered "do you do this?"; this page answers "what exactly does that
- * include, and from how much?" in the artboards' rate-card shape.
+ * One trade, browsed the way a customer thinks (2026-08-26 owner decision).
  *
- * The old page here was a marketing screen — hero band, trust pillars,
- * subcategory chip filters over image cards. All of it is gone: a customer
- * arriving from the catalogue has already chosen the trade, and the only job
- * left is showing them the card.
+ * Two views on one URL: `/catalog/plumber` is the "Select a service" photo-tile
+ * grid — the category's subcategories, each a picture and a name — and
+ * `/catalog/plumber?tile=taps-showers` is that tile's own services with images
+ * and honest price lines. Fixed-price, quote-priced and day-hire work all live
+ * here side by side; the price line and the tap target say which is which.
+ *
+ * The previous page here listed every service with every variant expanded — a
+ * rate card the customer had to read top to bottom before choosing anything.
+ * That answered "what exactly does it cost?" before "which thing do I need?",
+ * which is the wrong order on a phone.
  *
  * ## Literal `revalidate`
  *
  * Next statically analyses segment config; see catalog/page.tsx for the cache
  * policy discussion. The fan-out underneath carries the `catalog` tags, so a
- * publish still invalidates this page ahead of the timer.
+ * publish still invalidates this page ahead of the timer. Reading
+ * `searchParams` makes the route render per-request; the data reads underneath
+ * stay in the Data Cache, so the tile filter costs no extra API traffic.
  */
 export const revalidate = 300;
 
@@ -56,27 +61,27 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 function ListSkeleton() {
   return (
-    <div className="flex flex-col gap-2.5">
-      {Array.from({ length: 4 }, (_, index) => (
-        <Skeleton key={index} className="h-36 w-full rounded-card" />
+    <div className="grid grid-cols-3 gap-x-3 gap-y-5 sm:grid-cols-4 lg:grid-cols-5">
+      {Array.from({ length: 8 }, (_, index) => (
+        <div key={index} className="flex flex-col items-center gap-2">
+          <Skeleton className="aspect-square w-full rounded-card" />
+          <Skeleton className="h-3.5 w-4/5 rounded-control" />
+        </div>
       ))}
     </div>
   );
 }
 
-async function CategoryServices({ slug }: { slug: string }) {
-  const [category, services] = await Promise.all([
-    getCategory(slug),
-    getCategoryServiceDetails(slug),
-  ]);
+async function CategoryServices({ slug, tile }: { slug: string; tile: string | null }) {
+  const [category, services] = await Promise.all([getCategory(slug), getCategoryServices(slug)]);
 
   if (category === null || services === null) notFound();
 
-  return <CategoryVariantList category={category} services={services} />;
+  return <CategoryTileBrowser category={category} services={services} activeTileSlug={tile} />;
 }
 
-export default async function CategoryPage({ params }: PageProps) {
-  const { category: slug } = await params;
+export default async function CategoryPage({ params, searchParams }: PageProps) {
+  const [{ category: slug }, { tile }] = await Promise.all([params, searchParams]);
   // Resolved before streaming so an unknown slug 404s rather than rendering a
   // heading for a category that does not exist.
   const category = await getCategory(slug);
@@ -115,7 +120,7 @@ export default async function CategoryPage({ params }: PageProps) {
       </header>
 
       <Suspense fallback={<ListSkeleton />}>
-        <CategoryServices slug={slug} />
+        <CategoryServices slug={slug} tile={typeof tile === "string" && tile !== "" ? tile : null} />
       </Suspense>
     </main>
   );
