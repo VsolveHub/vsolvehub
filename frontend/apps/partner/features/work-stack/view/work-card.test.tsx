@@ -2,7 +2,12 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import type { WorkItem } from "../model/work-item";
-import { WorkCard } from "./work-home";
+/*
+  The cards live in their own module since the redesign split them out of the
+  home screen — `work-home.tsx` re-exports `WorkCard` so `all-work.tsx` keeps
+  one import path, but a test about the card should name the card's own file.
+*/
+import { WorkCard } from "./work-card";
 
 describe("WorkCard — a confirmed A1 job", () => {
   it("shows the service, estimated payout, full schedule, duration and area", () => {

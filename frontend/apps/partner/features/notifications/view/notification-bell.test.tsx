@@ -190,7 +190,7 @@ describe("opening the panel", () => {
 });
 
 describe("where a notice leads", () => {
-  it("links a workforce Partner's engagement to their shift booking", async () => {
+  it("links an engagement notice straight to the job, in one hop", async () => {
     serve({ unread: 1, results: [notice()] });
     renderBell([WORKFORCE_WORKSPACE]);
 
@@ -199,7 +199,7 @@ describe("where a notice leads", () => {
     await waitFor(() =>
       expect(screen.getByRole("link", { name: /open.*the job is open/i })).toHaveAttribute(
         "href",
-        "/workforce/shifts/eng-1",
+        "/work/jobs/eng-1",
       ),
     );
   });
@@ -222,22 +222,34 @@ describe("where a notice leads", () => {
     await waitFor(() =>
       expect(screen.getByRole("link", { name: /open.*new customer enquiry/i })).toHaveAttribute(
         "href",
-        "/projects/enquiries/invite-1",
+        "/work/enquiries/invite-1",
       ),
     );
   });
 
-  it("offers no link at all when the workspace cannot be told from the payload", async () => {
-    // The headline negative. Both capabilities held, no archetype on the target —
-    // so there is nothing to decide on, and the wrong screen would describe a
-    // project in shift-days.
+  it("still links an engagement when the Partner holds both capabilities", async () => {
+    /*
+      This was the headline *negative*: both capabilities held, no archetype on
+      the target, two screens with deliberately different vocabulary — so the
+      row was deliberately left unlinked rather than risk describing a project
+      in shift-days.
+
+      `/work/jobs/[id]` resolves both record kinds itself, asking the engagement
+      endpoint first because that is the one of the two reads that can honestly
+      answer "not mine". There is no longer a choice for the client to get
+      wrong, so the row this test was written to protect can now be a link.
+    */
     serve({ unread: 1, results: [notice()] });
     renderBell([WORKFORCE_WORKSPACE, PROJECT_WORKSPACE]);
 
     fireEvent.click(screen.getByRole("button", { name: /notifications/i }));
 
-    await waitFor(() => expect(screen.getByText("The job is open")).toBeInTheDocument());
-    expect(screen.queryByRole("link", { name: /open/i })).toBeNull();
+    await waitFor(() =>
+      expect(screen.getByRole("link", { name: /open.*the job is open/i })).toHaveAttribute(
+        "href",
+        "/work/jobs/eng-1",
+      ),
+    );
   });
 
   it("offers no link for a notice the server said leads nowhere", async () => {

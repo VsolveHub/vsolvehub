@@ -77,36 +77,43 @@ describe("where a notice leads", () => {
     expect(targetHref(null, [WORKFORCE_WORKSPACE])).toBeNull();
   });
 
-  it("sends a workforce Partner's engagement to their shift booking", () => {
-    expect(targetHref(ENGAGEMENT, [WORKFORCE_WORKSPACE])).toBe("/workforce/shifts/eng-1");
+  it("sends every engagement to the one job route, whatever the Partner holds", () => {
+    /*
+      This block used to assert four different answers — `/workforce/shifts/…`
+      for an A3 grant, `/projects/stages/…` for an A5 one, and `null` for both
+      "holds neither" and "holds both". All four were consequences of a route
+      table where the two archetypes had separate screens and
+      `NotificationTarget` carried nothing to choose between them.
+
+      `/work/jobs/[id]` resolves both record kinds itself, so there is no longer
+      a choice to get wrong. The capability list no longer changes the answer,
+      which is the whole point: the previous version's headline negative was a
+      Partner with *both* capabilities getting an unlinked row.
+    */
+    for (const held of [
+      [],
+      [WORKFORCE_WORKSPACE],
+      [PROJECT_WORKSPACE],
+      [WORKFORCE_WORKSPACE, PROJECT_WORKSPACE],
+      ["A9_SOMETHING_NEW"],
+    ]) {
+      expect(targetHref(ENGAGEMENT, held)).toBe("/work/jobs/eng-1");
+    }
+    // And with the argument omitted entirely.
+    expect(targetHref(ENGAGEMENT)).toBe("/work/jobs/eng-1");
   });
 
-  it("sends a project Partner's engagement to their project", () => {
-    expect(targetHref(ENGAGEMENT, [PROJECT_WORKSPACE])).toBe("/projects/stages/eng-1");
-  });
-
-  it("refuses to pick a workspace when the Partner holds both", () => {
-    // The headline negative. `NotificationTarget` carries no archetype, so with
-    // both capabilities held there is nothing to decide on — and the wrong choice
-    // is not cosmetic, it describes a project in shift-days. An unlinked row is
-    // two taps from the right screen; a wrong link is a support ticket.
-    expect(targetHref(ENGAGEMENT, [WORKFORCE_WORKSPACE, PROJECT_WORKSPACE])).toBeNull();
-  });
-
-  it("leads nowhere for a Partner who holds no M2 workspace at all", () => {
-    // An M1-only Partner still receives notices; they have no engagement screens
-    // to be sent to, and a link into a workspace they do not hold lands on a
-    // capability notice rather than on their work.
-    expect(targetHref(ENGAGEMENT, [])).toBeNull();
-    expect(targetHref(ENGAGEMENT)).toBeNull();
-  });
-
-  it("ignores a workspace key this build has no screens for", () => {
-    // Same rule the registry follows: a newer deployment can authorize a
-    // workspace this bundle cannot render, and offering it is offering a 404.
-    expect(targetHref(ENGAGEMENT, ["A9_SOMETHING_NEW"])).toBeNull();
-    expect(targetHref(ENGAGEMENT, ["A9_SOMETHING_NEW", WORKFORCE_WORKSPACE])).toBe(
-      "/workforce/shifts/eng-1",
+  it("sends both invitation kinds to the one enquiry route", () => {
+    /*
+      `/workforce/enquiries/{id}` and `/projects/enquiries/{id}` are both 308
+      redirects to this path now. Composing the old ones spent a round trip on
+      the surface whose entire job is to be the shortest way to the work.
+    */
+    expect(targetHref({ kind: "WORKFORCE_INVITATION", id: "inv-1" })).toBe(
+      "/work/enquiries/inv-1",
+    );
+    expect(targetHref({ kind: "PROJECT_INVITATION", id: "inv-1" })).toBe(
+      "/work/enquiries/inv-1",
     );
   });
 
@@ -124,18 +131,20 @@ describe("where a notice leads", () => {
   });
 
   it("opens invitation notices on the enquiry they actually refer to", () => {
+    // The id is an invitation id and the route is keyed by one — that part was
+    // always right and is unchanged. Only the path moved, off the redirect.
     expect(
       targetHref({ kind: "PROJECT_INVITATION", id: "invite-1" }, [
         WORKFORCE_WORKSPACE,
         PROJECT_WORKSPACE,
       ]),
-    ).toBe("/projects/enquiries/invite-1");
+    ).toBe("/work/enquiries/invite-1");
     expect(
       targetHref({ kind: "WORKFORCE_INVITATION", id: "invite-2" }, [
         WORKFORCE_WORKSPACE,
         PROJECT_WORKSPACE,
       ]),
-    ).toBe("/workforce/enquiries/invite-2");
+    ).toBe("/work/enquiries/invite-2");
   });
 
   it("leads nowhere for a kind this build has never heard of", () => {

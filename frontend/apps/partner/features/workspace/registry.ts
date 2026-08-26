@@ -6,7 +6,6 @@ import {
   HardHat,
   Home,
   UserCircle,
-  UserCircle2,
   Users,
   Wallet,
   Zap,
@@ -111,71 +110,24 @@ export const BASE_NAV: WorkspaceNavItem[] = [
   { href: "/profile", label: "You", icon: UserCircle },
 ];
 
-/**
- * The tap-first navigation: three destinations, unconditionally, for
- * every signed-in Partner regardless of which capabilities they hold.
- *
- * Used by `partner-shell.tsx`'s bottom tab bar in place of
- * `navigationFor(activeWorkspace(...))`. This supersedes `BASE_NAV` and
- * `WorkspaceSwitcher` for that one call site only — everything else in
- * this file stays in place, because it still has live consumers outside
- * the tab bar:
- *
- *  - `WORKSPACE_REGISTRY` / `resolveWorkspaces` / `ResolvedWorkspace` gate
- *    every M2 workspace route (`features/workspace/view/workspace-route.tsx`,
- *    `features/workspace/model/session-guard.ts`) and drive the
- *    capability-request screen's "this would open the ___ workspace" copy
- *    (`features/capability/adapters/capability-options.ts`).
- *  - `WORKFORCE_WORKSPACE` / `PROJECT_WORKSPACE` are the app's canonical
- *    archetype-key constants, reused well beyond navigation — notification
- *    routing (`features/notifications/model/feed.ts`) and several
- *    per-archetype screens (`crew-offer`, `engagement`, `enquiry`, `shift`,
- *    `crew`, `proposal`) import them directly.
- *  - `activeWorkspace` / `navigationFor` / `BASE_NAV` (above) stay because
- *    `navigationFor` itself still reads `BASE_NAV` internally, even though
- *    `partner-shell.tsx` no longer calls either.
- *
- * Retiring those once every consumer above has a real replacement is a
- * separate, deliberately deferred follow-up — not done here. See
- * `docs/superpowers/specs/2026-08-19-partner-tap-first-redesign-design.md`
- * and task 4's report in `.superpowers/sdd/2026-08-19-partner-tap-first-redesign/`
- * for the full reasoning (notification `targetHref` in particular needs a
- * product decision this task cannot make: where should an `ENGAGEMENT`
- * notice link now that the shell no longer resolves a single active
- * workspace?).
- *
- * Nothing here decides authorization. `useWorkStack` (features/work-stack)
- * only ever surfaces a `WorkItem` the underlying query already returned,
- * and Django already scoped that query to what this Partner may see.
- */
-/**
- * ## Why there are four tabs and not three
- *
- * The 2026-08-19 redesign collapsed eight nav targets into three, and the win
- * was real. But it left `/work` doing two jobs: a status screen (am I online,
- * what have I earned, is anything coming) and a ledger of every record the
- * vendor touches. On any account with history the ledger won, and the status —
- * the part checked twenty times a day — was pushed off the top of the screen.
- *
- * Splitting them is not a return to the old sprawl. It is one destination
- * becoming two because it was always two things, and each of the four now
- * answers a question a vendor actually asks:
- *
- * - **Home** — am I online, and what have I made? Plus anything that needs me.
- * - **Work** — the full list, grouped by whose move it is.
- * - **Money** — the ledger, payouts, the detail Home deliberately omits.
- * - **Me** — who I am and what I control.
- *
- * `Work` points at `/work/all` rather than `/work`: the tab is the list, and
- * `/work` redirects to `/home` so that a bookmark, a notification deep link or
- * a browser history entry from before the split still lands somewhere true.
- */
-export const TAP_FIRST_NAV: readonly WorkspaceNavItem[] = [
-  { href: "/home", label: "Home", icon: Home },
-  { href: "/work/all", label: "Work", icon: Users, activePrefix: "/work" },
-  { href: "/money", label: "Money", icon: Wallet },
-  { href: "/me", label: "Me", icon: UserCircle2 },
-];
+/*
+  `TAP_FIRST_NAV` lived here — the four bottom-tab destinations, read directly
+  by `partner-shell.tsx`.
+
+  It is `PARTNER_TABS` in `features/shell/view/tab-bar.tsx` now, beside the
+  component that renders it. Navigation chrome is not a workspace concern: this
+  file's job is turning Django's capability grants into authorized destinations,
+  and the four tabs are unconditional — they are the same for every signed-in
+  Partner regardless of which grants they hold, which is precisely why keeping
+  them next to the grant machinery kept inviting the question of whether they
+  should be gated by it.
+
+  Everything else in this file stays, because it still has live consumers:
+  `WORKSPACE_REGISTRY` / `resolveWorkspaces` / `ResolvedWorkspace` gate every M2
+  workspace route and drive the capability-request screen's copy, and
+  `WORKFORCE_WORKSPACE` / `PROJECT_WORKSPACE` are the app's canonical
+  archetype-key constants, imported well beyond navigation.
+*/
 
 /**
  * Routes and labels per known workspace.

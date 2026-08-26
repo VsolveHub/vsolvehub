@@ -54,10 +54,10 @@ export function AppChrome({ children }: { children: ReactNode }) {
   return (
     <>
       <SiteHeader />
-      {/* Clears the fixed tab bar (56px) plus whatever the device reserves for
+      {/* Clears the fixed tab bar (64px) plus whatever the device reserves for
           its home indicator. Above `md` the bar is gone and so is the padding. */}
       <div
-        className={`${CUSTOMER_VIEWPORT_WIDTH_CLASS} pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0`}
+        className={`${CUSTOMER_VIEWPORT_WIDTH_CLASS} pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0`}
       >
         <div className={chromeLayout.contentMinHeightClass}>
           {children}

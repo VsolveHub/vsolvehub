@@ -23,7 +23,9 @@ export default function LoginPage() {
        the fallback is a page rather than a hole inside one. */
     <Suspense
       fallback={
-        <main className="mx-auto w-full max-w-md px-4 py-16 text-text-secondary">
+        /* Same column and same width as `LoginScreen`'s own frame, so the
+           handoff from fallback to screen does not move the page. */
+        <main className="flex min-h-dvh items-center justify-center bg-canvas px-5 text-body text-text-secondary">
           Loading…
         </main>
       }

@@ -1,0 +1,257 @@
+/* ============================================================================
+   Partner app UI layer — mobile-first, field-use first.
+   ----------------------------------------------------------------------------
+   Sits on top of `@vsolve/ui/tokens.css`, which owns the brand palette and the
+   semantic colour roles shared with Customer and Operations. Nothing here
+   redefines a colour role; this file adds the three things a phone-native
+   field app needs that a shared token file has no opinion about:
+
+     1. A type scale, so screens stop inventing `text-[0.9375rem]`.
+     2. Safe-area and chrome metrics, so fixed chrome clears the notch and the
+        home indicator instead of guessing at `pb-20`.
+     3. Motion and elevation for a shell that pushes and pops screens.
+
+   Why a scale at all: the previous screens carried 14 distinct arbitrary font
+   sizes between 11px and 32px, most of them one-offs. On a 360px Android in
+   sunlight the difference between 13px and 13.5px is nothing, and the cost is
+   that no two screens agree. Seven steps is enough for every screen in this
+   app and small enough to hold in your head.
+   ============================================================================ */
+
+@theme {
+  /* ---------------------------------------------------------------------
+     TYPE SCALE
+     `micro` is the smallest thing this app is allowed to render. It is 11px,
+     not the 10px the old tab bar used: this product is read outdoors, at
+     arm's length, often by someone over forty, and 10px labels were being
+     guessed at from their icons rather than read.
+     --------------------------------------------------------------------- */
+  --text-micro: 0.6875rem;      /* 11px — eyebrow labels, tab labels */
+  --text-micro--line-height: 1.1;
+  --text-micro--letter-spacing: 0.04em;
+  --text-micro--font-weight: 700;
+
+  --text-caption: 0.8125rem;    /* 13px — secondary lines, meta */
+  --text-caption--line-height: 1.35;
+
+  --text-body: 0.9375rem;       /* 15px — default reading size */
+  --text-body--line-height: 1.45;
+
+  --text-title: 1.0625rem;      /* 17px — card titles, screen titles */
+  --text-title--line-height: 1.3;
+  --text-title--font-weight: 700;
+
+  --text-headline: 1.375rem;    /* 22px — screen headlines */
+  --text-headline--line-height: 1.2;
+  --text-headline--font-weight: 800;
+
+  --text-figure: 1.75rem;       /* 28px — a money figure on a card */
+  --text-figure--line-height: 1;
+  --text-figure--letter-spacing: -0.02em;
+  --text-figure--font-weight: 800;
+
+  --text-hero: 2.375rem;        /* 38px — the one number on a screen */
+  --text-hero--line-height: 1;
+  --text-hero--letter-spacing: -0.03em;
+  --text-hero--font-weight: 800;
+
+  /* ---------------------------------------------------------------------
+     SHAPE — three radii, matched to the three container scales.
+     --------------------------------------------------------------------- */
+  --radius-tile: 0.875rem;   /* 14px — a glyph tile inside a card */
+  --radius-sheet: 1.5rem;    /* 24px — bottom sheets, hero bands */
+  --radius-pill: 999px;
+
+  /* ---------------------------------------------------------------------
+     CHROME METRICS
+     Named rather than inlined so the tab bar's height and the space a
+     scrolling screen must clear cannot drift apart — which is exactly what
+     `min-h-[3.5rem]` against `pb-20` had already done.
+
+     In the `--spacing-*` namespace, not `--size-*`: Tailwind v4 generates
+     `h-tabbar` / `h-appbar` from the spacing scale, and a height token defined
+     under `--size-*` compiles to **nothing at all** — the bar would silently
+     collapse to its content. That is the same class of defect the shared token
+     file records for `--color-action-surface` and `--color-critical`, and it is
+     invisible in review because a missing utility is not an error.
+     --------------------------------------------------------------------- */
+  --spacing-tabbar: 3.875rem;   /* 62px of tappable bar, excluding safe area */
+  --spacing-appbar: 3.5rem;     /* 56px */
+
+  /* ---------------------------------------------------------------------
+     ELEVATION — the two planes the shared token file has no role for: a sheet
+     rising from the bottom edge, and a live offer that should look hot.
+     --------------------------------------------------------------------- */
+  --shadow-sheet: 0 -8px 32px -8px rgb(0 17 46 / 0.18);
+  --shadow-hot: 0 6px 20px -4px color-mix(in oklab, var(--color-action-active) 38%, transparent);
+
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+/* ---------------------------------------------------------------------------
+   SAFE AREAS
+   `env()` cannot be used inside `@theme` (it is not a static value), so the
+   insets are plain custom properties on `:root` with a zero fallback. Every
+   piece of fixed chrome reads these rather than hard-coding a guess.
+   --------------------------------------------------------------------------- */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
+/* Momentum scrolling inside the shell's scroll container, and no rubber-band
+   chaining to the document behind it — a bottom sheet that scrolls the page
+   under itself is the classic mobile-web tell. */
+.pv-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
+/* Kill the 300ms tap highlight flash on Android Chrome. Every interactive
+   surface in this app draws its own pressed state. */
+.pv-tap {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* The pressed state itself. A field app has no hover — the only feedback a
+   thumb ever gets is this, so every card and button carries it. */
+.pv-press {
+  transition: transform 120ms var(--ease-out), opacity 120ms var(--ease-out);
+}
+
+.pv-press:active {
+  transform: scale(0.975);
+}
+
+/* --------------------------------------------------------------------------
+   The duty beacon: the ring around the online/offline control.
+   Sweeps only while the server has confirmed a live session — see
+   `DutyPill`, which is the only thing allowed to add this class.
+   -------------------------------------------------------------------------- */
+@keyframes pv-beacon {
+  0% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+
+  70%,
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
+.pv-beacon::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: currentColor;
+  animation: pv-beacon 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+  pointer-events: none;
+}
+
+/* Skeleton shimmer. `background-position` rather than a translating child, so
+   it composites without a wrapper and cannot leak outside a rounded corner. */
+@keyframes pv-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.pv-shimmer {
+  background-image: linear-gradient(
+    90deg,
+    var(--color-warm-100) 0%,
+    var(--color-warm-50) 40%,
+    var(--color-warm-100) 80%
+  );
+  background-size: 200% 100%;
+  animation: pv-shimmer 1.4s linear infinite;
+}
+
+/* Screens push in from the right the way a native stack does. Applied by
+   `Screen` on focused (pushed) routes only — a tab switch is a lateral move
+   and gets a fade, not a push. */
+@keyframes pv-push-in {
+  from {
+    transform: translate3d(2rem, 0, 0);
+    opacity: 0;
+  }
+
+  to {
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
+  }
+}
+
+.pv-push-in {
+  animation: pv-push-in 260ms var(--ease-out) both;
+}
+
+@keyframes pv-sheet-up {
+  from {
+    transform: translate3d(0, 100%, 0);
+  }
+
+  to {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.pv-sheet-up {
+  animation: pv-sheet-up 280ms var(--ease-out) both;
+}
+
+/* Staggered list entrance. The delay is set per-item inline via `--pv-i`. */
+@keyframes pv-row-in {
+  from {
+    transform: translate3d(0, 0.75rem, 0);
+    opacity: 0;
+  }
+
+  to {
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
+  }
+}
+
+.pv-row-in {
+  animation: pv-row-in 320ms var(--ease-out) both;
+  animation-delay: calc(var(--pv-i, 0) * 45ms);
+}
+
+/* Tabular numerals for every money figure and countdown, so a ticking clock
+   does not jitter its own width. */
+[data-numeric],
+.pv-num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .pv-beacon::after,
+  .pv-shimmer,
+  .pv-push-in,
+  .pv-sheet-up,
+  .pv-row-in {
+    animation: none !important;
+  }
+
+  .pv-press:active {
+    transform: none;
+  }
+
+  .pv-shimmer {
+    background-image: none;
+    background-color: var(--color-warm-100);
+  }
+}

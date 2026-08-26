@@ -2,69 +2,55 @@
 
 import { hasWorkspaceAction, useLogout } from "@vsolve/query";
 import { cn } from "@vsolve/ui";
+import { CalendarDays, ChevronRight, Globe, HardHat, LogOut, UserRound, Wallet } from "lucide-react";
 import Link from "next/link";
+import { useState, type ReactNode } from "react";
 
-import { Pictogram } from "@/components/pictogram";
-import { PartnerPresence } from "@/features/presence/view/partner-presence";
+import { usePartnerPerformance } from "@/features/earnings/queries";
 import { usePartnerProfile } from "@/features/profile/queries";
+import { useDuty } from "@/features/presence/duty-context";
+import { DutySheet } from "@/features/shell/view/duty-control";
+import { Block, Screen } from "@/features/shell/view/screen";
 import { usePartnerWorkspaceGrants } from "@/features/workspace/queries";
 import { WORKFORCE_WORKSPACE } from "@/features/workspace/registry";
 import { getApiClient } from "@/lib/api/browser";
 
 /**
- * The Me tab — profile and settings, and the one other place the presence
- * control renders.
+ * The Me tab — who this Partner is, and everything they control.
  *
- * Replaces `/profile`. Mostly static: unlike `WorkHome`, nothing here reads
- * `usePartnerApplication` directly — `PartnerPresence` already does,
- * internally, to find the accepted consent version its "Go online" call
- * needs (see that component's own doc comment) — and a Partner cannot reach
- * this screen at all without already being approved, since `app/me/page.tsx`
- * wraps `PartnerShell requirePartnerRole`. There is no not-applied-yet,
- * under-review or suspended branch to answer here the way `WorkHome`
- * answers one for `/work`.
+ * ## What the redesign changed
  *
- * Ported from the design canvas: `Me.dc.html` (artboard "9 · ME"). Two
- * departures from that artboard, both the plan's Deviation 4 / its own
- * no-fabricated-content constraint, not oversights:
- * - The Days tile is dropped, not disabled. Presence now lives on this
- *   screen as the same `PartnerPresence` control `WorkHome` renders in its
- *   own header, so a second, separate "Days" entry point would just be a
- *   second way to reach the one switch.
- * - The canvas's Skills and Help tiles are dropped too. Neither has an
- *   existing route or feature in this codebase to link to, and the plan is
- *   explicit that a tile is not shipped pointing nowhere. Six tiles in the
- *   canvas, minus Days, minus these two, leaves three: Crew, Money (drawn
- *   with the canvas's "Papers" glyph), Language.
+ * The screen it replaces was a grid of three coloured squares (Crew, Money,
+ * Language) above a profile row and a sign-out button, plus a full copy of the
+ * duty control. Three problems, all fixed here:
  *
- * Three further departures from the brief's own draft code, all mechanical
- * corrections rather than judgment calls:
- * - The draft passed `strokeWidth={1.7}` to the avatar `Pictogram`.
- *   `Pictogram`'s props are exactly `{ name, className }`
- *   (`components/pictogram.tsx`) — stroke width is fixed at 1.8 inside the
- *   component and is not a prop at all, so this would not typecheck. Task 13
- *   hit the identical issue on `LanguagePicker` and dropped the prop the
- *   same way; doing the same here rather than reintroducing a defect this
- *   plan already found and fixed once.
- * - Every tap target in the brief's draft (three tiles, the sign-out
- *   button) was icon-only with no accessible name — `Pictogram` renders its
- *   `<svg>` as `aria-hidden`, so nothing here would announce anything to a
- *   screen reader. Every other icon-only tap target already shipped in this
- *   plan carries one (`WorkCard`'s `aria-label={cardLabel(item)}` in
- *   `features/work-stack/view/work-home.tsx`, on every card variant). Added
- *   a `label` prop to `MeTile` and an `aria-label` on Sign out to match.
- * - Added an `sr-only` `<h1>`, matching both other tab destinations
- *   (`WorkStack`'s `<h1 className="sr-only">Your work</h1>` and
- *   `MoneyPage`'s `<h1 className="sr-only">Money</h1>`) — the same
- *   reasoning applies unchanged here: the screen is pictures and icons, and
- *   the landmark still needs a name.
- * - `min-h-[calc(100dvh-9rem)]` rather than the draft's `min-h-screen`:
- *   `PartnerShell` already owns a sticky top bar and a fixed bottom tab
- *   bar, so a full-viewport main inside it scrolls by exactly the height
- *   of that chrome even with nothing below the fold. Matches
- *   `WorkStack`'s identical fix and its own comment
- *   (`features/work-stack/view/work-home.tsx:171-174`) verbatim — 9rem is
- *   the same sticky-header-plus-fixed-tab-bar allowance, not a new number.
+ * 1. **A settings screen is a list, not a launcher.** Square tiles are for
+ *    things you reach for by muscle memory a dozen times a day; a settings hub
+ *    is scanned once, by reading. Three squares meant three short labels under
+ *    three glyphs, with no room to say what any of them does — and the grid did
+ *    not survive a fourth item without rewrapping. Rows scan faster, carry a
+ *    supporting line, and grow.
+ *
+ * 2. **The duty control was a second copy.** It now lives in one provider with
+ *    a permanent indicator in the app bar (`features/presence/duty-context.tsx`
+ *    explains the two-heartbeat problem that ended). This screen links to the
+ *    same sheet rather than mounting a second control.
+ *
+ * 3. **The identity band said nothing.** It showed a glyph on a coloured square
+ *    with a name under it. It now also carries how many jobs this Partner has
+ *    finished and how long they have been one — `lifetime_jobs` off
+ *    `PartnerPerformance` and `member_since` off `PartnerProfile`, both already
+ *    fetched for other screens, so neither costs a request. There is
+ *    deliberately no rating: the contract publishes none on either payload, and
+ *    the one number a Partner would most want here is not one this app is
+ *    allowed to invent.
+ *
+ * ## Nothing is shipped pointing nowhere
+ *
+ * The rows below are exactly the destinations this codebase has routes for.
+ * The design canvas drew Skills and Help tiles too; neither has a route or a
+ * feature to link to, so neither is drawn. A tile that navigates to a 404 is
+ * worse than a screen with three rows.
  */
 export function MeHome() {
   const logout = useLogout(getApiClient());
@@ -72,142 +58,239 @@ export function MeHome() {
   const canManageCrew = hasWorkspaceAction(grants.grants ?? [], WORKFORCE_WORKSPACE, "crew.manage");
 
   return (
-    <main className="flex min-h-[calc(100dvh-9rem)] flex-col bg-canvas">
+    <Screen>
       <h1 className="sr-only">Me</h1>
 
       <IdentityBand />
 
-      <div className="px-4 pt-4">
-        <PartnerPresence />
-      </div>
+      <Block gap="none" className="flex-1 py-4">
+        <DutyRow />
 
-      <div className="flex flex-1 flex-col px-4 pt-4.5">
-        <div className="grid grid-cols-3 gap-2.5">
-          {canManageCrew ? <MeTile href="/me/crew" icon="crew" label="Crew" /> : null}
-          <MeTile href="/money" icon="papers" label="Money" />
-          <MeTile href="/me/language" icon="language" tone="warning" label="Language" />
+        <p className="px-1 pt-5 pb-2 text-micro uppercase text-text-muted">Your account</p>
+        <div className="overflow-hidden rounded-card border border-line bg-surface">
+          <MeRow
+            href="/me/profile"
+            icon={<UserRound size={20} aria-hidden />}
+            label="Your profile"
+            detail="Name, trades, service areas and documents"
+          />
+          {canManageCrew ? (
+            <MeRow
+              href="/me/crew"
+              icon={<HardHat size={20} aria-hidden />}
+              label="Your crew"
+              detail="The people you send to jobs"
+            />
+          ) : null}
+          <MeRow
+            href="/money"
+            icon={<Wallet size={20} aria-hidden />}
+            label="Money and payouts"
+            detail="Balance, statement and where we pay you"
+          />
+          <MeRow
+            href="/me/language"
+            icon={<Globe size={20} aria-hidden />}
+            label="Language"
+            detail="Choose the language this app uses"
+            last
+          />
         </div>
-
-        <Link
-          href="/me/profile"
-          className="mt-4 flex min-h-15 items-center gap-3 rounded-card border border-line bg-surface px-3.5 py-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-        >
-          <Pictogram name="crew" size="md" className="shrink-0 text-action-secondary" />
-          <span className="flex-1 text-base font-semibold text-text">Your profile</span>
-          <Pictogram name="go" size="sm" className="shrink-0 text-text-muted" />
-        </Link>
 
         {/*
-          Sign out is separated by a rule and sits last on the screen.
+          Sign out is separated by a gap and sits last, on its own.
 
-          It used to be a full-width tile in the grid above carrying nothing but
-          a red `back` arrow — the same glyph that means "go back" on four other
-          screens (`visit-job-view.tsx`, `enquiry-detail-screen.tsx`,
-          `offer-detail-screen.tsx`, and this app's own header). One glyph
-          cannot mean both "return" and "end your session", so this takes
-          `power`, which no navigation control uses.
+          It used to be a full-width tile carrying a red `back` arrow — the same
+          glyph that means "go back" on four other screens and in this app's own
+          header. One glyph cannot mean both "return" and "end your session".
         */}
-        <div className="mt-5 border-t border-line pt-5">
-          <button
-            type="button"
-            onClick={() => logout.mutate()}
-            disabled={logout.isPending}
-            className="flex h-14 w-full items-center justify-center gap-2.5 rounded-card border border-danger-line bg-surface disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-          >
-            <Pictogram name="power" size="md" className="text-danger-text" />
-            <span className="text-base font-bold text-danger-text">
-              {logout.isPending ? "Signing out…" : "Sign out"}
-            </span>
-          </button>
-        </div>
-      </div>
-    </main>
+        <button
+          type="button"
+          onClick={() => logout.mutate()}
+          disabled={logout.isPending}
+          className="pv-tap pv-press mt-5 flex h-13 w-full items-center justify-center gap-2.5 rounded-card border border-danger-line bg-surface disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+        >
+          <LogOut size={18} className="text-danger-text" aria-hidden />
+          <span className="text-title text-danger-text">
+            {logout.isPending ? "Signing out…" : "Sign out"}
+          </span>
+        </button>
+      </Block>
+    </Screen>
   );
 }
 
 /**
  * Who this Partner is, on the depth gradient.
  *
- * `usePartnerProfile` rather than a new endpoint: it is `SESSION_STATE`-cached
- * under `queryKeys.partner.me()` and `ProfilePanel` already reads it, so `/me`
- * and `/me/profile` share one response and the hop between them costs nothing.
+ * `usePartnerProfile` rather than a new endpoint: it is cached under
+ * `queryKeys.partner.me()` and `ProfilePanel` already reads it, so `/me` and
+ * `/me/profile` share one response and the hop between them costs nothing.
  *
- * The name is not decoration. Every other tab addresses the Partner in the
- * second person — "Your work", "Earned today" — while the one screen *about*
- * them showed an anonymous glyph on a coloured square.
- *
- * A pending or failed read renders the glyph alone rather than a skeleton: this
+ * A pending or failed read renders the glyph alone rather than a skeleton. This
  * band is not what anybody opens `/me` for, and a shimmering rectangle above
- * the tiles would draw the eye to the one thing on the screen that does
- * nothing.
+ * the rows would draw the eye to the one thing on the screen that does nothing.
  */
 function IdentityBand() {
   const profile = usePartnerProfile();
   const trade = profile.data?.skills[0] ?? null;
 
   return (
-    <div className="flex flex-col items-center gap-3 rounded-b-3xl bg-[linear-gradient(160deg,var(--color-navy-700)_0%,var(--color-navy-900)_100%)] px-4 pt-6.5 pb-6">
-      <span className="grid h-22 w-22 place-items-center rounded-[28px] bg-[linear-gradient(150deg,var(--color-navy-300)_0%,var(--color-navy-500)_100%)] shadow-raised">
-        <Pictogram name="crew" className="h-12 w-12 text-surface" />
+    <div className="flex flex-col items-center gap-3 rounded-b-sheet bg-[linear-gradient(160deg,var(--color-navy-700)_0%,var(--color-navy-900)_100%)] px-5 pt-6 pb-6">
+      <span className="grid h-20 w-20 place-items-center rounded-sheet bg-[linear-gradient(150deg,var(--color-navy-300)_0%,var(--color-navy-500)_100%)] shadow-raised">
+        <UserRound size={40} className="text-surface" aria-hidden />
       </span>
 
       {profile.data === undefined ? null : (
-        <span className="flex max-w-full flex-col items-center gap-0.5">
-          <span className="truncate text-xl font-bold text-surface">
-            {profile.data.display_name}
-          </span>
-          <span className="truncate text-[0.8125rem] font-medium text-navy-200">
+        <span className="flex max-w-full flex-col items-center gap-1">
+          <span className="truncate text-headline text-surface">{profile.data.display_name}</span>
+          <span className="pv-num truncate text-caption font-medium text-navy-200">
             {trade === null
               ? profile.data.phone_number
               : `${trade} · ${profile.data.phone_number}`}
           </span>
         </span>
       )}
+
+      <Credentials memberSince={profile.data?.member_since ?? null} />
     </div>
   );
 }
 
-function MeTile({
+/**
+ * Two facts about the account, and only ones the server publishes.
+ *
+ * Each chip renders on its own or not at all, rather than the pair waiting for
+ * both reads: they come from two different endpoints and holding the row back
+ * for the slower one would blank a fact that had already arrived.
+ */
+function Credentials({ memberSince }: { memberSince: string | null }) {
+  const performance = usePartnerPerformance();
+  const jobs = performance.data?.lifetime_jobs ?? null;
+
+  const since = (() => {
+    if (memberSince === null) return null;
+    const at = new Date(memberSince);
+    if (Number.isNaN(at.getTime())) return null;
+    return new Intl.DateTimeFormat("en-IN", { month: "short", year: "numeric" }).format(at);
+  })();
+
+  if (jobs === null && since === null) return null;
+
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-2">
+      {jobs === null ? null : (
+        <Chip icon={<HardHat size={14} aria-hidden />}>
+          {jobs} {jobs === 1 ? "job" : "jobs"} done
+        </Chip>
+      )}
+      {since === null ? null : (
+        <Chip icon={<CalendarDays size={14} aria-hidden />}>Partner since {since}</Chip>
+      )}
+    </div>
+  );
+}
+
+function Chip({ icon, children }: { icon: ReactNode; children: ReactNode }) {
+  return (
+    <span className="pv-num inline-flex items-center gap-1.5 rounded-pill bg-surface/15 px-3 py-1 text-caption font-bold text-surface">
+      {icon}
+      {children}
+    </span>
+  );
+}
+
+/**
+ * Duty, as a row that opens the one sheet.
+ *
+ * Not a second control. The state shown here is the same `useDuty` value the
+ * app bar's pill reads, and tapping it opens the same `DutySheet` the home's
+ * duty card opens. There is exactly one place in this app where going on or
+ * off duty happens, and this is a door to it.
+ */
+function DutyRow() {
+  const duty = useDuty();
+  const [open, setOpen] = useState(false);
+
+  if (duty === null) return null;
+
+  const on = duty.status === "online";
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className={cn(
+          "pv-tap pv-press flex min-h-15 w-full items-center gap-3 rounded-card border px-3.5 py-2.5 text-left",
+          "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring",
+          on ? "border-success-line bg-success-surface" : "border-line bg-surface",
+        )}
+      >
+        <span
+          className={cn(
+            "relative grid h-2.5 w-2.5 shrink-0 place-items-center rounded-pill",
+            on ? "bg-success-text" : "bg-warm-400",
+          )}
+        >
+          {on ? <span className="pv-beacon absolute inset-0 rounded-pill text-success-text" /> : null}
+        </span>
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className={cn("text-body font-bold", on ? "text-success-text" : "text-text")}>
+            {duty.copy.label}
+          </span>
+          <span
+            className={cn(
+              "truncate text-caption",
+              on ? "text-success-text/80" : "text-text-secondary",
+            )}
+          >
+            {on && duty.activeAreaName !== null
+              ? `Working in ${duty.activeAreaName}`
+              : "Tap to change your availability"}
+          </span>
+        </span>
+        <ChevronRight
+          size={18}
+          className={cn("shrink-0", on ? "text-success-text/70" : "text-text-muted")}
+          aria-hidden
+        />
+      </button>
+      <DutySheet open={open} onClose={() => setOpen(false)} />
+    </>
+  );
+}
+
+function MeRow({
   href,
   icon,
   label,
-  tone = "neutral",
+  detail,
+  last = false,
 }: {
   href: string;
-  icon: Parameters<typeof Pictogram>[0]["name"];
+  icon: ReactNode;
   label: string;
-  tone?: "neutral" | "warning";
+  detail: string;
+  last?: boolean;
 }) {
-  /*
-    The label renders. It used to live only in `aria-label`, which left three
-    identical-looking squares carrying a person, a document and a globe, and no
-    way to tell Crew from Money from Language without tapping one.
-
-    No `aria-label` any more: the visible text is the accessible name, and
-    keeping both would announce it twice.
-  */
   return (
     <Link
       href={href}
-      className={
-        tone === "warning"
-          ? "flex min-h-[104px] flex-col items-center justify-center gap-2.5 rounded-[18px] border border-action-line bg-action-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-          : "flex min-h-[104px] flex-col items-center justify-center gap-2.5 rounded-[18px] border border-line bg-surface shadow-card focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-      }
+      className={cn(
+        "pv-tap flex min-h-15 items-center gap-3.5 px-3.5 py-3 hover:bg-surface-hover",
+        "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus-ring",
+        last ? "" : "border-b border-line",
+      )}
     >
-      <Pictogram
-        name={icon}
-        size="xl"
-        className={tone === "warning" ? "text-warning-text" : "text-action-secondary"}
-      />
-      <span
-        className={cn(
-          "text-[0.8125rem] font-bold",
-          tone === "warning" ? "text-warning-text" : "text-text",
-        )}
-      >
-        {label}
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-tile bg-selected-surface text-action-secondary">
+        {icon}
       </span>
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="truncate text-body font-bold text-text">{label}</span>
+        <span className="truncate text-caption text-text-secondary">{detail}</span>
+      </span>
+      <ChevronRight size={18} className="shrink-0 text-text-muted" aria-hidden />
     </Link>
   );
 }

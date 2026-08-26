@@ -70,19 +70,23 @@ export function NotificationBell({ workspaceKeys, className }: NotificationBellP
         // would announce arrivals to somebody in the middle of another task.
         aria-label={unreadBadgeLabel(unread)}
         className={cn(
-          "relative inline-flex min-h-11 min-w-11 items-center justify-center rounded-control",
-          "text-text-secondary hover:bg-surface-hover hover:text-text",
-          "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action",
+          "pv-tap pv-press relative grid h-11 w-11 place-items-center rounded-pill",
+          "text-text-secondary hover:bg-surface-sunken hover:text-text",
+          "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring",
           className,
         )}
       >
-        <Bell size={20} aria-hidden />
+        <Bell size={21} aria-hidden />
         {badge === null ? null : (
           <span
             // Hidden from the accessibility tree: the button's own name already
             // carries the number, and exposing it here reads it twice.
+            //
+            // Ringed in the bar's own surface colour so the badge reads as a
+            // separate object sitting on the glyph rather than as part of it —
+            // the same treatment the Work tab's count uses, for consistency.
             aria-hidden
-            className="absolute right-1 top-1 inline-flex min-w-4 items-center justify-center rounded-full bg-action px-1 text-[0.625rem] font-bold leading-4 text-action-text"
+            className="pv-num absolute right-1.5 top-1.5 grid h-[1.0625rem] min-w-[1.0625rem] place-items-center rounded-pill border-2 border-surface bg-action px-1 text-[0.625rem] font-extrabold leading-none text-action-text"
           >
             {badge}
           </span>

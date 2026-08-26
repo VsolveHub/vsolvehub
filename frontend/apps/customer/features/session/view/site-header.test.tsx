@@ -251,7 +251,7 @@ describe("BottomNav", () => {
     expect(navigation).toHaveClass("inset-x-0", "bottom-0");
     expect(navigation).toHaveClass("pb-[env(safe-area-inset-bottom)]");
     expect(navigation).not.toHaveClass("inset-x-4", "bottom-4", "rounded-[2rem]");
-    expect(navigation.firstElementChild).toHaveClass("h-14", "w-full");
+    expect(navigation.firstElementChild).toHaveClass("min-h-16", "w-full");
     expect(navigation.firstElementChild).not.toHaveClass("max-w-lg");
   });
 

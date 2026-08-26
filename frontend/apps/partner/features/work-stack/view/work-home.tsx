@@ -1,55 +1,66 @@
 "use client";
 
 import { ApiRequestError } from "@vsolve/api-client";
-import { useAuthGuard, useServerCountdown, type Countdown } from "@vsolve/query";
-import { ErrorState, Spinner, cn, formatMoney } from "@vsolve/ui";
+import { useAuthGuard } from "@vsolve/query";
+import { Button, ErrorState, cn, formatMoney } from "@vsolve/ui";
+import { ChevronRight, Power } from "lucide-react";
 import Link from "next/link";
-import { useSyncExternalStore, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
-import { Pictogram, type PictogramName } from "@/components/pictogram";
+import { Pictogram } from "@/components/pictogram";
 import { usePartnerApplication } from "@/features/application/queries";
 import { ReadinessChecklist } from "@/features/application/view/readiness-checklist";
 import { ApplicationStatusBanner } from "@/features/application/view/status-banner";
 import { usePartnerPerformance, type PartnerPerformance } from "@/features/earnings/queries";
-import { readStoredSession } from "@/features/presence/model/stored-session";
-import { PartnerPresence } from "@/features/presence/view/partner-presence";
+import { useDuty } from "@/features/presence/duty-context";
 import { PARTNER_ROLE, SwitchToPartner } from "@/features/session/partner-shell";
+import { DutySheet } from "@/features/shell/view/duty-control";
+import { Block, Screen, SectionHeading } from "@/features/shell/view/screen";
+import { SkeletonHome, SkeletonList } from "@/features/shell/view/skeletons";
+import { usePartnerProfile } from "@/features/profile/queries";
 import { getApiClient } from "@/lib/api/browser";
 
 import type { WorkItem } from "../model/work-item";
 import { useWorkStack } from "../queries";
 import { WaitingRadar } from "./waiting-radar";
+import { WorkCard } from "./work-card";
 
 /**
- * The signed-in home, rebuilt as the one WORK surface.
+ * The signed-in home — the screen a Partner opens twenty times a day.
  *
- * Replaces `features/session/view/dashboard-home.tsx`. The seven application
- * states it answered are unchanged and answered here in the same order — a
- * Partner who has not been approved yet must never see an empty work stack,
- * they must see the screen that tells them where their application stands.
- * Only the **APPROVED** branch's content is new: the merged `useWorkStack`
- * stack replaces `LiveOffersBanner` (A1 offers are stack cards now),
- * `TodayStrip` (A1 jobs are stack cards now) and `PerformanceSummary`
- * (today's money is the header plate below).
+ * It answers three questions in this order, because that is the order they are
+ * asked: **am I on duty**, **what have I made**, **is anything waiting on me**.
  *
- * The status copy is `ApplicationStatusBanner`'s, never restated here. A second
- * table of the same seven states is a second thing to keep true.
+ * ## What moved
  *
- * Ported from the design canvas: `Main.dc.html` (artboard "2 · WORK — the one
- * place") for the populated state, `Empty.dc.html` ("12 · Nothing today") for
- * the empty one. See
- * `docs/superpowers/specs/2026-08-19-partner-tap-first-redesign-design.md`.
+ * The duty control used to be a full settings card sitting in this flow, and
+ * an identical second copy sat on `/me`. It is now one provider
+ * (`features/presence/duty-context.tsx`) with a permanent indicator in the app
+ * bar — so it is answerable from every screen — plus the one card below, which
+ * is loud when the Partner is off duty and a thin confirmation when they are
+ * on. That inversion is the point: the control needs to shout exactly when it
+ * is the reason nothing is happening.
+ *
+ * ## The seven application states are unchanged
+ *
+ * A Partner who has not been approved must never see an empty work stack; they
+ * must see where their application stands. Only the APPROVED branch's content
+ * is redesigned. The status copy stays `ApplicationStatusBanner`'s and is never
+ * restated here — a second table of the same seven states is a second thing to
+ * keep true.
  */
 
 const PRIMARY_LINK =
-  "inline-flex min-h-12 items-center rounded-control bg-action px-7 font-semibold text-action-text hover:bg-action-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action";
+  "pv-tap pv-press inline-flex h-13 items-center justify-center rounded-control bg-action px-7 text-title text-action-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring";
 
 function Home({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <main className="mx-auto w-full max-w-2xl px-4 py-6">
-      <h1 className="text-2xl font-bold text-text">{title}</h1>
-      <div className="mt-5 flex flex-col gap-5">{children}</div>
-    </main>
+    <Screen>
+      <Block gap="lg" className="py-5">
+        <h1 className="text-headline text-text">{title}</h1>
+        {children}
+      </Block>
+    </Screen>
   );
 }
 
@@ -61,12 +72,11 @@ export function WorkHome() {
 
   if (query.isPending) {
     return (
-      <Home title="Your work">
-        <p className="flex items-center gap-2 text-text-secondary">
-          <Spinner size="sm" />
-          Loading your account…
-        </p>
-      </Home>
+      <Screen>
+        <Block gap="md" className="py-4">
+          <SkeletonHome />
+        </Block>
+      </Screen>
     );
   }
 
@@ -87,7 +97,7 @@ export function WorkHome() {
   if (isMissing || query.data === undefined) {
     return (
       <Home title="Start your application">
-        <p className="max-w-prose text-sm leading-6 text-text-secondary">
+        <p className="max-w-prose text-body leading-relaxed text-text-secondary">
           It takes a few minutes. You can stop and come back — nothing is sent for
           review until you choose to send it.
         </p>
@@ -120,8 +130,8 @@ export function WorkHome() {
   }
 
   if (application.status === "SUSPENDED" || application.status === "OFFBOARDED") {
-    // No work and no presence control: both are refused by Django in these
-    // states, and an appeal runs through support rather than this screen.
+    // No work and no duty control: both are refused by Django in these states,
+    // and an appeal runs through support rather than this screen.
     return (
       <Home title="Your account">
         <ApplicationStatusBanner application={application} />
@@ -133,7 +143,7 @@ export function WorkHome() {
     return (
       <Home title="Your application">
         <ApplicationStatusBanner application={application} />
-        <p className="max-w-prose text-sm leading-6 text-text-secondary">
+        <p className="max-w-prose text-body leading-relaxed text-text-secondary">
           Job offers start once a reviewer has approved you. There is nothing
           waiting on you in the meantime, and you do not need to check back — we
           will message you.
@@ -161,16 +171,10 @@ export function WorkHome() {
    -------------------------------------------------------------------------- */
 
 /**
- * Everything an approved Partner is on the hook for, in one sorted stack.
- *
- * Its own component so that its hooks are unconditional: the gate above returns
- * early for six of the seven application states, and running `useWorkStack`'s
- * six underlying queries inside that `if` chain would be a conditional hook.
- *
- * `min-h-[calc(100dvh-9rem)]` rather than `min-h-screen`: `PartnerShell` already
- * owns a sticky top bar and a fixed bottom tab bar, so a full-viewport main
- * inside it scrolls by exactly the height of that chrome even with nothing in
- * the stack. 9rem is that allowance.
+ * Its own component so the hooks below are unconditional — the gate above
+ * returns early for six of the seven application states, and running
+ * `useWorkStack`'s six underlying queries inside that `if` chain would be a
+ * conditional hook.
  */
 function WorkStack() {
   const stack = useWorkStack();
@@ -180,43 +184,205 @@ function WorkStack() {
     What is on the Partner's plate *right now*, and what is merely on file.
 
     The stack merges every record this vendor touches, which on a working
-    account means a permanent tail of quotes they have sent and jobs already
-    settled. On the home that tail is noise — it pushed today's money and the
-    availability control off the top of a real screen and made "nothing waiting"
-    unreachable for anybody with any history at all.
-
-    So the home carries the three urgencies that are a call to action, and
-    `/work/all` carries the same stack unfiltered — reached through the Work
-    tab, which is why the home draws no link of its own to it. The split is by
-    whose move it is, never by count.
+    account means a permanent tail of quotes sent and jobs already settled. On
+    the home that tail is noise. So the home carries the three urgencies that
+    are a call to action, and `/work/all` carries the same stack unfiltered.
+    The split is by whose move it is, never by count.
   */
   const needsYou = stack.items.filter(
     (item) => item.urgency === "live" || item.urgency === "needs_price" || item.urgency === "doing",
   );
 
   return (
-    <main className="flex min-h-[calc(100dvh-9rem)] flex-col bg-[linear-gradient(180deg,var(--color-warm-25)_0%,var(--color-canvas)_100%)]">
-      <h1 className="sr-only">Your work</h1>
-
-      <div className="flex flex-col gap-3.5 px-4 pt-3.5">
-        {/* The one presence control in the app, shared with `/me` rather than
-            copied — see `PartnerPresence`'s own reasoning against a second one.
-            First on the screen because an offline Partner has exactly one thing
-            worth doing here, and every number below it is history until they do. */}
-        <PartnerPresence />
-
+    <Screen>
+      <Block gap="md" className="pt-4 pb-3">
+        <Greeting />
+        <DutyCard />
         <TodayPlate
           netPaise={performance.data?.today_net_paise ?? null}
           jobs={performance.data?.today_jobs ?? null}
         />
-
         <MonthStrip performance={performance.data ?? null} />
-      </div>
+      </Block>
 
-      <div className="flex flex-1 flex-col gap-3.5 px-4 pt-4 pb-3">
+      <Block gap="sm" className="flex-1 pt-4 pb-6">
         <StackBody stack={stack} needsYou={needsYou} />
+      </Block>
+    </Screen>
+  );
+}
+
+/**
+ * Who is reading this screen.
+ *
+ * The old home opened with a `sr-only` heading and went straight to a number.
+ * Every other tab addresses the Partner in the second person — "Your work",
+ * "Earned today" — while the screen they open most said nothing to them at all.
+ * The name comes from `usePartnerProfile`, which `/me` and `/me/profile`
+ * already share under one cache entry, so this costs no request.
+ *
+ * Renders the time-of-day line alone until the name arrives, rather than a
+ * skeleton: a shimmering rectangle in the first line of the screen is the most
+ * distracting possible place for one, and the greeting is not why anyone is
+ * here.
+ */
+function Greeting() {
+  const profile = usePartnerProfile();
+  const hour = new Date().getHours();
+  const part = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+
+  // First name only. Full legal names run long and this line is 360px wide.
+  const first = profile.data?.display_name.trim().split(/\s+/)[0] ?? null;
+
+  return (
+    <div className="flex items-baseline justify-between gap-3 pt-0.5">
+      <h1 className="min-w-0 truncate text-headline text-text">
+        {part}
+        {first === null ? "" : `, ${first}`}
+      </h1>
+    </div>
+  );
+}
+
+/**
+ * Duty, sized by how much it matters right now.
+ *
+ * Off duty this is the loudest thing on the screen, because it is the reason
+ * every number below it has stopped moving. On duty it collapses to a single
+ * confirming line — the state is already in the app bar, and a Partner who is
+ * working does not need a second panel telling them so.
+ *
+ * That asymmetry is the whole design. The control this replaces was the same
+ * size in both states: a settings card that took a third of the fold whether or
+ * not it had anything to say.
+ */
+function DutyCard() {
+  const duty = useDuty();
+  const [open, setOpen] = useState(false);
+
+  if (duty === null) return null;
+
+  // `checking` is not `offline`. Shouting "you are off duty" at somebody whose
+  // session is still being confirmed is the flicker `presenceStatus` exists to
+  // prevent, in its loudest possible form.
+  if (duty.status === "checking" || duty.status === "connecting") {
+    return (
+      <div className="flex h-13 items-center gap-2.5 rounded-card border border-line bg-surface px-3.5">
+        <span className="h-2.5 w-2.5 shrink-0 rounded-pill bg-warm-400" />
+        <span className="text-body font-semibold text-text-secondary">{duty.copy.label}…</span>
       </div>
-    </main>
+    );
+  }
+
+  if (duty.status === "online") {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="pv-tap pv-press flex h-13 items-center gap-2.5 rounded-card border border-success-line bg-success-surface px-3.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+      >
+        <span className="relative grid h-2.5 w-2.5 shrink-0 place-items-center rounded-pill bg-success-text">
+          <span className="pv-beacon absolute inset-0 rounded-pill text-success-text" />
+        </span>
+        <span className="min-w-0 flex-1 truncate text-body font-bold text-success-text">
+          On duty
+          {duty.activeAreaName === null ? "" : ` in ${duty.activeAreaName}`}
+        </span>
+        <ChevronRight size={18} className="shrink-0 text-success-text/70" aria-hidden />
+        <DutySheet open={open} onClose={() => setOpen(false)} />
+      </button>
+    );
+  }
+
+  // Off duty, stale, location refused, or unknown — every one of these means
+  // work is not reaching this Partner, and every one is fixed in the sheet.
+  const isFault = duty.status === "stale" || duty.status === "location_denied" || duty.status === "unknown";
+
+  return (
+    <>
+      <div
+        className={cn(
+          "flex flex-col gap-3 rounded-card border p-4",
+          isFault
+            ? "border-warning-line bg-warning-surface"
+            : "border-line bg-[linear-gradient(160deg,var(--color-navy-700)_0%,var(--color-navy-900)_100%)]",
+        )}
+      >
+        <div className="flex items-center gap-3">
+          <span
+            className={cn(
+              "grid h-11 w-11 shrink-0 place-items-center rounded-pill",
+              isFault ? "bg-warning-text/15 text-warning-text" : "bg-surface/15 text-surface",
+            )}
+          >
+            <Power size={22} aria-hidden />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className={cn("text-title", isFault ? "text-warning-text" : "text-surface")}>
+              {duty.copy.label}
+            </p>
+            <p
+              className={cn(
+                "mt-0.5 text-caption leading-snug",
+                isFault ? "text-warning-text/85" : "text-navy-200",
+              )}
+            >
+              {duty.copy.detail}
+            </p>
+          </div>
+        </div>
+
+        <Button block onClick={() => setOpen(true)}>
+          {isFault ? "Fix this" : "Go on duty"}
+        </Button>
+      </div>
+      <DutySheet open={open} onClose={() => setOpen(false)} />
+    </>
+  );
+}
+
+/**
+ * Today's money, on the depth gradient.
+ *
+ * `today_net_paise` is read straight off `PartnerPerformance` — the endpoint
+ * publishes today, this month and lifetime as their own fields, so nothing here
+ * reduces a daily series to find it.
+ */
+function TodayPlate({ netPaise, jobs }: { netPaise: number | null; jobs: number | null }) {
+  return (
+    <Link
+      href="/money"
+      aria-label={`Earned today ${netPaise === null ? "not yet known" : formatMoney(netPaise)}. Open your money.`}
+      className="pv-tap pv-press flex items-center gap-3.5 rounded-card bg-[linear-gradient(160deg,var(--color-navy-700)_0%,var(--color-navy-900)_100%)] p-4 shadow-card focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+    >
+      <Pictogram name="days" size="lg" className="shrink-0 text-action-hover" />
+      <span className="flex min-w-0 flex-col gap-1">
+        <span className="text-micro uppercase text-navy-200">Earned today</span>
+        <span className="pv-num truncate text-hero text-surface">
+          {netPaise === null ? "—" : formatMoney(netPaise)}
+        </span>
+      </span>
+      {/* Zero is a real answer and says so. A blank space where a count belongs
+          reads as a screen that failed to load, which is the one thing an idle
+          Partner must not conclude. */}
+      {jobs === null ? null : (
+        <span className="ml-auto flex shrink-0 flex-col items-end text-caption font-semibold leading-snug text-navy-200">
+          {jobs === 0 ? (
+            <>
+              <span>No jobs</span>
+              <span>yet today</span>
+            </>
+          ) : (
+            <>
+              <span className="pv-num">
+                {jobs} {jobs === 1 ? "job" : "jobs"}
+              </span>
+              <span>finished</span>
+            </>
+          )}
+        </span>
+      )}
+    </Link>
   );
 }
 
@@ -224,16 +390,15 @@ function WorkStack() {
  * The two figures that put today in context, and nothing beyond them.
  *
  * `PartnerPerformance` publishes seven numbers; three belong on a home screen.
- * Today is the hero plate above. This month answers "am I having a good month",
- * and the average answers "compared to what" — which is the only reason a single
- * month's figure means anything. Lifetime totals and the daily series are
- * genuinely interesting and genuinely not urgent: they live on `/money`, which
- * already renders them, and repeating them here would make the home a worse
+ * Today is the plate above. This month answers "am I having a good month", and
+ * the average answers "compared to what" — the only reason a single month's
+ * figure means anything. Lifetime totals and the daily series live on `/money`,
+ * which already renders them; repeating them here would make the home a worse
  * version of that screen.
  *
- * Renders nothing at all while the read is in flight. Three skeleton tiles above
- * the fold would draw the eye to the least important row on the screen, and the
- * row is supporting context — its absence for a second costs nothing.
+ * Renders nothing at all while the read is in flight. Three skeleton tiles here
+ * would draw the eye to the least important row on the screen, and the row is
+ * supporting context — its absence for a second costs nothing.
  */
 function MonthStrip({ performance }: { performance: PartnerPerformance | null }) {
   if (performance === null) return null;
@@ -252,11 +417,11 @@ function MonthStrip({ performance }: { performance: PartnerPerformance | null })
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex flex-col gap-0.5 rounded-card border border-line bg-surface px-3 py-2.5">
-      <span className="truncate text-[1.0625rem] font-extrabold leading-none tracking-[-0.02em] text-text">
+    <div className="flex flex-col gap-1 rounded-card border border-line bg-surface px-3 py-2.5">
+      <span className="pv-num truncate text-title leading-none tracking-[-0.02em] text-text">
         {value}
       </span>
-      <span className="truncate text-[0.6875rem] font-semibold text-text-muted">{label}</span>
+      <span className="truncate text-micro tracking-normal text-text-muted">{label}</span>
     </div>
   );
 }
@@ -265,14 +430,11 @@ function Metric({ label, value }: { label: string; value: string }) {
  * Loading and failure for the whole stack at once, because that is what
  * `useWorkStack` reports.
  *
- * It merges six queries and is all-or-nothing on both: one pending source
- * makes the whole hook pending, and one failed source empties `items` and sets
- * `error`. So there is one spinner and one error state here, never six — a
+ * It merges six queries and is all-or-nothing on both: one pending source makes
+ * the whole hook pending, and one failed source empties `items` and sets
+ * `error`. So there is one skeleton here and one error state, never six — a
  * screen showing five working sources and quietly hiding the broken sixth would
  * tell a Partner they have no offers when the offers endpoint is down.
- *
- * No retry button: the hook composes six query objects and exposes no refetch,
- * and a reload is the recovery that actually re-runs all of them.
  */
 function StackBody({
   stack,
@@ -283,10 +445,10 @@ function StackBody({
 }) {
   if (stack.isPending) {
     return (
-      <p className="flex flex-1 items-center justify-center gap-2 py-16 text-text-secondary">
-        <Spinner size="sm" />
-        Loading your work…
-      </p>
+      <>
+        <SectionHeading>Needs you</SectionHeading>
+        <SkeletonList rows={2} label="Loading your work" />
+      </>
     );
   }
 
@@ -296,6 +458,8 @@ function StackBody({
         title="We could not load your work"
         message="Nothing has changed. Check your connection and try again."
         actionLabel="Try again"
+        /* `useWorkStack` composes six query objects and exposes no refetch, so a
+           reload is the recovery that actually re-runs all of them. */
         onAction={() => window.location.reload()}
       />
     );
@@ -304,657 +468,40 @@ function StackBody({
   if (needsYou.length === 0) return <WaitingForWork />;
 
   return (
-    <section className="flex flex-col gap-2.5">
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-text-muted">
-          Needs you
-        </h2>
-        <span className="text-[0.6875rem] font-bold text-text-muted">
-          {needsYou.length}
-        </span>
-      </div>
-      {needsYou.map((item) => (
-        <WorkCard key={item.key} item={item} />
+    <>
+      <SectionHeading count={needsYou.length}>Needs you</SectionHeading>
+      {needsYou.map((item, index) => (
+        <WorkCard key={item.key} item={item} index={index} />
       ))}
-    </section>
+    </>
   );
 }
 
 /**
- * Nothing needs this Partner — the screen they see most, and the one the old
- * stack answered with a blank rectangle.
+ * Nothing needs this Partner — the screen they see most.
  *
- * Whether the radar sweeps is decided by presence, not by the stack: an offline
+ * Whether the radar sweeps is decided by duty, not by the stack: an off-duty
  * Partner has no dispatch running for them and must not be shown an animation
- * claiming otherwise. `readStoredSession` is the same source
- * `PresencePanel` restores from on load, read here rather than lifted into
- * shared state because it is a browser fact both components observe, not a
- * value either of them owns.
+ * claiming otherwise.
  *
- * `useSyncExternalStore` for the same reason `PresencePanel` uses it: reading
- * storage during render makes the server and client trees disagree, and the
- * flicker that produces is a Partner watching their availability appear to drop
- * and come back.
+ * ## Why this reads duty from the provider rather than from storage
+ *
+ * It used to read `localStorage` directly through `useSyncExternalStore`,
+ * because the presence state lived inside a sibling component and there was no
+ * other way to observe it. That made the radar agree with the duty control only
+ * by coincidence — a stored session id that Django had already refused still
+ * read as "online" here, so the radar swept for a Partner nobody was
+ * dispatching to. `useDuty` is the confirmed server answer, which is the only
+ * thing this animation is allowed to assert.
  */
 function WaitingForWork() {
-  const storedSession = useSyncExternalStore(
-    subscribeToNothing,
-    () => readStoredSession() !== null,
-    () => false,
-  );
-
-  return <WaitingRadar isOnline={storedSession} />;
-}
-
-/** Storage does not change under us within a paint; nothing to subscribe to. */
-function subscribeToNothing(): () => void {
-  return () => {};
+  const duty = useDuty();
+  return <WaitingRadar isOnline={duty?.isOnDuty ?? false} />;
 }
 
 /**
- * Today's money, on the depth gradient (`navy-700 → navy-900`).
- *
- * `today_net_paise` is read straight off `PartnerPerformance` — the endpoint
- * publishes today, this month and lifetime as their own fields, so nothing here
- * reduces a daily series to find it.
- *
- * The sun is the canvas's own glyph for this plate, and it is `days` in the
- * transcribed pictogram set (same rays, same 4.2 centre). It says "today"; the
- * number beside it says how much.
+ * Re-exported so `all-work.tsx` — which imported `WorkCard` from this module
+ * before the cards moved into their own file — keeps working against one card
+ * implementation rather than growing a second import path to the same component.
  */
-function TodayPlate({ netPaise, jobs }: { netPaise: number | null; jobs: number | null }) {
-  return (
-    <div className="flex items-center gap-3 rounded-card bg-[linear-gradient(160deg,var(--color-navy-700)_0%,var(--color-navy-900)_100%)] p-3.5 shadow-card">
-      <Pictogram name="days" size="lg" className="shrink-0 text-action-hover" />
-      <span className="flex flex-col gap-px">
-        <span className="text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-navy-200">
-          Earned today
-        </span>
-        <span className="text-[2rem] font-extrabold leading-none tracking-[-0.02em] text-surface">
-          {netPaise === null ? "—" : formatMoney(netPaise)}
-        </span>
-      </span>
-      {/* Zero is a real answer and says so. A blank space where a count belongs
-          reads as a screen that failed to load, which is the one thing an idle
-          Partner must not conclude. */}
-      {jobs === null ? null : (
-        <span className="ml-auto flex shrink-0 flex-col items-end text-[0.8125rem] font-semibold leading-snug text-navy-200">
-          {jobs === 0 ? (
-            <>
-              <span>No jobs</span>
-              <span>yet today</span>
-            </>
-          ) : (
-            <>
-              <span>
-                {jobs} {jobs === 1 ? "job" : "jobs"}
-              </span>
-              <span>finished</span>
-            </>
-          )}
-        </span>
-      )}
-    </div>
-  );
-}
-
-/*
-  `EmptyWork` lived here — a static dashed medallion for "nothing waiting".
-
-  It is `WaitingRadar` now (`./waiting-radar.tsx`), for two reasons. It was
-  effectively unreachable: the old home rendered the whole stack, so
-  `items.length` was only ever zero for a Partner with no history at all, and
-  every established vendor saw a tail of settled cards instead. And a still
-  medallion answers "do you have work for me?" the same way a screen that failed
-  to load does. The radar says the dispatch is running — and stops sweeping when
-  the Partner is offline, because then it isn't.
-
-  What the canvas drew and neither version ports: a "3 jobs within 12 km" pill
-  and "widen your radius" / "add a trade" buttons. All three are figures with no
-  Partner-facing endpoint behind them, and the screen a vendor checks when they
-  have no work is the worst possible place to invent one.
-*/
-
-/* --------------------------------------------------------------------------
-   The four card states
-   -------------------------------------------------------------------------- */
-
-/**
- * One card per `WorkItem`, branched on the urgency that gives it its colour.
- *
- * The four states are the design's whole timeline — somebody asked, I answered,
- * I'm doing it, I got paid — and each one is a different card in
- * `Main.dc.html`, not one card with a different border. See `WorkUrgency`.
- */
-export function WorkCard({ item }: { item: WorkItem }) {
-  switch (item.urgency) {
-    case "live":
-      return <LiveOfferCard item={item} />;
-    case "needs_price":
-      return <NeedsPriceCard item={item} />;
-    case "settled":
-      return <SettledCard item={item} />;
-    case "answered":
-      return <AnsweredCard item={item} />;
-    case "not_chosen":
-      return <OutcomeCard item={item} />;
-    case "closed":
-      return <OutcomeCard item={item} />;
-    case "doing":
-      return <DoingCard item={item} />;
-  }
-}
-
-/** Every card is a tap target first. 56px is the floor the design sets. */
-const CARD =
-  "flex min-h-14 flex-col gap-2.75 rounded-card p-3.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring";
-
-const TILE = "grid h-13 w-13 shrink-0 place-items-center rounded-[0.9375rem]";
-
-/** A 56px full-width action bar drawn inside the card's own link. */
-const BAR = "flex h-14 items-center justify-center gap-2 rounded-[0.8125rem]";
-
-/**
- * A picture and a value, at the size the design sets for a card fact.
- *
- * Sizing is a `size` prop now rather than a className, so the 16px the canvas
- * actually draws is what renders — the old comment here explained that a
- * smaller class lost its fight with `Pictogram`'s hard-coded default and that
- * every fact was therefore sized *up* to dodge it. That defect is fixed at the
- * component (`components/pictogram.tsx`), so this can be the size it wants.
- *
- * The glyph is decorative and the value carries the meaning. Where the glyph
- * alone is ambiguous — `time` reads as both "starts at" and "how long" — the
- * caller passes a `label`, which renders above the value at a third its size.
- */
-function Fact({
-  name,
-  label,
-  children,
-}: {
-  name: PictogramName;
-  label?: string;
-  children: ReactNode;
-}) {
-  return (
-    <span className="flex items-center gap-1.5">
-      <Pictogram name={name} size="sm" className="shrink-0" />
-      <span className="flex min-w-0 flex-col leading-tight">
-        {label === undefined ? null : (
-          <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.04em] opacity-70">
-            {label}
-          </span>
-        )}
-        <span className="truncate text-[0.9375rem] font-bold">{children}</span>
-      </span>
-    </span>
-  );
-}
-
-/**
- * When this card happens, formatted as what it actually is.
- *
- * A scheduled visit has a slot and reads "9:00 am". An enquiry has a **day** the
- * customer picked, which the server publishes as a `date-time` at midnight — so
- * formatting it as a clock printed "12:00 am" on every enquiry card in the
- * stack. It reads "12 Sep" now. `WorkItem.whenIsDay` is what decides; see its
- * doc comment for why the value is not sniffed.
- */
-function whenLabel(item: WorkItem): string | null {
-  if (item.whenIso === null) return null;
-  const at = new Date(item.whenIso);
-  if (Number.isNaN(at.getTime())) return null;
-
-  return new Intl.DateTimeFormat(
-    "en-IN",
-    item.whenIsDay
-      ? { day: "numeric", month: "short" }
-      : { hour: "numeric", minute: "2-digit" },
-  ).format(at);
-}
-
-function dateLabel(item: WorkItem): string | null {
-  if (item.whenIso === null) return null;
-  const at = new Date(item.whenIso);
-  if (Number.isNaN(at.getTime())) return null;
-  return new Intl.DateTimeFormat("en-IN", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-  }).format(at);
-}
-
-function startTimeLabel(item: WorkItem): string | null {
-  if (item.whenIso === null || item.whenIsDay) return null;
-  const at = new Date(item.whenIso);
-  if (Number.isNaN(at.getTime())) return null;
-  return new Intl.DateTimeFormat("en-IN", {
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(at);
-}
-
-function durationLabel(minutes: number | null): string | null {
-  if (minutes === null) return null;
-  if (minutes < 60) return `${minutes} min`;
-  const hours = Math.floor(minutes / 60);
-  const remainder = minutes % 60;
-  return remainder === 0 ? `${hours} ${hours === 1 ? "hr" : "hrs"}` : `${hours} hr ${remainder} min`;
-}
-
-/** The headline number, or the canvas's "₹ ?" for something not yet priced. */
-function money(amountPaise: number | null): string {
-  return amountPaise === null ? "₹ ?" : formatMoney(amountPaise);
-}
-
-/**
- * What the card is worth, said out loud — and for an engagement, hedged.
- *
- * `WorkItem.amountPaise` is a net payout for an offer and for a job, and is
- * **not** one for an engagement: there it is `staged_total_paise`, the agreed
- * total, and whether the platform's cut sits inside it or on top of it is
- * `commission_treatment`, an unenumerated field the model layer records rather
- * than decides. So an engagement's figure is announced as the agreement's
- * value, never as money this Partner will receive.
- */
-function spokenAmount(item: WorkItem): string | null {
-  if (item.amountPaise === null) return null;
-  const amount = formatMoney(item.amountPaise);
-  return item.amountLabel === null ? amount : `${item.amountLabel.toLowerCase()} ${amount}`;
-}
-
-function cardLabel(item: WorkItem): string {
-  const facts = [item.accessibleName];
-  const amount = spokenAmount(item);
-  if (amount !== null) facts.push(amount);
-  const date = dateLabel(item);
-  const starts = startTimeLabel(item);
-  const duration = durationLabel(item.durationMinutes);
-  if (date !== null) facts.push(`date ${date}`);
-  if (starts !== null) facts.push(`starts ${starts}`);
-  if (duration !== null) facts.push(`duration ${duration}`);
-  if (item.areaLabel !== null && item.areaLabel !== item.stateLabel) {
-    facts.push(`area ${item.areaLabel}`);
-  }
-  return facts.join(", ");
-}
-
-function ScheduleFacts({ item }: { readonly item: WorkItem }) {
-  const date = dateLabel(item);
-  const starts = startTimeLabel(item);
-  const duration = durationLabel(item.durationMinutes);
-  if (date === null && starts === null && duration === null && item.areaLabel === null) return null;
-
-  return (
-    <span className="grid grid-cols-2 gap-x-4 gap-y-2">
-      {date === null ? null : (
-        <Fact name="date" label="Date">
-          {date}
-        </Fact>
-      )}
-      {starts === null ? null : (
-        <Fact name="time" label="Starts">
-          {starts}
-        </Fact>
-      )}
-      {duration === null ? null : (
-        <Fact name="time" label="Duration">
-          {duration}
-        </Fact>
-      )}
-      {item.areaLabel === null ? null : (
-        <Fact name="distance" label="Area">
-          {item.areaLabel}
-        </Fact>
-      )}
-    </span>
-  );
-}
-
-/**
- * A clock is running on this one — the single hottest card on the screen.
- *
- * Both offer sources land here and share the treatment on purpose: an A3 crew
- * offer and an A1 direct offer are different records on different endpoints,
- * but to a Partner looking at this stack they are the same thing — somebody is
- * offering work and there is a deadline on the answer. `WorkItem` says so in as
- * many words, and names `href` as what separates them. It does: an A3 offer
- * opens its own detail screen, an A1 offer opens the inbox that answers it.
- *
- * ## The lapse guard, and why it lives here rather than in the adapter
- *
- * `toWorkItems` filters A3 offers through `isOfferLive` against the server's
- * own `server_now`, but deliberately applies no equivalent clock to A1 offers —
- * Celery owns those deadlines and `status` is the truth. The consequence is
- * that an A1 offer whose deadline has passed but whose next five-second poll
- * has not landed sorts to the very top of the stack, since the comparator reads
- * a dead deadline as the most urgent thing a Partner owns.
- *
- * So the card checks. `useServerCountdown` measures against the calibrated
- * server clock rather than the device's, and a lapsed one drops the heat
- * gradient and the countdown instead of shouting. It is not removed: the server
- * decides what is expired, this only decides what to shout about.
- */
-function LiveOfferCard({ item }: { item: WorkItem }) {
-  const countdown = useServerCountdown(item.respondsBy, 1000);
-  const lapsed = countdown?.isExpired ?? false;
-
-  return (
-    <Link
-      href={item.href}
-      aria-label={cardLabel(item)}
-      className={cn(
-        CARD,
-        lapsed
-          ? "border border-line bg-surface"
-          : "bg-[linear-gradient(135deg,var(--color-signal-400)_0%,var(--color-action)_55%,var(--color-action-active)_100%)] shadow-[0_4px_12px_color-mix(in_oklab,var(--color-action-active)_32%,transparent)]",
-      )}
-    >
-      <span className="flex items-center gap-2.75">
-        <span className={cn(TILE, lapsed ? "bg-surface-sunken" : "bg-surface")}>
-          <Pictogram name="now" size="lg" className="text-text" />
-        </span>
-
-        <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-text">
-          <CardTitle item={item} />
-          <span className="flex items-baseline gap-2">
-            <span className="text-[1.875rem] font-extrabold leading-none tracking-[-0.02em]">
-              {money(item.amountPaise)}
-            </span>
-            {item.amountLabel === null ? null : (
-              <span className="text-[0.6875rem] font-bold uppercase tracking-[0.04em] opacity-70">
-                {item.amountLabel}
-              </span>
-            )}
-          </span>
-        </span>
-
-        {countdown && !lapsed ? <CountdownDial countdown={countdown} /> : null}
-      </span>
-
-      <span className="text-text">
-        <ScheduleFacts item={item} />
-      </span>
-
-      <span className={cn(BAR, "bg-surface")}>
-        <Pictogram name="yes" size="md" className="text-success-text" />
-        <span className="text-base font-bold text-text">Take this job</span>
-      </span>
-    </Link>
-  );
-}
-
-/**
- * What the job is, which is the first thing a card has to say.
- *
- * `WorkItem.accessibleName` was built as an `sr-only` string on the rule that
- * this app renders pictures and numbers and never a service name. That rule is
- * what left a Partner looking at `₹450` for a job whose trade was nowhere on
- * screen. It is the card's title now — see the field's own doc comment in
- * `../model/work-item.ts`, which records the change.
- */
-function CardTitle({ item }: { item: WorkItem }) {
-  return (
-    <span className="flex min-w-0 flex-col gap-0.5">
-      <span className="truncate text-base font-semibold leading-snug">{item.title}</span>
-      {item.stateLabel === null ? null : (
-        <span className="truncate text-[0.6875rem] font-bold uppercase tracking-[0.04em] opacity-70">
-          {item.stateLabel}
-        </span>
-      )}
-    </span>
-  );
-}
-
-/**
- * `mm:ss` at card size.
- *
- * Not the progress ring from `Offer.dc.html` — that belongs to the offer detail
- * screen, and drawing an arc here would need a window length no endpoint
- * publishes, so the arc's denominator would be invented. The bezel is the
- * canvas's shape; the digits are the only part that is measured.
- *
- * The digits are `aria-hidden` and the coarse `announce` string is what is read
- * out: a per-second reading of a ticking clock is unusable with a screen
- * reader.
- */
-function CountdownDial({ countdown }: { countdown: Countdown }) {
-  return (
-    <span className="grid h-13.5 w-13.5 shrink-0 place-items-center rounded-full bg-text/13">
-      <span aria-hidden className="text-sm font-extrabold tracking-[-0.02em] text-text">
-        {countdown.display}
-      </span>
-      <span className="sr-only">{countdown.announce}</span>
-    </span>
-  );
-}
-
-/**
- * Waiting on a price from this Partner — plain white, orange number.
- *
- * The canvas draws two photo thumbnails on this card. `WorkItem` publishes no
- * photos and the enquiry summary the stack is built from carries none, so they
- * are not ported rather than filled with placeholder tiles.
- */
-function NeedsPriceCard({ item }: { item: WorkItem }) {
-  const at = whenLabel(item);
-
-  return (
-    <Link
-      href={item.href}
-      aria-label={cardLabel(item)}
-      className={cn(CARD, "border border-line bg-surface")}
-    >
-      <span className="flex items-center gap-2.75">
-        <span className={cn(TILE, "bg-surface-sunken")}>
-          <Pictogram name="new" size="lg" className="text-signal-700" />
-        </span>
-
-        <span className="flex min-w-0 flex-1 flex-col gap-0.75">
-          <CardTitle item={item} />
-          <span className="flex flex-col gap-1 text-text-secondary">
-            {item.areaLabel ? (
-              <Fact name="distance" label="Near">
-                {item.areaLabel}
-              </Fact>
-            ) : null}
-            {at ? (
-              <Fact name={item.whenIsDay ? "date" : "time"} label="Requested">
-                {at}
-              </Fact>
-            ) : null}
-          </span>
-        </span>
-      </span>
-
-      <span className={cn(BAR, "bg-action shadow-[0_2px_0_var(--color-action-active)]")}>
-        <Pictogram name="go" size="md" className="text-action-text" />
-        <span className="text-base font-bold text-action-text">
-          {item.actionLabel ?? "Review request"}
-        </span>
-      </span>
-    </Link>
-  );
-}
-
-/**
- * Being done now — white with the navy spine.
- *
- * Two things the canvas draws here are deliberately absent. The five progress
- * dots have no field behind them: neither a visit nor an engagement publishes a
- * step count on the list read this stack is built from. And the large
- * call-customer button needs a phone number, which the offer/visit projections
- * withhold until the Partner is on the job — `/work/jobs/[id]` is where that
- * lives, and this card opens it.
- *
- * A job leads with its start time and an engagement with its money, because an
- * engagement publishes no schedule of its own — its stages carry `scheduled_on`
- * and the agreement does not, so `whenIso` is null for every one of them. The
- * glyph beside the number says which is which.
- */
-function DoingCard({ item }: { item: WorkItem }) {
-  return (
-    <Link
-      href={item.href}
-      aria-label={cardLabel(item)}
-      className={cn(
-        CARD,
-        "border border-line border-l-[6px] border-l-action-secondary bg-surface",
-      )}
-    >
-      <span className="flex items-center gap-2.75">
-        <span
-          className={cn(
-            TILE,
-            "bg-[linear-gradient(150deg,var(--color-navy-300),var(--color-navy-500))]",
-          )}
-        >
-          <Pictogram name="doing" size="lg" className="text-surface" />
-        </span>
-
-        <span className="flex min-w-0 flex-1 flex-col gap-1 text-text">
-          <CardTitle item={item} />
-          {item.amountPaise === null ? null : (
-            <span className="flex items-baseline gap-2">
-              <span className="text-[1.5rem] font-extrabold leading-none tracking-[-0.02em] text-text">
-                {money(item.amountPaise)}
-              </span>
-              {item.amountLabel === null ? null : (
-                <span className="text-[0.6875rem] font-bold uppercase tracking-[0.04em] text-text-muted">
-                  {item.amountLabel}
-                </span>
-              )}
-            </span>
-          )}
-        </span>
-      </span>
-
-      {item.whenIso !== null || item.durationMinutes !== null || item.areaLabel !== null ? (
-        <span className="rounded-xl bg-surface-sunken px-3 py-2.5 text-action-secondary">
-          <ScheduleFacts item={item} />
-        </span>
-      ) : null}
-
-      <span
-        className={cn(BAR, "bg-action-secondary shadow-[0_2px_0_var(--color-navy-900)]")}
-      >
-        <Pictogram name="go" size="md" className="text-action-secondary-text" />
-        <span className="text-base font-bold text-action-secondary-text">Open this job</span>
-      </span>
-    </Link>
-  );
-}
-
-/**
- * Settled — green surface, and the padlock that says the money is held.
- *
- * Only a completed A1 visit reaches this state. An engagement is never mapped
- * to `settled` by the adapter, which is what keeps the "you got paid" treatment
- * off the one figure that is not a payout.
- */
-function SettledCard({ item }: { item: WorkItem }) {
-  const date = dateLabel(item);
-  const starts = startTimeLabel(item);
-
-  return (
-    <Link
-      href={item.href}
-      aria-label={cardLabel(item)}
-      className={cn(
-        "flex min-h-14 items-center gap-3 rounded-card border border-success-line bg-success-surface px-3.5 py-2.75",
-        "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring",
-      )}
-    >
-      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-success-text">
-        <Pictogram name="done" size="md" className="text-surface" />
-      </span>
-      <span className="flex min-w-0 flex-1 flex-col gap-px text-success-text">
-        <span className="truncate text-[0.9375rem] font-semibold leading-snug">
-          {item.title}
-        </span>
-        {date === null ? null : (
-          <span className="flex items-center gap-1 truncate text-xs font-semibold opacity-75">
-            <Pictogram name="time" size="xs" className="shrink-0" />
-            {date}
-            {starts === null ? null : ` · ${starts}`}
-          </span>
-        )}
-        <span className="flex items-center gap-1 text-xs font-semibold opacity-75">
-          <Pictogram name="held" size="xs" className="shrink-0" />
-          Held until payout
-        </span>
-      </span>
-      {item.amountPaise === null ? null : (
-        <span className="text-[1.375rem] font-extrabold leading-none tracking-[-0.02em] text-success-text">
-          {money(item.amountPaise)}
-        </span>
-      )}
-    </Link>
-  );
-}
-
-/**
- * You answered; the customer has not.
- *
- * ## Why this is not the settled card
- *
- * It was, briefly, and the result was a green "held until payout" row carrying
- * **`₹ ?`** — announcing that the platform did not know a price, on the one card
- * whose entire subject is a price the vendor had just sent. Two separate
- * untruths: nothing is held, and the amount is not unknown to the vendor.
- *
- * The design's four states are "somebody asked → I answered → I'm doing it → I
- * got paid". This is the second. It gets the calm, neutral treatment a waiting
- * room deserves — no money slot at all, because `EnquirySummary` does not
- * publish the vendor's quoted total and a figure this card cannot source is a
- * figure it must not draw.
- */
-function AnsweredCard({ item }: { item: WorkItem }) {
-  return (
-    <Link
-      href={item.href}
-      aria-label={cardLabel(item)}
-      className={cn(
-        "flex min-h-14 items-center gap-3 rounded-card border border-info-line bg-info-surface px-3.5 py-2.75",
-        "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring",
-      )}
-    >
-      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-info-text">
-        <Pictogram name="price" size="md" className="text-surface" />
-      </span>
-      <span className="flex min-w-0 flex-1 flex-col gap-px text-info-text">
-        <span className="truncate text-[0.9375rem] font-semibold leading-snug">{item.title}</span>
-        <span className="truncate text-xs font-semibold opacity-75">
-          Waiting for the customer to decide
-        </span>
-      </span>
-      <Pictogram name="go" size="sm" className="shrink-0 text-info-text" />
-    </Link>
-  );
-}
-
-function OutcomeCard({ item }: { item: WorkItem }) {
-  return (
-    <Link
-      href={item.href}
-      aria-label={cardLabel(item)}
-      className={cn(
-        "flex min-h-14 items-center gap-3 rounded-card border border-line bg-surface px-3.5 py-2.75",
-        "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring",
-      )}
-    >
-      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-surface-sunken">
-        <Pictogram name="no" size="md" className="text-text-muted" />
-      </span>
-      <span className="flex min-w-0 flex-1 flex-col gap-px">
-        <span className="truncate text-[0.9375rem] font-semibold leading-snug text-text">
-          {item.title}
-        </span>
-        <span className="text-xs font-semibold capitalize text-text-muted">
-          {item.stateLabel}
-        </span>
-      </span>
-      <Pictogram name="go" size="sm" className="shrink-0 text-text-muted" />
-    </Link>
-  );
-}
+export { WorkCard } from "./work-card";

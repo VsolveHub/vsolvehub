@@ -2,11 +2,12 @@
 
 import { ApiRequestError } from "@vsolve/api-client";
 import { useAuthGuard, useOtpFlow } from "@vsolve/query";
-import { Card, ErrorState, Logo, OtpForm, Spinner } from "@vsolve/ui";
+import { ErrorState, Logo, OtpForm, Spinner } from "@vsolve/ui";
 import { HelpCircle } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
 
 import { usePartnerApplication } from "@/features/application/queries";
 import { getApiClient } from "@/lib/api/browser";
@@ -69,97 +70,129 @@ export function LoginScreen() {
   }, [application.data?.status, isAuthenticated, knowsWhereToGo, next, router]);
 
   if (guard.status === "checking") {
-    return (
-      <main className="mx-auto flex w-full max-w-md items-center gap-2 px-4 py-16 text-text-secondary">
-        <Spinner size="sm" />
-        Checking your session…
-      </main>
-    );
+    return <Waiting>Checking your session…</Waiting>;
   }
 
   if (guard.status === "error") {
     return (
-      <main className="mx-auto w-full max-w-md px-4 py-16">
+      <Frame>
         <ErrorState
           title="We could not check your session"
           message="Nothing has changed. Check your connection and try again."
           actionLabel="Try again"
           onAction={() => window.location.reload()}
         />
-      </main>
+      </Frame>
     );
   }
 
   // Already signed in, or just now signed in: the effect above is navigating.
   // Re-showing the form here is how someone ends up logging in twice.
   if (isAuthenticated) {
-    return (
-      <main className="mx-auto flex w-full max-w-md items-center gap-2 px-4 py-16 text-text-secondary">
-        <Spinner size="sm" />
-        Taking you to your account…
-      </main>
-    );
+    return <Waiting>Taking you to your account…</Waiting>;
   }
 
   return (
-    <main className="mx-auto w-full max-w-md px-4 py-6">
-      {/* Hero illustration card */}
-      <Card className="overflow-hidden p-0">
-        <div className="flex items-center justify-center bg-surface px-6 pt-6">
-          {/* `next/image` rather than a bare tag: this is the largest paint on
-              the first screen a Partner ever sees, often on a slow connection,
-              and it is the one image worth serving at the right size. */}
-          <Image
-            src="/image.png"
-            alt="Partner tradespeople — weekly payouts, flexible hours, transparent earnings"
-            width={280}
-            height={280}
-            priority
-            className="vsh-hero-slideup mx-auto h-auto w-full max-w-[280px]"
-          />
-        </div>
+    <Frame>
+      {/*
+        The illustration, sized as an accent rather than a hero.
 
-        {/* Orange accent divider */}
-        <div className="h-[3px] bg-action" />
+        It was a 280px square filling the top of the card — the largest paint on
+        the first screen a Partner ever sees, on the slowest connection they
+        will ever be on, above a form they came here to use. At 132px it still
+        says what kind of app this is and the phone field is above the fold on a
+        360×640 device, which is the screen this has to work on.
+      */}
+      <div className="flex flex-col items-center gap-3.5 pb-1">
+        <Image
+          src="/image.png"
+          alt=""
+          width={224}
+          height={224}
+          priority
+          className="vsh-hero-slideup h-28 w-28"
+        />
+        <Logo className="h-8 w-auto" />
+      </div>
 
-        {/* OTP form */}
-        <div className="p-6 sm:p-8">
-          <Logo className="h-8 w-auto" />
-          <h1 className="mt-6 text-2xl font-bold text-text">Partner log in</h1>
-          <p className="mt-2 text-sm leading-6 text-text-secondary">
-            Use the mobile number your Partner account is on. We will text you a
-            code — there is no password.
-          </p>
+      <h1 className="text-center text-headline text-text">Log in to work</h1>
 
-          <div className="mt-6">
-            <OtpForm
-              {...flow}
-              heading="Your mobile number"
-              headingLevel={2}
-              description="We will text you a code. There is no password."
-              verifyLabel="Verify and continue"
-              footer={
-                <p>
-                  Not a Partner yet?{" "}
-                  <a
-                    href="/apply"
-                    className="font-semibold text-info-text underline-offset-4 hover:underline"
-                  >
-                    Apply to join
-                  </a>{" "}
-                  — it takes a few minutes and does not commit you to anything.
-                </p>
-              }
-            />
-          </div>
-        </div>
-      </Card>
+      {/*
+        One statement of the rule, not three.
 
-      {/* Help link */}
-      <p className="mt-6 flex items-center justify-center gap-1.5 text-sm text-text-muted">
-        <HelpCircle size={16} aria-hidden />
-        Need help logging in?
+        This screen used to say "We will text you a code — there is no password"
+        as a page description, then again as `OtpForm`'s `description`, then a
+        third time as the field's own hint. Beyond being noise it cost about
+        130px above the fold — enough that on a 360x640 Android, the floor this
+        product is built for, **Send code** was off screen. The field's own hint
+        is the most specific of the three and is the one kept.
+      */}
+      <div className="rounded-card border border-line bg-surface p-5 shadow-card">
+        <OtpForm
+          {...flow}
+          heading="Your mobile number"
+          headingLevel={2}
+          verifyLabel="Verify and continue"
+        />
+      </div>
+
+      {/*
+        Applying is a separate destination, not a footnote inside the form.
+
+        It used to be a sentence in `OtpForm`'s `footer`, which put the one link
+        for everybody who does *not* yet have an account underneath the code
+        field — a control that only appears on step two, and that a first-time
+        visitor has no reason to reach. It is a peer of the form now.
+      */}
+      <div className="flex flex-col gap-3 rounded-card border border-line bg-surface-sunken p-4 text-center">
+        <p className="text-body font-bold text-text">Not a Partner yet?</p>
+        <p className="text-caption leading-relaxed text-text-secondary">
+          Applying takes a few minutes and does not commit you to anything.
+        </p>
+        <Link
+          href="/apply"
+          className="pv-tap pv-press flex h-12 items-center justify-center rounded-control border border-line-strong bg-surface text-body font-bold text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+        >
+          Apply to join
+        </Link>
+      </div>
+
+      <p className="flex items-center justify-center gap-1.5 pb-2 text-caption text-text-muted">
+        <HelpCircle size={15} aria-hidden />
+        Trouble logging in? Call the number on your agreement.
       </p>
+    </Frame>
+  );
+}
+
+/**
+ * The one column every branch of this screen renders inside.
+ *
+ * Centred and capped at the same 480px the signed-in shell uses, so arriving at
+ * the app does not change its width. `justify-center` on short content and
+ * top-aligned once the form outgrows the viewport — `my-auto` on the inner
+ * stack does both without a media query.
+ */
+function Frame({ children }: { children: ReactNode }) {
+  return (
+    <main className="flex min-h-dvh justify-center bg-canvas px-5">
+      <div
+        className="my-auto flex w-full max-w-[480px] flex-col gap-5 py-8"
+        style={{ paddingTop: "calc(2rem + var(--safe-top))", paddingBottom: "calc(2rem + var(--safe-bottom))" }}
+      >
+        {children}
+      </div>
     </main>
+  );
+}
+
+function Waiting({ children }: { children: ReactNode }) {
+  return (
+    <Frame>
+      <p className="flex items-center justify-center gap-2.5 text-body text-text-secondary">
+        <Spinner size="sm" />
+        {children}
+      </p>
+    </Frame>
   );
 }

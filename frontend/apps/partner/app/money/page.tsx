@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { EarningsPanel } from "@/features/earnings/view/earnings-panel";
 import { PartnerShell } from "@/features/session/partner-shell";
+import { Block, Screen } from "@/features/shell/view/screen";
 
 export const dynamic = "force-dynamic";
 
@@ -26,24 +27,27 @@ export const metadata: Metadata = {
  * replaces (Task 5 redirects `/earnings` here) — both use the plain,
  * unrestricted shell rather than `requirePartnerRole`.
  *
- * ## `<main>` and the landmark, not `EarningsPanel`'s job
+ * ## The heading is visible now
  *
- * `EarningsPanel` renders three different return branches (pending, error,
- * success) and none of them carry a `<main>` today — the old
- * `app/earnings/page.tsx` supplied that wrapper at the route level, not
- * inside the shared component, so this keeps the same division of
- * responsibility rather than adding a landmark to a component whose data
- * logic this task is explicitly not meant to touch. The heading is
- * `sr-only`: the design direction here is pictures and numbers, the same
- * call `features/work-stack/view/work-home.tsx` already made for `/work`.
+ * It was `sr-only`, on the rule that this app renders pictures and numbers
+ * rather than words. That rule cost more than it saved here: `/money` is the
+ * one tab whose content is four different figures with four different
+ * meanings, and it opened with no statement of what screen you were on. The
+ * other three tabs all name themselves.
+ *
+ * `EarningsPanel` renders three return branches (pending, error, success) and
+ * none of them carry a landmark — the wrapper stays at the route level, which
+ * is where it has always been.
  */
 export default function MoneyPage() {
   return (
     <PartnerShell>
-      <main className="mx-auto w-full max-w-2xl px-4 py-6">
-        <h1 className="sr-only">Money</h1>
-        <EarningsPanel />
-      </main>
+      <Screen>
+        <Block gap="none" className="py-4">
+          <h1 className="pb-3 text-headline text-text">Your money</h1>
+          <EarningsPanel />
+        </Block>
+      </Screen>
     </PartnerShell>
   );
 }

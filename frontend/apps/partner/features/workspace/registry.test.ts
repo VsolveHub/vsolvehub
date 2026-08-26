@@ -5,7 +5,6 @@ import {
   BASE_NAV,
   MAX_TAB_ITEMS,
   PROJECT_WORKSPACE,
-  TAP_FIRST_NAV,
   WORKFORCE_WORKSPACE,
   activeWorkspace,
   navigationFor,
@@ -31,29 +30,6 @@ function grant(workspaceKey: string, actions: string[]): WorkspaceGrant {
 
 const A3_ACTIONS = ["enquiry.view", "attendance.confirm", "crew.manage"];
 const A5_ACTIONS = ["enquiry.view", "stage.submit_evidence"];
-
-describe("TAP_FIRST_NAV", () => {
-  // `partner-shell.tsx`'s bottom tab bar renders this directly now, in place
-  // of `navigationFor(activeWorkspace(...))`. Everything below this block
-  // still tests the older registry the rest of the app (M2 workspace
-  // gating, notification routing, capability-request copy) still runs on —
-  // see `TAP_FIRST_NAV`'s own doc comment in `registry.ts` for why that
-  // stays rather than being deleted alongside the switcher.
-  it("has exactly the three tap-first destinations, in order", () => {
-    expect(TAP_FIRST_NAV.map((item) => item.href)).toEqual([
-      "/home",
-      "/work/all",
-      "/money",
-      "/me",
-    ]);
-  });
-
-  it("gives every destination a one-word label", () => {
-    for (const item of TAP_FIRST_NAV) {
-      expect(item.label.split(" ")).toHaveLength(1);
-    }
-  });
-});
 
 describe("A1 backward compatibility", () => {
   it("leaves an M1 partner's navigation exactly as it is", () => {
