@@ -40,6 +40,17 @@ const EMPTY_COPY: Record<JobBucket, { title: string; description: string }> = {
     title: "Nothing cancelled",
     description: "Jobs that did not go ahead will show up here.",
   },
+  /*
+    `all` is not a tab and never appears in `TABS` — it is the unfiltered read
+    the work stack uses so a job outside the `active` date window is never
+    hidden (see `JobBucket`). The copy exists because `EMPTY_COPY` is keyed by
+    the whole union; if a screen ever does surface this shelf, an honest empty
+    state is better than a missing key.
+  */
+  all: {
+    title: "No work yet",
+    description: "Everything you are offered or booked for will show up here.",
+  },
 };
 
 export function JobList() {

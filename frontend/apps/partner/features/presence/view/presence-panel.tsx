@@ -1,7 +1,7 @@
 "use client";
 
 import { describeError } from "@vsolve/query";
-import { Badge, Button, Card, ErrorState, Select, Spinner } from "@vsolve/ui";
+import { Badge, Button, Card, ErrorState, Select, Spinner, cn } from "@vsolve/ui";
 import { Power } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
@@ -112,7 +112,13 @@ function GoOnlineFailure({ error }: { error: unknown }) {
   );
 }
 
-export function PresencePanel({ consentVersion }: { consentVersion: string | null }) {
+export function PresencePanel({
+  consentVersion,
+  variant = "default",
+}: {
+  consentVersion: string | null;
+  variant?: "default" | "driver";
+}) {
   const reference = useApplicationReference();
   const goOnline = useGoOnline();
   const goOffline = useGoOffline();
@@ -309,6 +315,29 @@ export function PresencePanel({ consentVersion }: { consentVersion: string | nul
 
   const copy = PRESENCE_COPY[status];
   const canGoOnline = areaId !== "" && consentVersion !== null && !goOnline.isPending;
+  const isOnline = sessionId !== null && (status === "online" || status === "stale");
+
+  if (variant === "driver") {
+    return (
+      <DriverPresenceControls
+        status={status}
+        copy={copy}
+        tone={TONE[status]}
+        consentVersion={consentVersion}
+        reference={reference}
+        isRestoring={isRestoring}
+        sessionId={sessionId}
+        areaId={areaId}
+        setAreaId={setAreaId}
+        canGoOnline={canGoOnline}
+        goOnline={goOnline}
+        goOffline={goOffline}
+        isOnline={isOnline}
+        handleGoOnline={handleGoOnline}
+        handleGoOffline={handleGoOffline}
+      />
+    );
+  }
 
   return (
     <Card className="p-5">
@@ -407,5 +436,148 @@ export function PresencePanel({ consentVersion }: { consentVersion: string | nul
         work. It stops the moment you go offline.
       </p>
     </Card>
+  );
+}
+
+/**
+ * Uber-inspired driver controls — area picker + large GO toggle.
+ *
+ * Layout-only variant of `PresencePanel`. All session logic stays in the parent;
+ * this component only decides how the same state is drawn on the home screen.
+ */
+function DriverPresenceControls({
+  status,
+  copy,
+  tone,
+  consentVersion,
+  reference,
+  isRestoring,
+  sessionId,
+  areaId,
+  setAreaId,
+  canGoOnline,
+  goOnline,
+  goOffline,
+  isOnline,
+  handleGoOnline,
+  handleGoOffline,
+}: {
+  status: PresenceStatus;
+  copy: (typeof PRESENCE_COPY)[PresenceStatus];
+  tone: (typeof TONE)[PresenceStatus];
+  consentVersion: string | null;
+  reference: ReturnType<typeof useApplicationReference>;
+  isRestoring: boolean;
+  sessionId: string | null;
+  areaId: string;
+  setAreaId: (value: string) => void;
+  canGoOnline: boolean;
+  goOnline: ReturnType<typeof useGoOnline>;
+  goOffline: ReturnType<typeof useGoOffline>;
+  isOnline: boolean;
+  handleGoOnline: () => Promise<void>;
+  handleGoOffline: () => Promise<void>;
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[0.6875rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+            Availability
+          </p>
+          <p role="status" className="mt-0.5 truncate text-sm font-medium text-text">
+            {copy.detail}
+          </p>
+        </div>
+        <Badge tone={tone} dot>
+          {copy.label}
+        </Badge>
+      </div>
+
+      {consentVersion === null ? (
+        <p className="rounded-2xl border border-line bg-surface-sunken px-3 py-2.5 text-sm text-text-secondary">
+          Accept the Partner agreements before going online.
+        </p>
+      ) : null}
+
+      {reference.isError ? (
+        <ErrorState
+          inline
+          title="We could not load your areas"
+          message="You are not online. Check your connection and try again."
+          actionLabel="Try again"
+          onAction={reference.refetch}
+        />
+      ) : null}
+
+      {goOnline.isError ? <GoOnlineFailure error={goOnline.error} /> : null}
+
+      {isRestoring ? (
+        <p className="flex items-center justify-center gap-2 py-6 text-sm text-text-secondary">
+          <Spinner size="sm" />
+          Checking your last session…
+        </p>
+      ) : (
+        <div className="flex flex-col items-center gap-4">
+          {sessionId === null ? (
+            <Select
+              aria-label="Area you are working in"
+              value={areaId}
+              onChange={(event) => setAreaId(event.target.value)}
+              disabled={reference.isPending || reference.serviceAreas.length === 0}
+              className="w-full max-w-xs rounded-2xl"
+            >
+              <option value="">Choose your area…</option>
+              {reference.serviceAreas.map((area) => (
+                <option key={area.id} value={area.id}>
+                  {area.name}
+                </option>
+              ))}
+            </Select>
+          ) : null}
+
+          <button
+            type="button"
+            aria-label={isOnline ? "Go offline" : "Go online"}
+            disabled={
+              isRestoring ||
+              (sessionId === null && !canGoOnline) ||
+              goOnline.isPending ||
+              goOffline.isPending
+            }
+            onClick={() => void (sessionId === null ? handleGoOnline() : handleGoOffline())}
+            className={cn(
+              "relative grid size-[5.5rem] place-items-center rounded-full transition-all duration-300 ease-out",
+              "focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-4 focus-visible:outline-action",
+              "disabled:cursor-not-allowed disabled:opacity-50",
+              isOnline
+                ? "bg-[linear-gradient(145deg,#ef4444_0%,#dc2626_100%)] shadow-[0_8px_32px_color-mix(in_oklab,#dc2626_45%,transparent)]"
+                : "bg-[linear-gradient(145deg,var(--color-success-text)_0%,#15803d_100%)] shadow-[0_8px_32px_color-mix(in_oklab,var(--color-success-text)_45%,transparent)]",
+            )}
+          >
+            {goOnline.isPending || goOffline.isPending ? (
+              <Spinner size="md" className="text-surface" />
+            ) : (
+              <Power
+                size={36}
+                strokeWidth={2.5}
+                className="text-surface"
+                aria-hidden
+              />
+            )}
+            {isOnline ? (
+              <span
+                aria-hidden
+                className="absolute inset-0 rounded-full border-2 border-red-500/30 animate-[vsh-ping_2.4s_ease-out_infinite] motion-reduce:animate-none"
+              />
+            ) : null}
+          </button>
+
+          <p className="text-center text-xs font-semibold uppercase tracking-[0.1em] text-text-muted">
+            {isOnline ? "Tap to go offline" : "Tap to go online"}
+          </p>
+        </div>
+      )}
+    </div>
   );
 }

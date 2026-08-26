@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createOfferDeduper,
   subscribeToOfferEvents,
+  subscribeToPartnerStream,
   type OfferCreatedPayload,
+  type NotificationCreatedPayload,
 } from "./live-events";
 
 class MockEventSource {
@@ -76,6 +78,25 @@ describe("subscribeToOfferEvents", () => {
     const instance = MockEventSource.instances[MockEventSource.instances.length - 1]!;
     instance.emit("offer_created", "not-json");
     expect(onOfferCreated).not.toHaveBeenCalled();
+  });
+
+  it("receives notification_created events on the same stream", () => {
+    const onNotificationCreated = vi.fn();
+    subscribeToPartnerStream(
+      { onNotificationCreated },
+      { EventSourceClass: MockEventSource as unknown as typeof EventSource },
+    );
+
+    const instance = MockEventSource.instances[MockEventSource.instances.length - 1]!;
+    const payload: NotificationCreatedPayload = {
+      notification_id: "notice-123",
+      purpose: "m2.invitation.received",
+      title: "New customer enquiry",
+      body: "A customer has sent a new enquiry.",
+    };
+
+    instance.emit("notification_created", JSON.stringify(payload));
+    expect(onNotificationCreated).toHaveBeenCalledWith(payload);
   });
 });
 

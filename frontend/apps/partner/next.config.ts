@@ -48,6 +48,7 @@ const nextConfig: NextConfig = {
   // Workspace packages are shipped as TS source; let Next compile them.
   transpilePackages: ["@vsolve/ui", "@vsolve/config", "@vsolve/api-client", "@vsolve/query"],
   allowedDevOrigins: devOrigins,
+  devIndicators: false,
   skipTrailingSlashRedirect: true,
   // Next 16 uses Turbopack for development and production by default.
   turbopack: { root: workspaceRoot },

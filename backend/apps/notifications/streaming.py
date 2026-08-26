@@ -43,11 +43,12 @@ import math
 import time
 from collections.abc import Iterator
 from datetime import datetime, timedelta
-from typing import cast
+from typing import Any, cast
 from uuid import UUID
 
 from django.conf import settings
 from django.db import close_old_connections
+from django.db.models import Q
 from django.http import StreamingHttpResponse
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiResponse, extend_schema
@@ -57,6 +58,7 @@ from rest_framework.views import APIView
 
 from apps.identity.models import User
 from apps.notifications.models import NotificationIntent
+from apps.notifications.templates_registry import render_notification
 from apps.partners.permissions import IsPartnerUser
 
 #: The one purpose this stream carries. Written by
@@ -64,6 +66,20 @@ from apps.partners.permissions import IsPartnerUser
 #: `contracts/proposals/partner-offer-events.md`.
 OFFER_CREATED_PURPOSE = "partner.offer_created"
 OFFER_CREATED_EVENT = "offer_created"
+
+#: Advance bookings assigned directly — same transport, different event.
+JOB_ASSIGNED_PURPOSE = "partner.job_assigned"
+JOB_ASSIGNED_EVENT = "job_assigned"
+
+#: In-app notices that should foreground-pop when a customer books or enquires.
+NOTIFICATION_CREATED_EVENT = "notification_created"
+PARTNER_IN_APP_STREAM_PURPOSES = frozenset(
+    {
+        "m2.invitation.received",
+        "m2.booking_fee.charged",
+        "m2.engagement.opened",
+    }
+)
 
 
 def _frame(*, event: str, data: dict[str, object]) -> str:
@@ -80,6 +96,55 @@ def _comment(text: str) -> str:
     """
 
     return f": {text}\n\n"
+
+
+def _stream_filter(*, recipient_id: UUID, since: datetime) -> Q:
+    """Intents this connection may carry for one partner."""
+
+    return Q(recipient_id=recipient_id, created_at__gt=since) & (
+        Q(
+            purpose=OFFER_CREATED_PURPOSE,
+            channel=NotificationIntent.Channel.PUSH,
+        )
+        | Q(
+            purpose=JOB_ASSIGNED_PURPOSE,
+            channel=NotificationIntent.Channel.PUSH,
+        )
+        | Q(
+            purpose__in=PARTNER_IN_APP_STREAM_PURPOSES,
+            channel=NotificationIntent.Channel.IN_APP,
+            status=NotificationIntent.Status.SENT,
+        )
+    )
+
+
+def _payload_for_intent(intent: NotificationIntent) -> tuple[str, dict[str, object]] | None:
+    if intent.purpose == OFFER_CREATED_PURPOSE:
+        return OFFER_CREATED_EVENT, cast(dict[str, object], intent.context)
+    if intent.purpose == JOB_ASSIGNED_PURPOSE:
+        return JOB_ASSIGNED_EVENT, cast(dict[str, object], intent.context)
+    if (
+        intent.channel == NotificationIntent.Channel.IN_APP
+        and intent.purpose in PARTNER_IN_APP_STREAM_PURPOSES
+    ):
+        rendered = render_notification(
+            template_code=intent.template_code,
+            context=cast(dict[str, Any], intent.context),
+        )
+        payload: dict[str, object] = {
+            "notification_id": str(intent.id),
+            "purpose": intent.purpose,
+            "title": rendered.title,
+            "body": rendered.body,
+        }
+        context = cast(dict[str, Any], intent.context)
+        target_kind = context.get("target_kind")
+        target_id = context.get("target_id")
+        if isinstance(target_kind, str) and isinstance(target_id, str):
+            payload["target_kind"] = target_kind
+            payload["target_id"] = target_id
+        return NOTIFICATION_CREATED_EVENT, payload
+    return None
 
 
 def offer_event_frames(
@@ -116,18 +181,17 @@ def offer_event_frames(
         # database connection for its entire life.
         close_old_connections()
         rows = list(
-            NotificationIntent.objects.filter(
-                recipient_id=recipient_id,
-                purpose=OFFER_CREATED_PURPOSE,
-                channel=NotificationIntent.Channel.PUSH,
-                created_at__gt=last_seen,
-            )
+            NotificationIntent.objects.filter(_stream_filter(recipient_id=recipient_id, since=last_seen))
             .exclude(status=NotificationIntent.Status.SUPPRESSED)
             .order_by("created_at", "id")
         )
         for intent in rows:
             last_seen = intent.created_at
-            yield _frame(event=OFFER_CREATED_EVENT, data=cast(dict[str, object], intent.context))
+            framed = _payload_for_intent(intent)
+            if framed is None:
+                continue
+            event, data = framed
+            yield _frame(event=event, data=data)
         if not rows:
             yield _comment("keepalive")
         time.sleep(poll_seconds)
@@ -151,12 +215,12 @@ class PartnerOfferStreamView(APIView):
         responses={
             200: OpenApiResponse(
                 description=(
-                    "A `text/event-stream` of `offer_created` events. Each event's "
-                    "`data` is the notification context documented in "
-                    "contracts/proposals/partner-offer-events.md: `offer_id`, "
-                    "`fulfilment_unit_id`, `requested_start`, `expires_at`. Comment "
-                    "lines are keepalives. The server closes the connection after "
-                    "M1_OFFER_STREAM_MAX_SECONDS and the client reconnects."
+                    "A `text/event-stream` multiplexed for Partner foreground delivery. "
+                    "Events: `offer_created` (same-day offers), `job_assigned` "
+                    "(advance bookings), `notification_created` (in-app booking and "
+                    "enquiry notices). Comment lines are keepalives. The server closes "
+                    "the connection after M1_OFFER_STREAM_MAX_SECONDS and the client "
+                    "reconnects."
                 ),
             ),
         },

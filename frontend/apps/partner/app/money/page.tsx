@@ -21,10 +21,9 @@ export const metadata: Metadata = {
  * rendered (`features/session/partner-shell.tsx`) — nothing mounts it
  * globally. Shipping this page without it would mean the Money tab has no
  * way back to Work or Me, and no top bar, no notification bell, no sign
- * out. `requirePartnerRole` is left off, matching `app/work/page.tsx`
- * (Task 6) and the currently-live `app/earnings/page.tsx` this route
- * replaces (Task 5 redirects `/earnings` here) — both use the plain,
- * unrestricted shell rather than `requirePartnerRole`.
+ * out. `requirePartnerRole` is on, matching `/work/all`: the earnings
+ * endpoints answer `403` without the partner role selected, and the shell
+ * auto-switches role when the session holds the grant.
  *
  * ## `<main>` and the landmark, not `EarningsPanel`'s job
  *
@@ -39,7 +38,7 @@ export const metadata: Metadata = {
  */
 export default function MoneyPage() {
   return (
-    <PartnerShell>
+    <PartnerShell requirePartnerRole>
       <main className="mx-auto w-full max-w-2xl px-4 py-6">
         <h1 className="sr-only">Money</h1>
         <EarningsPanel />

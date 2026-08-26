@@ -1,6 +1,6 @@
 "use client";
 
-import { hasRole, useAuthGuard, useLogout, useSwitchRole } from "@vsolve/query";
+import { hasRole, useAuthGuard, useCurrentSession, useLogout, useSwitchRole } from "@vsolve/query";
 import { Button, Card, ErrorState, Logo, Spinner, cn } from "@vsolve/ui";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
@@ -9,7 +9,8 @@ import { useEffect, useRef, type ReactNode } from "react";
 
 import { getApiClient } from "@/lib/api/browser";
 import { LiveOfferSheet } from "@/features/crew-offer/view/live-offer-sheet";
-import { NotificationBell } from "@/features/notifications/view/notification-bell";
+import { usePartnerStreamEvents } from "@/features/offers/live-events";
+import { NotificationNavTab } from "@/features/notifications/view/notification-bell";
 import {
   resolveWorkspaces,
   TAP_FIRST_NAV,
@@ -140,7 +141,7 @@ function FocusedHeader({ pathname }: { pathname: string }) {
         >
           <ArrowLeft size={20} />
         </button>
-        <h1 className="text-base font-semibold text-text truncate px-2">{title}</h1>
+        <h1 className="truncate px-2 text-base font-semibold text-text">{title}</h1>
         <div className="h-11 w-11" aria-hidden="true" />
       </div>
     </header>
@@ -153,18 +154,30 @@ export interface PartnerShellProps {
 }
 
 export function PartnerShell({ children, requirePartnerRole = false }: PartnerShellProps) {
-  const guard = useAuthGuard(
-    getApiClient(),
-    requirePartnerRole
-      ? { requiredRoles: [PARTNER_ROLE], requireActiveRole: true }
-      : {},
-  );
+  const pathname = usePathname();
+  const isApplyRoute = pathname.startsWith("/apply");
+
+  const session = useCurrentSession(getApiClient());
+  const hasPartnerGrant =
+    session.data?.user !== undefined &&
+    session.data.user !== null &&
+    hasRole(session.data.user, PARTNER_ROLE);
+  const shouldActAsPartner =
+    !isApplyRoute && (requirePartnerRole || hasPartnerGrant);
+
+  const guard = useAuthGuard(getApiClient(), {
+    enabled: !session.isPending,
+    requiredRoles: shouldActAsPartner ? [PARTNER_ROLE] : [],
+    requireActiveRole: shouldActAsPartner,
+  });
 
   const workspaceGrants = usePartnerWorkspaceGrants({
     enabled: guard.status === "authenticated" && hasRole(guard.user, PARTNER_ROLE),
   });
+  const isPartnerAuthenticated =
+    guard.status === "authenticated" && hasRole(guard.user, PARTNER_ROLE);
+  usePartnerStreamEvents(isPartnerAuthenticated);
   const logout = useLogout(getApiClient());
-  const pathname = usePathname();
   const router = useRouter();
 
   const isUnauthenticated = guard.status === "unauthenticated";
@@ -175,7 +188,7 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
     router.replace(`/login?next=${encodeURIComponent(pathname)}`);
   }, [isUnauthenticated, pathname, router]);
 
-  if (guard.status === "checking") {
+  if (session.isPending || guard.status === "checking") {
     return (
       <ShellMessage>
         <Spinner size="sm" />
@@ -224,11 +237,11 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
   }
 
   const workspaces = resolveWorkspaces(workspaceGrants.grants ?? []);
+  const workspaceKeys = workspaces.map((item) => item.key);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center">
-      <div className="w-full max-w-md min-h-screen bg-surface border-x border-line/50 shadow-sm flex flex-col relative">
-        {/* ---- Header ---- */}
+    <div className="flex min-h-screen flex-col items-center bg-background">
+      <div className="relative flex min-h-screen w-full max-w-md flex-col border-x border-line/50 bg-surface shadow-sm">
         {chromeMode === "full" ? (
           <header className="sticky top-0 z-30 border-b border-line bg-surface">
             <div className="flex items-center justify-between px-4 py-3">
@@ -239,42 +252,45 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
                 <Logo className="h-7 w-auto" />
                 <span className="text-sm font-semibold text-text-secondary">Partner</span>
               </Link>
-              <div className="flex items-center gap-1">
-                <NotificationBell workspaceKeys={workspaces.map((item) => item.key)} />
-                <Button
-                  variant="ghost"
-                  onClick={() => logout.mutate()}
-                  loading={logout.isPending}
-                  loadingLabel="Signing out"
-                >
-                  Sign Out
-                </Button>
-              </div>
+              <Button
+                variant="ghost"
+                onClick={() => logout.mutate()}
+                loading={logout.isPending}
+                loadingLabel="Signing out"
+              >
+                Sign Out
+              </Button>
             </div>
           </header>
         ) : chromeMode === "focused" ? (
           <FocusedHeader pathname={pathname} />
         ) : null}
 
-        {/* ---- Page content ---- */}
         <ShellContent paddingBottom={chromeMode === "full" ? "pb-20" : "pb-6"}>
           {children}
         </ShellContent>
 
-        {/* ---- Bottom tab bar ---- */}
-        {chromeMode === "full" ? <BottomTabBar items={TAP_FIRST_NAV} /> : null}
+        {chromeMode === "full" ? (
+          <BottomTabBar items={TAP_FIRST_NAV} workspaceKeys={workspaceKeys} />
+        ) : null}
 
-        {/* Live offer sheet */}
         {hasRole(guard.user, PARTNER_ROLE) ? <LiveOfferSheet /> : null}
       </div>
     </div>
   );
 }
 
-function BottomTabBar({ items }: { items: readonly WorkspaceNavItem[] }) {
+function BottomTabBar({
+  items,
+  workspaceKeys,
+}: {
+  items: readonly WorkspaceNavItem[];
+  workspaceKeys: readonly string[];
+}) {
   const pathname = usePathname();
 
   const current = items.reduce<{ href: string; owned: string } | null>((best, item) => {
+    if (item.kind === "notifications") return best;
     const owned = item.activePrefix ?? item.href;
     const matches = pathname === owned || pathname.startsWith(`${owned}/`);
     if (!matches) return best;
@@ -285,11 +301,19 @@ function BottomTabBar({ items }: { items: readonly WorkspaceNavItem[] }) {
   return (
     <nav
       aria-label="Partner navigation"
-      className="fixed inset-x-0 bottom-0 z-40 bg-surface border-t border-line"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface"
     >
       <div className="mx-auto max-w-md">
         <ul className="flex list-none justify-around p-0">
           {items.map((item) => {
+            if (item.kind === "notifications") {
+              return (
+                <li key={item.href} className="flex-1">
+                  <NotificationNavTab workspaceKeys={workspaceKeys} label={item.label} />
+                </li>
+              );
+            }
+
             const isCurrent = item.href === currentHref;
             const Icon = item.icon;
 
@@ -313,11 +337,7 @@ function BottomTabBar({ items }: { items: readonly WorkspaceNavItem[] }) {
                       isCurrent ? "bg-selected-surface" : "",
                     )}
                   >
-                    <Icon
-                      size={20}
-                      strokeWidth={isCurrent ? 2.5 : 2}
-                      aria-hidden
-                    />
+                    <Icon size={20} strokeWidth={isCurrent ? 2.5 : 2} aria-hidden />
                   </span>
                   {item.label}
                 </Link>
