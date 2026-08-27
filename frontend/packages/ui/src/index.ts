@@ -115,3 +115,40 @@ export type { ReadoutProps } from "./readout";
 // or a legal disclosure — see the component's own note.
 export { Disclosure } from "./disclosure";
 export type { DisclosureProps } from "./disclosure";
+
+// Operations console layout primitives
+export { PageHeader } from "./page-header";
+export type { PageHeaderProps } from "./page-header";
+export { Toolbar } from "./toolbar";
+export type { ToolbarProps, ActiveFilter } from "./toolbar";
+export { SplitView } from "./split-view";
+export type { SplitViewProps } from "./split-view";
+export { Drawer } from "./drawer";
+export type { DrawerProps } from "./drawer";
+export { StatusChip } from "./status-chip";
+export type { StatusChipProps, StatusCategory } from "./status-chip";
+export { Tabs } from "./tabs";
+export type { TabsProps, TabItem } from "./tabs";
+export { Tooltip } from "./tooltip";
+export type { TooltipProps } from "./tooltip";
+export { DataTable } from "./data-table";
+export type { DataTableProps, Column } from "./data-table";
+export {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "./table";
+export {
+  Command,
+  CommandDialog,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+} from "./command-palette";
+export { KeyboardHint } from "./keyboard-hint";
+export type { KeyboardHintProps } from "./keyboard-hint";

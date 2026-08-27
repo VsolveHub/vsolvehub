@@ -15,11 +15,11 @@ const DEFAULT_CHROME_LAYOUT: AppChromeLayout = {
 };
 
 const CART_CHROME_LAYOUT: AppChromeLayout = {
-  // Header (4rem) + mobile tab bar (3.5rem) are both fixed chrome. Subtract
+  // Header (4rem) + mobile tab bar (4rem) are both fixed chrome. Subtract
   // them once so a short cart fills the viewport without manufacturing a
   // second screen of blank space. The desktop has no tab bar.
   contentMinHeightClass:
-    "min-h-[calc(100dvh-7.5rem-env(safe-area-inset-bottom))] md:min-h-[calc(100dvh-4rem)]",
+    "min-h-[calc(100dvh-8rem-env(safe-area-inset-bottom))] md:min-h-[calc(100dvh-4rem)]",
   hideMobileFooter: true,
 };
 

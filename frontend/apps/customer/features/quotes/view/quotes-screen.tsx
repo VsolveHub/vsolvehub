@@ -279,7 +279,7 @@ export function QuotesScreen({
        *
        * Above the phone tab bar, not over it. */}
       {pickedId !== null && canChoose ? (
-        <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-10 -mx-4 mt-2 grid gap-3 border-t border-line bg-surface px-4 py-3 shadow-raised sm:-mx-6 sm:px-6 md:bottom-0 md:grid-cols-[minmax(0,1fr)_auto] md:items-center lg:-mx-[calc((100vw-1180px)/2)] lg:px-[calc((100vw-1180px)/2)]">
+        <div className="sticky bottom-[calc(4rem+env(safe-area-inset-bottom))] z-10 -mx-4 mt-2 grid gap-3 border-t border-line bg-surface px-4 py-3 shadow-raised sm:-mx-6 sm:px-6 md:bottom-0 md:grid-cols-[minmax(0,1fr)_auto] md:items-center lg:-mx-[calc((100vw-1180px)/2)] lg:px-[calc((100vw-1180px)/2)]">
           <div>
             <p className="text-sm font-extrabold tracking-tight text-text">
               {list?.cards.find((card) => card.proposalId === pickedId)?.vendorName ??

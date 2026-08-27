@@ -9,6 +9,12 @@ environ.Env.read_env(_backend_dir / ".env", overwrite=False)
 
 from config.settings.base import *  # noqa: E402
 
+# Base settings keep connections open for 60s (CONN_MAX_AGE), which is fine in
+# production behind a pooler. Locally, three Next.js apps SSR-fanning catalog
+# reads in parallel can exhaust Postgres's connection limit — close after each
+# request instead.
+DATABASES["default"]["CONN_MAX_AGE"] = 0
+
 DEBUG = env.bool("DJANGO_DEBUG", default=True)
 API_DOCS_ENABLED = env.bool("API_DOCS_ENABLED", default=True)
 OTP_PROVIDER = env("OTP_PROVIDER", default="development")

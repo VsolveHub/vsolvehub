@@ -393,12 +393,12 @@ export function BottomNav() {
     <nav
       aria-label="Main"
       className={cn(
-        "fixed inset-x-0 bottom-0 z-50 md:hidden",
-        "border-t border-line/80 bg-white/95 pb-[env(safe-area-inset-bottom)]",
-        "shadow-[0_-4px_16px_rgba(0,0,0,0.06)] backdrop-blur"
+        "fixed inset-x-0 bottom-0 z-50 overflow-visible md:hidden",
+        "border-t border-line/80 bg-[#FAF9F7] pb-[env(safe-area-inset-bottom)]",
+        "shadow-[0_-4px_16px_rgba(0,0,0,0.06)]",
       )}
     >
-      <div className="flex h-14 w-full items-stretch px-1">
+      <div className="flex min-h-16 w-full items-center px-1 py-2">
         {targets.map((target) => {
           const current = isCurrentTarget(target.href, pathname);
           return (
@@ -416,14 +416,14 @@ export function BottomNav() {
                 }
               }}
               className={cn(
-                "group flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-0.5",
+                "group relative flex min-w-0 flex-1 flex-col items-center justify-center gap-1 py-0.5",
                 "focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring",
               )}
               aria-label={target.label}
             >
               <span
                 className={cn(
-                  "flex size-8 shrink-0 items-center justify-center rounded-full transition-colors",
+                  "flex size-9 shrink-0 items-center justify-center rounded-full transition-colors",
                   current
                     ? "bg-action text-white shadow-sm"
                     : "text-text-secondary group-hover:text-navy-900",

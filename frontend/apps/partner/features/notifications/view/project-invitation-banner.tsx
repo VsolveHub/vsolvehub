@@ -30,7 +30,9 @@ export function ProjectInvitationBanner({ workspace }: { readonly workspace: Res
   if (!canReadEnquiries || waiting.length === 0) return null;
 
   const firstHref = targetHref(waiting[0]?.target ?? null, [workspace.key]);
-  const href = firstHref ?? "/projects/enquiries";
+  // `/projects/enquiries` is a 308 to `/work/all` now; point at the destination
+  // so a Partner with no resolvable target still lands in one hop.
+  const href = firstHref ?? "/work/all";
 
   return (
     <div className="flex items-center gap-4 rounded-card border border-action bg-signal-50 p-4">

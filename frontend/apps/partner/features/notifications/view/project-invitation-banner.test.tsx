@@ -81,7 +81,7 @@ describe("ProjectInvitationBanner", () => {
     );
     expect(screen.getByRole("link", { name: /open/i })).toHaveAttribute(
       "href",
-      "/projects/enquiries/invite-1",
+      "/work/enquiries/invite-1",
     );
   });
 
