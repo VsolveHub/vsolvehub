@@ -1,11 +1,13 @@
 "use client";
 
 import { safeNextPath, useAuthGuard, useOtpFlow } from "@vsolve/query";
-import { Card, ErrorState, Logo, OtpForm, Spinner } from "@vsolve/ui";
+import { ErrorState, Spinner } from "@vsolve/ui";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 
 import { getApiClient } from "@/lib/api/browser";
+
+import { CustomerLoginExperience } from "./customer-login-experience";
 
 /**
  * The Customer login route.
@@ -80,37 +82,23 @@ export function LoginScreen() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-md px-4 py-10">
-      <Card className="p-6 sm:p-8">
-        <Logo className="h-8 w-auto" />
-        <h1 className="mt-6 text-2xl font-bold text-text">Log in</h1>
-        <p className="mt-2 text-sm leading-6 text-text-secondary">
-          Use the mobile number you book with. We will text you a code — there is
-          no password.
-        </p>
-
-        <div className="mt-6">
-          <OtpForm
-            {...flow}
-            heading="Your mobile number"
-            headingLevel={2}
-            description="We will text you a code. There is no password."
-            verifyLabel="Verify and continue"
-            footer={
-              <p>
-                New here?{" "}
-                <a
-                  href="/catalog"
-                  className="font-semibold text-info-text underline-offset-4 hover:underline"
-                >
-                  Browse services
-                </a>{" "}
-                — you can add to your basket before signing in.
-              </p>
-            }
-          />
-        </div>
-      </Card>
+    <main className="mx-auto flex w-full max-w-4xl items-center px-4 py-6 sm:py-10">
+      <CustomerLoginExperience
+        flow={flow}
+        variant="page"
+        footer={
+          <p>
+            New here?{" "}
+            <a
+              href="/catalog"
+              className="font-semibold text-info-text underline-offset-4 hover:underline"
+            >
+              Browse services
+            </a>{" "}
+            — you can add to your basket before signing in.
+          </p>
+        }
+      />
     </main>
   );
 }
