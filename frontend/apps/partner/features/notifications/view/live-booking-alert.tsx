@@ -1,6 +1,6 @@
 "use client";
 
-import { request, serverClock } from "@vsolve/api-client";
+import { request } from "@vsolve/api-client";
 import { describeError, m2QueryKeys, queryKeys, useServerCountdown } from "@vsolve/query";
 import { Button, Dialog, ErrorState, Spinner, formatMoney } from "@vsolve/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -13,7 +13,6 @@ import {
   createOfferDeduper,
   subscribeToPartnerStream,
   type NotificationCreatedPayload,
-  type OfferCreatedPayload,
 } from "@/features/offers/live-events";
 import { useOfferCommand, usePartnerOffers, type Offer } from "@/features/offers/queries";
 import { permissionsFor, isEnquiryClosed } from "@/features/enquiry/model/enquiry-state";
@@ -28,16 +27,6 @@ import { stopBookingAlertLoop } from "./booking-alert-audio";
 
 const LIVE_INVITATION_PURPOSE = "m2.invitation.received";
 const LIVE_BOOKING_POLL_MS = 10_000;
-/** Same-day offer window; also the fallback when no server deadline is published. */
-const POPUP_RESPONSE_SECONDS = 45;
-
-function usePopupDeadline(serverDeadline: string | null | undefined): string {
-  /* Latched once on mount so the fallback window does not restart on re-render. */
-  const [fallback] = useState(() =>
-    new Date(serverClock.now() + POPUP_RESPONSE_SECONDS * 1000).toISOString(),
-  );
-  return serverDeadline ?? fallback;
-}
 
 function BookingPopupTimer({
   deadlineIso,
@@ -92,12 +81,26 @@ function isLiveBookingNotification(notification: {
   );
 }
 
+/**
+ * What is known about an offer at the moment it interrupts, before its full
+ * record has loaded. Every field is what the server actually said: an SSE
+ * `offer_created` event carries both instants, the poll fallback carries
+ * whatever the offer row holds — and a missing instant stays missing rather
+ * than being invented, so the popup renders no timer and no time instead of a
+ * fabricated one.
+ */
+interface LiveOfferSignal {
+  offer_id: string;
+  requested_start: string | null;
+  expires_at: string | null;
+}
+
 type LiveBooking =
-  | { kind: "offer"; offerId: string; payload: OfferCreatedPayload }
+  | { kind: "offer"; offerId: string; payload: LiveOfferSignal }
   | { kind: "invitation"; invitationId: string; title: string; body: string };
 
-function formatWhen(instant: string | null | undefined): string {
-  if (!instant) return "Time not given";
+function formatWhen(instant: string | null | undefined): string | null {
+  if (!instant) return null;
   return new Date(instant).toLocaleString("en-IN", {
     weekday: "short",
     day: "numeric",
@@ -131,12 +134,14 @@ function OfferBookingPopup({
   const command = useOfferCommand();
   const offer = findOffer(offersQuery.data?.pages, booking.offerId);
   const isBusy = command.isPending;
-  const deadlineIso = usePopupDeadline(offer?.expires_at ?? booking.payload.expires_at);
+  /* Only a deadline the server actually published. No deadline, no timer —
+     a countdown invented on the client is fake urgency over a real decision. */
+  const deadlineIso = offer?.expires_at ?? booking.payload.expires_at;
 
-  const serviceLabel =
-    offer?.service_lines.map((line) => line.service_label).join(", ") ?? "New service booking";
-  const area = offer?.approximate_area ?? "Your service area";
+  const serviceLabel = offer?.service_lines.map((line) => line.service_label).join(", ") ?? null;
+  const area = offer?.approximate_area ?? null;
   const when = formatWhen(offer?.starts_at ?? booking.payload.requested_start);
+  const detailsLoading = offer === undefined && offersQuery.isFetching;
 
   const handleCommand = (action: "accept" | "decline") => {
     onUserAction();
@@ -184,7 +189,9 @@ function OfferBookingPopup({
       }
     >
       <div className="flex flex-col gap-4">
-        <BookingPopupTimer deadlineIso={deadlineIso} onExpired={handleDismiss} />
+        {deadlineIso ? (
+          <BookingPopupTimer deadlineIso={deadlineIso} onExpired={handleDismiss} />
+        ) : null}
 
         <div className="flex items-start gap-3 rounded-card border border-warning-line bg-warning-surface p-4">
           <AlertTriangle className="mt-0.5 size-6 shrink-0 text-warning-text" aria-hidden />
@@ -196,11 +203,18 @@ function OfferBookingPopup({
           </div>
         </div>
 
-        {offersQuery.isPending && offer === undefined ? (
+        {detailsLoading ? (
           <div className="flex items-center gap-2 py-4 text-sm text-text-secondary">
             <Spinner size="sm" />
             Loading service details…
           </div>
+        ) : offer === undefined ? (
+          /* The list settled without this offer in it. Say so — a made-up
+             service name here would be the mock request this popup replaced. */
+          <p className="py-2 text-sm leading-6 text-text-secondary">
+            We could not load the service details. You can still accept or
+            decline, or open Work to see the full booking.
+          </p>
         ) : (
           <>
             <div>
@@ -208,15 +222,19 @@ function OfferBookingPopup({
                 Service
               </p>
               <p className="mt-1 text-lg font-bold text-text">{serviceLabel}</p>
-              <p className="mt-1 text-sm text-text-secondary">{area}</p>
+              {area ? <p className="mt-1 text-sm text-text-secondary">{area}</p> : null}
             </div>
 
-            <div className="flex items-center gap-2 text-sm text-text-secondary">
-              <Clock size={16} aria-hidden />
-              <time dateTime={booking.payload.requested_start}>{when}</time>
-            </div>
+            {when ? (
+              <div className="flex items-center gap-2 text-sm text-text-secondary">
+                <Clock size={16} aria-hidden />
+                <time dateTime={offer.starts_at ?? booking.payload.requested_start ?? undefined}>
+                  {when}
+                </time>
+              </div>
+            ) : null}
 
-            {offer?.estimated_net ? (
+            {offer.estimated_net ? (
               <div className="rounded-card border border-line bg-surface-sunken p-3">
                 <div className="flex justify-between gap-3 text-sm font-semibold text-text">
                   <span>You receive (est.)</span>
@@ -255,7 +273,8 @@ function InvitationBookingPopup({
   const closed = enquiry !== null && isEnquiryClosed(enquiry.status);
   const canAccept = permissions?.canAccept ?? !closed;
   const canDecline = permissions?.canDecline ?? !closed;
-  const deadlineIso = usePopupDeadline(enquiry?.respondsBy ?? null);
+  /* Only the deadline the server set on the enquiry, if it set one. */
+  const deadlineIso = enquiry?.respondsBy ?? null;
 
   const errorMessage =
     accept.error || decline.error
@@ -275,7 +294,7 @@ function InvitationBookingPopup({
           if (!next && !inFlight) handleDismiss();
         }}
         title={booking.title}
-        description="Review the service and respond before the timer runs out."
+        description="A customer is waiting for your answer. Review the service and respond."
         dismissable={!inFlight}
         footer={
           <>
@@ -306,7 +325,9 @@ function InvitationBookingPopup({
         }
       >
         <div className="flex flex-col gap-4">
-          <BookingPopupTimer deadlineIso={deadlineIso} onExpired={handleDismiss} />
+          {deadlineIso ? (
+            <BookingPopupTimer deadlineIso={deadlineIso} onExpired={handleDismiss} />
+          ) : null}
 
           <div className="flex items-start gap-3 rounded-card border border-warning-line bg-warning-surface p-4">
             <AlertTriangle className="mt-0.5 size-6 shrink-0 text-warning-text" aria-hidden />
@@ -395,7 +416,7 @@ export function PartnerLiveDelivery({
   const prevUnread = useRef<number | null>(null);
 
   const showOffer = useCallback(
-    (offerId: string, payload: OfferCreatedPayload) => {
+    (offerId: string, payload: LiveOfferSignal) => {
       if (!offerDeduper.current(offerId)) return;
       setAlertSound(true);
       setBooking({ kind: "offer", offerId, payload });
@@ -430,8 +451,26 @@ export function PartnerLiveDelivery({
     setBooking(null);
   }, [stopAlertSound]);
 
+  /**
+   * When this delivery session started, or `null` while offline.
+   *
+   * The poll effects below baseline themselves against the first fetch that
+   * completed *after* this instant. Comparing against `dataUpdatedAt` is what
+   * keeps a re-enable honest: the cached pages from the previous online spell
+   * are neither replayed nor trusted as a baseline — whatever arrived while
+   * offline is inbox backlog, not a live booking.
+   */
+  const enabledAt = useRef<number | null>(null);
+
   useEffect(() => {
-    if (enabled) return;
+    if (enabled) {
+      enabledAt.current ??= Date.now();
+      return;
+    }
+    enabledAt.current = null;
+    offersInitialized.current = false;
+    unreadInitialized.current = false;
+    prevUnread.current = null;
     /* Going offline must also silence the alert loop — an external system — so
        this cannot become a render-time derivation of `enabled`. */
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -458,22 +497,24 @@ export function PartnerLiveDelivery({
 
   useEffect(() => {
     if (!enabled || !offersQuery.isSuccess || !offersQuery.data) return;
+    /* Cached pages from before this online spell: not a baseline, not news. */
+    if (enabledAt.current === null || offersQuery.dataUpdatedAt < enabledAt.current) return;
 
     const liveOffers =
       offersQuery.data.pages[0]?.results.filter((offer) => offer.status === "OFFERED") ?? [];
 
+    /*
+      The first page after delivery starts is the baseline, never a popup.
+
+      Anything already in it existed before this Partner came online — it is
+      sitting in the Work inbox where it belongs, and replaying it here as
+      "a customer just booked", with the alarm, is a fake live request. The
+      popup announces arrivals; only an offer that appears after this baseline
+      is an arrival.
+    */
     if (!offersInitialized.current) {
       offersInitialized.current = true;
-      const nextOffer = liveOffers[0];
-      if (nextOffer) {
-        seenOfferIds.current.add(nextOffer.id);
-        showOffer(nextOffer.id, {
-          offer_id: nextOffer.id,
-          fulfilment_unit_id: nextOffer.fulfilment_unit_id ?? "",
-          requested_start: nextOffer.starts_at ?? new Date().toISOString(),
-          expires_at: nextOffer.expires_at ?? new Date().toISOString(),
-        });
-      }
+      for (const offer of liveOffers) seenOfferIds.current.add(offer.id);
       return;
     }
 
@@ -482,9 +523,8 @@ export function PartnerLiveDelivery({
       seenOfferIds.current.add(offer.id);
       showOffer(offer.id, {
         offer_id: offer.id,
-        fulfilment_unit_id: offer.fulfilment_unit_id ?? "",
-        requested_start: offer.starts_at ?? new Date().toISOString(),
-        expires_at: offer.expires_at ?? new Date().toISOString(),
+        requested_start: offer.starts_at ?? null,
+        expires_at: offer.expires_at ?? null,
       });
       break;
     }
@@ -500,15 +540,19 @@ export function PartnerLiveDelivery({
 
   useEffect(() => {
     if (!enabled || !unreadQuery.isSuccess || unreadQuery.data === undefined) return;
+    /* Cached count from before this online spell: not a baseline, not news. */
+    if (enabledAt.current === null || unreadQuery.dataUpdatedAt < enabledAt.current) return;
 
     const unread = unreadQuery.data.unread;
 
+    const fetchFeed = () =>
+      queryClient.fetchQuery({
+        queryKey: m2QueryKeys.notifications.feed(),
+        queryFn: () => request(() => getApiClient().GET("/api/v1/notifications/")),
+      });
+
     const inspectFeed = () => {
-      void queryClient
-        .fetchQuery({
-          queryKey: m2QueryKeys.notifications.feed(),
-          queryFn: () => request(() => getApiClient().GET("/api/v1/notifications/")),
-        })
+      void fetchFeed()
         .then((page) => {
           for (const notification of page.results) {
             if (isLiveBookingNotification(notification)) {
@@ -532,10 +576,27 @@ export function PartnerLiveDelivery({
         .catch(() => undefined);
     };
 
+    /*
+      First count after delivery starts: record the baseline and mark what is
+      already in the feed as seen, without showing anything.
+
+      An unread notice from before this Partner came online is inbox backlog —
+      the bell badge already counts it. Popping it here with the alarm replays
+      an old request as a live one. Marking the current feed seen is what lets
+      the non-init path below treat "unseen" as "arrived while online".
+    */
     if (!unreadInitialized.current) {
       unreadInitialized.current = true;
       prevUnread.current = unread;
-      if (unread > 0) inspectFeed();
+      if (unread > 0) {
+        void fetchFeed()
+          .then((page) => {
+            for (const notification of page.results) {
+              seenNotificationIds.current.add(notification.id);
+            }
+          })
+          .catch(() => undefined);
+      }
       return;
     }
 

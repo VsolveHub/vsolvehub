@@ -3,8 +3,15 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   canReceivePartnerLiveBookings,
   presenceStatus,
+  HEARTBEAT_INTERVAL_MS,
+  STALE_AFTER_MS,
   type PresenceStatus,
 } from "./presence";
+import {
+  announceHeartbeat,
+  onHeartbeat,
+  recurringHeartbeatClaimed,
+} from "./heartbeat-lease";
 import {
   clearStoredSession,
   readStoredSession,
@@ -18,8 +25,26 @@ function useStoredSessionId(): string | null {
 
 /**
  * Tracks whether this browser's Partner session is online enough to receive
- * live booking popups. Probes storage on change only — the visible presence
- * panel owns the recurring heartbeat so we do not double-hit Django/Postgres.
+ * live booking popups — and keeps that true, not just believed.
+ *
+ * ## The keep-alive this hook owns
+ *
+ * The presence panel sends location-bearing heartbeats, but it is mounted only
+ * on the screens that draw it. Before this hook beat too, a Partner reading
+ * their earnings or a job detail sent nothing; Django marked the session stale
+ * after `STALE_AFTER_MS` and dispatch skipped them — while this hook, with its
+ * hardcoded "fresh", kept the radar sweeping and the popups armed. The
+ * keep-alive below (session id only, no location) runs wherever the app is
+ * open, and stands down whenever a panel holds the lease so the two never
+ * double-beat.
+ *
+ * ## Staleness is reported, not assumed
+ *
+ * A timer armed at each acknowledged beat flips `overdue` once no beat — from
+ * either sender — has landed inside the stale window. `presenceStatus` then
+ * answers "stale", `canReceivePartnerLiveBookings` goes false, and the popup
+ * and its alarm disarm: a phone the dispatcher cannot reach must not claim it
+ * is receiving bookings.
  */
 export function usePartnerReceivingOffers(): {
   readonly status: PresenceStatus;
@@ -36,6 +61,10 @@ export function usePartnerReceivingOffers(): {
     readonly id: string;
     readonly ok: boolean;
   } | null>(null);
+  /* Keyed by session id for the same reason as `probe`: a stale verdict left
+     over from an ended session must not taint the next one, and comparing ids
+     at render time needs no synchronous reset. */
+  const [overdue, setOverdue] = useState<{ readonly id: string } | null>(null);
 
   useEffect(() => {
     heartbeatRef.current = heartbeat;
@@ -51,6 +80,7 @@ export function usePartnerReceivingOffers(): {
       .then(() => {
         if (cancelled) return;
         setProbe({ id: storedSessionId, ok: true });
+        announceHeartbeat();
       })
       .catch(() => {
         if (cancelled) return;
@@ -69,9 +99,48 @@ export function usePartnerReceivingOffers(): {
       : null;
   const isRestoring = storedSessionId !== null && probe?.id !== storedSessionId;
 
+  useEffect(() => {
+    if (sessionId === null) return;
+
+    let staleTimer: ReturnType<typeof setTimeout> | null = null;
+    const armStaleTimer = () => {
+      if (staleTimer !== null) clearTimeout(staleTimer);
+      staleTimer = setTimeout(() => setOverdue({ id: sessionId }), STALE_AFTER_MS);
+    };
+    armStaleTimer();
+
+    /* Every acknowledged beat — this hook's or the panel's — resets the clock. */
+    const unsubscribe = onHeartbeat(() => {
+      setOverdue(null);
+      armStaleTimer();
+    });
+
+    const interval = setInterval(() => {
+      /* A mounted presence panel is already beating, with a location. */
+      if (recurringHeartbeatClaimed()) return;
+      void heartbeatRef.current
+        .mutateAsync({ session_id: sessionId })
+        .then(() => announceHeartbeat())
+        .catch(() => {
+          /* Left for the stale timer to report. Retrying immediately would
+             hammer a server that is already struggling. */
+        });
+    }, HEARTBEAT_INTERVAL_MS);
+
+    return () => {
+      clearInterval(interval);
+      if (staleTimer !== null) clearTimeout(staleTimer);
+      unsubscribe();
+    };
+  }, [sessionId]);
+
+  const overdueForSession = sessionId !== null && overdue?.id === sessionId;
+
   const status = presenceStatus({
     hasSession: sessionId !== null,
-    msSinceHeartbeat: sessionId === null ? null : 0,
+    /* Not a measured duration — `presenceStatus` only thresholds this against
+       `STALE_AFTER_MS`, and the stale timer above is what does the measuring. */
+    msSinceHeartbeat: sessionId === null ? null : overdueForSession ? STALE_AFTER_MS + 1 : 0,
     isConnecting: false,
     locationDenied: false,
     hasFailed: false,

@@ -1,10 +1,5 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { m2QueryKeys, queryKeys } from "@vsolve/query";
-import { useToast } from "@vsolve/ui";
-
 import { PUBLIC_API_BASE_URL } from "@/lib/api/config";
 
 /**
@@ -184,59 +179,4 @@ export function subscribeToOfferEvents(
   options: SubscribeOptions = {},
 ): () => void {
   return subscribeToPartnerStream({ onOfferCreated }, options);
-}
-
-export function useOfferLiveEvents(enabled = true) {
-  usePartnerStreamEvents({ offers: enabled });
-}
-
-export function usePartnerStreamEvents(
-  enabled: boolean | { offers?: boolean; notifications?: boolean } = true,
-) {
-  const queryClient = useQueryClient();
-  const { notify } = useToast();
-  const offerDeduper = useRef<ReturnType<typeof createOfferDeduper> | null>(null);
-  const notificationDeduper = useRef<ReturnType<typeof createIdDeduper> | null>(null);
-  const jobDeduper = useRef<ReturnType<typeof createIdDeduper> | null>(null);
-  offerDeduper.current ??= createOfferDeduper();
-  notificationDeduper.current ??= createIdDeduper("notification");
-  jobDeduper.current ??= createIdDeduper("job");
-
-  const offersEnabled = typeof enabled === "boolean" ? enabled : (enabled.offers ?? true);
-  const notificationsEnabled =
-    typeof enabled === "boolean" ? enabled : (enabled.notifications ?? true);
-
-  useEffect(() => {
-    if (!offersEnabled && !notificationsEnabled) return;
-
-    const unsubscribe = subscribeToPartnerStream({
-      onOfferCreated: offersEnabled
-        ? (payload) => {
-            if (!offerDeduper.current?.(payload.offer_id)) return;
-            notify("A new offer just arrived.", "info");
-            void queryClient.invalidateQueries({ queryKey: queryKeys.partner.offers() });
-          }
-        : undefined,
-      onJobAssigned: offersEnabled
-        ? (payload) => {
-            if (!jobDeduper.current?.(payload.fulfilment_unit_id)) return;
-            notify("A job has been assigned to you.", "info");
-            void queryClient.invalidateQueries({ queryKey: queryKeys.partner.offers() });
-            void queryClient.invalidateQueries({ queryKey: queryKeys.partnerWork.all });
-          }
-        : undefined,
-      onNotificationCreated: notificationsEnabled
-        ? (payload) => {
-            if (!notificationDeduper.current?.(payload.notification_id)) return;
-            notify(payload.title, "info");
-            void queryClient.invalidateQueries({
-              queryKey: m2QueryKeys.notifications.unreadCount(),
-            });
-            void queryClient.invalidateQueries({ queryKey: m2QueryKeys.invitations.all });
-          }
-        : undefined,
-    });
-
-    return unsubscribe;
-  }, [notificationsEnabled, notify, offersEnabled, queryClient]);
 }

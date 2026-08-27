@@ -13,6 +13,7 @@ import {
   presenceStatus,
   type PresenceStatus,
 } from "../model/presence";
+import { announceHeartbeat, claimRecurringHeartbeat } from "../model/heartbeat-lease";
 import {
   clearStoredSession,
   readStoredSession,
@@ -190,6 +191,7 @@ export function PresencePanel({
             : {}),
         });
         setLastBeatAt(Date.now());
+        announceHeartbeat();
       } catch {
         // Left for the status to report as `stale`. Retrying immediately would
         // hammer a server that is already struggling, and pretending it
@@ -243,6 +245,7 @@ export function PresencePanel({
         // the server answered just now, which is what freshness is measured
         // from, and it keeps the comparison on a single local clock.
         setLastBeatAt(Date.now());
+        announceHeartbeat();
       })
       .catch(() => {
         if (!cancelled) clearStoredSession();
@@ -259,12 +262,17 @@ export function PresencePanel({
   useEffect(() => {
     if (sessionId === null) return;
 
+    // While this panel beats — with a location — the app-wide keep-alive in
+    // `usePartnerReceivingOffers` stands down, so the server hears exactly one
+    // cadence wherever the Partner is.
+    const releaseLease = claimRecurringHeartbeat();
     const beat = setInterval(() => void sendHeartbeatRef.current(sessionId), HEARTBEAT_INTERVAL_MS);
     // Advances the clock, so "connection lost" appears on its own rather than
     // waiting for the next successful beat to re-render the screen.
     const refresh = setInterval(() => setNow(Date.now()), 5_000);
 
     return () => {
+      releaseLease();
       clearInterval(beat);
       clearInterval(refresh);
     };
@@ -300,6 +308,7 @@ export function PresencePanel({
       // timestamp into it reintroduces device-clock skew as apparent staleness.
       setLastBeatAt(Date.now());
       writeStoredSession(session.id);
+      announceHeartbeat();
     }
   }
 
