@@ -88,9 +88,17 @@ export default async function CategoryPage({ params, searchParams }: PageProps) 
 
   if (!category) notFound();
 
+  const tileSlug = typeof tile === "string" && tile !== "" ? tile : null;
+
   return (
-    <main className="mx-auto w-full max-w-5xl px-4 py-4 sm:px-6 sm:py-6">
-      <header className="flex items-center gap-1 pb-3">
+    <main
+      className={
+        tileSlug
+          ? "mx-auto w-full max-w-5xl px-4 py-4 sm:px-6 sm:py-6 lg:mx-0 lg:max-w-none lg:p-0"
+          : "mx-auto w-full max-w-5xl px-4 py-4 sm:px-6 sm:py-6"
+      }
+    >
+      <header className={tileSlug ? "flex items-center gap-1 pb-3 lg:hidden" : "flex items-center gap-1 pb-3"}>
         <Link
           href="/catalog"
           aria-label="All services"
@@ -120,7 +128,7 @@ export default async function CategoryPage({ params, searchParams }: PageProps) 
       </header>
 
       <Suspense fallback={<ListSkeleton />}>
-        <CategoryServices slug={slug} tile={typeof tile === "string" && tile !== "" ? tile : null} />
+        <CategoryServices slug={slug} tile={tileSlug} />
       </Suspense>
     </main>
   );

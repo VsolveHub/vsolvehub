@@ -2,6 +2,7 @@ import Link from "next/link";
 import { formatMoney } from "@vsolve/ui";
 
 import { ServicePhoto } from "./category-artwork";
+import { TileDesktopSplitPane } from "./tile-desktop-split-pane";
 import { serviceHref } from "../service-href";
 import type { Category, ServiceCard } from "../queries";
 
@@ -39,6 +40,7 @@ const A3_TIME_BLOCK = "A3_TIME_BLOCK";
 export interface TileGroup {
   slug: string;
   name: string;
+  description: string;
   iconKey: string;
   imageUrl: string;
   services: ServiceCard[];
@@ -56,6 +58,7 @@ export function groupByTile(category: Category, services: readonly ServiceCard[]
     .map((subcategory) => ({
       slug: subcategory.slug,
       name: subcategory.name,
+      description: subcategory.description,
       iconKey: subcategory.icon_key,
       imageUrl: subcategory.image_url,
       services: bySlug.get(subcategory.slug) ?? [],
@@ -201,27 +204,35 @@ export function CategoryTileBrowser({
 
   if (activeTile !== undefined) {
     return (
-      <div className="flex flex-col gap-4">
-        <Link
-          href={`/catalog/${category.slug}`}
-          className="inline-flex min-h-11 w-fit items-center gap-1.5 rounded-control text-sm font-semibold text-action focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-        >
-          <svg
-            viewBox="0 0 20 20"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={1.9}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden
-            className="size-4"
+      <>
+        <div className="flex flex-col gap-4 lg:hidden">
+          <Link
+            href={`/catalog/${category.slug}`}
+            className="inline-flex min-h-11 w-fit items-center gap-1.5 rounded-control text-sm font-semibold text-action focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
           >
-            <path d="M12.5 4.5 7 10l5.5 5.5" />
-          </svg>
-          All {category.name.toLowerCase()} services
-        </Link>
-        <TileServiceList tile={activeTile} categorySlug={category.slug} />
-      </div>
+            <svg
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.9}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+              className="size-4"
+            >
+              <path d="M12.5 4.5 7 10l5.5 5.5" />
+            </svg>
+            All {category.name.toLowerCase()} services
+          </Link>
+          <TileServiceList tile={activeTile} categorySlug={category.slug} />
+        </div>
+        <TileDesktopSplitPane
+          key={activeTile.slug}
+          category={category}
+          tiles={tiles}
+          activeTile={activeTile}
+        />
+      </>
     );
   }
 

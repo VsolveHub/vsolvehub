@@ -258,37 +258,8 @@ export default async function HomePage() {
             </div>
           </section>
 
-          {/* The V Solve Approach Section */}
-          <section aria-labelledby="approach-heading" className="mt-20 mb-6 text-center max-w-4xl mx-auto">
-            <h2 id="approach-heading" className="text-[2.25rem] md:text-[2.75rem] font-extrabold tracking-tight text-navy-900">
-              The V Solve Approach
-            </h2>
-            <p className="mt-3 text-[1.05rem] text-text-secondary font-normal">
-              A seamless, curated process designed to deliver excellence without friction.
-            </p>
-            
-            <div className="mt-16 relative w-full px-0">
-              {/* Dashed connecting line for desktop */}
-              <div className="absolute top-8 left-[15%] right-[15%] h-px border-t-2 border-dashed border-[#F3E7D3]" />
-              
-              <ul className="grid grid-cols-3 gap-8 overflow-visible">
-                {APPROACH.map((step) => (
-                  <li key={step.title} className="relative flex flex-col items-center text-center bg-transparent p-0 rounded-none shadow-none border-transparent">
-                    <div className="z-10 flex size-16 items-center justify-center rounded-full bg-navy-900 text-white shadow-sm mb-8 shrink-0">
-                      {step.icon}
-                    </div>
-                    <h3 className="text-lg font-bold text-navy-900">{step.title}</h3>
-                    <p className="mt-3 text-sm text-text-secondary leading-relaxed font-normal max-w-xs text-center">
-                      {step.body}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </section>
-
           {/* Curated Services Section */}
-          <section aria-labelledby="categories-heading" className="mt-36 pb-12 bg-transparent rounded-none px-0">
+          <section aria-labelledby="categories-heading" className="mt-20 pb-12 bg-transparent rounded-none px-0">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-6 mb-8 md:mb-8">
               <div>
                 <h2 id="categories-heading" className="text-[2.25rem] md:text-[2.75rem] font-extrabold tracking-tight text-navy-900">
@@ -317,6 +288,35 @@ export default async function HomePage() {
           <div className="mt-20">
             <HomepageClientSections />
           </div>
+
+          {/* The V Solve Approach Section */}
+          <section aria-labelledby="approach-heading" className="mt-12 mb-16 text-center max-w-4xl mx-auto">
+            <h2 id="approach-heading" className="text-[2.25rem] md:text-[2.75rem] font-extrabold tracking-tight text-navy-900">
+              The V Solve Approach
+            </h2>
+            <p className="mt-3 text-[1.05rem] text-text-secondary font-normal">
+              A seamless, curated process designed to deliver excellence without friction.
+            </p>
+            
+            <div className="mt-16 relative w-full px-0">
+              {/* Dashed connecting line for desktop */}
+              <div className="absolute top-8 left-[15%] right-[15%] h-px border-t-2 border-dashed border-[#F3E7D3]" />
+              
+              <ul className="grid grid-cols-3 gap-8 overflow-visible">
+                {APPROACH.map((step) => (
+                  <li key={step.title} className="relative flex flex-col items-center text-center bg-transparent p-0 rounded-none shadow-none border-transparent">
+                    <div className="z-10 flex size-16 items-center justify-center rounded-full bg-navy-900 text-white shadow-sm mb-8 shrink-0">
+                      {step.icon}
+                    </div>
+                    <h3 className="text-lg font-bold text-navy-900">{step.title}</h3>
+                    <p className="mt-3 text-sm text-text-secondary leading-relaxed font-normal max-w-xs text-center">
+                      {step.body}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </section>
         </div>
 
         {/* ---------------------------------------------------- */}
