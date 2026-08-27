@@ -23,6 +23,27 @@
 
 export const STORAGE_KEY = "vsolve.partner.presence";
 
+const STORAGE_CHANGE_EVENT = "vsolve:partner-presence-storage";
+
+/** React to writes from this tab and from other tabs on the same origin. */
+export function subscribeStoredSession(onStoreChange: () => void): () => void {
+  if (typeof window === "undefined") return () => undefined;
+
+  const notify = () => onStoreChange();
+  window.addEventListener(STORAGE_CHANGE_EVENT, notify);
+  window.addEventListener("storage", notify);
+
+  return () => {
+    window.removeEventListener(STORAGE_CHANGE_EVENT, notify);
+    window.removeEventListener("storage", notify);
+  };
+}
+
+function notifyStoredSessionChange(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(STORAGE_CHANGE_EVENT));
+}
+
 /** Storage throws in private modes and when disabled; presence is not worth a crash. */
 function storage(): Storage | null {
   try {
@@ -43,6 +64,7 @@ export function readStoredSession(): string | null {
 export function writeStoredSession(sessionId: string): void {
   try {
     storage()?.setItem(STORAGE_KEY, sessionId);
+    notifyStoredSessionChange();
   } catch {
     // A Partner who cannot persist this simply loses the restore on reload,
     // which is the behaviour they had before it existed.
@@ -52,6 +74,7 @@ export function writeStoredSession(sessionId: string): void {
 export function clearStoredSession(): void {
   try {
     storage()?.removeItem(STORAGE_KEY);
+    notifyStoredSessionChange();
   } catch {
     // Nothing to recover: the next probe fails and clears the screen anyway.
   }

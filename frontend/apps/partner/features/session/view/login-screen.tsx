@@ -9,6 +9,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 
 import { usePartnerApplication } from "@/features/application/queries";
+import { prepareBookingAlertsFromGesture } from "@/features/notifications/view/booking-alert-audio";
 import { getApiClient } from "@/lib/api/browser";
 
 import { homeForApplication, safeNextPath } from "../model/redirect";
@@ -46,6 +47,17 @@ export function LoginScreen() {
   // the Partner role would lock out every new applicant on their very first
   // sign-in, since nobody holds that role before they have applied once.
   const flow = useOtpFlow(getApiClient());
+  const flowWithAudio = {
+    ...flow,
+    onRequestCode: () => {
+      prepareBookingAlertsFromGesture();
+      flow.onRequestCode();
+    },
+    onVerifyCode: () => {
+      prepareBookingAlertsFromGesture();
+      flow.onVerifyCode();
+    },
+  };
 
   const next = safeNextPath(searchParams.get("next"));
 
@@ -133,7 +145,7 @@ export function LoginScreen() {
 
           <div className="mt-6">
             <OtpForm
-              {...flow}
+              {...flowWithAudio}
               heading="Your mobile number"
               headingLevel={2}
               description="We will text you a code. There is no password."

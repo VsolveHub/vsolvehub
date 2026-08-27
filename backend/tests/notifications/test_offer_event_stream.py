@@ -156,6 +156,19 @@ def test_the_stream_requires_a_partner_session() -> None:
 
 @FAST_STREAM
 @freeze_time(FROZEN_NOW)
+def test_the_stream_accepts_text_event_stream_in_accept() -> None:
+    """`EventSource` sends `Accept: text/event-stream`; that must not 406."""
+
+    call_command("seed_technician_catalog")
+
+    response = APIClient().get(STREAM_URL, HTTP_ACCEPT="text/event-stream")
+
+    assert response.status_code in (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN)
+    assert response.status_code != HTTPStatus.NOT_ACCEPTABLE
+
+
+@FAST_STREAM
+@freeze_time(FROZEN_NOW)
 def test_stream_emits_notification_created_for_partner_in_app_booking_notice() -> None:
     call_command("seed_technician_catalog")
     partner = online_partner(suffix="86", variant_slugs=("switch-socket-repair",))

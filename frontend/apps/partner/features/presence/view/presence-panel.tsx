@@ -18,6 +18,7 @@ import {
   readStoredSession,
   writeStoredSession,
 } from "../model/stored-session";
+import { prepareBookingAlertsFromGesture } from "@/features/notifications/view/booking-alert-audio";
 import { useGoOffline, useGoOnline, useHeartbeat } from "../queries";
 
 /**
@@ -408,6 +409,7 @@ export function PresencePanel({
           </Select>
 
           <Button
+            onPointerDown={() => prepareBookingAlertsFromGesture()}
             onClick={() => void handleGoOnline()}
             disabled={!canGoOnline}
             loading={goOnline.isPending}
@@ -545,6 +547,7 @@ function DriverPresenceControls({
               goOnline.isPending ||
               goOffline.isPending
             }
+            onPointerDown={() => prepareBookingAlertsFromGesture()}
             onClick={() => void (sessionId === null ? handleGoOnline() : handleGoOffline())}
             className={cn(
               "relative grid size-[5.5rem] place-items-center rounded-full transition-all duration-300 ease-out",

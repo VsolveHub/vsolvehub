@@ -53,6 +53,7 @@ from django.http import StreamingHttpResponse
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.renderers import BaseRenderer, JSONRenderer
 from rest_framework.request import Request
 from rest_framework.views import APIView
 
@@ -197,6 +198,33 @@ def offer_event_frames(
         time.sleep(poll_seconds)
 
 
+class EventStreamRenderer(BaseRenderer):
+    """Accept `Accept: text/event-stream` from browser `EventSource`.
+
+    DRF negotiates renderers before the view runs. Without one whose
+    `media_type` matches, `EventSource`'s Accept header gets a `406` even
+    though the view returns a `StreamingHttpResponse` directly.
+    """
+
+    media_type = "text/event-stream"
+    format = "event-stream"
+    charset = None
+
+    def render(
+        self,
+        data: object,
+        accepted_media_type: str | None = None,
+        renderer_context: dict[str, object] | None = None,
+    ) -> bytes:
+        if data is None:
+            return b""
+        if isinstance(data, bytes):
+            return data
+        if isinstance(data, str):
+            return data.encode("utf-8")
+        return JSONRenderer().render(data, accepted_media_type, renderer_context)
+
+
 class PartnerOfferStreamView(APIView):
     """`GET /api/v1/partner/offers/stream/` — see the contract proposal.
 
@@ -207,6 +235,7 @@ class PartnerOfferStreamView(APIView):
     """
 
     permission_classes = (IsAuthenticated, IsPartnerUser)
+    renderer_classes = (EventStreamRenderer, JSONRenderer)
 
     @extend_schema(
         tags=["Partner"],

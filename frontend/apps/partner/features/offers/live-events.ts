@@ -5,6 +5,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { m2QueryKeys, queryKeys } from "@vsolve/query";
 import { useToast } from "@vsolve/ui";
 
+import { PUBLIC_API_BASE_URL } from "@/lib/api/config";
+
 /**
  * Foreground delivery for Partner stream events over
  * `GET /api/v1/partner/offers/stream/`.
@@ -47,6 +49,14 @@ export interface SubscribeOptions {
 }
 
 const SEEN_TTL_MS = 5 * 60_000;
+const STREAM_RECONNECT_MS = 2_000;
+
+/** Same-origin relative URL when `NEXT_PUBLIC_API_BASE_URL` is empty (dev proxy). */
+export function partnerStreamUrl(): string {
+  const base = PUBLIC_API_BASE_URL.replace(/\/$/, "");
+  if (!base) return "/api/v1/partner/offers/stream/";
+  return `${base}/api/v1/partner/offers/stream/`;
+}
 
 export function createOfferDeduper(now: () => number = Date.now) {
   const seen = new Map<string, number>();
@@ -97,8 +107,10 @@ export function subscribeToPartnerStream(
     return () => {};
   }
 
-  const url = options.url ?? "/api/v1/partner/offers/stream/";
-  const es = new EventSourceImpl(url, { withCredentials: true });
+  const url = options.url ?? partnerStreamUrl();
+  let es: EventSource | null = null;
+  let closed = false;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
   const onOfferCreated = (event: MessageEvent) => {
     const data = parseJson<OfferCreatedPayload>(event.data);
@@ -121,15 +133,48 @@ export function subscribeToPartnerStream(
     }
   };
 
-  es.addEventListener("offer_created", onOfferCreated as EventListener);
-  es.addEventListener("job_assigned", onJobAssigned as EventListener);
-  es.addEventListener("notification_created", onNotificationCreated as EventListener);
+  const attach = (source: EventSource) => {
+    source.addEventListener("offer_created", onOfferCreated as EventListener);
+    source.addEventListener("job_assigned", onJobAssigned as EventListener);
+    source.addEventListener("notification_created", onNotificationCreated as EventListener);
+  };
+
+  const detach = (source: EventSource) => {
+    source.removeEventListener("offer_created", onOfferCreated as EventListener);
+    source.removeEventListener("job_assigned", onJobAssigned as EventListener);
+    source.removeEventListener("notification_created", onNotificationCreated as EventListener);
+  };
+
+  const scheduleReconnect = () => {
+    if (closed || reconnectTimer !== null) return;
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      connect();
+    }, STREAM_RECONNECT_MS);
+  };
+
+  const connect = () => {
+    if (closed) return;
+    es?.close();
+    es = new EventSourceImpl(url, { withCredentials: true });
+    attach(es);
+    es.onerror = () => {
+      detach(es!);
+      es?.close();
+      es = null;
+      scheduleReconnect();
+    };
+  };
+
+  connect();
 
   return () => {
-    es.removeEventListener("offer_created", onOfferCreated as EventListener);
-    es.removeEventListener("job_assigned", onJobAssigned as EventListener);
-    es.removeEventListener("notification_created", onNotificationCreated as EventListener);
-    es.close();
+    closed = true;
+    if (reconnectTimer !== null) clearTimeout(reconnectTimer);
+    if (es) {
+      detach(es);
+      es.close();
+    }
   };
 }
 

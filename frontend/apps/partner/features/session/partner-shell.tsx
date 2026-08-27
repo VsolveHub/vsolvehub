@@ -8,8 +8,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, type ReactNode } from "react";
 
 import { getApiClient } from "@/lib/api/browser";
+import { prepareBookingAlertsFromGesture } from "@/features/notifications/view/booking-alert-audio";
 import { LiveOfferSheet } from "@/features/crew-offer/view/live-offer-sheet";
-import { usePartnerStreamEvents } from "@/features/offers/live-events";
 import { NotificationNavTab } from "@/features/notifications/view/notification-bell";
 import {
   resolveWorkspaces,
@@ -75,6 +75,7 @@ export function SwitchToPartner({ inline = false }: { inline?: boolean } = {}) {
 
       <div className="mt-6 flex flex-wrap gap-3">
         <Button
+          onPointerDown={() => prepareBookingAlertsFromGesture()}
           onClick={() => switchRole.mutate(PARTNER_ROLE)}
           loading={switchRole.isPending}
           loadingLabel="Switching"
@@ -174,9 +175,6 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
   const workspaceGrants = usePartnerWorkspaceGrants({
     enabled: guard.status === "authenticated" && hasRole(guard.user, PARTNER_ROLE),
   });
-  const isPartnerAuthenticated =
-    guard.status === "authenticated" && hasRole(guard.user, PARTNER_ROLE);
-  usePartnerStreamEvents(isPartnerAuthenticated);
   const logout = useLogout(getApiClient());
   const router = useRouter();
 
@@ -239,18 +237,24 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
   const workspaces = resolveWorkspaces(workspaceGrants.grants ?? []);
   const workspaceKeys = workspaces.map((item) => item.key);
 
+  const isDarkPage = pathname === "/home";
+
   return (
     <div className="flex min-h-screen flex-col items-center bg-background">
-      <div className="relative flex min-h-screen w-full max-w-md flex-col border-x border-line/50 bg-surface shadow-sm">
+      <div
+        className={cn(
+          "relative flex min-h-screen w-full max-w-md flex-col border-x border-line/50 shadow-sm",
+          isDarkPage ? "bg-[var(--color-ink-900)]" : "bg-surface",
+        )}
+      >
         {chromeMode === "full" ? (
-          <header className="sticky top-0 z-30 border-b border-line bg-surface">
-            <div className="flex items-center justify-between px-4 py-3">
+          <header className="sticky top-0 z-30 rounded-b-[2rem] bg-surface px-4 pb-4 pt-[max(0.625rem,env(safe-area-inset-top))] shadow-[0_4px_24px_rgba(0,0,0,0.15)]">
+            <div className="flex items-center justify-between">
               <Link
                 href="/home"
-                className="flex items-center gap-2 rounded-control focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+                className="flex min-w-0 items-center gap-2 rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
               >
-                <Logo className="h-7 w-auto" />
-                <span className="text-sm font-semibold text-text-secondary">Partner</span>
+                <Logo className="text-base h-7 w-auto" />
               </Link>
               <Button
                 variant="ghost"
@@ -266,7 +270,7 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
           <FocusedHeader pathname={pathname} />
         ) : null}
 
-        <ShellContent paddingBottom={chromeMode === "full" ? "pb-20" : "pb-6"}>
+        <ShellContent paddingBottom={chromeMode === "full" ? "pb-32" : "pb-6"}>
           {children}
         </ShellContent>
 
@@ -298,53 +302,87 @@ function BottomTabBar({
   }, null);
   const currentHref = current?.href ?? null;
 
+  const homeItem = items.find((item) => item.href === "/home" || item.label === "Home");
+  const sideItems = items.filter((item) => item.href !== "/home" && item.label !== "Home");
+  const midPoint = Math.ceil(sideItems.length / 2);
+  const leftItems = sideItems.slice(0, midPoint);
+  const rightItems = sideItems.slice(midPoint);
+
+  function renderTab(item: WorkspaceNavItem) {
+    if (item.kind === "notifications") {
+      return (
+        <li key={item.href} className="flex-1">
+          <NotificationNavTab workspaceKeys={workspaceKeys} label={item.label} />
+        </li>
+      );
+    }
+
+    const isCurrent = item.href === currentHref;
+    const Icon = item.icon;
+
+    return (
+      <li key={item.href} className="flex-1">
+        <Link
+          href={item.href}
+          aria-current={isCurrent ? "page" : undefined}
+          onPointerDown={() => prepareBookingAlertsFromGesture()}
+          className={cn(
+            "flex min-h-[3.5rem] flex-col items-center justify-center gap-0.5 px-1 text-[0.625rem] font-semibold",
+            "transition-colors duration-fast ease-out",
+            "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-action",
+            isCurrent ? "text-action-secondary" : "text-surface/45 hover:text-surface/70",
+          )}
+        >
+          <span
+            className={cn(
+              "flex h-8 w-14 items-center justify-center rounded-full transition-colors duration-fast",
+              isCurrent ? "bg-selected-surface" : "",
+            )}
+          >
+            <Icon size={20} strokeWidth={isCurrent ? 2.5 : 2} aria-hidden />
+          </span>
+          {item.label}
+        </Link>
+      </li>
+    );
+  }
+
   return (
     <nav
       aria-label="Partner navigation"
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface"
+      className="fixed inset-x-0 bottom-0 z-40 bg-transparent"
     >
-      <div className="mx-auto max-w-md">
-        <ul className="flex list-none justify-around p-0">
-          {items.map((item) => {
-            if (item.kind === "notifications") {
-              return (
-                <li key={item.href} className="flex-1">
-                  <NotificationNavTab workspaceKeys={workspaceKeys} label={item.label} />
-                </li>
-              );
-            }
+      <div className="mx-auto max-w-md relative">
+        {homeItem ? (
+          <div className="absolute inset-x-0 -top-6 z-50 mx-auto flex w-full justify-center pointer-events-none">
+            <Link
+              href={homeItem.href}
+              aria-label="Home"
+              aria-current={currentHref === homeItem.href ? "page" : undefined}
+              onPointerDown={() => prepareBookingAlertsFromGesture()}
+              className={cn(
+                "pointer-events-auto flex size-[4.25rem] items-center justify-center rounded-full",
+                "bg-[linear-gradient(135deg,var(--color-action-active)_0%,var(--color-action-active)_100%)] shadow-[0_8px_32px_color-mix(in_oklab,var(--color-action-active)_40%,transparent)]",
+                "text-action-text focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-4 focus-visible:outline-action transition-transform hover:scale-105 active:scale-95",
+              )}
+            >
+              <homeItem.icon size={26} strokeWidth={2.5} aria-hidden />
+            </Link>
+          </div>
+        ) : null}
 
-            const isCurrent = item.href === currentHref;
-            const Icon = item.icon;
-
-            return (
-              <li key={item.href} className="flex-1">
-                <Link
-                  href={item.href}
-                  aria-current={isCurrent ? "page" : undefined}
-                  className={cn(
-                    "flex min-h-[3.5rem] flex-col items-center justify-center gap-0.5 px-1 text-[0.625rem] font-semibold",
-                    "transition-colors duration-fast ease-out",
-                    "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-action",
-                    isCurrent
-                      ? "text-action-secondary"
-                      : "text-text-muted hover:text-text-secondary",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "flex h-8 w-14 items-center justify-center rounded-full transition-colors duration-fast",
-                      isCurrent ? "bg-selected-surface" : "",
-                    )}
-                  >
-                    <Icon size={20} strokeWidth={isCurrent ? 2.5 : 2} aria-hidden />
-                  </span>
-                  {item.label}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+        {/* Main bar */}
+        <div className="rounded-t-[1.75rem] bg-[var(--color-ink-900)] px-2 pb-[max(0.625rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_40px_color-mix(in_oklab,var(--color-ink-900)_50%,transparent)]">
+          <div className="flex w-full items-end">
+            <ul className="flex flex-1 list-none items-end justify-around">
+              {leftItems.map(renderTab)}
+            </ul>
+            <div aria-hidden className="w-[72px] shrink-0" />
+            <ul className="flex flex-1 list-none items-end justify-around">
+              {rightItems.map(renderTab)}
+            </ul>
+          </div>
+        </div>
       </div>
     </nav>
   );
