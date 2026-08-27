@@ -1,0 +1,43 @@
+{
+  "exported_at": "2026-08-27T16:24:32.622157+00:00",
+  "export_dir": "exports/2026-08-27-catalog",
+  "images": {
+    "files": 450,
+    "live": 450,
+    "missing": 0,
+    "bytes": 64245973,
+    "folders": {
+      "AC Services": 11,
+      "Beautician": 85,
+      "Construction": 5,
+      "Electrition": 45,
+      "Events": 3,
+      "Home Services": 95,
+      "Icons": 9,
+      "Pet Services": 20,
+      "PlumberServices": 31,
+      "Service Cover": 64,
+      "Technition": 82
+    }
+  },
+  "catalog_counts": {
+    "categories": 10,
+    "subcategories": 76,
+    "services": 322,
+    "variants": 533
+  },
+  "csv_rows": 533,
+  "image_url_hosts": {
+    "pub-32e84da8140449ddbc61c13539728e0e.r2.dev": 723,
+    "(blank)": 539
+  },
+  "files": [
+    "IMAGE_LIST.md",
+    "images_manifest.csv",
+    "r2_image_urls.json",
+    "catalog_live.json",
+    "services.csv",
+    "summary.json",
+    "README.txt"
+  ]
+}
