@@ -236,36 +236,42 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
 
   const workspaces = resolveWorkspaces(workspaceGrants.grants ?? []);
   const workspaceKeys = workspaces.map((item) => item.key);
-
-  const isDarkPage = pathname === "/home";
+  const isDarkHero = pathname === "/home" || pathname === "/work";
 
   return (
     <div className="flex min-h-screen flex-col items-center bg-background">
       <div
         className={cn(
           "relative flex min-h-screen w-full max-w-md flex-col border-x border-line/50 shadow-sm",
-          isDarkPage ? "bg-[var(--color-ink-900)]" : "bg-surface",
+          isDarkHero ? "bg-[var(--color-ink-900)]" : "bg-surface",
         )}
       >
         {chromeMode === "full" ? (
-          <header className="sticky top-0 z-30 rounded-b-[2rem] bg-surface px-4 pb-4 pt-[max(0.625rem,env(safe-area-inset-top))] shadow-[0_4px_24px_rgba(0,0,0,0.15)]">
-            <div className="flex items-center justify-between">
-              <Link
-                href="/home"
-                className="flex min-w-0 items-center gap-2 rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
-              >
-                <Logo className="text-base h-7 w-auto" />
-              </Link>
-              <Button
-                variant="ghost"
-                onClick={() => logout.mutate()}
-                loading={logout.isPending}
-                loadingLabel="Signing out"
-              >
-                Sign Out
-              </Button>
-            </div>
-          </header>
+          <div className={isDarkHero ? "sticky top-0 z-30 bg-[var(--color-ink-900)]" : "sticky top-0 z-30"}>
+            <header className="rounded-b-[1.75rem] bg-surface px-4 pb-3 pt-[max(0.625rem,env(safe-area-inset-top))] shadow-[0_4px_24px_rgba(0,0,0,0.12)]">
+              <div className="flex items-center justify-between">
+                <Link
+                  href="/home"
+                  // `min-h-11` (44px) so the home link is a real phone tap
+                  // target. The logo itself is 28px tall, which is under every
+                  // touch minimum, and this is the only way back to Home from a
+                  // "full"-chrome screen other than the dock. The extra height
+                  // is padding around the same mark — nothing moves.
+                  className="flex min-h-11 min-w-0 items-center gap-2 rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+                >
+                  <Logo className="text-base h-7 w-auto" />
+                </Link>
+                <Button
+                  variant="ghost"
+                  onClick={() => logout.mutate()}
+                  loading={logout.isPending}
+                  loadingLabel="Signing out"
+                >
+                  Sign Out
+                </Button>
+              </div>
+            </header>
+          </div>
         ) : chromeMode === "focused" ? (
           <FocusedHeader pathname={pathname} />
         ) : null}
@@ -327,21 +333,21 @@ function BottomTabBar({
           aria-current={isCurrent ? "page" : undefined}
           onPointerDown={() => prepareBookingAlertsFromGesture()}
           className={cn(
-            "flex min-h-[3.5rem] flex-col items-center justify-center gap-0.5 px-1 text-[0.625rem] font-semibold",
-            "transition-colors duration-fast ease-out",
+            "relative flex min-h-[3.5rem] flex-col items-center justify-center gap-1 px-1 text-[0.625rem] font-semibold leading-none tracking-wide transition-all",
             "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-action",
-            isCurrent ? "text-action-secondary" : "text-surface/45 hover:text-surface/70",
+            isCurrent ? "text-white font-bold" : "text-white/45 hover:text-white/70",
           )}
         >
-          <span
-            className={cn(
-              "flex h-8 w-14 items-center justify-center rounded-full transition-colors duration-fast",
-              isCurrent ? "bg-selected-surface" : "",
-            )}
-          >
-            <Icon size={20} strokeWidth={isCurrent ? 2.5 : 2} aria-hidden />
+          {isCurrent ? (
+            <span
+              aria-hidden
+              className="absolute -top-1 h-0.5 w-6 rounded-full bg-signal-500 shadow-[0_0_8px_rgba(249,115,22,0.8)]"
+            />
+          ) : null}
+          <span className="flex items-center justify-center">
+            <Icon size={22} strokeWidth={isCurrent ? 2.5 : 1.8} aria-hidden />
           </span>
-          {item.label}
+          <span>{item.label}</span>
         </Link>
       </li>
     );

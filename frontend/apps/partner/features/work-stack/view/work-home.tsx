@@ -7,9 +7,9 @@ import Link from "next/link";
 import { useSyncExternalStore, type ReactNode } from "react";
 
 import { Pictogram, type PictogramName } from "@/components/pictogram";
+import { ApplicationOverview } from "@/features/application/view/application-overview";
 import { usePartnerApplication } from "@/features/application/queries";
-import { ReadinessChecklist } from "@/features/application/view/readiness-checklist";
-import { ApplicationStatusBanner } from "@/features/application/view/status-banner";
+
 import { usePartnerPerformance, type PartnerPerformance } from "@/features/earnings/queries";
 import { readStoredSession } from "@/features/presence/model/stored-session";
 import { PartnerPresence } from "@/features/presence/view/partner-presence";
@@ -39,8 +39,6 @@ import { WaitingRadar } from "./waiting-radar";
  * `docs/superpowers/specs/2026-08-19-partner-tap-first-redesign-design.md`.
  */
 
-const PRIMARY_LINK =
-  "inline-flex min-h-12 items-center rounded-control bg-action px-7 font-semibold text-action-text hover:bg-action-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action";
 
 function Home({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -58,12 +56,9 @@ export function WorkHome() {
 
   if (query.isPending) {
     return (
-      <Home title="Your work">
-        <p className="flex items-center gap-2 text-text-secondary">
-          <Spinner size="sm" />
-          Loading your account…
-        </p>
-      </Home>
+      <div className="mx-auto w-full max-w-md px-4 py-6">
+        <ApplicationOverview />
+      </div>
     );
   }
 
@@ -80,64 +75,16 @@ export function WorkHome() {
     );
   }
 
-  // A 404 is a state, not a failure: this person has never applied.
-  if (isMissing || query.data === undefined) {
+  // A 404 or non-approved application renders the full ApplicationOverview
+  if (isMissing || query.data === undefined || query.data.status !== "APPROVED") {
     return (
-      <Home title="Start your application">
-        <p className="max-w-prose text-sm leading-6 text-text-secondary">
-          It takes a few minutes. You can stop and come back — nothing is sent for
-          review until you choose to send it.
-        </p>
-        <div>
-          <Link href="/apply/about" className={PRIMARY_LINK}>
-            Begin
-          </Link>
-        </div>
-      </Home>
-    );
-  }
-
-  const application = query.data;
-
-  if (application.status === "APPROVED") {
-    return <WorkStack />;
-  }
-
-  if (application.status === "SUSPENDED" || application.status === "OFFBOARDED") {
-    // No work and no presence control: both are refused by Django in these
-    // states, and an appeal runs through support rather than this screen.
-    return (
-      <Home title="Your account">
-        <ApplicationStatusBanner application={application} />
-      </Home>
-    );
-  }
-
-  if (application.status === "SUBMITTED" || application.status === "UNDER_REVIEW") {
-    return (
-      <Home title="Your application">
-        <ApplicationStatusBanner application={application} />
-        <p className="max-w-prose text-sm leading-6 text-text-secondary">
-          Job offers start once a reviewer has approved you. There is nothing
-          waiting on you in the meantime, and you do not need to check back — we
-          will message you.
-        </p>
-      </Home>
-    );
-  }
-
-  // DRAFT and CHANGES_REQUIRED: the work is theirs, and it is on `/apply`.
-  return (
-    <Home title="Your application">
-      <ApplicationStatusBanner application={application} />
-      <ReadinessChecklist application={application} />
-      <div className="border-t border-line pt-4">
-        <Link href="/apply/review" className={PRIMARY_LINK}>
-          Continue your application
-        </Link>
+      <div className="mx-auto w-full max-w-md px-4 py-6">
+        <ApplicationOverview />
       </div>
-    </Home>
-  );
+    );
+  }
+
+  return <WorkStack />;
 }
 
 /* --------------------------------------------------------------------------
@@ -183,7 +130,7 @@ function WorkStack() {
       <h1 className="sr-only">Your work</h1>
 
       {/* Map-style hero — earnings front and centre */}
-      <div className="relative flex shrink-0 flex-col px-4 pb-16 pt-2">
+      <div className="relative flex shrink-0 flex-col px-4 pb-12 pt-6 sm:pt-7">
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 opacity-[0.07]"
@@ -207,7 +154,7 @@ function WorkStack() {
       </div>
 
       {/* Bottom sheet — availability + work stack */}
-      <div className="relative -mt-10 flex flex-1 flex-col rounded-t-[1.75rem] bg-surface shadow-[0_-12px_48px_color-mix(in_oklab,var(--color-ink-900)_25%,transparent)]">
+      <div className="relative -mt-6 flex flex-1 flex-col rounded-t-[1.75rem] bg-surface shadow-[0_-12px_48px_color-mix(in_oklab,var(--color-ink-900)_25%,transparent)]">
         <div aria-hidden className="mx-auto mt-3 h-1 w-10 rounded-full bg-line" />
 
         <div className="px-4 pt-4 pb-2">
@@ -241,7 +188,7 @@ function MonthStrip({ performance }: { performance: PartnerPerformance | null })
   if (performance === null) return null;
 
   return (
-    <div className="relative z-10 mt-4 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className="relative z-10 mt-3 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <Metric label="This month" value={formatMoney(performance.month_net_paise)} />
       <Metric
         label={performance.month_jobs === 1 ? "Job done" : "Jobs done"}

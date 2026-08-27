@@ -69,8 +69,16 @@ export function WaitingRadar({ isOnline }: { readonly isOnline: boolean }) {
               : "bg-surface-sunken",
           )}
         >
+          {/*
+            `stopped`, not `power`, for the offline glyph. The go-online control
+            sits ~200px above this on a phone and *is* a power symbol — drawing
+            a second one here put two identical glyphs on one screen, the lower
+            one inert and ringed like a button. A Partner looking for the thing
+            to tap found the picture of it. `stopped` says the same thing about
+            the state without borrowing the control's affordance.
+          */}
           <Pictogram
-            name={isOnline ? "all-work" : "power"}
+            name={isOnline ? "all-work" : "stopped"}
             size="lg"
             className={isOnline ? "text-surface" : "text-text-muted"}
           />

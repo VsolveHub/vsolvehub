@@ -128,6 +128,7 @@ export function OfferInbox() {
 
   const offers = offersQuery.data?.pages.flatMap((page) => page.results) ?? [];
   const listError = offersQuery.error;
+  const livePollPaused = (offersQuery.data?.pages.length ?? 0) > 1;
 
   if (offersQuery.isError && offers.length === 0) {
     const restartable =

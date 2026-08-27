@@ -1,39 +1,18 @@
 "use client";
 
 import { ErrorState, Spinner } from "@vsolve/ui";
-
 import { useApplicationReference } from "../reference-queries";
 import { useApplicationEditor } from "./application-editor";
 
-/**
- * The agreements an applicant accepts before review.
- *
- * Every purpose, title, version and link comes from
- * `GET /api/v1/partner/required-consents/`. None of it is hardcoded, and that is
- * the whole point: a consent receipt records *which document at which version*
- * someone agreed to, and it has to hold up if the agreement is ever disputed. A
- * checkbox posting a made-up `document_version` would produce a receipt for a
- * document nobody can identify.
- *
- * Because the version comes from the server, republishing legal text
- * automatically re-prompts every applicant — behaviour a hardcoded string could
- * never provide.
- *
- * Acceptance is append-only. Unticking removes it from this draft, but nothing
- * withdraws an acceptance already recorded: withdrawal is its own command with
- * its own audit, not the absence of a tick.
- */
-
 export function ConsentStep() {
   const { draft, update, isReadOnly } = useApplicationEditor();
-
   const reference = useApplicationReference();
 
   if (reference.isPending) {
     return (
-      <p className="flex items-center gap-2 py-6 text-text-secondary">
+      <p className="flex items-center gap-2 py-6 text-sm text-text-secondary">
         <Spinner size="sm" />
-        Loading the agreements…
+        Loading agreements…
       </p>
     );
   }
@@ -41,8 +20,8 @@ export function ConsentStep() {
   if (reference.isError) {
     return (
       <ErrorState
-        title="We could not load the agreements"
-        message="Nothing has been accepted. Check your connection and try again."
+        title="Could not load agreements"
+        message="Check your connection and try again."
         actionLabel="Try again"
         onAction={reference.refetch}
       />
@@ -53,9 +32,9 @@ export function ConsentStep() {
     return (
       <p
         role="status"
-        className="rounded-card border border-line bg-surface p-4 text-sm text-text-secondary"
+        className="rounded-control border border-line bg-surface p-4 text-sm text-text-secondary"
       >
-        There is nothing to agree to at the moment.
+        No agreements are required at this time.
       </p>
     );
   }
@@ -65,15 +44,54 @@ export function ConsentStep() {
       (consent) => consent.purpose === purpose && consent.documentVersion === version,
     );
 
-  return (
-    <fieldset className="border-0 p-0">
-      <legend className="text-base font-semibold text-text">Agreements</legend>
-      <p className="mt-1 text-sm text-text-secondary">
-        Read each one and tick to accept. We record which version you agreed to
-        and when.
-      </p>
+  const requiredConsents = reference.requiredConsents.filter(
+    (c) => c.is_required_for_submission,
+  );
+  const allRequiredAccepted =
+    requiredConsents.length > 0 &&
+    requiredConsents.every((c) => isAccepted(c.purpose, c.document_version));
 
-      <div className="mt-3 flex flex-col gap-2">
+  return (
+    <fieldset className="border-0 p-0 flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <legend className="text-sm font-bold text-navy-900">
+          Required Agreements <span className="text-danger-text">*</span>
+        </legend>
+
+        {!isReadOnly && requiredConsents.length > 1 && (
+          <button
+            type="button"
+            onClick={() => {
+              if (allRequiredAccepted) {
+                const requiredKeys = new Set(
+                  requiredConsents.map((c) => `${c.purpose}@${c.document_version}`),
+                );
+                update({
+                  consents: draft.consents.filter(
+                    (c) => !requiredKeys.has(`${c.purpose}@${c.documentVersion}`),
+                  ),
+                });
+              } else {
+                const existing = [...draft.consents];
+                for (const doc of requiredConsents) {
+                  if (!isAccepted(doc.purpose, doc.document_version)) {
+                    existing.push({
+                      purpose: doc.purpose,
+                      documentVersion: doc.document_version,
+                    });
+                  }
+                }
+                update({ consents: existing });
+              }
+            }}
+            className="text-xs font-semibold text-navy-700 hover:text-signal-700"
+          >
+            {allRequiredAccepted ? "Deselect all" : "Accept all required"}
+          </button>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-3">
         {reference.requiredConsents.map((document) => {
           const accepted = isAccepted(document.purpose, document.document_version);
 
@@ -81,11 +99,13 @@ export function ConsentStep() {
             <div
               key={`${document.purpose}@${document.document_version}`}
               className={[
-                "rounded-control border p-3",
-                accepted ? "border-action bg-selected-surface" : "border-line bg-surface",
+                "rounded-control border p-3.5 transition-colors",
+                accepted
+                  ? "border-action bg-selected-surface"
+                  : "border-line bg-surface hover:border-line-strong",
               ].join(" ")}
             >
-              <label className="flex min-h-11 cursor-pointer items-start gap-3">
+              <label className="flex cursor-pointer items-start gap-3">
                 <input
                   type="checkbox"
                   checked={accepted}
@@ -109,30 +129,34 @@ export function ConsentStep() {
                           ],
                     })
                   }
-                  className="mt-0.5 h-5 w-5 shrink-0 accent-[var(--color-action)]"
+                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-line-strong accent-[var(--color-action)]"
                 />
-                <span className="min-w-0">
-                  <span className="block text-sm font-medium text-text">
-                    I accept the {document.title}
-                  </span>
-                  <span className="block text-sm text-text-secondary">
-                    Version {document.document_version}
-                    {document.is_required_for_submission ? " · required" : " · optional"}
-                  </span>
-                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium text-text">
+                      I agree to the {document.title}
+                    </span>
+                    {document.is_required_for_submission ? (
+                      <span className="text-xs font-semibold text-danger-text">* Required</span>
+                    ) : (
+                      <span className="text-xs text-text-muted">Optional</span>
+                    )}
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-xs text-text-secondary">
+                    <span>Version {document.document_version}</span>
+                    <a
+                      href={document.document_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex items-center gap-1 rounded-full border border-line bg-surface px-3 py-1 text-xs font-bold text-navy-900 hover:bg-surface-sunken hover:border-line-strong transition-colors shadow-xs"
+                    >
+                      <span>Read document</span>
+                      <span>↗</span>
+                    </a>
+                  </div>
+                </div>
               </label>
-
-              {/* Opens in a new tab so reading the terms never costs a
-                  half-filled application. */}
-              <a
-                href={document.document_url}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-info-text underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
-              >
-                Read the {document.title}
-                <span className="sr-only"> (opens in a new tab)</span>
-              </a>
             </div>
           );
         })}

@@ -16,14 +16,14 @@ export const metadata: Metadata = { title: "Your work" };
  * belongs on the client alongside the applicant's own answers.
  */
 export default async function WorkPage() {
-  const { services } = await getWorkCatalog();
+  const { mainCategories, services } = await getWorkCatalog();
 
   return (
     <ApplicationEditor
       title="Your work"
       description="Pick the trades you are qualified for and the jobs you are willing to take."
     >
-      <WorkStep services={services} />
+      <WorkStep mainCategories={mainCategories} services={services} />
     </ApplicationEditor>
   );
 }

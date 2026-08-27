@@ -7,7 +7,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Clock } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { isUnread } from "@/features/notifications/model/feed";
 import {
   createIdDeduper,
   createOfferDeduper,
@@ -32,11 +31,10 @@ const LIVE_BOOKING_POLL_MS = 10_000;
 const POPUP_RESPONSE_SECONDS = 45;
 
 function usePopupDeadline(serverDeadline: string | null | undefined): string {
-  const fallbackRef = useRef<string | null>(null);
-  fallbackRef.current ??= new Date(
-    serverClock.now() + POPUP_RESPONSE_SECONDS * 1000,
-  ).toISOString();
-  return serverDeadline ?? fallbackRef.current;
+  const [fallback] = useState(() =>
+    new Date(serverClock.now() + POPUP_RESPONSE_SECONDS * 1000).toISOString(),
+  );
+  return serverDeadline ?? fallback;
 }
 
 function BookingPopupTimer({
@@ -87,7 +85,7 @@ function isLiveBookingNotification(notification: {
 }): boolean {
   return (
     notification.purpose === LIVE_INVITATION_PURPOSE &&
-    isUnread(notification) &&
+    notification.read_at === null &&
     typeof notification.target?.id === "string"
   );
 }
@@ -461,15 +459,8 @@ export function PartnerLiveDelivery({
 
     if (!offersInitialized.current) {
       offersInitialized.current = true;
-      const nextOffer = liveOffers[0];
-      if (nextOffer) {
-        seenOfferIds.current.add(nextOffer.id);
-        showOffer(nextOffer.id, {
-          offer_id: nextOffer.id,
-          fulfilment_unit_id: nextOffer.fulfilment_unit_id,
-          requested_start: nextOffer.starts_at ?? new Date().toISOString(),
-          expires_at: nextOffer.expires_at ?? new Date().toISOString(),
-        });
+      for (const offer of liveOffers) {
+        seenOfferIds.current.add(offer.id);
       }
       return;
     }
@@ -479,7 +470,7 @@ export function PartnerLiveDelivery({
       seenOfferIds.current.add(offer.id);
       showOffer(offer.id, {
         offer_id: offer.id,
-        fulfilment_unit_id: offer.fulfilment_unit_id,
+        fulfilment_unit_id: offer.fulfilment_unit_id ?? "",
         requested_start: offer.starts_at ?? new Date().toISOString(),
         expires_at: offer.expires_at ?? new Date().toISOString(),
       });
@@ -500,7 +491,7 @@ export function PartnerLiveDelivery({
 
     const unread = unreadQuery.data.unread;
 
-    const inspectFeed = () => {
+    const inspectFeed = (triggerPopup = true) => {
       void queryClient
         .fetchQuery({
           queryKey: m2QueryKeys.notifications.feed(),
@@ -511,17 +502,19 @@ export function PartnerLiveDelivery({
             if (isLiveBookingNotification(notification)) {
               if (seenNotificationIds.current.has(notification.id)) continue;
               seenNotificationIds.current.add(notification.id);
-              showInvitation(
-                {
-                  notification_id: notification.id,
-                  purpose: notification.purpose,
-                  title: notification.title,
-                  body: notification.body,
-                  target_id: notification.target!.id,
-                },
-                notification.target!.id,
-              );
-              return;
+              if (triggerPopup) {
+                showInvitation(
+                  {
+                    notification_id: notification.id,
+                    purpose: notification.purpose,
+                    title: notification.title,
+                    body: notification.body,
+                    target_id: notification.target!.id,
+                  },
+                  notification.target!.id,
+                );
+                return;
+              }
             }
             seenNotificationIds.current.add(notification.id);
           }
@@ -532,7 +525,8 @@ export function PartnerLiveDelivery({
     if (!unreadInitialized.current) {
       unreadInitialized.current = true;
       prevUnread.current = unread;
-      if (unread > 0) inspectFeed();
+      // Mark historical existing unread notices as seen without triggering popup
+      if (unread > 0) inspectFeed(false);
       return;
     }
 
@@ -541,7 +535,7 @@ export function PartnerLiveDelivery({
       return;
     }
     prevUnread.current = unread;
-    inspectFeed();
+    inspectFeed(true);
   }, [
     enabled,
     queryClient,
