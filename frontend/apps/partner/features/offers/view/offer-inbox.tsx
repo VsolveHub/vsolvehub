@@ -13,12 +13,10 @@ import {
   isOfferForbidden,
   isOfferReservationConflict,
   isOfferUnavailable,
-  isTraversingHistory,
   useOfferCommand,
   usePartnerOffers,
   type Offer,
 } from "../queries";
-import { useOfferLiveEvents } from "../live-events";
 import { OfferCard } from "./offer-card";
 
 /**
@@ -121,9 +119,6 @@ function InboxSkeleton() {
 export function OfferInbox() {
   const queryClient = useQueryClient();
   const offersQuery = usePartnerOffers();
-
-  const livePollPaused = offersQuery.data ? isTraversingHistory(offersQuery.data) : false;
-  useOfferLiveEvents(Boolean(offersQuery.data && !livePollPaused));
 
   function restartFromPageOne() {
     void queryClient.resetQueries({ queryKey: queryKeys.partner.offers() });

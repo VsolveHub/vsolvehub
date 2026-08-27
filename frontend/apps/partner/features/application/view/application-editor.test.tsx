@@ -222,6 +222,60 @@ describe("save and continue", () => {
   });
 });
 
+describe("a step the applicant has already finished", () => {
+  /**
+   * The trap this closes.
+   *
+   * The button was `disabled={!dirty}`, so revisiting a completed step and
+   * changing nothing left the only forward control on the screen dead — no
+   * error, no explanation, and no other way on except noticing a link back to
+   * the overview and walking the sequence by hand.
+   *
+   * Saving and continuing are two things and only one of them needs a change to
+   * act on.
+   */
+  it("continues without spending a request when nothing changed", async () => {
+    client.GET.mockResolvedValue(ok(APPLICATION));
+
+    renderEditor();
+    await screen.findByLabelText(/display name/i);
+
+    const button = screen.getByRole("button", { name: /continue/i });
+    expect(button).toBeEnabled();
+    fireEvent.click(button);
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/apply/work"));
+    // Nothing changed, so there is nothing to send.
+    expect(client.PATCH).not.toHaveBeenCalled();
+  });
+
+  it("says Continue rather than Save and continue", async () => {
+    // The label states which of the two is about to happen.
+    client.GET.mockResolvedValue(ok(APPLICATION));
+
+    renderEditor();
+    await screen.findByLabelText(/display name/i);
+
+    expect(screen.getByRole("button", { name: "Continue" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /save and continue/i })).not.toBeInTheDocument();
+  });
+
+  it("goes nowhere from the last step, and still spends no request", async () => {
+    // `nextStep` is null at the end of the sequence, so a clean review screen
+    // has nothing to navigate to. It must not silently do nothing *and* claim to
+    // have saved.
+    pathname = "/apply/review";
+    client.GET.mockResolvedValue(ok(APPLICATION));
+
+    renderEditor();
+    await screen.findByLabelText(/display name/i);
+    fireEvent.click(screen.getByRole("button", { name: /save and continue/i }));
+
+    expect(push).not.toHaveBeenCalled();
+    expect(client.PATCH).not.toHaveBeenCalled();
+  });
+});
+
 describe("an application that is not the applicant's to edit", () => {
   it("hides the save action rather than disabling it mysteriously", async () => {
     client.GET.mockResolvedValue(ok({ ...APPLICATION, status: "UNDER_REVIEW" }));

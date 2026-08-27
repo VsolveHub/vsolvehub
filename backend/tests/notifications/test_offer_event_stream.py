@@ -18,7 +18,12 @@ from freezegun import freeze_time
 from rest_framework.test import APIClient
 
 from apps.notifications.models import NotificationIntent
-from apps.notifications.streaming import OFFER_CREATED_PURPOSE
+from apps.notifications.streaming import (
+    NOTIFICATION_CREATED_EVENT,
+    OFFER_CREATED_PURPOSE,
+    offer_event_frames,
+)
+from apps.notifications.services import request_notification
 from tests.assignments.same_day_offers import FROZEN_NOW, online_partner, same_day_offer
 from tests.assignments.test_group_dispatch import _partner_client
 
@@ -46,6 +51,17 @@ def _events(body: str) -> list[dict[str, object]]:
     for block in body.split("\n\n"):
         lines = block.splitlines()
         if not any(line == "event: offer_created" for line in lines):
+            continue
+        data = next(line for line in lines if line.startswith("data: "))
+        payloads.append(json.loads(data.removeprefix("data: ")))
+    return payloads
+
+
+def _events_named(body: str, event_name: str) -> list[dict[str, object]]:
+    payloads: list[dict[str, object]] = []
+    for block in body.split("\n\n"):
+        lines = block.splitlines()
+        if not any(line == f"event: {event_name}" for line in lines):
             continue
         data = next(line for line in lines if line.startswith("data: "))
         payloads.append(json.loads(data.removeprefix("data: ")))
@@ -136,3 +152,53 @@ def test_the_stream_requires_a_partner_session() -> None:
     response = APIClient().get(STREAM_URL)
 
     assert response.status_code in (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN)
+
+
+@FAST_STREAM
+@freeze_time(FROZEN_NOW)
+def test_the_stream_accepts_text_event_stream_in_accept() -> None:
+    """`EventSource` sends `Accept: text/event-stream`; that must not 406."""
+
+    call_command("seed_technician_catalog")
+
+    response = APIClient().get(STREAM_URL, HTTP_ACCEPT="text/event-stream")
+
+    assert response.status_code in (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN)
+    assert response.status_code != HTTPStatus.NOT_ACCEPTABLE
+
+
+@FAST_STREAM
+@freeze_time(FROZEN_NOW)
+def test_stream_emits_notification_created_for_partner_in_app_booking_notice() -> None:
+    call_command("seed_technician_catalog")
+    partner = online_partner(suffix="86", variant_slugs=("switch-socket-repair",))
+    request_notification(
+        recipient_id=partner.user_id,
+        purpose="m2.invitation.received",
+        channel=NotificationIntent.Channel.IN_APP,
+        template_code="m2_invitation_received",
+        context={
+            "target_kind": "WORKFORCE_INVITATION",
+            "target_id": "11111111-1111-1111-1111-111111111111",
+        },
+        idempotency_key="stream-invitation:86",
+    )
+    client = _partner_client(partner)
+
+    body = _read(client.get(STREAM_URL))
+
+    assert _events_named(body, NOTIFICATION_CREATED_EVENT) == [
+        {
+            "notification_id": str(
+                NotificationIntent.objects.get(purpose="m2.invitation.received").id
+            ),
+            "purpose": "m2.invitation.received",
+            "title": "New customer enquiry",
+            "body": (
+                "A customer has sent a new enquiry. Open it now to accept or quote before the "
+                "slot moves on."
+            ),
+            "target_kind": "WORKFORCE_INVITATION",
+            "target_id": "11111111-1111-1111-1111-111111111111",
+        }
+    ]

@@ -58,7 +58,8 @@ const REQUIRED_DOCUMENTS: readonly { kind: DocumentKind; code: RequirementCode; 
  * `SUPERSEDED` does not count — a newer version replaced it, and that newer
  * version is the one in this list carrying its own status.
  */
-function hasUsableDocument(application: Application, kind: DocumentKind): boolean {
+function hasUsableDocument(application: Application | null, kind: DocumentKind): boolean {
+  if (application === null) return false;
   return application.documents.some(
     (document) =>
       document.kind === kind &&
@@ -66,31 +67,45 @@ function hasUsableDocument(application: Application, kind: DocumentKind): boolea
   );
 }
 
-export function requirements(application: Application): Requirement[] {
+/**
+ * Takes `null` for the applicant who has not started.
+ *
+ * `GET /api/v1/partner/application/` answers 404 before an application exists,
+ * and that is a state rather than a failure — so every caller already holds
+ * `Application | null`. Widening here means "what does an application need?" has
+ * one answer whether or not there is one yet, and every requirement is simply
+ * unmet.
+ *
+ * The alternative was for callers to special-case `null` themselves, which
+ * `stepProgress` did briefly and got wrong: with an empty list to group, every
+ * step looked like it collected nothing, so a brand-new applicant's progress bar
+ * reported "everything is filled in".
+ */
+export function requirements(application: Application | null): Requirement[] {
   const list: Requirement[] = [
     {
       code: "DISPLAY_NAME",
       label: "Your name",
       href: "/apply/about",
-      isMet: application.display_name.trim().length > 0,
+      isMet: (application?.display_name ?? "").trim().length > 0,
     },
     {
       code: "SKILLS",
       label: "What you do",
       href: "/apply/work",
-      isMet: application.skill_codes.length > 0,
+      isMet: (application?.skill_codes.length ?? 0) > 0,
     },
     {
       code: "SERVICES",
       label: "Services you accept",
       href: "/apply/work",
-      isMet: application.service_variant_ids.length > 0,
+      isMet: (application?.service_variant_ids.length ?? 0) > 0,
     },
     {
       code: "SERVICE_AREAS",
       label: "Where you work",
       href: "/apply/areas",
-      isMet: application.service_area_ids.length > 0,
+      isMet: (application?.service_area_ids.length ?? 0) > 0,
     },
     ...REQUIRED_DOCUMENTS.map((required) => ({
       code: required.code,
@@ -102,14 +117,14 @@ export function requirements(application: Application): Requirement[] {
       code: "CONSENTS",
       label: "Agreements",
       href: "/apply/consent",
-      isMet: application.consents.length > 0,
+      isMet: (application?.consents.length ?? 0) > 0,
     },
   ];
 
   return list;
 }
 
-export function outstandingRequirements(application: Application): Requirement[] {
+export function outstandingRequirements(application: Application | null): Requirement[] {
   return requirements(application).filter((requirement) => !requirement.isMet);
 }
 

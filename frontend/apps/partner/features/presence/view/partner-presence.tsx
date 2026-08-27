@@ -21,7 +21,7 @@ import { PresencePanel } from "./presence-panel";
  * the only caller; a second copy on the home would have been a second chance to
  * get the version wrong.
  */
-export function PartnerPresence() {
+export function PartnerPresence({ variant = "default" }: { variant?: "default" | "driver" }) {
   const application = usePartnerApplication();
   const reference = useApplicationReference();
 
@@ -45,5 +45,5 @@ export function PartnerPresence() {
         ),
     ) ?? null;
 
-  return <PresencePanel consentVersion={accepted?.document_version ?? null} />;
+  return <PresencePanel consentVersion={accepted?.document_version ?? null} variant={variant} />;
 }

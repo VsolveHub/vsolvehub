@@ -1,4 +1,5 @@
 import {
+  Bell,
   Briefcase,
   CalendarCheck,
   ClipboardList,
@@ -83,6 +84,8 @@ export interface WorkspaceNavItem {
    * is a prefix of that path. A tab bar with nothing lit says "you are nowhere".
    */
   activePrefix?: string;
+  /** Opens the notification panel instead of navigating. */
+  kind?: "notifications";
 }
 
 export interface WorkspaceDefinition {
@@ -174,6 +177,7 @@ export const TAP_FIRST_NAV: readonly WorkspaceNavItem[] = [
   { href: "/home", label: "Home", icon: Home },
   { href: "/work/all", label: "Work", icon: Users, activePrefix: "/work" },
   { href: "/money", label: "Money", icon: Wallet },
+  { href: "#notifications", label: "Alerts", icon: Bell, kind: "notifications" },
   { href: "/me", label: "Me", icon: UserCircle2 },
 ];
 

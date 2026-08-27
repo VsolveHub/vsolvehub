@@ -64,10 +64,6 @@ export function NotificationBell({ workspaceKeys, className }: NotificationBellP
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
         aria-expanded={open}
-        // The whole name, count included. A digit beside a bell glyph is not a
-        // sentence, so the count lives in the control's own name where it is read
-        // on focus and re-read when it changes — rather than in a live region that
-        // would announce arrivals to somebody in the middle of another task.
         aria-label={unreadBadgeLabel(unread)}
         className={cn(
           "relative inline-flex min-h-11 min-w-11 items-center justify-center rounded-control",
@@ -79,14 +75,75 @@ export function NotificationBell({ workspaceKeys, className }: NotificationBellP
         <Bell size={20} aria-hidden />
         {badge === null ? null : (
           <span
-            // Hidden from the accessibility tree: the button's own name already
-            // carries the number, and exposing it here reads it twice.
             aria-hidden
             className="absolute right-1 top-1 inline-flex min-w-4 items-center justify-center rounded-full bg-action px-1 text-[0.625rem] font-bold leading-4 text-action-text"
           >
             {badge}
           </span>
         )}
+      </button>
+
+      <NotificationPanel
+        open={open}
+        onOpenChange={setOpen}
+        workspaceKeys={workspaceKeys}
+        unreadCount={unread}
+      />
+    </>
+  );
+}
+
+/**
+ * Bottom-nav bell — same panel as `NotificationBell`, styled as a tab item.
+ */
+export function NotificationNavTab({
+  workspaceKeys,
+  label,
+  isActive = false,
+}: {
+  workspaceKeys: readonly string[];
+  label: string;
+  isActive?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const count = useUnreadNotificationCount();
+
+  const unread = count.isSuccess && count.data !== undefined ? count.data.unread : null;
+  const badge = unreadBadgeDisplay(unread);
+  const active = isActive || open;
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label={unreadBadgeLabel(unread)}
+        className={cn(
+          "relative flex min-h-[3.25rem] w-full flex-col items-center justify-center gap-1 rounded-2xl px-2 transition-colors duration-200",
+          "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action",
+          active ? "text-surface" : "text-surface/45 hover:text-surface/70",
+        )}
+      >
+        {active ? (
+          <span
+            aria-hidden
+            className="absolute -top-1 h-0.5 w-5 rounded-full bg-action"
+          />
+        ) : null}
+        <span className="relative">
+          <Bell size={22} strokeWidth={active ? 2.5 : 2} aria-hidden />
+          {badge === null ? null : (
+            <span
+              aria-hidden
+              className="absolute -right-1.5 -top-1 inline-flex min-w-3.5 items-center justify-center rounded-full bg-action px-0.5 text-[0.5625rem] font-bold leading-3.5 text-action-text"
+            >
+              {badge}
+            </span>
+          )}
+        </span>
+        <span className="text-[0.625rem] font-semibold leading-none tracking-wide">{label}</span>
       </button>
 
       <NotificationPanel

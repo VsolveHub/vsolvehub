@@ -1,31 +1,35 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 
 import { ScheduleStep } from "@/features/application/view/schedule-step";
 
 export const metadata: Metadata = { title: "Your hours" };
 
+/**
+ * The hours step.
+ *
+ * Not wrapped in `ApplicationEditor`: hours are saved by their own endpoint
+ * (`ScheduleStep` owns the mutation), so there is no draft for the editor to
+ * hold and no partial patch for it to compute. The heading is drawn here to
+ * match every other step's shape.
+ *
+ * The old version also rendered its own "Back to your application" link. The
+ * shell carries a back control and an exit now, so a third navigation inside the
+ * content would be a third thing to explain.
+ */
 export default function SchedulePage() {
   return (
-    <section>
-      <h1 className="text-xl font-bold text-text sm:text-2xl">Your hours</h1>
-      <p className="mt-1.5 max-w-prose text-sm text-text-secondary">
-        You are only offered work in the hours you publish here. Nothing is
-        assumed — an empty week means no offers.
-      </p>
+    <section className="flex flex-col gap-5">
+      <header className="flex flex-col gap-1.5">
+        <h1 className="text-[1.375rem] font-extrabold leading-tight tracking-[-0.02em] text-text">
+          Your hours
+        </h1>
+        <p className="text-[0.9375rem] leading-relaxed text-text-secondary">
+          You are only offered work in the hours you publish here. Nothing is
+          assumed — an empty week means no offers.
+        </p>
+      </header>
 
-      <div className="mt-6">
-        <ScheduleStep />
-      </div>
-
-      <p className="mt-8">
-        <Link
-          href="/apply"
-          className="min-h-11 font-semibold text-info-text underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
-        >
-          Back to your application
-        </Link>
-      </p>
+      <ScheduleStep />
     </section>
   );
 }

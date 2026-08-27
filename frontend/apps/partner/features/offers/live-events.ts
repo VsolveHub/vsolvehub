@@ -2,17 +2,18 @@
 
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@vsolve/query";
+import { m2QueryKeys, queryKeys } from "@vsolve/query";
 import { useToast } from "@vsolve/ui";
 
+import { PUBLIC_API_BASE_URL } from "@/lib/api/config";
+
 /**
- * Foreground delivery of new offers, over the SSE stream in
- * `contracts/proposals/partner-offer-events.md`.
+ * Foreground delivery for Partner stream events over
+ * `GET /api/v1/partner/offers/stream/`.
  *
- * Additive on purpose. `usePartnerOffers` polling is the reliable path and is
- * untouched; this only shortens the delay in the good case. If the stream is
- * refused, unavailable or drops, the inbox behaves exactly as it did before —
- * an offer must never be visible *only* because the stream delivered it.
+ * Multiplexes same-day offers, advance job assignments, and in-app booking /
+ * enquiry notices on the one connection the server already holds open. Polling
+ * remains the reliable path for each surface; this only shortens the delay.
  */
 
 export interface OfferCreatedPayload {
@@ -22,33 +23,41 @@ export interface OfferCreatedPayload {
   expires_at: string;
 }
 
+export interface JobAssignedPayload {
+  fulfilment_unit_id: string;
+  requested_start: string;
+}
+
+export interface NotificationCreatedPayload {
+  notification_id: string;
+  purpose: string;
+  title: string;
+  body: string;
+  target_kind?: string;
+  target_id?: string;
+}
+
+export interface PartnerStreamHandlers {
+  onOfferCreated?: (payload: OfferCreatedPayload) => void;
+  onJobAssigned?: (payload: JobAssignedPayload) => void;
+  onNotificationCreated?: (payload: NotificationCreatedPayload) => void;
+}
+
 export interface SubscribeOptions {
   url?: string;
   EventSourceClass?: typeof EventSource;
 }
 
-/**
- * How long a delivered `offer_id` is remembered for de-duplication.
- *
- * Comfortably longer than the server's replay window (30s) and than an offer's
- * own life (45s), so a replayed event is always recognised, while the map stays
- * bounded by the arrival rate over a few minutes rather than by session length.
- */
 const SEEN_TTL_MS = 5 * 60_000;
+const STREAM_RECONNECT_MS = 2_000;
 
-/**
- * Remembers which offers have already been handled.
- *
- * The server replays `M1_OFFER_STREAM_REPLAY_SECONDS` of history to every new
- * connection, deliberately: an offer created between the client's list fetch and
- * its stream connecting belongs to neither, and a missed offer is not
- * recoverable inside a 45-second window. The contract's side of that bargain is
- * that clients treat `offer_id` as the event's identity — the server caps its
- * connections and `EventSource` reconnects, so replays are routine, not rare.
- *
- * Without this the partner gets a second toast for the same job every time a
- * connection turns over.
- */
+/** Same-origin relative URL when `NEXT_PUBLIC_API_BASE_URL` is empty (dev proxy). */
+export function partnerStreamUrl(): string {
+  const base = PUBLIC_API_BASE_URL.replace(/\/$/, "");
+  if (!base) return "/api/v1/partner/offers/stream/";
+  return `${base}/api/v1/partner/offers/stream/`;
+}
+
 export function createOfferDeduper(now: () => number = Date.now) {
   const seen = new Map<string, number>();
 
@@ -63,8 +72,32 @@ export function createOfferDeduper(now: () => number = Date.now) {
   };
 }
 
-export function subscribeToOfferEvents(
-  onOfferCreated: (payload: OfferCreatedPayload) => void,
+export function createIdDeduper(prefix: string, now: () => number = Date.now) {
+  const seen = new Map<string, number>();
+
+  return function isFirstSighting(id: string): boolean {
+    const at = now();
+    for (const [key, seenAt] of seen) {
+      if (at - seenAt > SEEN_TTL_MS) seen.delete(key);
+    }
+    const key = `${prefix}:${id}`;
+    if (seen.has(key)) return false;
+    seen.set(key, at);
+    return true;
+  };
+}
+
+function parseJson<T>(data: string): T | null {
+  try {
+    const parsed = JSON.parse(data) as T;
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export function subscribeToPartnerStream(
+  handlers: PartnerStreamHandlers,
   options: SubscribeOptions = {},
 ): () => void {
   const EventSourceImpl =
@@ -74,58 +107,136 @@ export function subscribeToOfferEvents(
     return () => {};
   }
 
-  const url = options.url ?? "/api/v1/partner/offers/stream/";
-  const es = new EventSourceImpl(url, { withCredentials: true });
+  const url = options.url ?? partnerStreamUrl();
+  let es: EventSource | null = null;
+  let closed = false;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const listener = (event: MessageEvent) => {
-    try {
-      const data = JSON.parse(event.data) as OfferCreatedPayload;
-      if (data && typeof data === "object" && typeof data.offer_id === "string") {
-        onOfferCreated(data);
-      }
-    } catch {
-      // Ignore unparseable frames
+  const onOfferCreated = (event: MessageEvent) => {
+    const data = parseJson<OfferCreatedPayload>(event.data);
+    if (data && typeof data.offer_id === "string") {
+      handlers.onOfferCreated?.(data);
     }
   };
 
-  es.addEventListener("offer_created", listener as EventListener);
+  const onJobAssigned = (event: MessageEvent) => {
+    const data = parseJson<JobAssignedPayload>(event.data);
+    if (data && typeof data.fulfilment_unit_id === "string") {
+      handlers.onJobAssigned?.(data);
+    }
+  };
 
-  // No `onerror` handling and no reconnect loop, both on purpose: `EventSource`
-  // reconnects natively, which is what the server's capped connection lifetime
-  // expects. A client-side loop on top of it would double up.
+  const onNotificationCreated = (event: MessageEvent) => {
+    const data = parseJson<NotificationCreatedPayload>(event.data);
+    if (data && typeof data.notification_id === "string" && typeof data.title === "string") {
+      handlers.onNotificationCreated?.(data);
+    }
+  };
+
+  const attach = (source: EventSource) => {
+    source.addEventListener("offer_created", onOfferCreated as EventListener);
+    source.addEventListener("job_assigned", onJobAssigned as EventListener);
+    source.addEventListener("notification_created", onNotificationCreated as EventListener);
+  };
+
+  const detach = (source: EventSource) => {
+    source.removeEventListener("offer_created", onOfferCreated as EventListener);
+    source.removeEventListener("job_assigned", onJobAssigned as EventListener);
+    source.removeEventListener("notification_created", onNotificationCreated as EventListener);
+  };
+
+  const scheduleReconnect = () => {
+    if (closed || reconnectTimer !== null) return;
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      connect();
+    }, STREAM_RECONNECT_MS);
+  };
+
+  const connect = () => {
+    if (closed) return;
+    es?.close();
+    es = new EventSourceImpl(url, { withCredentials: true });
+    attach(es);
+    es.onerror = () => {
+      detach(es!);
+      es?.close();
+      es = null;
+      scheduleReconnect();
+    };
+  };
+
+  connect();
+
   return () => {
-    es.removeEventListener("offer_created", listener as EventListener);
-    es.close();
+    closed = true;
+    if (reconnectTimer !== null) clearTimeout(reconnectTimer);
+    if (es) {
+      detach(es);
+      es.close();
+    }
   };
 }
 
+/** @deprecated Use subscribeToPartnerStream */
+export function subscribeToOfferEvents(
+  onOfferCreated: (payload: OfferCreatedPayload) => void,
+  options: SubscribeOptions = {},
+): () => void {
+  return subscribeToPartnerStream({ onOfferCreated }, options);
+}
+
 export function useOfferLiveEvents(enabled = true) {
+  usePartnerStreamEvents({ offers: enabled });
+}
+
+export function usePartnerStreamEvents(
+  enabled: boolean | { offers?: boolean; notifications?: boolean } = true,
+) {
   const queryClient = useQueryClient();
-  // Not wrapped in a try/catch. `useToast` throws when no `ToastProvider` is
-  // mounted, and swallowing that would leave this hook opening a connection per
-  // render to deliver a toast that never appears — the feature looking wired
-  // while doing nothing. The partner layout mounts the provider; if that ever
-  // regresses, this should fail loudly rather than quietly.
   const { notify } = useToast();
-  // A ref, so it survives the effect re-running — `enabled` flipping as the
-  // partner pages back through history tears the stream down and builds a new
-  // one, and that new connection replays.
-  const isFirstSighting = useRef<ReturnType<typeof createOfferDeduper> | null>(null);
-  isFirstSighting.current ??= createOfferDeduper();
+  const offerDeduper = useRef<ReturnType<typeof createOfferDeduper> | null>(null);
+  const notificationDeduper = useRef<ReturnType<typeof createIdDeduper> | null>(null);
+  const jobDeduper = useRef<ReturnType<typeof createIdDeduper> | null>(null);
+  offerDeduper.current ??= createOfferDeduper();
+  notificationDeduper.current ??= createIdDeduper("notification");
+  jobDeduper.current ??= createIdDeduper("job");
+
+  const offersEnabled = typeof enabled === "boolean" ? enabled : (enabled.offers ?? true);
+  const notificationsEnabled =
+    typeof enabled === "boolean" ? enabled : (enabled.notifications ?? true);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!offersEnabled && !notificationsEnabled) return;
 
-    const unsubscribe = subscribeToOfferEvents((payload) => {
-      if (!isFirstSighting.current?.(payload.offer_id)) return;
-      notify("A new offer just arrived.", "info");
-      void queryClient.invalidateQueries({ queryKey: queryKeys.partner.offers() });
+    const unsubscribe = subscribeToPartnerStream({
+      onOfferCreated: offersEnabled
+        ? (payload) => {
+            if (!offerDeduper.current?.(payload.offer_id)) return;
+            notify("A new offer just arrived.", "info");
+            void queryClient.invalidateQueries({ queryKey: queryKeys.partner.offers() });
+          }
+        : undefined,
+      onJobAssigned: offersEnabled
+        ? (payload) => {
+            if (!jobDeduper.current?.(payload.fulfilment_unit_id)) return;
+            notify("A job has been assigned to you.", "info");
+            void queryClient.invalidateQueries({ queryKey: queryKeys.partner.offers() });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.partnerWork.all });
+          }
+        : undefined,
+      onNotificationCreated: notificationsEnabled
+        ? (payload) => {
+            if (!notificationDeduper.current?.(payload.notification_id)) return;
+            notify(payload.title, "info");
+            void queryClient.invalidateQueries({
+              queryKey: m2QueryKeys.notifications.unreadCount(),
+            });
+            void queryClient.invalidateQueries({ queryKey: m2QueryKeys.invitations.all });
+          }
+        : undefined,
     });
 
     return unsubscribe;
-    // `notify` and `queryClient` are both stable — memoised in their providers —
-    // so this effect runs on mount and when `enabled` changes, and not on every
-    // render. That matters more than usual here: each re-run closes and reopens
-    // a connection, and every open stream holds a server worker thread.
-  }, [enabled, notify, queryClient]);
+  }, [notificationsEnabled, notify, offersEnabled, queryClient]);
 }

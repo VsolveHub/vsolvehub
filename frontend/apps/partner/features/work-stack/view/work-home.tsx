@@ -1,7 +1,7 @@
 "use client";
 
 import { ApiRequestError } from "@vsolve/api-client";
-import { useAuthGuard, useServerCountdown, type Countdown } from "@vsolve/query";
+import { useServerCountdown, type Countdown } from "@vsolve/query";
 import { ErrorState, Spinner, cn, formatMoney } from "@vsolve/ui";
 import Link from "next/link";
 import { useSyncExternalStore, type ReactNode } from "react";
@@ -13,8 +13,6 @@ import { ApplicationStatusBanner } from "@/features/application/view/status-bann
 import { usePartnerPerformance, type PartnerPerformance } from "@/features/earnings/queries";
 import { readStoredSession } from "@/features/presence/model/stored-session";
 import { PartnerPresence } from "@/features/presence/view/partner-presence";
-import { PARTNER_ROLE, SwitchToPartner } from "@/features/session/partner-shell";
-import { getApiClient } from "@/lib/api/browser";
 
 import type { WorkItem } from "../model/work-item";
 import { useWorkStack } from "../queries";
@@ -55,7 +53,6 @@ function Home({ title, children }: { title: string; children: ReactNode }) {
 
 export function WorkHome() {
   const query = usePartnerApplication();
-  const guard = useAuthGuard(getApiClient());
 
   const isMissing = query.error instanceof ApiRequestError && query.error.status === 404;
 
@@ -103,20 +100,7 @@ export function WorkHome() {
   const application = query.data;
 
   if (application.status === "APPROVED") {
-    /*
-      Django selects the alphabetically first grant at login, so a Partner who
-      is also a Customer arrives acting as `customer` and every work request
-      would 403. The stack is withheld until the session is acting as Partner —
-      showing it and letting each request fail is the version of this screen
-      that reads as "the app is broken".
-    */
-    return guard.activeRole === PARTNER_ROLE ? (
-      <WorkStack />
-    ) : (
-      <Home title="Your work">
-        <SwitchToPartner inline />
-      </Home>
-    );
+    return <WorkStack />;
   }
 
   if (application.status === "SUSPENDED" || application.status === "OFFBOARDED") {
@@ -195,15 +179,24 @@ function WorkStack() {
   );
 
   return (
-    <main className="flex min-h-[calc(100dvh-9rem)] flex-col bg-[linear-gradient(180deg,var(--color-warm-25)_0%,var(--color-canvas)_100%)]">
+    <main className="relative flex min-h-[calc(100dvh-3.5rem)] flex-col bg-[var(--color-ink-900)]">
       <h1 className="sr-only">Your work</h1>
 
-      <div className="flex flex-col gap-3.5 px-4 pt-3.5">
-        {/* The one presence control in the app, shared with `/me` rather than
-            copied — see `PartnerPresence`'s own reasoning against a second one.
-            First on the screen because an offline Partner has exactly one thing
-            worth doing here, and every number below it is history until they do. */}
-        <PartnerPresence />
+      {/* Map-style hero — earnings front and centre */}
+      <div className="relative flex shrink-0 flex-col px-4 pb-16 pt-2">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 opacity-[0.07]"
+          style={{
+            backgroundImage:
+              "linear-gradient(var(--color-surface) 1px, transparent 1px), linear-gradient(90deg, var(--color-surface) 1px, transparent 1px)",
+            backgroundSize: "28px 28px",
+          }}
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-[linear-gradient(180deg,transparent_0%,var(--color-ink-900)_100%)]"
+        />
 
         <TodayPlate
           netPaise={performance.data?.today_net_paise ?? null}
@@ -213,8 +206,17 @@ function WorkStack() {
         <MonthStrip performance={performance.data ?? null} />
       </div>
 
-      <div className="flex flex-1 flex-col gap-3.5 px-4 pt-4 pb-3">
-        <StackBody stack={stack} needsYou={needsYou} />
+      {/* Bottom sheet — availability + work stack */}
+      <div className="relative -mt-10 flex flex-1 flex-col rounded-t-[1.75rem] bg-surface shadow-[0_-12px_48px_color-mix(in_oklab,var(--color-ink-900)_25%,transparent)]">
+        <div aria-hidden className="mx-auto mt-3 h-1 w-10 rounded-full bg-line" />
+
+        <div className="px-4 pt-4 pb-2">
+          <PartnerPresence variant="driver" />
+        </div>
+
+        <div className="flex flex-1 flex-col gap-3 px-4 pb-4 pt-2">
+          <StackBody stack={stack} needsYou={needsYou} />
+        </div>
       </div>
     </main>
   );
@@ -239,7 +241,7 @@ function MonthStrip({ performance }: { performance: PartnerPerformance | null })
   if (performance === null) return null;
 
   return (
-    <div className="grid grid-cols-3 gap-2">
+    <div className="relative z-10 mt-4 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <Metric label="This month" value={formatMoney(performance.month_net_paise)} />
       <Metric
         label={performance.month_jobs === 1 ? "Job done" : "Jobs done"}
@@ -252,11 +254,11 @@ function MonthStrip({ performance }: { performance: PartnerPerformance | null })
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex flex-col gap-0.5 rounded-card border border-line bg-surface px-3 py-2.5">
-      <span className="truncate text-[1.0625rem] font-extrabold leading-none tracking-[-0.02em] text-text">
+    <div className="flex min-w-[7.5rem] shrink-0 snap-start flex-col gap-0.5 rounded-2xl border border-surface/10 bg-surface/8 px-3.5 py-2.5 backdrop-blur-sm">
+      <span className="truncate text-[1.0625rem] font-extrabold leading-none tracking-[-0.02em] text-surface">
         {value}
       </span>
-      <span className="truncate text-[0.6875rem] font-semibold text-text-muted">{label}</span>
+      <span className="truncate text-[0.6875rem] font-medium text-surface/55">{label}</span>
     </div>
   );
 }
@@ -305,11 +307,11 @@ function StackBody({
 
   return (
     <section className="flex flex-col gap-2.5">
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-text-muted">
+      <div className="flex items-baseline justify-between gap-3 px-0.5">
+        <h2 className="text-xs font-bold uppercase tracking-[0.08em] text-text-muted">
           Needs you
         </h2>
-        <span className="text-[0.6875rem] font-bold text-text-muted">
+        <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-[0.6875rem] font-bold tabular-nums text-text-muted">
           {needsYou.length}
         </span>
       </div>
@@ -364,36 +366,35 @@ function subscribeToNothing(): () => void {
  */
 function TodayPlate({ netPaise, jobs }: { netPaise: number | null; jobs: number | null }) {
   return (
-    <div className="flex items-center gap-3 rounded-card bg-[linear-gradient(160deg,var(--color-navy-700)_0%,var(--color-navy-900)_100%)] p-3.5 shadow-card">
-      <Pictogram name="days" size="lg" className="shrink-0 text-action-hover" />
-      <span className="flex flex-col gap-px">
-        <span className="text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-navy-200">
-          Earned today
-        </span>
-        <span className="text-[2rem] font-extrabold leading-none tracking-[-0.02em] text-surface">
+    <div className="relative z-10 flex flex-col gap-1 pt-2">
+      <span className="text-[0.6875rem] font-bold uppercase tracking-[0.1em] text-surface/50">
+        Earned today
+      </span>
+      <div className="flex items-end justify-between gap-4">
+        <span
+          data-numeric
+          className="text-[clamp(2.75rem,12vw,3.5rem)] font-extrabold leading-none tracking-[-0.03em] text-surface"
+        >
           {netPaise === null ? "—" : formatMoney(netPaise)}
         </span>
-      </span>
-      {/* Zero is a real answer and says so. A blank space where a count belongs
-          reads as a screen that failed to load, which is the one thing an idle
-          Partner must not conclude. */}
-      {jobs === null ? null : (
-        <span className="ml-auto flex shrink-0 flex-col items-end text-[0.8125rem] font-semibold leading-snug text-navy-200">
-          {jobs === 0 ? (
-            <>
-              <span>No jobs</span>
-              <span>yet today</span>
-            </>
-          ) : (
-            <>
-              <span>
-                {jobs} {jobs === 1 ? "job" : "jobs"}
-              </span>
-              <span>finished</span>
-            </>
-          )}
-        </span>
-      )}
+        {jobs === null ? null : (
+          <span className="mb-1 flex shrink-0 flex-col items-end text-right text-sm font-medium leading-snug text-surface/55">
+            {jobs === 0 ? (
+              <>
+                <span>No jobs</span>
+                <span>yet today</span>
+              </>
+            ) : (
+              <>
+                <span>
+                  {jobs} {jobs === 1 ? "job" : "jobs"}
+                </span>
+                <span>finished</span>
+              </>
+            )}
+          </span>
+        )}
+      </div>
     </div>
   );
 }

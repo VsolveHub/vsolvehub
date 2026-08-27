@@ -151,7 +151,7 @@ export function PartnerHero() {
 
       <div className="relative mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-12 px-5 lg:flex-row lg:gap-8">
         {/* Text column */}
-        <div className="z-10 order-2 flex w-full flex-col gap-6 lg:order-1 lg:w-[55%]">
+        <div className="z-10 flex w-full flex-col gap-6 lg:w-[55%]">
           <div className="flex flex-col gap-6">
             <span
               className="vsh-hero-slideup text-[13px] font-semibold uppercase tracking-[0.08em] text-accent-400"
@@ -224,7 +224,7 @@ export function PartnerHero() {
 
         {/* Phone visual column — a live preview of the real job-offer screen */}
         <div
-          className="vsh-hero-slideup order-1 flex w-full justify-center lg:order-2 lg:w-[45%] lg:justify-center"
+          className="vsh-hero-slideup flex w-full justify-center lg:w-[45%] lg:justify-center"
           style={{ animationDelay: "480ms" }}
         >
           {/* Float wrapper: idle bob only, kept separate so it never fights the frame tilt */}

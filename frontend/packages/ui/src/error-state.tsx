@@ -116,7 +116,7 @@ export function ErrorState({
       role={severity === "info" ? "status" : "alert"}
       aria-live={severity === "info" ? "polite" : "assertive"}
       className={cn(
-        "flex gap-3 rounded-[--radius-card] border",
+        "flex gap-3 rounded-card border",
         inline ? "p-3 text-sm" : "flex-col items-start p-5 sm:flex-row sm:items-start",
         styles.container,
         className,

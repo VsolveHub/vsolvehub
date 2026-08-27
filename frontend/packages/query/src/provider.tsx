@@ -25,7 +25,8 @@ export function QueryProvider({
   return (
     <QueryClientProvider client={queryClient}>
       {children}
-      {shouldRenderQueryDevtools(process.env.NODE_ENV, showDevtools) ? (
+      {shouldRenderQueryDevtools(process.env.NODE_ENV, showDevtools) &&
+      process.env.NEXT_PUBLIC_QUERY_DEVTOOLS === "true" ? (
         <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-left" />
       ) : null}
     </QueryClientProvider>

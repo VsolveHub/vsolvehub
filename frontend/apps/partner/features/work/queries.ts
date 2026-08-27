@@ -340,8 +340,36 @@ export function useProposeAmendment() {
    The job list (contract 1.19.0)
    ------------------------------------------------------------------------- */
 
-/** The shelves a Partner actually thinks in. Django owns the status mapping. */
-export type JobBucket = "active" | "completed" | "cancelled";
+/**
+ * The shelves a Partner actually thinks in, plus the unfiltered read.
+ *
+ * `"all"` omits the `bucket` parameter, which Django treats as "no status or
+ * date filter at all" — every booking this Partner owns. It exists because the
+ * three named shelves together do **not** cover the Partner's own work, and the
+ * gap swallows live jobs:
+ *
+ * `active` is `status NOT IN (terminal) AND scheduled_start ∈ [today, today+2d)`
+ * (`apps/fulfilment/views/partner.py`). The upper bound is deliberate — a
+ * booking three weeks out is not a task. The **lower** bound is the problem: a
+ * job that started before today and has not finished sorts below the window and
+ * disappears. Measured against the seeded database on 26 Aug 2026, four of ten
+ * bookings were in neither `active` nor `completed`:
+ *
+ *   Demo Partner 3  ARRIVED      30 Aug  — partner on site, job not in their app
+ *   Demo Partner 4  IN_PROGRESS  24 Aug  — started two days ago, still running
+ *   Demo Partner 1  CONFIRMED    30 Aug  — confirmed work, invisible until the 29th
+ *   Demo Partner 10 CANCELLED    27 Aug  — only in `cancelled`, which nothing reads
+ *
+ * The first two are the serious ones: a Partner who is mid-job cannot open it to
+ * mark arrival or file completion, while the Customer app shows the same booking
+ * as `ARRIVED`/`IN_PROGRESS` with that Partner named.
+ *
+ * Fixing the window is a backend change and is written up separately; `"all"`
+ * is what makes the app correct in the meantime, and it is correct on its own
+ * terms — `fromWorkItems` already decides which statuses are work, so the client
+ * was never relying on the server's date filter for anything but payload size.
+ */
+export type JobBucket = "active" | "completed" | "cancelled" | "all";
 
 /**
  * The Partner's own work, as a list.
@@ -362,7 +390,11 @@ export function usePartnerJobs(bucket: JobBucket) {
       (
         await request(() =>
           getApiClient().GET("/api/v1/partner/bookings/", {
-            params: { query: { bucket } },
+            // `all` means "send no filter". Django reads `bucket` with
+            // `.get("bucket")` and applies nothing when it is absent, so the
+            // parameter is omitted rather than sent as an empty string — which
+            // the query serializer would reject as an invalid choice.
+            params: { query: bucket === "all" ? {} : { bucket } },
           }),
         )
       ).results,

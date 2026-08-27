@@ -146,7 +146,7 @@ function IdentityBand() {
   const trade = profile.data?.skills[0] ?? null;
 
   return (
-    <div className="flex flex-col items-center gap-3 rounded-b-3xl bg-[linear-gradient(160deg,var(--color-navy-700)_0%,var(--color-navy-900)_100%)] px-4 pt-6.5 pb-6">
+    <div className="mx-4 mt-4 flex flex-col items-center gap-3 rounded-[2rem] bg-[linear-gradient(160deg,var(--color-navy-700)_0%,var(--color-navy-900)_100%)] px-4 py-6 shadow-[0_8px_24px_color-mix(in_oklab,var(--color-navy-900)_15%,transparent)]">
       <span className="grid h-22 w-22 place-items-center rounded-[28px] bg-[linear-gradient(150deg,var(--color-navy-300)_0%,var(--color-navy-500)_100%)] shadow-raised">
         <Pictogram name="crew" className="h-12 w-12 text-surface" />
       </span>

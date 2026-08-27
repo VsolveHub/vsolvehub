@@ -40,6 +40,8 @@ export interface DeclineDialogProps {
   readonly pending: boolean;
   /** A refusal from the last attempt, already presented. Kept visible in the dialog. */
   readonly error?: string | null;
+  /** Fires on pointerdown for footer actions — e.g. stop an alert loop immediately. */
+  readonly onActionPointerDown?: () => void;
 }
 
 export function DeclineDialog({
@@ -48,6 +50,7 @@ export function DeclineDialog({
   onDecline,
   pending,
   error,
+  onActionPointerDown,
 }: DeclineDialogProps) {
   const [reasonCode, setReasonCode] = useState("");
   const [touched, setTouched] = useState(false);
@@ -78,7 +81,13 @@ export function DeclineDialog({
       dismissable
       footer={
         <>
-          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={pending}>
+          <Button
+            variant="ghost"
+            onClick={() => onOpenChange(false)}
+            disabled={pending}
+            data-booking-alert-action=""
+            onPointerDown={() => onActionPointerDown?.()}
+          >
             Keep it
           </Button>
           <Button
@@ -87,6 +96,8 @@ export function DeclineDialog({
             loading={pending}
             loadingLabel="Declining"
             disabled={pending}
+            data-booking-alert-action=""
+            onPointerDown={() => onActionPointerDown?.()}
           >
             Decline
           </Button>
