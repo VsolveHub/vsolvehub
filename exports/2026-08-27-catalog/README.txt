@@ -30,12 +30,19 @@ Live catalog
 10 categories, 76 browse tiles,
 322 services, 533 variants.
 
-How to load services into another local DB
-------------------------------------------
-From `vsolvehub/backend`, after migrate:
+How to load this dump into another local DB
+-------------------------------------------
+Clone this repo, then from `vsolvehub/backend` after migrate:
 
     python manage.py seed_technician_catalog
-    python manage.py seed_task_catalog
+    python manage.py load_catalog_dump
 
-Run order matters. The first command seeds the six M1 services; the second adds the
-full Technician / Beautician / Home / Pet catalog and does not prune.
+`seed_technician_catalog` creates the Hyderabad service area and M1 pricing policy.
+`load_catalog_dump` writes this dump: categories, tiles, 322 services, variants,
+prices, and Cloudflare R2 image URLs.
+
+Optional: pass a dump file explicitly:
+
+    python manage.py load_catalog_dump --path ../exports/2026-08-27-catalog/catalog_live.json
+
+The command is idempotent (safe to re-run). It keys on slugs, not the exporter's UUIDs.
