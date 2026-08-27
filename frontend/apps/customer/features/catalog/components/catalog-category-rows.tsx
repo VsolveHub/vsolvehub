@@ -1,8 +1,7 @@
-import { createElement } from "react";
 import Link from "next/link";
 import { EmptyState } from "@vsolve/ui";
 
-import { iconForService } from "../icon-catalogue/service-icon";
+import { ServicePhoto } from "./category-artwork";
 import type { Category } from "../queries";
 
 const DESKTOP_PREVIEW_LIMIT = 6;
@@ -27,32 +26,12 @@ function SubcategoryArtwork({
   imageUrl: string;
   iconKey: string;
 }) {
-  if (imageUrl !== "") {
-    return (
-      <span className="block aspect-square w-full overflow-hidden rounded-card bg-surface-sunken shadow-xs">
-        {/* Catalog images are Operations-authored remote URLs. A native image lets Operations
-            change providers without widening a build-time host allowlist. */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={imageUrl}
-          alt=""
-          loading="lazy"
-          className="size-full object-cover transition-transform duration-slow ease-out group-hover:scale-[1.03] motion-reduce:transform-none"
-        />
-      </span>
-    );
-  }
-
   return (
-    <span
-      aria-hidden
-      className="grid aspect-square w-full place-items-center rounded-card bg-surface-sunken text-text-secondary shadow-xs"
-    >
-      {createElement(iconForService(iconKey || "service"), {
-        className: "size-7",
-        strokeWidth: 1.7,
-      })}
-    </span>
+    <ServicePhoto
+      imageUrl={imageUrl}
+      iconKey={iconKey}
+      className="shadow-xs transition-transform duration-slow ease-out group-hover:scale-[1.03] motion-reduce:transform-none"
+    />
   );
 }
 

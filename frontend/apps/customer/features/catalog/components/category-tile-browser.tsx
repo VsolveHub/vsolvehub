@@ -1,8 +1,7 @@
-import { createElement } from "react";
 import Link from "next/link";
 import { formatMoney } from "@vsolve/ui";
 
-import { iconForService } from "../icon-catalogue/service-icon";
+import { ServicePhoto } from "./category-artwork";
 import { serviceHref } from "../service-href";
 import type { Category, ServiceCard } from "../queries";
 
@@ -84,40 +83,6 @@ function priceLine(service: ServiceCard): string {
   return "Price confirmed before you pay";
 }
 
-function TileImage({
-  imageUrl,
-  iconKey,
-  alt,
-  sizeClassName,
-}: {
-  imageUrl: string;
-  iconKey: string;
-  alt: string;
-  sizeClassName: string;
-}) {
-  if (imageUrl !== "") {
-    // Remote catalog imagery from the API; next/image would need a per-host
-    // allowlist the catalogue deliberately does not maintain.
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={imageUrl}
-        alt={alt}
-        loading="lazy"
-        className={`${sizeClassName} rounded-card bg-surface-sunken object-cover`}
-      />
-    );
-  }
-  return (
-    <span
-      aria-hidden
-      className={`${sizeClassName} grid place-items-center rounded-card bg-surface-sunken text-text-secondary`}
-    >
-      {createElement(iconForService(iconKey), { className: "size-7", strokeWidth: 1.6 })}
-    </span>
-  );
-}
-
 function TileGrid({ tiles, categorySlug }: { tiles: TileGroup[]; categorySlug: string }) {
   return (
     <section aria-labelledby="select-a-service">
@@ -137,11 +102,10 @@ function TileGrid({ tiles, categorySlug }: { tiles: TileGroup[]; categorySlug: s
               href={tileHref(tile, categorySlug)}
               className="group flex flex-col items-center gap-2 rounded-card focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
             >
-              <TileImage
+              <ServicePhoto
                 imageUrl={tile.imageUrl}
                 iconKey={tile.iconKey}
-                alt=""
-                sizeClassName="aspect-square w-full transition-transform duration-fast group-hover:scale-[1.03]"
+                className="transition-transform duration-fast group-hover:scale-[1.03]"
               />
               <span className="line-clamp-2 w-full text-center text-[13px] font-semibold leading-tight text-text">
                 {tile.name}
@@ -178,12 +142,12 @@ function TileServiceList({
               href={serviceHref(service, categorySlug)}
               className="flex items-center gap-4 rounded-card border border-line bg-surface p-3 shadow-card transition-shadow duration-fast hover:shadow-raised focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
             >
-              <TileImage
-                imageUrl={service.cover?.url ?? tile.imageUrl}
-                iconKey={service.icon_key}
-                alt=""
-                sizeClassName="size-20 shrink-0"
-              />
+              <span className="size-20 shrink-0">
+                <ServicePhoto
+                  imageUrl={service.cover?.url ?? tile.imageUrl}
+                  iconKey={service.icon_key}
+                />
+              </span>
               <span className="min-w-0 flex-1">
                 <span className="block font-semibold leading-snug text-text">{service.name}</span>
                 <span className="mt-0.5 line-clamp-2 block text-sm leading-5 text-text-secondary">
