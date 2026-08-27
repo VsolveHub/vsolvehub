@@ -134,6 +134,6 @@ export function targetHref(
 }
 
 /** True once this notice has been read. `read_at` is the record; nothing local overrides it. */
-export function isUnread(notification: Schemas["Notification"]): boolean {
+export function isUnread(notification: Pick<Schemas["Notification"], "read_at">): boolean {
   return notification.read_at === null;
 }

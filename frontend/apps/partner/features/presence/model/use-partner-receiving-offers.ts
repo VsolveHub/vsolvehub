@@ -28,46 +28,46 @@ export function usePartnerReceivingOffers(): {
   const storedSessionId = useStoredSessionId();
   const heartbeat = useHeartbeat();
   const heartbeatRef = useRef(heartbeat);
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [hasProbedStoredSession, setHasProbedStoredSession] = useState(
-    () => readStoredSession() === null,
-  );
+  /* The last probe's verdict, keyed by the session id it probed. Everything
+     else — "is there a live session", "are we still restoring" — is derived
+     from comparing this against the currently stored id, so the effect below
+     never has to set state synchronously to keep the two in step. */
+  const [probe, setProbe] = useState<{
+    readonly id: string;
+    readonly ok: boolean;
+  } | null>(null);
 
   useEffect(() => {
     heartbeatRef.current = heartbeat;
   }, [heartbeat]);
 
-  const isRestoring = storedSessionId !== null && !hasProbedStoredSession;
-
   useEffect(() => {
-    if (storedSessionId === null) {
-      setSessionId(null);
-      setHasProbedStoredSession(true);
-      return;
-    }
+    if (storedSessionId === null) return;
 
     let cancelled = false;
-    setHasProbedStoredSession(false);
 
     void heartbeatRef.current
       .mutateAsync({ session_id: storedSessionId })
       .then(() => {
         if (cancelled) return;
-        setSessionId(storedSessionId);
+        setProbe({ id: storedSessionId, ok: true });
       })
       .catch(() => {
         if (cancelled) return;
         clearStoredSession();
-        setSessionId(null);
-      })
-      .finally(() => {
-        if (!cancelled) setHasProbedStoredSession(true);
+        setProbe({ id: storedSessionId, ok: false });
       });
 
     return () => {
       cancelled = true;
     };
   }, [storedSessionId]);
+
+  const sessionId =
+    storedSessionId !== null && probe?.id === storedSessionId && probe.ok
+      ? storedSessionId
+      : null;
+  const isRestoring = storedSessionId !== null && probe?.id !== storedSessionId;
 
   const status = presenceStatus({
     hasSession: sessionId !== null,

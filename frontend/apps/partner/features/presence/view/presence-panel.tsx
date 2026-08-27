@@ -448,7 +448,6 @@ export function PresencePanel({
  * this component only decides how the same state is drawn on the home screen.
  */
 function DriverPresenceControls({
-  status,
   copy,
   tone,
   consentVersion,

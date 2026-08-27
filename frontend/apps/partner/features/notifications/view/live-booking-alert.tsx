@@ -32,11 +32,11 @@ const LIVE_BOOKING_POLL_MS = 10_000;
 const POPUP_RESPONSE_SECONDS = 45;
 
 function usePopupDeadline(serverDeadline: string | null | undefined): string {
-  const fallbackRef = useRef<string | null>(null);
-  fallbackRef.current ??= new Date(
-    serverClock.now() + POPUP_RESPONSE_SECONDS * 1000,
-  ).toISOString();
-  return serverDeadline ?? fallbackRef.current;
+  /* Latched once on mount so the fallback window does not restart on re-render. */
+  const [fallback] = useState(() =>
+    new Date(serverClock.now() + POPUP_RESPONSE_SECONDS * 1000).toISOString(),
+  );
+  return serverDeadline ?? fallback;
 }
 
 function BookingPopupTimer({
@@ -432,6 +432,9 @@ export function PartnerLiveDelivery({
 
   useEffect(() => {
     if (enabled) return;
+    /* Going offline must also silence the alert loop — an external system — so
+       this cannot become a render-time derivation of `enabled`. */
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     closeBooking();
   }, [closeBooking, enabled]);
 
@@ -466,7 +469,7 @@ export function PartnerLiveDelivery({
         seenOfferIds.current.add(nextOffer.id);
         showOffer(nextOffer.id, {
           offer_id: nextOffer.id,
-          fulfilment_unit_id: nextOffer.fulfilment_unit_id,
+          fulfilment_unit_id: nextOffer.fulfilment_unit_id ?? "",
           requested_start: nextOffer.starts_at ?? new Date().toISOString(),
           expires_at: nextOffer.expires_at ?? new Date().toISOString(),
         });
@@ -479,7 +482,7 @@ export function PartnerLiveDelivery({
       seenOfferIds.current.add(offer.id);
       showOffer(offer.id, {
         offer_id: offer.id,
-        fulfilment_unit_id: offer.fulfilment_unit_id,
+        fulfilment_unit_id: offer.fulfilment_unit_id ?? "",
         requested_start: offer.starts_at ?? new Date().toISOString(),
         expires_at: offer.expires_at ?? new Date().toISOString(),
       });

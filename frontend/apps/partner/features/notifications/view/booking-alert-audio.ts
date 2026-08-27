@@ -12,7 +12,7 @@ let audio: HTMLAudioElement | null = null;
 let audioSrc: string | null = null;
 let loopWanted = false;
 let autoplayUnlocked = false;
-let listeners: Set<() => void> = new Set();
+const listeners: Set<() => void> = new Set();
 
 let webContext: AudioContext | null = null;
 let webLoopTimer: ReturnType<typeof setInterval> | null = null;

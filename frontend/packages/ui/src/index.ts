@@ -127,8 +127,6 @@ export { Drawer } from "./drawer";
 export type { DrawerProps } from "./drawer";
 export { StatusChip } from "./status-chip";
 export type { StatusChipProps, StatusCategory } from "./status-chip";
-export { Tabs } from "./tabs";
-export type { TabsProps, TabItem } from "./tabs";
 export { Tooltip } from "./tooltip";
 export type { TooltipProps } from "./tooltip";
 export { DataTable } from "./data-table";

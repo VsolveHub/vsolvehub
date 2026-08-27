@@ -71,7 +71,7 @@ export function DataTable<T>({
     return (
       <div className="p-6">
         <ErrorState
-          layout="inline"
+          inline
           title="Could not load data"
           message="There was an error loading the table contents."
           actionLabel={onRetry ? "Try again" : undefined}
@@ -144,7 +144,7 @@ export function DataTable<T>({
             <TableRow>
               <TableCell colSpan={columns.length} className="h-32 text-center p-0">
                 <EmptyState
-                  layout="compact"
+                  compact
                   title="No data"
                   description={emptyMessage}
                 />

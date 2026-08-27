@@ -75,7 +75,7 @@ export function SwitchToOperations() {
 
         {switchRole.isError ? (
           <ErrorState
-            layout="inline"
+            inline
             className="mt-4"
             title="We could not switch your role"
             message="Nothing has changed. Try again, or sign in with the account that has Operations access."
