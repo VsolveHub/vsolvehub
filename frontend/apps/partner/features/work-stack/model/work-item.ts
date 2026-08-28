@@ -256,6 +256,9 @@ function fromCrewOffers(offers: readonly CrewOffer[], serverNow: string): WorkIt
     .filter((offer) => isOfferLive(offer, serverNow))
     .map((offer) => {
       const area = blankToNull(offer.area_label);
+      // The first line of the customer's brief — "Wedding", "Loading and
+      // unloading" — is what tells two crew offers apart on a stack of cards.
+      const headline = offer.brief[0]?.value ?? null;
       return {
         kind: "offer" as const,
         key: `offer:${offer.invitation_id}`,
@@ -273,7 +276,9 @@ function fromCrewOffers(offers: readonly CrewOffer[], serverNow: string): WorkIt
         durationMinutes: null,
         areaLabel: area,
         ...named(
-          `Crew offer · ${offer.headcount} ${helperNoun(offer.headcount)}`,
+          headline === null
+            ? `Crew offer · ${offer.headcount} ${helperNoun(offer.headcount)}`
+            : `${headline} · ${offer.headcount} ${offer.headcount === 1 ? "person" : "people"}`,
           area,
         ),
       };

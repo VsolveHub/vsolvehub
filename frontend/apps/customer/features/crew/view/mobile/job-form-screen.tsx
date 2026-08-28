@@ -14,7 +14,9 @@ import { CounterCard } from "@/features/booking/view/parts/counter-card";
 import { DateSheet } from "@/features/booking/view/parts/date-sheet";
 import { PickerRow } from "@/features/booking/view/parts/picker-row";
 import { Segmented } from "@/features/booking/view/parts/segmented";
+import { TimeSheet } from "@/features/booking/view/parts/time-sheet";
 import type { RequirementQuestionView } from "@/features/requirement/adapters";
+import { formatReportingTime, reportingTimeOptions } from "../../model/reporting-time";
 import { NUMBER_FLOOR } from "../../model/size";
 
 /**
@@ -53,6 +55,16 @@ export interface JobFormScreenProps {
   /** `YYYY-MM-DD`, or null. */
   requestedStart: string | null;
   onRequestedStart: (isoDate: string) => void;
+  /** The caption on the date row. "Start from" for a day crew, "Event date" for a shift. */
+  dateLabel?: string;
+  /** How far ahead the date sheet offers. Ten days for a crew; an event is booked further out. */
+  dateHorizonDays?: number;
+  /**
+   * `HH:MM`, or null. Rendered as a picker only when `onReportingTime` is
+   * given — a crew booked by the day is never asked what time.
+   */
+  reportingTime?: string | null;
+  onReportingTime?: (time: string) => void;
 
   /** The chosen address as one line, or null. */
   addressLine: string | null;
@@ -69,12 +81,17 @@ export interface JobFormScreenProps {
   onBack: () => void;
   /** "Step 1 of 2" for a service with no work picker, "Step 2 of 3" behind one. */
   stepLabel?: string;
+  /** The header's place name and the heading's question. */
+  title?: string;
+  heading?: string;
   /**
    * The work chosen on step one, shown as a compact editable summary — or null
    * for a service whose catalogue asks no work question, where the service name
    * in the heading already says what the crew does.
    */
   selectedWorkLabel: string | null;
+  /** The caption over that summary. "Work selected" by default. */
+  selectedWorkEyebrow?: string;
   onChangeWork?: () => void;
   /** What's included / what's not, rendered when this screen is the flow's first. */
   aboutPanel?: ReactNode;
@@ -106,6 +123,10 @@ export function JobFormScreen({
   hiddenCodes = [],
   requestedStart,
   onRequestedStart,
+  dateLabel = "Start from",
+  dateHorizonDays,
+  reportingTime = null,
+  onReportingTime,
   addressLine,
   onOpenAddress,
   addressPicker,
@@ -115,11 +136,15 @@ export function JobFormScreen({
   saveError,
   onBack,
   stepLabel = "Step 2 of 3",
+  title = "Book a crew",
+  heading = "Plan the crew",
   selectedWorkLabel,
+  selectedWorkEyebrow = "Work selected",
   onChangeWork,
   aboutPanel,
 }: JobFormScreenProps) {
   const [dateOpen, setDateOpen] = useState(false);
+  const [timeOpen, setTimeOpen] = useState(false);
 
   // Counters are paired into a two-up grid, which is what makes People and Days
   // read as one question about size rather than two unrelated fields.
@@ -132,7 +157,7 @@ export function JobFormScreen({
 
   return (
     <MobileScreen
-      title="Book a crew"
+      title={title}
       onBack={onBack}
       step={stepLabel}
       reassurance="Free. Nothing is booked yet."
@@ -150,7 +175,7 @@ export function JobFormScreen({
       }
     >
       <div className="crew-stage-enter flex flex-col gap-4">
-        <ScreenHeading eyebrow={serviceName} title="Plan the crew" />
+        <ScreenHeading eyebrow={serviceName} title={heading} />
 
         {selectedWorkLabel !== null && onChangeWork !== undefined ? (
           <button
@@ -160,7 +185,7 @@ export function JobFormScreen({
           >
             <span className="min-w-0">
               <span className="block text-[11px] font-bold uppercase tracking-[0.1em] text-text-muted">
-                Work selected
+                {selectedWorkEyebrow}
               </span>
               <span className="mt-0.5 block text-sm font-bold leading-5 text-text">
                 {selectedWorkLabel}
@@ -270,12 +295,36 @@ export function JobFormScreen({
       ) : null}
 
       <div className="flex flex-col gap-2.5">
-        <PickerRow
-          label="Start from"
-          value={formatDay(requestedStart)}
-          placeholder="Choose a date"
-          onOpen={() => setDateOpen(true)}
-        />
+        {onReportingTime === undefined ? (
+          <PickerRow
+            label={dateLabel}
+            value={formatDay(requestedStart)}
+            placeholder="Choose a date"
+            onOpen={() => setDateOpen(true)}
+          />
+        ) : (
+          // Date and time side by side: one question — when — in two taps.
+          <div className="grid grid-cols-2 gap-2.5">
+            <PickerRow
+              label={dateLabel}
+              value={formatDay(requestedStart)}
+              placeholder="Choose a date"
+              onOpen={() => setDateOpen(true)}
+            />
+            <PickerRow
+              label="Reporting time"
+              value={reportingTime === null ? null : formatReportingTime(reportingTime)}
+              placeholder="Choose a time"
+              onOpen={() => setTimeOpen(true)}
+            />
+          </div>
+        )}
+        {onReportingTime !== undefined ? (
+          <p className="text-xs leading-5 text-text-muted">
+            Staff report ready to work. One 8-hour shift; after that, overtime runs only when
+            you approve it in the app.
+          </p>
+        ) : null}
         <PickerRow
           label="Where"
           value={addressLine}
@@ -293,7 +342,23 @@ export function JobFormScreen({
         onOpenChange={setDateOpen}
         value={requestedStart}
         onSelect={onRequestedStart}
+        title={dateLabel}
+        description={
+          onReportingTime === undefined ? undefined : "The day of the event."
+        }
+        horizonDays={dateHorizonDays}
       />
+
+      {onReportingTime !== undefined ? (
+        <TimeSheet
+          open={timeOpen}
+          onOpenChange={setTimeOpen}
+          value={reportingTime}
+          options={reportingTimeOptions()}
+          format={formatReportingTime}
+          onSelect={onReportingTime}
+        />
+      ) : null}
 
         {addressPicker}
       </div>

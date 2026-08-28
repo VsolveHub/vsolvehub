@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.45.0
+  version: 1.46.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -10541,16 +10541,24 @@ paths:
         `EventSource` cannot send custom headers, so this relies on the session cookie
         the partner app already holds — which is also why the permission check happens
         here, before the generator, rather than inside it.
+      parameters:
+      - in: query
+        name: format
+        schema:
+          type: string
+          enum:
+          - event-stream
+          - json
       tags:
       - Partner
       security:
       - cookieAuth: []
       responses:
         '200':
-          description: 'A `text/event-stream` of `offer_created` events. Each event''s
-            `data` is the notification context documented in contracts/proposals/partner-offer-events.md:
-            `offer_id`, `fulfilment_unit_id`, `requested_start`, `expires_at`. Comment
-            lines are keepalives. The server closes the connection after M1_OFFER_STREAM_MAX_SECONDS
+          description: 'A `text/event-stream` multiplexed for Partner foreground delivery.
+            Events: `offer_created` (same-day offers), `job_assigned` (advance bookings),
+            `notification_created` (in-app booking and enquiry notices). Comment lines
+            are keepalives. The server closes the connection after M1_OFFER_STREAM_MAX_SECONDS
             and the client reconnects.'
   /api/v1/partner/payout-account/:
     get:
@@ -16471,6 +16479,28 @@ components:
       required:
       - date
       - is_available
+    CrewBriefLine:
+      type: object
+      description: |-
+        One thing the Customer said, in the catalogue's own words (`crew_brief`).
+
+        `question` and `value` are display text resolved server-side from the configuration's question
+        schema — an option's label rather than its code, "Yes" rather than `true` — so a client renders
+        the brief without knowing any service's vocabulary. `code` travels for support and tests.
+      properties:
+        code:
+          type: string
+          readOnly: true
+        question:
+          type: string
+          readOnly: true
+        value:
+          type: string
+          readOnly: true
+      required:
+      - code
+      - question
+      - value
     CrewList:
       type: object
       properties:
@@ -16673,12 +16703,18 @@ components:
         area_label:
           type: string
           readOnly: true
+        brief:
+          type: array
+          items:
+            $ref: '#/components/schemas/CrewBriefLine'
+          readOnly: true
         server_now:
           type: string
           format: date-time
           readOnly: true
       required:
       - area_label
+      - brief
       - days
       - decline_reason_code
       - headcount
@@ -16760,6 +16796,11 @@ components:
           format: date-time
           readOnly: true
           nullable: true
+        brief:
+          type: array
+          items:
+            $ref: '#/components/schemas/CrewBriefLine'
+          readOnly: true
         server_now:
           type: string
           format: date-time
@@ -16767,6 +16808,7 @@ components:
       required:
       - add_on_rates
       - booking_id
+      - brief
       - days
       - headcount
       - hold_expires_at

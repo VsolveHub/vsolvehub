@@ -48,6 +48,10 @@ export interface RateScreenProps {
   notice?: ReactNode;
   /** Rendered in place of everything when there is no rate to show at all. */
   unavailable?: ReactNode;
+  /** What is being priced — the event card — between the rate and the money. */
+  summary?: ReactNode;
+  /** The total row's label. "3 people × 2 days" unless the caller has better words. */
+  crewLabel?: string;
 }
 
 /** "3 people × 2 days" — counting words, not arithmetic. */
@@ -66,6 +70,8 @@ export function RateScreen({
   isBooking,
   notice,
   unavailable,
+  summary,
+  crewLabel,
 }: RateScreenProps) {
   return (
     <MobileScreen
@@ -112,9 +118,11 @@ export function RateScreen({
                 overtimeHourlyLabel={rate.overtimeHourlyLabel}
               />
 
+              {summary}
+
               <MoneyRows
                 rows={[
-                  { label: crewLine(rate), amount: rate.totalLabel, emphasis: true },
+                  { label: crewLabel ?? crewLine(rate), amount: rate.totalLabel, emphasis: true },
                   {
                     label: "Cash to the crew",
                     note: `${rate.leadDayReceiptLabel} at the end of each day`,

@@ -6,6 +6,7 @@ reads. Operations' own rate-card routes follow, under the banner they arrived wi
 """
 
 import uuid
+from dataclasses import asdict
 from typing import cast
 
 from django.utils import timezone
@@ -25,7 +26,7 @@ from apps.partners.capabilities import assert_kyc_complete
 from apps.partners.exceptions import PartnerDomainError
 from apps.partners.models import Skill
 from apps.partners.permissions import IsOperationsUser, IsPartnerUser
-from apps.requirements import crew_dispatch, rate_cards
+from apps.requirements import crew_brief, crew_dispatch, rate_cards
 from apps.requirements.exceptions import RequirementDomainError, RequirementNotFoundError
 from apps.requirements.models import RateCardBooking, VendorInvitation
 from apps.requirements.selectors import invitation_for_partner
@@ -65,6 +66,7 @@ def _crew_offer_payload(offer: crew_dispatch.CrewOffer) -> dict[str, object]:
         "verified_roster_size": offer.verified_roster_size,
         "requested_start": requirement.requested_start,
         "area_label": area.name if area is not None else "",
+        "brief": [asdict(line) for line in offer.brief],
         "server_now": timezone.now(),
     }
 
@@ -108,7 +110,9 @@ class PartnerCrewOfferListView(APIView):
                 # than answerable.
                 requirement__rate_card_booking__status__in=(RateCardBooking.DISPATCHABLE_STATUSES),
             )
-            .select_related("requirement__service_area", "partner")
+            # The configuration is what turns stored answer codes into the brief's labels; without
+            # it here every offer in the list costs its own lookup.
+            .select_related("requirement__service_area", "requirement__configuration", "partner")
             .order_by("responds_by", "created_at")
         )
         offers = [
@@ -177,6 +181,9 @@ class PartnerCrewOfferAcceptView(ThrottledWriteMixin, APIView):
                     "inclusions": booking.inclusions,
                     "hold_expires_at": booking.hold_expires_at,
                     "requested_start": invitation.requirement.requested_start,
+                    "brief": [
+                        asdict(line) for line in crew_brief.brief_lines(invitation.requirement)
+                    ],
                     "server_now": timezone.now(),
                 }
             ).data

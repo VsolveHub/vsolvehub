@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.45.0)
- * Checksum: 2986258af2cda2b0
+ * Source:   contracts/openapi/v1.yaml (version 1.46.0)
+ * Checksum: 10332ed3760aaf9e
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -6194,6 +6194,18 @@ export interface components {
             is_available: boolean;
             reason?: string;
         };
+        /**
+         * @description One thing the Customer said, in the catalogue's own words (`crew_brief`).
+         *
+         *     `question` and `value` are display text resolved server-side from the configuration's question
+         *     schema — an option's label rather than its code, "Yes" rather than `true` — so a client renders
+         *     the brief without knowing any service's vocabulary. `code` travels for support and tests.
+         */
+        CrewBriefLine: {
+            readonly code: string;
+            readonly question: string;
+            readonly value: string;
+        };
         CrewList: {
             readonly members: components["schemas"]["CrewMember"][];
         };
@@ -6281,6 +6293,7 @@ export interface components {
             /** Format: date-time */
             readonly requested_start: string | null;
             readonly area_label: string;
+            readonly brief: components["schemas"]["CrewBriefLine"][];
             /** Format: date-time */
             readonly server_now: string;
         };
@@ -6318,6 +6331,7 @@ export interface components {
             readonly hold_expires_at: string | null;
             /** Format: date-time */
             readonly requested_start: string | null;
+            readonly brief: components["schemas"]["CrewBriefLine"][];
             /** Format: date-time */
             readonly server_now: string;
         };
@@ -21571,14 +21585,16 @@ export interface operations {
     };
     partner_offer_stream: {
         parameters: {
-            query?: never;
+            query?: {
+                format?: "event-stream" | "json";
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description A `text/event-stream` of `offer_created` events. Each event's `data` is the notification context documented in contracts/proposals/partner-offer-events.md: `offer_id`, `fulfilment_unit_id`, `requested_start`, `expires_at`. Comment lines are keepalives. The server closes the connection after M1_OFFER_STREAM_MAX_SECONDS and the client reconnects. */
+            /** @description A `text/event-stream` multiplexed for Partner foreground delivery. Events: `offer_created` (same-day offers), `job_assigned` (advance bookings), `notification_created` (in-app booking and enquiry notices). Comment lines are keepalives. The server closes the connection after M1_OFFER_STREAM_MAX_SECONDS and the client reconnects. */
             200: {
                 headers: {
                     [name: string]: unknown;

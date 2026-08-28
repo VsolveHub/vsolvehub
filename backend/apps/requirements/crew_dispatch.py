@@ -43,7 +43,7 @@ from apps.partners.models import (
     PartnerCrewMembership,
     PartnerProfile,
 )
-from apps.requirements import matching, purchase_gates, rate_cards, services
+from apps.requirements import crew_brief, matching, purchase_gates, rate_cards, services
 from apps.requirements.exceptions import (
     InvitationTransitionError,
     LifecycleNotSupportedError,
@@ -405,6 +405,10 @@ class CrewOffer:
     inclusions: list[str]
     responds_by: datetime | None
     verified_roster_size: int
+    #: What the Customer actually asked for, in the catalogue's words — the occasion, the roles,
+    #: the dress code. Without it a lead accepts a headcount and a day count and learns on site
+    #: whether it was a wedding or a demolition. See `crew_brief`.
+    brief: list[crew_brief.BriefLine]
 
 
 def crew_offer_for(invitation: VendorInvitation) -> CrewOffer | None:
@@ -428,6 +432,7 @@ def crew_offer_for(invitation: VendorInvitation) -> CrewOffer | None:
         inclusions=list(booking.inclusions),
         responds_by=invitation.responds_by,
         verified_roster_size=verified_roster_size(invitation.partner),
+        brief=crew_brief.brief_lines(invitation.requirement),
     )
 
 

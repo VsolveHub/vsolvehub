@@ -239,6 +239,15 @@ QUESTION_HELP: dict[str, str] = {
     "counter_length_ft": "Along the counter walls. A rough number is fine.",
     "point_count": "Switches, sockets and light points together.",
     "guest_count": "Sets the quantity on every dish.",
+    # Event staff roles. The help is the one line a customer reads to tell two roles apart, so it
+    # names the work rather than repeating the label.
+    "waiter_count": "Serving, clearing, refills and buffet counters.",
+    "bar_staff_count": "Soft drinks, mocktails and counters. No licensed liquor service.",
+    "hostess_count": "Welcoming guests, seating and the gifts desk.",
+    "kitchen_helper_count": "Plating, dish return and pantry support for your caterer.",
+    "cleanup_count": "Keeping the venue and washrooms presentable through the event.",
+    "setup_count": "Furniture, decor and equipment before and after.",
+    "staff_meal_provided": "Customary for shifts over six hours.",
 }
 
 #: `(code, prompt, kind, required, minimum)`. The A3 set answers `services.infer_archetype`'s
@@ -1406,6 +1415,119 @@ def _size_questions(people_label: str) -> tuple[QuestionSeed, ...]:
     )
 
 
+#: Event staff is the one day-hire that "picking the service" does NOT answer: a waiter, a bar
+#: hand, a hostess and a cleanup crew are different people at different stations, and a lead
+#: staffing a wedding needs the occasion, the crowd and the dress code before they can say yes.
+#:
+#: The per-role counts are optional NUMBER questions with a floor of zero. `worker_count` stays
+#: required and is the sum of them — the booking screen keeps it in step — because `preset_size`,
+#: matching and the shift-day engine all read that one code and nothing else. Order here is the
+#: order the screens ask in: the occasion, the crew, then how they should turn up.
+EVENT_STAFF_QUESTIONS: tuple[QuestionSeed, ...] = (
+    (
+        "event_type",
+        "What's the occasion?",
+        ServiceQuestion.Kind.SINGLE_CHOICE,
+        True,
+        None,
+        (
+            ("wedding", "Wedding", "Reception, sangeet, haldi or the wedding day itself."),
+            (
+                "corporate",
+                "Corporate event",
+                "Conferences, launches, office parties and client dinners.",
+            ),
+            ("birthday", "Birthday party", "For kids or adults, at home or at a venue."),
+            (
+                "house-function",
+                "House or religious function",
+                "Housewarming, pooja, naming ceremony or a festival gathering.",
+            ),
+            (
+                "other",
+                "Something else",
+                "Tell us in a sentence and we will pass it to the supervisor.",
+            ),
+        ),
+    ),
+    ("event_description", "Tell us about the event", ServiceQuestion.Kind.TEXT, False, None, None),
+    (
+        "guest_band",
+        "How many guests?",
+        ServiceQuestion.Kind.SINGLE_CHOICE,
+        True,
+        None,
+        (
+            ("under-50", "Under 50", ""),
+            ("50-100", "50 to 100", ""),
+            ("100-200", "100 to 200", ""),
+            ("200-plus", "200 or more", ""),
+        ),
+    ),
+    (
+        "service_style",
+        "How is food served?",
+        ServiceQuestion.Kind.SINGLE_CHOICE,
+        True,
+        None,
+        (
+            ("buffet", "Buffet", "Guests walk up to the counters."),
+            ("sit-down", "Sit-down service", "Served at the table, course by course."),
+            ("passed", "Snacks and drinks passed around", "Trays circulating through the room."),
+            ("no-food", "No food service", "Setup, reception and support only."),
+        ),
+    ),
+    ("waiter_count", "Waiters and serving staff", ServiceQuestion.Kind.NUMBER, False, 0, None),
+    ("bar_staff_count", "Bar and beverage staff", ServiceQuestion.Kind.NUMBER, False, 0, None),
+    ("hostess_count", "Guest reception", ServiceQuestion.Kind.NUMBER, False, 0, None),
+    (
+        "kitchen_helper_count",
+        "Kitchen and pantry helpers",
+        ServiceQuestion.Kind.NUMBER,
+        False,
+        0,
+        None,
+    ),
+    ("cleanup_count", "Cleanup and housekeeping", ServiceQuestion.Kind.NUMBER, False, 0, None),
+    ("setup_count", "Setup and teardown crew", ServiceQuestion.Kind.NUMBER, False, 0, None),
+    ("worker_count", "Staff", ServiceQuestion.Kind.NUMBER, True, 1, None),
+    ("duration_days", "Days", ServiceQuestion.Kind.NUMBER, True, 1, None),
+    (
+        "dress_code",
+        "Dress code",
+        ServiceQuestion.Kind.SINGLE_CHOICE,
+        True,
+        None,
+        (
+            ("black-white", "Black and white formal", ""),
+            ("traditional", "Traditional or ethnic", ""),
+            ("safari", "Safari suit", ""),
+            ("client-uniform", "We will provide uniforms", ""),
+        ),
+    ),
+    (
+        "staff_meal_provided",
+        "Will you provide a meal for the staff?",
+        ServiceQuestion.Kind.BOOLEAN,
+        True,
+        None,
+        None,
+    ),
+    (
+        "staff_preference",
+        "Staff preference",
+        ServiceQuestion.Kind.SINGLE_CHOICE,
+        False,
+        None,
+        (
+            ("any", "Any", ""),
+            ("female", "Female staff", ""),
+            ("male", "Male staff", ""),
+        ),
+    ),
+)
+
+
 A3_DAY_SEEDS: tuple[DaySeed, ...] = (
     DaySeed(
         slug=A3_SERVICE_SLUG,
@@ -1593,7 +1715,7 @@ A3_DAY_SEEDS: tuple[DaySeed, ...] = (
         worker_day_wage_paise=70_000,
         supervision_margin_paise=15_000,
         overtime_hourly_paise=12_000,
-        questions=_size_questions("Staff"),
+        questions=EVENT_STAFF_QUESTIONS,
         preset_questions=(),
         rate_inclusions=(
             "One 8-hour day per staff member, including a 30-minute break.",

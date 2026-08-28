@@ -42,6 +42,7 @@ function offer(overrides: Partial<CrewOffer> = {}): CrewOffer {
     verified_roster_size: 4,
     requested_start: "2026-08-20T00:00:00Z",
     area_label: "Kondapur",
+    brief: [],
     server_now: NOW,
     ...overrides,
   };

@@ -1,5 +1,12 @@
 import type { RequirementQuestionView } from "@/features/requirement/adapters";
 
+import {
+  isEventCrewFlow,
+  occasionQuestions,
+  roleQuestions,
+  roleTotal,
+} from "./event-flow";
+
 /**
  * The two catalogue codes that shape the work-first crew flow.
  *
@@ -11,12 +18,31 @@ export const WORK_TYPE_CODE = "work_type";
 export const WORK_DESCRIPTION_CODE = "work_description";
 export const OTHER_WORK_TYPE = "other";
 
-export type CrewBookingStep = "work" | "details" | "rate";
+/**
+ * Every stage the crew flow can be on, across its three shapes.
+ *
+ * - `plain` — a specific day-hire ("Electrician by the day"): details, rate.
+ * - `work` — generic labour: choose the work, then details, then rate.
+ * - `event` — event staff: the occasion, the crew, the details, then rate.
+ */
+export type CrewBookingStep = "occasion" | "work" | "crew" | "details" | "rate";
+
+export type CrewFlowShape = "plain" | "work" | "event";
 
 export function workTypeQuestion(
   questions: readonly RequirementQuestionView[],
 ): RequirementQuestionView | null {
   return questions.find((question) => question.code === WORK_TYPE_CODE) ?? null;
+}
+
+/**
+ * Which shape the catalogue published. Read off the questions, never off a
+ * service slug: a catalogue that publishes an occasion and roles for a
+ * different service gets the event flow with it.
+ */
+export function crewFlowShape(questions: readonly RequirementQuestionView[]): CrewFlowShape {
+  if (isEventCrewFlow(questions)) return "event";
+  return workTypeQuestion(questions) === null ? "plain" : "work";
 }
 
 /** All server-published questions except the work picker that owns step one. */
@@ -43,28 +69,60 @@ export function selectedWorkLabel(
 }
 
 /**
- * Where the flow opens: the work picker only when the catalogue actually asks
- * what the work is.
+ * Where the flow opens.
  *
- * A specific day-hire ("Electrician by the day") publishes no `work_type`
- * question — the customer answered it by choosing the service — so its flow
- * opens straight on planning. Only the generic labour service, whose crew
- * genuinely does different things on different days, still starts with the
- * picker.
+ * A specific day-hire publishes no `work_type` question — the customer answered
+ * it by choosing the service — so its flow opens straight on planning. Generic
+ * labour starts with the work picker, and event staff with the occasion.
  */
 export function initialCrewBookingStep(
-  question: RequirementQuestionView | null,
+  questions: readonly RequirementQuestionView[],
 ): CrewBookingStep {
-  return question === null ? "details" : "work";
+  switch (crewFlowShape(questions)) {
+    case "event":
+      return "occasion";
+    case "work":
+      return "work";
+    default:
+      return "details";
+  }
 }
 
-/** A restored draft with a recognised work choice resumes at crew planning. */
+function occasionComplete(
+  questions: readonly RequirementQuestionView[],
+  answers: Readonly<Record<string, unknown>>,
+): boolean {
+  return occasionQuestions(questions).every((question) => {
+    if (!question.required || question.kind !== "choice") return true;
+    const value = answers[question.code];
+    return (
+      typeof value === "string" &&
+      (question.options?.some((option) => option.value === value) ?? false)
+    );
+  });
+}
+
+/**
+ * Where a restored draft resumes: at the first stage it has not finished.
+ *
+ * A recognised work choice resumes at planning; a stale one goes back to the
+ * picker. An event draft resumes at the occasion until every choice on it is
+ * one the catalogue still publishes, at the crew until somebody is on it, and
+ * at the details after that.
+ */
 export function resumeCrewBookingStep(
-  question: RequirementQuestionView | null,
+  questions: readonly RequirementQuestionView[],
   answers: Readonly<Record<string, unknown>>,
 ): CrewBookingStep {
-  if (question === null) return "details";
-  return selectedWorkLabel(question, answers) === null ? "work" : "details";
+  switch (crewFlowShape(questions)) {
+    case "event":
+      if (!occasionComplete(questions, answers)) return "occasion";
+      return roleTotal(roleQuestions(questions), answers) > 0 ? "details" : "crew";
+    case "work":
+      return selectedWorkLabel(workTypeQuestion(questions), answers) === null ? "work" : "details";
+    default:
+      return "details";
+  }
 }
 
 /** The free-text follow-up is visible only for the server's `other` option. */

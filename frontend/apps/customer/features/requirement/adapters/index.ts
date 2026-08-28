@@ -408,6 +408,11 @@ export interface DraftIntent {
   addressId: string | null;
   /** The Customer's local calendar day, recovered from the stored date-time. */
   requestedStart: string | null;
+  /**
+   * The time of day on the same instant, as `HH:MM` local — or null at midnight,
+   * which is how a crew booked by the day rather than the shift is stored.
+   */
+  requestedStartTime: string | null;
   serviceBy: string | null;
   /** Days either side the Customer can move the start. Zero means exact. */
   flexibilityDays: number;
@@ -420,6 +425,7 @@ export function toDraftIntent(draft: RequirementDraft): DraftIntent {
     answers: readAnswers(draft.answers),
     addressId: draft.address_id,
     requestedStart: toLocalInputDate(draft.requested_start),
+    requestedStartTime: toLocalInputTime(draft.requested_start),
     serviceBy: draft.service_by,
     // The integer, which is the source of truth. `is_date_flexible` is the
     // server's own derivation of it (`flexibility_days > 0`) and carries less:
@@ -439,6 +445,17 @@ function toLocalInputDate(value: string | null): string | null {
   const month = `${instant.getMonth() + 1}`.padStart(2, "0");
   const day = `${instant.getDate()}`.padStart(2, "0");
   return `${instant.getFullYear()}-${month}-${day}`;
+}
+
+/** The same instant's time of day, or null at midnight — see `DraftIntent.requestedStartTime`. */
+function toLocalInputTime(value: string | null): string | null {
+  if (value === null) return null;
+  const instant = new Date(value);
+  if (Number.isNaN(instant.getTime())) return null;
+  const hour = instant.getHours();
+  const minute = instant.getMinutes();
+  if (hour === 0 && minute === 0) return null;
+  return `${`${hour}`.padStart(2, "0")}:${`${minute}`.padStart(2, "0")}`;
 }
 
 

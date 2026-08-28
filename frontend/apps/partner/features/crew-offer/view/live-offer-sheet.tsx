@@ -122,6 +122,19 @@ function OfferSheet({ offer, onDismiss }: { offer: CrewOffer; onDismiss: () => v
           ) : null}
         </div>
 
+        {/* The first two things the customer said — the occasion and the crowd
+            for an event, the work for a helper crew — so a lead knows what job
+            this is before deciding whether to look closer. The detail screen
+            carries the whole brief. */}
+        {offer.brief.length > 0 ? (
+          <p className="text-sm font-semibold leading-6 text-text">
+            {offer.brief
+              .slice(0, 2)
+              .map((line) => line.value)
+              .join(" · ")}
+          </p>
+        ) : null}
+
         <p className="text-sm leading-6 text-text">
           <strong className="font-semibold">{formatMoney(offer.lead_day_receipt_paise)}</strong> to
           you per day, paid directly by the customer at the end of each day.

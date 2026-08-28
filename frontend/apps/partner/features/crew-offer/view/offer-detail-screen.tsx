@@ -253,6 +253,7 @@ function OfferDecision({
         <FactRow icon="time" label="Starts" value={start ?? "Not stated"} />
         <FactRow icon="days" label="Days" value={String(offer.days)} />
         <FactRow icon="crew" label="People" value={String(offer.headcount)} />
+        <BriefList brief={offer.brief} />
       </div>
 
       {accept.error ? (
@@ -471,6 +472,42 @@ function FactRow({
         </span>
       </span>
     </div>
+  );
+}
+
+/**
+ * What the customer actually asked for, under the four numbers.
+ *
+ * The offer used to be a headcount, a day count and a place — a lead accepted
+ * "8 people, Kondapur" and found out on site whether it was a wedding or a
+ * demolition. `brief` is the customer's own answers, already worded by the
+ * server from the catalogue (an option's label, "Yes"/"No", never a code), so
+ * this renders them as rows and knows nothing about any one service.
+ *
+ * Rendered as a list rather than more `FactRow`s: a fact row is one big number
+ * with a picture, and "Black and white formal" is not a number. Nothing here
+ * when the form asked nothing beyond a size.
+ */
+function BriefList({ brief }: { readonly brief: CrewOffer["brief"] }) {
+  if (brief.length === 0) return null;
+  return (
+    <section className="rounded-card border border-line bg-surface px-3.5 py-3">
+      <h2 className="text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-text-muted">
+        What they asked for
+      </h2>
+      <dl className="mt-2 flex flex-col divide-y divide-line">
+        {brief.map((line) => (
+          <div key={line.code} className="flex items-baseline justify-between gap-3 py-2">
+            <dt className="min-w-0 text-[0.8125rem] leading-5 text-text-secondary">
+              {line.question}
+            </dt>
+            <dd className="shrink-0 text-right text-[0.9375rem] font-bold leading-5 text-text">
+              {line.value}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </section>
   );
 }
 

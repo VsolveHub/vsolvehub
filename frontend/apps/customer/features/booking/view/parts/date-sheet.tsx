@@ -52,6 +52,9 @@ export interface DateSheetProps {
    * away — raises it and accepts the scroll.
    */
   horizonDays?: number;
+  /** The sheet's own title and line. "Start from" for a crew booked by the day. */
+  title?: string;
+  description?: string;
 }
 
 /** `YYYY-MM-DD` in the customer's own timezone, not UTC. */
@@ -107,6 +110,8 @@ export function DateSheet({
   value,
   onSelect,
   horizonDays = 10,
+  title = "Start from",
+  description = "The first day you need the crew.",
 }: DateSheetProps) {
   // Staged, so dismissing the sheet leaves the committed value alone.
   const [pending, setPending] = useState<string | null>(value);
@@ -121,8 +126,8 @@ export function DateSheet({
         if (!next) setPending(value);
         onOpenChange(next);
       }}
-      title="Start from"
-      description="The first day you need the crew."
+      title={title}
+      description={description}
       footer={
         <>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>

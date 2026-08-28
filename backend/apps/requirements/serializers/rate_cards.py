@@ -306,6 +306,19 @@ class RateCardStateSerializer(serializers.Serializer[dict[str, Any]]):
     server_now = serializers.DateTimeField(read_only=True)
 
 
+class CrewBriefLineSerializer(serializers.Serializer[dict[str, Any]]):
+    """One thing the Customer said, in the catalogue's own words (`crew_brief`).
+
+    `question` and `value` are display text resolved server-side from the configuration's question
+    schema — an option's label rather than its code, "Yes" rather than `true` — so a client renders
+    the brief without knowing any service's vocabulary. `code` travels for support and tests.
+    """
+
+    code = serializers.CharField(read_only=True)
+    question = serializers.CharField(read_only=True)
+    value = serializers.CharField(read_only=True)
+
+
 class CrewOfferSerializer(serializers.Serializer[dict[str, Any]]):
     """One crew offer as the **lead** sees it (`M2-BE-435`).
 
@@ -346,6 +359,9 @@ class CrewOfferSerializer(serializers.Serializer[dict[str, Any]]):
     verified_roster_size = serializers.IntegerField(read_only=True)
     requested_start = serializers.DateTimeField(read_only=True, allow_null=True)
     area_label = serializers.CharField(read_only=True, allow_blank=True)
+    #: What the Customer asked for beyond a size — the occasion, the roles, the dress code — in
+    #: the catalogue's order and words. Empty when the form asked nothing beyond a size.
+    brief = CrewBriefLineSerializer(many=True, read_only=True)
     server_now = serializers.DateTimeField(read_only=True)
 
 
@@ -390,6 +406,8 @@ class CrewOfferAcceptedSerializer(serializers.Serializer[dict[str, Any]]):
     #: hold lapses, your standing is untouched and the cascade moves on.
     hold_expires_at = serializers.DateTimeField(read_only=True, allow_null=True)
     requested_start = serializers.DateTimeField(read_only=True, allow_null=True)
+    #: The same brief the offer carried, so the held job still says what it is for.
+    brief = CrewBriefLineSerializer(many=True, read_only=True)
     server_now = serializers.DateTimeField(read_only=True)
 
 

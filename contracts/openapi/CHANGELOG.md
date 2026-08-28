@@ -1,5 +1,15 @@
 # API Contract Changelog
 
+## 1.46.0 - Crew offers carry the Customer's brief
+
+- `CrewOffer` and `CrewOfferAccepted` gain `brief`: the Customer's answers beyond headcount and
+  days, as `{code, question, value}` lines resolved server-side from the variant's question schema
+  (option labels rather than codes, `Yes`/`No` for booleans, zero counts omitted, sizing codes
+  omitted). Additive; empty for a form that asks nothing beyond a size.
+- No operation, path or status change. The event-staff catalogue now publishes an occasion, a
+  guest band, a service style, per-role counts, a dress code, a staff-meal flag and a staff
+  preference on the same `ServiceQuestion` shapes already in the schema.
+
 ## 1.44.0 - Customer-booked visits and server-priced estimates
 
 - Added Customer signed-slot discovery, exact 1/2/3 slot selection, per-slot matching status and

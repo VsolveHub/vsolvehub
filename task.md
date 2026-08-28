@@ -771,6 +771,37 @@ Run the relevant Vitest and Playwright suites for every changed Customer/Partner
   present. Static gates green. No test suite executed; `booking-flow.test.ts` extended for
   the skip-work-picker rule (owner runs it).
 
+### Event staff crew booking — 2026-08-28 (Claude, owner-approved mockups)
+
+- **Problem:** `event-staff-by-the-day` asked only "Staff" and "Days". No role (waiter vs. bar
+  vs. hostess), no occasion, no crowd, no dress code, no reporting time (`requested_start` was
+  forced to midnight), and the lead's crew offer carried **none** of the customer's answers —
+  not even `work_type` on construction helpers.
+- **Backend:** `EVENT_STAFF_QUESTIONS` in `seed_m2_demo.py` (occasion + "something else" text,
+  guest band, service style, six `*_count` role questions with floor 0, `worker_count` kept as
+  the priced sum, days, dress code, staff meal, staff preference) — all on existing
+  `ServiceQuestion` kinds, no migration. New `requirements/crew_brief.py` projects answers
+  into `{code, question, value}` lines from the configuration's own schema (option labels, not
+  codes; zero counts and sizing codes dropped). `CrewOffer` and `CrewOfferAccepted` publish
+  `brief`. Contract **1.45.0 → 1.46.0**, `v1.yaml` and the client regenerated.
+- **Customer:** flow shape is read off the questions (`crewFlowShape`: plain / work / event).
+  Event = occasion → crew composer (per-role steppers; the guest band × service style rule
+  of thumb **pre-fills** the serving-staff count and re-fills it when the occasion changes
+  unless the customer set it by hand — `applyServingSuggestion`; headcount = sum) → date + reporting time + venue + dress/meal/preference →
+  rate with an event summary card. Desktop is one planning page with three sections and the
+  sticky plan rail. `requested_start` now carries the reporting time (`combineStart`);
+  helper crews still send midnight. Construction helpers / trade day-hires unchanged.
+- **Partner:** offer detail renders "What they asked for" from `brief`; the live offer sheet
+  and the WORK stack card lead with the brief's first line ("Wedding · 8 people").
+- **Not built (owner decision):** per-role rates — the card is still one flat per-person day
+  rate; a bartender and a waiter price the same. Needs a rate-card schema change.
+- **Verification:** backend ruff/mypy green, contract regenerated and matches; customer and
+  partner `tsc` green for these files (pre-existing failures: `tile-desktop-split-pane.tsx` /
+  `customer-login-modal.tsx` lint, `price-book/*` types from the WIP checkpoint). Tests
+  written (`test_crew_brief.py`, `event-flow.test.ts`, `reporting-time.test.ts`,
+  `booking-flow.test.ts`, event cases in `book-crew-screen.test.tsx`) — **owner runs them**.
+  Re-run `seed_m2_demo --i-understand-this-is-dev-only` to publish the new questions.
+
 ## Out of scope
 
 - Mixed Item-wise + Labour-wise estimates.

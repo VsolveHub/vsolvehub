@@ -363,6 +363,7 @@ describe("BookCrewScreen booking", () => {
       },
       addressId: address.id,
       requestedStart: "2026-09-07",
+      reportingTime: null,
       step: "details",
     });
 
@@ -437,5 +438,153 @@ describe("BookCrewScreen booking", () => {
 
     // The start date is unanswered, so the details action cannot create or price a draft.
     expect(screen.getByRole("button", { name: "See my live rate" })).toBeDisabled();
+  });
+});
+
+/** The event-staff catalogue: an occasion, a crowd, a service style, roles, then how they turn up. */
+const eventVariant = {
+  id: "variant-event",
+  questions: [
+    {
+      id: "q-occasion",
+      code: "event_type",
+      prompt: "What's the occasion?",
+      help_text: "",
+      kind: "SINGLE_CHOICE",
+      is_required: true,
+      validation_rules: {},
+      options: [
+        { id: "o-w", code: "wedding", label: "Wedding", description: "Reception or the day itself." },
+        { id: "o-o", code: "other", label: "Something else", description: "Tell us in a sentence." },
+      ],
+    },
+    { id: "q-desc", code: "event_description", prompt: "Tell us about the event", help_text: "", kind: "TEXT", is_required: false, validation_rules: {}, options: [] },
+    {
+      id: "q-guests",
+      code: "guest_band",
+      prompt: "How many guests?",
+      help_text: "",
+      kind: "SINGLE_CHOICE",
+      is_required: true,
+      validation_rules: {},
+      options: [
+        { id: "o-g1", code: "under-50", label: "Under 50", description: "" },
+        { id: "o-g2", code: "100-200", label: "100 to 200", description: "" },
+      ],
+    },
+    {
+      id: "q-style",
+      code: "service_style",
+      prompt: "How is food served?",
+      help_text: "",
+      kind: "SINGLE_CHOICE",
+      is_required: true,
+      validation_rules: {},
+      options: [{ id: "o-b", code: "buffet", label: "Buffet", description: "Guests walk up to the counters." }],
+    },
+    { id: "q-waiters", code: "waiter_count", prompt: "Waiters and serving staff", help_text: "Serving and clearing.", kind: "NUMBER", is_required: false, validation_rules: { minimum: 0 }, options: [] },
+    { id: "q-bar", code: "bar_staff_count", prompt: "Bar and beverage staff", help_text: "", kind: "NUMBER", is_required: false, validation_rules: { minimum: 0 }, options: [] },
+    { id: "q-staff", code: "worker_count", prompt: "Staff", help_text: "", kind: "NUMBER", is_required: true, validation_rules: { minimum: 1 }, options: [] },
+    { id: "q-days", code: "duration_days", prompt: "Days", help_text: "", kind: "NUMBER", is_required: true, validation_rules: { minimum: 1 }, options: [] },
+    {
+      id: "q-dress",
+      code: "dress_code",
+      prompt: "Dress code",
+      help_text: "",
+      kind: "SINGLE_CHOICE",
+      is_required: true,
+      validation_rules: {},
+      options: [{ id: "o-bw", code: "black-white", label: "Black and white formal", description: "" }],
+    },
+    { id: "q-meal", code: "staff_meal_provided", prompt: "Will you provide a meal for the staff?", help_text: "", kind: "BOOLEAN", is_required: true, validation_rules: {}, options: [] },
+  ],
+} as unknown as Parameters<typeof BookCrewScreen>[0]["variant"];
+
+const eventService = { slug: "event-staff-by-the-day", name: "Event staff by the day" } as Parameters<
+  typeof BookCrewScreen
+>[0]["service"];
+
+describe("BookCrewScreen for event staff", () => {
+  it("opens on the occasion and prices nobody until a role is counted", async () => {
+    respondToReads();
+    respondToWrites();
+
+    render(<BookCrewScreen service={eventService} variant={eventVariant} />, { wrapper });
+
+    expect(await screen.findByRole("heading", { name: "Staff your event, role by role." })).toBeInTheDocument();
+    expect(screen.getByText("Nobody yet")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "See my live rate" })).toBeDisabled();
+    expect(rateSizes()).toHaveLength(0);
+  });
+
+  it("keeps a serving count the customer set by hand when the occasion changes", async () => {
+    respondToReads();
+    respondToWrites();
+
+    render(<BookCrewScreen service={eventService} variant={eventVariant} />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("radio", { name: /^Wedding/ }));
+    fireEvent.click(screen.getByRole("radio", { name: "Under 50" }));
+    fireEvent.click(screen.getByRole("radio", { name: /^Buffet/ }));
+    // 40 guests at a buffet: one serving person. The customer wants three.
+    expect(screen.getByText(/1 person × 1 day/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "More waiters and serving staff" }));
+    fireEvent.click(screen.getByRole("button", { name: "More waiters and serving staff" }));
+
+    // A bigger crowd would suggest five — but three was theirs, and it stays.
+    fireEvent.click(screen.getByRole("radio", { name: "100 to 200" }));
+    expect(screen.getByText(/3 people × 1 day/)).toBeInTheDocument();
+  });
+
+  it("prices the sum of the roles, and saves the roles beside the headcount", async () => {
+    respondToReads();
+    respondToWrites();
+
+    render(<BookCrewScreen service={eventService} variant={eventVariant} />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("radio", { name: /^Wedding/ }));
+    fireEvent.click(screen.getByRole("radio", { name: "100 to 200" }));
+    fireEvent.click(screen.getByRole("radio", { name: /^Buffet/ }));
+    // 150 guests at a buffet starts the crew with five serving staff, already
+    // on the roster rather than in a sentence. The customer adjusts from there.
+    expect(screen.getByText(/we have started you with/)).toBeInTheDocument();
+    expect(screen.getByText(/5 people × 1 day/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "More waiters and serving staff" }));
+    fireEvent.click(screen.getByRole("button", { name: "More bar and beverage staff" }));
+    fireEvent.click(screen.getByRole("button", { name: "More bar and beverage staff" }));
+    expect(screen.getByText(/8 people × 1 day/)).toBeInTheDocument();
+
+    await chooseAddress();
+    fireEvent.change(screen.getByLabelText(/Event date/), { target: { value: "2026-09-14" } });
+    fireEvent.change(screen.getByLabelText(/Reporting time/), { target: { value: "17:00" } });
+    fireEvent.click(screen.getByRole("radio", { name: "Black and white formal" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Yes" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "See my live rate" }));
+
+    await waitFor(
+      () => expect(rateSizes()).toContainEqual({ headcount: 8, days: 1 }),
+      AFTER_DEBOUNCE,
+    );
+
+    const answered = client.PATCH.mock.calls.find(
+      ([, options]) => options.body?.answers !== undefined,
+    );
+    expect(answered?.[1].body.answers).toMatchObject({
+      event_type: "wedding",
+      guest_band: "100-200",
+      service_style: "buffet",
+      waiter_count: 6,
+      bar_staff_count: 2,
+      worker_count: 8,
+      duration_days: 1,
+      dress_code: "black-white",
+      staff_meal_provided: true,
+    });
+    // The reporting time rides on `requested_start` rather than a midnight day.
+    const saved = new Date(answered?.[1].body.requested_start as string);
+    expect(saved.getHours()).toBe(17);
+    expect(saved.getDate()).toBe(14);
   });
 });
