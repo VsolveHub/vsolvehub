@@ -1,20 +1,10 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import {
-  Phone,
-  MapPin,
-  Navigation,
-  Clock,
-  Sparkles,
-  Zap,
-  Wifi,
-  Signal,
-  BatteryFull,
-  Star,
-  type LucideIcon,
-} from "lucide-react";
+import { Phone, MapPin, Navigation, Clock, Sparkles, Zap, Wifi, Signal, BatteryFull, Star, Briefcase, Wallet, Bell, User, Home as HomeIcon, type LucideIcon } from "lucide-react";
+
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 import { inr } from "@/lib/format";
 
@@ -71,22 +61,7 @@ const OFFERS: DemoOffer[] = [
 ];
 
 const OFFER_WINDOW = 30; // seconds — matches the real offer countdown
-const RING_R = 16;
-const RING_C = 2 * Math.PI * RING_R;
 
-function StatPill({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
-  return (
-    <div className="flex items-center gap-2 rounded-xl border border-border bg-white p-2">
-      <div className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-600">
-        <Icon className="h-3.5 w-3.5" />
-      </div>
-      <div className="min-w-0">
-        <p className="text-[9px] uppercase tracking-wide text-gray-400">{label}</p>
-        <p className="truncate text-[11px] font-bold text-ink-900">{value}</p>
-      </div>
-    </div>
-  );
-}
 
 export function PartnerHero() {
   const router = useRouter();
@@ -126,13 +101,12 @@ export function PartnerHero() {
 
   const offer = OFFERS[index]!;
   const Icon = offer.icon;
-  const pct = (left / OFFER_WINDOW) * 100;
-  const ringColor = left <= 10 ? "#dc2626" : "#5b50e6";
 
   return (
     <section
+      id="hero"
       ref={heroRef}
-      className="relative flex items-center overflow-x-clip bg-ink-900 py-14 text-white lg:min-h-[540px] lg:py-8"
+      className="relative flex items-center overflow-x-clip bg-[#00112e] pt-24 pb-14 sm:pt-32 sm:pb-20 text-white lg:min-h-[580px]"
     >
       {/* Background layer */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
@@ -177,52 +151,76 @@ export function PartnerHero() {
 
           {/* Sends people to the real signup rather than authenticating here.
               Login is one screen, inside `/apply`, where the code, the resend
-              cooldown and the session all live — a second OTP entry point on a
-              marketing page is a second thing to keep correct. */}
+              cooldown and the session all live. */}
           <form
             onSubmit={(event) => {
               event.preventDefault();
-              router.push("/apply");
+              const formData = new FormData(event.currentTarget);
+              const rawPhone = (formData.get("phone") as string || "").replace(/\D/g, "");
+              if (rawPhone.length >= 10) {
+                router.push(`/apply?phone=${encodeURIComponent(rawPhone.slice(-10))}`);
+              } else {
+                router.push("/apply");
+              }
             }}
-            className="vsh-hero-slideup flex w-full max-w-[440px] flex-col gap-2"
+            className="vsh-hero-slideup flex w-full max-w-[460px] flex-col gap-2"
             style={{ animationDelay: "320ms" }}
           >
-            <div className="flex flex-col gap-3 md:flex-row">
+            <div className="flex flex-col gap-3 sm:flex-row">
               <div className="relative flex-1">
                 <label htmlFor="hero-phone" className="sr-only">
                   Mobile number
                 </label>
-                <Phone className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+                <div className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center gap-1 text-sm font-bold text-gray-500">
+                  <Phone className="h-4 w-4 text-gray-400" />
+                  <span>+91</span>
+                </div>
                 <input
                   id="hero-phone"
                   name="phone"
                   type="tel"
-                  inputMode="tel"
-                  autoComplete="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  autoComplete="tel-national"
                   maxLength={10}
-                  placeholder="Mobile number"
-                  required
-                  className="h-[52px] w-full rounded-[10px] bg-white pl-[44px] pr-4 font-sans text-ink-900 transition-all placeholder:text-gray-400 focus:shadow-[0_0_12px_rgba(249,115,22,0.3)] focus:outline-none focus:ring-2 focus:ring-accent-500 disabled:opacity-50"
+                  placeholder="Enter 10-digit number"
+                  className="h-[52px] w-full rounded-control border border-warm-300 bg-white pl-[72px] pr-4 font-sans text-base font-semibold text-ink-900 transition-all placeholder:text-gray-400 focus:border-signal-500 focus:outline-none focus:ring-2 focus:ring-signal-500 disabled:opacity-50"
                 />
               </div>
               <button
                 type="submit"
-                className="flex h-[52px] w-full items-center justify-center gap-2 rounded-[10px] bg-accent-500 px-6 font-semibold text-white transition-all hover:-translate-y-[1px] hover:bg-accent-600 md:w-auto"
+                className="flex h-[52px] w-full items-center justify-center gap-2 rounded-control bg-action px-6 text-base font-bold text-action-text shadow-md transition-all hover:bg-action-hover active:bg-action-active sm:w-auto shrink-0"
               >
-                Start signup
+                Apply Now
               </button>
             </div>
 
-            <p
-              className="vsh-hero-slideup text-[13px] text-white/50"
-              style={{ animationDelay: "400ms" }}
-            >
-              We&apos;ll send an OTP. Signup takes 5 minutes.
-            </p>
+            <div className="flex items-center gap-2 text-[13px] text-white/70">
+              <span className="h-1.5 w-1.5 rounded-full bg-success-text" />
+              <span>We&apos;ll send an OTP. Signup takes only 5 minutes.</span>
+            </div>
+
+            {/* Already registered sign-in shortcut */}
+            <div className="mt-2 flex flex-wrap items-center gap-2 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 px-4 py-2.5 text-xs text-white">
+              <span className="text-white/80">Already registered as a Partner?</span>
+              {/*
+                "Sign In", not "Click Here to Sign In". The label is read on its
+                own out of context by a screen reader's link list, where "Click
+                Here" names nothing — and most people meeting this hero are on a
+                phone, not clicking. `min-h-11` makes it a real tap target; the
+                pill keeps its size because the text was already centred.
+              */}
+              <Link
+                href="/login"
+                className="inline-flex min-h-11 items-center rounded-full bg-white px-3.5 py-1 text-xs font-extrabold text-[#00112e] shadow-sm hover:bg-amber-300 transition-all hover:scale-105 active:scale-95"
+              >
+                <span>Sign In</span>
+              </Link>
+            </div>
           </form>
         </div>
 
-        {/* Phone visual column — a live preview of the real job-offer screen */}
+        {/* Phone visual column — real post-login partner workspace preview */}
         <div
           className="vsh-hero-slideup flex w-full justify-center lg:w-[45%] lg:justify-center"
           style={{ animationDelay: "480ms" }}
@@ -231,16 +229,16 @@ export function PartnerHero() {
           <div className="vsh-phone-float">
             <div
               aria-hidden="true"
-              className="relative aspect-[300/620] w-[256px] shrink-0 rounded-[46px] border-[10px] border-[#14122e] bg-[#14122e] shadow-[0_30px_60px_-12px_rgba(0,0,0,0.55),0_12px_24px_-10px_rgba(0,0,0,0.5)] [transform:rotate(4deg)] sm:w-[264px] lg:w-[272px]"
+              className="relative aspect-[300/640] w-[270px] shrink-0 rounded-[48px] border-[10px] border-[#14122e] bg-[#14122e] shadow-[0_30px_60px_-12px_rgba(0,0,0,0.55),0_12px_24px_-10px_rgba(0,0,0,0.5)] [transform:rotate(3deg)] sm:w-[285px] lg:w-[295px]"
             >
               {/* Dynamic island */}
-              <div className="absolute left-1/2 top-2 z-30 h-[22px] w-[86px] -translate-x-1/2 rounded-full bg-[#14122e]" />
+              <div className="absolute left-1/2 top-2.5 z-30 h-[20px] w-[80px] -translate-x-1/2 rounded-full bg-[#14122e]" />
 
               {/* Screen */}
-              <div className="relative flex h-full w-full flex-col overflow-hidden rounded-[36px] bg-surface-muted">
-                {/* Status bar */}
-                <div className="flex items-center justify-between px-6 pb-1 pt-3 text-[11px] font-semibold text-ink-900/80">
-                  <span className="tabular-nums">9:41</span>
+              <div className="relative flex h-full w-full flex-col overflow-hidden rounded-[38px] bg-slate-50 text-slate-900">
+                {/* Phone Status bar */}
+                <div className="flex items-center justify-between px-6 pb-1 pt-3 text-[10px] font-semibold text-slate-700">
+                  <span className="tabular-nums font-bold">9:41</span>
                   <span className="flex items-center gap-1.5">
                     <Signal className="h-3 w-3" />
                     <Wifi className="h-3 w-3" />
@@ -248,107 +246,128 @@ export function PartnerHero() {
                   </span>
                 </div>
 
-                {/* App header */}
-                <div className="flex items-center justify-between px-4 pb-2 pt-1">
-                  <div className="flex items-center gap-2.5">
-                    <div className="grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-sm font-bold text-white">
+                {/* In-App Header */}
+                <div className="flex items-center justify-between bg-white px-3.5 py-2 border-b border-slate-100 shadow-xs">
+                  <div className="flex items-center gap-1.5">
+                    <div className="grid h-7 w-7 place-items-center rounded-full bg-navy-900 text-[11px] font-bold text-white">
                       S
                     </div>
                     <div>
-                      <p className="text-[10px] text-gray-500">Welcome back</p>
-                      <p className="text-[13px] font-bold text-ink-900">Suresh V.</p>
+                      <p className="text-[9px] font-semibold text-slate-500 leading-none">Partner</p>
+                      <p className="text-[11px] font-extrabold text-navy-900 leading-tight">Suresh V.</p>
                     </div>
                   </div>
-                  <span className="flex items-center gap-1 rounded-full bg-white px-2 py-1 text-[11px] font-bold text-ink-900 shadow-sm">
-                    <Star className="h-3 w-3 fill-accent-400 text-accent-400" /> 4.9
+
+                  {/* Presence Status Toggle */}
+                  <div className="flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 border border-emerald-200 text-[9px] font-extrabold text-emerald-700">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>ON DUTY</span>
+                  </div>
+
+                  <span className="flex items-center gap-0.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-extrabold text-amber-800 border border-amber-200">
+                    <Star className="h-2.5 w-2.5 fill-amber-500 text-amber-500" /> 4.9
                   </span>
                 </div>
 
-                {/* Offer body */}
-                <div className="flex flex-1 flex-col px-4 pb-5 pt-1">
-                  {/* Status + countdown */}
-                  <div className="mb-3 flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-bold text-green-700">
-                      <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" /> NEW JOB OFFER
-                    </span>
-                    <div className="relative h-10 w-10">
-                      <svg viewBox="0 0 40 40" className="h-full w-full -rotate-90">
-                        <circle cx="20" cy="20" r={RING_R} fill="none" stroke="#e8e6f0" strokeWidth="4" />
-                        <circle
-                          cx="20"
-                          cy="20"
-                          r={RING_R}
-                          fill="none"
-                          stroke={ringColor}
-                          strokeWidth="4"
-                          strokeLinecap="round"
-                          strokeDasharray={RING_C}
-                          strokeDashoffset={RING_C - (pct / 100) * RING_C}
-                          style={{ transition: "stroke-dashoffset 300ms linear, stroke 300ms ease" }}
-                        />
-                      </svg>
-                      <span className="absolute inset-0 grid place-items-center text-xs font-bold tabular-nums text-ink-900">
-                        {left}
+                {/* Dashboard Scrollable Area */}
+                <div className="flex flex-1 flex-col overflow-hidden px-3 pt-2 pb-1 gap-2">
+                  {/* Today's Earnings Card */}
+                  <div className="relative overflow-hidden rounded-2xl bg-[#00112e] p-3 text-white shadow-md">
+                    <div className="pointer-events-none absolute right-0 top-0 h-28 w-28 bg-signal-500/15 rounded-full blur-xl" />
+                    <div className="relative z-10 flex items-center justify-between">
+                      <div>
+                        <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Today&apos;s Earnings</p>
+                        <p className="text-[20px] font-black tracking-tight text-white tabular-nums leading-tight">
+                          ₹3,450
+                        </p>
+                      </div>
+                      <div className="flex flex-col items-end gap-1">
+                        <span className="rounded-full bg-white/10 px-2 py-0.5 text-[9px] font-bold text-emerald-400 border border-white/10">
+                          4 Jobs Done
+                        </span>
+                        <span className="text-[8px] text-slate-400">Weekly settlement</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Live Job Offer Stack Card */}
+                  <div className="flex flex-1 flex-col rounded-2xl border border-slate-200 bg-white p-3 shadow-md">
+                    {/* Header + Timer */}
+                    <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
+                      <span className="flex items-center gap-1.5 rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-bold text-emerald-800">
+                        <span className="h-1.5 w-1.5 animate-ping rounded-full bg-emerald-500" /> LIVE OFFER
+                      </span>
+                      <div className="flex items-center gap-1 text-[10px] font-extrabold text-slate-800 tabular-nums">
+                        <Clock className="h-3 w-3 text-signal-600" />
+                        <span>{left}s left</span>
+                      </div>
+                    </div>
+
+                    {/* Offer details */}
+                    <div className="mt-2 flex items-start gap-2">
+                      <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-signal-50 text-signal-700 border border-signal-200">
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-bold text-slate-900 leading-tight">{offer.title}</p>
+                        <p className="truncate text-[9px] text-slate-500 mt-0.5">{offer.area}</p>
+                      </div>
+                      <span className="shrink-0 text-right">
+                        <span className="text-xs font-extrabold text-slate-900 tabular-nums block">{inr(offer.fare)}</span>
+                        <span className="text-[8px] text-slate-500">~{offer.durationMin}m</span>
                       </span>
                     </div>
-                  </div>
 
-                  {/* Offer card */}
-                  <div
-                    key={index}
-                    className="vsh-slideup overflow-hidden rounded-3xl border border-border bg-white shadow-lg"
-                  >
-                    <div className="flex items-center justify-between gap-2 bg-gradient-to-br from-brand-600 to-brand-900 p-4 text-white">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/15">
-                          <Icon className="h-5 w-5" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="truncate text-xs font-bold leading-tight">{offer.title}</p>
-                          <p className="truncate text-[10px] text-white/70">{offer.area}</p>
-                        </div>
+                    {/* Stats pills */}
+                    <div className="mt-2 grid grid-cols-2 gap-1.5">
+                      <div className="flex items-center gap-1 rounded-lg bg-slate-50 px-2 py-1 border border-slate-100 text-[9px]">
+                        <Navigation className="h-2.5 w-2.5 text-slate-400" />
+                        <span className="font-bold text-slate-700">{offer.travelKm} km away</span>
                       </div>
-                      {offer.surge > 1 && (
-                        <span className="shrink-0 rounded-full bg-accent-500 px-2 py-0.5 text-[10px] font-bold text-ink-900">
-                          {offer.surge}× surge
-                        </span>
-                      )}
+                      <div className="flex items-center gap-1 rounded-lg bg-slate-50 px-2 py-1 border border-slate-100 text-[9px]">
+                        <Clock className="h-2.5 w-2.5 text-slate-400" />
+                        <span className="font-bold text-slate-700">{offer.etaMin} min ETA</span>
+                      </div>
                     </div>
 
-                    <div className="p-4">
-                      <div className="flex items-end justify-between">
-                        <div>
-                          <p className="text-[10px] uppercase tracking-wide text-gray-400">You earn</p>
-                          <p className="text-[22px] font-bold leading-none tabular-nums text-ink-900">
-                            {inr(offer.fare)}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[10px] uppercase tracking-wide text-gray-400">Duration</p>
-                          <p className="text-[13px] font-bold text-ink-900">~{offer.durationMin}m</p>
-                        </div>
-                      </div>
+                    {/* Location strip */}
+                    <div className="mt-2 flex items-start gap-1 rounded-lg bg-slate-50 p-1.5 text-[8.5px] text-slate-600 border border-slate-100">
+                      <MapPin className="mt-0.5 h-3 w-3 shrink-0 text-signal-600" />
+                      <p className="truncate">{offer.drop}</p>
+                    </div>
 
-                      <div className="mt-3 grid grid-cols-2 gap-2.5">
-                        <StatPill icon={Navigation} label="Travel" value={`${offer.travelKm} km`} />
-                        <StatPill icon={Clock} label="Arrive in" value={`${offer.etaMin} min`} />
+                    {/* Action buttons */}
+                    <div className="mt-auto grid grid-cols-3 gap-1.5 pt-2">
+                      <div className="rounded-xl border border-slate-200 bg-white py-1.5 text-center text-[10px] font-bold text-slate-600">
+                        Decline
                       </div>
-
-                      <div className="mt-3 flex items-start gap-2 rounded-xl bg-surface-muted p-2.5">
-                        <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" />
-                        <p className="text-[11px] leading-snug text-gray-600">{offer.drop}</p>
+                      <div className="col-span-2 rounded-xl bg-emerald-600 py-1.5 text-center text-[10px] font-extrabold text-white shadow-md">
+                        Accept · {inr(offer.fare)}
                       </div>
                     </div>
                   </div>
+                </div>
 
-                  {/* Actions */}
-                  <div className="mt-auto grid grid-cols-3 gap-2.5 pt-4">
-                    <div className="rounded-xl border border-border bg-white py-3 text-center text-xs font-semibold text-gray-600">
-                      Decline
-                    </div>
-                    <div className="col-span-2 rounded-xl bg-green-600 py-3 text-center text-xs font-bold text-white shadow-lg">
-                      Accept · {inr(offer.fare)}
-                    </div>
+                {/* Real In-App Bottom Tab Bar */}
+                <div className="flex items-center justify-around border-t border-slate-200 bg-white px-2 py-2 shrink-0 shadow-xs">
+                  <div className="flex flex-col items-center gap-0.5 text-signal-600">
+                    <Briefcase className="h-3.5 w-3.5" />
+                    <span className="text-[8px] font-bold">Work</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-0.5 text-slate-400">
+                    <Wallet className="h-3.5 w-3.5" />
+                    <span className="text-[8px] font-medium">Money</span>
+                  </div>
+                  <div className="-mt-4 flex h-8 w-8 items-center justify-center rounded-full bg-signal-500 text-[#00112e] shadow-md shadow-signal-500/40">
+                    <HomeIcon className="h-4 w-4 fill-[#00112e]" />
+                  </div>
+                  <div className="flex flex-col items-center gap-0.5 text-slate-400">
+                    <Bell className="h-3.5 w-3.5" />
+                    <span className="text-[8px] font-medium">Alerts</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-0.5 text-slate-400">
+                    <User className="h-3.5 w-3.5" />
+                    <span className="text-[8px] font-medium">Me</span>
                   </div>
                 </div>
               </div>

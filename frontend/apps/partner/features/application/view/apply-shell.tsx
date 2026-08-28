@@ -2,13 +2,24 @@
 
 import { ApiRequestError } from "@vsolve/api-client";
 import { Logo, Sheet, cn } from "@vsolve/ui";
-import { Check, ChevronLeft, ListChecks, X } from "lucide-react";
+import { Check, ChevronLeft, ListChecks } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useContext, useState, type ReactNode } from "react";
 
 import { previousStep, progressSummary, stepProgress, type StepProgress } from "../model/progress";
 import { usePartnerApplication } from "../queries";
+import { MarketingMobileNav } from "@/components/marketing-mobile-nav";
+
+const NAV = [
+  { href: "/how-it-works", label: "How It Works" },
+  { href: "/benefits", label: "Earnings & Benefits" },
+  { href: "/trades", label: "Trades & Services" },
+  { href: "/solutions", label: "Solutions" },
+  { href: "/pricing", label: "Payout Rates" },
+  { href: "/about", label: "About" },
+  { href: "/contact", label: "Support" },
+];
 
 /**
  * The chrome for `/apply/*`.
@@ -90,12 +101,6 @@ export function useApplyDockTarget(): HTMLElement | null | undefined {
 }
 
 export function ApplyShell({ children }: { children: ReactNode }) {
-  /*
-    State rather than a plain ref: the children render in the same pass as this
-    container, so a ref would still be `null` when they look for it and the dock
-    would never appear until something else forced a second render. A callback
-    ref stored in state gives that second render exactly once.
-  */
   const [dockTarget, setDockTarget] = useState<HTMLElement | null>(null);
   const pathname = usePathname();
 
@@ -109,7 +114,7 @@ export function ApplyShell({ children }: { children: ReactNode }) {
 
   return (
     <DockContext.Provider value={dockTarget}>
-      <div className="flex h-dvh flex-col bg-canvas">
+      <div className="min-h-screen bg-canvas text-text relative">
         <ApplyHeader
           steps={steps}
           summary={summary}
@@ -117,12 +122,9 @@ export function ApplyShell({ children }: { children: ReactNode }) {
           isLoading={query.isPending}
         />
 
-        <div
-          className="min-h-0 flex-1 overflow-y-auto"
-          style={{ WebkitOverflowScrolling: "touch", overscrollBehaviorY: "contain" }}
-        >
-          <div className="mx-auto w-full max-w-[520px] px-4 py-5 sm:px-5">{children}</div>
-        </div>
+        <main className="mx-auto w-full max-w-2xl px-4 pt-24 sm:pt-28 pb-16">
+          {children}
+        </main>
 
         {/* Filled by whichever step is mounted. Empty and zero-height on the
             overview and the review screen, which carry their own actions. */}
@@ -134,9 +136,9 @@ export function ApplyShell({ children }: { children: ReactNode }) {
 
 function ApplyHeader({
   steps,
-  summary,
+  summary: _summary,
   pathname,
-  isLoading,
+  isLoading: _isLoading,
 }: {
   steps: readonly StepProgress[];
   summary: ReturnType<typeof progressSummary>;
@@ -146,120 +148,84 @@ function ApplyHeader({
   const [open, setOpen] = useState(false);
   const router = useRouter();
 
-  const current = steps.find((step) => step.href === normalise(pathname)) ?? null;
-  // Position among the gating steps only, matching the denominator. A waypoint
-  // or the optional hours step reports no position rather than a wrong one.
-  const gating = steps.filter((step) => step.state === "done" || step.state === "todo");
-  const position = current === null ? -1 : gating.findIndex((step) => step.href === current.href);
-
   const back = previousStep(pathname);
 
   return (
-    <header
-      className="shrink-0 border-b border-line bg-surface"
-      style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
-    >
-      <div className="mx-auto flex w-full max-w-[520px] items-center gap-1 px-2 sm:px-3">
-        {back === null ? (
-          <span className="h-11 w-11" aria-hidden />
-        ) : (
-          <button
-            type="button"
-            onClick={() => router.push(back.href)}
-            aria-label={`Back to ${back.label}`}
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-text hover:bg-surface-sunken focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-          >
-            <ChevronLeft size={22} aria-hidden />
-          </button>
-        )}
+    <>
+      {/* Floating Dynamic-Island Navigation Matching Homepage */}
+      <div className="fixed top-3 inset-x-0 z-50 px-3 sm:px-6 pointer-events-none">
+        <header className="pointer-events-auto mx-auto max-w-6xl rounded-2xl sm:rounded-full bg-white/95 backdrop-blur-2xl border border-line-strong shadow-[0_12px_32px_rgba(0,17,46,0.12),0_1px_3px_rgba(0,0,0,0.05)] px-3.5 sm:px-5 py-2.5 transition-all duration-300">
+          <div className="flex items-center justify-between gap-2 sm:gap-4">
+            {/* Brand & Live Demand Tag */}
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+              {back !== null && (
+                <button
+                  type="button"
+                  onClick={() => router.push(back.href)}
+                  aria-label={`Back to ${back.label}`}
+                  // 44px on a phone, the 32px pill from `sm:` up. This is the
+                  // only back affordance in onboarding — the shell draws no
+                  // browser chrome — and 32x32 is well under a thumb.
+                  className="grid h-11 w-11 sm:h-8 sm:w-8 place-items-center rounded-full bg-surface-sunken text-navy-900 border border-line-strong hover:bg-surface transition-colors shrink-0"
+                >
+                  <ChevronLeft size={18} aria-hidden />
+                </button>
+              )}
 
-        <div className="flex min-w-0 flex-1 flex-col items-center py-2">
-          <Logo className="h-6 w-auto text-[0.8125rem]" />
-          <p className="mt-0.5 truncate text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-text-muted">
-            {isLoading
-              ? "Your application"
-              : position === -1
-                ? (current?.label ?? "Your application")
-                : `Step ${position + 1} of ${gating.length}`}
-          </p>
-        </div>
+              <Link href="/" className="flex min-h-11 items-center gap-2 group shrink-0">
+                <Logo className="h-6 sm:h-7 w-auto shrink-0" />
+              </Link>
 
-        {/*
-          Leaving is a real need and it was never offered: onboarding had no exit
-          at all, so somebody who opened it by mistake had the browser's back
-          button and nothing else. It is a link to the overview rather than a
-          sign-out — nothing is lost by stopping, because every step saves to the
-          server on its own.
-        */}
-        <Link
-          href="/apply"
-          aria-label="Close and see your whole application"
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-text-muted hover:bg-surface-sunken hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-        >
-          <X size={20} aria-hidden />
-        </Link>
+              {/* Live Demand Status Badge */}
+              <div className="hidden xl:flex items-center gap-2 rounded-full bg-surface-sunken border border-line px-2.5 py-1 text-[11px] shrink-0">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600" />
+                </span>
+                <span className="text-text-secondary font-medium">Daily Bookings:</span>
+                <span className="text-navy-900 font-bold">1,400+ Active</span>
+              </div>
+            </div>
+
+            {/* Desktop Center Navigation Capsule */}
+            <nav className="hidden lg:flex items-center gap-0.5 rounded-full bg-surface-sunken/80 border border-line p-1">
+              {NAV.map((n) => (
+                <Link
+                  key={n.label}
+                  href={n.href}
+                  className="px-3 py-1.5 text-xs font-bold text-text-secondary hover:text-navy-900 rounded-full hover:bg-surface transition-all duration-150"
+                >
+                  {n.label}
+                </Link>
+              ))}
+            </nav>
+
+            {/* Right Action: Step indicator pill / Overview CTA (desktop) & Mobile Drawer */}
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setOpen(true)}
+                className="hidden sm:inline-flex h-8 items-center gap-1.5 rounded-full bg-surface-sunken border border-line-strong px-3 text-xs font-bold text-navy-900 hover:bg-surface transition-colors shadow-xs"
+              >
+                <ListChecks size={14} aria-hidden />
+                <span>Steps</span>
+              </button>
+
+              <Link
+                href="/apply"
+                className="hidden sm:inline-flex text-xs font-bold text-navy-900 hover:text-navy-950 bg-surface-sunken hover:bg-surface px-3.5 py-1.5 rounded-full border border-line-strong transition-colors"
+              >
+                Overview
+              </Link>
+
+              <MarketingMobileNav items={NAV} />
+            </div>
+          </div>
+        </header>
       </div>
-
-      <ProgressBar summary={summary} isLoading={isLoading} onOpenSteps={() => setOpen(true)} />
 
       <StepSheet open={open} onOpenChange={setOpen} steps={steps} pathname={pathname} />
-    </header>
-  );
-}
-
-/**
- * How full the record is, as a bar and a sentence.
- *
- * The bar is `aria-hidden` and the sentence beside it carries the same fact in
- * words — a progress bar whose only accessible form is a `role="progressbar"`
- * with a percentage tells a screen-reader user "67%" of something unnamed.
- *
- * Renders a flat inert track while the application is still loading rather than
- * an animated indeterminate one: this bar states how much of *your* record is
- * complete, and a bar that moves before anything has been read is stating that
- * about nothing.
- */
-function ProgressBar({
-  summary,
-  isLoading,
-  onOpenSteps,
-}: {
-  summary: ReturnType<typeof progressSummary>;
-  isLoading: boolean;
-  onOpenSteps: () => void;
-}) {
-  const remaining = summary.total - summary.done;
-
-  return (
-    <div className="mx-auto flex w-full max-w-[520px] items-center gap-3 px-4 pb-2.5 sm:px-5">
-      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-        <span
-          aria-hidden
-          className="block h-1.5 overflow-hidden rounded-full bg-surface-sunken"
-        >
-          <span
-            className="block h-full rounded-full bg-action transition-[width] duration-300 ease-out motion-reduce:transition-none"
-            style={{ width: isLoading ? "0%" : `${Math.round(summary.fraction * 100)}%` }}
-          />
-        </span>
-        <span className="truncate text-[0.6875rem] font-semibold text-text-secondary">
-          {isLoading
-            ? "Loading your application…"
-            : remaining === 0
-              ? "Everything is filled in"
-              : `${remaining} ${remaining === 1 ? "thing" : "things"} still to do`}
-        </span>
-      </div>
-
-      <button
-        type="button"
-        onClick={onOpenSteps}
-        className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-line px-3 text-[0.75rem] font-bold text-text hover:bg-surface-sunken focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-      >
-        <ListChecks size={15} aria-hidden />
-        All steps
-      </button>
-    </div>
+    </>
   );
 }
 

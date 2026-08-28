@@ -1,36 +1,20 @@
 "use client";
 
 import { ErrorState, Spinner } from "@vsolve/ui";
-
 import { useApplicationEditor } from "./application-editor";
-
 import { useApplicationReference } from "../reference-queries";
 import { toggle } from "../model/draft";
 import { SelectableRow } from "./selectable-row";
 
-/**
- * Where the applicant is willing to travel.
- *
- * Every option comes from `GET /api/v1/service-areas/`, which publishes only
- * areas currently accepting Partners. An area at capacity stops appearing
- * without a frontend change — the same way a deactivated service already does —
- * so this screen never offers somewhere the platform cannot actually place them.
- *
- * Nothing here invents an id. Before contract 1.4.0 there was no endpoint at
- * all, and the only alternative would have been a hardcoded UUID attaching a
- * Partner to an area nobody chose.
- */
-
 export function AreasStep() {
   const { draft, update, isReadOnly } = useApplicationEditor();
-
   const reference = useApplicationReference();
 
   if (reference.isPending) {
     return (
-      <p className="flex items-center gap-2 py-6 text-text-secondary">
+      <p className="flex items-center gap-2 py-8 text-sm text-text-secondary">
         <Spinner size="sm" />
-        Loading areas…
+        Loading service areas…
       </p>
     );
   }
@@ -38,8 +22,8 @@ export function AreasStep() {
   if (reference.isError) {
     return (
       <ErrorState
-        title="We could not load the areas"
-        message="Nothing you have chosen is lost. Check your connection and try again."
+        title="Could not load service areas"
+        message="Check your connection and try again."
         actionLabel="Try again"
         onAction={reference.refetch}
       />
@@ -50,25 +34,43 @@ export function AreasStep() {
     return (
       <p
         role="status"
-        className="rounded-card border border-line bg-surface p-4 text-sm text-text-secondary"
+        className="rounded-control border border-line bg-surface p-4 text-sm text-text-secondary"
       >
-        No areas are open for new Partners at the moment. We will let you know as
-        soon as one near you opens.
+        No service areas are currently available for registration.
       </p>
     );
   }
 
-  return (
-    <fieldset className="border-0 p-0">
-      <legend className="text-base font-semibold text-text">
-        Which areas will you travel to?
-      </legend>
-      <p className="mt-1 text-sm text-text-secondary">
-        You will only be offered jobs inside the areas you pick. Choose as many
-        as you are genuinely willing to reach.
-      </p>
+  const allAreaIds = reference.serviceAreas.map((a) => a.id);
+  const allSelected =
+    allAreaIds.length > 0 && allAreaIds.every((id) => draft.serviceAreaIds.includes(id));
+  const selectedCount = draft.serviceAreaIds.length;
 
-      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+  return (
+    <fieldset className="border-0 p-0 flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <legend className="text-sm font-bold text-navy-900">
+          Service Locations <span className="text-danger-text">*</span>
+        </legend>
+
+        {!isReadOnly && reference.serviceAreas.length > 1 && (
+          <button
+            type="button"
+            onClick={() => {
+              if (allSelected) {
+                update({ serviceAreaIds: [] });
+              } else {
+                update({ serviceAreaIds: allAreaIds });
+              }
+            }}
+            className="text-xs font-semibold text-navy-700 hover:text-signal-700"
+          >
+            {allSelected ? "Deselect all" : "Select all"}
+          </button>
+        )}
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
         {reference.serviceAreas.map((area) => (
           <SelectableRow
             key={area.id}
@@ -78,10 +80,16 @@ export function AreasStep() {
               update({ serviceAreaIds: toggle(draft.serviceAreaIds, area.id) })
             }
             label={area.name}
-            caption={area.timezone}
+            caption={area.timezone || undefined}
           />
         ))}
       </div>
+
+      {selectedCount === 0 && (
+        <p className="text-xs font-semibold text-danger-text mt-1">
+          * Please select at least one service location.
+        </p>
+      )}
     </fieldset>
   );
 }

@@ -1,8 +1,8 @@
 "use client";
 
 import { describeError } from "@vsolve/query";
-import { Badge, Button, Card, ErrorState, Select, Spinner, cn } from "@vsolve/ui";
-import { Power } from "lucide-react";
+import { Badge, Button, Card, Dialog, ErrorState, Spinner, cn } from "@vsolve/ui";
+import { Check, ChevronDown, MapPin, Power } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { useApplicationReference } from "@/features/application/reference-queries";
@@ -127,6 +127,7 @@ export function PresencePanel({
   const heartbeat = useHeartbeat();
 
   const [areaId, setAreaId] = useState("");
+  const [openAreaModal, setOpenAreaModal] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [lastBeatAt, setLastBeatAt] = useState<number | null>(null);
   const [locationDenied, setLocationDenied] = useState(false);
@@ -326,127 +327,141 @@ export function PresencePanel({
   const copy = PRESENCE_COPY[status];
   const canGoOnline = areaId !== "" && consentVersion !== null && !goOnline.isPending;
   const isOnline = sessionId !== null && (status === "online" || status === "stale");
+  const selectedArea = reference.serviceAreas.find((area) => area.id === areaId);
 
   if (variant === "driver") {
     return (
-      <DriverPresenceControls
-        status={status}
-        copy={copy}
-        tone={TONE[status]}
-        consentVersion={consentVersion}
-        reference={reference}
-        isRestoring={isRestoring}
-        sessionId={sessionId}
-        areaId={areaId}
-        setAreaId={setAreaId}
-        canGoOnline={canGoOnline}
-        goOnline={goOnline}
-        goOffline={goOffline}
-        isOnline={isOnline}
-        handleGoOnline={handleGoOnline}
-        handleGoOffline={handleGoOffline}
-      />
+      <>
+        <DriverPresenceControls
+          status={status}
+          copy={copy}
+          tone={TONE[status]}
+          consentVersion={consentVersion}
+          reference={reference}
+          isRestoring={isRestoring}
+          sessionId={sessionId}
+          areaId={areaId}
+          setAreaId={setAreaId}
+          openAreaModal={openAreaModal}
+          setOpenAreaModal={setOpenAreaModal}
+          canGoOnline={canGoOnline}
+          goOnline={goOnline}
+          goOffline={goOffline}
+          isOnline={isOnline}
+          handleGoOnline={handleGoOnline}
+          handleGoOffline={handleGoOffline}
+        />
+        <AreaPickerModal
+          open={openAreaModal}
+          onOpenChange={setOpenAreaModal}
+          areas={reference.serviceAreas}
+          selectedId={areaId}
+          onSelect={setAreaId}
+        />
+      </>
     );
   }
 
   return (
-    <Card className="p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-base font-bold text-text">Your availability</h2>
-        <Badge tone={TONE[status]} dot>
-          {copy.label}
-        </Badge>
-      </div>
-
-      <p role="status" className="mt-2 text-sm leading-6 text-text-secondary">
-        {copy.detail}
-      </p>
-
-      {consentVersion === null ? (
-        <p className="mt-4 rounded-card border border-line bg-surface-sunken p-3 text-sm text-text-secondary">
-          Accept the Partner agreements before going online — we record which
-          version you agreed to alongside your location.
-        </p>
-      ) : null}
-
-      {reference.isError ? (
-        <ErrorState
-          inline
-          className="mt-4"
-          title="We could not load your areas"
-          message="You are not online. Check your connection and try again."
-          actionLabel="Try again"
-          onAction={reference.refetch}
-        />
-      ) : null}
-
-      {/*
-        Why the refusal gets its own block rather than only the badge.
-
-        Django refuses `presence/online` with a specific, actionable sentence —
-        "Your required identity documents are not approved" is one a Partner can
-        act on. Folding that into the status turned it into "Not sure: we could
-        not confirm whether you are online", which is the copy for *doubt*. The
-        server was not doubtful; it had decided, and said why. The badge still
-        reports doubt, because a failed attempt genuinely leaves availability
-        unconfirmed — this says what went wrong underneath it.
-      */}
-      {goOnline.isError ? <GoOnlineFailure error={goOnline.error} /> : null}
-
-      {/* The controls wait for the same answer the badge does. Showing "Go
-          online" and swapping it for "Go offline" a moment later is the same
-          flicker, in the part of the card the Partner is reaching for. */}
-      {isRestoring ? (
-        <p className="mt-4 flex items-center gap-2 text-sm text-text-secondary">
-          <Spinner size="sm" />
-          Checking your last session…
-        </p>
-      ) : sessionId === null ? (
-        <div className="mt-4 flex flex-col gap-3">
-          <Select
-            aria-label="Area you are working in"
-            value={areaId}
-            onChange={(event) => setAreaId(event.target.value)}
-            disabled={reference.isPending || reference.serviceAreas.length === 0}
-          >
-            <option value="">Choose your area…</option>
-            {reference.serviceAreas.map((area) => (
-              <option key={area.id} value={area.id}>
-                {area.name}
-              </option>
-            ))}
-          </Select>
-
-          <Button
-            onPointerDown={() => prepareBookingAlertsFromGesture()}
-            onClick={() => void handleGoOnline()}
-            disabled={!canGoOnline}
-            loading={goOnline.isPending}
-            loadingLabel="Going online"
-          >
-            Go online
-          </Button>
+    <>
+      <Card className="p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-base font-bold text-text">Your availability</h2>
+          <Badge tone={TONE[status]} dot>
+            {copy.label}
+          </Badge>
         </div>
-      ) : (
-        <div className="mt-4">
-          <Button
-            variant="outline"
-            block
-            icon={<Power size={16} />}
-            onClick={() => void handleGoOffline()}
-            loading={goOffline.isPending}
-            loadingLabel="Going offline"
-          >
-            Go offline
-          </Button>
-        </div>
-      )}
 
-      <p className="mt-3 text-xs leading-5 text-text-muted">
-        While you are online we keep a coarse location so we can offer you nearby
-        work. It stops the moment you go offline.
-      </p>
-    </Card>
+        <p role="status" className="mt-2 text-sm leading-6 text-text-secondary">
+          {copy.detail}
+        </p>
+
+        {consentVersion === null ? (
+          <p className="mt-4 rounded-card border border-line bg-surface-sunken p-3 text-sm text-text-secondary">
+            Accept the Partner agreements before going online — we record which
+            version you agreed to alongside your location.
+          </p>
+        ) : null}
+
+        {reference.isError ? (
+          <ErrorState
+            inline
+            className="mt-4"
+            title="We could not load your areas"
+            message="You are not online. Check your connection and try again."
+            actionLabel="Try again"
+            onAction={reference.refetch}
+          />
+        ) : null}
+
+        {/*
+          Why the refusal gets its own block rather than only the badge.
+
+          Django refuses `presence/online` with a specific, actionable sentence —
+          "Your required identity documents are not approved" is one a Partner can
+          act on. Folding that into the status turned it into "Not sure: we could
+          not confirm whether you are online", which is the copy for *doubt*. The
+          server was not doubtful; it had decided, and said why. The badge still
+          reports doubt, because a failed attempt genuinely leaves availability
+          unconfirmed — this says what went wrong underneath it.
+        */}
+        {goOnline.isError ? <GoOnlineFailure error={goOnline.error} /> : null}
+
+        {/* The controls wait for the same answer the badge does. Showing "Go
+            online" and swapping it for "Go offline" a moment later is the same
+            flicker, in the part of the card the Partner is reaching for. */}
+        {isRestoring ? (
+          <p className="mt-4 flex items-center gap-2 text-sm text-text-secondary">
+            <Spinner size="sm" />
+            Checking your last session…
+          </p>
+        ) : sessionId === null ? (
+          <div className="mt-4 flex flex-col gap-3">
+            <AreaPickerButton
+              areaName={selectedArea?.name}
+              disabled={reference.isPending || reference.serviceAreas.length === 0}
+              onClick={() => setOpenAreaModal(true)}
+            />
+
+            <Button
+              onPointerDown={() => prepareBookingAlertsFromGesture()}
+              onClick={() => void handleGoOnline()}
+              disabled={!canGoOnline}
+              loading={goOnline.isPending}
+              loadingLabel="Going online"
+            >
+              Go online
+            </Button>
+          </div>
+        ) : (
+          <div className="mt-4">
+            <Button
+              variant="outline"
+              block
+              icon={<Power size={16} />}
+              onClick={() => void handleGoOffline()}
+              loading={goOffline.isPending}
+              loadingLabel="Going offline"
+            >
+              Go offline
+            </Button>
+          </div>
+        )}
+
+        <p className="mt-3 text-xs leading-5 text-text-muted">
+          While you are online we keep a coarse location so we can offer you nearby
+          work. It stops the moment you go offline.
+        </p>
+      </Card>
+
+      <AreaPickerModal
+        open={openAreaModal}
+        onOpenChange={setOpenAreaModal}
+        areas={reference.serviceAreas}
+        selectedId={areaId}
+        onSelect={setAreaId}
+      />
+    </>
   );
 }
 
@@ -464,7 +479,7 @@ function DriverPresenceControls({
   isRestoring,
   sessionId,
   areaId,
-  setAreaId,
+  setOpenAreaModal,
   canGoOnline,
   goOnline,
   goOffline,
@@ -481,6 +496,8 @@ function DriverPresenceControls({
   sessionId: string | null;
   areaId: string;
   setAreaId: (value: string) => void;
+  openAreaModal: boolean;
+  setOpenAreaModal: (open: boolean) => void;
   canGoOnline: boolean;
   goOnline: ReturnType<typeof useGoOnline>;
   goOffline: ReturnType<typeof useGoOffline>;
@@ -488,6 +505,8 @@ function DriverPresenceControls({
   handleGoOnline: () => Promise<void>;
   handleGoOffline: () => Promise<void>;
 }) {
+  const selectedArea = reference.serviceAreas.find((area) => area.id === areaId);
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
@@ -530,20 +549,11 @@ function DriverPresenceControls({
       ) : (
         <div className="flex flex-col items-center gap-4">
           {sessionId === null ? (
-            <Select
-              aria-label="Area you are working in"
-              value={areaId}
-              onChange={(event) => setAreaId(event.target.value)}
+            <AreaPickerButton
+              areaName={selectedArea?.name}
               disabled={reference.isPending || reference.serviceAreas.length === 0}
-              className="w-full max-w-xs rounded-2xl"
-            >
-              <option value="">Choose your area…</option>
-              {reference.serviceAreas.map((area) => (
-                <option key={area.id} value={area.id}>
-                  {area.name}
-                </option>
-              ))}
-            </Select>
+              onClick={() => setOpenAreaModal(true)}
+            />
           ) : null}
 
           <button
@@ -590,5 +600,107 @@ function DriverPresenceControls({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Clean button trigger for opening the area picker modal.
+ */
+function AreaPickerButton({
+  areaName,
+  disabled,
+  onClick,
+}: {
+  areaName?: string;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        "flex h-12 w-full max-w-xs items-center justify-between rounded-2xl border border-line bg-surface px-4 text-sm font-semibold text-text shadow-xs transition-all",
+        "hover:border-line-strong hover:bg-surface-sunken focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action",
+        "disabled:cursor-not-allowed disabled:opacity-50"
+      )}
+    >
+      <span className="flex items-center gap-2.5 min-w-0 truncate">
+        <MapPin className="h-4 w-4 text-signal-600 shrink-0" />
+        <span className={cn("truncate text-sm", areaName ? "font-bold text-navy-900" : "font-medium text-text-muted")}>
+          {areaName ?? "Choose your area…"}
+        </span>
+      </span>
+      <ChevronDown className="h-4 w-4 text-text-muted shrink-0" />
+    </button>
+  );
+}
+
+/**
+ * Interactive pop-up dialog modal for selecting operational service areas.
+ */
+function AreaPickerModal({
+  open,
+  onOpenChange,
+  areas,
+  selectedId,
+  onSelect,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  areas: readonly { id: string; name: string }[];
+  selectedId: string;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Choose Service Area"
+      description="Select the operational area where you want to receive on-duty job offers."
+    >
+      <div className="flex flex-col gap-2 py-2 max-h-[60vh] overflow-y-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {areas.length === 0 ? (
+          <p className="text-sm text-text-secondary py-6 text-center">No service areas available.</p>
+        ) : (
+          areas.map((area) => {
+            const isSelected = area.id === selectedId;
+            return (
+              <button
+                key={area.id}
+                type="button"
+                onClick={() => {
+                  onSelect(area.id);
+                  onOpenChange(false);
+                }}
+                className={cn(
+                  "flex items-center justify-between rounded-2xl p-3.5 text-left transition-all",
+                  isSelected
+                    ? "border-2 border-emerald-500 bg-emerald-50 text-navy-900 font-bold shadow-xs"
+                    : "border border-line bg-surface hover:bg-surface-sunken text-text font-semibold"
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className={cn(
+                      "grid h-8 w-8 place-items-center rounded-xl shrink-0",
+                      isSelected ? "bg-emerald-600 text-white" : "bg-surface-sunken text-text-muted"
+                    )}
+                  >
+                    <MapPin className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold leading-tight text-navy-900">{area.name}</p>
+                    <p className="text-xs text-text-secondary mt-0.5">High booking demand</p>
+                  </div>
+                </div>
+                {isSelected ? <Check className="h-5 w-5 text-emerald-600 shrink-0" /> : null}
+              </button>
+            );
+          })
+        )}
+      </div>
+    </Dialog>
   );
 }

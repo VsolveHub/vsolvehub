@@ -1,9 +1,9 @@
 "use client";
 
 import { Button, EmptyState, ErrorState, Sheet, cn } from "@vsolve/ui";
-import { BellOff } from "lucide-react";
+import { BellOff, X } from "lucide-react";
 import Link from "next/link";
-import { useEffect } from "react";
+import { useState } from "react";
 
 import { AsyncSection, asyncStateFrom } from "@/components/async-section";
 import { timeAgo } from "@/lib/format";
@@ -74,27 +74,58 @@ export function NotificationPanel({
   workspaceKeys,
   unreadCount,
 }: NotificationPanelProps) {
+  /**
+   * A visit counter, not a boolean.
+   *
+   * `Sheet` keeps this component mounted for the whole session — `<dialog>` is
+   * shown and hidden, not remounted — so the dismissed-ids set and the mark-read
+   * refusal from one visit would otherwise still be sitting there the next time
+   * the bell is opened. Bumping this on every close and keying the body below
+   * with it forces React to throw the old instance away and mount a fresh one,
+   * resetting all of that state in the same commit the sheet closes in — with
+   * no effect and no ref read during render.
+   */
+  const [visitId, setVisitId] = useState(0);
+
+  return (
+    <NotificationPanelBody
+      key={visitId}
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) setVisitId((id) => id + 1);
+        onOpenChange(next);
+      }}
+      workspaceKeys={workspaceKeys}
+      unreadCount={unreadCount}
+    />
+  );
+}
+
+function NotificationPanelBody({
+  open,
+  onOpenChange,
+  workspaceKeys,
+  unreadCount,
+}: NotificationPanelProps) {
   // Fetched when the panel opens, never before and never on a timer. See
   // `useNotificationFeed`.
   const feed = useNotificationFeed(open);
   const markRead = useMarkNotificationRead();
-
-  /**
-   * A refusal belongs to the visit it happened in.
-   *
-   * This panel is mounted for the whole session, so a failed mark-read would
-   * otherwise still be on screen when the bell is next opened — an error about a
-   * tap from an hour ago, sitting above a list that has been refetched since. The
-   * mutation is reset on the way out rather than on the way in, so the message
-   * stays visible for as long as the sheet that produced it is open.
-   */
-  const { reset: resetMarkRead } = markRead;
-  useEffect(() => {
-    if (!open) resetMarkRead();
-  }, [open, resetMarkRead]);
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+  const [dismissedAll, setDismissedAll] = useState(false);
 
   const state = asyncStateFrom<NotificationPage, NotificationPage>(feed, (page) => page);
   const hasUnread = unreadCount !== null && unreadCount > 0;
+
+  const handleDismiss = (id: string) => {
+    setDismissedIds((prev) => new Set(prev).add(id));
+    markRead.mutate({ notificationId: id });
+  };
+
+  const handleDismissAll = () => {
+    setDismissedAll(true);
+    markRead.mutate({ all: true });
+  };
 
   return (
     <Sheet
@@ -105,7 +136,7 @@ export function NotificationPanel({
         hasUnread ? (
           <Button
             variant="ghost"
-            onClick={() => markRead.mutate({ all: true })}
+            onClick={handleDismissAll}
             loading={markRead.isPending}
             loadingLabel="Marking everything read"
             disabled={markRead.isPending}
@@ -121,8 +152,15 @@ export function NotificationPanel({
         <AsyncSection
           state={state}
           label="Loading your notifications"
-          isEmpty={(page) => page.results.length === 0}
-          onRetry={() => void feed.refetch()}
+          isEmpty={(page) =>
+            dismissedAll ||
+            page.results.filter((item) => !dismissedIds.has(item.id)).length === 0
+          }
+          onRetry={() => {
+            setDismissedIds(new Set());
+            setDismissedAll(false);
+            void feed.refetch();
+          }}
           empty={
             <EmptyState
               compact
@@ -132,34 +170,38 @@ export function NotificationPanel({
             />
           }
         >
-          {(page) => (
-            <>
-              <ul className="flex list-none flex-col gap-1 p-0">
-                {page.results.map((notification) => (
-                  <li key={notification.id}>
-                    <NotificationRow
-                      notification={notification}
-                      workspaceKeys={workspaceKeys}
-                      onOpened={() => onOpenChange(false)}
-                      onMarkRead={() =>
-                        markRead.mutate({ notificationId: notification.id })
-                      }
-                    />
-                  </li>
-                ))}
-              </ul>
+          {(page) => {
+            const visible = dismissedAll
+              ? []
+              : page.results.filter((item) => !dismissedIds.has(item.id));
 
-              {/* Truncation, said rather than hidden. The newest are first, so
-                  nothing waiting on the Partner is behind this line — but a capped
-                  list that reads as a complete history is a quiet lie. */}
-              {page.next === null ? null : (
-                <p className="text-sm leading-6 text-text-secondary">
-                  Only your most recent notices are shown here. Older ones stay on the job
-                  they belong to.
-                </p>
-              )}
-            </>
-          )}
+            return (
+              <>
+                <ul className="flex list-none flex-col gap-1 p-0">
+                  {visible.map((notification) => (
+                    <li key={notification.id}>
+                      <NotificationRow
+                        notification={notification}
+                        workspaceKeys={workspaceKeys}
+                        onOpened={() => onOpenChange(false)}
+                        onMarkRead={() => handleDismiss(notification.id)}
+                      />
+                    </li>
+                  ))}
+                </ul>
+
+                {/* Truncation, said rather than hidden. The newest are first, so
+                    nothing waiting on the Partner is behind this line — but a capped
+                    list that reads as a complete history is a quiet lie. */}
+                {page.next === null ? null : (
+                  <p className="text-sm leading-6 text-text-secondary">
+                    Only your most recent notices are shown here. Older ones stay on the job
+                    they belong to.
+                  </p>
+                )}
+              </>
+            );
+          }}
         </AsyncSection>
       </div>
     </Sheet>
@@ -202,27 +244,40 @@ function NotificationRow({
   return (
     <article
       className={cn(
-        "flex flex-col gap-1 rounded-card border border-line p-3",
-        unread ? "bg-surface" : "bg-surface-sunken",
+        "relative flex flex-col gap-1 rounded-card border border-line p-3 transition-all",
+        unread ? "bg-surface shadow-xs" : "bg-surface-sunken opacity-80",
       )}
     >
-      <div className="flex items-start gap-2">
-        {/* Shape as well as colour, and a word for anyone not reading either. */}
-        {unread ? (
-          <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-action" aria-hidden />
-        ) : (
-          <span className="mt-2 h-2 w-2 shrink-0" aria-hidden />
-        )}
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-text">
-            {unread ? <span className="sr-only">Unread. </span> : null}
-            {notification.title}
-          </p>
-          <p className="mt-0.5 text-sm leading-6 text-text-secondary">{notification.body}</p>
-          <time className="mt-1 block text-xs text-text-muted" dateTime={notification.created_at}>
-            {timeAgo(notification.created_at)}
-          </time>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-start gap-2.5 min-w-0 flex-1">
+          {/* Shape as well as colour, and a word for anyone not reading either. */}
+          {unread ? (
+            <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-signal-600" aria-hidden />
+          ) : (
+            <span className="mt-1.5 h-2 w-2 shrink-0" aria-hidden />
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-text">
+              {unread ? <span className="sr-only">Unread. </span> : null}
+              {notification.title}
+            </p>
+            <p className="mt-0.5 text-sm leading-6 text-text-secondary">{notification.body}</p>
+            <time className="mt-1 block text-xs text-text-muted" dateTime={notification.created_at}>
+              {timeAgo(notification.created_at)}
+            </time>
+          </div>
         </div>
+
+        {/* Clear / Dismiss (X) button for every notification */}
+        <button
+          type="button"
+          onClick={onMarkRead}
+          title="Clear notification"
+          aria-label={`Clear notification: ${notification.title}`}
+          className="shrink-0 -mr-1 -mt-1 grid h-7 w-7 place-items-center rounded-full text-text-muted hover:bg-surface-hover hover:text-navy-900 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+        >
+          <X className="h-4 w-4" />
+        </button>
       </div>
 
       {href === null ? (
@@ -230,28 +285,26 @@ function NotificationRow({
           <button
             type="button"
             onClick={onMarkRead}
-            className="inline-flex min-h-11 w-fit items-center rounded-control px-2 text-sm font-semibold text-action-secondary hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+            className="inline-flex min-h-9 w-fit items-center rounded-control px-2.5 text-xs font-bold text-action-secondary hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
           >
             Mark read
             <span className="sr-only">: {notification.title}</span>
           </button>
         ) : null
       ) : (
-        <Link
-          href={href}
-          onClick={() => {
-            // Marked read on the way out rather than on arrival: the destination
-            // screen has no idea which notice sent somebody to it, and a notice
-            // that stays bold after being opened is how a Partner stops trusting
-            // the badge.
-            if (unread) onMarkRead();
-            onOpened();
-          }}
-          className="inline-flex min-h-11 w-fit items-center rounded-control px-2 text-sm font-semibold text-action-secondary hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
-        >
-          Open
-          <span className="sr-only">: {notification.title}</span>
-        </Link>
+        <div className="mt-1 flex items-center justify-between">
+          <Link
+            href={href}
+            onClick={() => {
+              if (unread) onMarkRead();
+              onOpened();
+            }}
+            className="inline-flex min-h-9 items-center rounded-lg bg-navy-900 px-3 py-1 text-xs font-bold text-white hover:bg-navy-800 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+          >
+            Open
+            <span className="sr-only">: {notification.title}</span>
+          </Link>
+        </div>
       )}
     </article>
   );

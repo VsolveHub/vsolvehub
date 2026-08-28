@@ -121,29 +121,29 @@ export function NotificationNavTab({
         aria-expanded={open}
         aria-label={unreadBadgeLabel(unread)}
         className={cn(
-          "relative flex min-h-[3.25rem] w-full flex-col items-center justify-center gap-1 rounded-2xl px-2 transition-colors duration-200",
+          "relative flex min-h-[3.5rem] w-full flex-col items-center justify-center gap-1 px-1 text-[0.625rem] font-semibold leading-none tracking-wide transition-all",
           "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action",
-          active ? "text-surface" : "text-surface/45 hover:text-surface/70",
+          active ? "text-white font-bold" : "text-white/45 hover:text-white/70",
         )}
       >
         {active ? (
           <span
             aria-hidden
-            className="absolute -top-1 h-0.5 w-5 rounded-full bg-action"
+            className="absolute -top-1 h-0.5 w-6 rounded-full bg-signal-500 shadow-[0_0_8px_rgba(249,115,22,0.8)]"
           />
         ) : null}
-        <span className="relative">
-          <Bell size={22} strokeWidth={active ? 2.5 : 2} aria-hidden />
+        <span className="relative flex items-center justify-center">
+          <Bell size={22} strokeWidth={active ? 2.5 : 1.8} aria-hidden />
           {badge === null ? null : (
             <span
               aria-hidden
-              className="absolute -right-1.5 -top-1 inline-flex min-w-3.5 items-center justify-center rounded-full bg-action px-0.5 text-[0.5625rem] font-bold leading-3.5 text-action-text"
+              className="absolute -right-2 -top-1 inline-flex min-w-4 items-center justify-center rounded-full bg-signal-500 px-1 text-[0.5625rem] font-bold leading-3.5 text-white shadow-xs"
             >
               {badge}
             </span>
           )}
         </span>
-        <span className="text-[0.625rem] font-semibold leading-none tracking-wide">{label}</span>
+        <span>{label}</span>
       </button>
 
       <NotificationPanel

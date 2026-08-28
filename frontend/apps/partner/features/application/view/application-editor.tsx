@@ -2,6 +2,7 @@
 
 import { ApiRequestError, type Schemas } from "@vsolve/api-client";
 import { Button, ErrorState, Skeleton } from "@vsolve/ui";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -12,6 +13,7 @@ import {
   isDirty,
   type ApplicationDraft,
 } from "../model/draft";
+import { previousStep } from "../model/progress";
 import { isEditable } from "../model/readiness";
 import { nextStep } from "../model/steps";
 import { useApplyDockTarget } from "./apply-shell";
@@ -144,7 +146,13 @@ function Editor({
   application,
   title,
   description,
-  saveLabel = "Save and continue",
+  // Deliberately no default. An explicit `saveLabel` is a step saying the
+  // generic verb is wrong for it — `/apply/consent` passes "Accept and
+  // continue" because the applicant is accepting agreements, not saving a
+  // form — and a default here would be indistinguishable from that, so every
+  // step would win the override and none of the derived labels below would
+  // ever show.
+  saveLabel,
   continueOnSave = true,
   children,
 }: ApplicationEditorProps & { application: Application | null }) {
@@ -193,8 +201,10 @@ function Editor({
     act on. So a clean step navigates without spending a request, and a dirty one
     saves first and moves on success. The label says which is about to happen.
   */
-  const canAdvance = following !== null;
-  const primaryLabel = dirty ? saveLabel : canAdvance ? "Continue" : saveLabel;
+  const nextStepName = following ? following.label : null;
+  const primaryLabel = dirty
+    ? (saveLabel ?? (nextStepName ? `Save & Continue to ${nextStepName}` : "Save Changes"))
+    : (nextStepName ? `Continue to ${nextStepName}` : "Save and Continue");
 
   function commit() {
     if (!dirty) {
@@ -203,42 +213,45 @@ function Editor({
     }
 
     save.mutate(changedFields(draft, application), {
-      // Only on success. A save that was refused — a version conflict, a
-      // validation failure — must leave the applicant on the step that still
-      // needs them, with the message explaining why, rather than moving them on
-      // from work that was not kept.
       onSuccess: () => {
         if (following !== null) router.push(following.href);
       },
     });
   }
 
+  const previous = previousStep(pathname);
+  const backHref = previous ? previous.href : "/apply";
+
   return (
-    <section className="flex flex-col gap-5">
-      <header className="flex flex-col gap-1.5">
-        <h1 className="text-[1.375rem] font-extrabold leading-tight tracking-[-0.02em] text-text">
-          {title}
-        </h1>
-        {description ? (
-          <p className="text-[0.9375rem] leading-relaxed text-text-secondary">{description}</p>
+    <section className="flex flex-col gap-5 pb-20">
+      <div className="rounded-2xl border border-line bg-surface p-5 sm:p-6 shadow-sm flex flex-col gap-5">
+        <header className="flex flex-col gap-1 border-b border-line pb-4">
+          <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-navy-900">
+            {title}
+          </h1>
+          {description ? (
+            <p className="text-xs sm:text-sm leading-relaxed text-text-secondary">{description}</p>
+          ) : null}
+        </header>
+
+        {isReadOnly ? (
+          <p
+            role="status"
+            className="rounded-card border border-info-line bg-info-surface p-4 text-[0.9375rem] leading-relaxed text-info-text"
+          >
+            Your application is with a reviewer, so it cannot be changed right now.
+            If something needs correcting, we will tell you what and reopen it.
+          </p>
         ) : null}
-      </header>
 
-      {isReadOnly ? (
-        <p
-          role="status"
-          className="rounded-card border border-info-line bg-info-surface p-4 text-[0.9375rem] leading-relaxed text-info-text"
-        >
-          Your application is with a reviewer, so it cannot be changed right now.
-          If something needs correcting, we will tell you what and reopen it.
-        </p>
-      ) : null}
-
-      <EditorContext.Provider value={editor}>{children}</EditorContext.Provider>
+        <EditorContext.Provider value={editor}>{children}</EditorContext.Provider>
+      </div>
 
       {isReadOnly ? null : (
         <EditorDock
           label={primaryLabel}
+          backHref={backHref}
+          nextStepName={nextStepName}
           onCommit={commit}
           isSaving={save.isPending}
           saved={save.isSuccess && !dirty}
@@ -252,29 +265,10 @@ function Editor({
   );
 }
 
-/**
- * The step's committing action, handed up to `ApplyShell` so it renders pinned
- * to the bottom of the viewport rather than at the end of the scroll.
- *
- * ## Why it is not a `sticky` div here
- *
- * `ApplyShell` owns a `dvh` flex column whose middle child scrolls. A dock
- * rendered inside that child and pinned with `sticky bottom-0` works, but it
- * sits *inside* the scrolled region — so it overlaps the last field of a long
- * form and the applicant cannot see what they are typing on the documents step.
- * Handing the node to the shell puts it below the scroll container as a sibling,
- * where nothing can scroll under it.
- *
- * ## Why the messages live here rather than above the form
- *
- * A refusal belongs next to the control that caused it. These used to render at
- * the top of a block that also held the button, which was fine on a short step
- * and invisible on a long one: the applicant pressed a button at the bottom of
- * the screen and the explanation for why nothing happened appeared several
- * scrolls up.
- */
 function EditorDock({
   label,
+  backHref,
+  nextStepName,
   onCommit,
   isSaving,
   saved,
@@ -284,6 +278,8 @@ function EditorDock({
   fieldMessages,
 }: {
   label: string;
+  backHref: string;
+  nextStepName: string | null;
   onCommit: () => void;
   isSaving: boolean;
   saved: boolean;
@@ -296,10 +292,10 @@ function EditorDock({
 
   const dock = (
     <div
-      className="shrink-0 border-t border-line bg-surface"
+      className="shrink-0 border-t border-line bg-surface/95 backdrop-blur-md shadow-lg"
       style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
     >
-      <div className="mx-auto flex w-full max-w-[520px] flex-col gap-2.5 px-4 py-3 sm:px-5">
+      <div className="mx-auto flex w-full max-w-[560px] flex-col gap-2 px-4 py-3 sm:px-5">
         {conflict ? (
           <ErrorState
             inline
@@ -329,20 +325,38 @@ function EditorDock({
         ) : null}
 
         {saved && !conflict && !failed ? (
-          <p role="status" className="text-[0.8125rem] font-bold text-success-text">
-            Saved.
+          <p role="status" className="text-[0.8125rem] font-bold text-success-text text-center">
+            ✓ Changes saved securely.
           </p>
         ) : null}
 
-        <Button
-          size="lg"
-          block
-          loading={isSaving}
-          loadingLabel="Saving"
-          onClick={onCommit}
-        >
-          {label}
-        </Button>
+        <div className="flex items-center gap-2.5">
+          <Link href={backHref} className="shrink-0">
+            <Button
+              variant="outline"
+              size="lg"
+              className="font-bold text-sm h-12 px-5"
+            >
+              Back
+            </Button>
+          </Link>
+          <Button
+            size="lg"
+            block
+            loading={isSaving}
+            loadingLabel="Saving..."
+            onClick={onCommit}
+            className="font-bold text-base shadow-md h-12 flex-1"
+          >
+            {label}
+          </Button>
+        </div>
+
+        {nextStepName && (
+          <p className="text-center text-[11px] font-semibold text-text-muted">
+            Auto-saves as you type • Tap to proceed to {nextStepName}
+          </p>
+        )}
       </div>
     </div>
   );

@@ -127,81 +127,64 @@ function Standing({ application }: { application: Application }) {
   const ready = canSubmit(application);
 
   return (
-    <section className="flex flex-col gap-5">
+    <section className="flex flex-col gap-6 pb-20">
       <h1 className="sr-only">Your application</h1>
 
       <ApplicationStatusBanner application={application} />
 
-      {/*
-        Rejected documents come first and stay outside the step list.
-
-        They are not the same as a missing document: the applicant did upload
-        something, a reviewer looked at it and said no, and the reviewer's reason
-        is the single most useful string on this screen. Folding them into "2
-        things needed" would lose the reason and tell somebody to do again
-        exactly what they already did.
-      */}
+      {/* Reviewer Rejections Alarm */}
       {rejected.length > 0 ? (
-        <div role="alert" className="rounded-card border border-warning-line bg-warning-surface p-4">
-          <h2 className="text-[0.9375rem] font-bold text-warning-text">
-            Replace {rejected.length === 1 ? "this document" : "these documents"}
+        <div role="alert" className="rounded-2xl border border-warning-line bg-warning-surface p-5 shadow-sm">
+          <h2 className="text-sm font-bold text-warning-text flex items-center gap-2">
+            <span>⚠️ Action Required: Replace {rejected.length === 1 ? "this document" : "these documents"}</span>
           </h2>
           <ul className="mt-2 flex list-none flex-col gap-2 p-0">
             {rejected.map((document) => (
-              <li key={document.id}>
-                <p className="text-[0.875rem] font-semibold text-warning-text">
+              <li key={document.id} className="rounded-control bg-surface/80 p-3 border border-warning-line/60">
+                <p className="text-xs font-bold text-warning-text">
                   {DOCUMENT_LABELS[document.kind]}
                 </p>
-                {/* The reviewer's reason, verbatim. Summarising it is how a
-                    Partner re-uploads the same unusable photo three times. */}
                 {document.review_reason ? (
-                  <p className="text-[0.875rem] leading-relaxed text-warning-text/85">
+                  <p className="text-xs leading-relaxed text-text-secondary mt-1">
                     {document.review_reason}
                   </p>
                 ) : null}
               </li>
             ))}
           </ul>
-          {/* The app's primary action treatment, not a darker shade of the
-              banner it sits in. `bg-warning-text` is #8a5200 — a brown that
-              reads as mud on the warning surface and, being a *text* role,
-              carries no guarantee of contrast as a fill. This is the one thing
-              on the screen the applicant must do next; it should look like
-              every other primary action in the product. */}
           <Link
             href="/apply/documents"
-            className="mt-3 inline-flex h-12 items-center rounded-control bg-action px-5 text-[0.9375rem] font-bold text-action-text hover:bg-action-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+            className="mt-4 inline-flex h-11 items-center rounded-full bg-signal-500 hover:bg-signal-600 px-5 text-xs font-bold text-white transition-colors"
           >
-            Upload replacements
+            Upload Replacement Documents
           </Link>
         </div>
       ) : null}
 
+      {/* Primary Progress Hero Card */}
       {editable ? <NextAction summary={summary} ready={ready} /> : null}
 
-      <StepList steps={steps} editable={editable} />
+      {/* Structured Steps Checklist */}
+      <StepList steps={steps} />
 
-      {/*
-        The entry point to the M2 registration surface.
-
-        A quiet card rather than a step in the sequence: workforce and project
-        approval is asked for when a Partner wants it, and putting it on the path
-        would tell every applicant they have another thing to finish. The screen
-        behind it shows an honest empty state when none of their services is open
-        to it, so the link never leads to a promise.
-      */}
-      <section className="rounded-card border border-line bg-surface p-4">
-        <h2 className="text-[0.9375rem] font-bold text-text">Specialist work</h2>
-        <p className="mt-1 text-[0.875rem] leading-relaxed text-text-secondary">
-          Supplying a crew by the day, or quoting for a whole project, is reviewed
-          separately from ordinary jobs. Asking costs nothing and does not affect
-          the work you already do.
-        </p>
+      {/* Specialist & Contractor Option */}
+      <section className="rounded-3xl border border-line bg-white p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-bold text-navy-900">Contractor & Multi-Crew Supply</h2>
+            <span className="rounded-full bg-surface-sunken px-2.5 py-0.5 text-[10px] font-bold text-text-muted border border-line">
+              Optional
+            </span>
+          </div>
+          <p className="text-xs text-text-secondary mt-1 max-w-md leading-relaxed">
+            Have a crew of 3+ technicians? Dispatch work teams and bid for custom corporate contracts.
+          </p>
+        </div>
         <Link
           href="/apply/capabilities"
-          className="mt-3 inline-flex h-11 items-center rounded-control border border-line-strong px-4 text-[0.875rem] font-bold text-text hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+          className="inline-flex h-11 items-center justify-center rounded-full border border-line-strong bg-surface hover:bg-surface-sunken px-5 text-xs font-bold text-navy-900 transition-colors shadow-xs shrink-0"
         >
-          See what you can apply for
+          <span>Explore Crew Rates</span>
         </Link>
       </section>
 
@@ -213,11 +196,7 @@ function Standing({ application }: { application: Application }) {
 }
 
 /**
- * The hero: how far through, and the single next thing.
- *
- * Names the step rather than saying "Continue". An applicant who left three
- * days ago has no memory of where they stopped, and the whole value of a
- * resume button is that they do not have to.
+ * Modern Progress Hero Card
  */
 function NextAction({
   summary,
@@ -227,113 +206,181 @@ function NextAction({
   ready: boolean;
 }) {
   const percent = Math.round(summary.fraction * 100);
+  const remaining = summary.total - summary.done;
 
   return (
-    <div className="flex flex-col gap-4 rounded-card bg-[linear-gradient(160deg,var(--color-navy-700)_0%,var(--color-navy-900)_100%)] p-5">
-      <div className="flex items-end justify-between gap-3">
-        <div>
-          <p className="text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-navy-200">
-            Your application
-          </p>
-          <p className="mt-1 text-[2rem] font-extrabold leading-none tracking-[-0.03em] text-surface">
-            <span style={{ fontVariantNumeric: "tabular-nums" }}>{summary.done}</span>
-            <span className="text-navy-200"> / {summary.total}</span>
-          </p>
+    <div className="relative overflow-hidden rounded-3xl bg-[#00112e] text-white p-6 sm:p-8 shadow-2xl border border-white/10 flex flex-col gap-6">
+      {/* Background ambient lighting */}
+      <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-signal-500/15 blur-3xl" />
+      <div className="pointer-events-none absolute -left-16 -bottom-16 h-56 w-56 rounded-full bg-emerald-500/10 blur-3xl" />
+
+      {/* Top Status & Count Row */}
+      <div className="relative z-10 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-signal-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-signal-500" />
+          </span>
+          <span className="text-xs font-black uppercase tracking-wider text-amber-300">
+            Application Progress
+          </span>
         </div>
-        <p className="pb-1 text-[0.8125rem] font-semibold text-navy-200">
-          {ready ? "Ready to send" : `${summary.total - summary.done} to go`}
+
+        <span className="rounded-full bg-white/10 px-3.5 py-1 text-xs font-extrabold text-white border border-white/20 shadow-xs tabular-nums">
+          {ready ? "All Required Steps Done" : `${summary.done} of ${summary.total} Completed`}
+        </span>
+      </div>
+
+      {/* Headline & Description */}
+      <div className="relative z-10">
+        <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+          {ready ? "Application Complete!" : `${remaining} ${remaining === 1 ? "step" : "steps"} remaining`}
+        </h2>
+        <p className="text-xs sm:text-sm text-navy-200 mt-2 leading-relaxed max-w-lg">
+          {ready
+            ? "All required steps are filled. Review your profile details and submit for verification."
+            : `Next up: Complete your ${summary.nextIncomplete?.label.toLowerCase() ?? "documents"} to submit for fast 24h approval.`}
         </p>
       </div>
 
-      <span aria-hidden className="block h-2 overflow-hidden rounded-full bg-surface/15">
-        <span
-          className="block h-full rounded-full bg-action transition-[width] duration-500 ease-out motion-reduce:transition-none"
-          style={{ width: `${percent}%` }}
-        />
-      </span>
+      {/* Progress Track */}
+      <div className="relative z-10 flex flex-col gap-2 pt-1">
+        <div className="flex items-center justify-between text-xs font-bold text-navy-200">
+          <span>Overall Completion</span>
+          <span className="text-amber-400 font-black text-sm">{percent}%</span>
+        </div>
+        <div
+          className="h-2.5 w-full overflow-hidden rounded-full bg-white/15 p-0.5"
+          role="progressbar"
+          aria-valuenow={percent}
+          aria-valuemin={0}
+          aria-valuemax={100}
+        >
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-signal-500 via-amber-400 to-amber-300 transition-all duration-700 shadow-xs"
+            style={{ width: `${Math.max(6, percent)}%` }}
+          />
+        </div>
+      </div>
 
-      <Link
-        href={ready ? "/apply/review" : (summary.nextIncomplete?.href ?? "/apply/review")}
-        className="flex h-13 items-center justify-center gap-2 rounded-control bg-action px-6 text-[1.0625rem] font-bold text-action-text hover:bg-action-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-surface"
-      >
-        {ready ? "Review and send" : `Next: ${summary.nextIncomplete?.label.toLowerCase() ?? "review"}`}
-        <ArrowRight size={19} aria-hidden />
-      </Link>
+      {/* Primary Action Button */}
+      <div className="relative z-10 pt-1">
+        <Link
+          href={ready ? "/apply/review" : (summary.nextIncomplete?.href ?? "/apply/review")}
+          className="flex h-13 w-full items-center justify-center rounded-full bg-gradient-to-r from-signal-500 via-amber-500 to-signal-400 px-6 text-sm font-extrabold text-[#00112e] shadow-xl shadow-signal-500/25 hover:from-signal-400 hover:to-amber-300 hover:scale-[1.01] transition-all active:scale-[0.99]"
+        >
+          <span>
+            {ready
+              ? "Review & Submit Application"
+              : `Continue to ${summary.nextIncomplete?.label ?? "Next Step"}`}
+          </span>
+        </Link>
+      </div>
     </div>
   );
 }
 
 /**
- * Every step with its state, as rows.
- *
- * Completed steps stay in the list rather than disappearing. Onboarding is long
- * enough that seeing what is behind you matters, and a list that shrinks as you
- * work gives no sense of the whole.
+ * Clean & Modern Steps Checklist
  */
-function StepList({ steps, editable }: { steps: readonly StepProgress[]; editable: boolean }) {
+function StepList({ steps }: { steps: readonly StepProgress[] }) {
   const rows = steps.filter((step) => step.state !== "waypoint");
 
   return (
-    <section>
-      <h2 className="pb-2 text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-text-muted">
-        Every step
-      </h2>
-      <ul className="flex list-none flex-col overflow-hidden rounded-card border border-line bg-surface p-0">
-        {rows.map((step, index) => (
-          <li key={step.href} className={index === rows.length - 1 ? "" : "border-b border-line"}>
+    <section className="flex flex-col gap-3 mt-2">
+      <div className="flex items-center justify-between px-1">
+        <h2 className="text-xs font-black uppercase tracking-wider text-navy-900">
+          Application Checklist
+        </h2>
+        {/*
+          "Tap", not "Click". Onboarding is a phone flow — the shell that wraps
+          it is a 375px column — and a vendor filling this in on site is not
+          clicking anything.
+        */}
+        <span className="text-xs font-semibold text-text-secondary">
+          Tap any step to edit
+        </span>
+      </div>
+
+      <div className="rounded-3xl border border-line bg-white shadow-xs overflow-hidden divide-y divide-line">
+        {rows.map((step, idx) => {
+          const isDone = step.state === "done";
+          const isOptional = step.state === "optional";
+          const isNext = !isDone && !isOptional;
+
+          return (
             <Link
+              key={step.href}
               href={step.href}
               className={cn(
-                "flex min-h-15 items-center gap-3 px-3.5 py-2.5 hover:bg-surface-hover",
+                "flex items-center justify-between gap-4 p-4 sm:p-5 transition-all duration-200 group",
+                isNext ? "bg-amber-50/30 hover:bg-amber-50/60" : "hover:bg-surface-sunken/60",
                 "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus-ring",
               )}
             >
-              <StateMark state={step.state} />
-              <span className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-[0.9375rem] font-bold text-text">{step.label}</span>
-                <span className="truncate text-[0.8125rem] text-text-secondary">
-                  {step.state === "done"
-                    ? "Done"
-                    : step.state === "optional"
-                      ? "Optional"
-                      : step.outstanding === 1
-                        ? "1 thing needed"
-                        : `${step.outstanding} things needed`}
+              <div className="flex items-center gap-3.5 min-w-0">
+                <div
+                  className={cn(
+                    "grid h-9 w-9 shrink-0 place-items-center rounded-2xl text-xs font-black transition-transform duration-200 group-hover:scale-105",
+                    isDone
+                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-xs"
+                      : isNext
+                        ? "bg-signal-500 text-white shadow-md shadow-signal-500/25"
+                        : "bg-surface-sunken text-text-muted border border-line",
+                  )}
+                >
+                  {isDone ? (
+                    <Check size={18} strokeWidth={3} aria-hidden />
+                  ) : (
+                    <span>{idx + 1}</span>
+                  )}
+                </div>
+
+                <div className="flex flex-col min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm sm:text-base font-bold text-navy-900 group-hover:text-signal-700 transition-colors">
+                      {step.label}
+                    </span>
+                    {isNext && (
+                      <span className="hidden sm:inline-block rounded-full bg-signal-100 text-signal-800 text-[10px] font-extrabold px-2 py-0.5 border border-signal-200">
+                        Next Up
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-xs text-text-secondary mt-0.5">
+                    {isDone
+                      ? "Completed and verified"
+                      : isOptional
+                        ? "Optional schedule preferences"
+                        : step.outstanding === 1
+                          ? "Required details missing"
+                          : `${step.outstanding} items required`}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2.5 shrink-0">
+                <span
+                  className={cn(
+                    "rounded-full px-3 py-1 text-xs font-bold border transition-colors",
+                    isDone
+                      ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                      : isNext
+                        ? "bg-signal-50 text-signal-800 border-signal-200 font-extrabold"
+                        : "bg-surface-sunken text-text-muted border-line",
+                  )}
+                >
+                  {isDone ? "Done" : isOptional ? "Optional" : "Incomplete"}
                 </span>
-              </span>
-              {editable ? (
-                <ArrowRight size={17} className="shrink-0 text-text-muted" aria-hidden />
-              ) : null}
+              </div>
             </Link>
-          </li>
-        ))}
-      </ul>
+          );
+        })}
+      </div>
     </section>
   );
 }
 
-function StateMark({ state }: { state: StepProgress["state"] }) {
-  if (state === "done") {
-    return (
-      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-success-surface text-success-text">
-        <Check size={17} strokeWidth={3} aria-hidden />
-      </span>
-    );
-  }
-  if (state === "todo") {
-    return (
-      <span aria-hidden className="h-8 w-8 shrink-0 rounded-full border-2 border-action" />
-    );
-  }
-  return (
-    <span
-      aria-hidden
-      className="grid h-8 w-8 shrink-0 place-items-center rounded-full border-2 border-line-strong text-text-muted"
-    >
-      <span className="h-0.5 w-3 rounded-full bg-current" />
-    </span>
-  );
-}
 
 /**
  * Approval is the moment there is somewhere to go, not the moment the links

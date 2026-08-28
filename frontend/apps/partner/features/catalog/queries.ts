@@ -33,7 +33,43 @@ export interface OfferableService {
   requiredSkillCode: string;
 }
 
+/** Top-level catalog category — same rows the customer app shows under Our Services. */
+export interface MainCategory {
+  id: string;
+  slug: string;
+  name: string;
+  iconKey: string;
+  imageUrl: string;
+}
+
+/** Partner onboarding only surfaces main categories when the catalog publishes fewer than ten. */
+const MAX_MAIN_CATEGORIES = 10;
+
+export function visibleMainCategories(
+  categories: readonly {
+    id: string;
+    slug: string;
+    name: string;
+    icon_key: string;
+    image_url: string;
+  }[],
+): MainCategory[] {
+  const ordered = categories.map((category) => ({
+    id: category.id,
+    slug: category.slug,
+    name: category.name,
+    iconKey: category.icon_key,
+    imageUrl: category.image_url,
+  }));
+
+  if (ordered.length >= MAX_MAIN_CATEGORIES) {
+    return ordered.slice(0, MAX_MAIN_CATEGORIES - 1);
+  }
+  return ordered;
+}
+
 export interface WorkCatalog {
+  mainCategories: MainCategory[];
   services: OfferableService[];
 }
 
@@ -65,6 +101,9 @@ export const getWorkCatalog = cache(async (): Promise<WorkCatalog> => {
     ),
   );
 
+  const mainCategories = visibleMainCategories(categories);
+  const allowedCategoryNames = new Set(mainCategories.map((category) => category.name));
+
   const services: OfferableService[] = details.flatMap(({ categoryName, detail }) =>
     detail.variants.map((variant) => ({
       variantId: variant.id,
@@ -76,5 +115,8 @@ export const getWorkCatalog = cache(async (): Promise<WorkCatalog> => {
     })),
   );
 
-  return { services };
+  return {
+    mainCategories,
+    services: services.filter((service) => allowedCategoryNames.has(service.categoryName)),
+  };
 });

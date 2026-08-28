@@ -3,13 +3,42 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { Menu, X } from "lucide-react";
-import { Button } from "@vsolve/ui";
+import { Menu, X, ArrowRight, Phone, Zap } from "lucide-react";
+import { Logo } from "@vsolve/ui";
+import { useCurrentSession, hasRole } from "@vsolve/query";
+import { getApiClient } from "@/lib/api/browser";
+import { PARTNER_ROLE } from "@/features/session/partner-shell";
+import { usePartnerProfile } from "@/features/profile/queries";
+
+const DEFAULT_NAV = [
+  { href: "/how-it-works", label: "How It Works" },
+  { href: "/benefits", label: "Earnings & Benefits" },
+  { href: "/trades", label: "Trades & Services" },
+  { href: "/solutions", label: "Solutions" },
+  { href: "/pricing", label: "Payout Rates" },
+  { href: "/about", label: "About" },
+  { href: "/contact", label: "Support" },
+];
 
 /** Hamburger + slide-in drawer for the marketing header on small screens. */
-export function MarketingMobileNav({ items }: { items: { href: string; label: string }[] }) {
+export function MarketingMobileNav({
+  items = DEFAULT_NAV,
+}: {
+  items?: { href: string; label: string }[];
+}) {
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
+
+  const session = useCurrentSession(getApiClient());
+  const profile = usePartnerProfile();
+
+  const isApprovedPartner =
+    Boolean(session.data?.user && hasRole(session.data.user, PARTNER_ROLE)) ||
+    profile.data?.approval_status === "APPROVED";
+
+  const isLoggedIn = Boolean(session.data?.user);
+
+  const navItems = items && items.length > 0 ? items : DEFAULT_NAV;
 
   // Lock background scroll and close on Escape while the drawer is open.
   useEffect(() => {
@@ -24,66 +53,150 @@ export function MarketingMobileNav({ items }: { items: { href: string; label: st
     };
   }, [open]);
 
-  // Rendered into <body> so the header's `backdrop-blur` (a containing block for
-  // fixed elements) can't clip this overlay — otherwise the panel wouldn't cover
-  // the viewport and the page would show through.
+
   const drawer = (
-    <div className="fixed inset-0 z-[100]">
-      <div className="absolute inset-0 bg-black/50" onClick={close} aria-hidden />
-      <div className="absolute inset-y-0 right-0 flex w-72 max-w-[85%] flex-col bg-white px-5 py-5 shadow-xl">
-        <div className="flex items-center justify-between">
-          <span className="font-bold text-ink-900">Menu</span>
+    <div className="fixed inset-0 z-[100] flex justify-end animate-in fade-in duration-200">
+      <div
+        className="fixed inset-0 bg-navy-950/60 backdrop-blur-xs transition-opacity"
+        onClick={close}
+        aria-hidden
+      />
+      <div className="relative z-10 flex h-full w-84 max-w-[88%] flex-col bg-white text-navy-900 border-l border-line px-5 py-6 shadow-2xl overflow-y-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-line pb-4">
+          <Link href="/" onClick={close} className="flex items-center gap-2 group">
+            <Logo className="h-6 w-auto" />
+          </Link>
           <button
             type="button"
             onClick={close}
             aria-label="Close menu"
-            className="rounded-lg p-1.5 text-gray-600 hover:bg-surface-muted"
+            className="grid h-9 w-9 place-items-center rounded-full bg-surface-sunken text-navy-900 hover:bg-surface border border-line transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <nav className="mt-4 flex flex-col">
-          {items.map((n) => (
-            <Link
-              key={n.label}
-              href={n.href}
-              onClick={close}
-              className="rounded-lg px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-surface-muted"
-            >
-              {n.label}
-            </Link>
-          ))}
-        </nav>
+        {/* Quick Highlights Card */}
+        <div className="mt-4 rounded-2xl bg-amber-50/70 p-4 border border-amber-200/70">
+          <div className="flex items-center gap-2 text-xs font-bold text-amber-900">
+            <Zap className="h-4 w-4 text-signal-500 fill-signal-500" />
+            <span>Fast 24h Activation</span>
+          </div>
+          <p className="mt-1 text-xs leading-relaxed text-amber-950/80">
+            Zero joining fee. Direct bank settlements within 24 hours of job completion.
+          </p>
+        </div>
 
-        <div className="mt-auto space-y-2 border-t border-border pt-4">
-          <Link
-            href="/login"
-            onClick={close}
-            className="block rounded-lg px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-surface-muted"
-          >
-            Login
-          </Link>
-          <Link href="/login" onClick={close} className="block">
-            <Button size="lg" className="w-full">
-              Become a Partner
-            </Button>
-          </Link>
+        {/* Navigation links */}
+        <div className="mt-5 py-2">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-text-muted px-2 mb-2">
+            Explore Menu
+          </p>
+          <nav className="flex flex-col gap-1">
+            {navItems.map((n) => (
+              <Link
+                key={n.label}
+                href={n.href}
+                onClick={() => setOpen(false)}
+                className="flex items-center justify-between rounded-xl px-3 py-2.5 text-sm font-bold text-navy-900 hover:bg-surface-sunken transition-colors"
+              >
+                <span>{n.label}</span>
+                <ArrowRight className="h-3.5 w-3.5 text-text-muted" />
+              </Link>
+            ))}
+          </nav>
+        </div>
+
+        {/* Action CTAs */}
+        <div className="mt-auto space-y-2.5 border-t border-line pt-5">
+          {isApprovedPartner ? (
+            <>
+              <Link href="/home" onClick={close} className="block">
+                <button
+                  type="button"
+                  className="w-full flex items-center justify-center gap-2 rounded-full bg-emerald-600 py-3 text-sm font-extrabold text-white shadow-lg shadow-emerald-600/25 hover:bg-emerald-500 transition-all active:scale-[0.99]"
+                >
+                  <span>Open Partner App</span>
+                </button>
+              </Link>
+              <Link href="/me" onClick={close} className="block">
+                <button
+                  type="button"
+                  className="w-full rounded-full bg-surface py-2.5 text-sm font-bold text-navy-900 hover:bg-surface-sunken border border-line-strong transition-colors"
+                >
+                  My Profile & Settings
+                </button>
+              </Link>
+            </>
+          ) : isLoggedIn ? (
+            <>
+              <Link href="/apply" onClick={close} className="block">
+                <button
+                  type="button"
+                  className="w-full flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-signal-500 via-amber-500 to-signal-400 py-3 text-sm font-extrabold text-[#00112e] shadow-lg shadow-signal-500/25 hover:from-signal-400 hover:to-amber-300 transition-all active:scale-[0.99]"
+                >
+                  <span>Application Dashboard</span>
+                </button>
+              </Link>
+              <Link href="/login" onClick={close} className="block">
+                <button
+                  type="button"
+                  className="w-full rounded-full bg-surface py-2.5 text-sm font-bold text-navy-900 hover:bg-surface-sunken border border-line-strong transition-colors"
+                >
+                  Switch Account
+                </button>
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link href="/apply" onClick={close} className="block">
+                <button
+                  type="button"
+                  className="w-full flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-signal-500 via-amber-500 to-signal-400 py-3 text-sm font-extrabold text-[#00112e] shadow-lg shadow-signal-500/25 hover:from-signal-400 hover:to-amber-300 transition-all active:scale-[0.99]"
+                >
+                  <span>Become a Partner</span>
+                </button>
+              </Link>
+              <Link href="/login" onClick={close} className="block">
+                <button
+                  type="button"
+                  className="w-full rounded-full bg-surface py-2.5 text-sm font-bold text-navy-900 hover:bg-surface-sunken border border-line-strong transition-colors"
+                >
+                  Sign In to Account
+                </button>
+              </Link>
+            </>
+          )}
+
+          <div className="pt-2 text-center">
+            <Link
+              href="/contact"
+              onClick={close}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-text-secondary hover:text-navy-900 transition-colors"
+            >
+              <Phone className="h-3.5 w-3.5 text-signal-500" />
+              <span>Partner Helpline: +91 800 123 4567</span>
+            </Link>
+          </div>
         </div>
       </div>
     </div>
   );
 
   return (
-    <div className="md:hidden">
+    <div className="lg:hidden">
       <button
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Open menu"
         aria-expanded={open}
-        className="rounded-lg p-2 text-gray-700 hover:bg-surface-muted"
+        // 44px: this control only exists below `lg`, so it is only ever
+        // pressed with a thumb, and it is the sole route to every marketing
+        // destination on a phone.
+        className="flex h-11 w-11 items-center justify-center rounded-full bg-surface-sunken text-navy-900 hover:bg-surface border border-line-strong transition-all active:scale-95 shadow-xs"
       >
-        <Menu className="h-6 w-6" />
+        <Menu className="h-5 w-5" />
       </button>
 
       {open ? createPortal(drawer, document.body) : null}
