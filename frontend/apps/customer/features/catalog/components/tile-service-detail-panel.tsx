@@ -121,7 +121,7 @@ function PanelVariantScroller({
         className={cn(
           "mt-3",
           scrollable
-            ? "cursor-grab overflow-x-auto overscroll-x-contain pb-1.5 active:cursor-grabbing [scrollbar-width:thin]"
+            ? "no-scrollbar cursor-grab overflow-x-auto overscroll-x-contain pb-1.5 active:cursor-grabbing"
             : "overflow-x-hidden",
         )}
       >
@@ -256,7 +256,7 @@ export function TileServiceDetailPanel({
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4">
+      <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4">
         {showVariantPicker ? null : (
           <div className="mt-2 overflow-hidden rounded-[1rem] bg-[#F4F1EC]">
             {imageUrl !== "" ? (

@@ -93,6 +93,19 @@ body {
 }
 
 /*
+ * Scrollable panes that should stay wheel/trackpad-scrollable without showing
+ * native scrollbar chrome (split-pane catalog on desktop).
+ */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/*
  * Printing.
  *
  * The M1 order receipt has offered a Print button since Milestone 1 and marks

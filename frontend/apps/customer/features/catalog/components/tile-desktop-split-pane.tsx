@@ -12,7 +12,7 @@ import {
   Tag,
 } from "lucide-react";
 
-import { useServiceDetail, type Category, type ServiceCard } from "../client-queries";
+import { type Category, type ServiceCard } from "../client-queries";
 import { ServicePhoto } from "./category-artwork";
 import {
   categoryHeadline,
@@ -92,11 +92,6 @@ function SidebarWarrantyCard() {
   );
 }
 
-function includedSummary(items: string[] | undefined): string | null {
-  if (!items || items.length === 0) return null;
-  return items.slice(0, 3).join(", ");
-}
-
 function DesktopTileServiceCard({
   service,
   tile,
@@ -108,13 +103,7 @@ function DesktopTileServiceCard({
   categorySlug: string;
   onOpenPanel: () => void;
 }) {
-  const detailQuery = useServiceDetail(service.slug);
   const rating = displayRating(service.slug);
-  const included = includedSummary(
-    (detailQuery.data?.policies ?? [])
-      .filter((policy) => policy.kind === "INCLUDED")
-      .map((policy) => policy.text),
-  );
   const pricePaise = service.starting_price?.amount_paise ?? null;
 
   return (
@@ -140,24 +129,6 @@ function DesktopTileServiceCard({
         <p className="mt-1 line-clamp-2 text-[13px] leading-5 text-text-secondary">
           {service.short_description}
         </p>
-        {included ? (
-          <p className="mt-1.5 flex items-start gap-1.5 text-[12px] text-text-secondary">
-            <span className="mt-0.5 grid size-3.5 shrink-0 place-items-center rounded-full border border-navy-300 text-navy-700">
-              <svg viewBox="0 0 12 12" fill="none" className="size-2" aria-hidden>
-                <path
-                  d="M2.5 6.2 4.8 8.5 9.5 3.5"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </span>
-            <span className="line-clamp-1">
-              <span className="font-semibold text-navy-800">Includes:</span> {included}
-            </span>
-          </p>
-        ) : null}
       </div>
 
       <div className="flex shrink-0 flex-col items-end gap-2 pl-2">
@@ -247,7 +218,7 @@ export function TileDesktopSplitPane({
           </p>
           <SidebarWarrantyCard />
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-3 pt-3">
+        <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-3 pt-3">
           <section
             aria-labelledby={`desktop-select-${category.slug}`}
             className="rounded-[1.25rem] border border-[#e7e2da] px-3.5 pb-4 pt-3.5"
@@ -330,7 +301,7 @@ export function TileDesktopSplitPane({
       <div className="flex min-h-0 min-w-0 flex-1">
         <section
           aria-labelledby={`desktop-tile-${activeTile.slug}`}
-          className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-8 py-6"
+          className="no-scrollbar min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-8 py-6"
         >
           <Link
             href={`/catalog/${category.slug}`}
