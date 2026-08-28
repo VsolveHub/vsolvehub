@@ -173,14 +173,9 @@ export default async function ServiceDetailPage({ params }: PageProps) {
                         Tell us what you need <span aria-hidden="true" className="ml-2">&rarr;</span>
                       </Link>
                     ) : (
-                      <>
-                        <Link href={`/book/${service.slug}`} className="flex h-[3.25rem] w-full items-center justify-center rounded-md bg-action px-6 text-[0.95rem] font-bold text-white shadow-sm transition-all hover:bg-[#d65f1a] active:scale-[0.98]">
-                          Check price and availability <span aria-hidden="true" className="ml-2">&rarr;</span>
-                        </Link>
-                        {service.bookable_variant_id && (
-                          <AddToCartButton variantId={service.bookable_variant_id} />
-                        )}
-                      </>
+                      service.bookable_variant_id && (
+                        <AddToCartButton variantId={service.bookable_variant_id} />
+                      )
                     )}
                   </div>
                 )}
