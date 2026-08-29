@@ -330,3 +330,22 @@ def image_for(subject: str, position: int = 0) -> str:
 
     pool = SEED_IMAGE_POOLS[subject]
     return pool[position % len(pool)]
+
+
+def fill_blank_image(row: object, field: str, url: str) -> None:
+    """Seed an image only where there is none — never replace authored artwork.
+
+    The photographs in this module exist so a fresh database has *something* on every
+    tile. The real catalog art is the authored R2 icon set, which lives only in the R2
+    bucket and the `exports/` dumps and cannot be regenerated from this file.
+
+    Passing `image_url` in `update_or_create(defaults=...)` overwrites on every run, so
+    re-seeding a populated database silently replaced that artwork with stock photos.
+    Filling only blanks keeps the seeds' promise — "Adds; never prunes" — for images too.
+    To move a tile back to the authored art, run `restore_r2_images`.
+    """
+
+    if getattr(row, field, ""):
+        return
+    setattr(row, field, url)
+    row.save(update_fields=[field])  # type: ignore[attr-defined]

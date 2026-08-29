@@ -84,7 +84,7 @@ from apps.catalog.seed_content import (
     category_for_trade,
     content_for_trade,
 )
-from apps.catalog.seed_images import image_for
+from apps.catalog.seed_images import fill_blank_image, image_for
 from apps.locations.models import ServiceArea, ServiceAreaService
 from apps.pricing.models import ServiceRate, TaskRate
 
@@ -1263,6 +1263,7 @@ CATALOG: tuple[tuple[str, str, str, str, str, tuple[TradeSeed, ...], str], ...] 
 )
 
 
+
 class Command(BaseCommand):
     help = "Seed the priced Technician, Beautician, Home and Pet task catalog. Adds; never prunes."
 
@@ -1278,11 +1279,11 @@ class Command(BaseCommand):
                     "name": name,
                     "description": description,
                     "icon_key": icon_key,
-                    "image_url": image_for(category_subject),
                     "display_order": category_order,
                     "is_active": True,
                 },
             )
+            fill_blank_image(category, "image_url", image_for(category_subject))
             for trade_order, trade in enumerate(trades, start=1):
                 tile_subject = _image_subject_for(trade)
                 subcategory, _ = Subcategory.objects.update_or_create(
@@ -1295,11 +1296,12 @@ class Command(BaseCommand):
                             or SERVICE_ICON_BY_SUBCATEGORY.get(trade.dispatch_skill)
                             or ""
                         ),
-                        "image_url": image_for(tile_subject) if tile_subject else "",
                         "display_order": trade_order,
                         "is_active": True,
                     },
                 )
+                if tile_subject:
+                    fill_blank_image(subcategory, "image_url", image_for(tile_subject))
                 for task_order, task in enumerate(trade.tasks, start=1):
                     variants.extend(
                         self._seed_task(
@@ -1572,11 +1574,21 @@ class Command(BaseCommand):
                 is_active=True,
             )
             return
-        if cover.url != url or cover.alt_text != alt_text or not cover.is_active:
+        # Never replace a cover that already has artwork: the authored R2 photographs are
+        # not reproducible from `seed_images`, and re-running a seed used to silently swap
+        # them for stock. Only the alt text and the active flag are refreshed.
+        fields: list[str] = []
+        if not cover.url:
             cover.url = url
+            fields.append("url")
+        if cover.alt_text != alt_text:
             cover.alt_text = alt_text
+            fields.append("alt_text")
+        if not cover.is_active:
             cover.is_active = True
-            cover.save(update_fields=("url", "alt_text", "is_active"))
+            fields.append("is_active")
+        if fields:
+            cover.save(update_fields=tuple(fields))
 
     @staticmethod
     def _retire_stale_task_codes() -> None:

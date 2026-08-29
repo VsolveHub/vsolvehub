@@ -70,7 +70,7 @@ from apps.catalog.models import (
     ServiceVariant,
     Subcategory,
 )
-from apps.catalog.seed_images import image_for
+from apps.catalog.seed_images import fill_blank_image, image_for
 from apps.identity.models import Role, User, UserRole
 from apps.locations.models import (
     PostalCode,
@@ -2021,22 +2021,23 @@ class Command(BaseCommand):
                 "name": category_name,
                 "description": category_description,
                 "icon_key": category_icon,
-                "image_url": image_for(category_subject),
                 "is_active": True,
                 "display_order": category_order,
             },
         )
+        fill_blank_image(category, "image_url", image_for(category_subject))
         subcategory, _ = Subcategory.objects.update_or_create(
             category=category,
             slug=subcategory_slug,
             defaults={
                 "name": subcategory_name,
                 "icon_key": icon_key,
-                "image_url": image_for(image_subject) if image_subject else "",
                 "display_order": subcategory_display_order,
                 "is_active": True,
             },
         )
+        if image_subject:
+            fill_blank_image(subcategory, "image_url", image_for(image_subject))
         service, _ = Service.objects.update_or_create(
             slug=service_slug,
             defaults={
@@ -2186,11 +2187,19 @@ class Command(BaseCommand):
                 is_active=True,
             )
             return
-        if cover.url != url or cover.alt_text != alt_text or not cover.is_active:
+        # Never replace a cover that already has artwork — see `fill_blank_image`.
+        fields: list[str] = []
+        if not cover.url:
             cover.url = url
+            fields.append("url")
+        if cover.alt_text != alt_text:
             cover.alt_text = alt_text
+            fields.append("alt_text")
+        if not cover.is_active:
             cover.is_active = True
-            cover.save(update_fields=("url", "alt_text", "is_active"))
+            fields.append("is_active")
+        if fields:
+            cover.save(update_fields=tuple(fields))
 
     # -- the owner-blocked configuration -----------------------------------
 
