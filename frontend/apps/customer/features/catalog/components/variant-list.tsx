@@ -33,7 +33,7 @@ import type { ServiceDetail } from "../queries";
  */
 export function VariantList({
   variants,
-  serviceSlug,
+  serviceSlug: _serviceSlug,
 }: {
   variants: ServiceDetail["variants"];
   serviceSlug: string;

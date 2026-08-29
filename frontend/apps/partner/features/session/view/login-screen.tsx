@@ -2,11 +2,11 @@
 
 import { ApiRequestError } from "@vsolve/api-client";
 import { useAuthGuard, useOtpFlow } from "@vsolve/query";
-import { Card, ErrorState, Logo, OtpForm, Spinner } from "@vsolve/ui";
+import { Card, ErrorState, Logo, OtpForm, Spinner, useHydrated } from "@vsolve/ui";
 import { HelpCircle } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 
 import { MarketingMobileNav } from "@/components/marketing-mobile-nav";
 import { MarketingNavCta } from "@/components/marketing-nav-cta";
@@ -57,7 +57,7 @@ function LoginWait({ message }: { message: string }) {
 export function LoginScreen() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [hydrated, setHydrated] = useState(false);
+  const hydrated = useHydrated();
   const guard = useAuthGuard(getApiClient());
   const isAuthenticated = guard.status === "authenticated";
 
@@ -83,10 +83,6 @@ export function LoginScreen() {
   const isMissing =
     application.error instanceof ApiRequestError && application.error.status === 404;
   const knowsWhereToGo = !application.isPending || isMissing;
-
-  useEffect(() => {
-    setHydrated(true);
-  }, []);
 
   useEffect(() => {
     if (!isAuthenticated) return;

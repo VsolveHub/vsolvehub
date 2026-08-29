@@ -1,3 +1,7 @@
+/* eslint-disable @next/next/no-img-element -- Catalog thumbnails are fixed-size
+ * (size-16/size-20) and come from arbitrary remote hosts. `next/image` would need
+ * every one of those hosts in `images.remotePatterns`, which this app does not
+ * configure; `category-artwork.tsx` opts out the same way for the same reason. */
 "use client";
 
 import { useEffect, useState } from "react";
@@ -59,7 +63,7 @@ export function priceLine(service: ServiceCard): string {
 
 function WhatYouCanBookModal({
   service,
-  categorySlug,
+  categorySlug: _categorySlug,
   onClose,
 }: {
   service: ServiceCard;

@@ -1,8 +1,8 @@
 "use client";
 
 import type { OtpFlow } from "@vsolve/query";
-import { cn } from "@vsolve/ui";
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { cn, useHydrated } from "@vsolve/ui";
+import { useEffect, useId, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 
 import { claimViewport } from "@/lib/focus-mode";
@@ -82,11 +82,7 @@ export function CustomerLoginModal({
   const ref = useLoginModalDialog(open, onOpenChange);
   const id = useId();
   const isMobile = useMobileLoginViewport();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useHydrated();
 
   useLayoutEffect(() => {
     if (!open || !isMobile) return;

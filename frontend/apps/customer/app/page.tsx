@@ -5,7 +5,6 @@ import { Suspense } from "react";
 import { EmptyState } from "@vsolve/ui";
 
 import {
-  CategoryCard,
 } from "@/features/catalog/components/category-card";
 import { getCategories } from "@/features/catalog/queries";
 import { HomepageClientSections } from "@/features/catalog/components/homepage-client-sections";

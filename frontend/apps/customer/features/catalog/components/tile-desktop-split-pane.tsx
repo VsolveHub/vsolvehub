@@ -170,16 +170,20 @@ export function TileDesktopSplitPane({
   activeTile: DesktopTile;
 }) {
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
+  // Reset the detail pane when you switch tiles, during render rather than in an
+  // effect: an effect would paint the previous tile's service for one frame
+  // before clearing it. See https://react.dev/learn/you-might-not-need-an-effect
+  const [lastTileSlug, setLastTileSlug] = useState(activeTile.slug);
+  if (lastTileSlug !== activeTile.slug) {
+    setLastTileSlug(activeTile.slug);
+    setSelectedSlug(null);
+  }
   const selectedService =
     activeTile.services.find((service) => service.slug === selectedSlug) ?? null;
   const visibleTiles = sidebarTilesForDisplay(tiles, activeTile.slug);
   const showSeeAll = tiles.length > SIDEBAR_TILE_CAP;
   const headline = categoryHeadline(category.name);
   const stats = displayCategoryStats(category.slug);
-
-  useEffect(() => {
-    setSelectedSlug(null);
-  }, [activeTile.slug]);
 
   useEffect(() => {
     const media = window.matchMedia("(min-width: 1024px)");

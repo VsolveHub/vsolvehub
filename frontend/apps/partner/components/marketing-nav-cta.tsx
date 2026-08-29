@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useHydrated } from "@vsolve/ui";
 import { useCurrentSession, hasRole } from "@vsolve/query";
 import { getApiClient } from "@/lib/api/browser";
 import { PARTNER_ROLE } from "@/features/session/partner-shell";
@@ -29,11 +29,7 @@ function GuestMarketingNavCta() {
 }
 
 export function MarketingNavCta() {
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    setHydrated(true);
-  }, []);
+  const hydrated = useHydrated();
 
   const session = useCurrentSession(getApiClient(), { enabled: hydrated });
   const profile = usePartnerProfile();

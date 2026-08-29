@@ -104,7 +104,6 @@ export function FullScreenPartnerSearch({
   const feeOrTaxPaise = Math.max(0, totalPaise - itemChargesPaise);
 
   const totalMoney = { amount_paise: totalPaise, currency };
-  const itemChargesMoney = { amount_paise: itemChargesPaise, currency };
   const feeOrTaxMoney = { amount_paise: feeOrTaxPaise, currency };
 
   const currentStep = SEARCH_STEPS[stepIndex] ?? SEARCH_STEPS[0];

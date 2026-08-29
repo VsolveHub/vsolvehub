@@ -17,6 +17,7 @@ export type { QuantityStepperProps } from "./quantity-stepper";
 // Responsive branching for the rare case CSS cannot express: two layouts that
 // need different DOM. See the hook's own note before reaching for it.
 export { useMediaQuery, useIsWideScreen } from "./use-media-query";
+export { useHydrated } from "./use-hydrated";
 export { ChoiceChips } from "./choice-chips";
 export type { ChoiceChipOption, ChoiceChipsProps } from "./choice-chips";
 

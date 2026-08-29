@@ -2,10 +2,10 @@
 
 import type { Schemas } from "@vsolve/api-client";
 import { describeError } from "@vsolve/query";
-import { Button, Dialog, ErrorState, Skeleton, buttonStyles } from "@vsolve/ui";
+import { Button, Dialog, ErrorState, Skeleton, buttonStyles, useHydrated } from "@vsolve/ui";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import {
   useAddresses,
@@ -96,10 +96,7 @@ export function CheckoutWorkspace() {
   const session = useCustomerSession();
   const profileGate = useProfileCompletionGate("booking");
 
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useHydrated();
 
   const phoneNumber = mounted ? session.phoneNumber : null;
 

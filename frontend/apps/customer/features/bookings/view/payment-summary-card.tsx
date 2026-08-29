@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Dialog, buttonStyles } from "@vsolve/ui";
+import { Dialog, buttonStyles } from "@vsolve/ui";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 

@@ -3,11 +3,10 @@
 import { describeError, useServerCountdown } from "@vsolve/query";
 import { Button, Dialog, ErrorState, Skeleton, buttonStyles } from "@vsolve/ui";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { Money } from "@/features/checkout/view/money";
 import { BookingSupport } from "@/features/support/view/booking-support";
-import { claimViewport } from "@/lib/focus-mode";
 
 import { ProfessionalCard } from "./professional-card";
 import { VisitProgress } from "./visit-progress";
