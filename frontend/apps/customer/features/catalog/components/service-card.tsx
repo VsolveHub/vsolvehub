@@ -111,14 +111,6 @@ export function ServiceCard({
   };
 
   const renderCartAction = (buttonSizeClass: string, textClass: string) => {
-    if (!service.bookable_variant_id) {
-      return (
-        <span className="text-sm font-semibold leading-6 text-navy-900">
-          Get a quote
-        </span>
-      );
-    }
-
     if (cartItem) {
       return (
         <div className={`inline-flex ${buttonSizeClass} items-center border border-action rounded-full overflow-hidden bg-white shadow-xs relative z-20`}>
@@ -145,20 +137,33 @@ export function ServiceCard({
       );
     }
 
+    if (service.bookable_variant_id) {
+      return (
+        <button
+          type="button"
+          onClick={handleAddToCart}
+          disabled={isAdding || cartUnavailable}
+          className={`inline-flex ${buttonSizeClass} items-center justify-center rounded-full bg-action px-5 ${textClass} font-bold text-white shadow-sm transition-transform duration-200 hover:scale-105 hover:bg-[#d65f1a] disabled:opacity-50 cursor-pointer relative z-20`}
+        >
+          {isAdding ? "Adding..." : "Add"}
+          {!isAdding && (
+            <svg viewBox="0 0 20 20" fill="none" className="size-4 ml-1.5" aria-hidden="true" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10 4v12m-6-6h12" />
+            </svg>
+          )}
+        </button>
+      );
+    }
+
     return (
-      <button
-        type="button"
-        onClick={handleAddToCart}
-        disabled={isAdding || cartUnavailable}
-        className={`inline-flex ${buttonSizeClass} items-center justify-center rounded-full bg-action px-5 ${textClass} font-bold text-white shadow-sm transition-transform duration-200 hover:scale-105 hover:bg-[#d65f1a] disabled:opacity-50 cursor-pointer relative z-20`}
+      <span
+        className={`inline-flex ${buttonSizeClass} items-center justify-center rounded-full bg-action px-5 ${textClass} font-bold text-white shadow-sm transition-transform duration-200 hover:scale-105 hover:bg-[#d65f1a] cursor-pointer relative z-20`}
       >
-        {isAdding ? "Adding..." : "Add"}
-        {!isAdding && (
-          <svg viewBox="0 0 20 20" fill="none" className="size-4 ml-1.5" aria-hidden="true" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M10 4v12m-6-6h12" />
-          </svg>
-        )}
-      </button>
+        Add
+        <svg viewBox="0 0 20 20" fill="none" className="size-4 ml-1.5" aria-hidden="true" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M10 4v12m-6-6h12" />
+        </svg>
+      </span>
     );
   };
 

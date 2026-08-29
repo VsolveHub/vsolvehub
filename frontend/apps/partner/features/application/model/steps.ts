@@ -19,7 +19,7 @@ export interface ApplicationStep {
 export const APPLICATION_STEPS: readonly ApplicationStep[] = [
   { href: "/apply", label: "Overview" },
   { href: "/apply/about", label: "About you" },
-  { href: "/apply/work", label: "Your work" },
+  { href: "/apply/work", label: "Your trades" },
   { href: "/apply/areas", label: "Where you work" },
   { href: "/apply/consent", label: "Agreements" },
   { href: "/apply/documents", label: "Documents" },

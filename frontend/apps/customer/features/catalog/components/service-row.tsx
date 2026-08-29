@@ -85,11 +85,7 @@ export function ServiceRow({
             >
               {formatMoney(service.starting_price.amount_paise)}
             </span>
-          ) : (
-            <span className="mt-1 block text-sm font-semibold leading-none text-navy-900">
-              Get a quote
-            </span>
-          )}
+          ) : null}
 
           <span
             aria-hidden="true"

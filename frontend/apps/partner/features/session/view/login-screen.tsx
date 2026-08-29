@@ -4,9 +4,13 @@ import { ApiRequestError } from "@vsolve/api-client";
 import { useAuthGuard, useOtpFlow } from "@vsolve/query";
 import { Card, ErrorState, Logo, OtpForm, Spinner } from "@vsolve/ui";
 import { HelpCircle } from "lucide-react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
+import { MarketingMobileNav } from "@/components/marketing-mobile-nav";
+import { MarketingNavCta } from "@/components/marketing-nav-cta";
+import { HomeHeroLink } from "@/components/home-hero-link";
 import { usePartnerApplication } from "@/features/application/queries";
 import { prepareBookingAlertsFromGesture } from "@/features/notifications/view/booking-alert-audio";
 import { getApiClient } from "@/lib/api/browser";
@@ -34,19 +38,26 @@ const NAV = [
   { href: "/how-it-works", label: "How It Works" },
   { href: "/benefits", label: "Earnings & Benefits" },
   { href: "/trades", label: "Trades & Services" },
-  { href: "/solutions", label: "Solutions" },
-  { href: "/pricing", label: "Payout Rates" },
-  { href: "/about", label: "About" },
   { href: "/contact", label: "Support" },
 ];
 
-import Link from "next/link";
-import { MarketingMobileNav } from "@/components/marketing-mobile-nav";
-import { MarketingNavCta } from "@/components/marketing-nav-cta";
+function LoginShell({ children }: { children: ReactNode }) {
+  return <div className="min-h-screen bg-canvas text-text relative">{children}</div>;
+}
+
+function LoginWait({ message }: { message: string }) {
+  return (
+    <main className="mx-auto flex w-full max-w-md items-center justify-center gap-2 px-4 py-32 text-text-secondary">
+      <Spinner size="sm" />
+      {message}
+    </main>
+  );
+}
 
 export function LoginScreen() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [hydrated, setHydrated] = useState(false);
   const guard = useAuthGuard(getApiClient());
   const isAuthenticated = guard.status === "authenticated";
 
@@ -74,6 +85,10 @@ export function LoginScreen() {
   const knowsWhereToGo = !application.isPending || isMissing;
 
   useEffect(() => {
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
     if (!isAuthenticated) return;
 
     if (next) {
@@ -85,48 +100,48 @@ export function LoginScreen() {
     router.replace(homeForApplication(application.data?.status ?? null));
   }, [application.data?.status, isAuthenticated, knowsWhereToGo, next, router]);
 
-  if (guard.status === "checking") {
+  if (!hydrated || guard.status === "checking") {
     return (
-      <main className="mx-auto flex w-full max-w-md items-center justify-center gap-2 px-4 py-32 text-text-secondary">
-        <Spinner size="sm" />
-        Checking your session…
-      </main>
+      <LoginShell>
+        <LoginWait message="Checking your session…" />
+      </LoginShell>
     );
   }
 
   if (guard.status === "error") {
     return (
-      <main className="mx-auto w-full max-w-md px-4 py-32">
-        <ErrorState
-          title="We could not check your session"
-          message="Nothing has changed. Check your connection and try again."
-          actionLabel="Try again"
-          onAction={() => window.location.reload()}
-        />
-      </main>
+      <LoginShell>
+        <main className="mx-auto w-full max-w-md px-4 py-32">
+          <ErrorState
+            title="We could not check your session"
+            message="Nothing has changed. Check your connection and try again."
+            actionLabel="Try again"
+            onAction={() => window.location.reload()}
+          />
+        </main>
+      </LoginShell>
     );
   }
 
   if (isAuthenticated) {
     return (
-      <main className="mx-auto flex w-full max-w-md items-center justify-center gap-2 px-4 py-32 text-text-secondary">
-        <Spinner size="sm" />
-        Taking you to your account…
-      </main>
+      <LoginShell>
+        <LoginWait message="Taking you to your account…" />
+      </LoginShell>
     );
   }
 
   return (
-    <div className="min-h-screen bg-canvas text-text relative">
+    <LoginShell>
       {/* Floating Dynamic-Island Navigation Matching All Screens */}
       <div className="fixed top-3 inset-x-0 z-50 px-3 sm:px-6 pointer-events-none">
-        <header className="pointer-events-auto mx-auto max-w-6xl rounded-2xl sm:rounded-full bg-white/95 backdrop-blur-2xl border border-line-strong shadow-[0_12px_32px_rgba(0,17,46,0.12),0_1px_3px_rgba(0,0,0,0.05)] px-3.5 sm:px-5 py-2.5 transition-all duration-300">
+        <header className="pointer-events-auto mx-auto max-w-6xl xl:max-w-7xl rounded-2xl sm:rounded-full bg-white/95 backdrop-blur-2xl border border-line-strong shadow-[0_12px_32px_rgba(0,17,46,0.12),0_1px_3px_rgba(0,0,0,0.05)] px-3.5 sm:px-5 py-2.5 transition-all duration-300">
           <div className="flex items-center justify-between gap-2 sm:gap-4">
             {/* Brand */}
             <div className="flex items-center gap-2.5 sm:gap-3">
-              <Link href="/" className="flex min-h-11 items-center gap-2 group">
+              <HomeHeroLink className="flex min-h-11 items-center gap-2 group">
                 <Logo className="h-6 sm:h-7 w-auto" />
-              </Link>
+              </HomeHeroLink>
 
               {/* Live Demand Status Badge */}
               <div className="hidden xl:flex items-center gap-2 rounded-full bg-surface-sunken border border-line px-2.5 py-1 text-[11px]">
@@ -140,12 +155,12 @@ export function LoginScreen() {
             </div>
 
             {/* Desktop Center Navigation Capsule */}
-            <nav className="hidden lg:flex items-center gap-0.5 rounded-full bg-surface-sunken/80 border border-line p-1">
+            <nav className="hidden lg:flex items-center gap-1 rounded-full bg-surface-sunken/80 border border-line p-1">
               {NAV.map((n) => (
                 <Link
                   key={n.label}
                   href={n.href}
-                  className="px-3 py-1.5 text-xs font-bold text-text-secondary hover:text-navy-900 rounded-full hover:bg-surface transition-all duration-150"
+                  className="whitespace-nowrap rounded-full px-3.5 py-2 text-[0.8125rem] font-semibold text-text-secondary transition-colors duration-150 hover:bg-surface hover:text-navy-900"
                 >
                   {n.label}
                 </Link>
@@ -224,6 +239,6 @@ export function LoginScreen() {
           </Link>
         </div>
       </main>
-    </div>
+    </LoginShell>
   );
 }

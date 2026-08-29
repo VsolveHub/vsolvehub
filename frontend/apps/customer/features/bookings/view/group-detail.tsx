@@ -3,10 +3,11 @@
 import { describeError, useServerCountdown } from "@vsolve/query";
 import { Button, Dialog, ErrorState, Skeleton, buttonStyles } from "@vsolve/ui";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Money } from "@/features/checkout/view/money";
 import { BookingSupport } from "@/features/support/view/booking-support";
+import { claimViewport } from "@/lib/focus-mode";
 
 import { ProfessionalCard } from "./professional-card";
 import { VisitProgress } from "./visit-progress";
@@ -28,6 +29,9 @@ import {
   GroupStatusBadge,
   UnitStatusBadge,
 } from "./group-status";
+import { FullScreenPartnerSearch } from "./full-screen-search";
+import { MockProfessionalCard } from "./mock-professional-card";
+import { MobilePaymentBottomBar, PaymentSummarySideCard } from "./payment-summary-card";
 
 /**
  * One Booking Group, watched while the platform works on it.
@@ -78,11 +82,13 @@ function UnitCard({
   index,
   total,
   groupId,
+  isPaid,
 }: {
   unit: FulfilmentUnit;
   index: number;
   total: number;
   groupId: string;
+  isPaid: boolean;
 }) {
   const deadline = useServerCountdown(unit.state_deadline, 1000);
 
@@ -124,9 +130,18 @@ function UnitCard({
         </div>
       ) : null}
 
-      {unit.professional ? (
-        <div className="mt-3">
+      {/* Professional details: generic Mock card pre-payment, Real partner details post-payment */}
+      {unit.professional && isPaid ? (
+        <div className="mt-3 space-y-1.5">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold border border-emerald-200">
+            <span>✓</span>
+            <span>Real Partner Details Unlocked</span>
+          </div>
           <ProfessionalCard professional={unit.professional} />
+        </div>
+      ) : unit.professional || unit.status === "HELD" || unit.status === "PAYMENT_PENDING" ? (
+        <div className="mt-3">
+          <MockProfessionalCard serviceName={unit.lines[0]?.label} />
         </div>
       ) : null}
 
@@ -311,6 +326,7 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
   const groupQuery = useBookingGroup(groupId);
   const cancelGroup = useCancelBookingGroup();
   const [isCancelOpen, setIsCancelOpen] = useState(false);
+  const [isSearchDismissed, setIsSearchDismissed] = useState(false);
 
   const group = groupQuery.data;
   const expiry = useServerCountdown(group?.expires_at ?? null, 1000);
@@ -336,6 +352,24 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
     );
   }
 
+  const isPaid =
+    group.order_id !== null ||
+    group.status === "BOOKED" ||
+    group.status === "COMPLETED";
+  const isAwaitingPayment =
+    !isPaid &&
+    (group.recovery_action === "PAYMENT_REQUIRED" ||
+      group.status === "PAYMENT_PENDING" ||
+      group.status === "ALL_UNITS_HELD");
+
+  const isSearching =
+    !isPaid &&
+    !isAwaitingPayment &&
+    (group.status === "CONFIRMED" ||
+      group.status === "MATCHING" ||
+      group.status === "PARTIALLY_HELD") &&
+    !isSearchDismissed;
+
   const isPartnerOnTheWay = isPartnerOnTheWayOrBeyond(group);
   const canCancel = !isTerminal(group) && !isPartnerOnTheWay;
   const canRefresh = !isTerminal(group) && !isPartnerOnTheWay;
@@ -351,99 +385,137 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
   }
 
   return (
-    <div className="space-y-4">
-      {/* Header section with status badge */}
-      <div className="rounded-card border border-line bg-surface p-5 shadow-xs">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-text">
-              {group.units.length} {group.units.length === 1 ? "visit" : "visits"}
-            </h1>
-            <p className="mt-1 text-sm text-text-secondary">
-              Booked {formatWhen(group.created_at)}
+    <>
+      {isSearching ? (
+        <FullScreenPartnerSearch
+          group={group}
+          onDismiss={() => setIsSearchDismissed(true)}
+        />
+      ) : null}
+
+      <div className={isAwaitingPayment ? "lg:grid lg:grid-cols-12 lg:gap-8 items-start space-y-4 lg:space-y-0 pb-28 lg:pb-12" : "space-y-4 pb-20 lg:pb-12"}>
+        <div className={isAwaitingPayment ? "lg:col-span-7 space-y-4" : "space-y-4"}>
+        {/* Header section with status badge (shown when !isAwaitingPayment; when awaiting payment, details live in PaymentSummarySideCard) */}
+        {!isAwaitingPayment ? (
+          <div className="rounded-card border border-line bg-surface p-5 shadow-xs">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h1 className="text-2xl font-bold text-text">
+                  {group.units.length} {group.units.length === 1 ? "visit" : "visits"}
+                </h1>
+                <p className="mt-1 text-sm text-text-secondary">
+                  Booked {formatWhen(group.created_at)}
+                </p>
+              </div>
+              <GroupStatusBadge group={group} />
+            </div>
+
+            <div className="mt-4">
+              <AssignmentProgress group={group} />
+            </div>
+
+            {group.order_id !== null ? (
+              <div className="mt-4">
+                <Link
+                  href={`/bookings/${group.id}/receipt`}
+                  className={buttonStyles({ variant: "outline" })}
+                >
+                  View your receipt
+                </Link>
+              </div>
+            ) : null}
+
+            {expiry && !expiry.isExpired && !isTerminal(group) ? (
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-warm-100/70 border border-line p-3 text-xs text-text-secondary">
+                <p className="flex items-center gap-2 font-medium text-text">
+                  <span className="text-base">⏱️</span>
+                  <span>
+                    <span aria-hidden data-numeric className="font-bold text-navy-900">
+                      {expiry.display}
+                    </span>
+                    <span className="sr-only">{expiry.announce}</span>
+                    <span> before this booking expires if we cannot fill every visit</span>
+                  </span>
+                </p>
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
+                  <span className="size-2 rounded-full bg-emerald-500 animate-ping" />
+                  Live matching active
+                </span>
+              </div>
+            ) : null}
+
+            <p className="mt-3 text-xs text-text-secondary" aria-live="polite">
+              {groupQuery.isFetching
+                ? "Checking for updates…"
+                : groupQuery.isError
+                  ? "We could not check for updates just now."
+                  : isTerminal(group)
+                    ? "This booking is finished, so it will not change again."
+                    : isPartnerOnTheWay
+                      ? "Your professional is on the way or work is in progress."
+                      : "Updating automatically. You can close this page — it keeps going without it."}
             </p>
           </div>
-          <GroupStatusBadge group={group} />
-        </div>
+        ) : (
+          <div className="sr-only">
+            <AssignmentProgress group={group} />
+          </div>
+        )}
 
-        <div className="mt-4">
-          <AssignmentProgress group={group} />
-        </div>
+        {/* Unit list */}
+        <ul className="flex flex-col gap-3">
+          {group.units.map((unit, index) => (
+            <UnitCard
+              key={unit.id}
+              unit={unit}
+              index={index}
+              total={group.units.length}
+              groupId={group.id}
+              isPaid={isPaid}
+            />
+          ))}
+        </ul>
 
-        {group.order_id !== null ? (
-          <div className="mt-4">
-            <Link
-              href={`/bookings/${group.id}/receipt`}
-              className={buttonStyles({ variant: "outline" })}
-            >
-              View your receipt
-            </Link>
+        {/* Action controls: Refresh & Cancel only available BEFORE partner is on the way & before terminal state */}
+        {canRefresh || canCancel ? (
+          <div className="mt-6 flex flex-wrap gap-3">
+            {canRefresh ? (
+              <Button variant="outline" onClick={() => void groupQuery.refetch()} disabled={groupQuery.isFetching}>
+                Refresh now
+              </Button>
+            ) : null}
+            {canCancel ? (
+              <Button variant="ghost" onClick={() => setIsCancelOpen(true)}>
+                Cancel this booking
+              </Button>
+            ) : null}
           </div>
         ) : null}
 
-        {expiry && !expiry.isExpired && !isTerminal(group) ? (
-          <p className="mt-3 text-sm text-text-secondary">
-            <span aria-hidden data-numeric>
-              {expiry.display}
-            </span>
-            <span className="sr-only">{expiry.announce}</span>
-            <span> before this booking expires if we cannot fill every visit</span>
+        {cancelGroup.isError && !isCancelOpen ? (
+          <p className="mt-3 text-sm text-critical" role="alert">
+            {describeCancelFailure(cancelGroup.error)}
           </p>
         ) : null}
 
-        <p className="mt-3 text-xs text-text-secondary" aria-live="polite">
-          {groupQuery.isFetching
-            ? "Checking for updates…"
-            : groupQuery.isError
-              ? "We could not check for updates just now."
-              : isTerminal(group)
-                ? "This booking is finished, so it will not change again."
-                : isPartnerOnTheWay
-                  ? "Your professional is on the way or work is in progress."
-                  : "Updating automatically. You can close this page — it keeps going without it."}
+        <p className="mt-4 text-xs text-text-secondary">
+          Reference <span className="font-mono tabular-nums">{group.id}</span>
         </p>
+
+        <BookingSupport reference={group.id} />
       </div>
 
-      {/* Unit list */}
-      <ul className="flex flex-col gap-3">
-        {group.units.map((unit, index) => (
-          <UnitCard
-            key={unit.id}
-            unit={unit}
-            index={index}
-            total={group.units.length}
-            groupId={group.id}
-          />
-        ))}
-      </ul>
-
-      {/* Action controls: Refresh & Cancel only available BEFORE partner is on the way & before terminal state */}
-      {canRefresh || canCancel ? (
-        <div className="mt-6 flex flex-wrap gap-3">
-          {canRefresh ? (
-            <Button variant="outline" onClick={() => void groupQuery.refetch()} disabled={groupQuery.isFetching}>
-              Refresh now
-            </Button>
-          ) : null}
-          {canCancel ? (
-            <Button variant="ghost" onClick={() => setIsCancelOpen(true)}>
-              Cancel this booking
-            </Button>
-          ) : null}
+      {/* Desktop Payment Summary Side Card */}
+      {isAwaitingPayment ? (
+        <div className="hidden lg:block lg:col-span-5">
+          <PaymentSummarySideCard group={group} />
         </div>
       ) : null}
 
-      {cancelGroup.isError && !isCancelOpen ? (
-        <p className="mt-3 text-sm text-critical" role="alert">
-          {describeCancelFailure(cancelGroup.error)}
-        </p>
+      {/* Mobile Sticky Bottom Payment Bar */}
+      {isAwaitingPayment ? (
+        <MobilePaymentBottomBar group={group} />
       ) : null}
-
-      <p className="mt-4 text-xs text-text-secondary">
-        Reference <span className="font-mono tabular-nums">{group.id}</span>
-      </p>
-
-      <BookingSupport reference={group.id} />
 
       <CancelSupportDialog
         group={group}
@@ -461,7 +533,8 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
           setIsCancelOpen(false);
         }}
       />
-    </div>
+      </div>
+    </>
   );
 }
 

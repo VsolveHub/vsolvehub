@@ -1,6 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import { fireEvent } from "@testing-library/dom";
 import { describe, expect, it, vi } from "vitest";
+import { QueryProvider } from "@vsolve/query";
 
 import { cart, cartItem } from "../fixtures";
 import { CartItems, CartVersionNote } from "./cart-items";
@@ -36,7 +37,11 @@ function renderCart(overrides: Partial<Parameters<typeof CartItems>[0]> = {}) {
     onRemove: vi.fn(),
     ...overrides,
   };
-  render(<CartItems {...props} />);
+  render(
+    <QueryProvider showDevtools={false}>
+      <CartItems {...props} />
+    </QueryProvider>,
+  );
   return props;
 }
 

@@ -128,7 +128,7 @@ describe("address stage", () => {
     fireEvent.click(screen.getByRole("button", { name: /use this address/i }));
 
     expect(screen.getByText(/selected address/i)).toBeInTheDocument();
-    expect(screen.getByText(/flat 402/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/flat 402/i).length).toBeGreaterThan(0);
     expect(screen.queryByText(/we cover this area/i)).not.toBeInTheDocument();
   });
 
@@ -230,7 +230,7 @@ function AddNewHarness({
 
   return (
     <AddressStage
-      addresses={[]}
+      addresses={state.address ? [ADDRESS] : []}
       selectedAddressId={state.address?.id ?? null}
       isLoading={false}
       serviceability={null}
@@ -270,13 +270,14 @@ describe("address stage — adding a new address", () => {
     const onCreate = vi.fn(() => Promise.resolve(ADDRESS));
     renderInWorkspace(<AddNewHarness onCreate={onCreate} />);
 
+    fireEvent.click(screen.getByRole("button", { name: "Add address" }));
     fireEvent.click(screen.getByRole("button", { name: /add a new address/i }));
 
     // `latitude`/`longitude` are required on `AddressRequest` and there is no
     // forward geocoder, so the pin is a real precondition — and it is stated up
     // front rather than sprung as a validation message on submit.
     expect(screen.getByText(/pin the location first/i)).toBeInTheDocument();
-    fireEvent.submit(screen.getByRole("button", { name: /save and use/i }));
+    fireEvent.submit(screen.getByRole("dialog").querySelector("#address-add-form")!);
     expect(onCreate).not.toHaveBeenCalled();
   });
 
@@ -284,6 +285,7 @@ describe("address stage — adding a new address", () => {
     const onCreate = vi.fn(() => Promise.resolve(ADDRESS));
     renderInWorkspace(<AddNewHarness onCreate={onCreate} />);
 
+    fireEvent.click(screen.getByRole("button", { name: "Add address" }));
     fireEvent.click(screen.getByRole("button", { name: /add a new address/i }));
     fireEvent.click(screen.getByRole("button", { name: /use my location/i }));
 
@@ -295,7 +297,7 @@ describe("address stage — adding a new address", () => {
       target: { value: "Flat 903, B block" },
     });
     fireEvent.click(screen.getByRole("radio", { name: "Site" }));
-    fireEvent.click(screen.getByRole("button", { name: /save and use/i }));
+    fireEvent.submit(screen.getByRole("dialog").querySelector("#address-add-form")!);
 
     await screen.findByText(/selected address/i);
     expect(onCreate).toHaveBeenCalledWith(
@@ -311,6 +313,7 @@ describe("address stage — adding a new address", () => {
   it("keeps a failed save inside the dialog", () => {
     renderInWorkspace(<AddNewHarness createError="That pincode is not valid." />);
 
+    fireEvent.click(screen.getByRole("button", { name: "Add address" }));
     fireEvent.click(screen.getByRole("button", { name: /add a new address/i }));
 
     const dialog = screen.getByRole("dialog");

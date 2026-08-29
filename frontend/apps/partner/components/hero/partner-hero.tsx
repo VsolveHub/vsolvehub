@@ -62,9 +62,14 @@ const OFFERS: DemoOffer[] = [
 
 const OFFER_WINDOW = 30; // seconds — matches the real offer countdown
 
+function capNationalPhoneDigits(value: string): string {
+  return value.replace(/\D/g, "").slice(0, 10);
+}
+
 
 export function PartnerHero() {
   const router = useRouter();
+  const [phone, setPhone] = useState("");
   const [index, setIndex] = useState(0);
   const [left, setLeft] = useState(OFFER_WINDOW);
   const [isPaused, setIsPaused] = useState(false);
@@ -155,10 +160,9 @@ export function PartnerHero() {
           <form
             onSubmit={(event) => {
               event.preventDefault();
-              const formData = new FormData(event.currentTarget);
-              const rawPhone = (formData.get("phone") as string || "").replace(/\D/g, "");
+              const rawPhone = capNationalPhoneDigits(phone);
               if (rawPhone.length >= 10) {
-                router.push(`/apply?phone=${encodeURIComponent(rawPhone.slice(-10))}`);
+                router.push(`/apply?phone=${encodeURIComponent(rawPhone)}`);
               } else {
                 router.push("/apply");
               }
@@ -182,8 +186,9 @@ export function PartnerHero() {
                   inputMode="numeric"
                   pattern="[0-9]*"
                   autoComplete="tel-national"
-                  maxLength={10}
                   placeholder="Enter 10-digit number"
+                  value={phone}
+                  onChange={(event) => setPhone(capNationalPhoneDigits(event.target.value))}
                   className="h-[52px] w-full rounded-control border border-warm-300 bg-white pl-[72px] pr-4 font-sans text-base font-semibold text-ink-900 transition-all placeholder:text-gray-400 focus:border-signal-500 focus:outline-none focus:ring-2 focus:ring-signal-500 disabled:opacity-50"
                 />
               </div>

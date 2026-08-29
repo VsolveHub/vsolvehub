@@ -48,6 +48,53 @@ export function variantIdsForCategory(
     .map((service) => service.variantId);
 }
 
+export function isTradeCategorySelected(
+  category: MainCategory,
+  skills: readonly PartnerSkill[],
+  selectedSkillCodes: readonly string[],
+): boolean {
+  const skill = findSkillForCategory(skills, category);
+  return skill !== undefined && selectedSkillCodes.includes(skill.code);
+}
+
+export function toggleTradeCategorySelection(
+  category: MainCategory,
+  skills: readonly PartnerSkill[],
+  services: readonly { categoryName: string; variantId: string }[],
+  selectedSkillCodes: readonly string[],
+  selectedVariantIds: readonly string[],
+): { skillCodes: string[]; serviceVariantIds: string[] } {
+  const variantIds = variantIdsForCategory(category.name, services);
+  const skill = findSkillForCategory(skills, category);
+  const selected = isTradeCategorySelected(category, skills, selectedSkillCodes);
+
+  if (selected) {
+    return {
+      skillCodes: skill
+        ? selectedSkillCodes.filter((code) => code !== skill.code)
+        : [...selectedSkillCodes],
+      serviceVariantIds: selectedVariantIds.filter((id) => !variantIds.includes(id)),
+    };
+  }
+
+  return {
+    skillCodes: skill
+      ? Array.from(new Set([...selectedSkillCodes, skill.code]))
+      : [...selectedSkillCodes],
+    serviceVariantIds: [...selectedVariantIds],
+  };
+}
+
+export function selectedTradeCategories(
+  mainCategories: readonly MainCategory[],
+  skills: readonly PartnerSkill[],
+  selectedSkillCodes: readonly string[],
+): MainCategory[] {
+  return mainCategories.filter((category) =>
+    isTradeCategorySelected(category, skills, selectedSkillCodes),
+  );
+}
+
 export function isCategorySelected(
   category: MainCategory,
   skills: readonly PartnerSkill[],

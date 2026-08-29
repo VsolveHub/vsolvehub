@@ -463,7 +463,7 @@ function ItemLines({
           )}
         >
           <div className="flex items-start gap-2">
-            <div className="grid min-w-0 flex-1 grid-cols-2 gap-2">
+            <div className="grid min-w-0 flex-1 grid-cols-1 min-[360px]:grid-cols-2 gap-2">
               <Field label="Category">
                 <Input value={line.category} onChange={(e) => patch(index, { category: e.target.value })} disabled={disabled} />
               </Field>
@@ -473,7 +473,7 @@ function ItemLines({
             </div>
             <RemoveButton label={`Remove ${line.title || `item ${index + 1}`}`} onClick={() => onChange(lines.filter((_, position) => position !== index))} />
           </div>
-          <div className="mt-2 grid grid-cols-3 gap-2">
+          <div className="mt-2 grid grid-cols-1 min-[360px]:grid-cols-3 gap-2">
             <Field label="Unit">
               <Select value={line.unit} onChange={(e) => patch(index, { unit: e.target.value as ItemLineDraft["unit"] })} disabled={disabled}>
                 {ESTIMATE_UNITS.map((unit) => <option key={unit.value} value={unit.value}>{unit.label}</option>)}
@@ -517,13 +517,13 @@ function LabourLines({
       {lines.map((line, index) => (
         <div key={line.id} data-estimate-error={errors[`labour-${index}`] ? true : undefined} className={cn("rounded-card border bg-surface p-3", errors[`labour-${index}`] ? "border-danger-line" : "border-line")}>
           <div className="flex items-start gap-2">
-            <div className="grid min-w-0 flex-1 grid-cols-2 gap-2">
+            <div className="grid min-w-0 flex-1 grid-cols-1 min-[360px]:grid-cols-2 gap-2">
               <Field label="Role or trade"><Input value={line.role} onChange={(e) => patch(index, { role: e.target.value })} disabled={disabled} /></Field>
               <Field label="Team (optional)"><Input value={line.team} onChange={(e) => patch(index, { team: e.target.value })} disabled={disabled} /></Field>
             </div>
             <RemoveButton label={`Remove ${line.role || `role ${index + 1}`}`} onClick={() => onChange(lines.filter((_, position) => position !== index))} />
           </div>
-          <div className="mt-2 grid grid-cols-3 gap-2">
+          <div className="mt-2 grid grid-cols-1 min-[360px]:grid-cols-3 gap-2">
             <Field label="Members"><Input inputMode="numeric" value={line.memberCount} onChange={(e) => patch(index, { memberCount: Number(e.target.value) })} disabled={disabled} /></Field>
             <Field label="Days"><Input inputMode="numeric" value={line.dayCount} onChange={(e) => patch(index, { dayCount: Number(e.target.value) })} disabled={disabled} /></Field>
             <Field label="Rate/day ₹"><Input inputMode="decimal" value={paiseToRupeeInput(line.ratePaisePerDay)} onChange={(e) => patch(index, { ratePaisePerDay: rupeesToPaise(e.target.value) })} disabled={disabled} /></Field>
@@ -561,7 +561,7 @@ function MaterialLines({
             <div className="min-w-0 flex-1"><Field label="Material"><Input value={line.title} onChange={(e) => patch(index, { title: e.target.value })} disabled={disabled} /></Field></div>
             <RemoveButton label={`Remove ${line.title || `material ${index + 1}`}`} onClick={() => onChange(lines.filter((_, position) => position !== index))} />
           </div>
-          <div className="mt-2 grid grid-cols-3 gap-2">
+          <div className="mt-2 grid grid-cols-1 min-[360px]:grid-cols-3 gap-2">
             <Field label="Quantity"><Input inputMode="decimal" value={line.quantity} onChange={(e) => patch(index, { quantity: e.target.value })} disabled={disabled} /></Field>
             <Field label="Unit"><Input value={line.unit} onChange={(e) => patch(index, { unit: e.target.value })} disabled={disabled} /></Field>
             <Field label="Rate ₹"><Input inputMode="decimal" value={paiseToRupeeInput(line.ratePaise)} onChange={(e) => patch(index, { ratePaise: rupeesToPaise(e.target.value) })} disabled={disabled} /></Field>

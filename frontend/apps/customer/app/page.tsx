@@ -90,65 +90,104 @@ async function CategoryGrid() {
     );
   }
 
-  const [featured, ...rest] = categories;
+  const firstRow = categories.slice(0, 5);
+  const secondRow = categories.slice(5, 9);
 
   return (
     <>
-      {/* Desktop: one featured photo card, then the rest of the catalogue. */}
-      <div className="hidden md:grid grid-cols-3 gap-6">
-        {featured ? (
-          <Link
-            href={`/catalog/${featured.slug}`}
-            className="col-span-2 row-span-2 min-h-[24rem] rounded-card overflow-hidden relative group shadow-xl hover:shadow-2xl flex flex-col focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
-          >
-            {featured.image_url !== "" ? (
-              <div
-                className="absolute inset-0 bg-cover bg-center group-hover:scale-105 transition-transform duration-700 ease-out"
-                style={{ backgroundImage: `url('${featured.image_url}')` }}
-              />
-            ) : (
-              <div className="absolute inset-0 bg-navy-900" />
-            )}
-            <div className="absolute inset-0 bg-navy-900/60 mix-blend-multiply" />
-            <div className="absolute inset-0 bg-gradient-to-t from-navy-900/90 via-navy-900/50 to-navy-900/30" />
-            <div className="relative flex flex-col p-10 h-full justify-start">
-              <h3 className="text-[1.75rem] font-bold text-white mb-3">{featured.name}</h3>
-              <p className="text-base leading-relaxed text-white/80 max-w-md">
-                {featured.description}
-              </p>
-            </div>
-          </Link>
-        ) : null}
-        {rest.map((category) =>
-          category.image_url !== "" ? (
+      {/* Desktop: 2 rows (5 in first row, 4 in second row) as clean icons with text below */}
+      <div className="hidden md:flex flex-col gap-6 lg:gap-8">
+        {/* Row 1: 5 categories */}
+        <div className="grid grid-cols-5 gap-5 lg:gap-7">
+          {firstRow.map((category) => (
             <Link
               key={category.id}
               href={`/catalog/${category.slug}`}
-              className="relative min-h-[10rem] rounded-card overflow-hidden group shadow-sm hover:shadow-md transition-shadow flex flex-col justify-end p-5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+              className="group flex flex-col items-center gap-2.5 text-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
             >
-              <div
-                className="absolute inset-0 bg-cover bg-center group-hover:scale-105 transition-transform duration-700 ease-out"
-                style={{ backgroundImage: `url('${category.image_url}')` }}
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-navy-900/85 via-navy-900/40 to-transparent" />
-              <div className="relative z-10">
-                <h3 className="text-white font-bold text-[1.1rem]">{category.name}</h3>
-                <p className="mt-1 line-clamp-2 text-[0.8rem] leading-relaxed text-white/80">
-                  {category.description}
-                </p>
+              <div className="relative aspect-square w-full rounded-2xl bg-[#F8F9FA] border border-line/80 overflow-hidden flex items-center justify-center p-3.5 lg:p-4 shadow-xs transition-all duration-200 group-hover:scale-105 group-hover:shadow-md group-hover:border-line-strong group-hover:bg-[#FFF8F3]">
+                {category.image_url !== "" ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={category.image_url}
+                    alt=""
+                    loading="lazy"
+                    className="size-full object-contain transition-transform duration-300 group-hover:scale-110"
+                  />
+                ) : (
+                  <span
+                    aria-hidden
+                    className="grid size-12 place-items-center rounded-xl bg-navy-50 text-navy-700 shadow-xs"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="size-6"
+                    >
+                      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+                    </svg>
+                  </span>
+                )}
+              </div>
+              <div className="w-full px-1">
+                <h3 className="text-navy-900 font-bold text-sm lg:text-[15px] leading-tight group-hover:text-signal-700 transition-colors">
+                  {category.name}
+                </h3>
               </div>
             </Link>
-          ) : (
-            <CategoryCard
-              key={category.id}
-              href={`/catalog/${category.slug}`}
-              name={category.name}
-              description={category.description}
-              titleAs="h3"
-              variant="standard"
-            />
-          ),
-        )}
+          ))}
+        </div>
+
+        {/* Row 2: 4 categories */}
+        {secondRow.length > 0 ? (
+          <div className="grid grid-cols-4 gap-5 lg:gap-7 max-w-[80%] mx-auto w-full">
+            {secondRow.map((category) => (
+              <Link
+                key={category.id}
+                href={`/catalog/${category.slug}`}
+                className="group flex flex-col items-center gap-2.5 text-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+              >
+                <div className="relative aspect-square w-full rounded-2xl bg-[#F8F9FA] border border-line/80 overflow-hidden flex items-center justify-center p-3.5 lg:p-4 shadow-xs transition-all duration-200 group-hover:scale-105 group-hover:shadow-md group-hover:border-line-strong group-hover:bg-[#FFF8F3]">
+                  {category.image_url !== "" ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={category.image_url}
+                      alt=""
+                      loading="lazy"
+                      className="size-full object-contain transition-transform duration-300 group-hover:scale-110"
+                    />
+                  ) : (
+                    <span
+                      aria-hidden
+                      className="grid size-12 place-items-center rounded-xl bg-navy-50 text-navy-700 shadow-xs"
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="size-6"
+                      >
+                        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+                      </svg>
+                    </span>
+                  )}
+                </div>
+                <div className="w-full px-1">
+                  <h3 className="text-navy-900 font-bold text-sm lg:text-[15px] leading-tight group-hover:text-signal-700 transition-colors">
+                    {category.name}
+                  </h3>
+                </div>
+              </Link>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       {/* Mobile: the whole catalogue as photo tiles, three across. */}
@@ -322,7 +361,7 @@ export default async function HomePage() {
         {/* ---------------------------------------------------- */}
         {/* MOBILE LAYOUT (NEW PREMIUM REDESIGN MATCHING MOCKUP) */}
         {/* ---------------------------------------------------- */}
-        <div className="block md:hidden flex flex-col gap-6 px-4">
+        <div className="block md:hidden flex flex-col gap-8 pt-2">
           {/* Search Input */}
           <div className="relative w-full">
             <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-text-secondary">
@@ -339,19 +378,19 @@ export default async function HomePage() {
           </div>
 
           {/* Hero Banner Card */}
-          <div className="relative min-h-[200px] rounded-[1.5rem] overflow-hidden shadow-md">
+          <div className="relative min-h-[190px] rounded-[1.5rem] overflow-hidden shadow-md">
             <div 
               className="absolute inset-0 bg-cover bg-center" 
               style={{ backgroundImage: `url('https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=2070&auto=format&fit=crop')` }}
             />
             <div className="absolute inset-0 bg-gradient-to-r from-navy-900/90 via-navy-900/50 to-transparent" />
             
-            <div className="relative z-10 flex flex-col justify-between p-5 h-full min-h-[200px] max-w-[80%]">
+            <div className="relative z-10 flex flex-col justify-between p-5 h-full min-h-[190px] max-w-[85%]">
               <div className="self-start bg-[#f87000] text-white text-[9px] font-extrabold px-3 py-1 rounded-full uppercase tracking-wider">
                 Premium Quality
               </div>
               <div className="mt-auto">
-                <h2 className="text-white font-extrabold text-[1.65rem] leading-tight tracking-tight">
+                <h2 className="text-white font-extrabold text-[1.5rem] sm:text-[1.65rem] leading-tight tracking-tight">
                   Elite Home Services, at Your Doorstep
                 </h2>
               </div>
@@ -359,47 +398,49 @@ export default async function HomePage() {
           </div>
 
           {/* Our Services Section */}
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-3.5">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-extrabold text-[#00112e]">Our Services</h2>
               <Link href="/catalog" className="text-sm font-bold text-[#f87000] hover:text-[#fb8130] transition-colors">
                 See All
               </Link>
             </div>
-            <ul className="grid list-none grid-cols-3 gap-3 p-0">
+            <ul className="grid list-none grid-cols-3 gap-3 sm:gap-4 p-0">
               {categories.map((category) => (
                 <li key={category.id} className="min-w-0">
                   <Link
                     href={`/catalog/${category.slug}`}
-                    className="flex flex-col items-center gap-2 rounded-card focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+                    className="group flex flex-col items-center gap-1.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
                   >
-                    {category.image_url !== "" ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={category.image_url}
-                        alt=""
-                        loading="lazy"
-                        className="aspect-square w-full rounded-[1.25rem] bg-surface-sunken object-cover shadow-xs"
-                      />
-                    ) : (
-                      <span
-                        aria-hidden
-                        className="grid aspect-square w-full place-items-center rounded-[1.25rem] bg-navy-50 text-navy-700 shadow-xs"
-                      >
-                        <svg
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.8"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className="size-6"
+                    <div className="relative aspect-square w-full rounded-2xl bg-[#F8F9FA] border border-line/80 overflow-hidden flex items-center justify-center p-2.5 shadow-xs transition-all duration-200 group-hover:scale-105 group-hover:shadow-md group-hover:border-line-strong group-hover:bg-[#FFF8F3]">
+                      {category.image_url !== "" ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={category.image_url}
+                          alt=""
+                          loading="lazy"
+                          className="size-full object-contain"
+                        />
+                      ) : (
+                        <span
+                          aria-hidden
+                          className="grid aspect-square w-full place-items-center rounded-[1.25rem] bg-navy-50 text-navy-700 shadow-xs"
                         >
-                          <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                        </svg>
-                      </span>
-                    )}
-                    <span className="line-clamp-2 w-full text-center text-[11px] font-bold leading-tight text-[#00112e]">
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className="size-6"
+                          >
+                            <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                          </svg>
+                        </span>
+                      )}
+                    </div>
+                    <span className="line-clamp-2 w-full text-center text-[11px] sm:text-xs font-bold leading-tight text-[#00112e] group-hover:text-[#f87000] transition-colors px-0.5">
                       {category.name}
                     </span>
                   </Link>

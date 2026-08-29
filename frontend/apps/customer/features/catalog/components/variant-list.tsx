@@ -1,5 +1,4 @@
-import Link from "next/link";
-import { Badge, buttonStyles, formatMoney } from "@vsolve/ui";
+import { Badge, formatMoney } from "@vsolve/ui";
 
 import { AddToCartButton } from "./add-to-cart-button";
 import type { ServiceDetail } from "../queries";
@@ -79,25 +78,13 @@ export function VariantList({
             ) : null}
 
             {isChoice ? (
-              <>
-                {/* Below lg: unchanged — compact Add to Cart plus Book shortcut to the workspace. */}
-                <div className="mt-3 flex w-full flex-col gap-2 sm:mt-2 sm:w-auto sm:items-end lg:hidden">
-                  <AddToCartButton variantId={variant.id} size="compact" className="w-full sm:w-auto" />
-                  <Link
-                    href={`/book/${serviceSlug}?variant=${encodeURIComponent(variant.code)}`}
-                    className={buttonStyles({ size: "sm", variant: "secondary", className: "w-full sm:w-auto" })}
-                  >
-                    Book<span className="sr-only"> {variant.name}</span>
-                  </Link>
-                </div>
-                {/* lg+: one cart action per row, matching the panel footer treatment. */}
-                <div className="mt-3 hidden lg:block lg:mt-2">
-                  <AddToCartButton
-                    variantId={variant.id}
-                    className="inline-flex h-11 min-w-[8.5rem] items-center justify-center rounded-xl bg-navy-900 px-5 text-sm font-bold text-white shadow-xs transition-colors hover:bg-navy-800 disabled:opacity-50 cursor-pointer"
-                  />
-                </div>
-              </>
+              <div className="mt-3 flex w-full flex-col gap-2 sm:mt-2 sm:w-auto sm:items-end">
+                <AddToCartButton
+                  variantId={variant.id}
+                  size="compact"
+                  className="w-full sm:w-auto"
+                />
+              </div>
             ) : null}
           </div>
         </li>

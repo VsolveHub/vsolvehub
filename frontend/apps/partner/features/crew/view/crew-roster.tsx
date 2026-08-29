@@ -128,7 +128,7 @@ export function CrewRoster({
             </Button>
           </div>
 
-          <ul className="grid list-none grid-cols-2 gap-3 p-0">
+          <ul className="grid list-none grid-cols-1 min-[420px]:grid-cols-2 gap-3 p-0">
             {view.active.map((row) => (
               <li key={row.membershipId}>
                 <CrewCard

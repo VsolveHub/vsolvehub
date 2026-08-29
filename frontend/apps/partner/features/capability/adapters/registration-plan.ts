@@ -309,7 +309,7 @@ export function describeRegistrationPlan(input: RegistrationPlanInput): Registra
       "EXPERIENCE",
       (application?.experience_years ?? 0) > 0 ? "DONE" : "LATER",
       "How long you have done this",
-      "Optional. Customers read it, and it helps when two vendors quote the same price.",
+      "Customers read this on your profile and it helps when two vendors quote the same price.",
       { href: "/apply/about", label: "Add your experience" },
     ),
   );

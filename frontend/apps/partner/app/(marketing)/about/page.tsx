@@ -79,7 +79,7 @@ export default function AboutPage() {
 
       {/* Stats Strip */}
       <section className="mt-20 max-w-5xl mx-auto px-4 sm:px-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 rounded-3xl bg-[#00112e] p-8 text-white shadow-xl border border-white/10">
+        <div className="grid grid-cols-1 min-[380px]:grid-cols-2 md:grid-cols-4 gap-6 rounded-3xl bg-[#00112e] p-6 sm:p-8 text-white shadow-xl border border-white/10">
           {MILESTONES.map((m) => (
             <div key={m.label} className="text-center">
               <span className="text-3xl sm:text-4xl font-black text-amber-400 block">{m.value}</span>

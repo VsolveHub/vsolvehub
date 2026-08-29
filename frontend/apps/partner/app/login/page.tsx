@@ -23,9 +23,11 @@ export default function LoginPage() {
        the fallback is a page rather than a hole inside one. */
     <Suspense
       fallback={
-        <main className="mx-auto w-full max-w-md px-4 py-16 text-text-secondary">
-          Loading…
-        </main>
+        <div className="min-h-screen bg-canvas text-text relative">
+          <main className="mx-auto flex w-full max-w-md items-center justify-center gap-2 px-4 py-32 text-text-secondary">
+            Loading…
+          </main>
+        </div>
       }
     >
       <LoginScreen />

@@ -416,7 +416,12 @@ export function PresencePanel({
             Checking your last session…
           </p>
         ) : sessionId === null ? (
-          <div className="mt-4 flex flex-col gap-3">
+          // DESKTOP ONLY: `lg:max-w-sm`. The area picker and the go-online
+          // button are stacked full-bleed, which is right in a 375px card and
+          // becomes a ~900px-wide button once the shell stops pretending to be a
+          // handset. Capping the stack keeps them a normal control size on a
+          // wide screen; below `lg:` nothing changes.
+          <div className="mt-4 flex flex-col gap-3 lg:max-w-sm">
             <AreaPickerButton
               areaName={selectedArea?.name}
               disabled={reference.isPending || reference.serviceAreas.length === 0}
@@ -434,7 +439,7 @@ export function PresencePanel({
             </Button>
           </div>
         ) : (
-          <div className="mt-4">
+          <div className="mt-4 lg:max-w-sm">
             <Button
               variant="outline"
               block
@@ -508,13 +513,23 @@ function DriverPresenceControls({
   const selectedArea = reference.serviceAreas.find((area) => area.id === areaId);
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-3">
+    // DESKTOP ONLY: capped. This is a phone panel whose header row is
+    // `justify-between` — at full desktop width the "Availability" label and the
+    // Offline badge end up ~1300px apart and stop reading as one control.
+    <div className="flex flex-col gap-4 lg:max-w-3xl">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[0.6875rem] font-bold uppercase tracking-[0.08em] text-text-muted">
             Availability
           </p>
-          <p role="status" className="mt-0.5 truncate text-sm font-medium text-text">
+          {/*
+            Deliberately not `truncate`. This line is the whole instruction an
+            offline Partner needs — "You will not be offered any jobs until you
+            go online." clipped to "…until you go" at 375px, which reads as a
+            statement of fact rather than a thing to act on. It wraps instead;
+            the badge beside it keeps its width because the row is `items-start`.
+          */}
+          <p role="status" className="mt-0.5 text-sm font-medium text-text">
             {copy.detail}
           </p>
         </div>

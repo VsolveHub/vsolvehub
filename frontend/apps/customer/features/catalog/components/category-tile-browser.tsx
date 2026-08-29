@@ -1,39 +1,16 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { formatMoney } from "@vsolve/ui";
+import { formatMoney, cn } from "@vsolve/ui";
+import { ChevronRight, ClipboardList, X } from "lucide-react";
 
 import { ServicePhoto } from "./category-artwork";
+import { AddToCartButton } from "./add-to-cart-button";
 import { TileDesktopSplitPane } from "./tile-desktop-split-pane";
+import { useServiceDetail } from "../client-queries";
 import { serviceHref } from "../service-href";
 import type { Category, ServiceCard } from "../queries";
-
-/**
- * The category page's two views: the "Select a service" photo-tile grid, and one
- * tile's own services (2026-08-26 owner decision — image-led browsing, the
- * icon-and-text rule is reversed).
- *
- * ## Tiles are subcategories, and the grid is data all the way down
- *
- * Nothing here knows what an "electrician" is. The tiles are the category's
- * published subcategories; a tile's photo, glyph and name are server data, and
- * the services under it are grouped by `subcategory_slug` from the same category
- * read the old list used. A tile whose subcategory has no offerable service is
- * not rendered at all — a photo that opens an empty page is a broken promise,
- * and the server's own `service_count` counts ACTIVE services, not offerable
- * ones, so the grouping below is the honest number.
- *
- * ## One tap, one decision
- *
- * A tile with several services opens `?tile=<slug>` — the same page, narrowed.
- * A tile with exactly one service goes straight to that service's own route
- * ("Book a consultation" is one tap into the brief, not two). Server-rendered
- * throughout: the tile filter is a URL, so back, refresh and share all work.
- *
- * ## The price line speaks the commercial model
- *
- * "Starts at ₹X" is only ever a published rate. A quote-priced service says what
- * actually happens — a free quote after a site visit — and a crew service says
- * it is booked by the day. No number is invented for the unpriced paths.
- */
 
 const A3_TIME_BLOCK = "A3_TIME_BLOCK";
 
@@ -66,14 +43,8 @@ export function groupByTile(category: Category, services: readonly ServiceCard[]
     .filter((tile) => tile.services.length > 0);
 }
 
-function tileHref(tile: TileGroup, categorySlug: string): string {
-  const only = tile.services.length === 1 ? tile.services[0] : undefined;
-  if (only !== undefined) return serviceHref(only, categorySlug);
-  return `/catalog/${categorySlug}?tile=${tile.slug}`;
-}
-
 /** What buying this service is, in one honest line. */
-function priceLine(service: ServiceCard): string {
+export function priceLine(service: ServiceCard): string {
   if (service.starting_price !== null) {
     return `Starts at ${formatMoney(service.starting_price.amount_paise)}`;
   }
@@ -86,97 +57,171 @@ function priceLine(service: ServiceCard): string {
   return "Price confirmed before you pay";
 }
 
-function TileGrid({ tiles, categorySlug }: { tiles: TileGroup[]; categorySlug: string }) {
-  return (
-    <section aria-labelledby="select-a-service">
-      <div className="flex items-center gap-3 pb-4">
-        <h2
-          id="select-a-service"
-          className="text-sm font-bold uppercase tracking-[0.08em] text-text-muted"
-        >
-          Select a service
-        </h2>
-        <div className="h-px flex-1 bg-line/70" />
-      </div>
-      <ul className="grid list-none grid-cols-3 gap-x-3 gap-y-5 p-0 sm:grid-cols-4 sm:gap-x-4 lg:grid-cols-5">
-        {tiles.map((tile) => (
-          <li key={tile.slug} className="min-w-0">
-            <Link
-              href={tileHref(tile, categorySlug)}
-              className="group flex flex-col items-center gap-2 rounded-card focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-            >
-              <ServicePhoto
-                imageUrl={tile.imageUrl}
-                iconKey={tile.iconKey}
-                className="transition-transform duration-fast group-hover:scale-[1.03]"
-              />
-              <span className="line-clamp-2 w-full text-center text-[13px] font-semibold leading-tight text-text">
-                {tile.name}
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-function TileServiceList({
-  tile,
+function WhatYouCanBookModal({
+  service,
   categorySlug,
+  onClose,
 }: {
-  tile: TileGroup;
+  service: ServiceCard;
   categorySlug: string;
+  onClose: () => void;
 }) {
+  const { data: detail, isLoading } = useServiceDetail(service.slug);
+
+  const fallbackUrls = [
+    service.cover?.url,
+    ...(detail?.media?.map((m: { url: string }) => m.url) ?? []),
+  ].filter(Boolean) as string[];
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   return (
-    <section aria-labelledby={`tile-${tile.slug}`}>
-      <div className="flex items-baseline justify-between gap-3 pb-4">
-        <h2 id={`tile-${tile.slug}`} className="text-lg font-extrabold tracking-tight text-text">
-          {tile.name}
-        </h2>
-        <span className="text-sm font-medium text-text-secondary">
-          {tile.services.length === 1 ? "1 service" : `${tile.services.length} services`}
-        </span>
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="what-you-can-book-title"
+      className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-xs p-2 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:p-4 animate-in fade-in duration-200"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="w-full max-w-lg rounded-3xl sm:rounded-2xl border border-line bg-surface p-4 sm:p-6 shadow-2xl max-h-[80dvh] sm:max-h-[85dvh] flex flex-col gap-3.5 animate-in slide-in-from-bottom-4 duration-200">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-line pb-3 shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="grid size-7 place-items-center rounded-lg bg-selected-surface text-signal-500">
+              <ClipboardList className="size-4" />
+            </span>
+            <h3 id="what-you-can-book-title" className="text-base sm:text-lg font-bold text-navy-900">
+              What you can book
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="grid size-9 place-items-center rounded-full text-text-muted hover:bg-surface-sunken hover:text-text transition-colors cursor-pointer"
+          >
+            <X className="size-5" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="overflow-y-auto min-h-0 flex-1 flex flex-col gap-3.5 pr-1 pb-4 no-scrollbar">
+          {isLoading ? (
+            <div className="flex flex-col gap-3">
+              {Array.from({ length: 2 }, (_, i) => (
+                <div key={i} className="h-28 rounded-2xl bg-surface-sunken animate-pulse" />
+              ))}
+            </div>
+          ) : detail && detail.variants && detail.variants.length > 0 ? (
+            detail.variants.map((variant) => {
+              const variantImg =
+                variant.image_url && variant.image_url.trim() !== ""
+                  ? variant.image_url
+                  : (fallbackUrls[0] ?? "");
+              return (
+                <div
+                  key={variant.id}
+                  className="rounded-2xl border border-line bg-white p-3.5 sm:p-4 flex flex-col gap-3 shadow-2xs"
+                >
+                  <div className="flex items-start gap-3 sm:gap-4">
+                    {/* Left Thumbnail Image */}
+                    <span className="size-16 sm:size-20 shrink-0 rounded-2xl overflow-hidden bg-[#F4F1EC] grid place-items-center">
+                      {variantImg ? (
+                        <img
+                          src={variantImg}
+                          alt=""
+                          loading="lazy"
+                          className={
+                            variantImg.includes("/Service%20Cover/") ||
+                            variantImg.includes("/Service Cover/")
+                              ? "size-[80%] object-contain"
+                              : "size-full object-cover"
+                          }
+                        />
+                      ) : (
+                        <ServicePhoto imageUrl="" iconKey={service.icon_key} />
+                      )}
+                    </span>
+
+                    {/* Right Info */}
+                    <div className="min-w-0 flex-1 flex flex-col gap-1">
+                      <h4 className="text-base font-bold text-navy-900 leading-snug">{variant.name}</h4>
+                      {variant.description ? (
+                        <p className="text-xs sm:text-sm text-text-secondary leading-relaxed line-clamp-2">
+                          {variant.description}
+                        </p>
+                      ) : null}
+                      <p className="mt-0.5 text-xs italic text-text-muted">
+                        {variant.task_lines && variant.task_lines.length > 0
+                          ? `${variant.task_lines.length} tasks you can choose from`
+                          : "Priced on booking"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3 pt-2.5 border-t border-line/60">
+                    <div>
+                      <span className="block text-[10px] uppercase font-bold tracking-wider text-text-muted">
+                        STARTS AT
+                      </span>
+                      <span data-numeric className="block text-base sm:text-lg font-extrabold tabular-nums text-navy-900">
+                        {formatMoney(variant.starting_price.amount_paise)}
+                      </span>
+                    </div>
+
+                    <AddToCartButton variantId={variant.id} size="compact" />
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="rounded-2xl border border-line bg-white p-3.5 sm:p-4 flex flex-col gap-3 shadow-2xs">
+              <div className="flex items-start gap-3 sm:gap-4">
+                <span className="size-16 sm:size-20 shrink-0 rounded-2xl overflow-hidden bg-[#F4F1EC] grid place-items-center">
+                  {fallbackUrls[0] ? (
+                    <img
+                      src={fallbackUrls[0]}
+                      alt=""
+                      loading="lazy"
+                      className="size-full object-cover"
+                    />
+                  ) : (
+                    <ServicePhoto imageUrl="" iconKey={service.icon_key} />
+                  )}
+                </span>
+                <div className="min-w-0 flex-1 flex flex-col gap-1">
+                  <h4 className="text-base font-bold text-navy-900">{service.name}</h4>
+                  <p className="text-xs sm:text-sm text-text-secondary leading-relaxed">
+                    {service.short_description}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-3 pt-2.5 border-t border-line/60">
+                <div>
+                  <span className="block text-[10px] uppercase font-bold tracking-wider text-text-muted">
+                    STARTS AT
+                  </span>
+                  <span data-numeric className="block text-base sm:text-lg font-extrabold tabular-nums text-navy-900">
+                    {priceLine(service)}
+                  </span>
+                </div>
+                {service.bookable_variant_id ? (
+                  <AddToCartButton variantId={service.bookable_variant_id} size="compact" />
+                ) : null}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-      <ul className="flex list-none flex-col gap-2.5 p-0">
-        {tile.services.map((service) => (
-          <li key={service.id}>
-            <Link
-              href={serviceHref(service, categorySlug)}
-              className="flex items-center gap-4 rounded-card border border-line bg-surface p-3 shadow-card transition-shadow duration-fast hover:shadow-raised focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-            >
-              <span className="size-20 shrink-0">
-                <ServicePhoto
-                  imageUrl={service.cover?.url ?? tile.imageUrl}
-                  iconKey={service.icon_key}
-                />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block font-semibold leading-snug text-text">{service.name}</span>
-                <span className="mt-0.5 line-clamp-2 block text-sm leading-5 text-text-secondary">
-                  {service.short_description}
-                </span>
-                <span className="mt-1 block text-sm font-bold text-text">
-                  {priceLine(service)}
-                </span>
-              </span>
-              <svg
-                viewBox="0 0 20 20"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.9}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden
-                className="size-5 shrink-0 text-text-muted"
-              >
-                <path d="m7.5 4.5 5.5 5.5-5.5 5.5" />
-              </svg>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </section>
+    </div>
   );
 }
 
@@ -189,52 +234,174 @@ export function CategoryTileBrowser({
   services: readonly ServiceCard[];
   activeTileSlug: string | null;
 }) {
+  const [selectedServiceForModal, setSelectedServiceForModal] = useState<ServiceCard | null>(null);
   const tiles = groupByTile(category, services);
 
   if (tiles.length === 0) {
     return (
-      <p className="rounded-card border border-line bg-surface p-6 text-sm leading-6 text-text-secondary">
+      <p className="rounded-2xl border border-line bg-surface p-6 text-sm leading-6 text-text-secondary">
         Nothing is on sale in {category.name} for your area yet. The catalogue updates as
         professionals come on board — check back soon.
       </p>
     );
   }
 
-  const activeTile = tiles.find((tile) => tile.slug === activeTileSlug);
+  // Active tile defaults to the selected one or the first one
+  const activeTile = tiles.find((tile) => tile.slug === activeTileSlug) ?? tiles[0];
 
-  if (activeTile !== undefined) {
-    return (
-      <>
-        <div className="flex flex-col gap-4 lg:hidden">
-          <Link
-            href={`/catalog/${category.slug}`}
-            className="inline-flex min-h-11 w-fit items-center gap-1.5 rounded-control text-sm font-semibold text-action focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-          >
-            <svg
-              viewBox="0 0 20 20"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={1.9}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden
-              className="size-4"
+  return (
+    <>
+      {/* Desktop view: 3-pane split view matching desktop UI */}
+      <div className="hidden md:block w-full h-full min-h-0 flex-1">
+        <TileDesktopSplitPane category={category} tiles={tiles} activeTile={activeTile} />
+      </div>
+
+      {/* Mobile view: 2-column vertical rail + sub-services + popup modal */}
+      <div className="md:hidden flex items-start gap-2 sm:gap-4 h-full min-h-0 flex-1">
+        {/* Left Column: Independently scrollable vertical category rail */}
+        <nav
+          aria-label={`${category.name} categories`}
+          className="w-20 sm:w-24 shrink-0 h-full overflow-y-auto no-scrollbar border-r border-line/80 pr-2 sm:pr-3 pb-16"
+        >
+          <ul className="flex flex-col gap-2 list-none p-0 m-0">
+            {tiles.map((tile) => {
+              const isActive = tile.slug === activeTile.slug;
+              return (
+                <li key={tile.slug}>
+                  <Link
+                    href={`/catalog/${category.slug}?tile=${tile.slug}`}
+                    scroll={false}
+                    aria-current={isActive ? "page" : undefined}
+                    className={cn(
+                      "relative flex flex-col items-center justify-center gap-1.5 rounded-2xl py-2.5 px-1 text-center transition-all duration-150 group",
+                      isActive
+                        ? "bg-[#FFF8F3] before:absolute before:left-0 before:top-2 before:bottom-2 before:w-1 before:rounded-r before:bg-signal-500"
+                        : "bg-[#F8F9FA] hover:bg-[#F0F1F3]"
+                    )}
+                  >
+                    {tile.imageUrl ? (
+                      <img
+                        src={tile.imageUrl}
+                        alt=""
+                        loading="lazy"
+                        className="size-12 sm:size-14 object-contain shrink-0 transition-transform group-hover:scale-105"
+                      />
+                    ) : (
+                      <ServicePhoto
+                        imageUrl={tile.imageUrl}
+                        iconKey={tile.iconKey}
+                        className="size-12"
+                      />
+                    )}
+                    <span
+                      className={cn(
+                        "line-clamp-2 text-[10px] sm:text-[11px] font-bold leading-tight px-0.5",
+                        isActive ? "text-signal-700" : "text-navy-900"
+                      )}
+                    >
+                      {tile.name}
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+
+        {/* Right Column: Independently scrollable sub-services list */}
+        <section
+          aria-labelledby={`category-tile-${activeTile.slug}`}
+          className="flex-1 min-w-0 h-full overflow-y-auto no-scrollbar pl-1 sm:pl-2 pb-16 flex flex-col gap-3"
+        >
+          {/* Header with Title and Service Count */}
+          <div className="flex items-baseline justify-between gap-3 pb-1 border-b border-line/60 shrink-0">
+            <h2
+              id={`category-tile-${activeTile.slug}`}
+              className="text-lg sm:text-2xl font-extrabold tracking-tight text-navy-900"
             >
-              <path d="M12.5 4.5 7 10l5.5 5.5" />
-            </svg>
-            All {category.name.toLowerCase()} services
-          </Link>
-          <TileServiceList tile={activeTile} categorySlug={category.slug} />
-        </div>
-        <TileDesktopSplitPane
-          key={activeTile.slug}
-          category={category}
-          tiles={tiles}
-          activeTile={activeTile}
-        />
-      </>
-    );
-  }
+              {activeTile.name}
+            </h2>
+            <span className="text-xs sm:text-sm font-semibold text-text-secondary shrink-0">
+              {activeTile.services.length === 1
+                ? "1 service"
+                : `${activeTile.services.length} services`}
+            </span>
+          </div>
 
-  return <TileGrid tiles={tiles} categorySlug={category.slug} />;
+          {/* Sub-services Cards List */}
+          <ul className="flex flex-col gap-2.5 sm:gap-3 list-none p-0 m-0">
+            {activeTile.services.map((service) => {
+              const imgUrl = service.cover?.url ?? activeTile.imageUrl;
+              return (
+                <li key={service.id}>
+                  <Link
+                    href={serviceHref(service, category.slug)}
+                    className="group flex items-start sm:items-center justify-between gap-3 sm:gap-4 rounded-2xl border border-line/80 bg-white p-3 sm:p-4 shadow-xs transition-all duration-150 hover:shadow-md hover:border-line-strong active:scale-[0.99]"
+                  >
+                    {/* Image on Left */}
+                    <span className="size-16 sm:size-20 shrink-0 rounded-2xl overflow-hidden bg-[#F4F1EC] grid place-items-center">
+                      {imgUrl ? (
+                        <img
+                          src={imgUrl}
+                          alt=""
+                          loading="lazy"
+                          className={
+                            imgUrl.includes("/Service%20Cover/") || imgUrl.includes("/Service Cover/")
+                              ? "size-[80%] object-contain"
+                              : "size-full object-cover"
+                          }
+                        />
+                      ) : (
+                        <ServicePhoto imageUrl="" iconKey={service.icon_key} />
+                      )}
+                    </span>
+
+                    {/* Details in Center */}
+                    <div className="min-w-0 flex-1 flex flex-col justify-between">
+                      <div>
+                        <h3 className="text-sm sm:text-base font-bold text-navy-900 leading-snug group-hover:text-signal-700 transition-colors">
+                          {service.name}
+                        </h3>
+                        <p className="mt-1 line-clamp-2 text-xs text-text-secondary leading-relaxed">
+                          {service.short_description}
+                        </p>
+                      </div>
+                      <div className="mt-2.5 flex items-center justify-between gap-2">
+                        <p className="text-xs sm:text-sm font-bold text-navy-900">
+                          {priceLine(service)}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setSelectedServiceForModal(service);
+                          }}
+                          className="inline-flex shrink-0 items-center justify-center font-bold shadow-xs transition-colors rounded-lg px-3.5 h-8 text-xs bg-navy-900 text-white hover:bg-navy-800 active:scale-95 cursor-pointer"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Arrow on Right */}
+                    <ChevronRight className="size-5 shrink-0 text-text-muted group-hover:text-navy-900 group-hover:translate-x-0.5 transition-all self-center hidden min-[400px]:block" />
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      </div>
+
+      {/* Pop-up Dialog for "What you can book" */}
+      {selectedServiceForModal ? (
+        <WhatYouCanBookModal
+          service={selectedServiceForModal}
+          categorySlug={category.slug}
+          onClose={() => setSelectedServiceForModal(null)}
+        />
+      ) : null}
+    </>
+  );
 }

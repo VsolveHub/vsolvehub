@@ -42,7 +42,7 @@ export function AllWork() {
   const stack = useWorkStack();
 
   return (
-    <main className="flex min-h-[calc(100dvh-9rem)] flex-col bg-canvas">
+    <main className="flex min-h-[calc(100dvh-9rem)] flex-col bg-canvas lg:mx-auto lg:min-h-[calc(100dvh-5rem)] lg:w-full lg:max-w-5xl lg:pb-12">
       {/*
         No back arrow: this is a tab, not a pushed screen. A vendor arrives here
         from the Work tab and leaves by tapping another one, so a back control

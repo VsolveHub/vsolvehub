@@ -602,7 +602,7 @@ function CustomerReviewsMarquee() {
   return (
     <section
       aria-labelledby="reviews-heading"
-      className="relative left-1/2 w-screen max-w-[100vw] -translate-x-1/2 overflow-hidden pb-12 md:pb-16"
+      className="relative w-full overflow-hidden pb-12 md:pb-16"
     >
       <div className="mx-auto flex max-w-[1216px] flex-col items-center gap-3 px-4 text-center md:px-6 lg:px-0">
         <span className="rounded-full border border-[#e7e2da] bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-action">
@@ -873,21 +873,20 @@ export function HomepageClientSections() {
 
       {/* 3. Electrician Slider */}
       <section className="flex flex-col gap-5">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-4">
           <div>
             <h2 className="text-2xl md:text-3xl font-extrabold text-navy-900 tracking-tight">Electrician Services</h2>
             <p className="text-sm md:text-base text-text-secondary mt-1 font-medium">Certified electrical installations and diagnostics</p>
           </div>
-          <button
-            type="button"
-            onClick={() => router.push("/catalog/electrician")}
-            className="px-4 py-1.5 rounded-full border border-[#EA580C] text-[#EA580C] hover:bg-[#EA580C]/5 text-xs font-black transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
+          <Link
+            href="/catalog/electrician"
+            className="inline-flex items-center gap-1 text-xs sm:text-sm font-bold text-[#EA580C] hover:text-[#C2410C] hover:underline shrink-0 whitespace-nowrap transition-colors"
           >
             See all
-            <svg viewBox="0 0 20 20" fill="currentColor" className="size-3">
+            <svg viewBox="0 0 20 20" fill="currentColor" className="size-4">
               <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
             </svg>
-          </button>
+          </Link>
         </div>
 
         <HomepageServiceRow items={ELECTRICIAN_SERVICES} renderAction={renderItemAction} />
@@ -933,21 +932,20 @@ export function HomepageClientSections() {
 
       {/* 5. Plumber Slider */}
       <section className="flex flex-col gap-5">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-4">
           <div>
             <h2 className="text-2xl md:text-3xl font-extrabold text-navy-900 tracking-tight">Plumbing Services</h2>
             <p className="text-sm md:text-base text-text-secondary mt-1 font-medium">Taps, leakages, and sanitary fixes</p>
           </div>
-          <button
-            type="button"
-            onClick={() => router.push("/catalog/plumber")}
-            className="px-4 py-1.5 rounded-full border border-[#EA580C] text-[#EA580C] hover:bg-[#EA580C]/5 text-xs font-black transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
+          <Link
+            href="/catalog/plumber"
+            className="inline-flex items-center gap-1 text-xs sm:text-sm font-bold text-[#EA580C] hover:text-[#C2410C] hover:underline shrink-0 whitespace-nowrap transition-colors"
           >
             See all
-            <svg viewBox="0 0 20 20" fill="currentColor" className="size-3">
+            <svg viewBox="0 0 20 20" fill="currentColor" className="size-4">
               <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
             </svg>
-          </button>
+          </Link>
         </div>
 
         <HomepageServiceRow items={PLUMBING_SERVICES} renderAction={renderItemAction} />
@@ -955,21 +953,20 @@ export function HomepageClientSections() {
 
       {/* 6. Carpenter Slider */}
       <section className="flex flex-col gap-5">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-4">
           <div>
             <h2 className="text-2xl md:text-3xl font-extrabold text-navy-900 tracking-tight">Carpenter Services</h2>
             <p className="text-sm md:text-base text-text-secondary mt-1 font-medium">Furniture repair, mounts, and fittings</p>
           </div>
-          <button
-            type="button"
-            onClick={() => router.push("/catalog/technician")}
-            className="px-4 py-1.5 rounded-full border border-[#EA580C] text-[#EA580C] hover:bg-[#EA580C]/5 text-xs font-black transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
+          <Link
+            href="/catalog/technician"
+            className="inline-flex items-center gap-1 text-xs sm:text-sm font-bold text-[#EA580C] hover:text-[#C2410C] hover:underline shrink-0 whitespace-nowrap transition-colors"
           >
             See all
-            <svg viewBox="0 0 20 20" fill="currentColor" className="size-3">
+            <svg viewBox="0 0 20 20" fill="currentColor" className="size-4">
               <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
             </svg>
-          </button>
+          </Link>
         </div>
 
         <HomepageServiceRow items={CARPENTRY_SERVICES} renderAction={renderItemAction} />

@@ -4,7 +4,14 @@ import { ApiRequestError, type Schemas } from "@vsolve/api-client";
 import { Button, ErrorState, Skeleton } from "@vsolve/ui";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
 
 import {
@@ -40,6 +47,7 @@ export interface ApplicationEditorRenderProps {
   update: (patch: Partial<ApplicationDraft>) => void;
   application: Application | null;
   isReadOnly: boolean;
+  setProceedDisabled: (disabled: boolean) => void;
 }
 
 /**
@@ -67,6 +75,19 @@ export function useApplicationEditor(): ApplicationEditorRenderProps {
   return value;
 }
 
+const ProceedDisabledSetterContext = createContext<((disabled: boolean) => void) | null>(
+  null,
+);
+
+/** Register step-local validation that blocks Continue until resolved. */
+export function useProceedDisabled(disabled: boolean): void {
+  const setProceedDisabled = useContext(ProceedDisabledSetterContext);
+  useEffect(() => {
+    setProceedDisabled?.(disabled);
+    return () => setProceedDisabled?.(false);
+  }, [disabled, setProceedDisabled]);
+}
+
 export interface ApplicationEditorProps {
   title: string;
   description?: string;
@@ -86,6 +107,8 @@ export interface ApplicationEditorProps {
    * the bug this option exists to make deliberate rather than accidental.
    */
   continueOnSave?: boolean;
+  /** When true, the primary continue button stays disabled. */
+  proceedDisabled?: boolean;
 }
 
 export function ApplicationEditor(props: ApplicationEditorProps) {
@@ -154,9 +177,11 @@ function Editor({
   // ever show.
   saveLabel,
   continueOnSave = true,
+  proceedDisabled = false,
   children,
 }: ApplicationEditorProps & { application: Application | null }) {
   const [draft, setDraft] = useState(() => draftFromApplication(application));
+  const [childProceedDisabled, setChildProceedDisabled] = useState(false);
   const save = useUpdateApplication();
   const router = useRouter();
   const pathname = usePathname();
@@ -180,7 +205,13 @@ function Editor({
   }
 
   const editor = useMemo<ApplicationEditorRenderProps>(
-    () => ({ draft, update, application, isReadOnly }),
+    () => ({
+      draft,
+      update,
+      application,
+      isReadOnly,
+      setProceedDisabled: setChildProceedDisabled,
+    }),
     // `update` is stable enough in practice — it only closes over `setDraft` and
     // `save.reset` — and is recreated with the component anyway, which is keyed
     // on the application version above.
@@ -202,9 +233,7 @@ function Editor({
     saves first and moves on success. The label says which is about to happen.
   */
   const nextStepName = following ? following.label : null;
-  const primaryLabel = dirty
-    ? (saveLabel ?? (nextStepName ? `Save & Continue to ${nextStepName}` : "Save Changes"))
-    : (nextStepName ? `Continue to ${nextStepName}` : "Save and Continue");
+  const primaryLabel = saveLabel ?? "Save and Continue";
 
   function commit() {
     if (!dirty) {
@@ -223,7 +252,7 @@ function Editor({
   const backHref = previous ? previous.href : "/apply";
 
   return (
-    <section className="flex flex-col gap-5 pb-20">
+    <section className="flex flex-col gap-5">
       <div className="rounded-2xl border border-line bg-surface p-5 sm:p-6 shadow-sm flex flex-col gap-5">
         <header className="flex flex-col gap-1 border-b border-line pb-4">
           <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-navy-900">
@@ -244,7 +273,9 @@ function Editor({
           </p>
         ) : null}
 
-        <EditorContext.Provider value={editor}>{children}</EditorContext.Provider>
+        <ProceedDisabledSetterContext.Provider value={setChildProceedDisabled}>
+          <EditorContext.Provider value={editor}>{children}</EditorContext.Provider>
+        </ProceedDisabledSetterContext.Provider>
       </div>
 
       {isReadOnly ? null : (
@@ -254,6 +285,7 @@ function Editor({
           nextStepName={nextStepName}
           onCommit={commit}
           isSaving={save.isPending}
+          proceedDisabled={proceedDisabled || childProceedDisabled}
           saved={save.isSuccess && !dirty}
           conflict={isVersionConflict(save.error)}
           failed={save.isError && !isVersionConflict(save.error) && fieldMessages.length === 0}
@@ -271,6 +303,7 @@ function EditorDock({
   nextStepName,
   onCommit,
   isSaving,
+  proceedDisabled,
   saved,
   conflict,
   failed,
@@ -282,6 +315,7 @@ function EditorDock({
   nextStepName: string | null;
   onCommit: () => void;
   isSaving: boolean;
+  proceedDisabled: boolean;
   saved: boolean;
   conflict: boolean;
   failed: boolean;
@@ -345,6 +379,7 @@ function EditorDock({
             block
             loading={isSaving}
             loadingLabel="Saving..."
+            disabled={proceedDisabled}
             onClick={onCommit}
             className="font-bold text-base shadow-md h-12 flex-1"
           >

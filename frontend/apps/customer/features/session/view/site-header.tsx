@@ -65,7 +65,7 @@ export function SiteHeader() {
       "sticky top-0 z-20 transition-colors",
       pathname === "/"
         ? "bg-[#FAF9F7] md:bg-surface md:border-b md:border-line"
-        : "bg-surface border-b border-line"
+        : "hidden md:block bg-surface border-b border-line"
     )}>
       {/* Desktop Header Layout */}
       <div className="hidden md:flex mx-auto min-h-16 w-full max-w-[1216px] items-center gap-x-7 px-4 py-3 sm:px-6 lg:px-0">
@@ -256,7 +256,7 @@ export const NAV_TARGETS: readonly NavTarget[] = [
   // Deliberately first and deliberately public: the catalog and the anonymous
   // basket are real surfaces for somebody who has never signed in.
   { href: "/catalog", label: "Services", shortLabel: "Services", icon: "home", private: false },
-  { href: "/activity", label: "Bookings", shortLabel: "Bookings", icon: "activity", private: false },
+  { href: "/activity", label: "Bookings", shortLabel: "Bookings", icon: "activity", private: true },
 ];
 
 /**
