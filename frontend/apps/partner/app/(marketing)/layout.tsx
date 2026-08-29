@@ -3,14 +3,12 @@ import { Logo } from "@vsolve/ui";
 import { ShieldCheck, PhoneCall, Lock, Zap } from "lucide-react";
 import { MarketingMobileNav } from "@/components/marketing-mobile-nav";
 import { MarketingNavCta } from "@/components/marketing-nav-cta";
+import { HomeHeroLink } from "@/components/home-hero-link";
 
 const NAV = [
   { href: "/how-it-works", label: "How It Works" },
   { href: "/benefits", label: "Earnings & Benefits" },
   { href: "/trades", label: "Trades & Services" },
-  { href: "/solutions", label: "Solutions" },
-  { href: "/pricing", label: "Payout Rates" },
-  { href: "/about", label: "About" },
   { href: "/contact", label: "Support" },
 ];
 
@@ -50,13 +48,13 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen bg-canvas text-text relative">
       {/* Floating Dynamic-Island Navigation with White Background */}
       <div className="fixed top-3 inset-x-0 z-50 px-3 sm:px-6 pointer-events-none">
-        <header className="pointer-events-auto mx-auto max-w-6xl rounded-2xl sm:rounded-full bg-white/95 backdrop-blur-2xl border border-line-strong shadow-[0_12px_32px_rgba(0,17,46,0.12),0_1px_3px_rgba(0,0,0,0.05)] px-3.5 sm:px-5 py-2.5 transition-all duration-300">
+        <header className="pointer-events-auto mx-auto max-w-6xl xl:max-w-7xl rounded-2xl sm:rounded-full bg-white/95 backdrop-blur-2xl border border-line-strong shadow-[0_12px_32px_rgba(0,17,46,0.12),0_1px_3px_rgba(0,0,0,0.05)] px-3.5 sm:px-5 py-2.5 transition-all duration-300">
           <div className="flex items-center justify-between gap-2 sm:gap-4">
             {/* Brand & Live Demand Tag */}
             <div className="flex items-center gap-2.5 sm:gap-3">
-              <Link href="/" className="flex items-center gap-2 group">
+              <HomeHeroLink className="flex items-center gap-2 group">
                 <Logo className="h-6 sm:h-7 w-auto" />
-              </Link>
+              </HomeHeroLink>
 
               {/* Live Demand Status Badge */}
               <div className="hidden xl:flex items-center gap-2 rounded-full bg-surface-sunken border border-line px-2.5 py-1 text-[11px]">
@@ -70,12 +68,12 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
             </div>
 
             {/* Desktop Center Navigation Capsule */}
-            <nav className="hidden lg:flex items-center gap-0.5 rounded-full bg-surface-sunken/80 border border-line p-1">
+            <nav className="hidden lg:flex items-center gap-1 rounded-full bg-surface-sunken/80 border border-line p-1">
               {NAV.map((n) => (
                 <Link
                   key={n.label}
                   href={n.href}
-                  className="px-3 py-1.5 text-xs font-bold text-text-secondary hover:text-navy-900 rounded-full hover:bg-surface transition-all duration-150"
+                  className="whitespace-nowrap rounded-full px-3.5 py-2 text-[0.8125rem] font-semibold text-text-secondary transition-colors duration-150 hover:bg-surface hover:text-navy-900"
                 >
                   {n.label}
                 </Link>
@@ -106,9 +104,9 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
             {/* Left Brand Summary (5 cols) */}
             <div className="lg:col-span-5 flex flex-col justify-between">
               <div>
-                <Link href="/" className="flex items-center gap-2 group">
+                <HomeHeroLink className="flex items-center gap-2 group">
                   <Logo dark className="h-7 w-auto" />
-                </Link>
+                </HomeHeroLink>
                 <p className="mt-4 max-w-md text-sm leading-relaxed text-slate-300">
                   Empowering skilled technicians, electricians, plumbers, drivers, and service
                   entrepreneurs across Telangana with steady local jobs, direct weekly payouts, and
@@ -134,7 +132,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
             </div>
 
             {/* Right Links (7 cols) */}
-            <div className="lg:col-span-7 grid grid-cols-2 sm:grid-cols-3 gap-8">
+            <div className="lg:col-span-7 grid grid-cols-1 min-[380px]:grid-cols-2 sm:grid-cols-3 gap-8">
               {FOOTER_COLS.map((col) => (
                 <div key={col.title}>
                   <p className="text-xs font-extrabold uppercase tracking-wider text-slate-100">
@@ -158,7 +156,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
           </div>
 
           {/* Middle Operational Cities Banner */}
-          <div className="py-6 border-b border-navy-800/80 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-400">
+          <div className="py-6 border-b border-navy-800/80 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-xs text-slate-400">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-bold text-slate-200">Operational Hubs in Telangana:</span>
               <span className="rounded-full bg-white/5 border border-white/10 px-2.5 py-0.5 text-slate-300">Hyderabad</span>
@@ -175,9 +173,9 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
           </div>
 
           {/* Bottom Copyright and Legal Row */}
-          <div className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
+          <div className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400 text-center sm:text-left">
             <p>© {new Date().getFullYear()} V Solve Hub Technologies Pvt. Ltd. All rights reserved.</p>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4">
               <Link href="/privacy" className="hover:text-slate-200 transition-colors">Privacy Policy</Link>
               <span>•</span>
               <Link href="/terms" className="hover:text-slate-200 transition-colors">Terms of Service</Link>

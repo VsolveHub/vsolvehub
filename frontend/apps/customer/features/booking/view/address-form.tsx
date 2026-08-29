@@ -140,22 +140,62 @@ export function AddressForm({
     setDraft((current) => ({ ...current, [field]: value }));
   }
 
+function sanitizeGeocodedAddress(resolved: LocatedAddress) {
+  let line1 = (resolved.line1 ?? "").trim();
+  const postalCode = (resolved.postal_code ?? "").trim();
+  const locality = (resolved.locality ?? "").trim();
+  let city = (resolved.city ?? "").trim();
+
+  // If line1 starts with the 6-digit postal code or contains leading postal code numbers, strip them
+  if (postalCode && line1.startsWith(postalCode)) {
+    line1 = line1.slice(postalCode.length).replace(/^[\s,/-]+/, "").trim();
+  } else if (/^\d{6}\b/.test(line1)) {
+    line1 = line1.replace(/^\d{6}[\s,/-]*/, "").trim();
+  }
+
+  // If line1 is now purely numeric or empty, or identical to locality/city, keep it empty for user to type flat/house number
+  if (
+    /^\d+$/.test(line1) ||
+    line1.toLowerCase() === locality.toLowerCase() ||
+    line1.toLowerCase() === city.toLowerCase()
+  ) {
+    line1 = "";
+  }
+
+  // Clean city: strip "mandal", "district", "rural", "urban" suffixes
+  city = city
+    .replace(/\s+(mandal|district|rural|urban)\b/gi, "")
+    .replace(/,\s*.*$/, "")
+    .trim();
+
+  return {
+    line1,
+    locality,
+    city: city || (resolved.city ?? ""),
+    state: resolved.state ?? "",
+    postalCode,
+    latitude: resolved.latitude ?? "",
+    longitude: resolved.longitude ?? "",
+  };
+}
+
   async function locate() {
-    const resolved = await onLocate();
-    if (resolved === null) return;
+    const rawResolved = await onLocate();
+    if (rawResolved === null) return;
+    const resolved = sanitizeGeocodedAddress(rawResolved);
     // Merged rather than replaced: anything already typed is the Customer's own
     // correction and outranks the geocoder, which is the whole point of the two
     // steps. Only the coordinates are taken unconditionally — they are the one
     // thing the device knows better.
     setDraft((current) => ({
       ...current,
-      line1: current.line1 === "" ? (resolved.line1 ?? "") : current.line1,
-      locality: current.locality === "" ? (resolved.locality ?? "") : current.locality,
+      line1: current.line1 === "" ? resolved.line1 : current.line1,
+      locality: current.locality === "" ? resolved.locality : current.locality,
       city: current.city === "" ? resolved.city : current.city,
-      state: current.state === "" ? (resolved.state ?? "") : current.state,
-      postalCode: current.postalCode === "" ? (resolved.postal_code ?? "") : current.postalCode,
-      latitude: resolved.latitude ?? "",
-      longitude: resolved.longitude ?? "",
+      state: current.state === "" ? resolved.state : current.state,
+      postalCode: current.postalCode === "" ? resolved.postalCode : current.postalCode,
+      latitude: resolved.latitude,
+      longitude: resolved.longitude,
     }));
   }
 

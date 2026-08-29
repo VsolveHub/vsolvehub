@@ -42,7 +42,7 @@ import { WaitingRadar } from "./waiting-radar";
 
 function Home({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <main className="mx-auto w-full max-w-2xl px-4 py-6">
+    <main className="mx-auto w-full max-w-2xl px-4 py-6 lg:max-w-5xl lg:px-8 lg:py-10">
       <h1 className="text-2xl font-bold text-text">{title}</h1>
       <div className="mt-5 flex flex-col gap-5">{children}</div>
     </main>
@@ -56,7 +56,7 @@ export function WorkHome() {
 
   if (query.isPending) {
     return (
-      <div className="mx-auto w-full max-w-md px-4 py-6">
+      <div className="mx-auto w-full max-w-md px-4 py-6 lg:max-w-3xl lg:px-8 lg:py-10">
         <ApplicationOverview />
       </div>
     );
@@ -78,7 +78,7 @@ export function WorkHome() {
   // A 404 or non-approved application renders the full ApplicationOverview
   if (isMissing || query.data === undefined || query.data.status !== "APPROVED") {
     return (
-      <div className="mx-auto w-full max-w-md px-4 py-6">
+      <div className="mx-auto w-full max-w-md px-4 py-6 lg:max-w-3xl lg:px-8 lg:py-10">
         <ApplicationOverview />
       </div>
     );
@@ -145,23 +145,32 @@ function WorkStack() {
           className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-[linear-gradient(180deg,transparent_0%,var(--color-ink-900)_100%)]"
         />
 
-        <TodayPlate
-          netPaise={performance.data?.today_net_paise ?? null}
-          jobs={performance.data?.today_jobs ?? null}
-        />
+        {/*
+          The banner's colour, grid texture and bottom fade stay full-bleed on
+          the parent; only the figures inside are centred and capped. Capping the
+          banner itself would have put a hard seam where the texture stopped.
+          Below `lg:` this wrapper is a plain block and changes nothing.
+        */}
+        <div className="relative lg:mx-auto lg:w-full lg:max-w-7xl lg:px-4">
+          <TodayPlate
+            netPaise={performance.data?.today_net_paise ?? null}
+            jobs={performance.data?.today_jobs ?? null}
+          />
 
-        <MonthStrip performance={performance.data ?? null} />
+          <MonthStrip performance={performance.data ?? null} />
+        </div>
       </div>
 
       {/* Bottom sheet — availability + work stack */}
       <div className="relative -mt-6 flex flex-1 flex-col rounded-t-[1.75rem] bg-surface shadow-[0_-12px_48px_color-mix(in_oklab,var(--color-ink-900)_25%,transparent)]">
         <div aria-hidden className="mx-auto mt-3 h-1 w-10 rounded-full bg-line" />
 
-        <div className="px-4 pt-4 pb-2">
+        {/* The white sheet spans the viewport; its contents stay a readable width. */}
+        <div className="px-4 pt-4 pb-2 lg:mx-auto lg:w-full lg:max-w-7xl lg:px-8">
           <PartnerPresence variant="driver" />
         </div>
 
-        <div className="flex flex-1 flex-col gap-3 px-4 pb-4 pt-2">
+        <div className="flex flex-1 flex-col gap-3 px-4 pb-4 pt-2 lg:mx-auto lg:w-full lg:max-w-7xl lg:px-8">
           <StackBody stack={stack} needsYou={needsYou} />
         </div>
       </div>
@@ -317,10 +326,10 @@ function TodayPlate({ netPaise, jobs }: { netPaise: number | null; jobs: number 
       <span className="text-[0.6875rem] font-bold uppercase tracking-[0.1em] text-surface/50">
         Earned today
       </span>
-      <div className="flex items-end justify-between gap-4">
+      <div className="flex items-end justify-between gap-3 min-w-0">
         <span
           data-numeric
-          className="text-[clamp(2.75rem,12vw,3.5rem)] font-extrabold leading-none tracking-[-0.03em] text-surface"
+          className="text-[clamp(1.875rem,10vw,3.5rem)] font-extrabold leading-none tracking-[-0.03em] text-surface truncate min-w-0"
         >
           {netPaise === null ? "—" : formatMoney(netPaise)}
         </span>

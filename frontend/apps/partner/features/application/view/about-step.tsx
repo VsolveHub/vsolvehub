@@ -1,13 +1,18 @@
 "use client";
 
 import { Field, Input, Textarea } from "@vsolve/ui";
-import { useApplicationEditor } from "./application-editor";
+import { useApplicationEditor, useProceedDisabled } from "./application-editor";
 
 export function AboutStep() {
   const { draft, update, isReadOnly } = useApplicationEditor();
 
   const isNameInvalid =
     draft.displayName.trim().length > 0 && draft.displayName.trim().length < 2;
+  const isExperienceMissing = draft.experienceYears <= 0;
+
+  useProceedDisabled(
+    draft.displayName.trim().length < 2 || isExperienceMissing,
+  );
 
   return (
     <div className="flex flex-col gap-5">
@@ -31,12 +36,12 @@ export function AboutStep() {
         </Field>
 
         {/* Years of Experience */}
-        <Field label="Years of Experience">
+        <Field required label="Years of Experience">
           <Input
             name="experience_years"
             type="number"
             inputMode="numeric"
-            min={0}
+            min={1}
             max={80}
             placeholder="e.g. 5"
             value={draft.experienceYears === 0 ? "" : String(draft.experienceYears)}

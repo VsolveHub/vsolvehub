@@ -49,6 +49,7 @@ function withDocuments(kinds: readonly string[]): Application["documents"] {
 const COMPLETE = {
   ...EMPTY,
   display_name: "Ravi",
+  experience_years: 5,
   skill_codes: ["ELECTRICAL"],
   service_variant_ids: ["var-1"],
   service_area_ids: ["area-1"],
@@ -110,10 +111,15 @@ describe("a brand-new applicant", () => {
 describe("partial progress", () => {
   it("counts a step done only when everything it collects is present", () => {
     /*
-      `/apply/work` carries two requirements — SKILLS and SERVICES — and one of
-      them being satisfied is not the step being finished.
+      `/apply/work` carries both SKILLS and SERVICES. One of them being satisfied
+      is not the step being finished.
     */
-    const halfWork = { ...EMPTY, display_name: "Ravi", skill_codes: ["ELECTRICAL"] } as Application;
+    const halfWork = {
+      ...EMPTY,
+      display_name: "Ravi",
+      experience_years: 5,
+      skill_codes: ["ELECTRICAL"],
+    } as Application;
     const steps = stepProgress(halfWork);
 
     const about = steps.find((step) => step.href === "/apply/about");
@@ -122,6 +128,14 @@ describe("partial progress", () => {
     expect(about?.state).toBe("done");
     expect(work?.state).toBe("todo");
     expect(work?.outstanding).toBe(1);
+  });
+
+  it("keeps About you open until experience is entered", () => {
+    const namedOnly = { ...EMPTY, display_name: "Ravi" } as Application;
+    const about = stepProgress(namedOnly).find((step) => step.href === "/apply/about");
+
+    expect(about?.state).toBe("todo");
+    expect(about?.outstanding).toBe(1);
   });
 
   it("points at the first unfinished step, in sequence order", () => {
@@ -140,6 +154,7 @@ describe("partial progress", () => {
 describe("stepping backwards", () => {
   it("gives the previous step in the sequence", () => {
     expect(previousStep("/apply/areas")?.href).toBe("/apply/work");
+    expect(previousStep("/apply/work")?.href).toBe("/apply/about");
   });
 
   it("tolerates a trailing slash, because Next produces either form", () => {

@@ -110,7 +110,7 @@ function PanelVariantScroller({
   };
 
   return (
-    <section className="mt-5">
+    <section className="mt-2">
       <h3 className="text-[15px] font-extrabold text-navy-900">What you can book</h3>
       <div
         ref={scrollerRef}
@@ -257,6 +257,16 @@ export function TileServiceDetailPanel({
       </div>
 
       <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4">
+        {showVariantPicker ? (
+          <PanelVariantScroller
+            variants={bookableVariants}
+            selectedId={selectedVariant.id}
+            fallbackImageUrls={[tileImageUrl, imageUrl]}
+            iconKey={service.icon_key}
+            onSelect={setSelectedVariantId}
+          />
+        ) : null}
+
         {showVariantPicker ? null : (
           <div className="mt-2 overflow-hidden rounded-[1rem] bg-[#F4F1EC]">
             {imageUrl !== "" ? (
@@ -300,16 +310,6 @@ export function TileServiceDetailPanel({
             ))}
           </ul>
         </section>
-
-        {showVariantPicker ? (
-          <PanelVariantScroller
-            variants={bookableVariants}
-            selectedId={selectedVariant.id}
-            fallbackImageUrls={[tileImageUrl, imageUrl]}
-            iconKey={service.icon_key}
-            onSelect={setSelectedVariantId}
-          />
-        ) : null}
 
         <section className="mt-5">
           <h3 className="text-[15px] font-extrabold text-navy-900">Service details</h3>

@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { Menu, X, ArrowRight, Phone, Zap } from "lucide-react";
 import { Logo } from "@vsolve/ui";
+import { HomeHeroLink } from "@/components/home-hero-link";
 import { useCurrentSession, hasRole } from "@vsolve/query";
 import { getApiClient } from "@/lib/api/browser";
 import { PARTNER_ROLE } from "@/features/session/partner-shell";
@@ -14,9 +15,6 @@ const DEFAULT_NAV = [
   { href: "/how-it-works", label: "How It Works" },
   { href: "/benefits", label: "Earnings & Benefits" },
   { href: "/trades", label: "Trades & Services" },
-  { href: "/solutions", label: "Solutions" },
-  { href: "/pricing", label: "Payout Rates" },
-  { href: "/about", label: "About" },
   { href: "/contact", label: "Support" },
 ];
 
@@ -61,17 +59,17 @@ export function MarketingMobileNav({
         onClick={close}
         aria-hidden
       />
-      <div className="relative z-10 flex h-full w-84 max-w-[88%] flex-col bg-white text-navy-900 border-l border-line px-5 py-6 shadow-2xl overflow-y-auto">
+      <div className="relative z-10 flex h-full w-84 max-w-[min(22rem,88vw)] flex-col bg-white text-navy-900 border-l border-line px-5 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-2xl overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-line pb-4">
-          <Link href="/" onClick={close} className="flex items-center gap-2 group">
+          <HomeHeroLink onClick={close} className="flex min-h-11 items-center gap-2 group">
             <Logo className="h-6 w-auto" />
-          </Link>
+          </HomeHeroLink>
           <button
             type="button"
             onClick={close}
             aria-label="Close menu"
-            className="grid h-9 w-9 place-items-center rounded-full bg-surface-sunken text-navy-900 hover:bg-surface border border-line transition-colors"
+            className="grid h-11 w-11 sm:h-9 sm:w-9 place-items-center rounded-full bg-surface-sunken text-navy-900 hover:bg-surface border border-line transition-colors"
           >
             <X className="h-5 w-5" />
           </button>

@@ -23,7 +23,7 @@ export default async function BookingGroupPage({
   const { groupId } = await params;
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 pb-16 pt-6">
+    <main className="mx-auto w-full max-w-5xl px-4 pb-24 lg:pb-16 pt-6">
       <BookingGroupDetail groupId={groupId} />
     </main>
   );

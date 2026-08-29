@@ -55,7 +55,7 @@ describe("MeHome's Crew tile", () => {
 
     renderMeHome();
 
-    expect(screen.queryByRole("link", { name: "Crew" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Contractor Crew/i })).not.toBeInTheDocument();
   });
 
   it("is shown when the Partner holds A3 crew.manage", () => {
@@ -68,6 +68,6 @@ describe("MeHome's Crew tile", () => {
 
     renderMeHome();
 
-    expect(screen.getByRole("link", { name: "Crew" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Contractor Crew/i })).toBeInTheDocument();
   });
 });

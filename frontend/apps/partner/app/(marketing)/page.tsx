@@ -262,7 +262,7 @@ export default function LandingPage() {
       {/* Trust & Key Stats Strip */}
       <section className="border-y border-line bg-surface py-8 sm:py-10">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <div className="grid grid-cols-2 gap-6 lg:grid-cols-4">
+          <div className="grid grid-cols-1 min-[380px]:grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-4">
             {STATS.map((s) => (
               <div
                 key={s.label}
@@ -271,11 +271,11 @@ export default function LandingPage() {
                 <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-surface-sunken">
                   <s.icon className="h-6 w-6 text-signal-500" />
                 </div>
-                <div>
-                  <p className="text-xl font-extrabold text-text tracking-tight sm:text-2xl">
+                <div className="min-w-0">
+                  <p className="text-xl font-extrabold text-text tracking-tight sm:text-2xl truncate">
                     {s.value}
                   </p>
-                  <p className="text-xs font-semibold text-text-secondary">{s.label}</p>
+                  <p className="text-xs font-semibold text-text-secondary truncate">{s.label}</p>
                 </div>
               </div>
             ))}

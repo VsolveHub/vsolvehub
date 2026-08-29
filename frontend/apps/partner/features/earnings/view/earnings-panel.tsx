@@ -113,31 +113,31 @@ export function EarningsPanel() {
           warning/success tones `STATUS_TONE` already assigns to RESERVED/
           PENDING/PAID in the ledger below, just carried up to this
           breakdown so the two agree at a glance. */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="rounded-plate border border-info-line bg-info-surface p-3">
-          <p className="flex items-center gap-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-info-text">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        <div className="rounded-plate border border-info-line bg-info-surface p-2.5 sm:p-3">
+          <p className="flex items-center gap-1 text-[0.625rem] sm:text-[0.6875rem] font-semibold uppercase tracking-wide text-info-text truncate">
             <Pictogram name="held" size="xs" />
             Waiting
           </p>
-          <p data-numeric className="mt-1 text-lg font-bold text-info-text">
+          <p data-numeric className="mt-1 text-base sm:text-lg font-bold text-info-text truncate">
             {formatMoney(data.reserved_paise)}
           </p>
         </div>
-        <div className="rounded-plate border border-warning-line bg-warning-surface p-3">
-          <p className="flex items-center gap-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-warning-text">
+        <div className="rounded-plate border border-warning-line bg-warning-surface p-2.5 sm:p-3">
+          <p className="flex items-center gap-1 text-[0.625rem] sm:text-[0.6875rem] font-semibold uppercase tracking-wide text-warning-text truncate">
             <Pictogram name="later" size="xs" />
             On hold
           </p>
-          <p data-numeric className="mt-1 text-lg font-bold text-warning-text">
+          <p data-numeric className="mt-1 text-base sm:text-lg font-bold text-warning-text truncate">
             {formatMoney(data.pending_paise)}
           </p>
         </div>
-        <div className="rounded-plate border border-success-line bg-success-surface p-3">
-          <p className="flex items-center gap-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-success-text">
+        <div className="rounded-plate border border-success-line bg-success-surface p-2.5 sm:p-3">
+          <p className="flex items-center gap-1 text-[0.625rem] sm:text-[0.6875rem] font-semibold uppercase tracking-wide text-success-text truncate">
             <Pictogram name="done" size="xs" />
             Paid
           </p>
-          <p data-numeric className="mt-1 text-lg font-bold text-success-text">
+          <p data-numeric className="mt-1 text-base sm:text-lg font-bold text-success-text truncate">
             {formatMoney(data.paid_paise)}
           </p>
         </div>

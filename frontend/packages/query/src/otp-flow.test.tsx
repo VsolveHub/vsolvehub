@@ -161,9 +161,10 @@ afterEach(() => {
 describe("input sanitising", () => {
   it("keeps only what a phone number can contain, with one leading plus", () => {
     expect(sanitizePhoneInput("98765 43210")).toBe("98765 43210");
-    expect(sanitizePhoneInput("+91 98765-43210")).toBe("+91 98765-43210");
+    expect(sanitizePhoneInput("+91 98765-43210")).toBe("9876543210");
     expect(sanitizePhoneInput("call me 9876543210")).toBe("9876543210");
-    expect(sanitizePhoneInput("+91+98")).toBe("+9198");
+    expect(sanitizePhoneInput("+91+98")).toBe("98");
+    expect(sanitizePhoneInput("12345678901234")).toBe("1234567890");
   });
 
   it("reduces a pasted code to digits and clamps it to the expected length", () => {

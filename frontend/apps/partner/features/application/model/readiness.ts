@@ -19,6 +19,7 @@ type DocumentKind = Schemas["PartnerDocumentKindEnum"];
 
 export type RequirementCode =
   | "DISPLAY_NAME"
+  | "EXPERIENCE_YEARS"
   | "SKILLS"
   | "SERVICE_AREAS"
   | "SERVICES"
@@ -88,6 +89,12 @@ export function requirements(application: Application | null): Requirement[] {
       label: "Your name",
       href: "/apply/about",
       isMet: (application?.display_name ?? "").trim().length > 0,
+    },
+    {
+      code: "EXPERIENCE_YEARS",
+      label: "Years of experience",
+      href: "/apply/about",
+      isMet: (application?.experience_years ?? 0) > 0,
     },
     {
       code: "SKILLS",

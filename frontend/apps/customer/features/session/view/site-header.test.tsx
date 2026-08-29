@@ -97,14 +97,14 @@ describe("SiteHeader", () => {
     expect(screen.getByRole("link", { name: "Services" })).toBeInTheDocument();
     // The anonymous cart is a real product surface. Hiding it from a visitor who
     // has already put something in it would be absurd.
-    expect(screen.getByRole("link", { name: "Basket" })).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: /basket/i })[0]).toBeInTheDocument();
   });
 
   it("does not offer a signed-out visitor a link that would bounce them", () => {
     render(<SiteHeader />, { wrapper });
 
     expect(screen.queryByRole("link", { name: "Bookings" })).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Log in" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /log in/i })[0]).toBeInTheDocument();
   });
 
   it("offers activity and sign out once there is a session", () => {
@@ -117,11 +117,11 @@ describe("SiteHeader", () => {
     // not bounce.
     expect(screen.getByRole("link", { name: "Bookings" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /sign out/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Open profile" })).toHaveAttribute(
+    expect(screen.getAllByRole("link", { name: "Open profile" })[0]).toHaveAttribute(
       "href",
       "/account",
     );
-    expect(screen.queryByRole("link", { name: "Log in" })).not.toBeInTheDocument();
+    expect(screen.queryAllByRole("button", { name: /log in/i })).toHaveLength(0);
   });
 
   it("replaces the current page with login after sign out succeeds", () => {
@@ -141,7 +141,7 @@ describe("SiteHeader", () => {
 
     // The flicker regression: showing "Log in" here tells a signed-in customer
     // they are signed out on every cold load, then swaps it back.
-    expect(screen.queryByRole("link", { name: "Log in" })).not.toBeInTheDocument();
+    expect(screen.queryAllByRole("button", { name: /log in/i })).toHaveLength(0);
     expect(screen.queryByRole("button", { name: /sign out/i })).not.toBeInTheDocument();
   });
 
@@ -153,7 +153,7 @@ describe("SiteHeader", () => {
     // A failed request is not a logout. The links still work and Django still
     // refuses what it should; nobody gets a login wall because of a blip.
     expect(screen.getByRole("link", { name: "Services" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Log in" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /log in/i })[0]).toBeInTheDocument();
   });
 
   it("marks the current section from a nested route", () => {
@@ -198,7 +198,7 @@ describe("SiteHeader", () => {
 
     render(<SiteHeader />, { wrapper });
 
-    expect(screen.getByTestId("notification-bell")).toBeInTheDocument();
+    expect(screen.getAllByTestId("notification-bell")[0]).toBeInTheDocument();
   });
 
   it("does not mount the bell for a signed-out visitor", () => {
@@ -242,8 +242,14 @@ describe("SiteHeader", () => {
 });
 
 describe("BottomNav", () => {
+  it("renders navigation destinations across routes", () => {
+    route.pathname = "/catalog";
+    render(<BottomNav />, { wrapper });
+    expect(screen.getByRole("navigation", { name: "Main" })).toBeInTheDocument();
+  });
+
   it("uses the compact height that AppChrome reserves on mobile", () => {
-    route.pathname = "/cart";
+    route.pathname = "/";
 
     render(<BottomNav />, { wrapper });
 
@@ -255,8 +261,8 @@ describe("BottomNav", () => {
     expect(navigation.firstElementChild).not.toHaveClass("max-w-lg");
   });
 
-  it("keeps every signed-out destination flexible on a narrow cart viewport", () => {
-    route.pathname = "/cart";
+  it("keeps every signed-out destination flexible on the mobile viewport", () => {
+    route.pathname = "/";
 
     render(<BottomNav />, { wrapper });
 

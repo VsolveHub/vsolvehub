@@ -2,7 +2,7 @@
 
 import { hasWorkspaceAction, useLogout } from "@vsolve/query";
 import { Button } from "@vsolve/ui";
-import { Globe, Phone, Power, ShieldCheck, User, Users, Wallet, type LucideIcon } from "lucide-react";
+import { ChevronRight, Globe, Phone, Power, ShieldCheck, User, Users, Wallet, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 
 import { PartnerPresence } from "@/features/presence/view/partner-presence";
@@ -17,7 +17,7 @@ export function MeHome() {
   const canManageCrew = hasWorkspaceAction(grants.grants ?? [], WORKFORCE_WORKSPACE, "crew.manage");
 
   return (
-    <main className="flex min-h-[calc(100dvh-9rem)] flex-col bg-canvas pb-8">
+    <main className="flex min-h-[calc(100dvh-9rem)] flex-col bg-canvas pb-8 lg:mx-auto lg:min-h-[calc(100dvh-5rem)] lg:w-full lg:max-w-4xl lg:pb-12">
       <h1 className="sr-only">Partner Account & Settings</h1>
 
       {/* Clean Professional Profile Card */}
@@ -41,14 +41,16 @@ export function MeHome() {
               icon={User}
               title="Personal Profile"
               subtitle="Contact details, craft & KYC documents"
-              actionLabel="View"
+              colorClass="bg-blue-50 border-blue-100/80"
+              iconClass="text-blue-600"
             />
             <SettingsRow
               href="/me/language"
               icon={Globe}
               title="App Language"
               subtitle="English (India)"
-              actionLabel="Change"
+              colorClass="bg-purple-50 border-purple-100/80"
+              iconClass="text-purple-600"
             />
           </div>
         </section>
@@ -64,7 +66,8 @@ export function MeHome() {
               icon={Wallet}
               title="Money & Earnings"
               subtitle="Daily earnings, passbook & settlements"
-              actionLabel="Open"
+              colorClass="bg-emerald-50 border-emerald-100/80"
+              iconClass="text-emerald-600"
             />
             {canManageCrew ? (
               <SettingsRow
@@ -72,7 +75,8 @@ export function MeHome() {
                 icon={Users}
                 title="Contractor Crew"
                 subtitle="Manage team roster & crew dispatch"
-                actionLabel="Manage"
+                colorClass="bg-amber-50 border-amber-100/80"
+                iconClass="text-amber-600"
               />
             ) : null}
           </div>
@@ -88,18 +92,16 @@ export function MeHome() {
               href="tel:+918008765832"
               className="flex items-center justify-between p-3.5 transition-colors hover:bg-surface-sunken focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
             >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-surface-sunken text-navy-900 border border-line">
-                  <Phone className="h-4 w-4" />
+              <div className="flex items-center gap-3.5 min-w-0">
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-teal-50 text-teal-600 border border-teal-100/80">
+                  <Phone className="h-5 w-5" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-navy-900 leading-tight">24/7 Partner Helpline</p>
+                  <p className="text-sm font-bold text-navy-900 leading-tight">24/7 Partner Helpline</p>
                   <p className="text-xs text-text-secondary mt-0.5">+91 (800) 876-5832 • Dedicated Assistance</p>
                 </div>
               </div>
-              <span className="shrink-0 rounded-lg border border-line bg-surface px-3 py-1 text-xs font-semibold text-navy-900 shadow-xs">
-                Call
-              </span>
+              <ChevronRight className="h-5 w-5 shrink-0 text-text-muted" aria-hidden />
             </a>
           </div>
         </section>
@@ -114,7 +116,7 @@ export function MeHome() {
             onClick={() => logout.mutate()}
             loading={logout.isPending}
             loadingLabel="Signing out"
-            className="border-red-200 text-red-700 hover:bg-red-50 hover:border-red-300 font-semibold"
+            className="border-red-200 text-red-700 bg-red-50/40 hover:bg-red-50 hover:border-red-300 font-bold h-12"
           >
             Sign Out
           </Button>
@@ -173,45 +175,38 @@ function IdentityCard() {
 }
 
 /**
- * Standard settings list row without chevron arrows.
+ * Standard settings list row with chevron navigation icon.
  */
 function SettingsRow({
   href,
   icon: Icon,
   title,
   subtitle,
-  actionLabel,
+  colorClass = "bg-blue-50 border-blue-100/80",
+  iconClass = "text-blue-600",
 }: {
   href: string;
   icon: LucideIcon;
   title: string;
   subtitle: string;
-  actionLabel: string;
+  colorClass?: string;
+  iconClass?: string;
 }) {
   return (
     <Link
       href={href}
       className="flex items-center justify-between p-3.5 transition-colors hover:bg-surface-sunken focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
     >
-      <div className="flex items-center gap-3 min-w-0">
-        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-surface-sunken text-navy-900 border border-line">
-          <Icon className="h-4 w-4" />
+      <div className="flex items-center gap-3.5 min-w-0">
+        <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl border ${colorClass}`}>
+          <Icon className={`h-5 w-5 ${iconClass}`} />
         </div>
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-navy-900 leading-tight">{title}</p>
-          {/*
-            `line-clamp-2`, not `truncate`. Every subtitle here names what the
-            row actually contains — "Contact details, craft & KYC documents" —
-            and at 375px a single line cuts each one mid-noun, which is where
-            the useful half lives. Two lines fit all of them on a phone and the
-            clamp still bounds the row.
-          */}
+          <p className="text-sm font-bold text-navy-900 leading-tight">{title}</p>
           <p className="text-xs text-text-secondary line-clamp-2 mt-0.5">{subtitle}</p>
         </div>
       </div>
-      <span className="shrink-0 rounded-lg border border-line bg-surface px-3 py-1 text-xs font-semibold text-navy-900 shadow-xs">
-        {actionLabel}
-      </span>
+      <ChevronRight className="h-5 w-5 shrink-0 text-text-muted" aria-hidden />
     </Link>
   );
 }

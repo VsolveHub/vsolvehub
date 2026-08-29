@@ -1,8 +1,11 @@
 "use client";
 
-import { Button, EmptyState } from "@vsolve/ui";
+import { Button, EmptyState, formatMoney } from "@vsolve/ui";
 import { useId } from "react";
+import { Trash2 } from "lucide-react";
 
+import { useServiceDetail } from "@/features/catalog/client-queries";
+import { ServicePhoto } from "@/features/catalog/components/category-artwork";
 import type { Cart, CartItem } from "../queries";
 
 /**
@@ -25,6 +28,33 @@ export interface CartItemsProps {
   onUpdateQuantity: (input: { item: CartItem; quantity: number }) => void;
   /** Opens confirmation for the selected service. Always available once G21 is wired. */
   onRemove: (item: CartItem) => void;
+}
+
+function CartItemThumbnail({ serviceSlug }: { serviceSlug: string }) {
+  const detailQuery = useServiceDetail(serviceSlug);
+  const detail = detailQuery.data;
+  const imageUrl = detail?.cover?.url ?? "";
+  const iconKey = detail?.icon_key ?? "service";
+
+  return (
+    <span className="size-16 sm:size-20 shrink-0 rounded-2xl overflow-hidden bg-[#F4F1EC] grid place-items-center">
+      {imageUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={imageUrl}
+          alt=""
+          loading="lazy"
+          className={
+            imageUrl.includes("/Service%20Cover/") || imageUrl.includes("/Service Cover/")
+              ? "size-[80%] object-contain"
+              : "size-full object-cover"
+          }
+        />
+      ) : (
+        <ServicePhoto imageUrl="" iconKey={iconKey} />
+      )}
+    </span>
+  );
 }
 
 function QuantityStepper({
@@ -106,27 +136,44 @@ function CartItemRow({
   onRemove: () => void;
 }) {
   return (
-    <li className="rounded-card border border-line bg-surface p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="text-base font-semibold text-text">{item.service_name}</h3>
-          <p className="text-sm text-text-secondary">{item.variant_name}</p>
-          <ScopeSummary scope={item.scope} />
+    <li className="rounded-2xl border border-line bg-surface p-4 sm:p-5 shadow-xs">
+      <div className="flex items-start gap-4">
+        {/* Service Image / Thumbnail */}
+        <CartItemThumbnail serviceSlug={item.service_slug} />
+
+        {/* Item Info & Actions */}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="text-base font-bold text-navy-900 leading-snug">{item.service_name}</h3>
+              <p className="text-sm font-medium text-text-secondary mt-0.5">{item.variant_name}</p>
+              <ScopeSummary scope={item.scope} />
+            </div>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={isPending}
+              aria-label={`Remove ${item.service_name}`}
+              onClick={onRemove}
+              className="size-8 p-0 grid place-items-center text-text-muted hover:text-critical hover:bg-critical-surface/20 transition-colors"
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-line/60">
+            <QuantityStepper item={item} disabled={isPending} onChange={onUpdateQuantity} />
+            {item.amount ? (
+              <span
+                data-numeric
+                className="text-base font-extrabold tabular-nums text-navy-900 sm:text-lg"
+              >
+                {formatMoney(item.amount.amount_paise)}
+              </span>
+            ) : null}
+          </div>
         </div>
-
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={isPending}
-          aria-label={`Remove ${item.service_name}`}
-          onClick={onRemove}
-        >
-          Remove
-        </Button>
-      </div>
-
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-        <QuantityStepper item={item} disabled={isPending} onChange={onUpdateQuantity} />
       </div>
     </li>
   );

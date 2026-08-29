@@ -1,6 +1,10 @@
 export interface AppChromeLayout {
   contentMinHeightClass: string;
   hideMobileFooter: boolean;
+  /** Hide the site header and bottom tab bar on mobile; use a fixed back control instead. */
+  hideMobileChrome?: boolean;
+  mobileBackHref?: string;
+  mobileBackLabel?: string;
 }
 
 // Some embedded/device-preview browsers expose a visual viewport wider than
@@ -15,14 +19,25 @@ const DEFAULT_CHROME_LAYOUT: AppChromeLayout = {
 };
 
 const CART_CHROME_LAYOUT: AppChromeLayout = {
-  // Header (4rem) + mobile tab bar (4rem) are both fixed chrome. Subtract
-  // them once so a short cart fills the viewport without manufacturing a
-  // second screen of blank space. The desktop has no tab bar.
   contentMinHeightClass:
-    "min-h-[calc(100dvh-8rem-env(safe-area-inset-bottom))] md:min-h-[calc(100dvh-4rem)]",
+    "min-h-[calc(100dvh-7.5rem-env(safe-area-inset-bottom))] md:min-h-[calc(100dvh-4rem)]",
   hideMobileFooter: true,
+  hideMobileChrome: true,
+  mobileBackHref: "/catalog",
+  mobileBackLabel: "Back to services",
+};
+
+const CHECKOUT_CHROME_LAYOUT: AppChromeLayout = {
+  contentMinHeightClass:
+    "min-h-[calc(100dvh-7.5rem-env(safe-area-inset-bottom))] md:min-h-[calc(100dvh-4rem)]",
+  hideMobileFooter: true,
+  hideMobileChrome: true,
+  mobileBackHref: "/cart",
+  mobileBackLabel: "Back to cart",
 };
 
 export function appChromeLayout(pathname: string): AppChromeLayout {
-  return pathname === "/cart" ? CART_CHROME_LAYOUT : DEFAULT_CHROME_LAYOUT;
+  if (pathname === "/cart") return CART_CHROME_LAYOUT;
+  if (pathname === "/checkout") return CHECKOUT_CHROME_LAYOUT;
+  return DEFAULT_CHROME_LAYOUT;
 }

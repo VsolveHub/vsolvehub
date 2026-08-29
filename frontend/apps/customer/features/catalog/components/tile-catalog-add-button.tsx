@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { cn } from "@vsolve/ui";
 
@@ -110,43 +111,48 @@ export function TileCatalogAddButton({
         role="group"
         aria-label="Quantity in cart"
         className={cn(
-          "inline-flex shrink-0 items-center overflow-hidden bg-navy-900 text-white shadow-xs",
-          isPanel ? "h-11 rounded-xl" : "h-9 rounded-lg",
+          "inline-flex shrink-0 items-center justify-between gap-3 border border-line bg-white shadow-2xs",
+          isPanel ? "h-11 rounded-xl px-3.5 min-w-[10rem]" : "h-9 rounded-lg px-2.5",
         )}
       >
-        <button
-          type="button"
-          onClick={handleDecrement}
-          disabled={isUpdating || isRemoving}
-          aria-label="Remove one"
-          className={cn(
-            "grid place-items-center text-lg font-semibold leading-none transition-colors hover:bg-navy-800 disabled:opacity-50 cursor-pointer",
-            isPanel ? "size-11" : "size-9",
-          )}
+        <Link
+          href="/cart"
+          className="inline-flex items-center gap-1 font-bold text-action hover:underline text-xs sm:text-sm"
         >
-          −
-        </button>
-        <output
-          aria-live="polite"
-          className={cn(
-            "min-w-7 text-center font-black tabular-nums",
-            isPanel ? "text-sm" : "text-[13px]",
-          )}
-        >
-          {cartItem.quantity}
-        </output>
-        <button
-          type="button"
-          onClick={handleIncrement}
-          disabled={isUpdating}
-          aria-label="Add one"
-          className={cn(
-            "grid place-items-center text-lg font-semibold leading-none transition-colors hover:bg-navy-800 disabled:opacity-50 cursor-pointer",
-            isPanel ? "size-11" : "size-9",
-          )}
-        >
-          +
-        </button>
+          View Cart
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={2} className="size-3.5" aria-hidden>
+            <path strokeLinecap="round" strokeLinejoin="round" d="m7.5 4.5 5.5 5.5-5.5 5.5" />
+          </svg>
+        </Link>
+        <div className="flex items-center gap-2 border-l border-line/60 pl-2">
+          <button
+            type="button"
+            onClick={handleDecrement}
+            disabled={isUpdating || isRemoving}
+            aria-label="Remove one"
+            className="text-action font-extrabold text-base px-1 hover:text-[#C2410C] disabled:opacity-50 cursor-pointer"
+          >
+            −
+          </button>
+          <output
+            aria-live="polite"
+            className={cn(
+              "min-w-[18px] text-center font-black text-navy-900 tabular-nums",
+              isPanel ? "text-sm" : "text-xs",
+            )}
+          >
+            {cartItem.quantity}
+          </output>
+          <button
+            type="button"
+            onClick={handleIncrement}
+            disabled={isUpdating}
+            aria-label="Add one"
+            className="text-action font-extrabold text-base px-1 hover:text-[#C2410C] disabled:opacity-50 cursor-pointer"
+          >
+            +
+          </button>
+        </div>
       </div>
     );
   }

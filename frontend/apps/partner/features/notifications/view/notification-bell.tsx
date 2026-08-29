@@ -96,14 +96,28 @@ export function NotificationBell({ workspaceKeys, className }: NotificationBellP
 /**
  * Bottom-nav bell — same panel as `NotificationBell`, styled as a tab item.
  */
+/**
+ * `appearance` is presentation only — same panel, same query, same behaviour.
+ *
+ * `"dock"` is the default and is byte-for-byte the styling this component has
+ * always rendered, so the phone tab bar is untouched. `"bar"` exists because the
+ * desktop header (`DesktopPrimaryNav`) lays its items out in a 40px-tall row,
+ * and the dock variant is a 56px stacked icon-over-label built for a thumb — it
+ * was being clipped. Adding the variant here was preferred to wrapping this in a
+ * scaling hack at the call site, which would have distorted the unread badge.
+ */
+export type NotificationNavTabAppearance = "dock" | "bar";
+
 export function NotificationNavTab({
   workspaceKeys,
   label,
   isActive = false,
+  appearance = "dock",
 }: {
   workspaceKeys: readonly string[];
   label: string;
   isActive?: boolean;
+  appearance?: NotificationNavTabAppearance;
 }) {
   const [open, setOpen] = useState(false);
   const count = useUnreadNotificationCount();
@@ -111,6 +125,7 @@ export function NotificationNavTab({
   const unread = count.isSuccess && count.data !== undefined ? count.data.unread : null;
   const badge = unreadBadgeDisplay(unread);
   const active = isActive || open;
+  const isBar = appearance === "bar";
 
   return (
     <>
@@ -121,19 +136,33 @@ export function NotificationNavTab({
         aria-expanded={open}
         aria-label={unreadBadgeLabel(unread)}
         className={cn(
-          "relative flex min-h-[3.5rem] w-full flex-col items-center justify-center gap-1 px-1 text-[0.625rem] font-semibold leading-none tracking-wide transition-all",
+          "relative flex items-center transition-all",
           "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action",
-          active ? "text-white font-bold" : "text-white/45 hover:text-white/70",
+          isBar
+            ? cn(
+                "h-10 gap-2 whitespace-nowrap rounded-full px-4 text-sm font-semibold",
+                active
+                  ? "bg-surface-sunken text-navy-900"
+                  : "text-text-secondary hover:bg-surface-sunken/70 hover:text-navy-900",
+              )
+            : cn(
+                "min-h-[3.5rem] w-full flex-col justify-center gap-1 px-1 text-[0.625rem] font-semibold leading-none tracking-wide",
+                active ? "text-white font-bold" : "text-white/45 hover:text-white/70",
+              ),
         )}
       >
-        {active ? (
+        {active && !isBar ? (
           <span
             aria-hidden
             className="absolute -top-1 h-0.5 w-6 rounded-full bg-signal-500 shadow-[0_0_8px_rgba(249,115,22,0.8)]"
           />
         ) : null}
         <span className="relative flex items-center justify-center">
-          <Bell size={22} strokeWidth={active ? 2.5 : 1.8} aria-hidden />
+          <Bell
+            size={isBar ? 17 : 22}
+            strokeWidth={active ? (isBar ? 2.4 : 2.5) : isBar ? 2 : 1.8}
+            aria-hidden
+          />
           {badge === null ? null : (
             <span
               aria-hidden

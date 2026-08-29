@@ -21,6 +21,18 @@ import { isVersionConflict, usePartnerApplication, useSubmitApplication } from "
 import { useApplicationReference } from "../reference-queries";
 import { ApplicationStatusBanner } from "./status-banner";
 
+function SectionEditLink({ href, label }: { href: string; label: string }) {
+  return (
+    <Link
+      href={href}
+      aria-label={label}
+      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-line-strong bg-surface text-navy-700 transition-colors hover:border-navy-700 hover:bg-surface-hover hover:text-signal-700"
+    >
+      <Edit2 className="h-4 w-4" aria-hidden />
+    </Link>
+  );
+}
+
 export function ReviewStep() {
   const query = usePartnerApplication();
   const reference = useApplicationReference();
@@ -126,15 +138,9 @@ export function ReviewStep() {
             <User className="h-4 w-4 text-signal-500" />
             <h2 className="text-sm font-bold uppercase tracking-wider text-text">1. Personal Profile</h2>
           </div>
-          {isEditable(application) && (
-            <Link
-              href="/apply/about"
-              className="inline-flex items-center gap-1 text-xs font-bold text-navy-700 hover:text-signal-700 underline underline-offset-4"
-            >
-              <Edit2 className="h-3 w-3" />
-              <span>Edit</span>
-            </Link>
-          )}
+          {isEditable(application) ? (
+            <SectionEditLink href="/apply/about" label="Edit personal profile" />
+          ) : null}
         </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2 text-sm">
@@ -166,15 +172,9 @@ export function ReviewStep() {
             <Wrench className="h-4 w-4 text-signal-500" />
             <h2 className="text-sm font-bold uppercase tracking-wider text-text">2. Trades & Services</h2>
           </div>
-          {isEditable(application) && (
-            <Link
-              href="/apply/work"
-              className="inline-flex items-center gap-1 text-xs font-bold text-navy-700 hover:text-signal-700 underline underline-offset-4"
-            >
-              <Edit2 className="h-3 w-3" />
-              <span>Edit</span>
-            </Link>
-          )}
+          {isEditable(application) ? (
+            <SectionEditLink href="/apply/work" label="Edit trades and services" />
+          ) : null}
         </div>
 
         <div className="mt-4 flex flex-col gap-3 text-sm">
@@ -212,15 +212,9 @@ export function ReviewStep() {
             <MapPin className="h-4 w-4 text-signal-500" />
             <h2 className="text-sm font-bold uppercase tracking-wider text-text">3. Travel & Service Areas</h2>
           </div>
-          {isEditable(application) && (
-            <Link
-              href="/apply/areas"
-              className="inline-flex items-center gap-1 text-xs font-bold text-navy-700 hover:text-signal-700 underline underline-offset-4"
-            >
-              <Edit2 className="h-3 w-3" />
-              <span>Edit</span>
-            </Link>
-          )}
+          {isEditable(application) ? (
+            <SectionEditLink href="/apply/areas" label="Edit service areas" />
+          ) : null}
         </div>
 
         <div className="mt-4">
@@ -249,15 +243,9 @@ export function ReviewStep() {
             <FileText className="h-4 w-4 text-signal-500" />
             <h2 className="text-sm font-bold uppercase tracking-wider text-text">4. Verification Documents</h2>
           </div>
-          {isEditable(application) && (
-            <Link
-              href="/apply/documents"
-              className="inline-flex items-center gap-1 text-xs font-bold text-navy-700 hover:text-signal-700 underline underline-offset-4"
-            >
-              <Edit2 className="h-3 w-3" />
-              <span>Edit</span>
-            </Link>
-          )}
+          {isEditable(application) ? (
+            <SectionEditLink href="/apply/documents" label="Edit verification documents" />
+          ) : null}
         </div>
 
         <div className="mt-4 flex flex-col gap-2">
@@ -289,15 +277,9 @@ export function ReviewStep() {
             <FileCheck className="h-4 w-4 text-signal-500" />
             <h2 className="text-sm font-bold uppercase tracking-wider text-text">5. Platform Agreements</h2>
           </div>
-          {isEditable(application) && (
-            <Link
-              href="/apply/consent"
-              className="inline-flex items-center gap-1 text-xs font-bold text-navy-700 hover:text-signal-700 underline underline-offset-4"
-            >
-              <Edit2 className="h-3 w-3" />
-              <span>Edit</span>
-            </Link>
-          )}
+          {isEditable(application) ? (
+            <SectionEditLink href="/apply/consent" label="Edit platform agreements" />
+          ) : null}
         </div>
 
         <div className="mt-3">

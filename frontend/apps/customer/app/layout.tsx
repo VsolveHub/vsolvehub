@@ -54,8 +54,8 @@ export const viewport = {
  */
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={appFont.variable} suppressHydrationWarning>
-      <body className={`${CUSTOMER_VIEWPORT_WIDTH_CLASS} antialiased`}>
+    <html lang="en" className={`${appFont.variable} bg-[#FAF9F7]`} suppressHydrationWarning>
+      <body className={`${CUSTOMER_VIEWPORT_WIDTH_CLASS} bg-[#FAF9F7] antialiased`}>
         <QueryProvider showDevtools={false}>
           <SessionSync />
           {/* The chrome wraps the page rather than sitting above it: the phone

@@ -249,15 +249,13 @@ describe("a step the applicant has already finished", () => {
     expect(client.PATCH).not.toHaveBeenCalled();
   });
 
-  it("says Continue rather than Save and continue", async () => {
-    // The label states which of the two is about to happen.
+  it("says Save and continue", async () => {
     client.GET.mockResolvedValue(ok(APPLICATION));
 
     renderEditor();
     await screen.findByLabelText(/display name/i);
 
-    expect(screen.getByRole("button", { name: "Continue" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /save and continue/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /save and continue/i })).toBeInTheDocument();
   });
 
   it("goes nowhere from the last step, and still spends no request", async () => {

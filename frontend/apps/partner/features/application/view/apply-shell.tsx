@@ -10,14 +10,12 @@ import { createContext, useContext, useState, type ReactNode } from "react";
 import { previousStep, progressSummary, stepProgress, type StepProgress } from "../model/progress";
 import { usePartnerApplication } from "../queries";
 import { MarketingMobileNav } from "@/components/marketing-mobile-nav";
+import { HomeHeroLink } from "@/components/home-hero-link";
 
 const NAV = [
   { href: "/how-it-works", label: "How It Works" },
   { href: "/benefits", label: "Earnings & Benefits" },
   { href: "/trades", label: "Trades & Services" },
-  { href: "/solutions", label: "Solutions" },
-  { href: "/pricing", label: "Payout Rates" },
-  { href: "/about", label: "About" },
   { href: "/contact", label: "Support" },
 ];
 
@@ -114,7 +112,7 @@ export function ApplyShell({ children }: { children: ReactNode }) {
 
   return (
     <DockContext.Provider value={dockTarget}>
-      <div className="min-h-screen bg-canvas text-text relative">
+      <div className="relative min-h-dvh bg-canvas text-text">
         <ApplyHeader
           steps={steps}
           summary={summary}
@@ -122,13 +120,12 @@ export function ApplyShell({ children }: { children: ReactNode }) {
           isLoading={query.isPending}
         />
 
-        <main className="mx-auto w-full max-w-2xl px-4 pt-24 sm:pt-28 pb-16">
+        <main className="mx-auto w-full max-w-2xl px-4 pt-24 pb-[calc(8.5rem+env(safe-area-inset-bottom,0px))] sm:pt-28">
           {children}
         </main>
 
-        {/* Filled by whichever step is mounted. Empty and zero-height on the
-            overview and the review screen, which carry their own actions. */}
-        <div ref={setDockTarget} className="shrink-0 empty:hidden" />
+        {/* Portaled action bar from ApplicationEditor — fixed above the home indicator. */}
+        <div ref={setDockTarget} className="fixed inset-x-0 bottom-0 z-40 empty:hidden" />
       </div>
     </DockContext.Provider>
   );
@@ -154,7 +151,7 @@ function ApplyHeader({
     <>
       {/* Floating Dynamic-Island Navigation Matching Homepage */}
       <div className="fixed top-3 inset-x-0 z-50 px-3 sm:px-6 pointer-events-none">
-        <header className="pointer-events-auto mx-auto max-w-6xl rounded-2xl sm:rounded-full bg-white/95 backdrop-blur-2xl border border-line-strong shadow-[0_12px_32px_rgba(0,17,46,0.12),0_1px_3px_rgba(0,0,0,0.05)] px-3.5 sm:px-5 py-2.5 transition-all duration-300">
+        <header className="pointer-events-auto mx-auto max-w-6xl xl:max-w-7xl rounded-2xl sm:rounded-full bg-white/95 backdrop-blur-2xl border border-line-strong shadow-[0_12px_32px_rgba(0,17,46,0.12),0_1px_3px_rgba(0,0,0,0.05)] px-3.5 sm:px-5 py-2.5 transition-all duration-300">
           <div className="flex items-center justify-between gap-2 sm:gap-4">
             {/* Brand & Live Demand Tag */}
             <div className="flex items-center gap-2 sm:gap-3 shrink-0">
@@ -172,9 +169,9 @@ function ApplyHeader({
                 </button>
               )}
 
-              <Link href="/" className="flex min-h-11 items-center gap-2 group shrink-0">
+              <HomeHeroLink className="flex min-h-11 items-center gap-2 group shrink-0">
                 <Logo className="h-6 sm:h-7 w-auto shrink-0" />
-              </Link>
+              </HomeHeroLink>
 
               {/* Live Demand Status Badge */}
               <div className="hidden xl:flex items-center gap-2 rounded-full bg-surface-sunken border border-line px-2.5 py-1 text-[11px] shrink-0">
@@ -188,12 +185,12 @@ function ApplyHeader({
             </div>
 
             {/* Desktop Center Navigation Capsule */}
-            <nav className="hidden lg:flex items-center gap-0.5 rounded-full bg-surface-sunken/80 border border-line p-1">
+            <nav className="hidden lg:flex items-center gap-1 rounded-full bg-surface-sunken/80 border border-line p-1">
               {NAV.map((n) => (
                 <Link
                   key={n.label}
                   href={n.href}
-                  className="px-3 py-1.5 text-xs font-bold text-text-secondary hover:text-navy-900 rounded-full hover:bg-surface transition-all duration-150"
+                  className="whitespace-nowrap rounded-full px-3.5 py-2 text-[0.8125rem] font-semibold text-text-secondary transition-colors duration-150 hover:bg-surface hover:text-navy-900"
                 >
                   {n.label}
                 </Link>
