@@ -274,6 +274,45 @@ export function useWithdrawProposal() {
   });
 }
 
+export interface DeclineRevisionInput {
+  readonly proposalId: string;
+  readonly requestId: string;
+  readonly requirementId: string;
+  readonly note: string;
+}
+
+/**
+ * Say no to a customer's requested change; the estimate stands as sent.
+ *
+ * Accepting the request is not a separate command — a revision (`POST
+ * /proposals/`) supersedes the estimate and answers the request in one step.
+ */
+export function useDeclineRevisionRequest() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: DeclineRevisionInput) =>
+      request(() =>
+        getApiClient().POST(
+          "/api/v1/proposals/{proposal_id}/revision-requests/{request_id}/decline/",
+          {
+            params: { path: { proposal_id: input.proposalId, request_id: input.requestId } },
+            body: { note: input.note },
+          },
+        ),
+      ),
+    onSuccess: async (_declined, input) => {
+      await queryClient.invalidateQueries({
+        queryKey: m2QueryKeys.proposals.mine(input.requirementId),
+      });
+      await queryClient.invalidateQueries({
+        queryKey: m2QueryKeys.proposals.detail(input.proposalId),
+      });
+    },
+    retry: false,
+  });
+}
+
 /* ---------------------------------------------------------------------------
    Refusals worth naming
    --------------------------------------------------------------------------- */

@@ -21,6 +21,13 @@ function card(overrides: Partial<QuoteCardView> = {}): QuoteCardView {
     vendorName: "Vaastu Interiors",
     vendorType: null,
     isVerified: true,
+    trust: {
+      ratingAverage: null,
+      ratingCount: 0,
+      jobsCompleted: 0,
+      experienceYears: 0,
+      activeSinceLabel: null,
+    },
     status: "DELIVERED",
     isSelectable: true,
     isExpired: false,
@@ -44,10 +51,14 @@ function card(overrides: Partial<QuoteCardView> = {}): QuoteCardView {
     inclusions: [],
     exclusions: [],
     warrantyTerms: null,
+    scopeSummary: null,
     validUntil: null,
+    validityDaysLeft: null,
     submittedAt: "2026-08-20T10:00:00.000Z",
     siteVisitId: "v1",
     visitCompletedAt: null,
+    questions: [],
+    revisionRequest: null,
     ...overrides,
   };
 }

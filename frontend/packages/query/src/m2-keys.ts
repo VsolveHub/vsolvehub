@@ -74,6 +74,9 @@ export const m2QueryKeys = {
       [...m2QueryKeys.requirements.all, "detail", requirementId] as const,
     timeline: (requirementId: string) =>
       [...m2QueryKeys.requirements.detail(requirementId), "timeline"] as const,
+    /** Every clarification question on one request, both directions (1.47.0). */
+    questions: (requirementId: string) =>
+      [...m2QueryKeys.requirements.detail(requirementId), "questions"] as const,
     /**
      * Probable duplicates for a draft, keyed by the inputs that decide the answer.
      *

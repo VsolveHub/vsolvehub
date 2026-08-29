@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Button, Card, ConfirmAction, ErrorState, FactList, formatMoney } from "@vsolve/ui";
+import { Badge, Button, Card, ConfirmAction, Dialog, ErrorState, FactList, Textarea, formatMoney } from "@vsolve/ui";
 import { describeError } from "@vsolve/query";
 import { useServerCountdown } from "@vsolve/query";
 import { useState } from "react";
@@ -17,7 +17,7 @@ import {
   traceForInvitation,
   type Proposal,
 } from "../model/proposal-state";
-import { useMyProposals, useWithdrawProposal } from "../queries";
+import { useDeclineRevisionRequest, useMyProposals, useWithdrawProposal } from "../queries";
 
 /**
  * The quote a vendor already sent, its state, and what they may still do.
@@ -221,6 +221,15 @@ export function ProposalStatus({
         <MaterialBreakdown lines={current.material_lines} />
       ) : null}
 
+      {current.revision_request !== null ? (
+        <RevisionRequestPanel
+          proposal={current}
+          requirementId={requirementId}
+          documentLabel={documentLabel}
+          onRevise={onRevise}
+        />
+      ) : null}
+
       {usability ? <p className="text-sm leading-6 text-warning-text">{usability}</p> : null}
 
       {revalidation ? (
@@ -288,6 +297,113 @@ export function ProposalStatus({
         }
       />
     </Card>
+  );
+}
+
+const REVISION_REASON: Record<string, string> = {
+  LEAVE_OUT: "Leave something out",
+  CHANGE_MATERIALS: "Change materials or finish",
+  PHASE_WORK: "Split the work into phases",
+  OTHER: "Something else",
+};
+
+/**
+ * The customer asked for a change — what, and the two honest answers.
+ *
+ * Accepting is not a button: it is a revised estimate, which supersedes this
+ * one and closes the request in the same step. Declining takes a note the
+ * customer reads beside their ask, so "no" never arrives as silence. An open
+ * request also keeps the five-minute revision window open (`permissionsFor`).
+ */
+function RevisionRequestPanel({
+  proposal,
+  requirementId,
+  documentLabel,
+  onRevise,
+}: {
+  readonly proposal: Proposal;
+  readonly requirementId: string;
+  readonly documentLabel: "quote" | "estimate";
+  readonly onRevise: () => void;
+}) {
+  const request = proposal.revision_request;
+  const decline = useDeclineRevisionRequest();
+  // `excluded_items` is a JSONField published as `unknown`; anything that is not a
+  // list of non-empty strings renders as nothing rather than crashing the panel.
+  const excludedItems: readonly string[] = Array.isArray(request?.excluded_items)
+    ? request.excluded_items.filter((item): item is string => typeof item === "string" && item.trim() !== "")
+    : [];
+  const [declining, setDeclining] = useState(false);
+  const [note, setNote] = useState("");
+  if (request === null) return null;
+  const isOpen = request.status === "OPEN";
+  const presentation = decline.error ? describeError(decline.error, "mutation") : null;
+
+  return (
+    <div
+      className={
+        isOpen
+          ? "rounded-control border border-info-line bg-info-surface p-3"
+          : "rounded-control border border-line bg-surface-sunken p-3"
+      }
+    >
+      <p className="text-sm font-semibold text-text">
+        {isOpen
+          ? `The customer asked for a revised ${documentLabel}`
+          : request.status === "ANSWERED"
+            ? "You answered their revision request"
+            : "You declined their revision request"}
+      </p>
+      <p className="mt-1 text-sm leading-6 text-text-secondary">
+        {REVISION_REASON[request.reason_code] ?? request.reason_code}
+        {excludedItems.length > 0 ? `: ${excludedItems.join(", ")}` : ""}
+        {request.note.trim() !== "" ? ` — “${request.note.trim()}”` : ""}
+      </p>
+      <p className="mt-0.5 text-xs text-text-muted">Asked {timeAgo(request.created_at)}</p>
+      {request.decline_note.trim() !== "" ? (
+        <p className="mt-1 text-sm text-text">Your note: “{request.decline_note.trim()}”</p>
+      ) : null}
+      {presentation ? (
+        <ErrorState inline className="mt-2" title={presentation.title} message={presentation.message} severity={presentation.severity} />
+      ) : null}
+      {isOpen ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button size="sm" onClick={onRevise}>
+            Send a revised {documentLabel}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setDeclining(true)}>
+            Decline with a note
+          </Button>
+        </div>
+      ) : null}
+
+      <Dialog
+        open={declining}
+        onOpenChange={setDeclining}
+        title="Decline the change?"
+        description={`Your ${documentLabel} stays exactly as sent. Tell the customer why — they read it beside their request.`}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setDeclining(false)}>Keep thinking</Button>
+            <Button
+              variant="danger"
+              loading={decline.isPending}
+              loadingLabel="Declining"
+              onClick={() =>
+                decline.mutate(
+                  { proposalId: proposal.id, requestId: request.id, requirementId, note: note.trim() },
+                  { onSuccess: () => setDeclining(false) },
+                )
+              }
+            >
+              Decline
+            </Button>
+          </>
+        }
+      >
+        <Textarea rows={3} maxLength={1000} value={note} onChange={(event) => setNote(event.target.value)} placeholder="The false ceiling carries the lights, so it cannot come out on its own." />
+      </Dialog>
+    </div>
   );
 }
 

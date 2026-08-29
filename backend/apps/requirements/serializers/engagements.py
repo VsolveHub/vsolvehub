@@ -18,6 +18,7 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.commerce.providers import FakePaymentProvider
+from apps.requirements import proposals, vendor_trust
 from apps.requirements.models import (
     Engagement,
     EngagementAmendment,
@@ -38,6 +39,8 @@ from .enquiries import (
     ProposalMaterialLineSerializer,
     ProposalOtherChargeSerializer,
     ProposalStageSerializer,
+    RequirementQuestionSerializer,
+    RevisionRequestSerializer,
     SiteVisitSerializer,
 )
 
@@ -266,6 +269,14 @@ class CustomerProposalSerializer(serializers.ModelSerializer[Proposal]):
     labour_lines = ProposalLabourLineSerializer(many=True, read_only=True)
     other_charges = ProposalOtherChargeSerializer(many=True, read_only=True)
     site_visit = SiteVisitSerializer(read_only=True, allow_null=True)
+    #: The clarification thread between this Customer and this vendor, both directions, oldest
+    #: first. Hung off the proposal because a question is addressed to the professional who wrote
+    #: it, and the invitation is what links the two.
+    questions = RequirementQuestionSerializer(
+        many=True, read_only=True, source="invitation.questions"
+    )
+    #: The Customer's most recent ask for a change, or null.
+    revision_request = serializers.SerializerMethodField()
 
     class Meta:
         model = Proposal
@@ -276,6 +287,8 @@ class CustomerProposalSerializer(serializers.ModelSerializer[Proposal]):
             "rejection_reason",
             "revision",
             "revalidation_requested_at",
+            "revision_request",
+            "questions",
             "vendor",
             "site_visit",
             "rate_paise_per_worker_day",
@@ -298,6 +311,7 @@ class CustomerProposalSerializer(serializers.ModelSerializer[Proposal]):
             "customer_total_paise",
             "inclusions",
             "exclusions",
+            "scope_summary",
             "stages",
             "material_lines",
             "warranty_terms",
@@ -306,8 +320,20 @@ class CustomerProposalSerializer(serializers.ModelSerializer[Proposal]):
         )
         read_only_fields = fields
 
+    @extend_schema_field(RevisionRequestSerializer(allow_null=True))
+    def get_revision_request(self, obj: Proposal) -> dict[str, Any] | None:
+        latest = proposals.latest_revision_request_for(obj)
+        return None if latest is None else dict(RevisionRequestSerializer(latest).data)
+
     def get_vendor(self, obj: Proposal) -> dict[str, Any]:
+        """Who wrote this, and what a Customer may weigh before choosing them.
+
+        The trust figures are read off completed engagements and Customer ratings at read time —
+        never stored, never an input to matching. A vendor with no rated work publishes `null`
+        rather than a number nobody gave.
+        """
         business = getattr(obj.partner, "business_profile", None)
+        trust = vendor_trust.trust_for(obj.partner)
         return {
             "partner_id": obj.partner_id,
             "vendor_type": business.business_type if business is not None else "INDIVIDUAL",
@@ -315,6 +341,11 @@ class CustomerProposalSerializer(serializers.ModelSerializer[Proposal]):
             "display_name": (
                 business.legal_name if business is not None else obj.partner.display_name
             ),
+            "rating_average": trust.rating_average,
+            "rating_count": trust.rating_count,
+            "jobs_completed": trust.jobs_completed,
+            "experience_years": trust.experience_years,
+            "active_since": trust.active_since.isoformat(),
         }
 
 

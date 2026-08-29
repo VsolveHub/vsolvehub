@@ -309,7 +309,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.46.0",
+    "VERSION": "1.47.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -330,6 +330,8 @@ SPECTACULAR_SETTINGS = {
             "apps.requirements.models.CommercialPolicy.SupplierOfRecord"
         ),
         "PartnerApplicationStatusEnum": "apps.partners.models.PartnerApplication.Status",
+        "RevisionRequestStatusEnum": "apps.requirements.models.RevisionRequest.Status",
+        "RevisionRequestReasonCodeEnum": "apps.requirements.models.RevisionRequest.ReasonCode",
         "PartnerDocumentKindEnum": "apps.partners.models.PartnerDocument.Kind",
         # Named when the Partner directory added a second serializer over `PartnerDocument`.
         # Two `status` fields on one model made the generator disambiguate both, renaming

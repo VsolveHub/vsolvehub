@@ -169,7 +169,11 @@ function OnsiteComposerWithRevision({
   readonly enquiryHref: string;
   readonly onSubmitted: (proposal: Proposal) => void;
 }) {
-  const [composer, setComposer] = useState<"tap" | "detailed">("tap");
+  // Detailed by default since the quotes revamp: the customer's page is built
+  // from the line items, the scope and the inclusions, and an estimate written
+  // without them reads as a bare number beside two that were. The tap composer
+  // stays one tap away for the vendor standing in the room.
+  const [composer, setComposer] = useState<"tap" | "detailed">("detailed");
   const mine = useMyProposals(enquiry.requirementId);
 
   if (mine.isPending) {
@@ -248,8 +252,8 @@ function ComposerChooser({
       <div className="mt-1 grid grid-cols-2 gap-2">
         {(
           [
+            ["detailed", "Detailed estimate", "Scope, line items, what is in and out — what the customer compares"],
             ["tap", "Quick tap estimate", "Tap the work, price each part"],
-            ["detailed", "Detailed line items", "Item-wise or labour-wise, with named charges"],
           ] as const
         ).map(([key, label, description]) => {
           const selected = value === key;

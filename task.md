@@ -802,6 +802,44 @@ Run the relevant Vitest and Playwright suites for every changed Customer/Partner
   `booking-flow.test.ts`, event cases in `book-crew-screen.test.tsx`) — **owner runs them**.
   Re-run `seed_m2_demo --i-understand-this-is-dev-only` to publish the new questions.
 
+### Quotes journey revamp — 2026-08-28 (Claude, owner-approved mockups)
+
+- **Problem (audit):** a professional's question rendered read-only on the timeline with no way
+  to answer it; a card showed a name and a "Verified" chip and nothing else about who the pro is;
+  the estimate read as an invoice (no scope narrative; the M2 composer never sent `inclusions`);
+  the richer comparison adapter was built but unused; the only "revision" path was re-asking an
+  expired price; validity was a date string; "pay to start" was buried in a disclosure; the
+  partner composer defaulted to the tap form and had no preview.
+- **Backend (contract 1.46.0 → 1.47.0):** `Proposal.scope_summary`; `RevisionRequest` model
+  (`requirements/0026`, hand-written — `makemigrations` on this branch also emits price-book
+  deletions) with `request_revision` / `decline_revision_request` in `proposals.py`; an OPEN
+  request reopens the A5 five-minute revision window, and a supersession answers it. Expired
+  estimates with a revalidation ask can now be superseded (the window used to refuse them).
+  `vendor_trust.py` reads rating average/count (Customer `ServiceRating`s), completed
+  engagements, experience years and active-since at read time. `CustomerProposal` gains
+  `scope_summary`, `questions`, `revision_request`, vendor trust fields. New routes:
+  `m2_quote_revision_request`, `m2_proposal_revision_decline`, `m2_requirement_question_list`.
+- **Customer:** estimate card redesigned (trust line, pay-to-start + timeline tiles, ✓/✗ scope
+  preview, "Leaves out" computed against the *other* estimates, validity days left, open
+  questions); full estimate on its own page (`/quotes/{proposalId}`) with scope narrative, lines,
+  stages, terms, share; questions thread (`…/questions`) with answer + ask; revision-request
+  dialog (reason, lines to leave out, note — no price); confirm step (`…/confirm`) before the
+  selection opens the agreement; comparison table rebuilt around "where they differ" rows;
+  request page gets a question inbox and richer estimate rows.
+- **Partner:** detailed composer is the default; scope summary (required, ≥20 chars),
+  tappable inclusions/exclusions (`INCLUSION_CHOICES`), preview-as-customer sheet; sent
+  estimate shows the revision request with "send a revised estimate" / "decline with a note";
+  clarification thread mounted on the enquiry (ask + answer).
+- **Not built:** site photos on the estimate (needs an upload pipeline — the retired
+  requirement-attachment presign/scan flow would be the model); price-book quick-add (the
+  price-book feature is a broken WIP checkpoint on this branch — the picker is relabelled and
+  ready to wire).
+- **Verification:** backend ruff/mypy green, contract regenerated and matches, migration check
+  clean for these models; customer + partner `tsc`/eslint green on touched files (pre-existing
+  `price-book/*` errors remain). Tests written, not run: `test_revision_request.py`,
+  `scope.test.ts`, `quote-card.test.tsx` (rewritten for the new card). **Owner runs `migrate`
+  and the suites.**
+
 ## Out of scope
 
 - Mixed Item-wise + Labour-wise estimates.

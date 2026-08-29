@@ -51,9 +51,15 @@ import {
   type OtherChargeDraft,
   type ProposalRequest,
 } from "../model/commercial-estimate-draft";
-import { materialPresetsFor, workPresetsFor } from "../model/estimate-presets";
+import {
+  EXCLUSION_CHOICES,
+  INCLUSION_CHOICES,
+  materialPresetsFor,
+  workPresetsFor,
+} from "../model/estimate-presets";
 import { paiseToRupeeInput, rupeesToPaise } from "../model/proposal-draft";
 import { useProposalFinancialPreview } from "../queries";
+import { EstimatePreviewSheet } from "./estimate-preview-sheet";
 
 export interface CommercialEstimateComposerProps {
   readonly invitationId: string;
@@ -91,6 +97,7 @@ export function CommercialEstimateComposer({
   const [attempted, setAttempted] = useState(false);
   const [pendingMode, setPendingMode] = useState<EstimateMode | null>(null);
   const [picker, setPicker] = useState<Picker>(null);
+  const [previewing, setPreviewing] = useState(false);
   const idCounter = useRef(0);
   const errorSummaryRef = useRef<HTMLDivElement>(null);
   const workPresets = workPresetsFor(archetype);
@@ -205,6 +212,12 @@ export function CommercialEstimateComposer({
 
       {draft.mode !== null ? (
         <>
+          <ScopeSection
+            draft={draft}
+            error={attempted ? errors.scopeSummary : undefined}
+            disabled={isSubmitting}
+            onChange={setDraft}
+          />
           <MaterialLines
             lines={draft.materialLines}
             errors={attempted ? errors : {}}
@@ -265,6 +278,15 @@ export function CommercialEstimateComposer({
         blocked={hasCommercialEstimateErrors(errors)}
         isSubmitting={isSubmitting}
         onSend={submit}
+        onPreview={() => setPreviewing(true)}
+      />
+
+      <EstimatePreviewSheet
+        open={previewing}
+        onClose={() => setPreviewing(false)}
+        draft={draft}
+        preview={previewIsCurrent ? preview.data : undefined}
+        vendorName="Your estimate"
       />
 
       <PresetPicker
@@ -659,13 +681,130 @@ function Installments({
   );
 }
 
+/**
+ * What the customer reads first: what you will do, what is in, what is out.
+ *
+ * The line items say what each rupee buys; this says what the job is. The
+ * inclusions are chips rather than a textarea because the customer's
+ * comparison table is built from these words — two vendors tapping the same
+ * chip produce a row that can say "both include this", and a shorter list
+ * shows as a difference rather than vanishing into prose.
+ */
+function ScopeSection({
+  draft,
+  error,
+  disabled,
+  onChange,
+}: {
+  draft: CommercialEstimateDraft;
+  error?: string;
+  disabled: boolean;
+  onChange: (draft: CommercialEstimateDraft) => void;
+}) {
+  const [customIn, setCustomIn] = useState("");
+  const [customOut, setCustomOut] = useState("");
+  const toggle = (list: readonly string[], line: string) =>
+    list.includes(line) ? list.filter((entry) => entry !== line) : [...list, line];
+
+  return (
+    <section
+      data-estimate-error={error ? true : undefined}
+      className={cn("rounded-card border bg-surface p-4", error ? "border-danger-line" : "border-line")}
+    >
+      <h2 className="text-sm font-extrabold text-text">What you will do</h2>
+      <p className="mt-1 text-sm leading-5 text-text-secondary">
+        The first thing the customer reads. A sentence or two, in your words.
+      </p>
+      <Textarea
+        rows={3}
+        className="mt-2"
+        maxLength={2000}
+        placeholder="Full strip-out, waterproofing, wall and floor tiling with your tiles, plumbing rerouted for the new shower…"
+        value={draft.scopeSummary}
+        onChange={(e) => onChange({ ...draft, scopeSummary: e.target.value })}
+        disabled={disabled}
+      />
+      {error ? <p role="alert" className="mt-1 text-sm text-danger-text">{error}</p> : null}
+
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <div>
+          <h3 className="text-xs font-extrabold uppercase tracking-[0.06em] text-success-text">Included</h3>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {INCLUSION_CHOICES.map((choice) => {
+              const on = draft.inclusions.includes(choice.label);
+              return (
+                <Chip key={choice.code} on={on} disabled={disabled} onClick={() => onChange({ ...draft, inclusions: toggle(draft.inclusions, choice.label) })}>
+                  {on ? "✓ " : ""}{choice.label}
+                </Chip>
+              );
+            })}
+            {draft.inclusions.filter((line) => !INCLUSION_CHOICES.some((choice) => choice.label === line)).map((line) => (
+              <Chip key={line} on disabled={disabled} onClick={() => onChange({ ...draft, inclusions: draft.inclusions.filter((entry) => entry !== line) })}>
+                ✓ {line} ×
+              </Chip>
+            ))}
+          </div>
+          <CustomLine value={customIn} onChange={setCustomIn} placeholder="Add something else you include" disabled={disabled} onAdd={() => { const line = customIn.trim(); if (line) { onChange({ ...draft, inclusions: [...draft.inclusions, line] }); setCustomIn(""); } }} />
+        </div>
+        <div>
+          <h3 className="text-xs font-extrabold uppercase tracking-[0.06em] text-text-muted">Not included</h3>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {EXCLUSION_CHOICES.map((choice) => {
+              const on = draft.exclusions.includes(choice.sentence);
+              return (
+                <Chip key={choice.code} on={on} tone="muted" disabled={disabled} onClick={() => onChange({ ...draft, exclusions: toggle(draft.exclusions, choice.sentence) })}>
+                  {on ? "✗ " : ""}{choice.label}
+                </Chip>
+              );
+            })}
+            {draft.exclusions.filter((line) => line.trim() !== "" && !EXCLUSION_CHOICES.some((choice) => choice.sentence === line)).map((line) => (
+              <Chip key={line} on tone="muted" disabled={disabled} onClick={() => onChange({ ...draft, exclusions: draft.exclusions.filter((entry) => entry !== line) })}>
+                ✗ {line} ×
+              </Chip>
+            ))}
+          </div>
+          <CustomLine value={customOut} onChange={setCustomOut} placeholder="Add something you do not include" disabled={disabled} onAdd={() => { const line = customOut.trim(); if (line) { onChange({ ...draft, exclusions: [...draft.exclusions.filter((entry) => entry.trim() !== ""), line] }); setCustomOut(""); } }} />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Chip({ on, tone = "success", disabled, onClick, children }: { on: boolean; tone?: "success" | "muted"; disabled: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        "inline-flex min-h-9 items-center rounded-full border px-3 text-[13px] font-semibold transition-colors duration-fast",
+        "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:opacity-60",
+        on
+          ? tone === "success" ? "border-success-line bg-success-surface text-success-text" : "border-line-strong bg-surface-sunken text-text"
+          : "border-line bg-surface text-text-secondary hover:border-line-strong",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function CustomLine({ value, onChange, placeholder, disabled, onAdd }: { value: string; onChange: (value: string) => void; placeholder: string; disabled: boolean; onAdd: () => void }) {
+  return (
+    <div className="mt-2 flex gap-2">
+      <Input value={value} placeholder={placeholder} maxLength={200} disabled={disabled} onChange={(e) => onChange(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onAdd(); } }} />
+      <Button type="button" variant="outline" size="sm" disabled={disabled || value.trim() === ""} onClick={onAdd}>Add</Button>
+    </div>
+  );
+}
+
 function Terms({ draft, disabled, onChange }: { draft: CommercialEstimateDraft; disabled: boolean; onChange: (draft: CommercialEstimateDraft) => void }) {
   return (
-    <Disclosure summary="Estimate terms" hint="Warranty, exclusions and validity">
+    <Disclosure summary="Estimate terms" hint="Warranty and validity">
       <div className="flex flex-col gap-3 pt-3">
-        <Field label="Warranty"><Textarea rows={2} value={draft.warrantyTerms} onChange={(e) => onChange({ ...draft, warrantyTerms: e.target.value })} disabled={disabled} /></Field>
-        <Field label="Exclusions" description="One clear exclusion per line."><Textarea rows={3} value={draft.exclusions.join("\n")} onChange={(e) => onChange({ ...draft, exclusions: e.target.value.split("\n") })} disabled={disabled} /></Field>
-        <Field label="Estimate valid until"><Input type="date" value={draft.validUntil?.slice(0, 10) ?? ""} onChange={(e) => onChange({ ...draft, validUntil: e.target.value ? new Date(`${e.target.value}T23:59:59`).toISOString() : null })} disabled={disabled} /></Field>
+        <Field label="Warranty" description="On workmanship, in your words. A blank here shows as “not stated” beside estimates that have one."><Textarea rows={2} value={draft.warrantyTerms} onChange={(e) => onChange({ ...draft, warrantyTerms: e.target.value })} disabled={disabled} /></Field>
+        <Field label="Estimate valid until" description="The customer sees how many days are left."><Input type="date" value={draft.validUntil?.slice(0, 10) ?? ""} onChange={(e) => onChange({ ...draft, validUntil: e.target.value ? new Date(`${e.target.value}T23:59:59`).toISOString() : null })} disabled={disabled} /></Field>
         <p className="text-xs leading-5 text-text-muted">The PDF is an Estimate/Quotation, not a tax invoice.</p>
       </div>
     </Disclosure>
@@ -676,7 +815,7 @@ function LineAmount({ amount }: { amount: number | null }) {
   return <p className="mt-2 text-right text-sm font-extrabold tabular-nums text-text">{amount === null ? "Amount —" : `Amount ${formatMoney(amount)}`}</p>;
 }
 
-function FinancialDock({ draft, preview, previewIsCurrent, isChecking, previewError, blocked, isSubmitting, onSend }: { draft: CommercialEstimateDraft; preview?: import("../queries").ProposalFinancialSummary; previewIsCurrent: boolean; isChecking: boolean; previewError: unknown; blocked: boolean; isSubmitting: boolean; onSend: () => void }) {
+function FinancialDock({ draft, preview, previewIsCurrent, isChecking, previewError, blocked, isSubmitting, onSend, onPreview }: { draft: CommercialEstimateDraft; preview?: import("../queries").ProposalFinancialSummary; previewIsCurrent: boolean; isChecking: boolean; previewError: unknown; blocked: boolean; isSubmitting: boolean; onSend: () => void; onPreview: () => void }) {
   const localLines = selectedLineSubtotal(draft);
   const localCharges = authorizedChargeSubtotal(draft);
   const localMaterials = materialSubtotal(draft);
@@ -692,7 +831,10 @@ function FinancialDock({ draft, preview, previewIsCurrent, isChecking, previewEr
       )}
       {isChecking ? <p role="status" className="mt-2 text-xs text-text-muted">Checking tax, fees and totals with Vsolve…</p> : null}
       {previewError ? <ErrorState inline className="mt-2" title="We could not check this estimate" message="Your draft is saved. Review the highlighted fields or try the preview again." severity="error" /> : null}
-      <Button block size="lg" className="mt-3" disabled={blocked || !previewIsCurrent} loading={isSubmitting} loadingLabel="Sending estimate" onClick={onSend}>Send estimate</Button>
+      <div className="mt-3 grid grid-cols-[auto_1fr] gap-2">
+        <Button size="lg" variant="outline" onClick={onPreview}>Preview as customer</Button>
+        <Button block size="lg" disabled={blocked || !previewIsCurrent} loading={isSubmitting} loadingLabel="Sending estimate" onClick={onSend}>Send estimate</Button>
+      </div>
       {!blocked && !previewIsCurrent && !isChecking ? <p className="mt-2 text-center text-xs text-warning-text">A current server total is required before sending.</p> : null}
     </aside>
   );
@@ -701,7 +843,7 @@ function FinancialDock({ draft, preview, previewIsCurrent, isChecking, previewEr
 function PresetPicker({ open, picker, mode, work, materials, onClose, onCustom, onWork, onMaterial }: { open: boolean; picker: Picker; mode: EstimateMode | null; work: ReturnType<typeof workPresetsFor>; materials: ReturnType<typeof materialPresetsFor>; onClose: () => void; onCustom: () => void; onWork: (label: string) => void; onMaterial: (label: string, unit: string) => void }) {
   const isMaterial = picker === "material";
   return (
-    <Sheet open={open} onOpenChange={(next) => { if (!next) onClose(); }} title={isMaterial ? "Add material" : mode === "LABOUR_WISE" ? "Add labour role" : "Add work"} description="Presets add names and units only. You set every price." footer={<Button variant="ghost" onClick={onClose}>Cancel</Button>}>
+    <Sheet open={open} onOpenChange={(next) => { if (!next) onClose(); }} title={isMaterial ? "Add material" : mode === "LABOUR_WISE" ? "Add labour role" : "Add from your usual lines"} description="Names and units only. You set every price — your rate card fills these in once it is published." footer={<Button variant="ghost" onClick={onClose}>Cancel</Button>}>
       <div className="grid grid-cols-2 gap-2">
         {(isMaterial ? materials : work).map((preset) => (
           <button key={preset.code} type="button" onClick={() => isMaterial ? onMaterial(preset.label, (preset as (typeof materials)[number]).unit) : onWork(preset.label)} className="flex min-h-20 items-center gap-3 rounded-card border border-line bg-surface p-3 text-left hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"><span className="grid size-10 place-items-center rounded-control bg-action-surface text-action-active"><Pictogram name={preset.icon} size="sm" /></span><span className="text-sm font-bold text-text">{preset.label}</span></button>

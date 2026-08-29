@@ -24,6 +24,8 @@ import {
 } from "../queries";
 import { TapRow, TapRowGroup } from "@/components/patterns";
 
+import { QuestionInbox } from "@/features/quotes/view/question-inbox";
+
 import { RequestAttachments } from "./request-attachments";
 import { RequestDetail } from "./request-detail";
 import { titleForSlug } from "./my-requests-screen";
@@ -314,6 +316,12 @@ export function RequestDetailScreen({ requirementId }: RequestDetailScreenProps)
         onRetryTimeline={() => void timelineQuery.refetch()}
         supportAction={supportAction}
       >
+      {/* A professional's question, with somewhere to answer it. Above the
+          money surface because it is the one thing here only the Customer can
+          move, and it arrives before any estimate does. */}
+      {draft !== null && !isFreelyEditable(draft.status) ? (
+        <QuestionInbox requirementId={requirementId} supportAction={supportAction} />
+      ) : null}
       {draft !== null ? (
         // Wave A2, extended by A2R. The A3 money surface — the rate-card crew
         // panel or its quote-flow fallback — or the A5 visit tracker, chosen

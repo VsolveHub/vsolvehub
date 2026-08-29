@@ -21,6 +21,7 @@ import {
   usePartnerEnquiry,
   type EnquiryDetail,
 } from "../queries";
+import { ClarificationThread } from "./clarification-thread";
 import { DeclineDialog } from "./decline-dialog";
 import { RequirementSummary } from "./requirement-summary";
 
@@ -192,6 +193,12 @@ function EnquiryDecision({ detail }: { readonly detail: EnquiryDetail }) {
       <div className="px-4 pt-4">
         <RequirementSummary enquiry={enquiry} />
       </div>
+
+      {enquiry.status !== "INVITED" ? (
+        <div className="px-4 pt-4">
+          <ClarificationThread enquiry={enquiry} />
+        </div>
+      ) : null}
 
       {isProject ? (
         <div className="px-4 pt-4">

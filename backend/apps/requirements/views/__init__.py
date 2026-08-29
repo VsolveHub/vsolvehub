@@ -71,6 +71,7 @@ from .clarifications import (
     RequirementAttachmentDetailView,
     RequirementAttachmentFinalizeView,
     RequirementQuestionAnswerView,
+    RequirementQuestionListView,
     RequirementQuoteQuestionView,
 )
 from .crew_offers import (
@@ -128,12 +129,14 @@ from .proposals import (
     PartnerProposalCollectionView,
     PartnerProposalDetailView,
     PartnerProposalPreviewView,
+    PartnerProposalRevisionDeclineView,
     PartnerProposalWithdrawView,
 )
 from .quote_access import (
     RequirementQuoteListView,
     RequirementQuoteRejectView,
     RequirementQuoteRevalidateView,
+    RequirementQuoteRevisionRequestView,
     RequirementUnlockView,
     RequirementVisitPlanCheckoutView,
     RequirementVisitPlanView,
@@ -289,6 +292,7 @@ __all__ = [
     "PartnerProposalCollectionView",
     "PartnerProposalDetailView",
     "PartnerProposalPreviewView",
+    "PartnerProposalRevisionDeclineView",
     "PartnerProposalWithdrawView",
     "PartnerQuestionAnswerView",
     "PartnerWorkspaceListView",
@@ -309,10 +313,12 @@ __all__ = [
     "RequirementDetailView",
     "RequirementDuplicateCheckView",
     "RequirementQuestionAnswerView",
+    "RequirementQuestionListView",
     "RequirementQuoteListView",
     "RequirementQuoteQuestionView",
     "RequirementQuoteRejectView",
     "RequirementQuoteRevalidateView",
+    "RequirementQuoteRevisionRequestView",
     "RequirementRateCardBookView",
     "RequirementRateCardCancelView",
     "RequirementRateCardQuotesView",

@@ -40,6 +40,7 @@ from apps.requirements.models import (
     Proposal,
     ProposalSelection,
     RequirementQuestion,
+    RevisionRequest,
     SiteVisit,
     VendorInvitation,
     VisitPlanShare,
@@ -76,15 +77,38 @@ def _assert_project_revision_allowed(
         or requirement.archetype != ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT
     ):
         return
+    if (
+        previous.status == Proposal.Status.EXPIRED
+        and previous.revalidation_requested_at is not None
+    ):
+        # The Customer asked for a fresh price on an expired estimate. That is the one way an
+        # expired row is superseded, and refusing it here would make `request_revalidation` a
+        # button that promises a revision nobody can send.
+        return
     if previous.status != Proposal.Status.SUBMITTED:
         raise RequirementTransitionError(
             "This estimate can no longer be revised. You may only withdraw a live estimate "
             "until the Customer chooses it."
         )
+    if open_revision_request_for(previous) is not None:
+        # The Customer asked for a change. A request with a reason behind it reopens the window;
+        # the answer is still an ordinary supersession the Customer reads in full.
+        return
     if timezone.now() >= estimate_revision_expires_at(previous):
         raise RequirementTransitionError(
-            "An estimate can only be revised during the first 5 minutes after it is sent."
+            "An estimate can only be revised during the first 5 minutes after it is sent, "
+            "or when the Customer has asked for a revision."
         )
+
+
+def open_revision_request_for(proposal: Proposal) -> RevisionRequest | None:
+    """The Customer's unanswered request for a different estimate, if there is one."""
+    return proposal.revision_requests.filter(status=RevisionRequest.Status.OPEN).first()
+
+
+def latest_revision_request_for(proposal: Proposal) -> RevisionRequest | None:
+    """The most recent request on this proposal, in any state — what a screen shows beside it."""
+    return proposal.revision_requests.order_by("-created_at").first()
 
 
 @dataclass(frozen=True, slots=True)
@@ -331,6 +355,7 @@ def submit_proposal(  # noqa: PLR0912, PLR0915 - one transaction owns the append
     item_lines: list[dict[str, Any]] | None = None,
     labour_lines: list[dict[str, Any]] | None = None,
     other_charges: list[dict[str, Any]] | None = None,
+    scope_summary: str = "",
 ) -> Proposal:
     """Submit a first quote, or a revision that supersedes the vendor's previous one.
 
@@ -496,10 +521,21 @@ def submit_proposal(  # noqa: PLR0912, PLR0915 - one transaction owns the append
         stages=stages or [],
         material_lines=material_lines or [],
         warranty_terms=warranty_terms,
+        scope_summary=scope_summary.strip(),
         valid_until=valid_until,
         captured_by=captured_by,
         vendor_confirmed_at=None if captured_by is not None else timezone.now(),
     )
+
+    if previous is not None:
+        # A revision is the answer to whatever the Customer asked for on the row it replaces.
+        RevisionRequest.objects.filter(
+            proposal=previous, status=RevisionRequest.Status.OPEN
+        ).update(
+            status=RevisionRequest.Status.ANSWERED,
+            answered_by_proposal=proposal,
+            resolved_at=timezone.now(),
+        )
 
     if invitation.status != VendorInvitation.Status.QUOTED:
         invitation.status = VendorInvitation.Status.QUOTED
@@ -881,6 +917,108 @@ def request_revalidation(
         },
     )
     return proposal
+
+
+@transaction.atomic
+def request_revision(
+    *,
+    requirement_id: uuid.UUID,
+    proposal_id: uuid.UUID,
+    actor: User,
+    reason_code: str,
+    excluded_items: list[str],
+    note: str,
+) -> RevisionRequest:
+    """Ask a vendor for a different estimate, with the reason attached.
+
+    The rule that only a vendor states a price is untouched: nothing here carries a number, and the
+    answer is an ordinary superseding proposal. What changes is that a Customer can say *what* they
+    want different — leave the false ceiling out, cheaper tiles, two phases — instead of turning
+    the estimate down and hoping the replacement guesses. Gated on the same entitlement that lets
+    them read the estimate, refused once somebody has been chosen, and one open request at a time
+    per estimate so a vendor is never answering two asks with one revision.
+    """
+    requirement = (
+        CustomerRequirement.objects.select_for_update(of=("self",))
+        .select_related("configuration")
+        .get(pk=requirement_id)
+    )
+    if requirement.status in CustomerRequirement.CLOSED_STATUSES:
+        raise RequirementTransitionError("This request is closed.")
+    if not access.customer_may_read_full_quotes(requirement):
+        raise ProposalNotSelectableError("Unlock this request's quotes before asking about them.")
+    if ProposalSelection.objects.filter(
+        requirement=requirement,
+        status__in=ProposalSelection.LIVE_STATUSES,
+    ).exists():
+        raise ProposalNotSelectableError("This request already has a chosen vendor.")
+
+    proposal = Proposal.objects.select_for_update().get(pk=proposal_id, requirement=requirement)
+    if proposal.status != Proposal.Status.SUBMITTED:
+        raise ProposalNotSelectableError(
+            "This estimate is no longer live, so a revision cannot be asked for."
+        )
+    existing = open_revision_request_for(proposal)
+    if existing is not None:
+        # Idempotent by state: a second tap re-reads the open request rather than sending the
+        # vendor a duplicate.
+        return existing
+    if reason_code not in RevisionRequest.ReasonCode.values:
+        raise RequirementTransitionError("Say what you would like changed.")
+
+    request = RevisionRequest.objects.create(
+        requirement=requirement,
+        proposal=proposal,
+        requested_by=actor,
+        reason_code=reason_code,
+        excluded_items=[item.strip() for item in excluded_items if item.strip()][:20],
+        note=note.strip(),
+    )
+    record_transition(
+        requirement=requirement,
+        from_status=requirement.status,
+        to_status=requirement.status,
+        actor=actor,
+        reason_code="revision_requested",
+        reason=f"proposal:{proposal.id} partner:{proposal.partner_id} {reason_code}",
+    )
+    enqueue_outbox_event(
+        aggregate_type="requirement",
+        aggregate_id=requirement.id,
+        event_type="m2.proposal.revision_requested",
+        idempotency_key=f"proposal-revision-request:{request.id}",
+        payload={
+            "requirement_id": str(requirement.id),
+            "proposal_id": str(proposal.id),
+            "partner_id": str(proposal.partner_id),
+            "invitation_id": str(proposal.invitation_id),
+            "revision_request_id": str(request.id),
+            "reason_code": reason_code,
+        },
+    )
+    return request
+
+
+@transaction.atomic
+def decline_revision_request(
+    *, request_id: uuid.UUID, partner_id: uuid.UUID, note: str
+) -> RevisionRequest:
+    """The vendor says no to a requested change. Their estimate stands as sent."""
+    request = (
+        RevisionRequest.objects.select_for_update()
+        .select_related("proposal")
+        .filter(pk=request_id, proposal__partner_id=partner_id)
+        .first()
+    )
+    if request is None:
+        raise RequirementNotFoundError()
+    if request.status != RevisionRequest.Status.OPEN:
+        raise RequirementTransitionError("This request has already been answered.")
+    request.status = RevisionRequest.Status.DECLINED
+    request.decline_note = note.strip()
+    request.resolved_at = timezone.now()
+    request.save(update_fields=("status", "decline_note", "resolved_at"))
+    return request
 
 
 def expired_proposal_ids(*, at: datetime | None = None) -> list[uuid.UUID]:

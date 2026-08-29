@@ -160,6 +160,9 @@ describe("customer visit arrival", () => {
           rejection_reason: "NOT_CHOSEN",
           revision: 2,
           revalidation_requested_at: null,
+      revision_request: null,
+      questions: [],
+      scope_summary: "",
           vendor: {
             partner_id: "partner-1",
             vendor_type: "AGENCY",

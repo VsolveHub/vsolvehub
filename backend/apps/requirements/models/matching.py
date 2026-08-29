@@ -364,6 +364,9 @@ class Proposal(models.Model):
     #: output too, and the next field added to a material line will be the one that is a date.
     material_lines = models.JSONField(default=list, blank=True, encoder=DjangoJSONEncoder)
     warranty_terms = models.TextField(blank=True)
+    #: What the vendor will actually do, in their own words. The lines say what each rupee buys;
+    #: this says what the job is. Blank on every quote written before it existed.
+    scope_summary = models.TextField(blank=True)
     valid_until = models.DateTimeField(null=True, blank=True)
 
     #: Set when Operations captured this by phone. The vendor still confirms before the Customer
@@ -508,3 +511,81 @@ class RequirementQuestion(models.Model):
 
     def __str__(self) -> str:
         return f"{self.requirement_id}:{self.id}"
+
+
+class RevisionRequest(models.Model):
+    """A Customer asking a vendor to send a different estimate.
+
+    Not a counter-offer and not a negotiation: nothing here carries a price, and the vendor's
+    answer is an ordinary superseding proposal. What this records is the *reason* — leave the
+    false ceiling out, use a cheaper tile, split it into phases — so the vendor knows what to
+    change, and so a revision that arrives after the five-minute correction window has a Customer's
+    request behind it rather than a quietly replaced price.
+
+    One open request per proposal. Answering it (a new revision) or declining it closes it.
+    """
+
+    class Status(models.TextChoices):
+        OPEN = "OPEN", "Waiting for the vendor"
+        ANSWERED = "ANSWERED", "Answered with a revised estimate"
+        DECLINED = "DECLINED", "Declined by the vendor"
+
+    class ReasonCode(models.TextChoices):
+        LEAVE_OUT = "LEAVE_OUT", "Leave something out"
+        CHANGE_MATERIALS = "CHANGE_MATERIALS", "Change materials or finish"
+        PHASE_WORK = "PHASE_WORK", "Split the work into phases"
+        OTHER = "OTHER", "Something else"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    requirement = models.ForeignKey(
+        "requirements.CustomerRequirement",
+        on_delete=models.PROTECT,
+        related_name="revision_requests",
+    )
+    proposal = models.ForeignKey(
+        Proposal,
+        on_delete=models.PROTECT,
+        related_name="revision_requests",
+    )
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="revision_requests_made",
+    )
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.OPEN)
+    reason_code = models.CharField(max_length=20, choices=ReasonCode.choices)
+    #: The priced lines the Customer wants left out, by the title the vendor gave them. Titles
+    #: rather than indexes because a vendor reads "false ceiling", not "line 4".
+    excluded_items = models.JSONField(default=list, blank=True)
+    note = models.TextField(blank=True)
+    #: The vendor's reason for declining, when they did.
+    decline_note = models.TextField(blank=True)
+    #: The revision that answered this, once one has.
+    answered_by_proposal = models.ForeignKey(
+        Proposal,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="answers_revision_requests",
+    )
+    created_at = models.DateTimeField(default=timezone.now)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("-created_at", "id")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("proposal",),
+                condition=models.Q(status="OPEN"),
+                name="requirements_one_open_revision_request_per_proposal",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(status="OPEN", resolved_at__isnull=True)
+                | ~models.Q(status="OPEN") & models.Q(resolved_at__isnull=False),
+                name="requirements_revision_request_resolved_when_closed",
+            ),
+        ]
+        indexes = [models.Index(fields=("requirement", "status"))]
+
+    def __str__(self) -> str:
+        return f"{self.proposal_id}:{self.status}"

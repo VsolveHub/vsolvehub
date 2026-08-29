@@ -48,6 +48,7 @@ from .matching import (
     Proposal,
     RequirementQuestion,
     RequirementSnapshot,
+    RevisionRequest,
     VendorInvitation,
 )
 from .operations import (
@@ -113,6 +114,7 @@ __all__ = [
     "RequirementQuestion",
     "RequirementSnapshot",
     "RequirementTransition",
+    "RevisionRequest",
     "SafetyIncident",
     "ShiftAttendance",
     "SiteVisit",

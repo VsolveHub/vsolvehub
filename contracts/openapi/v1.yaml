@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.46.0
+  version: 1.47.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -11437,6 +11437,66 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/proposals/{proposal_id}/revision-requests/{request_id}/decline/:
+    post:
+      operationId: m2_proposal_revision_decline
+      description: Decline the Customer's open request for a revised estimate. Your
+        estimate stays on the table exactly as sent; the Customer sees your note beside
+        their request. To accept the request, send a revision instead — `POST /api/v1/proposals/`
+        supersedes and answers it in one step.
+      parameters:
+      - in: path
+        name: proposal_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: request_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Proposals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RevisionRequestDeclineRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RevisionRequestDeclineRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RevisionRequestDeclineRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevisionRequest'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/proposals/{proposal_id}/withdraw/:
     post:
       operationId: m2_proposal_withdraw
@@ -12068,6 +12128,38 @@ paths:
           description: '`m2_policy_unavailable` while the forfeit split is unset —
             the fee stays `ACTIVE` and visible rather than being split on an invented
             ratio.'
+  /api/v1/requirements/{requirement_id}/questions/:
+    get:
+      operationId: m2_requirement_question_list
+      description: Every clarification question on this request, both directions,
+        oldest first. A professional's question arrives before any estimate — often
+        before the visit — so this is readable at every status and is not gated on
+        the paywall. The vendor's identity is not on a question; `invitation` links
+        it to the estimate it belongs to once one exists.
+      parameters:
+      - in: path
+        name: requirement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Requirements
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementQuestionList'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/requirements/{requirement_id}/quotes/:
     get:
       operationId: m2_quote_list
@@ -12314,6 +12406,85 @@ paths:
           description: '`m2_proposal_not_selectable` when the quote has not expired,
             when the request already has a chosen vendor, or when the caller has not
             unlocked these quotes at all.'
+  /api/v1/requirements/{requirement_id}/quotes/{proposal_id}/revision-request/:
+    post:
+      operationId: m2_quote_revision_request
+      description: 'Ask the professional behind one live estimate for a different
+        one, with the reason attached: leave named lines out, change materials, split
+        the work into phases, or something else in a sentence. **Carries no price
+        and changes no price** — only a vendor states a number, and they answer by
+        superseding the estimate, which lands under the same entitlement. One open
+        request per estimate; a second call re-reads the first.'
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: proposal_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: requirement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Quotes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RevisionRequestCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RevisionRequestCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RevisionRequestCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevisionRequest'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_proposal_not_selectable` when the estimate is no longer
+            live, when the request already has a chosen vendor, or when the caller
+            has not unlocked these quotes.'
   /api/v1/requirements/{requirement_id}/quotes/teasers/:
     get:
       operationId: m2_quote_teaser_list
@@ -14478,6 +14649,9 @@ components:
             type: string
             minLength: 1
             maxLength: 200
+        scope_summary:
+          type: string
+          maxLength: 2000
         warranty_terms:
           type: string
           maxLength: 4000
@@ -17049,9 +17223,25 @@ components:
           format: date-time
           readOnly: true
           nullable: true
+        revision_request:
+          allOf:
+          - $ref: '#/components/schemas/RevisionRequest'
+          nullable: true
+          readOnly: true
+        questions:
+          type: array
+          items:
+            $ref: '#/components/schemas/RequirementQuestion'
+          readOnly: true
         vendor:
           type: object
           additionalProperties: {}
+          description: |-
+            Who wrote this, and what a Customer may weigh before choosing them.
+
+            The trust figures are read off completed engagements and Customer ratings at read time —
+            never stored, never an input to matching. A vendor with no rated work publishes `null`
+            rather than a number nobody gave.
           readOnly: true
         site_visit:
           allOf:
@@ -17126,6 +17316,9 @@ components:
           readOnly: true
         exclusions:
           readOnly: true
+        scope_summary:
+          type: string
+          readOnly: true
         stages:
           type: array
           items:
@@ -17165,10 +17358,13 @@ components:
       - partner_quote_total_paise
       - platform_fee_paise
       - platform_fee_tax_paise
+      - questions
       - rate_paise_per_worker_day
       - rejection_reason
       - revalidation_requested_at
       - revision
+      - revision_request
+      - scope_summary
       - site_visit
       - stages
       - status
@@ -24201,6 +24397,11 @@ components:
           format: date-time
           nullable: true
           readOnly: true
+        revision_request:
+          allOf:
+          - $ref: '#/components/schemas/RevisionRequest'
+          nullable: true
+          readOnly: true
         status:
           allOf:
           - $ref: '#/components/schemas/ProposalStatusEnum'
@@ -24303,6 +24504,9 @@ components:
           readOnly: true
         exclusions:
           readOnly: true
+        scope_summary:
+          type: string
+          readOnly: true
         stages:
           type: array
           items:
@@ -24357,6 +24561,8 @@ components:
       - revalidation_requested_at
       - revision
       - revision_expires_at
+      - revision_request
+      - scope_summary
       - site_visit
       - stages
       - status
@@ -24430,6 +24636,9 @@ components:
             type: string
             minLength: 1
             maxLength: 200
+        scope_summary:
+          type: string
+          maxLength: 2000
         warranty_terms:
           type: string
           maxLength: 4000
@@ -24845,6 +25054,9 @@ components:
             type: string
             minLength: 1
             maxLength: 200
+        scope_summary:
+          type: string
+          maxLength: 2000
         warranty_terms:
           type: string
           maxLength: 4000
@@ -26609,6 +26821,22 @@ components:
       - id
       - invitation
       - question
+    RequirementQuestionList:
+      type: object
+      description: Every question on one request, both directions, oldest first.
+      properties:
+        questions:
+          type: array
+          items:
+            $ref: '#/components/schemas/RequirementQuestion'
+          readOnly: true
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - questions
+      - server_now
     RequirementScanStatusEnum:
       enum:
       - PENDING
@@ -26981,6 +27209,110 @@ components:
       - postal_code
       - provider
       - state
+    RevisionRequest:
+      type: object
+      description: |-
+        A Customer's ask for a different estimate, as both sides read it.
+
+        No money on it, by design: it names what to change, and the vendor's answer is a superseding
+        proposal read through the ordinary quote surfaces.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        proposal:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/RevisionRequestStatusEnum'
+          readOnly: true
+        reason_code:
+          allOf:
+          - $ref: '#/components/schemas/RevisionRequestReasonCodeEnum'
+          readOnly: true
+        excluded_items:
+          readOnly: true
+        note:
+          type: string
+          readOnly: true
+        decline_note:
+          type: string
+          readOnly: true
+        answered_by_proposal:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        resolved_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - answered_by_proposal
+      - created_at
+      - decline_note
+      - excluded_items
+      - id
+      - note
+      - proposal
+      - reason_code
+      - resolved_at
+      - status
+    RevisionRequestCreateRequest:
+      type: object
+      properties:
+        reason_code:
+          $ref: '#/components/schemas/RevisionRequestReasonCodeEnum'
+        excluded_items:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 200
+          maxItems: 20
+        note:
+          type: string
+          default: ''
+          maxLength: 2000
+      required:
+      - reason_code
+    RevisionRequestDeclineRequest:
+      type: object
+      properties:
+        note:
+          type: string
+          default: ''
+          maxLength: 1000
+    RevisionRequestReasonCodeEnum:
+      enum:
+      - LEAVE_OUT
+      - CHANGE_MATERIALS
+      - PHASE_WORK
+      - OTHER
+      type: string
+      description: |-
+        * `LEAVE_OUT` - Leave something out
+        * `CHANGE_MATERIALS` - Change materials or finish
+        * `PHASE_WORK` - Split the work into phases
+        * `OTHER` - Something else
+    RevisionRequestStatusEnum:
+      enum:
+      - OPEN
+      - ANSWERED
+      - DECLINED
+      type: string
+      description: |-
+        * `OPEN` - Waiting for the vendor
+        * `ANSWERED` - Answered with a revised estimate
+        * `DECLINED` - Declined by the vendor
     RoleSwitchRequest:
       type: object
       properties:

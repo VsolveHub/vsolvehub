@@ -67,6 +67,12 @@ export type VisitNoShowParty = Schemas["VisitNoShowPartyEnum"];
 
 export type CustomerProposal = Schemas["CustomerProposal"];
 export type CustomerQuoteList = Schemas["CustomerQuoteList"];
+/** A Customer's ask for a different estimate (contract 1.47.0). Carries no price. */
+export type RevisionRequest = Schemas["RevisionRequest"];
+export type RevisionRequestReasonCode = Schemas["RevisionRequestReasonCodeEnum"];
+/** One clarification question and its single answer, in either direction. */
+export type RequirementQuestion = Schemas["RequirementQuestion"];
+export type RequirementQuestionList = Schemas["RequirementQuestionList"];
 export type ProposalStage = Schemas["ProposalStage"];
 export type ProposalMaterialLine = Schemas["ProposalMaterialLine"];
 export type ProposalItemLine = Schemas["ProposalItemLine"];
@@ -506,6 +512,18 @@ export interface VendorIdentity {
   vendorType: string | null;
   isVerified: boolean;
   displayName: string | null;
+  /**
+   * What a Customer may weigh before choosing (contract 1.47.0). Read at request
+   * time from completed engagements and Customer ratings; never an input to
+   * matching. `ratingAverage` is null until somebody has rated this vendor —
+   * a star count nobody gave is the one thing this must not invent.
+   */
+  ratingAverage: number | null;
+  ratingCount: number;
+  jobsCompleted: number;
+  experienceYears: number;
+  /** ISO date the vendor joined, or null on a payload that predates 1.47.0. */
+  activeSince: string | null;
 }
 
 export function readVendorIdentity(vendor: unknown): VendorIdentity {
@@ -517,6 +535,11 @@ export function readVendorIdentity(vendor: unknown): VendorIdentity {
     const value = source[key];
     return typeof value === "string" && value !== "" ? value : null;
   };
+  const count = (key: string): number => {
+    const value = source[key];
+    return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : 0;
+  };
+  const rating = source["rating_average"];
   return {
     partnerId: text("partner_id"),
     vendorType: text("vendor_type"),
@@ -524,6 +547,12 @@ export function readVendorIdentity(vendor: unknown): VendorIdentity {
     // verified is the one direction of this field that can hurt somebody.
     isVerified: source["is_verified"] === true,
     displayName: text("display_name"),
+    ratingAverage:
+      typeof rating === "number" && Number.isFinite(rating) && rating > 0 ? rating : null,
+    ratingCount: count("rating_count"),
+    jobsCompleted: count("jobs_completed"),
+    experienceYears: count("experience_years"),
+    activeSince: text("active_since"),
   };
 }
 

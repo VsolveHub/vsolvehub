@@ -1,5 +1,7 @@
 "use client";
 
+import { timelineLabel } from "@/features/quotes/view/quote-card";
+import { requestEstimateHref } from "@/lib/routes";
 import {
   bookingPhase,
   canCheckOutVisitPlan,
@@ -15,7 +17,7 @@ import Link from "next/link";
 import { useProfileCompletionGate } from "@/features/account/view/profile-completion-dialog";
 import { useRateCardState } from "@/features/crew/queries";
 import { CrewDispatchPanel } from "@/features/crew/view/crew-dispatch-panel";
-import { toQuoteListView } from "@/features/quotes/adapters";
+import { firstStageOf, toQuoteListView } from "@/features/quotes/adapters";
 import { useCustomerQuotes } from "@/features/quotes/queries";
 import type { RequirementArchetype } from "@/features/requirement/adapters";
 import {
@@ -320,6 +322,10 @@ function A5Access({
           proposalId: card.proposalId,
           vendorName: card.vendorName,
           priceLabel: card.payableLabel,
+          href: requestEstimateHref(requirementId, card.proposalId),
+          trust: card.trust,
+          startLabel: firstStageOf(card)?.amountLabel ?? null,
+          timelineLabel: timelineLabel(card),
         }));
 
   return (

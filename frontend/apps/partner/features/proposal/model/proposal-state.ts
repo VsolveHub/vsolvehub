@@ -163,7 +163,10 @@ export function permissionsFor(input: {
 }): ProposalPermissions {
   const slotHeld = input.enquiryStatus === "ACCEPTED" || input.enquiryStatus === "QUOTED";
   const isEstimate = input.proposal.revision_expires_at !== null;
-  const revisionWindowOpen = input.revisionWindowOpen ?? true;
+  // A customer's open request for a change reopens the five-minute window —
+  // the server allows the supersession, so the control must too.
+  const customerAsked = input.proposal.revision_request?.status === "OPEN";
+  const revisionWindowOpen = (input.revisionWindowOpen ?? true) || customerAsked;
 
   return {
     canWithdraw: input.proposal.status === "SUBMITTED",

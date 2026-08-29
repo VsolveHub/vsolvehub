@@ -4,172 +4,129 @@ import { describe, expect, it } from "vitest";
 import type { QuoteCardView } from "../adapters";
 import { QuoteCard } from "./quote-card";
 
-function estimate(): QuoteCardView {
+function estimate(overrides: Partial<QuoteCardView> = {}): QuoteCardView {
   return {
-    proposalId: "proposal-chosen",
-    vendorName: "M2 Demo Vendor",
+    proposalId: "proposal-1",
+    vendorName: "Ravi Interiors",
     vendorType: "Company",
     isVerified: true,
-    status: "ACCEPTED",
-    isSelectable: false,
+    trust: {
+      ratingAverage: 4.8,
+      ratingCount: 120,
+      jobsCompleted: 120,
+      experienceYears: 9,
+      activeSinceLabel: "since 2017",
+    },
+    status: "SUBMITTED",
+    isSelectable: true,
     isExpired: false,
     isOutOfBudget: false,
     hasAskedForRevalidation: false,
     revision: 1,
-    totalLabel: "₹10,000",
-    taxLabel: "₹0",
+    totalLabel: "₹1,84,000",
+    taxLabel: "₹28,000",
     taxBasis: "INCLUSIVE",
-    payableLabel: "₹10,000",
-    payablePaise: 1_000_000,
+    payableLabel: "₹1,84,000",
+    payablePaise: 18_400_000,
     rateLabel: null,
     minimumDays: null,
     workerCount: null,
-    estimateType: "LABOUR_WISE",
+    estimateType: "ITEM_WISE",
     itemLines: [],
     labourLines: [],
     otherCharges: [],
-    stages: [],
+    stages: [
+      { title: "Start", deliverable: "Demolition done", amountLabel: "₹46,000", endsOn: null },
+      { title: "Handover", deliverable: null, amountLabel: "₹1,38,000", endsOn: "2026-10-14" },
+    ],
     materials: [],
-    inclusions: [],
-    exclusions: [],
-    warrantyTerms: null,
-    validUntil: null,
+    inclusions: ["Demolition & debris", "Waterproofing", "Plumbing rework"],
+    exclusions: ["Sanitaryware"],
+    scopeSummary: "Full strip-out and retile.",
+    warrantyTerms: "1 year on workmanship",
+    validUntil: "2026-09-20T18:29:59.000Z",
+    validityDaysLeft: 6,
     submittedAt: "2026-08-21T08:00:00Z",
     siteVisitId: "visit-1",
     visitCompletedAt: "2026-08-21T07:30:00Z",
+    questions: [],
+    revisionRequest: null,
+    ...overrides,
   };
 }
 
-describe("the priced lines behind the number", () => {
-  /**
-   * The item-wise / labour-wise breakdown reached the wire at 1.44.0 and the
-   * vendor's read-back rendered it, but this card dropped all three arrays —
-   * the same gap the materials regression below closed for `material_lines`.
-   */
-  it("renders item-wise lines with their quantity arithmetic", () => {
-    render(
-      <QuoteCard
-        card={{
-          ...estimate(),
-          estimateType: "ITEM_WISE",
-          itemLines: [
-            {
-              category: "Work",
-              title: "Wall tiling",
-              quantityLabel: "40 Sq ft × ₹80",
-              amountLabel: "₹3,200",
-            },
-            { category: "Work", title: "Grouting", quantityLabel: null, amountLabel: "₹1,000" },
-          ],
-        }}
-        index={0}
-        isPicked={false}
-        isChosen={false}
-        isRevalidating={false}
-      />,
-    );
+const hrefs = { detailHref: "/estimate", questionsHref: "/estimate/questions" };
 
-    expect(screen.getByText("How the price is built — item-wise")).toBeInTheDocument();
-    expect(screen.getByText("Wall tiling")).toBeInTheDocument();
-    expect(screen.getByText("40 Sq ft × ₹80")).toBeInTheDocument();
-    // A whole-job line has no quantity story; its rate IS its amount.
-    expect(screen.getByText("Grouting")).toBeInTheDocument();
-    expect(screen.getByText("₹1,000")).toBeInTheDocument();
+describe("the estimate card", () => {
+  it("leads with who, how trusted, what it costs and what it costs to start", () => {
+    render(<QuoteCard card={estimate()} index={0} isPicked={false} isRevalidating={false} {...hrefs} />);
+
+    expect(screen.getByRole("heading", { name: "Ravi Interiors" })).toBeInTheDocument();
+    expect(screen.getByText("★ 4.8 (120) · 120 jobs · 9 yrs · since 2017")).toBeInTheDocument();
+    expect(screen.getByText("₹1,84,000")).toBeInTheDocument();
+    // The first stage's own amount — `stages[0].amount_paise`, never a share computed here.
+    expect(screen.getByText("₹46,000")).toBeInTheDocument();
+    expect(screen.getByText("Ends 14 Oct")).toBeInTheDocument();
+    expect(screen.getByText("Valid 6 more days")).toBeInTheDocument();
   });
 
-  it("renders labour-wise lines with the crew arithmetic spelt out", () => {
-    render(
-      <QuoteCard
-        card={{
-          ...estimate(),
-          labourLines: [
-            {
-              role: "Mason",
-              team: "Ravi's team",
-              crewLabel: "2 people × 3 days × ₹900/day",
-              amountLabel: "₹5,400",
-            },
-          ],
-          otherCharges: [{ label: "Transportation", amountLabel: "₹800" }],
-        }}
-        index={0}
-        isPicked={false}
-        isChosen={false}
-        isRevalidating={false}
-      />,
-    );
-
-    expect(screen.getByText("How the price is built — labour-wise")).toBeInTheDocument();
-    expect(screen.getByText("Mason — Ravi's team")).toBeInTheDocument();
-    expect(screen.getByText("2 people × 3 days × ₹900/day")).toBeInTheDocument();
-    // Named charges are inside the total, like materials, and say so.
-    expect(screen.getByText("Named charges")).toBeInTheDocument();
-    expect(screen.getByText("Transportation")).toBeInTheDocument();
-  });
-});
-
-describe("materials the vendor priced in", () => {
-  /**
-   * Regression. `CustomerProposal.material_lines` was on the wire, the vendor sent
-   * it, the vendor's own read-back rendered it — and this card dropped it, while
-   * the amounts stayed inside `total_paise`. A Customer was being charged for
-   * goods the app never named.
-   */
-  it("names every material, because their cost is already inside the total", () => {
-    render(
-      <QuoteCard
-        card={{
-          ...estimate(),
-          materials: [
-            { title: "Cement", quantityLabel: "8 bags", amountLabel: "₹3,200" },
-            { title: "Waterproofing membrane", quantityLabel: null, amountLabel: "₹1,800" },
-          ],
-        }}
-        index={0}
-        isPicked={false}
-        isChosen={false}
-        isRevalidating={false}
-      />,
-    );
-
-    expect(screen.getByText("Cement")).toBeInTheDocument();
-    expect(screen.getByText("8 bags")).toBeInTheDocument();
-    expect(screen.getByText("₹3,200")).toBeInTheDocument();
-    expect(screen.getByText("Waterproofing membrane")).toBeInTheDocument();
-    expect(screen.getByText("₹1,800")).toBeInTheDocument();
-
-    // The reader has to be told these are not an extra on top of the headline.
-    expect(screen.getByText("Already counted in the total above.")).toBeInTheDocument();
-  });
-
-  it("says nothing at all when the vendor priced no materials", () => {
+  it("names what the other estimates include and this one does not, as a comparison", () => {
     render(
       <QuoteCard
         card={estimate()}
         index={0}
         isPicked={false}
-        isChosen={false}
         isRevalidating={false}
+        scopeGaps={["False ceiling", "Debris disposal"]}
+        {...hrefs}
       />,
     );
 
-    expect(screen.queryByText("Materials they will supply")).not.toBeInTheDocument();
+    expect(screen.getByText(/Leaves out:/)).toBeInTheDocument();
+    expect(screen.getByText(/False ceiling, Debris disposal/)).toBeInTheDocument();
   });
-});
 
-describe("chosen estimate", () => {
-  it("keeps the persisted choice highlighted when comparison is revisited", () => {
-    const { container } = render(
+  it("offers a free fresh price on an expired estimate, and says when it has been asked for", () => {
+    const { rerender } = render(
+      <QuoteCard card={estimate({ isExpired: true })} index={0} isPicked={false} isRevalidating={false} onRevalidate={() => undefined} {...hrefs} />,
+    );
+    expect(screen.getByRole("button", { name: "Ask for a fresh price — free" })).toBeInTheDocument();
+
+    rerender(
+      <QuoteCard card={estimate({ isExpired: true, hasAskedForRevalidation: true })} index={0} isPicked={false} isRevalidating={false} onRevalidate={() => undefined} {...hrefs} />,
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("Fresh price asked for");
+  });
+
+  it("withholds the revision control while a request is already open", () => {
+    render(
       <QuoteCard
-        card={estimate()}
+        card={estimate({ revisionRequest: { id: "r1", status: "OPEN", reasonLabel: "Leave something out", excludedItems: [], note: null, declineNote: null, createdAt: "2026-08-22T08:00:00Z" } })}
         index={0}
         isPicked={false}
-        isChosen
         isRevalidating={false}
+        onRequestRevision={() => undefined}
+        {...hrefs}
       />,
     );
+    expect(screen.queryByRole("button", { name: "Ask for a revision" })).not.toBeInTheDocument();
+    expect(screen.getByText("Revision asked for")).toBeInTheDocument();
+  });
 
-    expect(screen.getByText("Chosen")).toBeInTheDocument();
-    expect(container.querySelector("article")).toHaveClass("ring-selected");
+  it("counts the professional's questions waiting on the customer", () => {
+    render(
+      <QuoteCard
+        card={estimate({
+          questions: [
+            { id: "q1", askedByRole: "VENDOR", question: "Old tiling off?", answer: null, askedAt: "2026-08-22T08:00:00Z", answeredAt: null },
+          ],
+        })}
+        index={0}
+        isPicked={false}
+        isRevalidating={false}
+        {...hrefs}
+      />,
+    );
+    expect(screen.getByText("1 question for you")).toBeInTheDocument();
   });
 });

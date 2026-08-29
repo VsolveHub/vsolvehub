@@ -54,6 +54,9 @@ export interface CommercialEstimateDraft {
   readonly materialLines: readonly MaterialLineDraft[];
   readonly otherCharges: readonly OtherChargeDraft[];
   readonly installments: readonly InstallmentDraft[];
+  /** What the vendor will do, in a few sentences. The first thing the customer reads. */
+  readonly scopeSummary: string;
+  readonly inclusions: readonly string[];
   readonly exclusions: readonly string[];
   readonly warrantyTerms: string;
   readonly validUntil: string | null;
@@ -88,6 +91,8 @@ export const EMPTY_COMMERCIAL_ESTIMATE: CommercialEstimateDraft = {
   materialLines: [],
   otherCharges: [],
   installments: [],
+  scopeSummary: "",
+  inclusions: [],
   exclusions: [],
   warrantyTerms: "",
   validUntil: null,
@@ -206,6 +211,12 @@ export function validateCommercialEstimate(
     }
   });
 
+  if (draft.scopeSummary.trim().length < 20) {
+    // The one prose field on the estimate, and the one the customer reads first. A line
+    // list without it is an invoice; twenty characters is "Full strip-out and retile."
+    errors.scopeSummary = "Say what you will do, in a sentence or two.";
+  }
+
   const serviceSubtotal = partnerServiceSubtotal(draft);
   if (draft.installments.length === 0) {
     errors.installments = "Add at least one payment installment.";
@@ -278,6 +289,8 @@ function requestBody(input: {
       amount_paise: row.amountPaise as number,
       ends_on: row.endsOn,
     })),
+    scope_summary: draft.scopeSummary.trim(),
+    inclusions: draft.inclusions.map((line) => line.trim()).filter(Boolean),
     exclusions: draft.exclusions.map((line) => line.trim()).filter(Boolean),
     warranty_terms: draft.warrantyTerms.trim(),
     valid_until: draft.validUntil,

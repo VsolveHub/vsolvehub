@@ -1,5 +1,26 @@
 # API Contract Changelog
 
+## 1.47.0 - Estimates a Customer can act on
+
+- `CustomerProposal` gains `scope_summary`, `questions` (the clarification thread with that
+  vendor, both directions) and `revision_request` (the Customer's latest ask for a change, or
+  null). `CustomerProposal.vendor` now also carries `rating_average` (nullable), `rating_count`,
+  `jobs_completed`, `experience_years` and `active_since` — read at request time from completed
+  engagements and Customer ratings, never stored and never an input to matching.
+- `Proposal` (the vendor's own read) gains `scope_summary` and `revision_request`;
+  `ProposalCreateRequest` accepts `scope_summary`.
+- New `POST /requirements/{id}/quotes/{proposal_id}/revision-request/`
+  (`m2_quote_revision_request`): the Customer asks for a different estimate with a reason
+  (`RevisionRequestReasonCodeEnum`), named lines to leave out and a note. Carries no price. One
+  open request per estimate; a second call re-reads the first. An open request keeps the A5
+  five-minute revision window open until the vendor supersedes (which answers it) or declines.
+- New `POST /proposals/{id}/revision-requests/{request_id}/decline/`
+  (`m2_proposal_revision_decline`) for the vendor.
+- New `GET /requirements/{id}/questions/` (`m2_requirement_question_list`): every question on a
+  request, readable at any status so a Customer can answer a professional's pre-visit question.
+- An expired A5 estimate with a revalidation request can now be superseded — previously the
+  revision window refused the very revision `m2_quote_revalidate` asked for.
+
 ## 1.46.0 - Crew offers carry the Customer's brief
 
 - `CrewOffer` and `CrewOfferAccepted` gain `brief`: the Customer's answers beyond headcount and

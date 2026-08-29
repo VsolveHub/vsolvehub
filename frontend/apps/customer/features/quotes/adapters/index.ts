@@ -13,6 +13,8 @@ import {
   type ProposalOtherCharge,
   type ProposalSelection,
   type ProposalStage,
+  type RequirementQuestion,
+  type RevisionRequest,
 } from "@vsolve/query";
 import { formatMoney } from "@vsolve/ui";
 
@@ -201,12 +203,86 @@ function toChargeViews(charges: readonly ProposalOtherCharge[]): readonly QuoteC
   }));
 }
 
+/**
+ * One clarification question and its answer, as either side wrote it.
+ *
+ * `askedByRole` is the server's own field, derived by identity comparison —
+ * never inferred here from which screen is looking.
+ */
+export interface QuestionView {
+  id: string;
+  askedByRole: "CUSTOMER" | "VENDOR" | "OPERATIONS";
+  question: string;
+  answer: string | null;
+  askedAt: string;
+  answeredAt: string | null;
+}
+
+export function toQuestionView(question: RequirementQuestion): QuestionView {
+  const role = question.asked_by_role;
+  return {
+    id: question.id,
+    askedByRole: role === "CUSTOMER" || role === "VENDOR" ? role : "OPERATIONS",
+    question: question.question,
+    answer: question.answer.trim() === "" ? null : question.answer,
+    askedAt: question.asked_at,
+    answeredAt: question.answered_at,
+  };
+}
+
+/** The Customer's latest ask for a different estimate, as the card shows it. */
+export interface RevisionRequestView {
+  id: string;
+  status: "OPEN" | "ANSWERED" | "DECLINED";
+  reasonLabel: string;
+  excludedItems: readonly string[];
+  note: string | null;
+  declineNote: string | null;
+  createdAt: string;
+}
+
+const REVISION_REASON_LABEL: Record<string, string> = {
+  LEAVE_OUT: "Leave something out",
+  CHANGE_MATERIALS: "Change materials or finish",
+  PHASE_WORK: "Split the work into phases",
+  OTHER: "Something else",
+};
+
+export function toRevisionRequestView(request: RevisionRequest): RevisionRequestView {
+  return {
+    id: request.id,
+    status: request.status,
+    reasonLabel: REVISION_REASON_LABEL[request.reason_code] ?? request.reason_code,
+    excludedItems: readLines(request.excluded_items),
+    note: request.note.trim() === "" ? null : request.note,
+    declineNote: request.decline_note.trim() === "" ? null : request.decline_note,
+    createdAt: request.created_at,
+  };
+}
+
+/**
+ * What the Customer may know about the professional before choosing them.
+ *
+ * Every figure is the server's and every null is honest: a vendor nobody has
+ * rated yet has no star count, and printing one would be this adapter deciding
+ * a reputation.
+ */
+export interface VendorTrustView {
+  ratingAverage: number | null;
+  ratingCount: number;
+  jobsCompleted: number;
+  experienceYears: number;
+  /** "since 2017", or null when the payload predates the field. */
+  activeSinceLabel: string | null;
+}
+
 export interface QuoteCardView {
   proposalId: string;
   /** The vendor, as much as the fee bought. Contact is never here. */
   vendorName: string | null;
   vendorType: string | null;
   isVerified: boolean;
+  trust: VendorTrustView;
 
   status: string;
   isSelectable: boolean;
@@ -253,13 +329,25 @@ export interface QuoteCardView {
 
   inclusions: readonly string[];
   exclusions: readonly string[];
+  /** What the vendor will do, in their own words. Null on an estimate written before 1.47.0. */
+  scopeSummary: string | null;
   warrantyTerms: string | null;
   validUntil: string | null;
+  /**
+   * Whole days of validity left, counted from the server's own clock — or null
+   * when the vendor set no validity. Zero means it runs out today.
+   */
+  validityDaysLeft: number | null;
   submittedAt: string;
 
   /** The visit this estimate came out of. Null for every A3 quote. */
   siteVisitId: string | null;
   visitCompletedAt: string | null;
+
+  /** The clarification thread with this professional, oldest first. */
+  questions: readonly QuestionView[];
+  /** The Customer's latest ask for a different estimate, or null. */
+  revisionRequest: RevisionRequestView | null;
 }
 
 /**
@@ -281,7 +369,29 @@ export function comparableTotalPaise(proposal: CustomerProposal): number {
     : proposal.total_paise;
 }
 
-export function toQuoteCard(proposal: CustomerProposal): QuoteCardView {
+/**
+ * Whole days between the server's clock and `valid_until`, floored at zero.
+ *
+ * Counted on the server's `server_now` rather than the device, for the reason
+ * `isExpiredQuote` gives: a phone an hour fast would show a live estimate as
+ * gone. Days rather than hours, because "valid 6 more days" is the grain a
+ * decision is made at and a ticking clock on a written estimate is pressure.
+ */
+export function validityDaysLeft(validUntil: string | null, serverNow: string): number | null {
+  if (validUntil === null) return null;
+  const until = new Date(validUntil).getTime();
+  const now = new Date(serverNow).getTime();
+  if (Number.isNaN(until) || Number.isNaN(now)) return null;
+  return Math.max(0, Math.floor((until - now) / 86_400_000));
+}
+
+function activeSinceLabel(iso: string | null): string | null {
+  if (iso === null) return null;
+  const year = new Date(iso).getFullYear();
+  return Number.isNaN(year) ? null : `since ${year}`;
+}
+
+export function toQuoteCard(proposal: CustomerProposal, serverNow: string): QuoteCardView {
   const identity = readVendorIdentity(proposal.vendor);
   const payable = comparableTotalPaise(proposal);
 
@@ -290,6 +400,13 @@ export function toQuoteCard(proposal: CustomerProposal): QuoteCardView {
     vendorName: identity.displayName,
     vendorType: identity.vendorType,
     isVerified: identity.isVerified,
+    trust: {
+      ratingAverage: identity.ratingAverage,
+      ratingCount: identity.ratingCount,
+      jobsCompleted: identity.jobsCompleted,
+      experienceYears: identity.experienceYears,
+      activeSinceLabel: activeSinceLabel(identity.activeSince),
+    },
 
     status: proposal.status,
     isSelectable: isSelectable(proposal),
@@ -321,13 +438,105 @@ export function toQuoteCard(proposal: CustomerProposal): QuoteCardView {
 
     inclusions: readLines(proposal.inclusions),
     exclusions: readLines(proposal.exclusions),
+    scopeSummary: proposal.scope_summary.trim() === "" ? null : proposal.scope_summary.trim(),
     warrantyTerms: proposal.warranty_terms.trim() === "" ? null : proposal.warranty_terms,
     validUntil: proposal.valid_until,
+    validityDaysLeft: validityDaysLeft(proposal.valid_until, serverNow),
     submittedAt: proposal.submitted_at,
 
     siteVisitId: proposal.site_visit?.id ?? null,
     visitCompletedAt: proposal.site_visit?.completed_at ?? null,
+
+    questions: proposal.questions.map(toQuestionView),
+    revisionRequest:
+      proposal.revision_request === null ? null : toRevisionRequestView(proposal.revision_request),
   };
+}
+
+/**
+ * The professional's questions still waiting on the Customer, across every estimate.
+ *
+ * A vendor's unanswered question is the one thing on this whole journey that
+ * only the Customer can move, so it is surfaced on the request page rather
+ * than left on a timeline with nothing to press.
+ */
+export function unansweredVendorQuestions(
+  cards: readonly QuoteCardView[],
+): readonly { card: QuoteCardView; question: QuestionView }[] {
+  return cards.flatMap((card) =>
+    card.questions
+      .filter((question) => question.askedByRole === "VENDOR" && question.answer === null)
+      .map((question) => ({ card, question })),
+  );
+}
+
+function normaliseLine(line: string): string {
+  return line.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+/**
+ * The scope lines other estimates include and this one does not.
+ *
+ * A comparison, never a judgement. Computed only against what the *other*
+ * professionals put in writing — so it says "the others include plumbing
+ * rework; this one does not", which is the honest answer to "why is this one
+ * cheaper", and never "missing", which would be the screen deciding what a
+ * bathroom needs. Matching is on the words, case- and space-insensitive; two
+ * vendors describing one thing differently simply do not match, and a false
+ * gap is the worse error of the two.
+ */
+export function scopeGaps(
+  card: QuoteCardView,
+  cards: readonly QuoteCardView[],
+): readonly string[] {
+  const own = new Set(card.inclusions.map(normaliseLine));
+  const seen = new Set<string>();
+  const gaps: string[] = [];
+  for (const other of cards) {
+    if (other.proposalId === card.proposalId) continue;
+    for (const line of other.inclusions) {
+      const key = normaliseLine(line);
+      if (own.has(key) || seen.has(key)) continue;
+      seen.add(key);
+      gaps.push(line);
+    }
+  }
+  return gaps;
+}
+
+/** One scope line and which estimates include it, for the "where they differ" rows. */
+export interface ScopeDifferenceRow {
+  line: string;
+  /** One flag per card, in card order. */
+  included: readonly boolean[];
+}
+
+/**
+ * The scope lines the estimates disagree on.
+ *
+ * Only the lines that at least one estimate includes and at least one does
+ * not — a line everybody includes is not a difference, and a row of ticks is
+ * noise on the table whose whole point is the differences.
+ */
+export function scopeDifferenceRows(
+  cards: readonly QuoteCardView[],
+): readonly ScopeDifferenceRow[] {
+  if (cards.length < 2) return [];
+  const lines = new Map<string, string>();
+  for (const card of cards) {
+    for (const line of card.inclusions) {
+      const key = normaliseLine(line);
+      if (!lines.has(key)) lines.set(key, line);
+    }
+  }
+  const rows: ScopeDifferenceRow[] = [];
+  for (const [key, line] of lines) {
+    const included = cards.map((card) =>
+      card.inclusions.some((own) => normaliseLine(own) === key),
+    );
+    if (included.some(Boolean) && !included.every(Boolean)) rows.push({ line, included });
+  }
+  return rows;
 }
 
 export interface QuoteListView {
@@ -346,7 +555,7 @@ export interface QuoteListView {
 }
 
 export function toQuoteListView(list: CustomerQuoteList): QuoteListView {
-  const cards = list.quotes.map(toQuoteCard);
+  const cards = list.quotes.map((quote) => toQuoteCard(quote, list.server_now));
   const bases = new Set(cards.map((card) => card.taxBasis));
   return {
     cards,

@@ -18,7 +18,13 @@ from rest_framework import serializers
 
 from apps.partners.photos import partner_photo_url
 from apps.requirements import financials, proposals
-from apps.requirements.models import Proposal, RequirementQuestion, SiteVisit, VendorInvitation
+from apps.requirements.models import (
+    Proposal,
+    RequirementQuestion,
+    RevisionRequest,
+    SiteVisit,
+    VendorInvitation,
+)
 from apps.requirements.selectors import (
     QUESTION_ASKER_ROLES,
     question_asker_role,
@@ -66,6 +72,50 @@ class RequirementQuestionSerializer(serializers.ModelSerializer[RequirementQuest
     @extend_schema_field(serializers.ChoiceField(choices=QUESTION_ASKER_ROLES))
     def get_asked_by_role(self, obj: RequirementQuestion) -> str:
         return question_asker_role(obj)
+
+
+class RequirementQuestionListSerializer(serializers.Serializer[dict[str, Any]]):
+    """Every question on one request, both directions, oldest first."""
+
+    questions = RequirementQuestionSerializer(many=True, read_only=True)
+    server_now = serializers.DateTimeField(read_only=True)
+
+
+class RevisionRequestSerializer(serializers.ModelSerializer[RevisionRequest]):
+    """A Customer's ask for a different estimate, as both sides read it.
+
+    No money on it, by design: it names what to change, and the vendor's answer is a superseding
+    proposal read through the ordinary quote surfaces.
+    """
+
+    class Meta:
+        model = RevisionRequest
+        fields = (
+            "id",
+            "proposal",
+            "status",
+            "reason_code",
+            "excluded_items",
+            "note",
+            "decline_note",
+            "answered_by_proposal",
+            "created_at",
+            "resolved_at",
+        )
+        read_only_fields = fields
+
+
+class RevisionRequestCreateSerializer(serializers.Serializer[dict[str, Any]]):
+    reason_code = serializers.ChoiceField(choices=RevisionRequest.ReasonCode.choices)
+    #: The priced lines to leave out, by title. Meaningful with `LEAVE_OUT`; ignored otherwise.
+    excluded_items = serializers.ListField(
+        child=serializers.CharField(max_length=200), required=False, default=list, max_length=20
+    )
+    note = serializers.CharField(required=False, allow_blank=True, default="", max_length=2000)
+
+
+class RevisionRequestDeclineSerializer(serializers.Serializer[dict[str, Any]]):
+    note = serializers.CharField(required=False, allow_blank=True, default="", max_length=1000)
 
 
 class QuestionCreateSerializer(serializers.Serializer[dict[str, Any]]):
@@ -689,6 +739,9 @@ class ProposalSerializer(serializers.ModelSerializer[Proposal]):
     labour_lines = ProposalLabourLineSerializer(many=True, read_only=True)
     other_charges = ProposalOtherChargeSerializer(many=True, read_only=True)
     revision_expires_at = serializers.SerializerMethodField()
+    #: The Customer's most recent ask for a change on this estimate, or null. An `OPEN` one keeps
+    #: the revision window open past its five minutes.
+    revision_request = serializers.SerializerMethodField()
 
     class Meta:
         model = Proposal
@@ -698,6 +751,7 @@ class ProposalSerializer(serializers.ModelSerializer[Proposal]):
             "invitation",
             "revision",
             "revision_expires_at",
+            "revision_request",
             "status",
             "usability",
             "rejection_reason",
@@ -730,6 +784,7 @@ class ProposalSerializer(serializers.ModelSerializer[Proposal]):
             "partner_net_paise",
             "inclusions",
             "exclusions",
+            "scope_summary",
             "stages",
             "material_lines",
             "warranty_terms",
@@ -744,6 +799,11 @@ class ProposalSerializer(serializers.ModelSerializer[Proposal]):
         if obj.requirement.archetype != "A5_CUSTOM_PROJECT":
             return None
         return proposals.estimate_revision_expires_at(obj)
+
+    @extend_schema_field(RevisionRequestSerializer(allow_null=True))
+    def get_revision_request(self, obj: Proposal) -> dict[str, Any] | None:
+        latest = proposals.latest_revision_request_for(obj)
+        return None if latest is None else dict(RevisionRequestSerializer(latest).data)
 
 
 class ProposalPageSerializer(serializers.Serializer[dict[str, Any]]):
@@ -778,6 +838,9 @@ class ProposalCreateSerializer(serializers.Serializer[dict[str, Any]]):
     other_charges = ProposalOtherChargeSerializer(many=True, required=False)
     inclusions = serializers.ListField(child=serializers.CharField(max_length=200), required=False)
     exclusions = serializers.ListField(child=serializers.CharField(max_length=200), required=False)
+    #: What the vendor will do, in a few sentences. The lines say what each rupee buys; this says
+    #: what the job is, and it is the first thing a Customer reads on the estimate.
+    scope_summary = serializers.CharField(required=False, allow_blank=True, max_length=2000)
     warranty_terms = serializers.CharField(required=False, allow_blank=True, max_length=4000)
     valid_until = serializers.DateTimeField(required=False, allow_null=True)
     #: **Required for an A5 estimate**, and the field that was missing: `submit_proposal` has always

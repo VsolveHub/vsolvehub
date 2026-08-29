@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.46.0)
- * Checksum: 10332ed3760aaf9e
+ * Source:   contracts/openapi/v1.yaml (version 1.47.0)
+ * Checksum: 1ed6fe17af448e74
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -4299,6 +4299,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/proposals/{proposal_id}/revision-requests/{request_id}/decline/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Decline the Customer's open request for a revised estimate. Your estimate stays on the table exactly as sent; the Customer sees your note beside their request. To accept the request, send a revision instead — `POST /api/v1/proposals/` supersedes and answers it in one step. */
+        post: operations["m2_proposal_revision_decline"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/proposals/{proposal_id}/withdraw/": {
         parameters: {
             query?: never;
@@ -4506,6 +4523,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/requirements/{requirement_id}/questions/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Every clarification question on this request, both directions, oldest first. A professional's question arrives before any estimate — often before the visit — so this is readable at every status and is not gated on the paywall. The vendor's identity is not on a question; `invitation` links it to the estimate it belongs to once one exists. */
+        get: operations["m2_requirement_question_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/requirements/{requirement_id}/quotes/": {
         parameters: {
             query?: never;
@@ -4574,6 +4608,23 @@ export interface paths {
         put?: never;
         /** @description Ask this vendor to put a fresh price on a quote whose validity has passed. **This charges nothing and reuses the unlock or visit plan already paid for** — expiry must not be a dead end that forces a second purchase. The vendor answers by superseding the quote; the expired revision stays readable and stays unselectable, because only a vendor can state a price. */
         post: operations["m2_quote_revalidate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requirements/{requirement_id}/quotes/{proposal_id}/revision-request/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Ask the professional behind one live estimate for a different one, with the reason attached: leave named lines out, change materials, split the work into phases, or something else in a sentence. **Carries no price and changes no price** — only a vendor states a number, and they answer by superseding the estimate, which lands under the same entitlement. One open request per estimate; a second call re-reads the first. */
+        post: operations["m2_quote_revision_request"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5380,6 +5431,7 @@ export interface components {
             other_charges?: components["schemas"]["ProposalOtherChargeRequest"][];
             inclusions?: string[];
             exclusions?: string[];
+            scope_summary?: string;
             warranty_terms?: string;
             /** Format: date-time */
             valid_until?: string | null;
@@ -6429,6 +6481,15 @@ export interface components {
             readonly revision: number;
             /** Format: date-time */
             readonly revalidation_requested_at: string | null;
+            readonly revision_request: components["schemas"]["RevisionRequest"] | null;
+            readonly questions: components["schemas"]["RequirementQuestion"][];
+            /**
+             * @description Who wrote this, and what a Customer may weigh before choosing them.
+             *
+             *     The trust figures are read off completed engagements and Customer ratings at read time —
+             *     never stored, never an input to matching. A vendor with no rated work publishes `null`
+             *     rather than a number nobody gave.
+             */
             readonly vendor: {
                 [key: string]: unknown;
             };
@@ -6453,6 +6514,7 @@ export interface components {
             readonly customer_total_paise: number;
             readonly inclusions: unknown;
             readonly exclusions: unknown;
+            readonly scope_summary: string;
             readonly stages: components["schemas"]["ProposalStage"][];
             readonly material_lines: components["schemas"]["ProposalMaterialLine"][];
             readonly warranty_terms: string;
@@ -9301,6 +9363,7 @@ export interface components {
             readonly revision: number;
             /** Format: date-time */
             readonly revision_expires_at: string | null;
+            readonly revision_request: components["schemas"]["RevisionRequest"] | null;
             readonly status: components["schemas"]["ProposalStatusEnum"];
             readonly usability: components["schemas"]["ProposalUsabilityEnum"];
             readonly rejection_reason: components["schemas"]["RejectionReasonEnum"];
@@ -9332,6 +9395,7 @@ export interface components {
             readonly partner_net_paise: number;
             readonly inclusions: unknown;
             readonly exclusions: unknown;
+            readonly scope_summary: string;
             readonly stages: components["schemas"]["ProposalStage"][];
             readonly material_lines: components["schemas"]["ProposalMaterialLine"][];
             readonly warranty_terms: string;
@@ -9364,6 +9428,7 @@ export interface components {
             other_charges?: components["schemas"]["ProposalOtherChargeRequest"][];
             inclusions?: string[];
             exclusions?: string[];
+            scope_summary?: string;
             warranty_terms?: string;
             /** Format: date-time */
             valid_until?: string | null;
@@ -9526,6 +9591,7 @@ export interface components {
             other_charges?: components["schemas"]["ProposalOtherChargeRequest"][];
             inclusions?: string[];
             exclusions?: string[];
+            scope_summary?: string;
             warranty_terms?: string;
             /** Format: date-time */
             valid_until?: string | null;
@@ -10267,6 +10333,12 @@ export interface components {
             /** Format: date-time */
             readonly answered_at: string | null;
         };
+        /** @description Every question on one request, both directions, oldest first. */
+        RequirementQuestionList: {
+            readonly questions: components["schemas"]["RequirementQuestion"][];
+            /** Format: date-time */
+            readonly server_now: string;
+        };
         /**
          * @description * `PENDING` - Pending
          *     * `VERIFIED` - Verified
@@ -10430,6 +10502,54 @@ export interface components {
             readonly longitude: string;
             readonly provider: string;
         };
+        /**
+         * @description A Customer's ask for a different estimate, as both sides read it.
+         *
+         *     No money on it, by design: it names what to change, and the vendor's answer is a superseding
+         *     proposal read through the ordinary quote surfaces.
+         */
+        RevisionRequest: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly proposal: string;
+            readonly status: components["schemas"]["RevisionRequestStatusEnum"];
+            readonly reason_code: components["schemas"]["RevisionRequestReasonCodeEnum"];
+            readonly excluded_items: unknown;
+            readonly note: string;
+            readonly decline_note: string;
+            /** Format: uuid */
+            readonly answered_by_proposal: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly resolved_at: string | null;
+        };
+        RevisionRequestCreateRequest: {
+            reason_code: components["schemas"]["RevisionRequestReasonCodeEnum"];
+            excluded_items?: string[];
+            /** @default  */
+            note: string;
+        };
+        RevisionRequestDeclineRequest: {
+            /** @default  */
+            note: string;
+        };
+        /**
+         * @description * `LEAVE_OUT` - Leave something out
+         *     * `CHANGE_MATERIALS` - Change materials or finish
+         *     * `PHASE_WORK` - Split the work into phases
+         *     * `OTHER` - Something else
+         * @enum {string}
+         */
+        RevisionRequestReasonCodeEnum: "LEAVE_OUT" | "CHANGE_MATERIALS" | "PHASE_WORK" | "OTHER";
+        /**
+         * @description * `OPEN` - Waiting for the vendor
+         *     * `ANSWERED` - Answered with a revised estimate
+         *     * `DECLINED` - Declined by the vendor
+         * @enum {string}
+         */
+        RevisionRequestStatusEnum: "OPEN" | "ANSWERED" | "DECLINED";
         RoleSwitchRequest: {
             role: string;
         };
@@ -22423,6 +22543,58 @@ export interface operations {
             };
         };
     };
+    m2_proposal_revision_decline: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RevisionRequestDeclineRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["RevisionRequestDeclineRequest"];
+                "multipart/form-data": components["schemas"]["RevisionRequestDeclineRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevisionRequest"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     m2_proposal_withdraw: {
         parameters: {
             query?: never;
@@ -23036,6 +23208,35 @@ export interface operations {
             };
         };
     };
+    m2_requirement_question_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementQuestionList"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     m2_quote_list: {
         parameters: {
             query?: never;
@@ -23228,6 +23429,70 @@ export interface operations {
                 };
             };
             /** @description `m2_proposal_not_selectable` when the quote has not expired, when the request already has a chosen vendor, or when the caller has not unlocked these quotes at all. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_quote_revision_request: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                proposal_id: string;
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RevisionRequestCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["RevisionRequestCreateRequest"];
+                "multipart/form-data": components["schemas"]["RevisionRequestCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevisionRequest"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_proposal_not_selectable` when the estimate is no longer live, when the request already has a chosen vendor, or when the caller has not unlocked these quotes. */
             409: {
                 headers: {
                     [name: string]: unknown;

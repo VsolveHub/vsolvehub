@@ -132,6 +132,8 @@ export function proposal(overrides: Partial<Schemas["Proposal"]> = {}): Schemas[
     invitation: "11111111-1111-4111-8111-111111111111",
     revision: 1,
     revision_expires_at: null,
+    revision_request: null,
+    scope_summary: "",
     status: "SUBMITTED",
     usability: "USABLE",
     // `NOT_CHOSEN` is the enum's zero-information member; it is only meaningful

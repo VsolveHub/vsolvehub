@@ -1,5 +1,7 @@
 "use client";
 
+import { VendorTrustLine } from "@/features/quotes/view/vendor-trust-line";
+import type { VendorTrustView } from "@/features/quotes/adapters";
 import type { VisitPlanPhase } from "@vsolve/query";
 import {
   Badge,
@@ -108,7 +110,17 @@ export interface VisitTrackerProps {
    * it — asking again from a list component would be a second place that could
    * get the gate wrong.
   */
-  estimates?: readonly { proposalId: string; vendorName: string | null; priceLabel: string }[];
+  estimates?: readonly {
+    proposalId: string;
+    vendorName: string | null;
+    priceLabel: string;
+    /** The estimate's own page. Falls back to `estimatesHref` when absent. */
+    href?: string;
+    trust?: VendorTrustView;
+    /** The first stage's amount, the number people decide on. */
+    startLabel?: string | null;
+    timelineLabel?: string | null;
+  }[];
 
   /**
    * The plan-size chooser, when re-choosing is still allowed.
@@ -249,7 +261,7 @@ export function VisitTracker({
             {estimates.map((estimate, index) => (
               <li key={estimate.proposalId}>
                 <Link
-                  href={estimatesHref}
+                  href={estimate.href ?? estimatesHref}
                   className={cn(
                     "flex items-center gap-3 rounded-control px-3 py-2.5",
                     "bg-surface ring-1 ring-inset ring-line",
@@ -257,8 +269,23 @@ export function VisitTracker({
                     "focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring",
                   )}
                 >
-                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-text">
-                    {estimate.vendorName ?? `Estimate ${index + 1}`}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-text">
+                      {estimate.vendorName ?? `Estimate ${index + 1}`}
+                    </span>
+                    {estimate.trust !== undefined ? (
+                      <VendorTrustLine trust={estimate.trust} />
+                    ) : null}
+                    {estimate.startLabel || estimate.timelineLabel ? (
+                      <span className="block text-xs text-text-secondary">
+                        {[
+                          estimate.startLabel ? `Pay ${estimate.startLabel} to start` : null,
+                          estimate.timelineLabel ?? null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                    ) : null}
                   </span>
                   <span
                     data-numeric

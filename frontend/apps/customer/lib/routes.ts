@@ -52,9 +52,22 @@ export function requestQuotesHref(requirementId: string): string {
   return `/requests/${requirementId}/quotes`;
 }
 
-/** One professional's estimate, focused inside the existing comparison page. */
+/** One professional's estimate, read in full on its own page. */
 export function requestEstimateHref(requirementId: string, proposalId: string): string {
-  return `${requestQuotesHref(requirementId)}#estimate-${proposalId}`;
+  return `${requestQuotesHref(requirementId)}/${proposalId}`;
+}
+
+/** The clarification thread with one professional, on that estimate. */
+export function estimateQuestionsHref(requirementId: string, proposalId: string): string {
+  return `${requestEstimateHref(requirementId, proposalId)}/questions`;
+}
+
+/**
+ * The one step between "Choose" and the agreement: what is being agreed to,
+ * read once, before the selection that opens the engagement.
+ */
+export function estimateConfirmHref(requirementId: string, proposalId: string): string {
+  return `${requestEstimateHref(requirementId, proposalId)}/confirm`;
 }
 
 /**

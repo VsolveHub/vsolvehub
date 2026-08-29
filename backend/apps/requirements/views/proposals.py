@@ -31,6 +31,8 @@ from apps.requirements.serializers import (
     ProposalPageSerializer,
     ProposalPreviewSerializer,
     ProposalSerializer,
+    RevisionRequestDeclineSerializer,
+    RevisionRequestSerializer,
 )
 from apps.requirements.views.base import (
     ProposalCursorPagination,
@@ -221,6 +223,49 @@ class PartnerProposalDetailView(APIView):
         if proposal is None:
             _raise_api_error(RequirementNotFoundError())
         return Response(ProposalSerializer(proposal).data)
+
+
+class PartnerProposalRevisionDeclineView(ThrottledWriteMixin, APIView):
+    """The vendor says no to a Customer's requested change; their estimate stands as sent."""
+
+    permission_classes = (IsAuthenticated, IsPartnerUser)
+    throttle_scope = "m2_partner_response"
+
+    @extend_schema(
+        tags=["M2 - Proposals"],
+        operation_id="m2_proposal_revision_decline",
+        request=RevisionRequestDeclineSerializer,
+        description=(
+            "Decline the Customer's open request for a revised estimate. Your estimate stays on "
+            "the table exactly as sent; the Customer sees your note beside their request. To "
+            "accept the request, send a revision instead — `POST /api/v1/proposals/` supersedes "
+            "and answers it in one step."
+        ),
+        responses={
+            200: RevisionRequestSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request, proposal_id: uuid.UUID, request_id: uuid.UUID) -> Response:
+        serializer = RevisionRequestDeclineSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            profile = _partner_profile(request)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        if not Proposal.objects.filter(id=proposal_id, partner=profile).exists():
+            _raise_api_error(RequirementNotFoundError())
+        try:
+            declined = proposals.decline_revision_request(
+                request_id=request_id,
+                partner_id=profile.id,
+                note=str(serializer.validated_data["note"]),
+            )
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        return Response(RevisionRequestSerializer(declined).data)
 
 
 class PartnerProposalWithdrawView(ThrottledWriteMixin, APIView):

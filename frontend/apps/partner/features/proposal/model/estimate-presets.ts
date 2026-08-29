@@ -227,6 +227,33 @@ export const EXCLUSION_CHOICES: readonly ExclusionChoice[] = [
 ];
 
 /**
+ * The things vendors most often promise, tappable.
+ *
+ * The customer's comparison is built on these words — "where they differ" is a
+ * row per inclusion — so two vendors tapping the same chip produce the same
+ * line, and the table can say so. A custom line is still allowed; it simply
+ * will not match anybody else's wording.
+ */
+export interface InclusionChoice {
+  readonly code: string;
+  readonly icon: PictogramName;
+  readonly label: string;
+}
+
+export const INCLUSION_CHOICES: readonly InclusionChoice[] = [
+  { code: "demolition", icon: "walls", label: "Demolition and debris" },
+  { code: "waterproofing", icon: "water", label: "Waterproofing" },
+  { code: "plumbing", icon: "water", label: "Plumbing rework" },
+  { code: "wiring", icon: "wiring", label: "Electrical points" },
+  { code: "tiling", icon: "floor", label: "Tiling labour" },
+  { code: "painting", icon: "paint", label: "Painting and finishing" },
+  { code: "false_ceiling", icon: "fit-out", label: "False ceiling" },
+  { code: "carpentry", icon: "wood", label: "Carpentry" },
+  { code: "cleanup", icon: "clean", label: "Site cleanup" },
+  { code: "supervision", icon: "crew", label: "Supervisor on site" },
+];
+
+/**
  * The work a vendor can tap for this enquiry.
  *
  * Takes the archetype so the seam is real rather than notional — today every A5

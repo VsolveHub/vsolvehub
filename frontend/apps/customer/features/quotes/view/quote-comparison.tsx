@@ -3,40 +3,59 @@
 import { Badge, cn } from "@vsolve/ui";
 import type { ReactNode } from "react";
 
-import { cheapestIndex, type QuoteCardView } from "../adapters";
+import {
+  cheapestIndex,
+  firstStageOf,
+  scopeDifferenceRows,
+  type QuoteCardView,
+} from "../adapters";
+import { timelineLabel, validityLabel } from "./quote-card";
+import { VendorTrustLine } from "./vendor-trust-line";
 
 export interface QuoteComparisonProps {
   cards: readonly QuoteCardView[];
   isComparableOnOneBasis: boolean;
   detailHrefFor?: (proposalId: string) => string;
-  onChoose?: (proposalId: string) => void;
-  isChoosing?: boolean;
   pickedId?: string | null;
   /** The quote already chosen on the persisted selection. */
   chosenId?: string | null;
   onPick?: (proposalId: string) => void;
 }
 
+/**
+ * The estimates side by side, and — the part that decides it — where they differ.
+ *
+ * The rows are the questions a Customer actually asks in order: what do I pay,
+ * what do I pay to start, how long, what warranty, how long does the price
+ * hold, how is it priced. Then the scope lines the professionals disagree on,
+ * one row each, with a tick or a cross per column. Lines everybody includes
+ * are not shown; a row of ticks is noise on the table whose whole job is the
+ * differences.
+ *
+ * **It compares and it does not decide.** Picking stays here and on the cards;
+ * committing stays on the confirm screen.
+ */
 export function QuoteComparison(props: QuoteComparisonProps) {
-  const { cards, pickedId = null, chosenId = null, onPick } = props;
+  const { cards, pickedId = null, chosenId = null, onPick, isComparableOnOneBasis } = props;
   if (cards.length === 0) return null;
 
-  const cheapest = cheapestIndex(cards);
+  const cheapest = isComparableOnOneBasis ? cheapestIndex(cards) : null;
   const rows = comparisonRows(cards, cheapest);
+  const differences = scopeDifferenceRows(cards);
 
   return (
     <section aria-labelledby="comparison-heading">
       <h2 id="comparison-heading" className="sr-only">
-        Quotes compared side by side
+        Estimates compared side by side
       </h2>
-      <div className="overflow-x-auto rounded-[10px] border border-line bg-surface shadow-card">
-        <table className="w-full min-w-[1040px] border-collapse text-left">
+      <div className="overflow-x-auto rounded-[14px] border border-line bg-surface shadow-card">
+        <table className="w-full min-w-[720px] border-collapse text-left">
           <caption className="sr-only">
-            Quotes compared field by field, with one column per professional.
+            Estimates compared field by field, with one column per professional.
           </caption>
           <thead>
             <tr>
-              <th scope="col" className="w-[200px] border-b border-line bg-surface p-0" />
+              <th scope="col" className="w-[170px] border-b border-line bg-surface p-0" />
               {cards.map((card, index) => {
                 const picked = card.proposalId === pickedId;
                 const chosen = card.proposalId === chosenId;
@@ -46,51 +65,37 @@ export function QuoteComparison(props: QuoteComparisonProps) {
                     key={card.proposalId}
                     scope="col"
                     className={cn(
-                      "w-[326px] border-b border-line px-4 py-5 align-top text-text",
-                      picked || chosen
-                        ? "bg-selected-surface shadow-[inset_0_3px_0_0_var(--color-selected)]"
-                        : null,
+                      "min-w-[220px] border-b border-line px-4 py-4 align-top text-text",
+                      picked || chosen ? "bg-selected-surface shadow-[inset_0_3px_0_0_var(--color-selected)]" : null,
                     )}
                   >
-                    <div className="flex min-h-[110px] flex-col">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="text-base font-extrabold leading-tight tracking-tight">
-                            {card.vendorName ?? `Quote ${index + 1}`}
-                          </p>
-                          <p className="mt-1 text-sm font-medium leading-tight text-text-secondary">
-                            {vendorLine(card)}
-                          </p>
-                        </div>
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-base font-extrabold leading-tight tracking-tight">
+                          {card.vendorName ?? `Estimate ${index + 1}`}
+                        </p>
                         {chosen ? (
-                          <Badge tone="success" className="px-2 py-0.5 text-[0.6875rem]">
-                            Chosen
-                          </Badge>
+                          <Badge tone="success">Chosen</Badge>
                         ) : card.isVerified ? (
-                          <Badge tone="success" className="px-2 py-0.5 text-[0.6875rem]">
-                            Verified
-                          </Badge>
+                          <Badge tone="success">Verified</Badge>
                         ) : null}
                       </div>
-
+                      <VendorTrustLine trust={card.trust} />
                       {pickable ? (
                         <button
                           type="button"
                           aria-pressed={picked}
                           onClick={() => onPick(card.proposalId)}
                           className={cn(
-                            "mt-auto flex min-h-[42px] w-full items-center justify-center gap-2 rounded-[6px] px-3 text-sm font-extrabold leading-tight",
+                            "mt-2 flex min-h-[38px] w-full items-center justify-center rounded-[8px] px-3 text-sm font-extrabold",
                             "transition-colors duration-fast focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring",
                             picked
                               ? "bg-action-secondary text-action-secondary-text"
                               : "bg-surface text-text ring-1 ring-inset ring-line-strong hover:bg-surface-hover",
                           )}
                         >
-                          {picked ? <CheckIcon className="size-3.5" /> : null}
-                          {picked ? "Selected" : "Select this quote"}
-                          <span className="sr-only">
-                            {` - ${card.vendorName ?? `quote ${index + 1}`}`}
-                          </span>
+                          {picked ? "Leaning this way" : "Lean this way"}
+                          <span className="sr-only">{` - ${card.vendorName ?? `estimate ${index + 1}`}`}</span>
                         </button>
                       ) : null}
                     </div>
@@ -102,34 +107,98 @@ export function QuoteComparison(props: QuoteComparisonProps) {
           <tbody>
             {rows.map((row) => (
               <tr key={row.label}>
-                <th
-                  scope="row"
-                  className="w-[200px] border-b border-line bg-surface-sunken px-4 py-4 align-top text-[0.6875rem] font-extrabold uppercase tracking-[0.12em] text-text-muted"
-                >
-                  {row.label}
-                </th>
-                {row.values.map((value, index) => {
-                  const picked = cards[index]?.proposalId === pickedId;
-                  const chosen = cards[index]?.proposalId === chosenId;
-                  return (
-                    <td
-                      key={`${row.label}-${cards[index]?.proposalId ?? index}`}
-                      className={cn(
-                        "border-b border-line px-4 py-4 align-top text-[0.9375rem] font-semibold leading-6 text-text",
-                        picked || chosen ? "bg-selected-surface" : null,
-                        row.emphasis ? "text-2xl font-extrabold tracking-tight" : null,
-                      )}
-                    >
-                      {value ?? <span className="text-text-muted">Not stated</span>}
-                    </td>
-                  );
-                })}
+                <RowHead>{row.label}</RowHead>
+                {row.values.map((value, index) => (
+                  <Cell
+                    key={`${row.label}-${cards[index]?.proposalId ?? index}`}
+                    highlighted={cards[index]?.proposalId === pickedId || cards[index]?.proposalId === chosenId}
+                    emphasis={row.emphasis}
+                  >
+                    {value ?? <span className="font-medium text-text-muted">Not stated</span>}
+                  </Cell>
+                ))}
               </tr>
             ))}
+
+            {differences.length > 0 ? (
+              <>
+                <tr>
+                  <th
+                    scope="rowgroup"
+                    colSpan={cards.length + 1}
+                    className="border-b border-line bg-surface-sunken px-4 py-2.5 text-left text-[0.6875rem] font-extrabold uppercase tracking-[0.12em] text-text-muted"
+                  >
+                    Scope — where they differ
+                  </th>
+                </tr>
+                {differences.map((row) => (
+                  <tr key={row.line}>
+                    <RowHead plain>{row.line}</RowHead>
+                    {row.included.map((included, index) => (
+                      <Cell
+                        key={`${row.line}-${cards[index]?.proposalId ?? index}`}
+                        highlighted={cards[index]?.proposalId === pickedId || cards[index]?.proposalId === chosenId}
+                      >
+                        <span className={cn("font-bold", included ? "text-success-text" : "text-warm-500")}>
+                          {included ? "✓ Included" : "✗ Not included"}
+                        </span>
+                      </Cell>
+                    ))}
+                  </tr>
+                ))}
+              </>
+            ) : null}
           </tbody>
         </table>
       </div>
+      {!isComparableOnOneBasis ? (
+        <p className="mt-2 text-sm text-text-secondary">
+          These estimates state tax differently, so the totals are not ranked against each other.
+        </p>
+      ) : null}
+      <p className="mt-2 text-xs leading-5 text-text-muted">
+        A shorter list is not a worse offer — it may be a more careful one. What is not written
+        down is what you would pay for separately.
+      </p>
     </section>
+  );
+}
+
+function RowHead({ children, plain = false }: { children: ReactNode; plain?: boolean }) {
+  return (
+    <th
+      scope="row"
+      className={cn(
+        "border-b border-line bg-surface-sunken px-4 py-3 align-top",
+        plain
+          ? "text-sm font-semibold text-text"
+          : "text-[0.6875rem] font-extrabold uppercase tracking-[0.12em] text-text-muted",
+      )}
+    >
+      {children}
+    </th>
+  );
+}
+
+function Cell({
+  children,
+  highlighted,
+  emphasis = false,
+}: {
+  children: ReactNode;
+  highlighted: boolean;
+  emphasis?: boolean;
+}) {
+  return (
+    <td
+      className={cn(
+        "border-b border-line px-4 py-3 align-top text-[0.9375rem] font-semibold leading-6 text-text",
+        highlighted ? "bg-selected-surface" : null,
+        emphasis ? "text-2xl font-extrabold tracking-tight" : null,
+      )}
+    >
+      {children}
+    </td>
   );
 }
 
@@ -139,135 +208,65 @@ interface MatrixRow {
   emphasis?: boolean;
 }
 
-function comparisonRows(
-  cards: readonly QuoteCardView[],
-  cheapest: number | null,
-): readonly MatrixRow[] {
-  return [
+function comparisonRows(cards: readonly QuoteCardView[], cheapest: number | null): readonly MatrixRow[] {
+  const rows: MatrixRow[] = [
     {
-      label: "Price",
-      values: cards.map((card) => card.payableLabel),
+      label: "Total",
       emphasis: true,
+      values: cards.map((card, index) => (
+        <span key={card.proposalId} className="flex flex-col">
+          <span>{card.payableLabel}</span>
+          {cheapest === index ? (
+            <span className="text-xs font-bold uppercase tracking-[0.06em] text-success-text">Lowest</span>
+          ) : null}
+        </span>
+      )),
     },
     {
-      label: "Tax",
-      values: cards.map((card) => (card.taxBasis === "INCLUSIVE" ? "Included" : "On top")),
+      label: "To start",
+      values: cards.map((card) => {
+        const first = firstStageOf(card);
+        return first === null ? null : `${first.amountLabel} — ${first.title}`;
+      }),
     },
+    { label: "Timeline", values: cards.map((card) => timelineLabel(card)) },
     {
-      label: "How long",
+      label: "Warranty",
       values: cards.map((card) =>
-        card.minimumDays === null
-          ? null
-          : card.minimumDays === 1
-            ? "1 day"
-            : `${card.minimumDays} days`,
+        card.warrantyTerms === null ? (
+          <span key={card.proposalId} className="font-semibold text-warning-text">Not stated ⚠</span>
+        ) : (
+          card.warrantyTerms
+        ),
       ),
     },
     {
-      label: "Warranty",
-      values: cards.map((card) => card.warrantyTerms),
-    },
-    {
-      label: "Worth noting",
-      values: cards.map((card, index) => {
-        if (cheapest === index) return `Lowest of the ${countWord(cards.length)}`;
-        if (card.isOutOfBudget) return "Above your budget";
-        if (card.isExpired) return "Price expired";
-        return null;
+      label: "Valid",
+      values: cards.map((card) => {
+        const validity = validityLabel(card);
+        return validity === null ? null : (
+          <span key={card.proposalId} className={validity.urgent ? "text-warning-text" : undefined}>
+            {validity.text}
+          </span>
+        );
       }),
     },
     {
-      label: "What is included",
-      values: cards.map((card) => <ScopeLines key={card.proposalId} card={card} />),
+      label: "Priced",
+      values: cards.map((card) =>
+        card.itemLines.length > 0
+          ? `Item-wise (${card.itemLines.length})`
+          : card.labourLines.length > 0
+            ? `Labour-wise (${card.labourLines.length})`
+            : card.rateLabel !== null
+              ? `${card.rateLabel} per worker per day`
+              : null,
+      ),
     },
-  ].filter((row) => row.values.some((value) => value !== null));
-}
-
-function ScopeLines({ card }: { card: QuoteCardView }) {
-  const lines = [
-    ...card.inclusions.map((line) => ({ line, included: true })),
-    ...card.exclusions.map((line) => ({ line, included: false })),
+    {
+      label: "Tax",
+      values: cards.map((card) => (card.taxBasis === "INCLUSIVE" ? `Included (${card.taxLabel})` : `On top (${card.taxLabel})`)),
+    },
   ];
-
-  if (lines.length === 0) return <span className="text-text-muted">Not stated</span>;
-
-  return (
-    <ul className="flex list-none flex-col gap-2 p-0">
-      {lines.map((entry, index) => (
-        <li
-          key={`${card.proposalId}-${index}`}
-          className="flex items-start gap-2 text-sm font-medium leading-5 text-text-secondary"
-        >
-          {entry.included ? (
-            <CheckIcon className="mt-1 size-3.5 shrink-0 text-success-text" />
-          ) : (
-            <CrossIcon className="mt-1 size-3.5 shrink-0 text-warm-400" />
-          )}
-          <span>{entry.line}</span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function vendorLine(card: QuoteCardView): string {
-  const quotedAt = formatSubmittedAt(card.submittedAt);
-  return [card.vendorType, quotedAt === null ? null : `quoted ${quotedAt}`]
-    .filter(Boolean)
-    .join(" · ");
-}
-
-function formatSubmittedAt(iso: string): string | null {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return null;
-  return new Intl.DateTimeFormat("en-IN", {
-    weekday: "short",
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  })
-    .format(date)
-    .replace(",", "")
-    .toLowerCase();
-}
-
-function countWord(count: number): string {
-  if (count === 1) return "one";
-  if (count === 2) return "two";
-  if (count === 3) return "three";
-  return String(count);
-}
-
-function CheckIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      aria-hidden
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={3}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <path d="m5 12 5 5 9-10" />
-    </svg>
-  );
-}
-
-function CrossIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      aria-hidden
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2.4}
-      strokeLinecap="round"
-      className={className}
-    >
-      <path d="m6 6 12 12" />
-      <path d="m18 6-12 12" />
-    </svg>
-  );
+  return rows.filter((row) => row.values.some((value) => value !== null));
 }
