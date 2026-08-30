@@ -289,6 +289,9 @@ export function toA3Request(input: {
     minimum_days: draft.minimumDays,
     worker_count: draft.workerCount,
     inclusions: cleanLines(draft.inclusions),
+    // Required on the wire since 1.48.0 and meaningless on a workforce quote,
+    // which carries no shopping list. Blank is the serializer's own default.
+    material_brand_tier: "",
   };
 }
 
@@ -350,6 +353,8 @@ export function toA5Request(input: {
     exclusions: cleanLines(draft.exclusions),
     warranty_terms: draft.warrantyTerms.trim(),
     valid_until: draft.validUntil,
+    // The remote A5 composer collects no shopping list; blank is the default.
+    material_brand_tier: "",
     ...(input.siteVisitId ? { site_visit_id: input.siteVisitId } : {}),
   };
 }

@@ -5,9 +5,10 @@ import { Check, X } from "lucide-react";
 
 import { FieldLabel, ScreenHeading } from "@/features/booking/view/mobile-screen";
 import type { RequirementQuestionView } from "@/features/requirement/adapters";
+import { shouldShowTextQuestion } from "@/features/requirement/model/event-brief";
 import { iconForOption } from "../model/option-icons";
 import { unitFor } from "../model/questions";
-import { OptionTiles } from "./parts/option-tiles";
+import { OptionTiles, toggleValue } from "./parts/option-tiles";
 import { ServicePicker, hasServiceDetail } from "./parts/service-picker";
 import { SqftCard } from "./parts/sqft-card";
 
@@ -22,19 +23,19 @@ import { SqftCard } from "./parts/sqft-card";
  * ## The controls are chosen from the data
  *
  * A choice whose options carry published detail gets cards and a dialog
- * (`ServicePicker`); every other choice gets icon tiles; a boolean is two
- * tiles; a number is a keypad card. Which questions exist, in what order, with
- * what options, is the catalogue's — so a variant that publishes a different
- * brief still renders with the same four controls rather than a text box each.
+ * (`ServicePicker`); every other choice gets icon tiles, single- or
+ * multi-select by the question's kind; a boolean is two tiles; a number is a
+ * keypad card. Which questions exist, in what order, with what options, is the
+ * catalogue's — so a variant that publishes a different brief still renders
+ * with the same controls rather than a text box each.
  *
  * ## The text branch is a fact field, not a description box
  *
  * The catalogue can still publish a `TEXT` question and it renders as one
  * single-line input, because a required question with no control is a flow
- * whose Continue is disabled for a reason nothing on screen explains. It is a
- * seam, not an invitation: the M2-revamp's capture rule is that questions
- * collect choice/number/boolean facts, and a category configured with prose
- * questions should be fixed in the catalogue.
+ * whose Continue is disabled for a reason nothing on screen explains. An
+ * *optional* one stays hidden until a "Something else" tile is chosen
+ * (`shouldShowTextQuestion`): it is the escape hatch, not an invitation.
  */
 
 export interface WhatScreenProps {
@@ -46,6 +47,10 @@ export interface WhatScreenProps {
 /** Above this many options a grid stops being scannable and a list wins. */
 const MAXIMUM_TILE_OPTIONS = 8;
 
+function selectedValues(value: unknown): readonly string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+}
+
 export function WhatScreen({ questions, answers, onAnswer }: WhatScreenProps) {
   return (
     <>
@@ -53,6 +58,8 @@ export function WhatScreen({ questions, answers, onAnswer }: WhatScreenProps) {
 
       {questions.map((question) => {
         const value = answers[question.code];
+
+        if (!shouldShowTextQuestion(question, questions, answers)) return null;
 
         if (question.kind === "number") {
           return (
@@ -102,20 +109,32 @@ export function WhatScreen({ questions, answers, onAnswer }: WhatScreenProps) {
           );
         }
 
+        const tileOptions = (question.options ?? []).map((option) => ({
+          value: option.value,
+          label: option.label,
+          description: option.description,
+          icon: iconForOption(option),
+        }));
+
         return (
           <div key={question.code}>
             <FieldLabel>{question.label}</FieldLabel>
-            {question.kind === "choice" &&
-            (question.options ?? []).length <= MAXIMUM_TILE_OPTIONS ? (
+            {question.kind === "multi" ? (
               <OptionTiles
                 label={question.label}
                 name={question.code}
-                options={(question.options ?? []).map((option) => ({
-                  value: option.value,
-                  label: option.label,
-                  description: option.description,
-                  icon: iconForOption(option),
-                }))}
+                options={tileOptions}
+                values={selectedValues(value)}
+                onToggle={(next) =>
+                  onAnswer(question.code, toggleValue(selectedValues(value), next))
+                }
+              />
+            ) : question.kind === "choice" &&
+              (question.options ?? []).length <= MAXIMUM_TILE_OPTIONS ? (
+              <OptionTiles
+                label={question.label}
+                name={question.code}
+                options={tileOptions}
                 value={typeof value === "string" ? value : null}
                 onChange={(next) => onAnswer(question.code, next)}
               />
@@ -148,7 +167,8 @@ export function WhatScreen({ questions, answers, onAnswer }: WhatScreenProps) {
                 ))}
               </Select>
             )}
-            {question.help !== undefined && question.kind === "choice" ? (
+            {question.help !== undefined &&
+            (question.kind === "choice" || question.kind === "multi") ? (
               <p className="mt-1.5 text-xs leading-5 text-text-muted">{question.help}</p>
             ) : null}
           </div>

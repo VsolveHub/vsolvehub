@@ -9,22 +9,24 @@ import { isVisitNotCompleted } from "@/features/visit/queries";
 import type { SiteVisit } from "@/features/visit/model/visit-state";
 
 import type { ProposalRequest } from "../model/commercial-estimate-draft";
-import { isProposalWindowClosed, useSubmitProposal, type Proposal } from "../queries";
 import {
-  CommercialEstimateComposer,
-  clearSavedCommercialEstimate,
-} from "./commercial-estimate-composer";
+  isCustomTitleScreened,
+  isProposalWindowClosed,
+  isRateOutsideBand,
+  useSubmitProposal,
+  type Proposal,
+} from "../queries";
+import { clearSavedCommercialEstimate } from "./commercial-estimate-composer";
+import { RateCardEstimateComposer } from "./rate-card-estimate-composer";
 import { EstimateClosedDialog } from "./tap-estimate-composer";
 
 /**
  * The item-wise / labour-wise estimate, wired to the submit that already works.
  *
- * Same shape and same guards as `TapEstimateComposer`, deliberately: the two are
- * alternative composers over one wire contract, and a rule enforced on one side
- * only would make the flows disagree about what an estimate is. The parts that
- * differ are the composer being mounted and one extra job on success — the
- * commercial draft autosaves to localStorage, and a sent estimate must not
- * reappear as a half-filled form on the vendor's next enquiry visit.
+ * Mounts the rate-card composer over the autosaved per-invitation draft and
+ * owns the guards around sending: the visit must be closed, the window must be
+ * open, and a sent estimate must not reappear as a half-filled form on the
+ * vendor's next enquiry visit (the draft autosaves to localStorage).
  *
  * The submit body comes back from the composer itself rather than being rebuilt
  * here, because the composer only enables Send once the server's own preview has
@@ -52,6 +54,10 @@ export function CommercialEstimateFlow({
   const visitIsOpen = visit !== null && visit.status !== "COMPLETED";
   const refusedForVisit = isVisitNotCompleted(submit.error);
   const windowClosed = isProposalWindowClosed(submit.error);
+  // A line-level refusal (1.48.0) is rendered beside the line by the composer,
+  // not as a banner above it — the banner would name the range and the row
+  // would not, which is the wrong way round.
+  const lineRefusal = isRateOutsideBand(submit.error) || isCustomTitleScreened(submit.error);
   const presentation =
     submit.error && !refusedForVisit && !windowClosed
       ? describeError(submit.error, "mutation")
@@ -90,39 +96,43 @@ export function CommercialEstimateFlow({
     );
   }
 
+  const notice =
+    visitIsOpen || refusedForVisit ? (
+      <ErrorState
+        inline
+        title="Close the visit first"
+        message="An estimate is sent after the visit is closed. Close it on the enquiry, then come back — your priced lines are saved."
+        severity="warning"
+        actionLabel="Go to the enquiry"
+        onAction={() => {
+          window.location.href = enquiryHref;
+        }}
+      />
+    ) : presentation && !lineRefusal ? (
+      <ErrorState
+        inline
+        title={presentation.title}
+        message={presentation.message}
+        severity={presentation.severity}
+        actionLabel="Try again"
+        onAction={() => submit.reset()}
+        reference={presentation.reference}
+      />
+    ) : null;
+
   return (
     <>
-      <CommercialEstimateComposer
+      <RateCardEstimateComposer
         invitationId={enquiry.id}
         siteVisitId={visit.id}
         serviceName={enquiry.serviceName}
-        archetype={enquiry.archetype}
+        brief={enquiry.brief}
+        pricingSkillCode={enquiry.pricingSkillCode}
+        visitCompleted={visit.status === "COMPLETED"}
         isSubmitting={submit.isPending}
+        submitError={submit.error}
         onSend={handleSend}
-        notice={
-          visitIsOpen || refusedForVisit ? (
-            <ErrorState
-              inline
-              title="Close the visit first"
-              message="An estimate is sent after the visit is closed. Close it on the enquiry, then come back — your priced lines are saved."
-              severity="warning"
-              actionLabel="Go to the enquiry"
-              onAction={() => {
-                window.location.href = enquiryHref;
-              }}
-            />
-          ) : presentation ? (
-            <ErrorState
-              inline
-              title={presentation.title}
-              message={presentation.message}
-              severity={presentation.severity}
-              actionLabel="Try again"
-              onAction={() => submit.reset()}
-              reference={presentation.reference}
-            />
-          ) : null
-        }
+        notice={notice}
       />
       {windowClosed ? <EstimateClosedDialog /> : null}
     </>

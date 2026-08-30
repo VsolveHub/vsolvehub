@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import {
   cheapestIndex,
   firstStageOf,
+  materialCountLabel,
   scopeDifferenceRows,
   type QuoteCardView,
 } from "../adapters";
@@ -262,6 +263,12 @@ function comparisonRows(cards: readonly QuoteCardView[], cheapest: number | null
               ? `${card.rateLabel} per worker per day`
               : null,
       ),
+    },
+    {
+      // A count only. The list is priceless by contract, and what the
+      // Customer buys is outside every total in the row above it.
+      label: "Materials to buy",
+      values: cards.map((card) => materialCountLabel(card.materialList.length)),
     },
     {
       label: "Tax",

@@ -130,6 +130,10 @@ export function targetHref(
   if (target.kind === "PROJECT_INVITATION") return `/work/enquiries/${target.id}`;
   if (target.kind === "WORKFORCE_INVITATION") return `/work/enquiries/${target.id}`;
   if (target.kind === "ENGAGEMENT") return `/work/jobs/${target.id}`;
+  // An A3 crew offer. The id is the invitation id, which is what the offer
+  // detail route is keyed by — and the offer is on a two-minute clock, so this
+  // is the one notice where landing anywhere but the answer button is a loss.
+  if (target.kind === "CREW_OFFER") return `/work/offers/${target.id}`;
   return null;
 }
 

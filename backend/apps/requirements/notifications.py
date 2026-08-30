@@ -73,6 +73,10 @@ class NotificationRoute:
     #: with a pronoun swap would be a worse lie than two honest sentences.
     customer_template: str = ""
     partner_template: str = ""
+    #: What the vendor is told when the engagement is `LEAD_ONLY`, where the ordinary partner
+    #: copy would be a lie — "the customer chose your quote" on a job that never had a quote, or
+    #: "its payment is on hold" on money the platform never held. Empty means no distinction.
+    lead_only_partner_template: str = ""
 
 
 #: Read this as the list of moments the platform breaks its silence.
@@ -85,10 +89,22 @@ class NotificationRoute:
 NOTIFICATION_ROUTES: tuple[NotificationRoute, ...] = (
     # ---- A3: rate-card crews -------------------------------------------------------------
     NotificationRoute(
+        event_type="m2.crew_offer.invited",
+        purpose="m2.crew_offer.invited",
+        audience=Audience.PARTNER,
+        partner_template="m2_crew_offer_invited",
+    ),
+    NotificationRoute(
         event_type="m2.crew_offer.accepted",
         purpose="m2.crew_offer.accepted",
         audience=Audience.CUSTOMER,
         customer_template="m2_crew_offer_accepted",
+    ),
+    NotificationRoute(
+        event_type="m2.booking_fee.forfeited",
+        purpose="m2.booking_fee.forfeited",
+        audience=Audience.PARTNER,
+        partner_template="m2_booking_fee_forfeited_partner",
     ),
     NotificationRoute(
         event_type="m2.booking_fee.charged",
@@ -100,8 +116,9 @@ NOTIFICATION_ROUTES: tuple[NotificationRoute, ...] = (
     NotificationRoute(
         event_type="m2.crew.vendor_no_show",
         purpose="m2.crew.vendor_no_show",
-        audience=Audience.CUSTOMER,
+        audience=Audience.BOTH,
         customer_template="m2_crew_vendor_no_show",
+        partner_template="m2_crew_vendor_no_show_partner",
     ),
     NotificationRoute(
         event_type="m2.rate_card.fell_back",
@@ -130,6 +147,15 @@ NOTIFICATION_ROUTES: tuple[NotificationRoute, ...] = (
         audience=Audience.CUSTOMER,
         customer_template="m2_visit_plan_charged",
     ),
+    #: One per held visit the plan payment confirmed. The Partner accepted a fixed time and was
+    #: told not to travel; this is the moment that changes, and the only way they learn it
+    #: without a tab open.
+    NotificationRoute(
+        event_type="m2.visit.booked",
+        purpose="m2.visit.booked",
+        audience=Audience.PARTNER,
+        partner_template="m2_visit_booked_partner",
+    ),
     NotificationRoute(
         event_type="m2.proposal.rejected",
         purpose="m2.proposal.rejected",
@@ -143,6 +169,7 @@ NOTIFICATION_ROUTES: tuple[NotificationRoute, ...] = (
         audience=Audience.BOTH,
         customer_template="m2_engagement_opened_customer",
         partner_template="m2_engagement_opened_partner",
+        lead_only_partner_template="m2_engagement_opened_partner_crew",
     ),
     NotificationRoute(
         event_type="m2.stage.awaiting_review",
@@ -155,6 +182,7 @@ NOTIFICATION_ROUTES: tuple[NotificationRoute, ...] = (
         purpose="m2.stage.disputed",
         audience=Audience.PARTNER,
         partner_template="m2_stage_disputed",
+        lead_only_partner_template="m2_shift_attendance_disputed_partner",
     ),
     NotificationRoute(
         event_type="m2.amendment.authorized",
@@ -219,8 +247,9 @@ NOTIFICATION_ROUTES: tuple[NotificationRoute, ...] = (
     NotificationRoute(
         event_type="m2.booking_fee.waived",
         purpose="m2.booking_fee.waived",
-        audience=Audience.CUSTOMER,
+        audience=Audience.BOTH,
         customer_template="m2_booking_fee_waived",
+        partner_template="m2_booking_fee_waived_partner",
     ),
     NotificationRoute(
         event_type="m2.proposal.revalidation_requested",
@@ -248,11 +277,29 @@ NOTIFICATION_ROUTES: tuple[NotificationRoute, ...] = (
         customer_template="m2_shift_shortfall",
     ),
     NotificationRoute(
+        event_type="m2.shift.attendance_confirmed",
+        purpose="m2.shift.attendance_confirmed",
+        audience=Audience.PARTNER,
+        partner_template="m2_shift_attendance_confirmed_partner",
+    ),
+    NotificationRoute(
+        event_type="m2.shift.attendance_disputed",
+        purpose="m2.shift.attendance_disputed",
+        audience=Audience.PARTNER,
+        partner_template="m2_shift_attendance_disputed_partner",
+    ),
+    NotificationRoute(
         event_type="m2.shift.day_settled",
         purpose="m2.shift.day_settled",
         audience=Audience.BOTH,
         customer_template="m2_shift_day_settled_customer",
         partner_template="m2_shift_day_settled_partner",
+    ),
+    NotificationRoute(
+        event_type="m2.vendor.cash_demand_reported",
+        purpose="m2.vendor.cash_demand_reported",
+        audience=Audience.PARTNER,
+        partner_template="m2_cash_demand_reported_partner",
     ),
     # ---- A5: the project -----------------------------------------------------------------
     NotificationRoute(
@@ -342,6 +389,8 @@ class _Recipients:
     customer_id: uuid.UUID | None
     partner_user_id: uuid.UUID | None
     context: dict[str, Any]
+    #: The engagement's `commercial_mode` when the event resolved to one; blank otherwise.
+    commercial_mode: str = ""
 
 
 def notified_event_types() -> tuple[str, ...]:
@@ -434,7 +483,12 @@ def _resolve(event: OutboxEvent) -> _Recipients:
     context.setdefault("headcount", payload.get("crew_size") or "your crew")
     context.setdefault("visit_count", payload.get("visit_count") or "the visits you chose")
     _add_payload_details(context, payload)
-    return _Recipients(customer_id=customer_id, partner_user_id=partner_user_id, context=context)
+    return _Recipients(
+        customer_id=customer_id,
+        partner_user_id=partner_user_id,
+        context=context,
+        commercial_mode=engagement.commercial_mode if engagement is not None else "",
+    )
 
 
 #: The Indian numbering system groups the last three digits and then every two above them —
@@ -496,6 +550,7 @@ _DETAIL_FALLBACKS: dict[str, str] = {
     "workers_present": "fewer",
     "workers_expected": "the agreed number",
     "extension_days": "more",
+    "days": "the agreed number of",
     "deliverables": "their work",
 }
 
@@ -524,7 +579,7 @@ def _add_payload_details(context: dict[str, Any], payload: dict[str, Any]) -> No
     if deliverables is not None:
         context.setdefault("deliverables", deliverables)
 
-    for key in ("workers_present", "workers_expected", "extension_days"):
+    for key in ("workers_present", "workers_expected", "extension_days", "days"):
         value = payload.get(key)
         if isinstance(value, int) and not isinstance(value, bool):
             context.setdefault(key, str(value))
@@ -564,12 +619,17 @@ def _context_for_route(route: NotificationRoute, context: dict[str, Any]) -> dic
             }
         return context
 
-    if route.event_type != "m2.invitation.received":
+    if route.event_type not in ("m2.invitation.received", "m2.crew_offer.invited"):
         return context
 
     invitation_id = context.get("invitation_id")
     if not isinstance(invitation_id, str) or not invitation_id:
         return context
+
+    if route.event_type == "m2.crew_offer.invited":
+        # A crew offer opens on the offer screen, not the enquiry inbox: it has a two-minute
+        # clock and one button, and the enquiry page would show it as a quote to write.
+        return {**context, "target_kind": "CREW_OFFER", "target_id": invitation_id}
 
     archetype = context.get("archetype")
     target_kind = (
@@ -627,12 +687,18 @@ def notify_for_outbox_event(event: OutboxEvent) -> list[NotificationIntent]:
         )
 
     wants_partner = route.audience in (Audience.PARTNER, Audience.BOTH)
-    if wants_partner and recipients.partner_user_id is not None and route.partner_template:
+    partner_template = route.partner_template
+    if (
+        route.lead_only_partner_template
+        and recipients.commercial_mode == Engagement.CommercialMode.LEAD_ONLY
+    ):
+        partner_template = route.lead_only_partner_template
+    if wants_partner and recipients.partner_user_id is not None and partner_template:
         intents.append(
             _notify(
                 recipient_id=recipients.partner_user_id,
                 route=route,
-                template_code=route.partner_template,
+                template_code=partner_template,
                 event=event,
                 context=_context_for_route(route, recipients.context),
             )

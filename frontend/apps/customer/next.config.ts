@@ -76,6 +76,12 @@ const nextConfig: NextConfig = {
    * no reason, and hide CORS and cookie misconfiguration until the day the proxy
    * is removed.
    */
+  async redirects() {
+    return [
+      // A customer never sees the word "engagement"; the booking lives at /jobs/{id} now.
+      { source: "/engagements/:path*", destination: "/jobs/:path*", permanent: true },
+    ];
+  },
   async rewrites() {
     if (!isDev) return [];
     return [

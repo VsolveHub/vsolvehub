@@ -4,21 +4,32 @@ The one rule this module exists to keep: **the guarantee lives here, not in the 
 Partner's saved rate is validated on write for convenience; every check below runs again, against
 the live catalog and the live policy, at the moment a quote is actually submitted
 (`validate_quote_guardrails`, called from `financials.calculate_estimate` for every A5 item-wise
-estimate). A band Operations narrows, or a cap Operations lowers, between the Partner saving a rate
+estimate that touches the catalog). A band Operations narrows between the Partner saving a rate
 and sending a quote is caught here — never assumed from a client that might be stale, patched, or
 lying.
 
+Two owner decisions (2026-08-29) shape what is *not* enforced:
+
+* **Custom items are allowed inline, without review.** A Partner on site adds "Something not
+  listed", prices it, and sends. There is no share cap and no "custom-only quote" refusal — a
+  review queue that held the estimate would mean the estimate never went out in the visit window.
+  The one thing still screened is the title itself (no phone numbers, no links).
+* **Materials are always the Customer's to buy.** The catalog carries a *material recipe* per item
+  and `shopping_list_for_lines` turns the tapped items into the list the Customer shops from —
+  quantities only, never money.
+
 Money in this module is otherwise dumb arithmetic: `financials.py` owns tax, commission, platform
-fee and reconciliation. This module answers exactly two questions — "is this rate allowed" and "is
-this quote's shape allowed" — and hands `financials` a clean, already-validated set of lines plus
-two dial amounts to fold into the existing money ladder.
+fee and reconciliation. This module answers "is this rate allowed", "what should the Customer buy",
+and hands `financials` a clean, already-validated set of lines.
 """
 
 from __future__ import annotations
 
+import math
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from django.db import transaction
@@ -28,10 +39,7 @@ from apps.identity.models import User
 from apps.locations.models import ServiceArea
 from apps.partners.models import PartnerProfile, Skill
 from apps.requirements.exceptions import (
-    CustomOnlyQuoteError,
-    CustomShareExceededError,
     CustomTitleScreenedError,
-    DialOverCapError,
     GuardrailPolicyUnavailableError,
     ProposalShapeError,
     RateOutsideBandError,
@@ -40,21 +48,13 @@ from apps.requirements.exceptions import (
 from apps.requirements.models import (
     CustomWorkItemReview,
     PartnerRateItem,
-    Proposal,
     QuoteGuardrailPolicy,
     WorkItem,
     WorkItemRate,
     band_for_item_in_area,
 )
 
-#: `financials._bps`, duplicated rather than imported: that helper is private to the money module
-#: and this module's rounding never touches a money total `financials` also computes, so importing
-#: it would be a coupling with nothing behind it. Both round half-up on the same 10,000 basis.
 _MAX_BASIS_POINTS = 10_000
-
-
-def _round_bps(amount_paise: int, basis_points: int) -> int:
-    return (amount_paise * basis_points + 5_000) // _MAX_BASIS_POINTS
 
 
 # ---------------------------------------------------------------------------
@@ -72,15 +72,12 @@ def active_guardrail_policy(*, at: datetime | None = None) -> QuoteGuardrailPoli
     """
 
     moment = at or timezone.now()
-    policy = (
-        QuoteGuardrailPolicy.objects.filter(
-            status=QuoteGuardrailPolicy.Status.ACTIVE,
-            approved_at__isnull=False,
-            approved_by__isnull=False,
-            effective_from__lte=moment,
-        )
-        .first()
-    )
+    policy = QuoteGuardrailPolicy.objects.filter(
+        status=QuoteGuardrailPolicy.Status.ACTIVE,
+        approved_at__isnull=False,
+        approved_by__isnull=False,
+        effective_from__lte=moment,
+    ).first()
     if policy is None:
         raise GuardrailPolicyUnavailableError()
     required_bps = (
@@ -254,27 +251,59 @@ class PriceBookEntry:
     ceiling_paise: int | None
     partner_rate_paise: int | None
     partner_is_active: bool
+    #: True while the Partner has never saved a rate: `partner_rate_paise` is the city reference.
+    is_default_rate: bool
+    #: The trade this item belongs to - the rate-card screen's section heading.
+    trade_code: str
+    trade_name: str
+
+
+def pricing_trades_for_partner(partner: PartnerProfile) -> list[str]:
+    """The trade codes this Partner prices from.
+
+    Every skill they hold, plus the pricing trade of every active M2 configuration whose dispatch
+    skill they hold (`full-home-rewiring` -> `electrician`) - so the rate card shows a rewiring
+    electrician the electrician catalogue even when the only skill row they carry is the
+    service's own.
+    """
+
+    from apps.catalog.models import M2VariantConfiguration  # noqa: PLC0415 - avoid a model cycle
+
+    held = list(partner.skill_links.filter(is_active=True).values_list("skill__code", flat=True))
+    mapped = (
+        M2VariantConfiguration.objects.filter(
+            status=M2VariantConfiguration.Status.ACTIVE,
+            variant__required_skill_code__in=held,
+        )
+        .exclude(pricing_skill_code="")
+        .values_list("pricing_skill_code", flat=True)
+    )
+    trades: list[str] = []
+    for code in (*held, *mapped):
+        if code and code not in trades:
+            trades.append(code)
+    return trades
 
 
 def price_book_for_partner(
-    *, partner: PartnerProfile, service_area: ServiceArea
+    *, partner: PartnerProfile, service_area: ServiceArea, skill_code: str | None = None
 ) -> list[PriceBookEntry]:
-    """Every catalog item this Partner's skills cover, with the band and their own saved rate.
+    """Every catalog item this Partner's skills cover, with the band and their own rate.
 
     One read for two screens (§6 of the build prompt): the rate-card editor and the composer's
-    "from my rate card" list both call this, so the two can never disagree about what band a rate
-    must sit inside. An item with no published rate for this Partner's area is still listed —
-    `reference_rate_paise` and the band are `None` — so the screen can say "not priced here yet"
-    rather than silently omitting the item.
+    catalog both call this, so the two can never disagree about what band a rate must sit inside.
+
+    **A rate the Partner never set is the city reference.** A new Partner can quote on day one;
+    the entry says `is_default_rate` so the screen can show "set your own" rather than pretend.
+    An item with no published rate for this Partner's area is still listed — the band and the
+    rate are `None` — so the screen can say "not priced here yet" rather than silently omit it.
     """
 
-    skill_ids = list(
-        partner.skill_links.filter(is_active=True).values_list("skill_id", flat=True)
-    )
+    trades = [skill_code] if skill_code else pricing_trades_for_partner(partner)
     items = list(
-        WorkItem.objects.filter(skill_id__in=skill_ids, status=WorkItem.Status.ACTIVE).order_by(
-            "sort_order", "name"
-        )
+        WorkItem.objects.filter(skill__code__in=trades, status=WorkItem.Status.ACTIVE)
+        .select_related("skill")
+        .order_by("skill__name", "sort_order", "name")
     )
     try:
         policy = active_guardrail_policy()
@@ -292,15 +321,19 @@ def price_book_for_partner(
             else None
         )
         own = saved.get(item.id)
+        reference = band["reference_rate_paise"] if band else None
         entries.append(
             PriceBookEntry(
                 work_item=item,
-                reference_rate_paise=band["reference_rate_paise"] if band else None,
+                reference_rate_paise=reference,
                 rate_version=band["rate_version"] if band else None,
                 floor_paise=band["floor_paise"] if band else None,
                 ceiling_paise=band["ceiling_paise"] if band else None,
-                partner_rate_paise=own.rate_paise if own else None,
-                partner_is_active=own.is_active if own else False,
+                partner_rate_paise=own.rate_paise if own else reference,
+                partner_is_active=own.is_active if own else reference is not None,
+                is_default_rate=own is None,
+                trade_code=item.skill.code,
+                trade_name=item.skill.name,
             )
         )
     return entries
@@ -346,7 +379,8 @@ def set_partner_rate(
 
 # ---------------------------------------------------------------------------
 # Quote-time enforcement. Called from `financials.calculate_estimate` for every A5 item-wise
-# estimate — see that module for where these results join the money ladder.
+# estimate that carries a catalog or custom line — see that module for where the results join
+# the money ladder.
 # ---------------------------------------------------------------------------
 
 
@@ -354,13 +388,10 @@ def set_partner_rate(
 class GuardrailCheckResult:
     """What `validate_quote_guardrails` decided, folded into `financials`' snapshot and lines."""
 
-    policy_version: int
+    policy_version: int | None
     #: Item lines with `reference_rate_paise`/`band_floor_paise`/`band_ceiling_paise`/`rate_version`
-    #: attached to every catalog line, unchanged on every custom line.
+    #: attached to every catalog line; custom lines carry `is_custom: True` and nothing else new.
     item_lines: list[dict[str, Any]]
-    misc_amount_paise: int
-    margin_amount_paise: int
-    custom_reviews: list[CustomWorkItemReview]
 
 
 def _screen_custom_title(title: str) -> None:
@@ -384,11 +415,10 @@ def _annotate_catalog_lines(
     catalog_lines: list[dict[str, Any]],
     service_area: ServiceArea,
     policy: QuoteGuardrailPolicy,
-) -> tuple[list[dict[str, Any]], int]:
+) -> list[dict[str, Any]]:
     """Band-check every catalog line and attach its resolved band to the snapshot.
 
-    Returns the full line list (catalog lines annotated, custom lines untouched, in original
-    order) and the catalog-only subtotal the custom-share cap is measured against.
+    Returns the full line list — catalog lines annotated, custom lines marked, original order.
     """
 
     work_items = {
@@ -399,10 +429,11 @@ def _annotate_catalog_lines(
         )
     }
     annotated_items: list[dict[str, Any]] = []
-    catalog_subtotal = 0
     for line in item_lines:
         if not line.get("work_item_id"):
-            annotated_items.append(line)
+            annotated_items.append(
+                {**line, "is_custom": True, "category": str(line.get("category") or "Custom")}
+            )
             continue
         work_item_id = uuid.UUID(str(line["work_item_id"]))
         work_item = work_items.get(work_item_id)
@@ -419,134 +450,169 @@ def _annotate_catalog_lines(
                 f"{work_item.name} must be priced between "
                 f"₹{band['floor_paise'] / 100:.2f} and ₹{band['ceiling_paise'] / 100:.2f}."
             )
-        catalog_subtotal += int(line.get("amount_paise") or 0)
         annotated_items.append(
             {
                 **line,
+                "work_item_id": str(work_item_id),
+                "is_custom": False,
+                # The catalogue's own words, so every Partner's line reads the same on a
+                # comparison; the composer sends whatever it had.
+                "title": work_item.name,
+                "category": work_item.group or str(line.get("category") or ""),
                 "reference_rate_paise": band["reference_rate_paise"],
                 "band_floor_paise": band["floor_paise"],
                 "band_ceiling_paise": band["ceiling_paise"],
                 "rate_version": band["rate_version"],
             }
         )
-    return annotated_items, catalog_subtotal
-
-
-def _assert_custom_share_within_cap(
-    *, custom_lines: list[dict[str, Any]], catalog_subtotal: int, policy: QuoteGuardrailPolicy
-) -> None:
-    if not custom_lines:
-        return
-    custom_subtotal = sum(int(line.get("amount_paise") or 0) for line in custom_lines)
-    custom_share_bps = (
-        (custom_subtotal * _MAX_BASIS_POINTS) // catalog_subtotal
-        if catalog_subtotal > 0
-        else _MAX_BASIS_POINTS
-    )
-    if custom_share_bps > (policy.custom_share_cap_bps or 0):
-        raise CustomShareExceededError(
-            "Custom items cannot make up more than "
-            f"{(policy.custom_share_cap_bps or 0) / 100:.0f}% of your priced items."
-        )
-
-
-def _build_custom_item_reviews(
-    *, custom_lines: list[dict[str, Any]], partner: PartnerProfile, proposal: Proposal | None
-) -> list[CustomWorkItemReview]:
-    reviews: list[CustomWorkItemReview] = []
-    for line in custom_lines:
-        title = str(line.get("title") or "").strip()
-        if not title:
-            raise ProposalShapeError("Every custom item needs a description.")
-        _screen_custom_title(title)
-        reviews.append(
-            CustomWorkItemReview(
-                partner=partner,
-                proposal=proposal,
-                title=title,
-                unit=str(line.get("unit") or ""),
-                rate_paise=int(line.get("rate_paise") or line.get("amount_paise") or 0),
-            )
-        )
-    return reviews
-
-
-def _assert_dials_within_cap(
-    *, misc_bps: int, margin_bps: int, policy: QuoteGuardrailPolicy
-) -> None:
-    if misc_bps > (policy.misc_cap_bps or 0):
-        raise DialOverCapError(
-            f"Miscellaneous cannot exceed {(policy.misc_cap_bps or 0) / 100:.0f}%."
-        )
-    if margin_bps > (policy.margin_cap_bps or 0):
-        raise DialOverCapError(f"Margin cannot exceed {(policy.margin_cap_bps or 0) / 100:.0f}%.")
+    return annotated_items
 
 
 def validate_quote_guardrails(
     *,
-    partner: PartnerProfile,
-    service_area: ServiceArea,
+    service_area: ServiceArea | None,
     item_lines: list[dict[str, Any]],
-    line_subtotal_paise: int,
-    misc_bps: int,
-    margin_bps: int,
-    proposal: Proposal | None = None,
 ) -> GuardrailCheckResult:
-    """Enforce every Phase A rule against the *current* catalog and policy. See the build prompt §5.
+    """Enforce the price-book rules against the *current* catalog and policy.
 
-    Runs only when at least one line carries `work_item_id` or `is_custom` — an A5 estimate that
-    never touches the price book (an older client, or a labour-wise estimate) passes through
-    untouched, at zero-bps dials, exactly as it did before this feature existed.
+    A line with `work_item_id` is a catalog line and must sit inside its band; any other line is
+    a custom line the Partner typed on site, allowed as-is once its title passes the contact
+    screen. With no catalog line at all the policy is not even consulted — an older client, a
+    labour-wise estimate or an all-custom estimate passes through untouched.
     """
 
     catalog_lines = [line for line in item_lines if line.get("work_item_id")]
-    custom_lines = [line for line in item_lines if line.get("is_custom")]
-    unclassified = [
-        line for line in item_lines if line not in catalog_lines and line not in custom_lines
-    ]
-    if unclassified:
-        raise ProposalShapeError(
-            "Every item line must either come from your rate card or be marked as a custom item."
-        )
+    for line in item_lines:
+        if line.get("work_item_id"):
+            continue
+        title = str(line.get("title") or "").strip()
+        if not title:
+            raise ProposalShapeError("Every item needs a name.")
+        _screen_custom_title(title)
+
     if not catalog_lines:
-        raise CustomOnlyQuoteError()
+        return GuardrailCheckResult(
+            policy_version=None,
+            item_lines=[
+                {**line, "is_custom": True, "category": str(line.get("category") or "Custom")}
+                for line in item_lines
+            ],
+        )
+    if service_area is None:
+        raise WorkItemRateUnavailableError(
+            "This request has no service area, so rate-card items cannot be checked."
+        )
 
     policy = active_guardrail_policy()
-
-    annotated_items, catalog_subtotal = _annotate_catalog_lines(
+    annotated = _annotate_catalog_lines(
         item_lines=item_lines,
         catalog_lines=catalog_lines,
         service_area=service_area,
         policy=policy,
     )
-    _assert_custom_share_within_cap(
-        custom_lines=custom_lines, catalog_subtotal=catalog_subtotal, policy=policy
-    )
-    custom_reviews = _build_custom_item_reviews(
-        custom_lines=custom_lines, partner=partner, proposal=proposal
-    )
-    _assert_dials_within_cap(misc_bps=misc_bps, margin_bps=margin_bps, policy=policy)
-
-    return GuardrailCheckResult(
-        policy_version=policy.version,
-        item_lines=annotated_items,
-        misc_amount_paise=_round_bps(line_subtotal_paise, misc_bps),
-        margin_amount_paise=_round_bps(line_subtotal_paise, margin_bps),
-        custom_reviews=custom_reviews,
-    )
+    return GuardrailCheckResult(policy_version=policy.version, item_lines=annotated)
 
 
-@transaction.atomic
-def save_custom_item_reviews(reviews: list[CustomWorkItemReview]) -> None:
-    """Persist the custom-item review rows a submitted quote produced.
+# ---------------------------------------------------------------------------
+# The shopping list: what the Customer buys, from the items the Partner tapped.
+# ---------------------------------------------------------------------------
 
-    Split from `validate_quote_guardrails` on purpose: validation must be able to run as a
-    dry-run preview (`proposals.preview_proposal`) without writing anything, and only an actual
-    `submit_proposal` should ever queue a review for Operations.
+
+def _decimal(value: object, default: Decimal = Decimal(0)) -> Decimal:
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError):
+        return default
+
+
+def shopping_list_for_lines(  # noqa: PLR0912 - one pass: aggregate, then round to packs
+    item_lines: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Aggregate every catalog line's material recipe into one list, rounded up to packs.
+
+    Quantities only — never money. Entries with the same title/spec/unit merge, and a recipe that
+    names a pack ("90 m coil") reports whole packs rather than raw metres, because that is what
+    the shop sells and what the Customer should ask for. The Partner corrects quantities before
+    sending; this is the starting point that spares them typing sixteen rows.
     """
 
-    for review in reviews:
-        review.save()
+    ids: list[uuid.UUID] = []
+    for line in item_lines:
+        raw = line.get("work_item_id")
+        if raw:
+            ids.append(uuid.UUID(str(raw)))
+    if not ids:
+        return []
+    recipes = {
+        item.id: item.material_recipe
+        for item in WorkItem.objects.filter(id__in=ids).only("id", "material_recipe")
+    }
+
+    totals: dict[tuple[str, str, str], dict[str, Any]] = {}
+    order: list[tuple[str, str, str]] = []
+    for line in item_lines:
+        raw = line.get("work_item_id")
+        if not raw:
+            continue
+        recipe = recipes.get(uuid.UUID(str(raw))) or []
+        quantity = _decimal(line.get("quantity"), Decimal(1))
+        for entry in recipe:
+            if not isinstance(entry, dict):
+                continue
+            title = str(entry.get("title") or "").strip()
+            if not title:
+                continue
+            spec = str(entry.get("spec") or "").strip()
+            unit = str(entry.get("unit") or "").strip()
+            key = (title, spec, unit)
+            if key not in totals:
+                order.append(key)
+                totals[key] = {
+                    "title": title,
+                    "spec": spec,
+                    "unit": unit,
+                    "raw": Decimal(0),
+                    "pack_size": _decimal(entry.get("pack_size")),
+                    "pack_unit": str(entry.get("pack_unit") or "").strip(),
+                }
+            totals[key]["raw"] += _decimal(entry.get("per_unit")) * quantity
+
+    result: list[dict[str, Any]] = []
+    for key in order:
+        row = totals[key]
+        raw_total: Decimal = row["raw"]
+        if raw_total <= 0:
+            continue
+        pack_size: Decimal = row["pack_size"]
+        if pack_size > 0 and row["pack_unit"]:
+            packs = math.ceil(raw_total / pack_size)
+            result.append(
+                {
+                    "title": row["title"],
+                    "spec": row["spec"],
+                    "unit": row["pack_unit"],
+                    "quantity": str(packs),
+                    "note": f"about {raw_total.normalize():f} {row['unit']}".strip(),
+                }
+            )
+        else:
+            result.append(
+                {
+                    "title": row["title"],
+                    "spec": row["spec"],
+                    "unit": row["unit"],
+                    "quantity": str(math.ceil(raw_total)),
+                    "note": "",
+                }
+            )
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Operations: promoting a custom item into the catalog. Nothing queues reviews any more — a
+# Partner's custom line goes out with the estimate — but Operations can still read the queue
+# table and graduate an item they noticed into the catalog.
+# ---------------------------------------------------------------------------
 
 
 @transaction.atomic

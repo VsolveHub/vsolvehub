@@ -1,12 +1,30 @@
 "use client";
 
-import { useServerCountdown } from "@vsolve/query";
-import { Badge, Button, Sheet, formatMoney } from "@vsolve/ui";
+import { describeError, useServerCountdown } from "@vsolve/query";
+import { Badge, Button, ConfirmAction, Sheet, formatMoney } from "@vsolve/ui";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
-import { isOfferLive } from "../model/offer-state";
-import { useAcceptCrewOffer, usePartnerCrewOffers, type CrewOffer } from "../queries";
+import {
+  ACCEPT_CONSEQUENCE,
+  PAID_DAILY,
+  acceptQuestion,
+  crewMathsLine,
+  crewSizeLine,
+  inclusionsLine,
+  isOfferLive,
+  startDayLabel,
+  type CrewOfferAnswer,
+} from "../model/offer-state";
+import {
+  useAcceptCrewOffer,
+  useDeclineCrewOffer,
+  usePartnerCrewOffers,
+  type CrewOffer,
+} from "../queries";
+import { CrewOfferDeclineDialog } from "./crew-offer-decline-dialog";
+import { CrewOfferOutcome } from "./crew-offer-outcome";
 
 /**
  * A live crew offer, wherever the lead happens to be.
@@ -14,57 +32,25 @@ import { useAcceptCrewOffer, usePartnerCrewOffers, type CrewOffer } from "../que
  * ## Why this is not a page
  *
  * A crew offer expires in about two minutes. The offers page renders them
- * perfectly and is useless to a lead who is on their earnings screen, their
- * profile, or an enquiry when one lands — and that is most of the time, because
- * the cascade pushes offers rather than the lead going to fetch them. A missed
- * offer is lost income *and* a wave that widens for no reason.
- *
- * A notification-bell badge was the cheaper option and is the wrong one at this
- * deadline: a badge is a thing you notice later, and there is no later here.
+ * perfectly and is useless to a lead who is on their earnings screen when one
+ * lands. A missed offer is lost income *and* a wave that widens for no reason.
  *
  * ## It adds no transport
  *
- * This is the same `usePartnerCrewOffers` query the offers page already runs, on
- * the same fifteen-second bounded poll. Mounting it in the shell does not double
- * the polling — TanStack dedupes by query key, so the page and the sheet share
- * one observer and one request. Offers were already dynamic; they were merely
- * confined to one route.
- *
- * ## Two guards on what counts as live
- *
- * The server refuses to return a lapsed offer, and `isOfferLive` re-checks the
- * deadline against `server_now` when the lead actually looks. Between a
- * fifteen-second poll and a hundred-and-twenty-second deadline the cached list
- * is routinely a few seconds stale, and a button rendered inside that window
- * produces a refusal describing a race that never happened.
+ * Same `usePartnerCrewOffers` query the WORK stack runs, on the same
+ * fifteen-second bounded poll; TanStack dedupes by query key.
  *
  * ## Suppressed where the offer is already on screen
  *
- * Where the offer is already rendered, a sheet over it is the same offer twice
- * with two accept buttons — and the one underneath would keep working.
+ * `/work` renders every live offer as a card and `/work/offers/[invitationId]`
+ * is the offer's own screen. The match is `/work/offers/` **with** the trailing
+ * slash so the bare A1 inbox at `/work/offers` is not matched.
  *
- * That used to mean `/offers`, which was never right: `/offers` is A1's
- * unit-scoped inbox, a different endpoint and a different record type from the
- * A3 crew offers this sheet shows. The two places an A3 offer is now on screen
- * are `/work` — the merged WORK stack renders every live offer as its own card
- * — and `/work/offers/[invitationId]`, the offer's own detail screen. Both are
- * matched here.
+ * ## The answer outlives the row
  *
- * The match is `/work/offers/` **with** the trailing slash, not a bare
- * `startsWith("/work/offers")`. Task 7 Part B added a second, bare
- * `/work/offers` route — the A1 direct-offer inbox, no id, a different record
- * type again — and a prefix match with no trailing slash also matches that
- * route and its own sub-paths. That inbox never renders an A3 offer, so
- * matching it here would suppress this sheet for a lead sitting on the A1
- * list with a live A3 offer arriving on a countdown, with nothing else on
- * screen to catch it. `/work/offers/[invitationId]` always has a segment
- * after the slash, so the trailing slash keeps that route matched while
- * excluding the bare inbox exactly.
- *
- * Deliberately not the whole `/work` subtree: `/work/jobs/…` and
- * `/work/enquiries/…` are detail screens with no offer on them, and a lead
- * reading one of those when an offer lands is exactly the case this sheet
- * exists for.
+ * A successful accept or decline removes the offer from the next read, which
+ * would unmount this sheet on top of "don't travel yet". So the answer is
+ * captured here and drawn by `CrewOfferOutcome` until the lead dismisses it.
  */
 export function LiveOfferSheet() {
   const pathname = usePathname();
@@ -73,6 +59,11 @@ export function LiveOfferSheet() {
 
   const offersQuery = usePartnerCrewOffers(!showsOffersAlready);
   const [dismissed, setDismissed] = useState<string | null>(null);
+  const [answer, setAnswer] = useState<CrewOfferAnswer | null>(null);
+
+  if (answer !== null) {
+    return <OutcomeSheet answer={answer} onDone={() => setAnswer(null)} />;
+  }
 
   const data = offersQuery.data ?? null;
   const live =
@@ -88,84 +79,158 @@ export function LiveOfferSheet() {
       key={offer.invitation_id}
       offer={offer}
       onDismiss={() => setDismissed(offer.invitation_id)}
+      onAnswered={setAnswer}
     />
   );
 }
 
 /**
  * Split out, and keyed by invitation, so the countdown belongs to one offer.
- *
- * The parent may render a different offer on the next poll. A countdown hook
- * reading `responds_by` off a changing row would keep counting the previous
- * deadline down for a commit, which on a two-minute clock is visible.
  */
-function OfferSheet({ offer, onDismiss }: { offer: CrewOffer; onDismiss: () => void }) {
-  const accept = useAcceptCrewOffer(offer.invitation_id);
+function OfferSheet({
+  offer,
+  onDismiss,
+  onAnswered,
+}: {
+  readonly offer: CrewOffer;
+  readonly onDismiss: () => void;
+  readonly onAnswered: (answer: CrewOfferAnswer) => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const [declining, setDeclining] = useState(false);
   const countdown = useServerCountdown(offer.responds_by, 1000);
 
+  const accept = useAcceptCrewOffer(offer.invitation_id, {
+    onAccepted: (booking) => {
+      setConfirming(false);
+      onAnswered({ kind: "accepted", offer, booking });
+    },
+  });
+  const decline = useDeclineCrewOffer(offer.invitation_id, {
+    onDeclined: (declined, input) => {
+      setDeclining(false);
+      onAnswered({ kind: "declined", offer: declined, reasonCode: input.reasonCode });
+    },
+  });
+
+  const area = offer.area_label.trim();
+  const start = startDayLabel(offer.requested_start);
+  const whereWhen = [area || null, start === null ? null : `from ${start}`]
+    .filter((part): part is string => part !== null)
+    .join(" · ");
+  const brief = inclusionsLine(offer.brief.slice(0, 2).map((line) => line.value));
+  const busy = accept.isPending || decline.isPending;
+  const acceptError = accept.error ? describeError(accept.error, "mutation").message : null;
+
   return (
-    <Sheet open onOpenChange={(next) => (next ? undefined : onDismiss())} title="A job is waiting for your answer">
-      <div className="flex flex-col gap-3">
+    <Sheet open onOpenChange={(next) => (next ? undefined : onDismiss())} title="New job">
+      <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-lg font-semibold text-text">
-            {offer.headcount === 1 ? "1 person" : `${offer.headcount} people`} ·{" "}
-            {offer.days === 1 ? "1 day" : `${offer.days} days`}
+          <p className="text-xl font-bold leading-tight text-text">
+            {crewSizeLine(offer.headcount, offer.days)}
           </p>
           {countdown !== null ? (
-            // The countdown is the whole reason this interrupts rather than
-            // waits. `announce` rather than the digits for assistive tech: a
+            // `announce` rather than the digits for assistive tech: a
             // per-second reading of a ticking clock is unusable.
             <Badge tone={countdown.remainingMs <= 30_000 ? "danger" : "warning"} dot>
-              <span aria-hidden>{countdown.display} left</span>
+              <span aria-hidden>⏱ {countdown.display}</span>
               <span className="sr-only">{countdown.announce}</span>
             </Badge>
           ) : null}
         </div>
 
-        {/* The first two things the customer said — the occasion and the crowd
-            for an event, the work for a helper crew — so a lead knows what job
-            this is before deciding whether to look closer. The detail screen
-            carries the whole brief. */}
-        {offer.brief.length > 0 ? (
-          <p className="text-sm font-semibold leading-6 text-text">
-            {offer.brief
-              .slice(0, 2)
-              .map((line) => line.value)
-              .join(" · ")}
-          </p>
-        ) : null}
+        {whereWhen === "" ? null : (
+          <p className="text-sm leading-5 text-text-secondary">{whereWhen}</p>
+        )}
 
-        <p className="text-sm leading-6 text-text">
-          <strong className="font-semibold">{formatMoney(offer.lead_day_receipt_paise)}</strong> to
-          you per day, paid directly by the customer at the end of each day.
+        <p className="text-2xl font-extrabold leading-tight tabular-nums text-text">
+          {formatMoney(offer.lead_total_receipt_paise)} to you
         </p>
-        {offer.area_label ? (
-          <p className="text-sm leading-6 text-text-secondary">{offer.area_label}</p>
-        ) : null}
+        <p className="text-sm leading-5 text-text-secondary">
+          {crewMathsLine({
+            leadDayReceiptPaise: offer.lead_day_receipt_paise,
+            headcount: offer.headcount,
+            days: offer.days,
+          })}{" "}
+          · {PAID_DAILY}
+        </p>
 
-        <div className="mt-1 flex flex-wrap gap-2">
+        {brief === null ? null : (
+          <p className="text-sm font-semibold leading-5 text-text">{brief}</p>
+        )}
+
+        {acceptError === null ? null : (
+          <p role="alert" className="text-sm leading-5 text-danger-text">
+            {acceptError}
+          </p>
+        )}
+
+        <div className="mt-1 flex gap-2">
           <Button
-            onClick={() => accept.mutate()}
+            className="flex-1"
+            onClick={() => setConfirming(true)}
+            disabled={busy}
             loading={accept.isPending}
-            loadingLabel="Taking the job"
+            loadingLabel="Taking it"
           >
-            Take this job
+            Take it
           </Button>
-          {/* Dismiss, never decline. Declining carries a required reason that
-              feeds the decline-rate alarm, and a lead who closed a sheet has not
-              given one. The offer stays on the offers page, where declining has
-              the reason picker it needs. */}
-          <Button variant="ghost" onClick={onDismiss}>
-            Not now
+          <Button variant="ghost" onClick={() => setDeclining(true)} disabled={busy}>
+            Pass
           </Button>
         </div>
 
-        <p className="text-xs leading-5 text-text-secondary">
-          Taking it holds the job while the customer pays the booking fee.{" "}
-          <strong className="font-semibold text-text">Do not travel yet</strong> — we will tell
-          you the moment it is confirmed.
-        </p>
+        <Link
+          href={`/work/offers/${offer.invitation_id}`}
+          className="text-xs font-semibold text-action-secondary underline-offset-2 hover:underline"
+        >
+          See the whole brief
+        </Link>
       </div>
+
+      <ConfirmAction
+        open={confirming}
+        onOpenChange={setConfirming}
+        title={acceptQuestion(offer)}
+        consequence={ACCEPT_CONSEQUENCE}
+        confirmLabel="Yes, send them"
+        cancelLabel="Back"
+        pending={accept.isPending}
+        onConfirm={() => {
+          // Success closes it through `onAccepted`. Failure closes it here so
+          // the refusal below the dialog is reachable and a second POST is not
+          // one tap away (`accept_crew_offer` declares no `Idempotency-Key`).
+          accept.mutate(undefined, { onError: () => setConfirming(false) });
+        }}
+      />
+
+      <CrewOfferDeclineDialog
+        open={declining}
+        onOpenChange={setDeclining}
+        pending={decline.isPending}
+        error={decline.error ? describeError(decline.error, "mutation").message : null}
+        onDecline={(input) => decline.mutate(input)}
+      />
+    </Sheet>
+  );
+}
+
+/** The answer, kept up after the row is gone. */
+function OutcomeSheet({
+  answer,
+  onDone,
+}: {
+  readonly answer: CrewOfferAnswer;
+  readonly onDone: () => void;
+}) {
+  return (
+    <Sheet
+      open
+      onOpenChange={(next) => (next ? undefined : onDone())}
+      title={answer.kind === "accepted" ? "Your answer" : "Passed"}
+      footer={<Button onClick={onDone}>Done</Button>}
+    >
+      <CrewOfferOutcome answer={answer} />
     </Sheet>
   );
 }

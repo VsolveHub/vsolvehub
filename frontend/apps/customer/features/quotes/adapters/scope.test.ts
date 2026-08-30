@@ -35,6 +35,8 @@ function card(overrides: Partial<QuoteCardView> = {}): QuoteCardView {
     otherCharges: [],
     stages: [],
     materials: [],
+    materialList: [],
+    brandTierLabel: null,
     inclusions: [],
     exclusions: [],
     scopeSummary: null,

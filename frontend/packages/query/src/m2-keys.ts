@@ -226,6 +226,25 @@ export const m2QueryKeys = {
   },
 
   /**
+   * The Partner's own price book — the ops-curated work-item catalog for their
+   * skills, with the band context and the rate they saved against each item
+   * (contract 1.46.0, `GET /partner/price-book/`).
+   *
+   * Rooted rather than nested under a requirement: the price book is the
+   * Partner's, not a project's. The rate-card screen and the on-site estimate
+   * composer read the same key so a rate saved on one is never stale on the
+   * other. `list(serviceAreaId)` because the band is per city — the same item
+   * carries a different floor and ceiling in a different service area — and an
+   * undefined area is the server's own "the Partner's primary area" default,
+   * which gets a key of its own rather than colliding with a named one.
+   */
+  priceBook: {
+    all: ["m2", "price-book"] as const,
+    list: (serviceAreaId?: string, skill?: string) =>
+      [...m2QueryKeys.priceBook.all, "list", serviceAreaId ?? "primary", skill ?? "all"] as const,
+  },
+
+  /**
    * The A5 visit plan, its slots and the grid a vendor books one from.
    *
    * Added at the Wave I gate on both frontend columns' §7 request — Session A

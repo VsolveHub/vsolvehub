@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
 
+import type { CustomerProposal } from "@vsolve/query";
+
 import {
+  brandTierLabel,
   firstStageOf,
+  materialCountLabel,
   savingsAgainstDearest,
   toComparisonRows,
+  toQuoteCard,
   type QuoteCardView,
 } from "./index";
 
@@ -48,6 +53,8 @@ function card(overrides: Partial<QuoteCardView> = {}): QuoteCardView {
     otherCharges: [],
     stages: [],
     materials: [],
+    materialList: [],
+    brandTierLabel: null,
     inclusions: [],
     exclusions: [],
     warrantyTerms: null,
@@ -122,6 +129,86 @@ describe("firstStageOf", () => {
   });
 });
 
+describe("the shopping list — contract 1.48.0", () => {
+  /** The minimum the adapter reads off the wire; everything else is defaulted. */
+  function proposal(overrides: Partial<CustomerProposal> = {}): CustomerProposal {
+    return {
+      id: "proposal-1",
+      requirement: "requirement-1",
+      status: "SUBMITTED",
+      rejection_reason: "",
+      revision: 1,
+      revalidation_requested_at: null,
+      revision_request: null,
+      questions: [],
+      scope_summary: "",
+      vendor: {},
+      site_visit: null,
+      rate_paise_per_worker_day: null,
+      minimum_days: null,
+      worker_count: null,
+      estimate_type: "LABOUR_WISE",
+      item_lines: [],
+      labour_lines: [],
+      other_charges: [],
+      calculation_snapshot: null,
+      line_subtotal_paise: 0,
+      authorized_charges_paise: 0,
+      taxable_value_paise: 0,
+      partner_quote_total_paise: 0,
+      platform_fee_paise: 0,
+      platform_fee_tax_paise: 0,
+      customer_total_paise: 0,
+      total_paise: 100_000,
+      tax_paise: 0,
+      tax_basis: "INCLUSIVE",
+      inclusions: [],
+      exclusions: [],
+      stages: [],
+      material_lines: [],
+      material_list: [],
+      material_brand_tier: "",
+      warranty_terms: "",
+      valid_until: null,
+      submitted_at: "2026-08-21T09:30:00.000Z",
+      ...overrides,
+    } as CustomerProposal;
+  }
+
+  it("maps each line to a title, spec, quantity with unit and note — never a price", () => {
+    const view = toQuoteCard(
+      proposal({
+        material_list: [
+          { title: " Modular switch ", spec: "16 A, white", unit: "Nos", quantity: "5.000", note: "" },
+          { title: "PVC conduit", spec: "", unit: "", quantity: "20.500", note: "any brand" },
+          { title: "  ", spec: "ignored", unit: "Nos", quantity: "1", note: "" },
+        ],
+        material_brand_tier: "STANDARD",
+      }),
+      "2026-08-21T10:00:00.000Z",
+    );
+
+    expect(view.materialList).toEqual([
+      { title: "Modular switch", spec: "16 A, white", quantityLabel: "5 Nos", note: null },
+      { title: "PVC conduit", spec: null, quantityLabel: "20.5", note: "any brand" },
+    ]);
+    expect(view.brandTierLabel).toBe("Standard tier (Finolex / Anchor class)");
+    expect(Object.keys(view.materialList[0] ?? {})).not.toContain("amountLabel");
+  });
+
+  it("names both tiers and nothing else", () => {
+    expect(brandTierLabel("PREMIUM")).toBe("Premium tier (Polycab / Legrand class)");
+    expect(brandTierLabel("")).toBeNull();
+    expect(brandTierLabel("GOLD")).toBeNull();
+  });
+
+  it("counts items in words", () => {
+    expect(materialCountLabel(0)).toBeNull();
+    expect(materialCountLabel(1)).toBe("1 item");
+    expect(materialCountLabel(4)).toBe("4 items");
+  });
+});
+
 describe("toComparisonRows", () => {
   it("drops a row no estimate answered", () => {
     // A row of "Not stated" across every column is noise, not information.
@@ -167,6 +254,16 @@ describe("toComparisonRows", () => {
     const priced = rows.find((row) => row.label === "How it is priced");
     expect(priced?.values).toEqual(["Item-wise (1 item)", "Labour-wise (1 role)", null]);
     expect(priced?.equivalent).toBe(true);
+  });
+
+  it("counts the materials to buy per estimate, and drops the row when nobody listed any", () => {
+    const rows = toComparisonRows([
+      card({ materialList: [{ title: "Switch", spec: null, quantityLabel: "5 Nos", note: null }] }),
+      card({ proposalId: "p2" }),
+    ]);
+    expect(rows.find((row) => row.label === "Materials to buy")?.values).toEqual(["1 item", null]);
+
+    expect(toComparisonRows([card()]).map((row) => row.label)).not.toContain("Materials to buy");
   });
 
   it("keeps assumptions out of the ranked rows", () => {

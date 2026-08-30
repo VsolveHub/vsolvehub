@@ -40,10 +40,15 @@ function renderVisit(status: Schemas["SiteVisitStatusEnum"]) {
 }
 
 describe("project visit progress", () => {
-  it("shows the payment wait while the slot is held", () => {
+  it("says not to travel while the slot is held, and keeps the address locked", () => {
     renderVisit("REQUESTED");
 
-    expect(screen.getByText("Waiting for customer payment")).toBeInTheDocument();
+    expect(screen.getByText("This visit is yours")).toBeInTheDocument();
+    expect(screen.getByText("Do not travel yet")).toBeInTheDocument();
+    expect(screen.getByText(/Waiting for customer payment/)).toBeInTheDocument();
+    expect(screen.getByText("Exact address")).toBeInTheDocument();
+    expect(screen.getByText("Customer phone")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /release/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "I’ve arrived" })).not.toBeInTheDocument();
   });
 

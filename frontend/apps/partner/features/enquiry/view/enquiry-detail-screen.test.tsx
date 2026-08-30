@@ -18,74 +18,6 @@ function ok<T>(data: T) {
   return { data, error: undefined, response: new Response(null, { status: 200 }) };
 }
 
-const slotGrid: Schemas["VisitSlotGrid"] = {
-  server_now: "2026-08-21T03:30:00Z",
-  visit_duration_minutes: 45,
-  availability_is_preliminary: true,
-  timezone: "Asia/Kolkata",
-  days: [
-    {
-      date: "2026-08-21",
-      is_today: true,
-      slots: [
-        {
-          id: "today-slot-token",
-          starts_at: "2026-08-21T03:30:00Z",
-          ends_at: "2026-08-21T04:15:00Z",
-          is_available: true,
-          unavailable_reason: null,
-        },
-      ],
-    },
-    {
-      date: "2026-08-22",
-      is_today: false,
-      slots: [
-        {
-          id: "signed-slot-token",
-          starts_at: "2026-08-22T03:30:00Z",
-          ends_at: "2026-08-22T04:15:00Z",
-          is_available: true,
-          unavailable_reason: null,
-        },
-        {
-          id: "unavailable-slot-token",
-          starts_at: "2026-08-22T04:30:00Z",
-          ends_at: "2026-08-22T05:15:00Z",
-          is_available: false,
-          unavailable_reason: "NO_CAPACITY",
-        },
-      ],
-    },
-    {
-      date: "2026-08-23",
-      is_today: false,
-      slots: [
-        {
-          id: "second-day-slot-token",
-          starts_at: "2026-08-23T03:30:00Z",
-          ends_at: "2026-08-23T04:15:00Z",
-          is_available: true,
-          unavailable_reason: null,
-        },
-      ],
-    },
-    {
-      date: "2026-08-24",
-      is_today: false,
-      slots: [
-        {
-          id: "third-day-slot-token",
-          starts_at: "2026-08-24T03:30:00Z",
-          ends_at: "2026-08-24T04:15:00Z",
-          is_available: true,
-          unavailable_reason: null,
-        },
-      ],
-    },
-  ],
-};
-
 let queryClient: QueryClient;
 
 function wrapper({ children }: { readonly children: ReactNode }) {
@@ -98,20 +30,25 @@ function renderProject(
   proposals: Schemas["Proposal"][] = [],
 ) {
   client.GET.mockImplementation((path: string) => {
-    if (path.endsWith("/visit-slots/")) return Promise.resolve(ok(slotGrid));
     if (path === "/api/v1/proposals/") {
       return Promise.resolve(ok({ results: proposals, next: null }));
     }
     return Promise.resolve(
-          ok(
-            enquiryDetail({
-              archetype: "A5_CUSTOM_PROJECT",
-              service_name: "Home renovation",
-              status,
-              site_visits: visits,
-            }),
-          ),
-        );
+      ok(
+        enquiryDetail({
+          archetype: "A5_CUSTOM_PROJECT",
+          service_name: "Home renovation",
+          status,
+          site_visits: visits,
+          // A fixed-time offer (1.44.0): the customer already chose the slot.
+          fixed_visit_start: "2026-08-22T04:30:00Z",
+          fixed_visit_duration_minutes: 120,
+          fixed_visit_earning_paise: 14_900,
+          fixed_visit_status: "OFFERED",
+          brief: [{ code: "symptom", question: "What is wrong", value: "Power keeps tripping" }],
+        }),
+      ),
+    );
   });
 
   return render(
@@ -135,41 +72,38 @@ afterEach(() => {
 });
 
 describe("project visit entry", () => {
-  it("shows the visit picker instead of a separate Accept action", async () => {
+  it("shows the fixed-time offer as tiles, with take and pass and no picker", async () => {
     renderProject("INVITED");
 
-    expect(
-      await screen.findByRole("heading", { name: "Book your site visit" }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Take this visit" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Pass on this one" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Home renovation" })).toBeInTheDocument();
     expect(screen.getByText("Near Kukatpally, Hyderabad")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "What the customer asked for" })).toBeInTheDocument();
-    expect(screen.getByText("Two floors, deep clean before a handover.")).toBeInTheDocument();
+    // The brief, as labelled — not the raw answer map.
+    expect(screen.getByText("Power keeps tripping")).toBeInTheDocument();
+    expect(screen.queryByText("Site access")).not.toBeInTheDocument();
     expect(screen.queryByText("Plot 14")).not.toBeInTheDocument();
-    expect(await screen.findByRole("radio", { name: /Choose/i })).toBeInTheDocument();
-    expect(screen.queryByText("Today")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /22 Aug/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /23 Aug/i })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /24 Aug/i })).not.toBeInTheDocument();
-    expect(screen.queryByText(/10:00/)).not.toBeInTheDocument();
-    expect(screen.getByRole("radiogroup")).toHaveClass("grid-cols-2");
+    expect(screen.getByText("Service")).toBeInTheDocument();
+    expect(screen.getByText("Area")).toBeInTheDocument();
+    expect(screen.getByText("Date")).toBeInTheDocument();
+    expect(screen.getByText("Starts")).toBeInTheDocument();
+    expect(screen.getByText("₹149")).toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: /Choose/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Accept$/i })).not.toBeInTheDocument();
   });
 
-  it("keeps the visit picker available after the older UI already accepted", async () => {
+  it("keeps the offer answerable after the older UI already accepted", async () => {
     renderProject("ACCEPTED");
 
-    expect(
-      await screen.findByRole("heading", { name: "Book your site visit" }),
-    ).toBeInTheDocument();
-    expect(screen.queryByText("Confirm a visit slot first")).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Take this visit" })).toBeInTheDocument();
   });
 
-  it("shows the booked visit instead of offering another slot", async () => {
+  it("shows the booked visit instead of the offer", async () => {
     renderProject("ACCEPTED", [planVisit()]);
 
     expect(await screen.findByRole("heading", { name: "Your visit" })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Book your site visit" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Take this visit" })).not.toBeInTheDocument();
   });
 
   it("shows the submitted estimate with a revise action", async () => {

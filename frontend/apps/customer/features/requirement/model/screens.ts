@@ -23,24 +23,34 @@ export type Screen = (typeof SCREENS)[number];
  */
 export const SCREEN_BUDGET = 3;
 
-export function screenIndex(screen: Screen): number {
-  return SCREENS.indexOf(screen);
+/**
+ * Every navigation helper takes the *active* sequence as an optional second
+ * argument and defaults to the full budget. A variant that publishes no
+ * questions walks `["where_when", "visits_send"]` — see `active-screens.ts` —
+ * and the reducer must step through that list, not this one, or Continue
+ * from "Where and when" would land on a step the Customer never saw.
+ */
+export function screenIndex(screen: Screen, screens: readonly Screen[] = SCREENS): number {
+  return screens.indexOf(screen);
 }
 
-export function nextScreen(screen: Screen): Screen | null {
-  const index = screenIndex(screen);
-  if (index === -1 || index === SCREENS.length - 1) return null;
-  return SCREENS[index + 1] ?? null;
+export function nextScreen(screen: Screen, screens: readonly Screen[] = SCREENS): Screen | null {
+  const index = screenIndex(screen, screens);
+  if (index === -1 || index === screens.length - 1) return null;
+  return screens[index + 1] ?? null;
 }
 
-export function previousScreen(screen: Screen): Screen | null {
-  const index = screenIndex(screen);
+export function previousScreen(
+  screen: Screen,
+  screens: readonly Screen[] = SCREENS,
+): Screen | null {
+  const index = screenIndex(screen, screens);
   if (index <= 0) return null;
-  return SCREENS[index - 1] ?? null;
+  return screens[index - 1] ?? null;
 }
 
-export function isFinalScreen(screen: Screen): boolean {
-  return screen === SCREENS[SCREENS.length - 1];
+export function isFinalScreen(screen: Screen, screens: readonly Screen[] = SCREENS): boolean {
+  return screen === screens[screens.length - 1];
 }
 
 /**

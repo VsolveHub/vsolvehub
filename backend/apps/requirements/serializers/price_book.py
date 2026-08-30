@@ -34,6 +34,9 @@ class WorkItemSerializer(serializers.ModelSerializer[WorkItem]):
             "description",
             "status",
             "sort_order",
+            "group",
+            "material_recipe",
+            "bundle_quantities",
             "band_below_bps",
             "band_above_bps",
             "created_at",
@@ -171,6 +174,11 @@ class PriceBookEntrySerializer(serializers.Serializer[dict[str, Any]]):
     ceiling_paise = serializers.IntegerField(allow_null=True)
     partner_rate_paise = serializers.IntegerField(allow_null=True)
     partner_is_active = serializers.BooleanField()
+    #: True while the Partner has never saved a rate for this item: `partner_rate_paise` is then
+    #: the city reference, so a new Partner can quote on day one and change it whenever they like.
+    is_default_rate = serializers.BooleanField()
+    trade_code = serializers.CharField()
+    trade_name = serializers.CharField()
 
 
 class PriceBookListSerializer(serializers.Serializer[dict[str, Any]]):

@@ -513,6 +513,18 @@ def forfeit_booking_fee(*, requirement_id: uuid.UUID, reason_code: str) -> Booki
             f"+ {platform_paise} platform ({reason_code})"
         ),
     )
+    enqueue_outbox_event(
+        aggregate_type="requirement",
+        aggregate_id=requirement.id,
+        event_type="m2.booking_fee.forfeited",
+        idempotency_key=f"m2-booking-fee-forfeited:{fee.id}",
+        payload={
+            "requirement_id": str(requirement.id),
+            "vendor_invitation_id": str(fee.invitation_id),
+            "amount_paise": travel_paise,
+            "reason_code": reason_code,
+        },
+    )
     return fee
 
 

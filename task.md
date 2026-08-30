@@ -840,6 +840,229 @@ Run the relevant Vitest and Playwright suites for every changed Customer/Partner
   `scope.test.ts`, `quote-card.test.tsx` (rewritten for the new card). **Owner runs `migrate`
   and the suites.**
 
+### Event lighting & decor brief — 2026-08-29 (Claude, owner-approved redesign doc)
+
+- **Problem (audit):** the A5 brief for `event-lighting-decor` was three generic questions
+  (occasion / guest number / venue booked); desktop step 1 printed "Illustrative selection" /
+  "Mock scope only" fallback cards; three of four occasion tiles shared one icon and "Festival"
+  fell through to a letter; guest count showed catering copy in a sq-ft card; step 2 asked
+  "Ready to start ± a week" for a fixed-date event; `budget_min/max_paise` were never written.
+  Full audit + screens: `docs/superpowers/plans/2026-08-29-event-decor-flow-audit-and-redesign.md`.
+- **Backend (no contract change — `MULTIPLE_CHOICE` was already published):** `validate_scope`
+  accepts a `MULTI_SELECT` list of option codes; `seed_m2_demo` maps `MULTIPLE_CHOICE` →
+  `MULTI_SELECT` and re-authors the decor brief as eight questions (occasion ×8 with South-India
+  functions, optional one-line "Something else" text, multi-select decor areas, look, venue type,
+  guest band, budget band, setup access); `services._budget_band_bounds` projects `budget_band`
+  onto the budget columns on create and on every answer write (`unsure` stores nothing; an
+  answer set without the question leaves the budget alone). Band amounts are dev-seed
+  placeholders for owner decision D2.
+- **Customer:** `model/event-brief.ts` detects the event shape from the `event_type` question
+  (never the slug): step 2 becomes venue + "Event date" with no flexibility band or finish-by
+  row and renders `setup_access` as tiles; step 3 recap prints option labels (multi joined with
+  "+", no "Standard requirement details" filler). `OptionTiles` gained a checkbox mode; both
+  what-screens render `multi`; the desktop screen keeps the curated fit-out cards only when
+  every option is curated and otherwise uses the phone's icon tiles — the hashed-gradient
+  placeholder cards are deleted. `iconForOption` gained occasion/decor/scale rules ordered ahead
+  of the trades ("baby shower" is not plumbing). An optional TEXT question hides until a
+  sibling is answered `other`. The step-1 guard now requires every catalogue-required answer
+  before the first save (`requiredAnswerCodes` on the provider). `?selected_service=` sync is
+  confined to single-question briefs so a reload cannot skip step 1.
+- **Verification:** backend ruff format/check + strict mypy on changed modules green,
+  `makemigrations --check` clean (data-only); customer `tsc` and eslint green on changed
+  folders. Pre-existing ruff-format failures in `price_book`/catalog commands are untouched.
+  **No tests executed** per convention — written for the owner: `test_event_decor_brief.py`,
+  `event-brief.test.ts`, new cases in `state.test.ts` and `draft.test.ts`.
+- **Owner steps:** re-run `seed_m2_demo --i-understand-this-is-dev-only`; open
+  `/requests/new/event-lighting-decor` on phone and desktop width; send a wedding brief with
+  two decor areas and a budget band; check "Budget you gave" on the request detail and the
+  partner enquiry's answers. Decisions D1 (photos), D3 (multi-day weddings), D4 (A1 balloon
+  packages) remain open.
+
+### Visit-first quotes + vendor price book, Electrician end to end — 2026-08-29 (Claude, owner-directed)
+
+Owner decisions this build implements: quote (A5) projects are **visit-first** (tap the service, address,
+date, estimates + slots — the pro measures on site); the partner prices **labour only** from a rate
+card; **materials are always the customer's to buy** and the estimate produces the shopping list;
+custom items are allowed inline with no ops review; unsaved rates default to the city reference;
+no misc/margin dials; no PDF. Electrician is the first trade; other trades follow the same shape.
+
+- **Backend (contract 1.47.0 → 1.48.0, migration `requirements/0027`)**: the vendor price book
+  that existed unwired is now live — missing exception classes added, models/serializers/views
+  exported, routes under `partner/price-book/**` and `operations/work-items|quote-guardrails|
+  custom-item-reviews/**`. `price_book.validate_quote_guardrails` is called from
+  `financials.calculate_estimate` (band check on catalogue lines, contact screening on custom
+  titles; no share cap, no custom-only refusal, no dials — `Proposal.misc_bps/margin_bps` dropped).
+  `WorkItem` gains `group`, `material_recipe`, `bundle_quantities`; `Proposal` gains
+  `material_list` (quantities, never money) and `material_brand_tier`; the preview returns
+  `suggested_material_list` (recipes × quantity, rounded up to sellable packs). `EnquiryDetail`
+  gains `brief` (labels not codes, via `crew_brief`). New partner push `m2.visit.booked` when a
+  plan payment confirms a held visit. `seed_price_book_demo` re-authored: 27 electrician items
+  in six groups with recipes and 1/2/3 BHK bundles, labour-day items, upsert-on-rerun; painting
+  items grouped. `seed_m2_demo`: `full-home-rewiring` asks nothing, `electrician-consultation`
+  asks one "What's going on?" tile. The bogus untracked `0027_remove_customworkitemreview…`
+  migration was deleted (it was Django reacting to the unexported models). `seed_m2_demo` now
+  also activates one DEV-marked `CommercialPolicy` (version 1: 18% on every service category,
+  2% Customer-paid platform fee, 5% commission, no withholding) — nothing had ever activated one,
+  so every A5 preview answered `m2_financial_policy_unavailable`. A real policy is never overwritten.
+- **Partner app**: `/me/rate-card` compiles and groups by `group` with the city-rate default;
+  the estimate route defaults to a 5-step tap composer (`rate-card-estimate-composer.tsx`):
+  mode tiles → catalogue items with quick sets, steppers, band-printed money pad and inline
+  custom items (labour-wise: people × days) → shopping list seeded from the preview and edited
+  in place, Standard/Premium → terms tiles with payment templates that allocate installments
+  exactly → server-checked review with inline `rate_outside_band`/`custom_title_screened`.
+  Scope summary is optional and auto-composed; inclusions auto-filled. The "Tap / Detailed"
+  chooser was removed the next morning (owner): one composer, whose first step is the only
+  choice — Item-wise or Labour-wise. `commercial-estimate-composer.tsx` stays on disk, unmounted.
+  Same morning: `GET …/quotes/{proposal_id}/shopping-list.pdf` (`views/receipts.py`, the existing
+  reportlab renderer and masthead) — V Solve Hub-branded, names the professional, quantities only;
+  the customer estimate page has a PDF button that shares the file via the Web Share sheet or opens
+  it in a tab. With exactly one estimate the quotes page now renders the full estimate inline
+  (`EstimateDetailScreen embedded`) instead of a card plus a "Full estimate" link. The list is no
+  longer printed on the page: `ShoppingListCard` (count + brand tier, right-hand column on
+  desktop) opens the PDF in a `Dialog` viewer with Share (file where supported) and Download.
+  `Engagement` now publishes `service_name`/`service_slug`; both apps title the agreement with it
+  ("Full home rewiring") instead of "Your project" / "Project".
+
+### Trade rollout — 2026-08-30 (Claude, owner-directed)
+
+- **Pricing trade (Claude):** every quote/day-hire variant dispatches on its own skill code, but the
+  price book is keyed by skill — so a multi-skill partner saw catalogues mixed and a plumber
+  consultation showed electrician items. `M2VariantConfiguration.pricing_skill_code`
+  (`catalog/0017`) names the trade catalogue per variant; enquiries publish it; the composer
+  passes it as `?skill=`; the rate-card screen groups by trade. Seeds set it via
+  `ProjectSeed.pricing_skill` / `DaySeed.pricing_skill`.
+- **Claude's trades, done:** plumber (23 items: taps, WC & basin, lines, drainage, tank & motor,
+  labour; consultation = one "What's going on?" tile, bathroom renovation asks nothing, day-hire
+  wired), carpenter (19 items: kitchen units per rft, wardrobes, furniture, doors, labour; kitchen
+  asks nothing, furniture = one "What are we building?" tile), event decor (14 items, small/
+  medium/large sets; the 8-question brief cut to occasion + optional line). Day-hire help text
+  no longer promises a supervisor. `bundleLabel` reads Small/Medium/Large as well as BHK.
+- **Remaining trades (Claude, same day - owner chose not to use Codex; the brief at
+  `docs/prompts/trade-catalogue-rollout-codex-brief.md` stays as the pattern description):**
+  painter (19 items, recipes by the bucket/bag + BHK sets), tiling (10, tiles by the box),
+  waterproofing (9), demolition (9), construction helpers (6), AC & ducting (12), catering (13,
+  per plate/counter, no recipes), bridal makeup (11). Every quote service now asks 0-1 tile:
+  painting/kitchen/rewiring/bathroom/central-AC ask nothing; the rest one fork. Interior fit-out
+  keeps only its fit-out-kind tiles and prices from the carpenter catalogue. 12 trade
+  catalogues, 172 work items, all with Hyderabad placeholder rates.
+- Gates: ruff/mypy/`makemigrations --check` green; contract regenerated + client; partner and
+  customer typecheck/lint green. Tests not run. Owner: `migrate`, re-run both seeds. Offer screen uses the gallery fact tiles + countdown + Pass reasons; held
+  state shows "Do not travel yet" with locked address/phone tiles; enquiry summary renders
+  `brief`, stale free-text/photo sentences removed.
+- **Customer app**: a variant with no questions opens on "Where and when · 1 of 2"
+  (`model/active-screens.ts`); A5 briefs read "When should the pro come?" with no flexibility
+  band or finish-by row; step 3 facts card is just the service name when nothing was asked.
+  Quote card/detail/comparison show "What you need to buy · N items" (rows, spec, brand tier,
+  Share/Copy — no prices, no download).
+- **Gates**: backend ruff/strict mypy/`makemigrations --check`/spectacular validate + contract in
+  sync; `pnpm contract:check`; typecheck + eslint green for customer, partner, admin and
+  `packages/query`. Four pre-existing unformatted files outside this scope remain
+  (`restore_r2_images`, `seed_task_catalog`, `notifications/streaming`, partner commands).
+  **No tests executed** — written for the owner: `test_price_book.py`,
+  `commercial-estimate-draft.test.ts`, `requirement-summary.test.tsx`, `active-screens.test.ts`,
+  updated quote/comparison/visit-panel/enquiry-detail specs.
+- **Owner steps**: `python manage.py migrate`; `seed_m2_demo --i-understand-this-is-dev-only`;
+  `seed_price_book_demo --i-understand-this-is-dev-only`; walk customer
+  `/requests/new/full-home-rewiring` (2 steps) and `/requests/new/electrician-consultation`
+  (1 tile + 2 steps); as the demo electrician: offer → take → (pay as customer) → arrival code →
+  finish visit → estimate: 2 BHK quick set, edit a rate outside the band, add a custom item,
+  fix a coil quantity, pick 50/50, send; read it as the customer with the shopping list; run
+  the suites above. Known follow-ups: composer step not persisted across reload (draft is);
+  partner's sent-estimate record does not yet print `material_list`; other trades need their
+  catalogue seeds.
+
+### Crew day-hire, partner side rebuilt — 2026-08-30 (Claude, owner-approved mockups)
+
+Owner: "the flow in the customer side is clear, but the partner side is not clear like the way the
+vendor sends his crew"; the customer page showed "Professional details unavailable" on an accepted
+crew booking; too much text everywhere. Built from the owner-approved screens (offer → confirm →
+held → job hub → name crew → reached → close the day → settle → problem → job done).
+
+- **Backend (contract 1.49.0)**: `Engagement.crew_terms` (frozen rate-card snapshot),
+  `site_address` / `customer_contact` / `partner_contact` (disclosed at `contact_released_at` —
+  before this a confirmed lead had no field that said where to go), `EngagementStage.shift_summary`
+  (crew named, arrival, count, answer, settlement) so a hub draws every day from one read. New
+  vendor-routed events: `m2.crew_offer.invited` (the wave emitted nothing — on a 2-minute clock only a
+  lead already in the app could answer), `m2.booking_fee.forfeited` (travel compensation),
+  `m2.shift.attendance_confirmed` ("4 of 5 confirmed — collect ₹3,200"),
+  `m2.shift.attendance_disputed`, `m2.vendor.cash_demand_reported`; `booking_fee.waived` and
+  `crew.vendor_no_show` now reach both sides; `NotificationRoute.lead_only_partner_template` so an A3
+  win is no longer "the customer chose your quote" and a dispute no longer claims a held payment.
+  Target kind `CREW_OFFER` opens `/work/offers/{id}`. Tests written, not run:
+  `tests/requirements/test_crew_day_hire_partner_side.py`.
+- **Partner app**: offer sheet/detail as one card (people · days · area · ₹ to you · one-line
+  confirm); held state; A3 job hub with address/Map/Call, crew terms, day chips, next-action CTA,
+  Problem sheet (fewer people / can't come / injury / customer issue); crew picker with "copy to all
+  days"; morning "We've reached"; evening close = who-came grid + overtime chips + amount + one
+  "Send"; settlement with UPI share and "Got paid"; job-done summary with "collected directly";
+  `/work/how-day-hire-works` holds the explanations the screens used to carry;
+  `/workforce/shifts` links fixed.
+- **Customer app**: partner card from `partner_contact` (bug fixed), crew price card
+  `₹/person × people × days = total` + booking fee paid, day chips from `shift_summary`, dead
+  `no_show` dialog removed, stale "OFFER_ACCEPTED unreachable" comments corrected, crew screens
+  trimmed to one sentence per control.
+- **Owner steps**: `migrate` (no new migrations), restart the API, walk a crew booking end to end
+  in both apps; run the backend suite + partner/customer vitest. Known gaps kept honest on screen:
+  no partner-side cancel endpoint (routes to support), no "late arrival" endpoint, the night-before
+  "name tomorrow's crew" reminder needs a scheduled task (not built).
+
+### Crew day-hire, customer side rebuilt — 2026-08-30 (Claude + Sonnet builders, owner-approved mockups)
+
+Audit (Sonnet, code-driven — no browser tool attached): the wage-money sentence was hand-written ~20
+times across 9 files; three rupee figures stacked on 6 screens; the booking page was a 15-section scroll
+rendering days/money 5–6 times with no "what now"; "Book this crew" then "Confirm — pay fee" read as one
+action; two look-alike taps on the day page; three rate-card disclosure components, two receipts.
+
+- **Routes**: a customer never sees "engagement" — `/jobs/{id}` (`/bookings/[engagementId]` was blocked by
+  M1's `/bookings/[groupId]`), `/engagements/*` → 308 redirect, `lib/routes.ts` helpers repointed, page
+  title "Your booking".
+- **One sentence, one place**: `features/crew/view/wage-line.tsx`; one `RateTermsSheet` + `RateTermsLink`
+  (`rate-terms-sheet.tsx`, adapter `toRateTermsView` accepting the pre-booking preview/booking and the
+  engagement's `crewTerms`) replaces `rate-disclosure`, `rate-rail` and the mobile `RateDisclosures`.
+- **Pre-booking**: waiting = one status card (no money rail, "Wave 2 of 3" one line); nobody accepted = 3
+  buttons; "someone accepted → Pay ₹fee & confirm" is ONE screen (dialog + confirm-crew screen deleted);
+  confirmed = one card → Open booking; compose rate review shows two numbers, CTA "Book — pay ₹X when
+  accepted".
+- **Booking hub** (`lead-only-hub.tsx`): supervisor + Call, DayChips, the one live `today-card.tsx`
+  (They came / Nobody came → arrived → "Suresh says 4 of 4 · ₹3,200 → Yes, that's right / Not right?" →
+  Pay on UPI / Paid cash → Yes, paid → ✓ paid; shortfall as three tap rows; overtime Approve/Decline row),
+  money once, address, Problem sheet (nobody came / asked for more money / safety → support / cancel /
+  support), Done card (per-day rows, paid to crew, fee + Receipt, rating, Book again). `not-right-sheet.tsx`
+  (fewer came / left early / asked for cash / something else) replaces the inline dispute form and the two
+  cash-demand mounts. Merged `receipt.tsx` (inline | document). Deleted: crew-booking-summary,
+  crew-day-panel, booked-screen, attendance-decision, day-settlement, shift-day-panel, payment-receipt,
+  receipt-document, booking-fee-dialog, confirm-crew-screen, rate-disclosure, rate-rail, and the dead
+  `features/booking/view/parts/{rate-panel,money-rows,wave-meter}`.
+- **Gates**: customer/query/admin typecheck + customer lint clean. Tests adjusted, not run.
+  `features/crew/SMOKE.md` still describes the old flow — owner to re-walk it.
+- **Owner steps**: open `/requests/aba511e1-6c6f-4cb7-b38c-497315298ba2` as +918790456763 (Painter by the
+  day, 4 × 3, wave 1); accept as a partner; pay; walk the hub through a day; run customer vitest.
+  Not built: night-before reminder push (scheduled task), customer safety-incident mutation.
+
+### Lapsed crew offers, job statuses, "no partner available" — 2026-08-30 (Claude + Sonnet, owner bug)
+
+Owner: an expired offer still showed in the partner job list and accepting it errored; statuses
+unclear; no filter; the customer never heard that nobody accepted. Root causes: (1) the partner
+**enquiry inbox** listed every invitation — crew offers included, lapsed or not — as "waiting for
+you", so a dead offer had a second, clockless copy that tapped into a refusal; (2) accepting a crew
+offer left the sibling offers `INVITED` for the other leads; (3) lapse → cascade → exhausted runs
+only under Celery beat, which is not running in dev, so a MATCHING booking outlived every offer.
+
+- `selectors.partner_invitations` excludes rate-card invitations (crew offers have their own
+  inbox) and any `INVITED` past `responds_by`.
+- `crew_dispatch.accept_crew_offer` withdraws every sibling offer under the same lock.
+- `crew_dispatch.reconcile_lapsed_offers(requirement_id | partner)` — read-driven sweep called by
+  the customer's rate-card read and the partner's offers read, so the cascade moves (and parks as
+  `EXHAUSTED`) without the beat. Customer notice is now "No partner available right now / Nobody
+  accepted your job at the published rate. Nothing has been charged — open it to search wider,
+  get quotes instead, or cancel."
+- Partner work list: defensive expiry filter, a status chip on every card, and a filter row on
+  `/work/all` (All · Offers · Enquiries · In progress · Waiting · Done, remembered per device).
+- Dev DB: the owner's painter booking `aba511e1…` is now `EXHAUSTED` (customer picks search wider /
+  quotes / cancel); two stale sibling offers on the confirmed booking were withdrawn.
+- Tests written, not run: `test_crew_offer_slots.py` (+4). Beat is still the right long-term
+  mechanism — run `celery -A config beat` alongside the worker in dev to get the timers.
+
 ## Out of scope
 
 - Mixed Item-wise + Labour-wise estimates.

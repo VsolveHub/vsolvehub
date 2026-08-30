@@ -35,6 +35,7 @@ export function enquirySummary(
     fixed_visit_earning_paise: null,
     fixed_visit_status: null,
     responds_by: "2026-08-14T09:00:00Z",
+    pricing_skill_code: "electrician",
     latest_proposal_status: null,
     latest_proposal_rejection_reason: null,
     created_at: "2026-08-12T06:00:00Z",
@@ -49,6 +50,13 @@ export function enquiryDetail(
     ...enquirySummary(),
     service_name: "Housekeeping staff",
     answers: { worker_count: 6, duration_days: 4, site_access: "Service lift after 8am" },
+    // The customer's answers as labels (1.48.0). What the partner reads; the
+    // raw `answers` above stay for the two codes the domain reads by name.
+    brief: [
+      { code: "worker_count", question: "How many people", value: "6" },
+      { code: "duration_days", question: "For how long", value: "4 days" },
+      { code: "site_access", question: "Getting in", value: "Service lift after 8am" },
+    ],
     budget_min_paise: null,
     budget_max_paise: 4_000_000,
     // Blank is the ordinary state: no vendor has quoted yet, so no basis is
@@ -168,6 +176,9 @@ export function proposal(overrides: Partial<Schemas["Proposal"]> = {}): Schemas[
     // Required since 1.26.0. Materials are their own row type, not a stage —
     // a stage carries an evidence cycle and a bag of cement does not.
     material_lines: [],
+    // What the customer buys (1.48.0): quantities and a spec, never money.
+    material_list: [],
+    material_brand_tier: "",
     inclusions: ["Own tools"],
     exclusions: [],
     stages: [],

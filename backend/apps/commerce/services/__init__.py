@@ -55,7 +55,11 @@ from .refunds import (
     request_unit_refund,
     submit_refund,
 )
-from .simulation import _standalone_attempt_belongs_to, simulate_capture
+from .simulation import (
+    _standalone_attempt_belongs_to,
+    attempt_belongs_to,
+    simulate_capture,
+)
 
 __all__ = [
     "FINANCIAL_YEAR_START_MONTH",
@@ -78,6 +82,7 @@ __all__ = [
     "_validate_payment_amount",
     "allocate_document_number",
     "apply_provider_payment",
+    "attempt_belongs_to",
     "create_provider_order",
     "initiate_payment_attempt",
     "initiate_standalone_payment_attempt",

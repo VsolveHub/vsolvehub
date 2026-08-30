@@ -562,3 +562,19 @@ export function useReportCrewNoShow() {
     retry: false,
   });
 }
+
+
+/**
+ * The attempt behind a booking-fee checkout, read once so it can be handed on.
+ *
+ * `AccessCheckout` carries the provider and the order id but not the provider's public key,
+ * and the key is what the widget opens with. The attempt read has it. Not a hook: this runs
+ * inside the pay handler, between "the charge exists" and "the widget is open".
+ */
+export function fetchPaymentAttempt(attemptId: string) {
+  return request(() =>
+    getApiClient().GET("/api/v1/payment-attempts/{attempt_id}/", {
+      params: { path: { attempt_id: attemptId } },
+    }),
+  );
+}

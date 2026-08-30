@@ -18,14 +18,20 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.views import APIView
 
-from apps.commerce.documents import DocumentLine, access_receipt_spec, render_pdf
+from apps.commerce.documents import DocumentLine, DocumentSpec, access_receipt_spec, render_pdf
 from apps.commerce.documents.money import format_money
+from apps.commerce.documents.sources import ISSUER_ADDRESS, ISSUER_CONTACT, ISSUER_NAME
 from apps.commerce.views import _pdf_response
 from apps.identity.models import User
+from apps.requirements import access
 from apps.requirements.exceptions import RequirementDomainError
-from apps.requirements.models import RateCardBooking
-from apps.requirements.selectors import access_receipt_for, engagement_for_participant
-from apps.requirements.views.base import _raise_api_error
+from apps.requirements.models import Proposal, RateCardBooking
+from apps.requirements.selectors import (
+    access_receipt_for,
+    engagement_for_participant,
+    requirement_for_customer,
+)
+from apps.requirements.views.base import _proposal_for_customer, _raise_api_error
 from common.errors.serializers import ApiErrorSerializer
 
 #: What the receipt's one line says the money bought. Mirrors the customer app's own map, and
@@ -128,3 +134,106 @@ def _buyer(engagement: object) -> str:
     profile = getattr(customer, "customer_profile", None)
     display_name = str(getattr(profile, "display_name", "") or "").strip()
     return full_name or display_name or str(getattr(customer, "phone_number", "") or "Customer")
+
+
+#: The brand tier the Partner named on the estimate, in the words the list is shopped with.
+_BRAND_TIER: dict[str, str] = {
+    str(Proposal.MaterialBrandTier.STANDARD): "Standard tier (Finolex / Anchor class)",
+    str(Proposal.MaterialBrandTier.PREMIUM): "Premium tier (Polycab / Legrand class)",
+}
+
+
+class RequirementQuoteShoppingListPdfView(APIView):
+    """The estimate's shopping list as a branded PDF the Customer can hand to a shop.
+
+    Quantities and specs only — materials are the Customer's to buy on every project and no
+    price is part of the estimate, so the document carries none. Rendered on demand from the
+    stored `material_list`, on the same renderer and masthead as every other V Solve Hub
+    document, and gated exactly like the estimate itself: an unpaid visit plan gets the same
+    refusal the quote list gives.
+    """
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Quotes"],
+        operation_id="m2_quote_shopping_list_pdf",
+        description=(
+            "Download one estimate's shopping list — what the Customer should buy before work "
+            "starts — as a PDF branded V Solve Hub and naming the professional who wrote it. "
+            "Quantities and specs only; never a price. `Content-Disposition: attachment`. "
+            "Same entitlement as `m2_quote_list`: an A5 request needs a charged visit plan."
+        ),
+        responses={
+            (200, "application/pdf"): OpenApiTypes.BINARY,
+            404: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+        },
+    )
+    def get(
+        self, request: Request, requirement_id: uuid.UUID, proposal_id: uuid.UUID
+    ) -> HttpResponse:
+        user = cast(User, request.user)
+        try:
+            requirement = requirement_for_customer(customer=user, requirement_id=requirement_id)
+            access.assert_customer_may_read_full_quotes(requirement)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        proposal = _proposal_for_customer(requirement=requirement, proposal_id=proposal_id)
+        rows = [row for row in (proposal.material_list or []) if isinstance(row, dict)]
+        if not rows:
+            raise NotFound("This estimate has no shopping list.")
+
+        business = getattr(proposal.partner, "business_profile", None)
+        partner_name = (
+            business.legal_name if business is not None else proposal.partner.display_name
+        ) or "Your professional"
+        service_name = requirement.variant.service.name
+        buyer = str(getattr(user, "display_name", "") or "").strip() or str(user.phone_number)
+        tier = _BRAND_TIER.get(str(proposal.material_brand_tier), "")
+
+        lines = tuple(
+            DocumentLine(
+                label=str(row.get("title") or ""),
+                amount=f"{_quantity(row.get('quantity'))} {row.get('unit') or ''}".strip(),
+                note=" · ".join(
+                    part
+                    for part in (str(row.get("spec") or ""), str(row.get("note") or ""))
+                    if part
+                ),
+            )
+            for row in rows
+            if str(row.get("title") or "").strip()
+        )
+        spec = DocumentSpec(
+            title="What to buy",
+            number=f"EST-{str(proposal.id)[:8].upper()}-R{proposal.revision}",
+            issued_on=proposal.submitted_at,
+            issuer_name=ISSUER_NAME,
+            buyer_name=buyer,
+            lines=lines,
+            total_label="Items to buy",
+            total_amount=str(len(lines)),
+            issuer_address=ISSUER_ADDRESS,
+            issuer_contact=ISSUER_CONTACT,
+            meta=(
+                ("Prepared by", partner_name),
+                ("Service", service_name),
+                *((("Brand tier", tier),) if tier else ()),
+            ),
+            footnote=(
+                "Materials are yours to buy from any shop; this list carries quantities and "
+                "specifications only and no price is part of the estimate. Ask the professional "
+                "on Vsolve before substituting a rating or gauge."
+            ),
+        )
+        filename = f"what-to-buy-{str(proposal.id)[:8]}-r{proposal.revision}.pdf"
+        return _pdf_response(render_pdf(spec), filename=filename)
+
+
+def _quantity(value: object) -> str:
+    """A stored decimal string as a shop reads it: `3`, not `3.000`."""
+    text = str(value or "1")
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return text or "1"

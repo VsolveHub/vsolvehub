@@ -52,6 +52,8 @@ export interface EnquiryRow {
   readonly approximateArea: string;
   /** The server's archetype for this record. Decides which composer opens. */
   readonly archetype: string;
+  /** The trade whose price book the composer opens — `electrician`, `plumber`, … */
+  readonly pricingSkillCode: string;
   readonly status: EnquiryStatus;
   readonly requestedStart: string | null;
   readonly serviceBy: string | null;
@@ -59,8 +61,20 @@ export interface EnquiryRow {
   readonly createdAt: string;
 }
 
+/** One line of the customer's brief: the question as asked, the answer as a label. */
+export type BriefLine = Schemas["CrewBriefLine"];
+
 export interface EnquiryRecord extends EnquiryRow {
   readonly answers: AnswerMap;
+  /**
+   * The customer's answers as labels (1.48.0).
+   *
+   * What every screen renders. `answers` above is the raw map keyed by question
+   * code and is read by name for exactly two codes (`worker_count`,
+   * `duration_days`); nothing else may de-slug it into prose now that the
+   * server publishes the question and the chosen label itself.
+   */
+  readonly brief: readonly BriefLine[];
   /**
    * The visit the customer already chose, published from contract 1.44.0.
    *
@@ -117,6 +131,7 @@ export function readEnquiryRow(summary: Schemas["EnquirySummary"]): EnquiryRow {
     serviceName: summary.service_name,
     approximateArea: summary.approximate_area,
     archetype: summary.archetype,
+    pricingSkillCode: summary.pricing_skill_code,
     status: summary.status,
     requestedStart: nullableInstant(summary.requested_start),
     serviceBy: nullableInstant(summary.service_by),
@@ -129,6 +144,7 @@ export function readEnquiryRecord(detail: Schemas["EnquiryDetail"]): EnquiryReco
   return {
     ...readEnquiryRow(detail),
     answers: readAnswers(detail.answers),
+    brief: Array.isArray(detail.brief) ? detail.brief : [],
     fixedVisitStart: detail.fixed_visit_start,
     fixedVisitDurationMinutes: detail.fixed_visit_duration_minutes,
     fixedVisitEarningPaise: detail.fixed_visit_earning_paise,

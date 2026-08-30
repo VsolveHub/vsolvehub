@@ -194,6 +194,8 @@ describe("customer visit arrival", () => {
           exclusions: [],
           stages: [],
           material_lines: [],
+          material_list: [],
+          material_brand_tier: "",
           warranty_terms: "",
           valid_until: null,
           submitted_at: "2026-08-21T09:30:00.000Z",

@@ -249,6 +249,10 @@ class BookingFeeSerializer(serializers.ModelSerializer[BookingFee]):
             "receipt_sequence",
             "settlement_reason_code",
             "failure_code",
+            #: The attempt behind a `PENDING` fee, so a screen reopened mid-payment can find the
+            #: charge it started — and hand it to the provider, or to the development simulator —
+            #: instead of sitting on "confirming your payment" with nothing to confirm.
+            "payment_attempt_id",
             "activated_at",
             "earned_at",
             "settled_at",

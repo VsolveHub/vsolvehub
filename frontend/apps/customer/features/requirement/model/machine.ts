@@ -92,8 +92,14 @@ export type RequirementAction =
    * how they take it back off.
    */
   | { type: "SET_SERVICE_BY"; serviceBy: string | null }
-  /** Where the Customer was, from the URL, after a reload. See the reducer case. */
-  | { type: "RESTORE_SCREEN"; screen: Screen }
+  /**
+   * Where the Customer was, from the URL, after a reload. See the reducer case.
+   *
+   * `screens` is the active sequence (`activeScreens`) on this and on the two
+   * movement actions below. The reducer does not know the variant, and the
+   * budget list would put a step-1 the brief never asked back into `visited`.
+   */
+  | { type: "RESTORE_SCREEN"; screen: Screen; screens?: readonly Screen[] }
   | { type: "SET_FLEXIBILITY_DAYS"; days: number }
   | { type: "ADD_ATTACHMENT"; attachment: DraftAttachment }
   | { type: "UPDATE_ATTACHMENT"; id: string; patch: Partial<DraftAttachment> }
@@ -140,8 +146,8 @@ export type RequirementAction =
     }
   | { type: "GO_TO"; screen: Screen }
   | { type: "OPEN"; screen: Screen }
-  | { type: "ADVANCE" }
-  | { type: "BACK" };
+  | { type: "ADVANCE"; screens?: readonly Screen[] }
+  | { type: "BACK"; screens?: readonly Screen[] };
 
 /**
  * Drops the server's reading of the answers.
@@ -329,12 +335,13 @@ export function requirementReducer(
       // what makes Back work immediately after a reload instead of dead-ending.
       // The per-screen guards are untouched, so landing here does not let anybody
       // past a rule — a restored `review` still cannot submit without an address.
-      const index = screenIndex(action.screen);
+      const screens = action.screens ?? SCREENS;
+      const index = screenIndex(action.screen, screens);
       if (index === -1) return state;
       return {
         ...state,
         screen: action.screen,
-        visited: SCREENS.slice(0, index),
+        visited: screens.slice(0, index),
       };
     }
 
@@ -372,10 +379,13 @@ export function requirementReducer(
     case "ADVANCE":
       // The guard lives in the container, which knows today's date and whether a
       // duplicate is unresolved. The reducer only moves.
-      return advanceScreen(state);
+      return advanceScreen(state, action.screens ?? SCREENS);
 
     case "BACK": {
-      const previous = [...state.visited].reverse().find((screen) => screen !== state.screen);
+      const screens = action.screens ?? SCREENS;
+      const previous = [...state.visited]
+        .reverse()
+        .find((screen) => screen !== state.screen && screens.includes(screen));
       return previous === undefined ? state : { ...state, screen: previous };
     }
 

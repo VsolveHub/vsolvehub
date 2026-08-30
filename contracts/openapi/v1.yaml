@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.47.0
+  version: 1.50.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -5945,6 +5945,71 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: '`m2_requirement_transition_not_allowed` when the membership
             is archived, or when verification is being removed with no reason given.'
+  /api/v1/operations/custom-item-reviews/:
+    get:
+      operationId: m2_operations_custom_item_review_queue
+      tags:
+      - M2 - Price book
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomWorkItemReviewList'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/custom-item-reviews/{review_id}/resolve/:
+    post:
+      operationId: m2_operations_custom_item_review_resolve
+      parameters:
+      - in: path
+        name: review_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Price book
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomWorkItemReviewResolveRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CustomWorkItemReviewResolveRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CustomWorkItemReviewResolveRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomWorkItemReview'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/operations/enquiries/{invitation_id}/assisted-clarification/:
     post:
       operationId: m2_operations_assisted_clarification
@@ -7326,6 +7391,68 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/operations/quote-guardrails/:
+    get:
+      operationId: m2_operations_guardrail_policy_list
+      description: Every guardrail policy version, newest first. Mirrors the commercial
+        policy review calendar's own read.
+      tags:
+      - M2 - Price book
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/QuoteGuardrailPolicy'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/quote-guardrails/activate/:
+    post:
+      operationId: m2_operations_guardrail_policy_activate
+      tags:
+      - M2 - Price book
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuoteGuardrailPolicyActivateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/QuoteGuardrailPolicyActivateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/QuoteGuardrailPolicyActivateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuoteGuardrailPolicy'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/operations/rate-cards/:
     get:
       operationId: m2_rate_card_list
@@ -7972,6 +8099,195 @@ paths:
                 $ref: '#/components/schemas/UnpayablePartner'
           description: ''
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/work-items/:
+    get:
+      operationId: m2_operations_work_item_list
+      parameters:
+      - in: query
+        name: skill_id
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - M2 - Price book
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WorkItem'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+    post:
+      operationId: m2_operations_work_item_create
+      tags:
+      - M2 - Price book
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkItemCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/WorkItemCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/WorkItemCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkItem'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/work-items/{work_item_id}/:
+    patch:
+      operationId: m2_operations_work_item_update
+      parameters:
+      - in: path
+        name: work_item_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Price book
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedWorkItemUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedWorkItemUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedWorkItemUpdateRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkItem'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/work-items/{work_item_id}/rates/:
+    get:
+      operationId: m2_operations_work_item_rate_list
+      parameters:
+      - in: path
+        name: work_item_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Price book
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WorkItemRate'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+    post:
+      operationId: m2_operations_work_item_rate_publish
+      description: Publish a reference rate for one item in one city, effective immediately.
+        Loaded, never edited — the previous published version is retired in the same
+        transaction.
+      parameters:
+      - in: path
+        name: work_item_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Price book
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkItemRatePublishRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/WorkItemRatePublishRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/WorkItemRatePublishRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkItemRate'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
           content:
             application/json:
               schema:
@@ -10739,6 +11055,112 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/partner/price-book/:
+    get:
+      operationId: m2_partner_price_book_read
+      description: The catalog for this Partner's skills and one city, with their
+        own saved rates.
+      parameters:
+      - in: query
+        name: service_area_id
+        schema:
+          type: string
+          format: uuid
+        description: One of the Partner's own active service areas. Defaults to their
+          sole area when they serve only one.
+      - in: query
+        name: skill
+        schema:
+          type: string
+        description: Narrow to one trade's catalogue - the enquiry's `pricing_skill_code`.
+          Omitted, every trade the Partner prices from is listed.
+      tags:
+      - M2 - Price book
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceBookList'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/price-book/items/{work_item_id}/:
+    put:
+      operationId: m2_partner_price_book_item_set
+      description: Set this Partner's own rate for one catalog item.
+      parameters:
+      - in: query
+        name: service_area_id
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: work_item_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Price book
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerRateItemSetRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PartnerRateItemSetRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PartnerRateItemSetRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerRateItem'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`rate_outside_band` when the rate sits outside the allowed
+            range for this item in this city.'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/partner/questions/{question_id}/answer/:
     post:
       operationId: m2_partner_question_answer
@@ -12485,6 +12907,51 @@ paths:
           description: '`m2_proposal_not_selectable` when the estimate is no longer
             live, when the request already has a chosen vendor, or when the caller
             has not unlocked these quotes.'
+  /api/v1/requirements/{requirement_id}/quotes/{proposal_id}/shopping-list/download/:
+    get:
+      operationId: m2_quote_shopping_list_pdf
+      description: 'Download one estimate''s shopping list — what the Customer should
+        buy before work starts — as a PDF branded V Solve Hub and naming the professional
+        who wrote it. Quantities and specs only; never a price. `Content-Disposition:
+        attachment`. Same entitlement as `m2_quote_list`: an A5 request needs a charged
+        visit plan.'
+      parameters:
+      - in: path
+        name: proposal_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: requirement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Quotes
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/requirements/{requirement_id}/quotes/teasers/:
     get:
       operationId: m2_quote_teaser_list
@@ -14623,6 +15090,14 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ProposalMaterialLineRequest'
+        material_list:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalMaterialListLineRequest'
+        material_brand_tier:
+          oneOf:
+          - $ref: '#/components/schemas/MaterialBrandTierEnum'
+          - $ref: '#/components/schemas/BlankEnum'
         estimate_type:
           $ref: '#/components/schemas/EstimateTypeEnum'
         item_lines:
@@ -14810,6 +15285,11 @@ components:
           type: string
           readOnly: true
           pattern: ^[-a-zA-Z0-9_]+$
+        payment_attempt_id:
+          type: string
+          format: uuid
+          nullable: true
+          readOnly: true
         activated_at:
           type: string
           format: date-time
@@ -14831,6 +15311,7 @@ components:
       - earned_at
       - failure_code
       - id
+      - payment_attempt_id
       - platform_share_paise
       - receipt_sequence
       - receipt_series
@@ -16044,7 +16525,7 @@ components:
           readOnly: true
         status:
           allOf:
-          - $ref: '#/components/schemas/CommercialPolicyStatusEnum'
+          - $ref: '#/components/schemas/Status24aEnum'
           readOnly: true
         approval_reference:
           type: string
@@ -16219,16 +16700,6 @@ components:
       - visit_supplier_of_record
       - withholding_basis
       - withholding_bps
-    CommercialPolicyStatusEnum:
-      enum:
-      - DRAFT
-      - ACTIVE
-      - RETIRED
-      type: string
-      description: |-
-        * `DRAFT` - Draft
-        * `ACTIVE` - Active
-        * `RETIRED` - Retired
     CommercialPolicyTaxBasisEnum:
       enum:
       - INCLUSIVE
@@ -17035,6 +17506,67 @@ components:
       required:
       - offers
       - server_now
+    CrewTerms:
+      type: object
+      description: |-
+        The frozen rate-card terms behind a crew booking, as both sides need to read them.
+
+        Every figure is the one snapshotted at booking (`terms_snapshot`), never the live card. The
+        Customer's all-in total and the lead's receipt are both here because the two apps show
+        different halves: the Customer sees what they pay the crew and the fee they paid Vsolve; the
+        lead sees what they receive per day and never the fee.
+      properties:
+        headcount:
+          type: integer
+          readOnly: true
+        days:
+          type: integer
+          readOnly: true
+        per_worker_day_paise:
+          type: integer
+          readOnly: true
+        lead_day_receipt_paise:
+          type: integer
+          readOnly: true
+        lead_receipt_paise:
+          type: integer
+          readOnly: true
+        booking_fee_paise:
+          type: integer
+          readOnly: true
+        total_customer_paise:
+          type: integer
+          readOnly: true
+        standard_day_hours:
+          type: integer
+          readOnly: true
+          nullable: true
+        overtime_hourly_paise:
+          type: integer
+          readOnly: true
+          nullable: true
+        add_on_rates:
+          type: object
+          additionalProperties:
+            type: integer
+          readOnly: true
+        inclusions:
+          type: array
+          items:
+            type: string
+          readOnly: true
+      required:
+      - add_on_rates
+      - booking_fee_paise
+      - days
+      - headcount
+      - inclusions
+      - lead_day_receipt_paise
+      - lead_receipt_paise
+      - overtime_hourly_paise
+      - per_worker_day_paise
+      - standard_day_hours
+      - total_customer_paise
     CrewVerificationQueue:
       type: object
       properties:
@@ -17073,6 +17605,100 @@ components:
           readOnly: true
       required:
       - csrf_token
+    CustomWorkItemReview:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        partner:
+          type: string
+          format: uuid
+          readOnly: true
+        partner_business_name:
+          type: string
+          readOnly: true
+        proposal:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        title:
+          type: string
+          readOnly: true
+        unit:
+          type: string
+          readOnly: true
+        rate_paise:
+          type: integer
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/CustomWorkItemReviewStatusEnum'
+          readOnly: true
+        resolved_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        resolved_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        promoted_work_item:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - partner
+      - partner_business_name
+      - promoted_work_item
+      - proposal
+      - rate_paise
+      - resolved_at
+      - resolved_by
+      - status
+      - title
+      - unit
+    CustomWorkItemReviewList:
+      type: object
+      properties:
+        reviews:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomWorkItemReview'
+      required:
+      - reviews
+    CustomWorkItemReviewResolveRequest:
+      type: object
+      properties:
+        approve:
+          type: boolean
+        skill_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - approve
+    CustomWorkItemReviewStatusEnum:
+      enum:
+      - PENDING
+      - APPROVED
+      - REJECTED
+      type: string
+      description: |-
+        * `PENDING` - Pending review
+        * `APPROVED` - Approved
+        * `REJECTED` - Rejected
     CustomerBooking:
       type: object
       description: |-
@@ -17329,6 +17955,14 @@ components:
           items:
             $ref: '#/components/schemas/ProposalMaterialLine'
           readOnly: true
+        material_list:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalMaterialListLine'
+          readOnly: true
+        material_brand_tier:
+          type: string
+          readOnly: true
         warranty_terms:
           type: string
           readOnly: true
@@ -17352,7 +17986,9 @@ components:
       - item_lines
       - labour_lines
       - line_subtotal_paise
+      - material_brand_tier
       - material_lines
+      - material_list
       - minimum_days
       - other_charges
       - partner_quote_total_paise
@@ -17891,6 +18527,33 @@ components:
           type: string
           format: uuid
           readOnly: true
+        service_name:
+          type: string
+          readOnly: true
+        service_slug:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        crew_terms:
+          allOf:
+          - $ref: '#/components/schemas/CrewTerms'
+          nullable: true
+          readOnly: true
+        site_address:
+          allOf:
+          - $ref: '#/components/schemas/EngagementSiteAddress'
+          nullable: true
+          readOnly: true
+        customer_contact:
+          allOf:
+          - $ref: '#/components/schemas/EngagementContact'
+          nullable: true
+          readOnly: true
+        partner_contact:
+          allOf:
+          - $ref: '#/components/schemas/EngagementContact'
+          nullable: true
+          readOnly: true
         proposal:
           type: string
           format: uuid
@@ -17993,15 +18656,21 @@ components:
       - completed_at
       - contact_released_at
       - created_at
+      - crew_terms
+      - customer_contact
       - disputed_at
       - funded_total_paise
       - id
       - partner
+      - partner_contact
       - proposal
       - refunded_total_paise
       - released_total_paise
       - requirement
       - server_now
+      - service_name
+      - service_slug
+      - site_address
       - staged_total_paise
       - stages
       - status
@@ -18157,6 +18826,20 @@ components:
       description: |-
         * `LEAD_ONLY` - Customer pays the vendor directly
         * `MANAGED_PAYMENT_REQUIRED` - Paid through Vsolve
+    EngagementContact:
+      type: object
+      description: A name and a phone number, disclosed only once `contact_released_at`
+        is stamped.
+      properties:
+        name:
+          type: string
+          readOnly: true
+        phone:
+          type: string
+          readOnly: true
+      required:
+      - name
+      - phone
     EngagementEvent:
       type: object
       description: |-
@@ -18240,6 +18923,40 @@ components:
       - next
       - previous
       - results
+    EngagementSiteAddress:
+      type: object
+      description: Where the work is. Same shape as the visit-side disclosure; no
+        coordinates.
+      properties:
+        line1:
+          type: string
+          readOnly: true
+        line2:
+          type: string
+          readOnly: true
+        landmark:
+          type: string
+          readOnly: true
+        locality:
+          type: string
+          readOnly: true
+        city:
+          type: string
+          readOnly: true
+        state:
+          type: string
+          readOnly: true
+        postal_code:
+          type: string
+          readOnly: true
+      required:
+      - city
+      - landmark
+      - line1
+      - line2
+      - locality
+      - postal_code
+      - state
     EngagementStage:
       type: object
       description: |-
@@ -18268,6 +18985,11 @@ components:
           type: integer
           readOnly: true
         funding_breakdown:
+          readOnly: true
+        shift_summary:
+          allOf:
+          - $ref: '#/components/schemas/ShiftDaySummary'
+          nullable: true
           readOnly: true
         kind:
           allOf:
@@ -18383,6 +19105,7 @@ components:
       - released_at
       - review_due_at
       - scheduled_on
+      - shift_summary
       - started_at
       - starts_on
       - status
@@ -18523,6 +19246,9 @@ components:
           type: string
           format: date-time
           readOnly: true
+        pricing_skill_code:
+          type: string
+          readOnly: true
         latest_proposal_status:
           type: string
           nullable: true
@@ -18536,6 +19262,11 @@ components:
           format: date-time
           readOnly: true
         answers:
+          readOnly: true
+        brief:
+          type: array
+          items:
+            $ref: '#/components/schemas/CrewBriefLine'
           readOnly: true
         budget_min_paise:
           type: integer
@@ -18580,6 +19311,7 @@ components:
       - answers
       - approximate_area
       - archetype
+      - brief
       - budget_max_paise
       - budget_min_paise
       - category_slug
@@ -18592,6 +19324,7 @@ components:
       - id
       - latest_proposal_rejection_reason
       - latest_proposal_status
+      - pricing_skill_code
       - proposals
       - questions
       - requested_start
@@ -18676,6 +19409,9 @@ components:
           type: string
           format: date-time
           readOnly: true
+        pricing_skill_code:
+          type: string
+          readOnly: true
         latest_proposal_status:
           type: string
           nullable: true
@@ -18700,6 +19436,7 @@ components:
       - id
       - latest_proposal_rejection_reason
       - latest_proposal_status
+      - pricing_skill_code
       - requested_start
       - requirement_id
       - requirement_status
@@ -19749,6 +20486,14 @@ components:
         * `NO_PROFESSIONAL_FOUND` - No professional found
         * `CANCELLED` - Cancelled
         * `RECOVERY` - Recovery
+    MaterialBrandTierEnum:
+      enum:
+      - STANDARD
+      - PREMIUM
+      type: string
+      description: |-
+        * `STANDARD` - Standard
+        * `PREMIUM` - Premium
     ModeEnum:
       enum:
       - SAME_PARTNER_SEQUENTIAL
@@ -22687,6 +23432,44 @@ components:
       - phone_number
       - service_areas
       - skills
+    PartnerRateItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        work_item:
+          type: string
+          format: uuid
+          readOnly: true
+        rate_paise:
+          type: integer
+          readOnly: true
+        is_active:
+          type: boolean
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - id
+      - is_active
+      - rate_paise
+      - updated_at
+      - work_item
+    PartnerRateItemSetRequest:
+      type: object
+      properties:
+        rate_paise:
+          type: integer
+          minimum: 1
+        is_active:
+          type: boolean
+          default: true
+      required:
+      - rate_paise
     PartnerSchedule:
       type: object
       properties:
@@ -23091,6 +23874,31 @@ components:
           writeOnly: true
           minLength: 1
           maxLength: 16
+    PatchedWorkItemUpdateRequest:
+      type: object
+      description: A partial edit. Every field optional — Operations edits one thing
+        at a time.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type: string
+        status:
+          $ref: '#/components/schemas/Status423Enum'
+        sort_order:
+          type: integer
+        band_below_bps:
+          type: integer
+          maximum: 10000
+          minimum: 0
+          nullable: true
+        band_above_bps:
+          type: integer
+          maximum: 10000
+          minimum: 0
+          nullable: true
     PaymentAllocation:
       type: object
       properties:
@@ -23657,6 +24465,56 @@ components:
       required:
       - group_key
       - starts_at
+    PriceBookEntry:
+      type: object
+      description: One catalog item, with its band context and this Partner's own
+        saved rate, if any.
+      properties:
+        work_item:
+          $ref: '#/components/schemas/WorkItem'
+        reference_rate_paise:
+          type: integer
+          nullable: true
+        rate_version:
+          type: integer
+          nullable: true
+        floor_paise:
+          type: integer
+          nullable: true
+        ceiling_paise:
+          type: integer
+          nullable: true
+        partner_rate_paise:
+          type: integer
+          nullable: true
+        partner_is_active:
+          type: boolean
+        is_default_rate:
+          type: boolean
+        trade_code:
+          type: string
+        trade_name:
+          type: string
+      required:
+      - ceiling_paise
+      - floor_paise
+      - is_default_rate
+      - partner_is_active
+      - partner_rate_paise
+      - rate_version
+      - reference_rate_paise
+      - trade_code
+      - trade_name
+      - work_item
+    PriceBookList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PriceBookEntry'
+      required:
+      - items
     PrivacyRequest:
       type: object
       properties:
@@ -24517,6 +25375,14 @@ components:
           items:
             $ref: '#/components/schemas/ProposalMaterialLine'
           readOnly: true
+        material_list:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalMaterialListLine'
+          readOnly: true
+        material_brand_tier:
+          type: string
+          readOnly: true
         warranty_terms:
           type: string
           readOnly: true
@@ -24548,7 +25414,9 @@ components:
       - item_lines
       - labour_lines
       - line_subtotal_paise
+      - material_brand_tier
       - material_lines
+      - material_list
       - minimum_days
       - other_charges
       - partner_net_paise
@@ -24610,6 +25478,14 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ProposalMaterialLineRequest'
+        material_list:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalMaterialListLineRequest'
+        material_brand_tier:
+          oneOf:
+          - $ref: '#/components/schemas/MaterialBrandTierEnum'
+          - $ref: '#/components/schemas/BlankEnum'
         estimate_type:
           $ref: '#/components/schemas/EstimateTypeEnum'
         item_lines:
@@ -24677,6 +25553,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ProposalStage'
+        suggested_material_list:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalMaterialListLine'
         line_subtotal_paise:
           type: integer
           minimum: 0
@@ -24738,11 +25618,15 @@ components:
       - platform_fee_tax_paise
       - policy_version
       - stages
+      - suggested_material_list
       - tax_basis
       - taxable_value_paise
       - withholding_paise
     ProposalItemLine:
       type: object
+      description: |-
+        One priced line. A catalog line names its `work_item_id` and is band-checked at
+        submission; any other line is a custom item the Partner added on site (`price_book`).
       properties:
         category:
           type: string
@@ -24762,19 +25646,26 @@ components:
         amount_paise:
           type: integer
           readOnly: true
+        work_item_id:
+          type: string
+          format: uuid
+          nullable: true
+        is_custom:
+          type: boolean
       required:
       - amount_paise
-      - category
       - quantity
       - rate_paise
       - title
       - unit
     ProposalItemLineRequest:
       type: object
+      description: |-
+        One priced line. A catalog line names its `work_item_id` and is band-checked at
+        submission; any other line is a custom item the Partner added on site (`price_book`).
       properties:
         category:
           type: string
-          minLength: 1
           maxLength: 80
         title:
           type: string
@@ -24789,8 +25680,13 @@ components:
         rate_paise:
           type: integer
           minimum: 1
+        work_item_id:
+          type: string
+          format: uuid
+          nullable: true
+        is_custom:
+          type: boolean
       required:
-      - category
       - quantity
       - rate_paise
       - title
@@ -24945,6 +25841,65 @@ components:
           minimum: 1
       required:
       - title
+    ProposalMaterialListLine:
+      type: object
+      description: |-
+        One thing the Customer should buy. Quantities and a spec — **never a price**.
+
+        Materials are the Customer's to purchase on every project (owner decision, 2026-08-29). The
+        server suggests this list from the tapped catalog items' recipes; the Partner corrects it
+        after the visit; the Customer shops from it. `unit` is free text for the same reason
+        `ProposalMaterialLineSerializer.unit` is: coils, boxes and bags are all real.
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        spec:
+          type: string
+          maxLength: 200
+        unit:
+          type: string
+          maxLength: 32
+        quantity:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,9}(?:\.\d{0,3})?$
+        note:
+          type: string
+          maxLength: 200
+      required:
+      - quantity
+      - title
+    ProposalMaterialListLineRequest:
+      type: object
+      description: |-
+        One thing the Customer should buy. Quantities and a spec — **never a price**.
+
+        Materials are the Customer's to purchase on every project (owner decision, 2026-08-29). The
+        server suggests this list from the tapped catalog items' recipes; the Partner corrects it
+        after the visit; the Customer shops from it. `unit` is free text for the same reason
+        `ProposalMaterialLineSerializer.unit` is: coils, boxes and bags are all real.
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        spec:
+          type: string
+          maxLength: 200
+        unit:
+          type: string
+          maxLength: 32
+        quantity:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,9}(?:\.\d{0,3})?$
+        note:
+          type: string
+          maxLength: 200
+      required:
+      - quantity
+      - title
     ProposalOtherCharge:
       type: object
       properties:
@@ -25028,6 +25983,14 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ProposalMaterialLineRequest'
+        material_list:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalMaterialListLineRequest'
+        material_brand_tier:
+          oneOf:
+          - $ref: '#/components/schemas/MaterialBrandTierEnum'
+          - $ref: '#/components/schemas/BlankEnum'
         estimate_type:
           $ref: '#/components/schemas/EstimateTypeEnum'
         item_lines:
@@ -25482,6 +26445,117 @@ components:
       required:
       - address_id
       - window_id
+    QuoteGuardrailPolicy:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/Status24aEnum'
+          readOnly: true
+        approval_reference:
+          type: string
+          readOnly: true
+        approved_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        effective_from:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        default_band_below_bps:
+          type: integer
+          readOnly: true
+          nullable: true
+        default_band_above_bps:
+          type: integer
+          readOnly: true
+          nullable: true
+        misc_cap_bps:
+          type: integer
+          readOnly: true
+          nullable: true
+        margin_cap_bps:
+          type: integer
+          readOnly: true
+          nullable: true
+        custom_share_cap_bps:
+          type: integer
+          readOnly: true
+          nullable: true
+        per_skill_bands:
+          readOnly: true
+      required:
+      - approval_reference
+      - approved_at
+      - custom_share_cap_bps
+      - default_band_above_bps
+      - default_band_below_bps
+      - effective_from
+      - id
+      - margin_cap_bps
+      - misc_cap_bps
+      - per_skill_bands
+      - status
+      - version
+    QuoteGuardrailPolicyActivateRequest:
+      type: object
+      description: |-
+        Every value required, none defaulted — the same rule `CommercialPolicyActivateSerializer`
+        keeps, for the same reason: a default here would be this file setting a commercial term.
+      properties:
+        version:
+          type: integer
+          minimum: 1
+        approval_reference:
+          type: string
+          minLength: 1
+          maxLength: 120
+        effective_from:
+          type: string
+          format: date-time
+        default_band_below_bps:
+          type: integer
+          maximum: 10000
+          minimum: 0
+        default_band_above_bps:
+          type: integer
+          maximum: 10000
+          minimum: 0
+        misc_cap_bps:
+          type: integer
+          maximum: 10000
+          minimum: 0
+        margin_cap_bps:
+          type: integer
+          maximum: 10000
+          minimum: 0
+        custom_share_cap_bps:
+          type: integer
+          maximum: 10000
+          minimum: 0
+        per_skill_bands:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/SkillBandRequest'
+      required:
+      - approval_reference
+      - custom_share_cap_bps
+      - default_band_above_bps
+      - default_band_below_bps
+      - effective_from
+      - margin_cap_bps
+      - misc_cap_bps
+      - version
     QuoteLine:
       type: object
       properties:
@@ -28447,6 +29521,52 @@ components:
       - stage_id
       - stage_status
       - standard_day_hours
+    ShiftDaySummary:
+      type: object
+      description: |-
+        One crew day at a glance, for the day chips on both job pages.
+
+        The full shift-day read (`/engagement-stages/{id}/shift-day/`) is still where the day is
+        worked; this is the state of every day in one engagement read so a hub can draw "Name crew ·
+        Reached · 4 of 5 · Paid" without one request per day. Null on anything that is not a crew day.
+      properties:
+        crew_named:
+          type: integer
+          readOnly: true
+        expected_count:
+          type: integer
+          readOnly: true
+        arrived_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        present_count:
+          type: integer
+          readOnly: true
+          nullable: true
+        attendance_status:
+          type: string
+          readOnly: true
+        settlement_status:
+          type: string
+          readOnly: true
+        settlement_amount_paise:
+          type: integer
+          readOnly: true
+          nullable: true
+        shortfall_choice:
+          type: string
+          readOnly: true
+      required:
+      - arrived_at
+      - attendance_status
+      - crew_named
+      - expected_count
+      - present_count
+      - settlement_amount_paise
+      - settlement_status
+      - shortfall_choice
     ShiftExtraKindEnum:
       enum:
       - OVERTIME
@@ -28632,6 +29752,20 @@ components:
         * `CANCELLED` - Cancelled
         * `VENDOR_NO_SHOW` - Vendor did not arrive
         * `CUSTOMER_NO_SHOW` - Nobody was on site
+    SkillBandRequest:
+      type: object
+      properties:
+        below_bps:
+          type: integer
+          maximum: 10000
+          minimum: 0
+        above_bps:
+          type: integer
+          maximum: 10000
+          minimum: 0
+      required:
+      - above_bps
+      - below_bps
     SourceEnum:
       enum:
       - MANUAL
@@ -28933,6 +30067,24 @@ components:
       required:
       - code
       - expected_version
+    Status24aEnum:
+      enum:
+      - DRAFT
+      - ACTIVE
+      - RETIRED
+      type: string
+      description: |-
+        * `DRAFT` - Draft
+        * `ACTIVE` - Active
+        * `RETIRED` - Retired
+    Status423Enum:
+      enum:
+      - ACTIVE
+      - RETIRED
+      type: string
+      description: |-
+        * `ACTIVE` - Active
+        * `RETIRED` - Retired
     StepUpSession:
       type: object
       properties:
@@ -30166,6 +31318,147 @@ components:
         * `AMENDMENT` - Amendment
         * `COMPLETION` - Completion
         * `WAIT` - Wait
+    WorkItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        skill:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 120
+        unit:
+          type: string
+          maxLength: 16
+        description:
+          type: string
+        status:
+          allOf:
+          - $ref: '#/components/schemas/Status423Enum'
+          default: ACTIVE
+        sort_order:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        group:
+          type: string
+          maxLength: 40
+        material_recipe: {}
+        bundle_quantities: {}
+        band_below_bps:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          nullable: true
+        band_above_bps:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - name
+      - skill
+      - unit
+      - updated_at
+    WorkItemCreateRequest:
+      type: object
+      properties:
+        skill_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        unit:
+          type: string
+          minLength: 1
+          maxLength: 16
+        description:
+          type: string
+          default: ''
+        sort_order:
+          type: integer
+          default: 0
+      required:
+      - name
+      - skill_id
+      - unit
+    WorkItemRate:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        work_item:
+          type: string
+          format: uuid
+          readOnly: true
+        service_area:
+          type: string
+          format: uuid
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        reference_rate_paise:
+          type: integer
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/WorkItemRateStatusEnum'
+          readOnly: true
+          default: DRAFT
+        published_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - id
+      - published_at
+      - reference_rate_paise
+      - service_area
+      - status
+      - version
+      - work_item
+    WorkItemRatePublishRequest:
+      type: object
+      properties:
+        service_area_id:
+          type: string
+          format: uuid
+        reference_rate_paise:
+          type: integer
+          minimum: 1
+      required:
+      - reference_rate_paise
+      - service_area_id
+    WorkItemRateStatusEnum:
+      enum:
+      - DRAFT
+      - PUBLISHED
+      - RETIRED
+      type: string
+      description: |-
+        * `DRAFT` - Draft
+        * `PUBLISHED` - Published
+        * `RETIRED` - Retired
     WorkOutcome:
       type: object
       properties:

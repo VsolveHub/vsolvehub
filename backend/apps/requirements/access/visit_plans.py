@@ -614,6 +614,17 @@ def complete_visit_plan(*, payment_attempt_id: uuid.UUID) -> VisitPlan | None:
                 matching_status=VisitPlanShare.MatchingStatus.BOOKED,
                 updated_at=timezone.now(),
             )
+        enqueue_outbox_event(
+            aggregate_type="site_visit",
+            aggregate_id=visit.id,
+            event_type="m2.visit.booked",
+            idempotency_key=f"visit-booked:{visit.id}",
+            payload={
+                "requirement_id": str(requirement.id),
+                "vendor_invitation_id": str(visit.invitation_id),
+                "site_visit_id": str(visit.id),
+            },
+        )
     _mark_visits_booked(requirement)
     enqueue_outbox_event(
         aggregate_type="requirement",

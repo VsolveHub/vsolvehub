@@ -40,6 +40,8 @@ function estimate(overrides: Partial<QuoteCardView> = {}): QuoteCardView {
       { title: "Handover", deliverable: null, amountLabel: "₹1,38,000", endsOn: "2026-10-14" },
     ],
     materials: [],
+    materialList: [],
+    brandTierLabel: null,
     inclusions: ["Demolition & debris", "Waterproofing", "Plumbing rework"],
     exclusions: ["Sanitaryware"],
     scopeSummary: "Full strip-out and retile.",
@@ -111,6 +113,35 @@ describe("the estimate card", () => {
     );
     expect(screen.queryByRole("button", { name: "Ask for a revision" })).not.toBeInTheDocument();
     expect(screen.getByText("Revision asked for")).toBeInTheDocument();
+  });
+
+  it("says what to buy as one line that opens into the list, with no prices", () => {
+    render(
+      <QuoteCard
+        card={estimate({
+          materialList: [
+            { title: "Modular switch", spec: "16 A, white", quantityLabel: "5 Nos", note: null },
+            { title: "PVC conduit", spec: null, quantityLabel: "20 metre", note: "any brand" },
+          ],
+        })}
+        index={0}
+        isPicked={false}
+        isRevalidating={false}
+        {...hrefs}
+      />,
+    );
+
+    expect(screen.getByText("🛒 What you need to buy · 2 items")).toBeInTheDocument();
+    expect(screen.getByText("Modular switch")).toBeInTheDocument();
+    expect(screen.getByText("16 A, white")).toBeInTheDocument();
+    expect(screen.getByText("5 Nos")).toBeInTheDocument();
+    expect(screen.getByText("any brand")).toBeInTheDocument();
+  });
+
+  it("shows no buy line when the list is empty", () => {
+    render(<QuoteCard card={estimate({ materialList: [] })} index={0} isPicked={false} isRevalidating={false} {...hrefs} />);
+
+    expect(screen.queryByText(/What you need to buy/)).not.toBeInTheDocument();
   });
 
   it("counts the professional's questions waiting on the customer", () => {

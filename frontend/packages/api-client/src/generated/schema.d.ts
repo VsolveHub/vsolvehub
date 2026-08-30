@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.47.0)
- * Checksum: 1ed6fe17af448e74
+ * Source:   contracts/openapi/v1.yaml (version 1.50.0)
+ * Checksum: 752f94dcc854bf13
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -2273,6 +2273,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/custom-item-reviews/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["m2_operations_custom_item_review_queue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/custom-item-reviews/{review_id}/resolve/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["m2_operations_custom_item_review_resolve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/enquiries/{invitation_id}/assisted-clarification/": {
         parameters: {
             query?: never;
@@ -2745,6 +2777,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/quote-guardrails/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Every guardrail policy version, newest first. Mirrors the commercial policy review calendar's own read. */
+        get: operations["m2_operations_guardrail_policy_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/quote-guardrails/activate/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["m2_operations_guardrail_policy_activate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/rate-cards/": {
         parameters: {
             query?: never;
@@ -2985,6 +3050,55 @@ export interface paths {
         get: operations["operations_unpayable_partners"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/work-items/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["m2_operations_work_item_list"];
+        put?: never;
+        post: operations["m2_operations_work_item_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/work-items/{work_item_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["m2_operations_work_item_update"];
+        trace?: never;
+    };
+    "/api/v1/operations/work-items/{work_item_id}/rates/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["m2_operations_work_item_rate_list"];
+        put?: never;
+        /** @description Publish a reference rate for one item in one city, effective immediately. Loaded, never edited — the previous published version is retired in the same transaction. */
+        post: operations["m2_operations_work_item_rate_publish"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4010,6 +4124,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/partner/price-book/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The catalog for this Partner's skills and one city, with their own saved rates. */
+        get: operations["m2_partner_price_book_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/price-book/items/{work_item_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Set this Partner's own rate for one catalog item. */
+        put: operations["m2_partner_price_book_item_set"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/partner/questions/{question_id}/answer/": {
         parameters: {
             query?: never;
@@ -4625,6 +4773,23 @@ export interface paths {
         put?: never;
         /** @description Ask the professional behind one live estimate for a different one, with the reason attached: leave named lines out, change materials, split the work into phases, or something else in a sentence. **Carries no price and changes no price** — only a vendor states a number, and they answer by superseding the estimate, which lands under the same entitlement. One open request per estimate; a second call re-reads the first. */
         post: operations["m2_quote_revision_request"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requirements/{requirement_id}/quotes/{proposal_id}/shopping-list/download/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Download one estimate's shopping list — what the Customer should buy before work starts — as a PDF branded V Solve Hub and naming the professional who wrote it. Quantities and specs only; never a price. `Content-Disposition: attachment`. Same entitlement as `m2_quote_list`: an A5 request needs a charged visit plan. */
+        get: operations["m2_quote_shopping_list_pdf"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -5425,6 +5590,8 @@ export interface components {
             worker_count?: number | null;
             stages?: components["schemas"]["ProposalStageRequest"][];
             material_lines?: components["schemas"]["ProposalMaterialLineRequest"][];
+            material_list?: components["schemas"]["ProposalMaterialListLineRequest"][];
+            material_brand_tier?: components["schemas"]["MaterialBrandTierEnum"] | components["schemas"]["BlankEnum"];
             estimate_type?: components["schemas"]["EstimateTypeEnum"];
             item_lines?: components["schemas"]["ProposalItemLineRequest"][];
             labour_lines?: components["schemas"]["ProposalLabourLineRequest"][];
@@ -5503,6 +5670,8 @@ export interface components {
             readonly receipt_sequence: number | null;
             readonly settlement_reason_code: string;
             readonly failure_code: string;
+            /** Format: uuid */
+            readonly payment_attempt_id: string | null;
             /** Format: date-time */
             readonly activated_at: string | null;
             /** Format: date-time */
@@ -6022,7 +6191,7 @@ export interface components {
             /** Format: uuid */
             readonly id: string;
             readonly version: number;
-            readonly status: components["schemas"]["CommercialPolicyStatusEnum"];
+            readonly status: components["schemas"]["Status24aEnum"];
             readonly approval_reference: string;
             /** Format: date-time */
             readonly effective_from: string;
@@ -6071,13 +6240,6 @@ export interface components {
             withholding_bps: number;
             withholding_basis: components["schemas"]["CommercialAmountBasisEnum"];
         };
-        /**
-         * @description * `DRAFT` - Draft
-         *     * `ACTIVE` - Active
-         *     * `RETIRED` - Retired
-         * @enum {string}
-         */
-        CommercialPolicyStatusEnum: "DRAFT" | "ACTIVE" | "RETIRED";
         /**
          * @description * `INCLUSIVE` - Included in Partner rates
          *     * `EXCLUSIVE` - Added to Partner rates
@@ -6406,6 +6568,29 @@ export interface components {
             /** Format: date-time */
             readonly server_now: string;
         };
+        /**
+         * @description The frozen rate-card terms behind a crew booking, as both sides need to read them.
+         *
+         *     Every figure is the one snapshotted at booking (`terms_snapshot`), never the live card. The
+         *     Customer's all-in total and the lead's receipt are both here because the two apps show
+         *     different halves: the Customer sees what they pay the crew and the fee they paid Vsolve; the
+         *     lead sees what they receive per day and never the fee.
+         */
+        CrewTerms: {
+            readonly headcount: number;
+            readonly days: number;
+            readonly per_worker_day_paise: number;
+            readonly lead_day_receipt_paise: number;
+            readonly lead_receipt_paise: number;
+            readonly booking_fee_paise: number;
+            readonly total_customer_paise: number;
+            readonly standard_day_hours: number | null;
+            readonly overtime_hourly_paise: number | null;
+            readonly add_on_rates: {
+                [key: string]: number;
+            };
+            readonly inclusions: string[];
+        };
         CrewVerificationQueue: {
             memberships: components["schemas"]["CrewMembershipVerificationRow"][];
             /** Format: date-time */
@@ -6426,6 +6611,42 @@ export interface components {
         CsrfToken: {
             readonly csrf_token: string;
         };
+        CustomWorkItemReview: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly partner: string;
+            readonly partner_business_name: string;
+            /** Format: uuid */
+            readonly proposal: string | null;
+            readonly title: string;
+            readonly unit: string;
+            readonly rate_paise: number;
+            readonly status: components["schemas"]["CustomWorkItemReviewStatusEnum"];
+            /** Format: uuid */
+            readonly resolved_by: string | null;
+            /** Format: date-time */
+            readonly resolved_at: string | null;
+            /** Format: uuid */
+            readonly promoted_work_item: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        CustomWorkItemReviewList: {
+            reviews: components["schemas"]["CustomWorkItemReview"][];
+        };
+        CustomWorkItemReviewResolveRequest: {
+            approve: boolean;
+            /** Format: uuid */
+            skill_id?: string | null;
+        };
+        /**
+         * @description * `PENDING` - Pending review
+         *     * `APPROVED` - Approved
+         *     * `REJECTED` - Rejected
+         * @enum {string}
+         */
+        CustomWorkItemReviewStatusEnum: "PENDING" | "APPROVED" | "REJECTED";
         /**
          * @description One visit, as the Customer who paid for it sees it.
          *
@@ -6517,6 +6738,8 @@ export interface components {
             readonly scope_summary: string;
             readonly stages: components["schemas"]["ProposalStage"][];
             readonly material_lines: components["schemas"]["ProposalMaterialLine"][];
+            readonly material_list: components["schemas"]["ProposalMaterialListLine"][];
+            readonly material_brand_tier: string;
             readonly warranty_terms: string;
             /** Format: date-time */
             readonly valid_until: string | null;
@@ -6757,6 +6980,12 @@ export interface components {
             readonly id: string;
             /** Format: uuid */
             readonly requirement: string;
+            readonly service_name: string;
+            readonly service_slug: string;
+            readonly crew_terms: components["schemas"]["CrewTerms"] | null;
+            readonly site_address: components["schemas"]["EngagementSiteAddress"] | null;
+            readonly customer_contact: components["schemas"]["EngagementContact"] | null;
+            readonly partner_contact: components["schemas"]["EngagementContact"] | null;
             /** Format: uuid */
             readonly proposal: string | null;
             /** Format: uuid */
@@ -6855,6 +7084,11 @@ export interface components {
          * @enum {string}
          */
         EngagementCommercialModeEnum: "LEAD_ONLY" | "MANAGED_PAYMENT_REQUIRED";
+        /** @description A name and a phone number, disclosed only once `contact_released_at` is stamped. */
+        EngagementContact: {
+            readonly name: string;
+            readonly phone: string;
+        };
         /**
          * @description One line of the agreement's history.
          *
@@ -6886,6 +7120,16 @@ export interface components {
             readonly previous: string | null;
             readonly results: components["schemas"]["Engagement"][];
         };
+        /** @description Where the work is. Same shape as the visit-side disclosure; no coordinates. */
+        EngagementSiteAddress: {
+            readonly line1: string;
+            readonly line2: string;
+            readonly landmark: string;
+            readonly locality: string;
+            readonly city: string;
+            readonly state: string;
+            readonly postal_code: string;
+        };
         /**
          * @description One shift-day or one milestone, with its money and its clocks.
          *
@@ -6905,6 +7149,7 @@ export interface components {
             readonly label: string;
             readonly amount_paise: number;
             readonly funding_breakdown: unknown;
+            readonly shift_summary: components["schemas"]["ShiftDaySummary"] | null;
             readonly kind: components["schemas"]["EngagementStageKindEnum"];
             /** Format: date */
             readonly starts_on: string | null;
@@ -7009,11 +7254,13 @@ export interface components {
             readonly fixed_visit_status: string | null;
             /** Format: date-time */
             readonly responds_by: string;
+            readonly pricing_skill_code: string;
             readonly latest_proposal_status: string | null;
             readonly latest_proposal_rejection_reason: string | null;
             /** Format: date-time */
             readonly created_at: string;
             readonly answers: unknown;
+            readonly brief: components["schemas"]["CrewBriefLine"][];
             readonly budget_min_paise: number | null;
             readonly budget_max_paise: number | null;
             readonly required_tax_basis: string;
@@ -7057,6 +7304,7 @@ export interface components {
             readonly fixed_visit_status: string | null;
             /** Format: date-time */
             readonly responds_by: string;
+            readonly pricing_skill_code: string;
             readonly latest_proposal_status: string | null;
             readonly latest_proposal_rejection_reason: string | null;
             /** Format: date-time */
@@ -7515,6 +7763,12 @@ export interface components {
          * @enum {string}
          */
         MatchingStatusEnum: "SEARCHING" | "HELD" | "BOOKED" | "VISITED" | "ESTIMATE_RECEIVED" | "NO_PROFESSIONAL_FOUND" | "CANCELLED" | "RECOVERY";
+        /**
+         * @description * `STANDARD` - Standard
+         *     * `PREMIUM` - Premium
+         * @enum {string}
+         */
+        MaterialBrandTierEnum: "STANDARD" | "PREMIUM";
         /**
          * @description * `SAME_PARTNER_SEQUENTIAL` - Same Partner sequential
          *     * `PARALLEL_ALLOWED` - Parallel allowed
@@ -8646,6 +8900,21 @@ export interface components {
             readonly member_since: string;
             readonly has_payout_account: boolean;
         };
+        PartnerRateItem: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly work_item: string;
+            readonly rate_paise: number;
+            readonly is_active: boolean;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        PartnerRateItemSetRequest: {
+            rate_paise: number;
+            /** @default true */
+            is_active: boolean;
+        };
         PartnerSchedule: {
             readonly rules: components["schemas"]["PartnerAvailabilityRule"][];
             readonly exceptions: components["schemas"]["PartnerAvailabilityException"][];
@@ -8826,6 +9095,15 @@ export interface components {
             budget_max_paise?: number | null;
             additional_details?: string;
             language?: string;
+        };
+        /** @description A partial edit. Every field optional — Operations edits one thing at a time. */
+        PatchedWorkItemUpdateRequest: {
+            name?: string;
+            description?: string;
+            status?: components["schemas"]["Status423Enum"];
+            sort_order?: number;
+            band_below_bps?: number | null;
+            band_above_bps?: number | null;
         };
         PaymentAllocation: {
             /** Format: uuid */
@@ -9041,6 +9319,22 @@ export interface components {
             group_key: string;
             /** Format: date-time */
             starts_at: string;
+        };
+        /** @description One catalog item, with its band context and this Partner's own saved rate, if any. */
+        PriceBookEntry: {
+            work_item: components["schemas"]["WorkItem"];
+            reference_rate_paise: number | null;
+            rate_version: number | null;
+            floor_paise: number | null;
+            ceiling_paise: number | null;
+            partner_rate_paise: number | null;
+            partner_is_active: boolean;
+            is_default_rate: boolean;
+            trade_code: string;
+            trade_name: string;
+        };
+        PriceBookList: {
+            items: components["schemas"]["PriceBookEntry"][];
         };
         PrivacyRequest: {
             /** Format: uuid */
@@ -9398,6 +9692,8 @@ export interface components {
             readonly scope_summary: string;
             readonly stages: components["schemas"]["ProposalStage"][];
             readonly material_lines: components["schemas"]["ProposalMaterialLine"][];
+            readonly material_list: components["schemas"]["ProposalMaterialListLine"][];
+            readonly material_brand_tier: string;
             readonly warranty_terms: string;
             /** Format: date-time */
             readonly valid_until: string | null;
@@ -9422,6 +9718,8 @@ export interface components {
             worker_count?: number | null;
             stages?: components["schemas"]["ProposalStageRequest"][];
             material_lines?: components["schemas"]["ProposalMaterialLineRequest"][];
+            material_list?: components["schemas"]["ProposalMaterialListLineRequest"][];
+            material_brand_tier?: components["schemas"]["MaterialBrandTierEnum"] | components["schemas"]["BlankEnum"];
             estimate_type?: components["schemas"]["EstimateTypeEnum"];
             item_lines?: components["schemas"]["ProposalItemLineRequest"][];
             labour_lines?: components["schemas"]["ProposalLabourLineRequest"][];
@@ -9442,6 +9740,7 @@ export interface components {
             material_lines: components["schemas"]["ProposalMaterialLine"][];
             other_charges: components["schemas"]["ProposalOtherCharge"][];
             stages: components["schemas"]["ProposalStage"][];
+            suggested_material_list: components["schemas"]["ProposalMaterialListLine"][];
             line_subtotal_paise: number;
             material_total_paise: number;
             authorized_charges_paise: number;
@@ -9458,22 +9757,36 @@ export interface components {
             policy_version: number;
             calculation_snapshot: unknown;
         };
+        /**
+         * @description One priced line. A catalog line names its `work_item_id` and is band-checked at
+         *     submission; any other line is a custom item the Partner added on site (`price_book`).
+         */
         ProposalItemLine: {
-            category: string;
+            category?: string;
             title: string;
             unit: components["schemas"]["UnitEnum"];
             /** Format: decimal */
             quantity: string;
             rate_paise: number;
             readonly amount_paise: number;
+            /** Format: uuid */
+            work_item_id?: string | null;
+            is_custom?: boolean;
         };
+        /**
+         * @description One priced line. A catalog line names its `work_item_id` and is band-checked at
+         *     submission; any other line is a custom item the Partner added on site (`price_book`).
+         */
         ProposalItemLineRequest: {
-            category: string;
+            category?: string;
             title: string;
             unit: components["schemas"]["UnitEnum"];
             /** Format: decimal */
             quantity: string;
             rate_paise: number;
+            /** Format: uuid */
+            work_item_id?: string | null;
+            is_custom?: boolean;
         };
         ProposalLabourLine: {
             role: string;
@@ -9552,6 +9865,38 @@ export interface components {
             rate_paise?: number;
             amount_paise?: number;
         };
+        /**
+         * @description One thing the Customer should buy. Quantities and a spec — **never a price**.
+         *
+         *     Materials are the Customer's to purchase on every project (owner decision, 2026-08-29). The
+         *     server suggests this list from the tapped catalog items' recipes; the Partner corrects it
+         *     after the visit; the Customer shops from it. `unit` is free text for the same reason
+         *     `ProposalMaterialLineSerializer.unit` is: coils, boxes and bags are all real.
+         */
+        ProposalMaterialListLine: {
+            title: string;
+            spec?: string;
+            unit?: string;
+            /** Format: decimal */
+            quantity: string;
+            note?: string;
+        };
+        /**
+         * @description One thing the Customer should buy. Quantities and a spec — **never a price**.
+         *
+         *     Materials are the Customer's to purchase on every project (owner decision, 2026-08-29). The
+         *     server suggests this list from the tapped catalog items' recipes; the Partner corrects it
+         *     after the visit; the Customer shops from it. `unit` is free text for the same reason
+         *     `ProposalMaterialLineSerializer.unit` is: coils, boxes and bags are all real.
+         */
+        ProposalMaterialListLineRequest: {
+            title: string;
+            spec?: string;
+            unit?: string;
+            /** Format: decimal */
+            quantity: string;
+            note?: string;
+        };
         ProposalOtherCharge: {
             code: components["schemas"]["CodeEnum"];
             label: string;
@@ -9585,6 +9930,8 @@ export interface components {
             worker_count?: number | null;
             stages?: components["schemas"]["ProposalStageRequest"][];
             material_lines?: components["schemas"]["ProposalMaterialLineRequest"][];
+            material_list?: components["schemas"]["ProposalMaterialListLineRequest"][];
+            material_brand_tier?: components["schemas"]["MaterialBrandTierEnum"] | components["schemas"]["BlankEnum"];
             estimate_type?: components["schemas"]["EstimateTypeEnum"];
             item_lines?: components["schemas"]["ProposalItemLineRequest"][];
             labour_lines?: components["schemas"]["ProposalLabourLineRequest"][];
@@ -9786,6 +10133,41 @@ export interface components {
             /** Format: uuid */
             address_id: string;
             window_id: string;
+        };
+        QuoteGuardrailPolicy: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly version: number;
+            readonly status: components["schemas"]["Status24aEnum"];
+            readonly approval_reference: string;
+            /** Format: date-time */
+            readonly approved_at: string | null;
+            /** Format: date-time */
+            readonly effective_from: string | null;
+            readonly default_band_below_bps: number | null;
+            readonly default_band_above_bps: number | null;
+            readonly misc_cap_bps: number | null;
+            readonly margin_cap_bps: number | null;
+            readonly custom_share_cap_bps: number | null;
+            readonly per_skill_bands: unknown;
+        };
+        /**
+         * @description Every value required, none defaulted — the same rule `CommercialPolicyActivateSerializer`
+         *     keeps, for the same reason: a default here would be this file setting a commercial term.
+         */
+        QuoteGuardrailPolicyActivateRequest: {
+            version: number;
+            approval_reference: string;
+            /** Format: date-time */
+            effective_from: string;
+            default_band_below_bps: number;
+            default_band_above_bps: number;
+            misc_cap_bps: number;
+            margin_cap_bps: number;
+            custom_share_cap_bps: number;
+            per_skill_bands?: {
+                [key: string]: components["schemas"]["SkillBandRequest"];
+            };
         };
         QuoteLine: {
             readonly code: string;
@@ -10977,6 +11359,24 @@ export interface components {
             readonly server_now: string;
         };
         /**
+         * @description One crew day at a glance, for the day chips on both job pages.
+         *
+         *     The full shift-day read (`/engagement-stages/{id}/shift-day/`) is still where the day is
+         *     worked; this is the state of every day in one engagement read so a hub can draw "Name crew ·
+         *     Reached · 4 of 5 · Paid" without one request per day. Null on anything that is not a crew day.
+         */
+        ShiftDaySummary: {
+            readonly crew_named: number;
+            readonly expected_count: number;
+            /** Format: date-time */
+            readonly arrived_at: string | null;
+            readonly present_count: number | null;
+            readonly attendance_status: string;
+            readonly settlement_status: string;
+            readonly settlement_amount_paise: number | null;
+            readonly shortfall_choice: string;
+        };
+        /**
          * @description * `OVERTIME` - Hours past the published shift
          *     * `ADD_ON` - A published add-on from the rate card
          * @enum {string}
@@ -11068,6 +11468,10 @@ export interface components {
          * @enum {string}
          */
         SiteVisitStatusEnum: "REQUESTED" | "SCHEDULED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED" | "VENDOR_NO_SHOW" | "CUSTOMER_NO_SHOW";
+        SkillBandRequest: {
+            below_bps: number;
+            above_bps: number;
+        };
         /**
          * @description * `MANUAL` - Manual
          *     * `REVERSE_GEOCODED` - Reverse geocoded
@@ -11207,6 +11611,19 @@ export interface components {
             expected_version: number;
             code: string;
         };
+        /**
+         * @description * `DRAFT` - Draft
+         *     * `ACTIVE` - Active
+         *     * `RETIRED` - Retired
+         * @enum {string}
+         */
+        Status24aEnum: "DRAFT" | "ACTIVE" | "RETIRED";
+        /**
+         * @description * `ACTIVE` - Active
+         *     * `RETIRED` - Retired
+         * @enum {string}
+         */
+        Status423Enum: "ACTIVE" | "RETIRED";
         StepUpSession: {
             /** Format: date-time */
             readonly stepped_up_at: string;
@@ -11766,6 +12183,63 @@ export interface components {
          * @enum {string}
          */
         WorkEvidenceKindEnum: "BEFORE" | "AFTER" | "CONTACT_ATTEMPT" | "SAFETY" | "DAMAGE" | "AMENDMENT" | "COMPLETION" | "WAIT";
+        WorkItem: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            skill: string;
+            name: string;
+            unit: string;
+            description?: string;
+            /** @default ACTIVE */
+            status: components["schemas"]["Status423Enum"];
+            sort_order?: number;
+            group?: string;
+            material_recipe?: unknown;
+            bundle_quantities?: unknown;
+            band_below_bps?: number | null;
+            band_above_bps?: number | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        WorkItemCreateRequest: {
+            /** Format: uuid */
+            skill_id: string;
+            name: string;
+            unit: string;
+            /** @default  */
+            description: string;
+            /** @default 0 */
+            sort_order: number;
+        };
+        WorkItemRate: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly work_item: string;
+            /** Format: uuid */
+            readonly service_area: string;
+            readonly version: number;
+            readonly reference_rate_paise: number;
+            /** @default DRAFT */
+            readonly status: components["schemas"]["WorkItemRateStatusEnum"];
+            /** Format: date-time */
+            readonly published_at: string | null;
+        };
+        WorkItemRatePublishRequest: {
+            /** Format: uuid */
+            service_area_id: string;
+            reference_rate_paise: number;
+        };
+        /**
+         * @description * `DRAFT` - Draft
+         *     * `PUBLISHED` - Published
+         *     * `RETIRED` - Retired
+         * @enum {string}
+         */
+        WorkItemRateStatusEnum: "DRAFT" | "PUBLISHED" | "RETIRED";
         WorkOutcome: {
             /** Format: uuid */
             readonly id: string;
@@ -17306,6 +17780,76 @@ export interface operations {
             };
         };
     };
+    m2_operations_custom_item_review_queue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomWorkItemReviewList"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_operations_custom_item_review_resolve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                review_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomWorkItemReviewResolveRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CustomWorkItemReviewResolveRequest"];
+                "multipart/form-data": components["schemas"]["CustomWorkItemReviewResolveRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomWorkItemReview"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     m2_operations_assisted_clarification: {
         parameters: {
             query?: never;
@@ -18642,6 +19186,74 @@ export interface operations {
             };
         };
     };
+    m2_operations_guardrail_policy_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuoteGuardrailPolicy"][];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_operations_guardrail_policy_activate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuoteGuardrailPolicyActivateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["QuoteGuardrailPolicyActivateRequest"];
+                "multipart/form-data": components["schemas"]["QuoteGuardrailPolicyActivateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuoteGuardrailPolicy"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     m2_rate_card_list: {
         parameters: {
             query?: {
@@ -19231,6 +19843,192 @@ export interface operations {
                 };
             };
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_operations_work_item_list: {
+        parameters: {
+            query?: {
+                skill_id?: string;
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkItem"][];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_operations_work_item_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkItemCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["WorkItemCreateRequest"];
+                "multipart/form-data": components["schemas"]["WorkItemCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkItem"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_operations_work_item_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                work_item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedWorkItemUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedWorkItemUpdateRequest"];
+                "multipart/form-data": components["schemas"]["PatchedWorkItemUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkItem"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_operations_work_item_rate_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                work_item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkItemRate"][];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_operations_work_item_rate_publish: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                work_item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkItemRatePublishRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["WorkItemRatePublishRequest"];
+                "multipart/form-data": components["schemas"]["WorkItemRatePublishRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkItemRate"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -21915,6 +22713,108 @@ export interface operations {
             };
         };
     };
+    m2_partner_price_book_read: {
+        parameters: {
+            query?: {
+                /** @description One of the Partner's own active service areas. Defaults to their sole area when they serve only one. */
+                service_area_id?: string;
+                /** @description Narrow to one trade's catalogue - the enquiry's `pricing_skill_code`. Omitted, every trade the Partner prices from is listed. */
+                skill?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceBookList"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_partner_price_book_item_set: {
+        parameters: {
+            query?: {
+                service_area_id?: string;
+            };
+            header?: never;
+            path: {
+                work_item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PartnerRateItemSetRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PartnerRateItemSetRequest"];
+                "multipart/form-data": components["schemas"]["PartnerRateItemSetRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerRateItem"];
+                };
+            };
+            /** @description `rate_outside_band` when the rate sits outside the allowed range for this item in this city. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     m2_partner_question_answer: {
         parameters: {
             query?: never;
@@ -23493,6 +24393,44 @@ export interface operations {
                 };
             };
             /** @description `m2_proposal_not_selectable` when the estimate is no longer live, when the request already has a chosen vendor, or when the caller has not unlocked these quotes. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_quote_shopping_list_pdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
             409: {
                 headers: {
                     [name: string]: unknown;

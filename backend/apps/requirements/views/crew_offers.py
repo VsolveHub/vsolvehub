@@ -92,6 +92,7 @@ class PartnerCrewOfferListView(APIView):
     )
     def get(self, request: Request) -> Response:
         profile = _partner_profile(request)
+        crew_dispatch.reconcile_lapsed_offers(partner=profile)
         now = timezone.now()
         invitations = (
             VendorInvitation.objects.filter(

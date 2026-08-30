@@ -1,17 +1,29 @@
 "use client";
 
 import { Card, Field, Input, cn } from "@vsolve/ui";
+import { Check, X } from "lucide-react";
 
+import { iconForOption } from "@/features/project-request/model/option-icons";
+import { OptionTiles, toggleValue } from "@/features/project-request/view/parts/option-tiles";
 import type { RequirementQuestionView } from "../adapters";
+import { shouldShowTextQuestion } from "../model/event-brief";
 import { useRequirement } from "./requirement-context";
 
 /**
- * Screen 1 - What you need.
+ * Screen 1 — What needs doing, on the desktop brief.
  *
- * The old version of this screen leaned on free text. This version keeps the
- * same server-authored question model, but renders choice questions as visual
- * cards so the Customer can pick the closest fit rather than describing the
- * job in their own words.
+ * The same server-authored question model as the phone screen, rendered with
+ * the same rule: the Customer recognises, they do not read.
+ *
+ * ## Curated cards, or tiles — never an invented card
+ *
+ * The four fit-out options have authored artwork, facts and included/not-
+ * included lists (`CHOICE_VISUALS`), and a choice whose *every* option is
+ * curated renders those cards. Anything else — an occasion, a venue, a budget
+ * band — renders the phone's icon tiles. This used to fall back to a hashed
+ * gradient with "Illustrative selection" and "Mock scope only" printed on it,
+ * which is placeholder copy in front of a paying Customer; the tiles say only
+ * what the catalogue said.
  */
 
 export interface WhatScreenProps {
@@ -81,39 +93,6 @@ const CHOICE_VISUALS: Record<string, ChoiceOptionVisual> = {
   },
 };
 
-function hashText(value: string): number {
-  let hash = 0;
-  for (const char of value) {
-    hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-  }
-  return hash;
-}
-
-function fallbackVisual(option: { value: string; label: string; description?: string }): ChoiceOptionVisual {
-  const hash = hashText(option.value || option.label);
-  const hues = [hash % 360, (hash + 35) % 360, (hash + 70) % 360];
-  return {
-    eyebrow: "Illustrative selection",
-    facts: [
-      option.description ?? "Mock scope only",
-      "Pick the closest match",
-      "We fill in the rest",
-    ],
-    included: ["Basic scope review", "Vendor visit estimate", "Itemised quote"],
-    notIncluded: ["Final pricing before site check", "Authority approvals", "Materials bought outside quote"],
-    palette: [
-      `hsl(${hues[0]} 34% 20%)`,
-      `hsl(${hues[1]} 45% 38%)`,
-      `hsl(${hues[2]} 56% 82%)`,
-    ],
-    imageLabel: option.label,
-  };
-}
-
-function choiceVisualFor(option: { value: string; label: string; description?: string }): ChoiceOptionVisual {
-  return CHOICE_VISUALS[option.value] ?? fallbackVisual(option);
-}
-
 function svgDataUri(svg: string): string {
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
@@ -127,8 +106,10 @@ function escapeXml(value: string): string {
     .replaceAll("'", "&apos;");
 }
 
-function choiceArtwork(option: { value: string; label: string; description?: string }): string {
-  const visual = choiceVisualFor(option);
+function choiceArtwork(
+  option: { value: string; label: string; description?: string },
+  visual: ChoiceOptionVisual,
+): string {
   const [dark, mid, light] = visual.palette;
 
   const motif =
@@ -141,7 +122,7 @@ function choiceArtwork(option: { value: string; label: string; description?: str
           : '<rect x="24" y="24" width="152" height="92" rx="12" fill="rgba(255,255,255,0.10)" /><path d="M24 58h152M24 86h152M72 24v92M120 24v92" stroke="rgba(255,255,255,0.2)" /><rect x="34" y="34" width="34" height="18" rx="4" fill="rgba(255,255,255,0.16)" /><rect x="132" y="96" width="34" height="14" rx="4" fill="rgba(255,255,255,0.16)" />';
 
   const title = visual.imageLabel;
-  const subtitle = option.description ?? "Illustrative scope only";
+  const subtitle = option.description ?? visual.eyebrow;
 
   return svgDataUri(`
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 140" fill="none" role="img" aria-label="${escapeXml(title)}">
@@ -164,7 +145,32 @@ function choiceArtwork(option: { value: string; label: string; description?: str
   `);
 }
 
-function renderChoiceQuestion({
+type Dispatch = ReturnType<typeof useRequirement>["dispatch"];
+
+function QuestionHeading({ question }: { question: RequirementQuestionView }) {
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-text">
+        {question.label}
+        {question.required ? (
+          <span aria-hidden className="ml-0.5 text-danger-text">
+            *
+          </span>
+        ) : (
+          <span className="ml-1.5 font-normal text-text-muted">(optional)</span>
+        )}
+      </h3>
+      {question.help ? <p className="mt-1 text-sm text-text-secondary">{question.help}</p> : null}
+    </div>
+  );
+}
+
+function selectedValues(value: unknown): readonly string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+}
+
+/** The authored fit-out cards. Only for a choice whose every option is curated. */
+function renderCuratedChoice({
   question,
   value,
   dispatch,
@@ -173,7 +179,7 @@ function renderChoiceQuestion({
 }: {
   question: RequirementQuestionView;
   value: unknown;
-  dispatch: ReturnType<typeof useRequirement>["dispatch"];
+  dispatch: Dispatch;
   isChoosing: boolean;
   onChoiceSelect?: (questionCode: string, value: string) => void;
 }) {
@@ -181,25 +187,14 @@ function renderChoiceQuestion({
 
   return (
     <section className="space-y-3">
-      <div>
-        <h3 className="text-sm font-semibold text-text">
-          {question.label}
-          {question.required ? (
-            <span aria-hidden className="ml-0.5 text-danger-text">
-              *
-            </span>
-          ) : (
-            <span className="ml-1.5 font-normal text-text-muted">(optional)</span>
-          )}
-        </h3>
-        {question.help ? <p className="mt-1 text-sm text-text-secondary">{question.help}</p> : null}
-      </div>
+      <QuestionHeading question={question} />
 
       <div role="radiogroup" aria-label={question.label} className="grid gap-3 md:grid-cols-2">
         {options.map((option, index) => {
           const checked = value === option.value;
-          const visual = choiceVisualFor(option);
-          const image = choiceArtwork(option);
+          const visual = CHOICE_VISUALS[option.value];
+          if (visual === undefined) return null;
+          const image = choiceArtwork(option, visual);
 
           return (
             <label key={option.value} className="group block cursor-pointer">
@@ -246,14 +241,10 @@ function renderChoiceQuestion({
                   </div>
 
                   <div className="mt-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-base font-semibold text-text">{option.label}</p>
-                        <p className="mt-1 text-sm leading-6 text-text-secondary">
-                          {option.description ?? "Illustrative scope only."}
-                        </p>
-                      </div>
-                    </div>
+                    <p className="text-base font-semibold text-text">{option.label}</p>
+                    {option.description !== undefined ? (
+                      <p className="mt-1 text-sm leading-6 text-text-secondary">{option.description}</p>
+                    ) : null}
 
                     <ul className="mt-3 flex flex-wrap gap-2">
                       {visual.facts.map((fact) => (
@@ -310,6 +301,60 @@ function renderChoiceQuestion({
   );
 }
 
+/** Icon tiles — single or multi — for every choice the catalogue did not curate. */
+function renderTileChoice({
+  question,
+  value,
+  dispatch,
+  onChoiceSelect,
+}: {
+  question: RequirementQuestionView;
+  value: unknown;
+  dispatch: Dispatch;
+  onChoiceSelect?: (questionCode: string, value: string) => void;
+}) {
+  const options = (question.options ?? []).map((option) => ({
+    value: option.value,
+    label: option.label,
+    description: option.description,
+    icon: iconForOption(option),
+  }));
+
+  return (
+    <section className="space-y-3">
+      <QuestionHeading question={question} />
+      {question.kind === "multi" ? (
+        <OptionTiles
+          label={question.label}
+          name={question.code}
+          columns={3}
+          options={options}
+          values={selectedValues(value)}
+          onToggle={(next) =>
+            dispatch({
+              type: "ANSWER",
+              questionCode: question.code,
+              value: toggleValue(selectedValues(value), next),
+            })
+          }
+        />
+      ) : (
+        <OptionTiles
+          label={question.label}
+          name={question.code}
+          columns={3}
+          options={options}
+          value={typeof value === "string" ? value : null}
+          onChange={(next) => {
+            dispatch({ type: "ANSWER", questionCode: question.code, value: next });
+            onChoiceSelect?.(question.code, next);
+          }}
+        />
+      )}
+    </section>
+  );
+}
+
 function renderQuestion({
   question,
   value,
@@ -319,12 +364,39 @@ function renderQuestion({
 }: {
   question: RequirementQuestionView;
   value: unknown;
-  dispatch: ReturnType<typeof useRequirement>["dispatch"];
+  dispatch: Dispatch;
   isChoosing: boolean;
   onChoiceSelect?: (questionCode: string, value: string) => void;
 }) {
-  if (question.kind === "choice") {
-    return renderChoiceQuestion({ question, value, dispatch, isChoosing, onChoiceSelect });
+  if (question.kind === "choice" || question.kind === "multi") {
+    const curated =
+      question.kind === "choice" &&
+      (question.options ?? []).length > 0 &&
+      (question.options ?? []).every((option) => CHOICE_VISUALS[option.value] !== undefined);
+    return curated
+      ? renderCuratedChoice({ question, value, dispatch, isChoosing, onChoiceSelect })
+      : renderTileChoice({ question, value, dispatch, onChoiceSelect });
+  }
+
+  if (question.kind === "boolean") {
+    return (
+      <section className="space-y-3">
+        <QuestionHeading question={question} />
+        <OptionTiles
+          label={question.label}
+          name={question.code}
+          columns={3}
+          options={[
+            { value: "yes", label: "Yes", icon: Check },
+            { value: "no", label: "No", icon: X },
+          ]}
+          value={value === true ? "yes" : value === false ? "no" : null}
+          onChange={(next) =>
+            dispatch({ type: "ANSWER", questionCode: question.code, value: next === "yes" })
+          }
+        />
+      </section>
+    );
   }
 
   return (
@@ -334,31 +406,7 @@ function renderQuestion({
       description={question.help}
       required={question.required}
     >
-      {question.kind === "boolean" ? (
-        <div className="flex flex-col gap-2">
-          {[{ value: true, label: "Yes" }, { value: false, label: "No" }].map((option) => (
-            <label
-              key={option.label}
-              className="flex items-center gap-3 text-sm leading-6 text-text"
-            >
-              <input
-                type="radio"
-                name={question.code}
-                checked={value === option.value}
-                onChange={() =>
-                  dispatch({
-                    type: "ANSWER",
-                    questionCode: question.code,
-                    value: option.value,
-                  })
-                }
-                className="size-5 border-line text-action focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
-              />
-              {option.label}
-            </label>
-          ))}
-        </div>
-      ) : question.kind === "number" ? (
+      {question.kind === "number" ? (
         <Input
           type="number"
           inputMode="numeric"
@@ -405,11 +453,10 @@ export function WhatScreen({
   return (
     <div>
       {hideHeading ? null : (
-        <h2 className="text-lg font-semibold text-text">Choose a service for {categoryName}</h2>
+        <h2 className="text-lg font-semibold text-text">What needs doing for {categoryName}?</h2>
       )}
       <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
-        Pick the closest service. Each option shows what is included and what is not included; once
-        you choose, we will take you straight to where and when.
+        Tap what fits. The site visit fills in the rest.
       </p>
 
       {unsupportedQuestions.length > 0 ? (
@@ -441,17 +488,19 @@ export function WhatScreen({
       ) : null}
 
       <div className="mt-5 flex flex-col gap-5">
-        {questions.map((question) => (
-          <div key={question.code}>
-            {renderQuestion({
-              question,
-              value: state.answers[question.code],
-              dispatch,
-              isChoosing,
-              onChoiceSelect,
-            })}
-          </div>
-        ))}
+        {questions.map((question) =>
+          shouldShowTextQuestion(question, questions, state.answers) ? (
+            <div key={question.code}>
+              {renderQuestion({
+                question,
+                value: state.answers[question.code],
+                dispatch,
+                isChoosing,
+                onChoiceSelect,
+              })}
+            </div>
+          ) : null,
+        )}
       </div>
     </div>
   );

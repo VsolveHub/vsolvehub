@@ -112,6 +112,17 @@ from .operations_workspace import (
     OperationsTouchMetricView,
     OperationsTouchRollupView,
 )
+from .price_book import (
+    OperationsCustomWorkItemReviewQueueView,
+    OperationsCustomWorkItemReviewResolveView,
+    OperationsQuoteGuardrailPolicyActivateView,
+    OperationsQuoteGuardrailPolicyView,
+    OperationsWorkItemCollectionView,
+    OperationsWorkItemDetailView,
+    OperationsWorkItemRateView,
+    PartnerPriceBookItemView,
+    PartnerPriceBookView,
+)
 from .project_completion import PartnerProjectCompletionView, ProjectCompletionCodeView
 from .projects import (
     EngagementHandoverAcceptanceView,
@@ -264,9 +275,14 @@ __all__ = [
     "OperationsCommercialPolicyActivateView",
     "OperationsCrewVerificationQueueView",
     "OperationsCrewVerificationView",
+    # The vendor price book.
+    "OperationsCustomWorkItemReviewQueueView",
+    "OperationsCustomWorkItemReviewResolveView",
     "OperationsDeadlineView",
     "OperationsDeclineAlarmView",
     "OperationsQueueView",
+    "OperationsQuoteGuardrailPolicyActivateView",
+    "OperationsQuoteGuardrailPolicyView",
     "OperationsRateCardView",
     "OperationsReclassificationView",
     "OperationsReconciliationView",
@@ -276,6 +292,9 @@ __all__ = [
     "OperationsSafetyIncidentDecisionView",
     "OperationsTouchMetricView",
     "OperationsTouchRollupView",
+    "OperationsWorkItemCollectionView",
+    "OperationsWorkItemDetailView",
+    "OperationsWorkItemRateView",
     "PartnerCrewOfferAcceptView",
     "PartnerCrewOfferDeclineView",
     "PartnerCrewOfferListView",
@@ -288,6 +307,8 @@ __all__ = [
     "PartnerEnquiryQuestionView",
     "PartnerEnquirySiteVisitView",
     "PartnerEnquiryVisitSlotView",
+    "PartnerPriceBookItemView",
+    "PartnerPriceBookView",
     "PartnerProjectCompletionView",
     "PartnerProposalCollectionView",
     "PartnerProposalDetailView",
@@ -359,4 +380,9 @@ __all__ = [
     "_requirement_for_party",
     "_shift_stage_for_participant",
 ]
-from .receipts import EngagementReceiptDownloadView
+from .receipts import (
+    EngagementReceiptDownloadView,
+    RequirementQuoteShoppingListPdfView,
+)
+
+__all__ += ["RequirementQuoteShoppingListPdfView"]

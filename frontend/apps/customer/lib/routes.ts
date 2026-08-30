@@ -114,7 +114,7 @@ export function bookCrewFeeHref(requirementId: string): string {
 
 /** One agreement, keyed by the engagement so a months-old notification resolves. */
 export function engagementHref(engagementId: string): string {
-  return `/engagements/${engagementId}`;
+  return `/jobs/${engagementId}`;
 }
 
 /**
@@ -125,12 +125,12 @@ export function engagementHref(engagementId: string): string {
  * a URL. A dialog cannot be any of those.
  */
 export function receiptHref(engagementId: string): string {
-  return `/engagements/${engagementId}/receipt`;
+  return `/jobs/${engagementId}/receipt`;
 }
 
 /** One stage's own review route — the money screen, reachable from a notification. */
 export function stageHref(engagementId: string, stageId: string): string {
-  return `/engagements/${engagementId}/stages/${stageId}`;
+  return `/jobs/${engagementId}/stages/${stageId}`;
 }
 
 /**

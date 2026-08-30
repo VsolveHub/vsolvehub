@@ -385,7 +385,7 @@ export function useSubmitRequirement() {
    `putBytes`, `attachmentFinalizeKey`, `refusalToFailure`, `isAlreadyRemoved`
    and the two input types.
 
-   The two-step brief has no place a customer types or attaches anything, so
+   The three-step brief has no place a customer types or attaches anything, so
    nothing mounted them; 1.44.0 then removed the endpoints they targeted. Either
    fact alone makes them dead, and a mutation that cannot reach its endpoint is
    worse than an absent one, because the button stays on screen and fails only

@@ -13,6 +13,7 @@ from django.utils import timezone
 from apps.foundation.services import enqueue_outbox_event
 from apps.identity.models import User
 from apps.partners.models import PartnerBusinessProfile, PartnerProfile
+from apps.requirements import price_book
 from apps.requirements.exceptions import (
     FinancialPolicyUnavailableError,
     InstallmentMismatchError,
@@ -53,6 +54,9 @@ class CalculationResult:
     tax_basis: str
     policy_version: int
     calculation_snapshot: dict[str, Any]
+    #: What the Customer should buy, built from the catalog lines' material recipes. Quantities
+    #: only; the Partner corrects it before sending and the corrected list is what is stored.
+    suggested_material_list: list[dict[str, Any]]
 
     def as_payload(self) -> dict[str, Any]:
         return asdict(self)
@@ -310,11 +314,21 @@ def calculate_estimate(  # noqa: PLR0912, PLR0915 - mirrors the published money 
         raise ProposalShapeError("Choose Item-wise or Labour-wise pricing.")
     items = item_lines or []
     labour = labour_lines or []
+    guardrail_policy_version: int | None = None
     if estimate_type == Proposal.EstimateType.ITEM_WISE:
         if not items or labour:
             raise ProposalShapeError("An Item-wise estimate must contain only item lines.")
         normal_items, line_subtotal = _normalise_items(items)
         normal_labour: list[dict[str, Any]] = []
+        # The price book's guarantee: a catalog line is band-checked against the live policy and
+        # a custom line's name is screened, here, on every preview and every submission.
+        if any(line.get("work_item_id") or line.get("is_custom") for line in normal_items):
+            guard = price_book.validate_quote_guardrails(
+                service_area=requirement.service_area,
+                item_lines=normal_items,
+            )
+            normal_items = guard.item_lines
+            guardrail_policy_version = guard.policy_version
     else:
         if not labour or items:
             raise ProposalShapeError("A Labour-wise estimate must contain only labour lines.")
@@ -488,6 +502,7 @@ def calculate_estimate(  # noqa: PLR0912, PLR0915 - mirrors the published money 
         "calculator_version": 1,
         "rounding": "integer_paise_half_up; allocation remainder to final row",
         "calculated_at": calculated_at.isoformat(),
+        "guardrail_policy_version": guardrail_policy_version,
         "policy": {
             "id": str(policy.id),
             "version": policy.version,
@@ -548,4 +563,5 @@ def calculate_estimate(  # noqa: PLR0912, PLR0915 - mirrors the published money 
         tax_basis=policy.tax_basis,
         policy_version=policy.version,
         calculation_snapshot=snapshot,
+        suggested_material_list=price_book.shopping_list_for_lines(normal_items),
     )

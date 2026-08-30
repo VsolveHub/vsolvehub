@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { StageReviewScreen } from "@/features/engagement/view/stage-review-screen";
+import { engagementHref } from "@/lib/routes";
 
 /**
  * The stage review — `M2-FE-609`.
@@ -42,7 +43,7 @@ export default async function StageReviewPage({
       <StageReviewScreen
         engagementId={engagementId}
         stageId={stageId}
-        engagementHref={`/engagements/${engagementId}`}
+        engagementHref={engagementHref(engagementId)}
       />
     </main>
   );

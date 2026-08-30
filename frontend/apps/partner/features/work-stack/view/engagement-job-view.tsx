@@ -1,12 +1,13 @@
 "use client";
 
 import { isMaterialAdvance, orderedStages } from "@vsolve/query";
-import { cn, formatMoney } from "@vsolve/ui";
+import { Badge, buttonStyles, cn, formatMoney } from "@vsolve/ui";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { Pictogram, type PictogramName } from "@/components/pictogram";
+import { HOW_DAY_HIRE_WORKS_HREF, overtimeLine } from "@/features/crew-offer/model/offer-state";
 import { CompletionRating } from "@/features/ratings/view/completion-rating";
 import {
   PROJECT_WORDING,
@@ -18,63 +19,398 @@ import {
   type StatusTone,
 } from "@/features/engagement/model/engagement-copy";
 import type { Engagement, EngagementStage } from "@/features/engagement/queries";
+import { ProblemSheet } from "@/features/shift/view/problem-sheet";
 import { shortDate } from "@/lib/format";
 
+import {
+  collectedDirectlyPaise,
+  dayChipDate,
+  describeShiftDay,
+  nextCrewAction,
+  type DayChipTone,
+} from "../model/day-chip";
+
 /**
- * The M2 engagement job screen — the design canvas artboard
- * "7 · How far along" (`Progress.dc.html`).
+ * The M2 engagement job screen.
  *
- * One agreement, its ordered stages, and how far each one has got. Reached from
- * `DoingCard` in the merged WORK stack (`work-item.ts`'s `ENGAGEMENT_HREF`) and
- * from the two old detail routes `next.config.ts` now redirects here —
- * `/workforce/shifts/:id` and `/projects/stages/:id`.
+ * One agreement, reached from `DoingCard` in the merged WORK stack and from the
+ * two old detail routes `next.config.ts` redirects here.
  *
- * ## Which vocabulary, and how it is decided
+ * ## Two branches, decided by `commercial_mode`
  *
- * `commercial_mode`, the server's own value, exactly as `engagement-screens.tsx`
- * mounted the two workspaces: `LEAD_ONLY` is the A3 workforce booking and
- * `MANAGED_PAYMENT_REQUIRED` is the A5 project. Those are the only two members
- * of `EngagementCommercialModeEnum` (`schema.d.ts:6644`). A stage is a
- * **shift-day** on one and a **stage** on the other, `M2-FE-111` forbids
- * flattening either into a generic "work item", and this screen keeps them apart
- * through `StageWording` rather than by hardcoding either noun. Every one of
- * those words is read out rather than drawn: the screen itself is pictures and
- * numbers.
+ * `LEAD_ONLY` is the A3 day-hire booking and gets the **job hub** below: the
+ * customer, the site, the terms, one chip per day and the next thing to do.
+ * `MANAGED_PAYMENT_REQUIRED` is the A5 project and keeps the stage list it has
+ * always had. `M2-FE-111` forbids flattening either into the other.
  *
- * ## Every stage but a material advance is a link
+ * ## The A3 hub reads contract 1.49.0
  *
- * A3 stages go to `/work/jobs/[id]/days/[stageId]` (`ShiftDayScreen`, gated on
- * `WORKFORCE_WORKSPACE`). A5 stages go to `/work/jobs/[id]/stages/[stageId]`
- * (`ProjectEngagementScreen`, gated on `PROJECT_WORKSPACE`) — the whole
- * engagement's stage list, agreement, amendments and payouts, the same set of
- * panels `EngagementDetail` has always composed. A material advance is never a
- * link on either archetype — it is money for cement, not a day of work, and
- * there is no day screen behind it.
- *
- * ## The headline figure is `staged_total_paise`
- *
- * Not `commission_paise`, which is Vsolve's cut — documented server-side as zero
- * for `LEAD_ONLY`, so on the whole A3 direct-pay path it is not even a number,
- * let alone the vendor's. Not `total_paise` either: it never moves, so on an
- * engagement with an accepted amendment it is a figure nobody is owed.
- * `staged_total_paise` is "now owed", the same field `EngagementCard` and the
- * WORK stack card that linked here both read. It is the agreement's value rather
- * than a payout — whether the platform's cut sits inside it or on top of it is
- * `commission_treatment` — so it is announced that way.
+ * `crew_terms`, `site_address`, `customer_contact` and `stages[].shift_summary`
+ * are all nullable: the address and contact are withheld until the booking fee
+ * is verified (`contact_released_at`), and a record written before 1.49.0 has
+ * no terms at all. Every line here renders nothing rather than a placeholder
+ * when its field is null.
  */
 export function EngagementJobView({ engagement }: { readonly engagement: Engagement }) {
-  const router = useRouter();
+  if (engagement.commercial_mode === "LEAD_ONLY") {
+    return isJobOver(engagement) ? (
+      <CrewJobSummary engagement={engagement} />
+    ) : (
+      <CrewJobHub engagement={engagement} />
+    );
+  }
+  return <ProjectJobView engagement={engagement} />;
+}
 
-  const workforce = engagement.commercial_mode === "LEAD_ONLY";
-  const wording: StageWording = workforce ? WORKFORCE_WORDING : PROJECT_WORDING;
+/** Every status past the last working day. */
+function isJobOver(engagement: Engagement): boolean {
+  return ["COMPLETING", "COMPLETED", "WARRANTY", "CLOSED"].includes(engagement.status);
+}
+
+/* ==========================================================================
+   A3 — the job hub
+   ========================================================================== */
+
+const STATUS_BADGE_TONE: Record<StatusTone, "action" | "info" | "neutral" | "warning" | "danger" | "success"> = {
+  action: "action",
+  info: "info",
+  neutral: "neutral",
+  warning: "warning",
+  danger: "danger",
+  success: "success",
+};
+
+function addressText(address: NonNullable<Engagement["site_address"]>): string {
+  return [
+    address.line1,
+    address.line2,
+    address.landmark,
+    address.locality,
+    address.city,
+    address.state,
+    address.postal_code,
+  ]
+    .map((part) => part.trim())
+    .filter((part) => part !== "")
+    .join(", ");
+}
+
+function mapHref(address: NonNullable<Engagement["site_address"]>): string {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressText(address))}`;
+}
+
+function shortAddress(address: NonNullable<Engagement["site_address"]>): string {
+  return [address.line1, address.line2, address.locality]
+    .map((part) => part.trim())
+    .filter((part) => part !== "")
+    .join(", ");
+}
+
+function CrewJobHub({ engagement }: { readonly engagement: Engagement }) {
+  const [problemOpen, setProblemOpen] = useState(false);
+  const status = describeEngagementStatus(engagement, WORKFORCE_WORDING);
+  const stages = orderedStages(engagement).filter((stage) => stage.shift_summary !== null);
+  const terms = engagement.crew_terms;
+  const address = engagement.site_address;
+  const customer = engagement.customer_contact;
+  const next = nextCrewAction(stages);
+  const overtime = terms ? overtimeLine(terms.overtime_hourly_paise, terms.standard_day_hours) : null;
+  const inclusions = terms?.inclusions.filter((line) => line.trim() !== "") ?? [];
+  const dayHref = (stageId: string) => `/work/jobs/${engagement.id}/days/${stageId}`;
+
+  return (
+    <>
+      <main className="flex min-h-[calc(100dvh-9rem)] flex-col bg-canvas">
+        <HubHeader title={engagement.service_name || "Crew booking"}>
+          {status ? (
+            <Badge tone={STATUS_BADGE_TONE[status.tone]} dot>
+              {status.label}
+            </Badge>
+          ) : null}
+        </HubHeader>
+
+        <div className="flex flex-1 flex-col gap-2.5 px-4 pt-4 pb-5">
+          {customer ? (
+            <p className="text-xl font-bold leading-tight text-text">{customer.name}</p>
+          ) : null}
+
+          {address ? (
+            <ContactRow icon="distance" text={shortAddress(address)}>
+              <a
+                href={mapHref(address)}
+                target="_blank"
+                rel="noreferrer"
+                className={buttonStyles({ variant: "outline", size: "sm" })}
+              >
+                Map
+              </a>
+            </ContactRow>
+          ) : (
+            <p className="text-sm leading-5 text-text-secondary">
+              Address and phone unlock once the booking fee is confirmed.
+            </p>
+          )}
+
+          {customer && customer.phone.trim() !== "" ? (
+            <ContactRow icon="call" text={customer.name}>
+              <a href={`tel:${customer.phone}`} className={buttonStyles({ variant: "outline", size: "sm" })}>
+                Call
+              </a>
+            </ContactRow>
+          ) : null}
+
+          <div className="rounded-card border border-line bg-surface px-3.5 py-3">
+            {terms ? (
+              <>
+                <p className="text-lg font-extrabold leading-tight tabular-nums text-text">
+                  {formatMoney(terms.lead_receipt_paise)} to you ·{" "}
+                  {formatMoney(terms.per_worker_day_paise)}/head/day
+                </p>
+                <p className="mt-0.5 text-sm leading-5 text-text-secondary">
+                  Customer pays you each evening
+                </p>
+              </>
+            ) : (
+              <p className="text-lg font-extrabold leading-tight tabular-nums text-text">
+                {formatMoney(engagement.staged_total_paise)} agreed
+              </p>
+            )}
+          </div>
+
+          <DayChips stages={stages} hrefFor={dayHref} />
+
+          {inclusions.length > 0 ? (
+            <p className="text-sm font-semibold leading-5 text-text">{inclusions.join(" · ")}</p>
+          ) : null}
+          {overtime ? <p className="text-sm leading-5 text-text-secondary">{overtime}</p> : null}
+
+          {next ? (
+            <Link
+              href={dayHref(next.stageId)}
+              className="mt-2 flex h-16 items-center justify-center gap-2 rounded-2xl bg-action text-base font-bold text-action-text shadow-raised focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+            >
+              {next.label}
+              <Pictogram name="go" size="md" />
+            </Link>
+          ) : null}
+
+          <div className="mt-1 flex items-center justify-between gap-3">
+            <Link
+              href={HOW_DAY_HIRE_WORKS_HREF}
+              className="flex items-center gap-1.5 py-1 text-sm font-semibold text-action-secondary underline-offset-2 hover:underline"
+            >
+              <span aria-hidden className="grid h-5 w-5 place-items-center rounded-full border border-current text-xs">
+                i
+              </span>
+              How day-hire works
+            </Link>
+            <button
+              type="button"
+              onClick={() => setProblemOpen(true)}
+              className="flex min-h-11 items-center gap-1.5 rounded-control px-2 text-sm font-bold text-warning-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+            >
+              <span aria-hidden>⚠</span> Problem
+            </button>
+          </div>
+        </div>
+      </main>
+
+      <ProblemSheet
+        engagementId={engagement.id}
+        requirementId={engagement.requirement}
+        stageId={next?.stageId}
+        open={problemOpen}
+        onOpenChange={setProblemOpen}
+      />
+    </>
+  );
+}
+
+/** The chips, one per shift-day, scrolling sideways. */
+function DayChips({
+  stages,
+  hrefFor,
+}: {
+  readonly stages: readonly EngagementStage[];
+  readonly hrefFor: (stageId: string) => string;
+}) {
+  if (stages.length === 0) return null;
+  return (
+    <section aria-label="Days">
+      <h2 className="text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-text-muted">Days</h2>
+      <div className="-mx-4 mt-1.5 flex gap-2 overflow-x-auto px-4 pb-1">
+        {stages.map((stage) => {
+          const chip = describeShiftDay(stage.shift_summary!);
+          const date = dayChipDate(stage.scheduled_on) ?? `Day ${stage.position}`;
+          const cancelled = stage.status === "CANCELLED";
+          return (
+            <Link
+              key={stage.id}
+              href={hrefFor(stage.id)}
+              aria-label={`${date}, ${cancelled ? "cancelled" : chip.label}`}
+              className={cn(
+                "flex min-h-14 shrink-0 flex-col justify-center gap-0.5 rounded-2xl border px-3 py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring",
+                cancelled ? "border-line bg-surface-sunken opacity-60" : DAY_CHIP_TONE[chip.tone],
+              )}
+            >
+              <span className="text-sm font-bold text-text">{date}</span>
+              <span className="max-w-[14ch] truncate text-xs font-semibold">
+                {cancelled ? "Cancelled" : chip.label}
+              </span>
+            </Link>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+const DAY_CHIP_TONE: Record<DayChipTone, string> = {
+  action: "border-action-line bg-action-surface text-warning-text",
+  info: "border-selected-line bg-selected-surface text-action-secondary",
+  neutral: "border-line bg-surface text-text-muted",
+  warning: "border-warning-line bg-warning-surface text-warning-text",
+  danger: "border-danger-line bg-danger-surface text-danger-text",
+  success: "border-success-line bg-success-surface text-success-text",
+};
+
+function ContactRow({
+  icon,
+  text,
+  children,
+}: {
+  readonly icon: PictogramName;
+  readonly text: string;
+  readonly children: ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-card border border-line bg-surface px-3.5 py-2.5">
+      <Pictogram name={icon} size="md" className="shrink-0 text-action-secondary" />
+      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-text">{text}</span>
+      {children}
+    </div>
+  );
+}
+
+function HubHeader({ title, children }: { readonly title: string; readonly children?: ReactNode }) {
+  const router = useRouter();
+  return (
+    <div className="flex items-center gap-3 bg-[linear-gradient(160deg,var(--color-navy-700)_0%,var(--color-navy-900)_100%)] px-4 pt-4 pb-4">
+      <button
+        type="button"
+        onClick={() => router.back()}
+        className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-surface/13 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring-inverse"
+      >
+        <Pictogram name="back" size="md" className="text-surface" />
+        <span className="sr-only">Back</span>
+      </button>
+      <h1 className="min-w-0 flex-1 truncate text-lg font-bold leading-tight text-surface">{title}</h1>
+      {children}
+    </div>
+  );
+}
+
+/* ==========================================================================
+   A3 — job done
+   ========================================================================== */
+
+/**
+ * The hub once the last day is closed: one row per day from `shift_summary`,
+ * the total collected directly, and the rating.
+ *
+ * Overtime hours are not on `shift_summary`, so a row shows the count and the
+ * settled amount only — the amount already includes any approved extra.
+ */
+function CrewJobSummary({ engagement }: { readonly engagement: Engagement }) {
+  const stages = orderedStages(engagement).filter((stage) => stage.shift_summary !== null);
+  const collected = collectedDirectlyPaise(stages);
+  const customer = engagement.customer_contact;
+  const title = [engagement.service_name || "Crew booking", customer?.name ?? null]
+    .filter((part): part is string => part !== null)
+    .join(" · ");
+
+  return (
+    <>
+      <main className="flex min-h-[calc(100dvh-9rem)] flex-col bg-canvas">
+        <HubHeader title={title}>
+          <Badge tone="success" dot>
+            Job complete
+          </Badge>
+        </HubHeader>
+
+        <div className="flex flex-1 flex-col gap-2.5 px-4 pt-4 pb-5">
+          {stages.length === 0 ? (
+            <p className="text-sm leading-5 text-text-secondary">No days on this booking.</p>
+          ) : (
+            <ul className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface">
+              {stages.map((stage) => {
+                const summary = stage.shift_summary!;
+                const settled = summary.settlement_status === "SETTLED";
+                const count =
+                  summary.present_count === null
+                    ? "—"
+                    : `${summary.present_count} of ${summary.expected_count}`;
+                return (
+                  <li key={stage.id} className="flex items-center gap-3 px-3.5 py-2.5 text-sm">
+                    <span className="w-12 shrink-0 font-bold text-text">
+                      {dayChipDate(stage.scheduled_on) ?? `Day ${stage.position}`}
+                    </span>
+                    <span className="min-w-0 flex-1 text-text-secondary">{count}</span>
+                    <span className="shrink-0 font-bold tabular-nums text-text">
+                      {summary.settlement_amount_paise === null
+                        ? ""
+                        : formatMoney(summary.settlement_amount_paise)}
+                    </span>
+                    <span
+                      className={cn(
+                        "w-14 shrink-0 text-right text-xs font-bold",
+                        settled ? "text-success-text" : "text-text-muted",
+                      )}
+                    >
+                      {settled ? "Paid ✓" : stage.status === "CANCELLED" ? "Cancelled" : "Open"}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          {collected === null ? null : (
+            <p className="flex items-baseline justify-between rounded-card border border-line bg-surface px-3.5 py-3">
+              <span className="text-sm font-semibold text-text">Collected directly</span>
+              <span className="text-xl font-extrabold tabular-nums text-text">{formatMoney(collected)}</span>
+            </p>
+          )}
+        </div>
+      </main>
+      <div className="bg-canvas px-4 pb-5">
+        <CompletionRating
+          subject="engagement"
+          id={engagement.id}
+          isComplete={["COMPLETED", "WARRANTY", "CLOSED"].includes(engagement.status)}
+        />
+      </div>
+    </>
+  );
+}
+
+/* ==========================================================================
+   A5 — the project stage list (unchanged)
+   ========================================================================== */
+
+/**
+ * The headline figure is `staged_total_paise` — "now owed" — not
+ * `commission_paise` (Vsolve's cut) and not `total_paise` (never moves).
+ */
+function ProjectJobView({ engagement }: { readonly engagement: Engagement }) {
+  const router = useRouter();
+  const wording: StageWording = PROJECT_WORDING;
   const status = describeEngagementStatus(engagement, wording);
   const stages = orderedStages(engagement);
 
   return (
     <>
     <main className="flex min-h-[calc(100dvh-9rem)] flex-col bg-canvas">
-      {/* The screen is a number and a column of pictures; the landmark still
-          needs a name. */}
       <h1 className="sr-only">
         Your {wording.parent}
         {status ? ` — ${status.label}` : ""}
@@ -90,13 +426,6 @@ export function EngagementJobView({ engagement }: { readonly engagement: Engagem
           <span className="sr-only">Back</span>
         </button>
 
-        {/*
-          "Agreed at", not "you receive". `staged_total_paise` is the agreement's
-          value and whether the platform's cut sits inside it or on top of it is
-          `commission_treatment` — an unenumerated field the model layer records
-          rather than decides. The label has to be exactly this careful, which is
-          why it is worth showing rather than hiding.
-        */}
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-navy-200">
             This {wording.parent} is agreed at
@@ -116,13 +445,7 @@ export function EngagementJobView({ engagement }: { readonly engagement: Engagem
               key={stage.id}
               stage={stage}
               wording={wording}
-              href={
-                isMaterialAdvance(stage)
-                  ? null
-                  : workforce
-                    ? `/work/jobs/${engagement.id}/days/${stage.id}`
-                    : `/work/jobs/${engagement.id}/stages/${stage.id}`
-              }
+              href={isMaterialAdvance(stage) ? null : `/work/jobs/${engagement.id}/stages/${stage.id}`}
             />
           ))
         )}
@@ -139,18 +462,9 @@ export function EngagementJobView({ engagement }: { readonly engagement: Engagem
   );
 }
 
-/* --------------------------------------------------------------------------
-   One stage
-   -------------------------------------------------------------------------- */
-
 /**
- * A picture, a date and a number — the only way this app states a fact.
- *
- * The row's whole accessible name is assembled here rather than left to the
- * three bare values a screen reader would otherwise read out in a row: the
- * stage's own title (`stageTitle` degrades a blank label to "Shift-day 3" or
- * "Materials 2" in the right vocabulary), what state it is in, and what it is
- * worth.
+ * A picture, a date and a number. The row's whole accessible name is assembled
+ * here: the stage's own title, what state it is in, and what it is worth.
  */
 function StageRow({
   stage,
@@ -187,10 +501,6 @@ function StageRow({
       </span>
 
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        {/* The stage's own name, which used to be `sr-only` — so a sighted
-            vendor read an amount and a date with nothing saying which stage
-            they belonged to or where it had got to. `status.label` rides with
-            it for the same reason. */}
         <span className="truncate text-[0.9375rem] font-semibold leading-snug text-text">
           {stageTitle(stage, wording)}
         </span>
@@ -219,9 +529,7 @@ function StageRow({
   const shell =
     "flex min-h-18 items-center gap-3 rounded-card border border-line bg-surface p-3.5";
 
-  // Nothing to open, so nothing to focus: a project stage is a statement of
-  // where the work got to, not a door. The `sr-only` name inside `body` carries
-  // it — an `aria-label` on a plain `div` is ignored by most screen readers.
+  // A material advance is money for cement, not a day of work: nothing to open.
   if (href === null) return <div className={shell}>{body}</div>;
 
   return (
@@ -239,12 +547,8 @@ function StageRow({
 }
 
 /**
- * An agreement with no stages on it yet.
- *
- * Real: `PENDING_START` is a published engagement status and an A5 project is
- * staged when its estimate is accepted, so there is a genuine window in which
- * this payload carries an empty `stages[]`. A drawn medallion rather than an
- * invented row.
+ * An agreement with no stages on it yet. Real: `PENDING_START` is a published
+ * status and an A5 project is staged when its estimate is accepted.
  */
 function EmptyStages({ wording }: { readonly wording: StageWording }): ReactNode {
   return (
@@ -261,14 +565,7 @@ function EmptyStages({ wording }: { readonly wording: StageWording }): ReactNode
 
 /**
  * One glyph per stage status, as a total record so that a status added to
- * `EngagementStageStatusEnum` (`schema.d.ts:6748`) is a typecheck failure rather
- * than a blank tile.
- *
- * `CORRECTION_REQUESTED` and `DISPUTED` are deliberately different glyphs. A
- * correction asks for the agreed work to be done properly and moves no money; a
- * dispute stops one allocation and nothing else — `describeStageStatus`'s own
- * docblock says a vendor who confuses the two has been told the wrong thing by
- * their own app, and drawing both as the same picture would be exactly that.
+ * `EngagementStageStatusEnum` is a typecheck failure rather than a blank tile.
  */
 const STAGE_PICTOGRAM: Record<EngagementStage["status"], PictogramName> = {
   PENDING: "time",

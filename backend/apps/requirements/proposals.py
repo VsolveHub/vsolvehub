@@ -356,6 +356,8 @@ def submit_proposal(  # noqa: PLR0912, PLR0915 - one transaction owns the append
     labour_lines: list[dict[str, Any]] | None = None,
     other_charges: list[dict[str, Any]] | None = None,
     scope_summary: str = "",
+    material_list: list[dict[str, Any]] | None = None,
+    material_brand_tier: str = "",
 ) -> Proposal:
     """Submit a first quote, or a revision that supersedes the vendor's previous one.
 
@@ -406,7 +408,7 @@ def submit_proposal(  # noqa: PLR0912, PLR0915 - one transaction owns the append
     site_visit: SiteVisit | None = None
     calculation: financials.CalculationResult | None = None
     if requirement.archetype == ServiceVariant.BookingArchetype.A3_TIME_BLOCK:
-        if material_lines:
+        if material_lines or material_list:
             raise ProposalShapeError("A workforce quote does not have material lines.")
         if item_lines or labour_lines or other_charges or estimate_type:
             raise ProposalShapeError("A workforce quote uses the published daily-rate fields.")
@@ -520,6 +522,8 @@ def submit_proposal(  # noqa: PLR0912, PLR0915 - one transaction owns the append
         exclusions=exclusions or [],
         stages=stages or [],
         material_lines=material_lines or [],
+        material_list=material_list or [],
+        material_brand_tier=material_brand_tier,
         warranty_terms=warranty_terms,
         scope_summary=scope_summary.strip(),
         valid_until=valid_until,

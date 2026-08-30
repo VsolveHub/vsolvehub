@@ -7,9 +7,9 @@ import { getServiceConfiguration } from "@/features/catalog/queries";
 import { RequirementFlow } from "@/features/requirement/view/requirement-flow";
 
 /**
- * The two-screen requirement — `M2-FE-201..212`, as revised by the M2-revamp.
+ * The three-screen requirement — `M2-FE-201..212`, as revised by the M2-revamp.
  *
- * ## One route for two screens
+ * ## One route for three screens
  *
  * The screens are deliberately not mounted as separate routes, on the
  * precedent of `/book/[service]` and `/checkout`: the flow is one reducer,
@@ -19,7 +19,7 @@ import { RequirementFlow } from "@/features/requirement/view/requirement-flow";
  * refuse a forward jump — a pasted deep link to the last screen would either
  * skip every guard or bounce, and neither is a route worth having. The
  * flow-weight budget is about screens the Customer walks through, and it is
- * enforced by `SCREENS.length === 2` rather than by a folder count.
+ * enforced by `SCREENS.length === 3` rather than by a folder count.
  *
  * ## The variant is resolved on the server, before anything is offered
  *

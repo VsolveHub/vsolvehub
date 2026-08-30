@@ -14,6 +14,7 @@ from datetime import date
 from typing import Any
 
 from django.db.models import Count, Prefetch, Q, QuerySet
+from django.utils import timezone
 
 from apps.catalog.models import ServiceVariant
 from apps.identity.hashing import keyed_hash
@@ -37,6 +38,7 @@ from apps.requirements.models import (
     Proposal,
     ProposalSelection,
     QuoteUnlock,
+    RateCardBooking,
     RequirementQuestion,
     RequirementTransition,
     ShiftAttendance,
@@ -211,8 +213,31 @@ def confirmed_teaser_count(requirement: CustomerRequirement) -> int:
 
 
 def partner_invitations(partner: PartnerProfile) -> QuerySet[VendorInvitation]:
+    """The Partner's quote enquiries — never a crew offer, never a lapsed invitation.
+
+    A rate-card crew offer has its own inbox (`/partner/crew-offers/`) with a minutes-level clock
+    and one button; listing the same invitation here as an enquiry showed a lapsed offer as
+    "waiting for you" and let the lead tap into a refusal. Invitations for a requirement whose
+    booking is on the instant path are therefore not enquiries at all. Once the booking has
+    fallen back to the quote flow the *new* wave's invitations are ordinary enquiries and show.
+
+    An unanswered invitation past its deadline is excluded outright rather than shown as expired:
+    the sweep that expires it runs on its own schedule, and in the gap the inbox must not advertise
+    an answer the server will refuse.
+    """
+    now = timezone.now()
     return (
         VendorInvitation.objects.filter(partner=partner)
+        .exclude(
+            requirement__rate_card_booking__status__in=(
+                RateCardBooking.Status.MATCHING,
+                RateCardBooking.Status.OFFER_HELD,
+                RateCardBooking.Status.CONFIRMED,
+                RateCardBooking.Status.EXHAUSTED,
+                RateCardBooking.Status.CANCELLED,
+            )
+        )
+        .exclude(status=VendorInvitation.Status.INVITED, responds_by__lt=now)
         .select_related(
             "requirement__address",
             "requirement__service_area",

@@ -4,7 +4,13 @@ import { Field, Input } from "@vsolve/ui";
 import type { ReactNode } from "react";
 
 import { Segmented } from "@/features/booking/view/parts/segmented";
-import { FLEXIBILITY_OPTIONS } from "@/features/project-request/view/where-when-screen";
+import { iconForOption } from "@/features/project-request/model/option-icons";
+import { OptionTiles } from "@/features/project-request/view/parts/option-tiles";
+import {
+  FLEXIBILITY_OPTIONS,
+  VISIT_FIRST_REASSURANCE,
+} from "@/features/project-request/view/where-when-screen";
+import type { RequirementQuestionView } from "../adapters";
 import { useRequirement } from "./requirement-context";
 
 /**
@@ -49,6 +55,12 @@ import { useRequirement } from "./requirement-context";
  * that rule, the column it fills still drives the expiry sweep, and this
  * description states the consequence rather than asking for it again. Do not
  * re-add the field — the answer is already on the screen.
+ *
+ * ## Events have one date
+ *
+ * In `eventMode` the same `requested_start` is the event date, the flexibility
+ * band is hidden (a function on the 14th is not "± a week"), and the catalogue's
+ * `setup_access` question renders here as tiles — see `model/event-brief.ts`.
  */
 
 export interface WhereWhenScreenProps {
@@ -79,6 +91,15 @@ export interface WhereWhenScreenProps {
    * button sits beside it. Absent on A3 and before the draft exists.
    */
   visitPlanChooser?: ReactNode;
+  /** Event-shaped brief: venue + event date, no flexibility. */
+  eventMode?: boolean;
+  /**
+   * Visit-first (A5) brief: the date is when the pro should come to measure
+   * and quote, and there is no flexibility band. Ignored under `eventMode`.
+   */
+  visitFirst?: boolean;
+  /** The setup-access question, when the catalogue publishes one for an event. */
+  setupAccessQuestion?: RequirementQuestionView | null;
 }
 
 export function WhereWhenScreen({
@@ -86,8 +107,14 @@ export function WhereWhenScreen({
   minDate,
   hideHeading = false,
   visitPlanChooser,
+  eventMode = false,
+  visitFirst = false,
+  setupAccessQuestion = null,
 }: WhereWhenScreenProps) {
   const { state, dispatch } = useRequirement();
+  const setupAccessValue =
+    setupAccessQuestion === null ? null : state.answers[setupAccessQuestion.code];
+  const isVisitDate = visitFirst && !eventMode;
 
   return (
     <div>
@@ -96,14 +123,27 @@ export function WhereWhenScreen({
       )}
 
       <div className={hideHeading ? "" : "mt-5"}>
-        <p className="text-sm font-semibold text-text">Where is the work?</p>
+        <p className="text-sm font-semibold text-text">
+          {eventMode ? "Where is the event?" : "Where is the work?"}
+        </p>
+        {eventMode ? (
+          <p className="mt-1 text-sm text-text-secondary">
+            Venue not booked yet? Give your home address — the decorator plans with you first.
+          </p>
+        ) : null}
         <div className="mt-2">{addressPicker}</div>
       </div>
 
       <div className="mt-6 flex flex-col gap-5">
         <Field
-          label="Start from"
-          description="The day the work should begin. Professionals quote against this, and if nobody has taken it by then we close the request and keep nothing."
+          label={eventMode ? "Event date" : isVisitDate ? "When should the pro come?" : "Start from"}
+          description={
+            eventMode
+              ? "The day of the function. Professionals visit before it and quote for that date."
+              : isVisitDate
+                ? VISIT_FIRST_REASSURANCE
+                : "The day the work should begin. Professionals quote against this, and if nobody has taken it by then we close the request and keep nothing."
+          }
           required
         >
           <Input
@@ -119,24 +159,50 @@ export function WhereWhenScreen({
           />
         </Field>
 
-        {/* Three bands rather than the checkbox this was. The wire has always
-            taken `flexibility_days` as a number, and yes-or-no could say the
-            dates were movable without saying how far — which is the difference
-            between a vendor offering next Tuesday and not bothering. */}
-        <Field
-          label="How firm is that date?"
-          description="More professionals can quote when the dates can move. This does not change the date above."
-        >
-          <Segmented
+        {eventMode || isVisitDate ? null : (
+          // Three bands rather than the checkbox this was. The wire has always
+          // taken `flexibility_days` as a number, and yes-or-no could say the
+          // dates were movable without saying how far — which is the difference
+          // between a vendor offering next Tuesday and not bothering.
+          <Field
             label="How firm is that date?"
-            name="flexibility"
-            options={[...FLEXIBILITY_OPTIONS]}
-            value={String(state.flexibilityDays)}
-            onChange={(days) =>
-              dispatch({ type: "SET_FLEXIBILITY_DAYS", days: Number(days) })
-            }
-          />
-        </Field>
+            description="More professionals can quote when the dates can move. This does not change the date above."
+          >
+            <Segmented
+              label="How firm is that date?"
+              name="flexibility"
+              options={[...FLEXIBILITY_OPTIONS]}
+              value={String(state.flexibilityDays)}
+              onChange={(days) =>
+                dispatch({ type: "SET_FLEXIBILITY_DAYS", days: Number(days) })
+              }
+            />
+          </Field>
+        )}
+
+        {eventMode && setupAccessQuestion !== null ? (
+          <Field
+            label={setupAccessQuestion.label}
+            description={setupAccessQuestion.help}
+            required={setupAccessQuestion.required}
+          >
+            <OptionTiles
+              label={setupAccessQuestion.label}
+              name={setupAccessQuestion.code}
+              columns={3}
+              options={(setupAccessQuestion.options ?? []).map((option) => ({
+                value: option.value,
+                label: option.label,
+                description: option.description,
+                icon: iconForOption(option),
+              }))}
+              value={typeof setupAccessValue === "string" ? setupAccessValue : null}
+              onChange={(next) =>
+                dispatch({ type: "ANSWER", questionCode: setupAccessQuestion.code, value: next })
+              }
+            />
+          </Field>
+        ) : null}
 
         {visitPlanChooser}
       </div>

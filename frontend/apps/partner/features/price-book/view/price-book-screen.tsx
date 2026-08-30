@@ -11,19 +11,23 @@ import { Pictogram } from "@/components/pictogram";
 import { usePriceBook, useSetPriceBookRate } from "../queries";
 
 /**
- * "My Rate Card" — the Partner's own price book (contract 1.46.0).
+ * "My Rate Card" — the Partner's own price book (contract 1.48.0).
  *
- * Reached from `/me/rate-card`. Lists the ops-curated catalog for this
- * Partner's skills, grouped by skill, each item showing the allowed range
- * plainly ("₹120 – ₹195") and an editable rate. There is no free-text field
- * anywhere on this screen: every item name comes from the server, and the
- * only thing a Partner can type is a number the server re-validates against
- * the band on save.
+ * Reached from `/me/rate-card`. Lists the ops-curated catalogue for this
+ * Partner's skills, grouped by the composer tab each item belongs to
+ * (`work_item.group`: Points, Boards, MCB / DB, … with Labour last), each
+ * item showing the allowed range plainly ("₹120 – ₹195") and the rate the
+ * estimate composer will fill in from. There is no free-text field anywhere
+ * on this screen: every item name comes from the server, and the only thing a
+ * Partner can type is a number the server re-validates against the band on
+ * save.
  *
- * A Partner with no catalog items for their skills yet, or serving no active
- * area, sees an honest empty state rather than a blank screen — the platform
- * has not curated this trade's catalog, which is a fact worth saying rather
- * than hiding.
+ * An item still on the city reference rate says so — "City rate — tap to set
+ * yours" — because that is the difference between a rate the Partner chose
+ * and one the platform chose for them, and the estimate composer uses either.
+ *
+ * A Partner with no catalogue items for their skills yet, or serving no active
+ * area, sees an honest empty state rather than a blank screen.
  */
 export function PriceBookScreen() {
   const priceBook = usePriceBook();
@@ -33,9 +37,7 @@ export function PriceBookScreen() {
     <main className="mx-auto w-full max-w-2xl px-4 py-6">
       <h1 className="text-headline text-text">Your rate card</h1>
       <p className="mt-1 text-body text-text-secondary">
-        Set your own rate for each item. Every rate must sit inside the range
-        we show — it keeps every quote comparable and protects your
-        customer&rsquo;s trust in the price.
+        Set once. Every estimate fills in from here.
       </p>
 
       <div className="mt-5">
@@ -64,40 +66,90 @@ export function PriceBookScreen() {
 
 type PriceBookItem = Schemas["PriceBookEntry"];
 
+const LABOUR_GROUP = "Labour";
+const UNGROUPED = "Other";
+
 function PriceBookList({ items }: { items: PriceBookItem[] }) {
-  const groups = useMemo(() => groupBySkill(items), [items]);
+  // One section per trade the Partner prices from (Electrician, Plumber, ...),
+  // each with its composer tabs beneath. A single-trade Partner sees no trade
+  // heading at all - the page title already names the job.
+  const trades = useMemo(() => groupByTrade(items), [items]);
 
   return (
-    <div className="flex flex-col gap-6">
-      {groups.map((group) => (
-        <section key={group.skillId} aria-label={group.skillId}>
-          <ul className="flex flex-col gap-2.5">
-            {group.items.map((item) => (
-              <li key={item.work_item.id}>
-                <PriceBookRow item={item} />
-              </li>
-            ))}
-          </ul>
+    <div className="flex flex-col gap-8">
+      {trades.map((trade) => (
+        <section key={trade.code} aria-label={trade.name} className="flex flex-col gap-6">
+          {trades.length > 1 ? (
+            <h2 className="text-base font-extrabold leading-tight text-text">{trade.name}</h2>
+          ) : null}
+          {groupByComposerTab(trade.items).map((group) => (
+            <section
+              key={`${trade.code}-${group.name}`}
+              aria-labelledby={`price-book-${trade.code}-${group.name}`}
+            >
+              <h3
+                id={`price-book-${trade.code}-${group.name}`}
+                className="mb-2 text-xs font-extrabold uppercase tracking-[0.08em] text-text-muted"
+              >
+                {group.name}
+              </h3>
+              <ul className="flex flex-col gap-2.5">
+                {group.items.map((item) => (
+                  <li key={item.work_item.id}>
+                    <PriceBookRow item={item} />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
         </section>
       ))}
     </div>
   );
 }
 
-function groupBySkill(items: PriceBookItem[]): { skillId: string; items: PriceBookItem[] }[] {
-  const bySkill = new Map<string, PriceBookItem[]>();
+/** Grouped by trade in the server's order - the rate-card screen's top-level sections. */
+export function groupByTrade(
+  items: readonly PriceBookItem[],
+): { code: string; name: string; items: PriceBookItem[] }[] {
+  const byTrade = new Map<string, { code: string; name: string; items: PriceBookItem[] }>();
   for (const item of items) {
-    const bucket = bySkill.get(item.work_item.skill) ?? [];
-    bucket.push(item);
-    bySkill.set(item.work_item.skill, bucket);
+    const code = item.trade_code || "other";
+    const bucket = byTrade.get(code) ?? { code, name: item.trade_name || "Other", items: [] };
+    bucket.items.push(item);
+    byTrade.set(code, bucket);
   }
-  return [...bySkill.entries()].map(([skillId, groupItems]) => ({ skillId, items: groupItems }));
+  return [...byTrade.values()];
+}
+
+/**
+ * Grouped by `work_item.group` in first-seen order — the server's own sort —
+ * with Labour always last: it is the one group priced per day rather than per
+ * point, and the composer shows it on its own step.
+ */
+export function groupByComposerTab(
+  items: readonly PriceBookItem[],
+): { name: string; items: PriceBookItem[] }[] {
+  const byGroup = new Map<string, PriceBookItem[]>();
+  for (const item of items) {
+    const name = item.work_item.group?.trim() || (item.work_item.unit === "day" ? LABOUR_GROUP : UNGROUPED);
+    const bucket = byGroup.get(name) ?? [];
+    bucket.push(item);
+    byGroup.set(name, bucket);
+  }
+  const groups = [...byGroup.entries()].map(([name, groupItems]) => ({ name, items: groupItems }));
+  const labour = groups.filter((group) => group.name === LABOUR_GROUP);
+  return [...groups.filter((group) => group.name !== LABOUR_GROUP), ...labour];
 }
 
 function PriceBookRow({ item }: { item: PriceBookItem }) {
   const setRate = useSetPriceBookRate();
   const [rupees, setRupees] = useState<string>(
-    item.partner_rate_paise === null ? "" : String(item.partner_rate_paise / 100),
+    item.partner_rate_paise === null
+      ? item.reference_rate_paise === null
+        ? ""
+        : String(item.reference_rate_paise / 100)
+      : String(item.partner_rate_paise / 100),
   );
   const [isActive, setIsActive] = useState(item.partner_is_active);
 
@@ -105,10 +157,12 @@ function PriceBookRow({ item }: { item: PriceBookItem }) {
   const parsedRupees = Number.parseFloat(rupees);
   const canSave =
     hasBand && rupees.trim() !== "" && Number.isFinite(parsedRupees) && parsedRupees > 0;
+  const savedPaise = item.partner_rate_paise ?? (item.is_default_rate ? item.reference_rate_paise : null);
   const isDirty =
     canSave &&
-    (Math.round(parsedRupees * 100) !== (item.partner_rate_paise ?? -1) ||
-      isActive !== item.partner_is_active);
+    (Math.round(parsedRupees * 100) !== (savedPaise ?? -1) ||
+      isActive !== item.partner_is_active ||
+      item.is_default_rate);
 
   function save() {
     if (!canSave) return;
@@ -134,7 +188,12 @@ function PriceBookRow({ item }: { item: PriceBookItem }) {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-base font-semibold text-text">{item.work_item.name}</p>
-          <p className="text-xs text-text-secondary">Per {unitLabel(item.work_item.unit)}</p>
+          <p className="text-xs text-text-secondary">
+            Per {unitLabel(item.work_item.unit)}
+            {hasBand
+              ? ` · ${formatMoney(item.floor_paise as number)} – ${formatMoney(item.ceiling_paise as number)}`
+              : null}
+          </p>
         </div>
 
         <button
@@ -158,12 +217,7 @@ function PriceBookRow({ item }: { item: PriceBookItem }) {
         </button>
       </div>
 
-      {hasBand ? (
-        <p className="text-xs text-text-secondary">
-          Allowed range: {formatMoney(item.floor_paise as number)} –{" "}
-          {formatMoney(item.ceiling_paise as number)}
-        </p>
-      ) : (
+      {hasBand ? null : (
         <p className="text-xs text-warning-text">
           Not priced in your area yet — you cannot set a rate for this item here.
         </p>
@@ -198,6 +252,10 @@ function PriceBookRow({ item }: { item: PriceBookItem }) {
           Save
         </Button>
       </div>
+
+      {item.is_default_rate && hasBand ? (
+        <p className="text-xs text-text-muted">City rate — tap to set yours</p>
+      ) : null}
 
       {errorMessage ? (
         <ErrorState inline severity="error" title="Could not save this rate" message={errorMessage} />

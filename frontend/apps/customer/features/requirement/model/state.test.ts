@@ -34,6 +34,39 @@ describe("screen 1 — what", () => {
     expect(blockedReason(draft({ answers: { worker_count: 4 } }), TODAY)).toBeNull();
   });
 
+  it("requires every catalogue-required answer when the container names them", () => {
+    // One tapped tile out of seven used to unlock Continue. With the required
+    // codes in hand the guard can hold the form until each is answered — and
+    // an empty multi-select counts as unanswered.
+    const required = ["event_type", "decor_areas", "budget_band"];
+
+    expect(
+      blockedReason(draft({ answers: { event_type: "wedding" } }), TODAY, false, required),
+    ).toBe("REQUIRED_ANSWER_MISSING");
+    expect(
+      blockedReason(
+        draft({ answers: { event_type: "wedding", decor_areas: [], budget_band: "25-50k" } }),
+        TODAY,
+        false,
+        required,
+      ),
+    ).toBe("REQUIRED_ANSWER_MISSING");
+    expect(
+      blockedReason(
+        draft({
+          answers: { event_type: "wedding", decor_areas: ["stage"], budget_band: "25-50k" },
+        }),
+        TODAY,
+        false,
+        required,
+      ),
+    ).toBeNull();
+  });
+
+  it("falls back to the touched-form rule when no required codes are known", () => {
+    expect(blockedReason(draft({ answers: { worker_count: 4 } }), TODAY, false, [])).toBeNull();
+  });
+
   it("reads the server's list of missing answers rather than recomputing it", () => {
     const state = draft({
       answers: { worker_count: 4 },

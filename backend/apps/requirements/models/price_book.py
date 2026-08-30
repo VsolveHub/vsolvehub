@@ -77,6 +77,18 @@ class WorkItem(models.Model):
     #: Display order inside the skill's catalog. Not unique — Operations reorders by editing many
     #: rows, same as any hand-curated list.
     sort_order = models.PositiveIntegerField(default=0)
+    #: The composer's tab this item sits under — "Points", "MCB / DB", "Labour". Operations-
+    #: authored free text, grouped by exact match; blank lands under the catalog's last tab.
+    group = models.CharField(max_length=40, blank=True)
+    #: What one unit of this item consumes, so the estimate can hand the Customer a shopping
+    #: list without the Partner typing one (materials are always the Customer's to buy). Each
+    #: entry: `{title, spec, unit, per_unit, pack_size?, pack_unit?}` — `per_unit` is the
+    #: quantity per unit of work as a decimal string; a pack rounds the total up to what a
+    #: shop actually sells ("90 m coil"). Empty for labour-day items and anything consumable-free.
+    material_recipe = models.JSONField(default=list, blank=True)
+    #: Suggested quantities per quick set, keyed by set code (`{"1bhk": 8, "2bhk": 12}`). An
+    #: item absent from a set is simply not added when the Partner taps that set.
+    bundle_quantities = models.JSONField(default=dict, blank=True)
     #: Per-item band override, in basis points below/above the reference rate. **Both** must be set
     #: together or **both** must be null — see `Meta.constraints` — because a floor with no ceiling
     #: (or the reverse) is a policy nobody actually approved for this one item.

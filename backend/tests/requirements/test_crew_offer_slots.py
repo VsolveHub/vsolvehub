@@ -13,6 +13,7 @@ from http import HTTPStatus
 
 import pytest
 from django.utils import timezone
+from rest_framework.test import APIClient
 
 from apps.catalog.models import ServiceVariant
 from apps.requirements import matching
@@ -174,3 +175,86 @@ def test_an_offer_for_a_parked_job_is_gone_too(world: M2World) -> None:
     booking.save(update_fields=("status",))
 
     assert str(invitation.id) not in _live_offer_ids(world)
+
+
+# --------------------------------------------------------------------------------------------
+# The inbox never shows a crew offer as an enquiry, and a taken job leaves every other inbox
+# --------------------------------------------------------------------------------------------
+
+
+def _enquiry_ids(client: APIClient) -> set[str]:
+    response = client.get("/api/v1/partner/enquiries/")
+    assert response.status_code == HTTPStatus.OK
+    return {row["id"] for row in response.json()["results"]}
+
+
+def test_a_crew_offer_is_not_an_enquiry(world: M2World) -> None:
+    """The same invitation used to appear twice: as an offer with a clock, and as an enquiry
+    "waiting for you" with no clock at all. A lead who tapped the second copy after the first
+    had lapsed was refused. A rate-card job has one inbox."""
+    requirement = submitted_requirement(world=world)
+    _rate_card_booking(world=world, requirement=requirement)
+    invitation = invitation_for(requirement=requirement, partner=world.vendor)
+
+    assert str(invitation.id) in _live_offer_ids(world)
+    assert str(invitation.id) not in _enquiry_ids(world.vendor_client)
+
+
+def test_a_lapsed_quote_invitation_is_not_listed_as_waiting(world: M2World) -> None:
+    requirement = submitted_requirement(
+        world=world, archetype=ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT
+    )
+    invitation = invitation_for(requirement=requirement, partner=world.vendor)
+    assert str(invitation.id) in _enquiry_ids(world.vendor_client)
+
+    VendorInvitation.objects.filter(pk=invitation.pk).update(
+        responds_by=timezone.now() - timedelta(seconds=1)
+    )
+
+    assert str(invitation.id) not in _enquiry_ids(world.vendor_client)
+
+
+def test_taking_a_job_withdraws_every_other_lead_offer(world: M2World) -> None:
+    """First accept wins, so the rest of the wave is over — for the other leads too."""
+    from apps.requirements import crew_dispatch  # noqa: PLC0415 - keeps the module header short
+
+    requirement = submitted_requirement(world=world)
+    _rate_card_booking(world=world, requirement=requirement)
+    first = invitation_for(requirement=requirement, partner=world.vendor)
+    second = invitation_for(requirement=requirement, partner=world.other_vendor)
+
+    crew_dispatch.accept_crew_offer(invitation_id=first.id)
+
+    second.refresh_from_db()
+    assert second.status == VendorInvitation.Status.WITHDRAWN
+    other = world.other_vendor_client.get("/api/v1/partner/crew-offers/")
+    assert other.status_code == HTTPStatus.OK
+    assert other.json()["offers"] == []
+
+
+def test_a_customer_read_moves_a_cascade_the_beat_has_not_reached(world: M2World) -> None:
+    """No worker, no beat, and the Customer still learns nobody accepted.
+
+    The lapsed offer is expired and the cascade advanced by the Customer's own read of the
+    request, so "finding your crew" cannot outlive every offer on it. With no configured cascade
+    policy the advance parks the booking as exhausted, which is the honest answer here.
+    """
+    requirement = submitted_requirement(world=world)
+    booking = _rate_card_booking(world=world, requirement=requirement)
+    invitation = invitation_for(requirement=requirement, partner=world.vendor)
+    VendorInvitation.objects.filter(pk=invitation.pk).update(
+        responds_by=timezone.now() - timedelta(seconds=1)
+    )
+
+    response = world.customer_client.get(f"/api/v1/requirements/{requirement.id}/rate-card/")
+
+    assert response.status_code == HTTPStatus.OK
+    invitation.refresh_from_db()
+    assert invitation.status == VendorInvitation.Status.EXPIRED
+    booking.refresh_from_db()
+    assert (
+        booking.status != RateCardBooking.Status.MATCHING
+        or not VendorInvitation.objects.filter(
+            requirement=requirement, status=VendorInvitation.Status.INVITED
+        ).exists()
+    )

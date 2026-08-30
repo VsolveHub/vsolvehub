@@ -7,9 +7,11 @@ import {
   ConfirmAction,
   ErrorState,
   FactList,
+  FactTile,
   Readout,
   Spinner,
   buttonStyles,
+  formatMoney,
 } from "@vsolve/ui";
 import { describeError, useServerCountdown } from "@vsolve/query";
 import Link from "next/link";
@@ -155,19 +157,11 @@ export function VisitDayPanel({
       ) : null}
 
       {visit.status === "REQUESTED" ? (
-        <div
-          role="status"
-          className="flex min-h-16 items-center gap-3 rounded-card border border-warning-line bg-warning-surface p-3"
-        >
-          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-surface">
-            <Pictogram name="held" size="md" className="text-warning-text" />
-          </span>
-          <span className="flex min-w-0 flex-1 flex-col">
-            <span className="font-bold text-text">Waiting for customer payment</span>
-            <span className="text-sm text-text-secondary">This page updates automatically.</span>
-          </span>
-          {isRefreshing ? <Spinner size="sm" /> : null}
-        </div>
+        <HeldVisit
+          earningPaise={enquiry.fixedVisitEarningPaise}
+          approximateArea={enquiry.approximateArea}
+          isRefreshing={isRefreshing}
+        />
       ) : null}
 
       {visit.status === "COMPLETED" ? (
@@ -285,6 +279,83 @@ export function VisitDayPanel({
         }
       />
     </Card>
+  );
+}
+
+/**
+ * The gap between accepting a visit and being able to travel to it.
+ *
+ * Accepting does not book. The slot is held while the customer pays, and only
+ * a verified payment turns a hold into a booking — so there is a window,
+ * minutes long, where the partner has won the visit and must not set off. The
+ * warning is the loudest thing here, above the facts and before the money.
+ *
+ * The locked rows are the point, not decoration: the exact address and the
+ * customer's phone both exist on the server right now and are deliberately
+ * withheld until payment confirms. Rendering them locked says two true things
+ * at once — there is an address, and you cannot have it yet. No release
+ * control: no such mutation is published.
+ *
+ * Ported from `gallery/held-visit-screen.tsx`.
+ */
+function HeldVisit({
+  earningPaise,
+  approximateArea,
+  isRefreshing,
+}: {
+  readonly earningPaise: number | null;
+  readonly approximateArea: string;
+  readonly isRefreshing: boolean;
+}) {
+  return (
+    <div role="status" className="flex flex-col gap-3">
+      <div className="flex flex-col items-center gap-1.5 text-center">
+        <span
+          aria-hidden
+          className="grid size-14 place-items-center rounded-full bg-success-surface text-success-text"
+        >
+          <Pictogram name="yes" size="lg" />
+        </span>
+        <p className="text-lg font-extrabold tracking-[-0.02em] text-text">This visit is yours</p>
+      </div>
+
+      <div className="flex gap-3 rounded-card border-[1.5px] border-warning-line bg-warning-surface p-3.5">
+        <span aria-hidden className="mt-px shrink-0 text-warning-text">
+          <Pictogram name="later" size="md" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[15px] font-extrabold tracking-[-0.015em] text-warning-text">
+            Do not travel yet
+          </p>
+          <p className="mt-1 text-[12.5px] leading-[18px] text-warning-text">
+            Waiting for customer payment. This page updates automatically.
+          </p>
+        </div>
+        {isRefreshing ? <Spinner size="sm" /> : null}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <FactTile
+          locked
+          icon={<Pictogram name="site" size="sm" />}
+          label="Exact address"
+          value={approximateArea.trim() === "" ? "After payment" : `${approximateArea} — after payment`}
+        />
+        <FactTile
+          locked
+          icon={<Pictogram name="call" size="sm" />}
+          label="Customer phone"
+          value="After payment"
+        />
+      </div>
+
+      {earningPaise === null ? null : (
+        <p className="text-center text-xs text-text-muted">
+          You receive <span className="font-extrabold text-text">{formatMoney(earningPaise)}</span>{" "}
+          after this visit.
+        </p>
+      )}
+    </div>
   );
 }
 

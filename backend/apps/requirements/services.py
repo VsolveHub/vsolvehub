@@ -85,6 +85,37 @@ def infer_archetype(*, variant: ServiceVariant, answers: dict[str, Any]) -> str:
     return declared
 
 
+#: What each published `budget_band` option code means in paise.
+#:
+#: The one place a band answer becomes money. The codes are catalogue data
+#: (`seed_m2_demo.EVENT` decor questions and any later service that reuses the
+#: code); a band this map does not know — including the deliberate "unsure" —
+#: leaves the stored budget untouched rather than guessing a number. `None`
+#: means "no bound on this side".
+_BUDGET_BAND_PAISE: dict[str, tuple[int | None, int | None]] = {
+    "under-10k": (None, 1_000_000),
+    "10-25k": (1_000_000, 2_500_000),
+    "25-50k": (2_500_000, 5_000_000),
+    "50k-1l": (5_000_000, 10_000_000),
+    "1l-plus": (10_000_000, None),
+}
+
+
+def _budget_band_bounds(answers: dict[str, Any]) -> tuple[int | None, int | None]:
+    """A `budget_band` answer as the requirement's budget columns.
+
+    The detail screens already render "Budget you gave" from
+    `budget_min_paise`/`budget_max_paise`; before this, nothing in the capture
+    flow ever wrote them. Derived on every answer write so a changed band
+    changes the stored range. `(None, None)` for answer sets without the
+    question or with a band this build does not price — including "unsure".
+    """
+    band = answers.get("budget_band")
+    if not isinstance(band, str):
+        return (None, None)
+    return _BUDGET_BAND_PAISE.get(band, (None, None))
+
+
 def find_probable_duplicate(
     *,
     customer: User,
@@ -132,6 +163,7 @@ def create_draft(
 ) -> CustomerRequirement:
     configuration = active_configuration(variant)
     answers = configured_scope(schema=configuration.question_schema, scope=answers or {})
+    budget_min_paise, budget_max_paise = _budget_band_bounds(answers)
     requirement = CustomerRequirement.objects.create(
         customer=customer,
         variant=variant,
@@ -140,6 +172,8 @@ def create_draft(
         status=CustomerRequirement.Status.DRAFT,
         answers=answers,
         language=language,
+        budget_min_paise=budget_min_paise,
+        budget_max_paise=budget_max_paise,
     )
     record_transition(
         requirement=requirement,
@@ -226,6 +260,12 @@ def update_draft(
             variant=requirement.variant,
             answers=requirement.answers,
         )
+        # Only when the variant actually asks for a band: an answer set without
+        # the question must not clear a budget something else wrote.
+        if "budget_band" in requirement.answers:
+            requirement.budget_min_paise, requirement.budget_max_paise = _budget_band_bounds(
+                requirement.answers,
+            )
     for field, value in (
         ("address", address),
         ("service_area", service_area),

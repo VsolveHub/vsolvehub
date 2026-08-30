@@ -79,8 +79,8 @@ export interface RequirementQuestionView {
   label: string;
   /** Plain-language help, shown under the control. */
   help?: string;
-  kind: "text" | "number" | "choice" | "boolean";
-  /** Present for `choice` only. */
+  kind: "text" | "number" | "choice" | "multi" | "boolean";
+  /** Present for `choice` and `multi` only. */
   options?: readonly { value: string; label: string; description?: string }[];
   required: boolean;
   /**
@@ -111,20 +111,19 @@ function readMinimum(rules: unknown): number | undefined {
 }
 
 /**
- * The question kinds screen 1 has a control for, and the one it does not.
+ * The question kinds screen 1 has a control for.
  *
- * `MULTIPLE_CHOICE` is absent on purpose rather than by omission. The M2
- * validator (`carts.item_inputs.validate_scope`, shared with A1) accepts
- * `INTEGER`, `TEXT`, `BOOLEAN` and `SELECT` — there is no list-valued answer it
- * would take — so a multiple-choice question on an A3/A5 variant is a
- * configuration that cannot be submitted, whatever this screen renders for it.
- * Guessing a control would produce an answer the submit command refuses, with
- * the refusal landing on the Customer.
+ * `MULTIPLE_CHOICE` joined with the event-decor redesign (2026-08-29): the M2
+ * validator (`carts.item_inputs.validate_scope`, shared with A1) now accepts a
+ * `MULTI_SELECT` list of option codes, so a multi-select question renders as
+ * multi-select tiles and submits as a string array. A kind neither side knows
+ * still lands in `unsupported` rather than guessing a control.
  */
 const QUESTION_KIND: Record<string, RequirementQuestionView["kind"]> = {
   TEXT: "text",
   NUMBER: "number",
   SINGLE_CHOICE: "choice",
+  MULTIPLE_CHOICE: "multi",
   BOOLEAN: "boolean",
 };
 
@@ -178,7 +177,7 @@ export function toQuestionSet(
       required: question.is_required,
       minimum: kind === "number" ? readMinimum(question.validation_rules) : undefined,
       options:
-        kind === "choice"
+        kind === "choice" || kind === "multi"
           ? question.options.map((option) => ({
               value: option.code,
               label: option.label,

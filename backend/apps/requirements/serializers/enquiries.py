@@ -17,7 +17,7 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.partners.photos import partner_photo_url
-from apps.requirements import financials, proposals
+from apps.requirements import crew_brief, financials, proposals
 from apps.requirements.models import (
     Proposal,
     RequirementQuestion,
@@ -34,6 +34,7 @@ from apps.requirements.selectors import (
 )
 
 from .base import INVITATION_DECLINE_REASONS
+from .rate_cards import CrewBriefLineSerializer
 
 # ---------------------------------------------------------------------------
 # Clarification, shared by both roles
@@ -352,6 +353,10 @@ class EnquirySummarySerializer(serializers.ModelSerializer[VendorInvitation]):
     #: Guidance for a countdown only. The backend owns expiry and slot ownership; a client clock
     #: that has drifted must never be what decides an enquiry is still open.
     responds_by = serializers.DateTimeField(read_only=True)
+    #: The trade whose price book the composer opens for this enquiry — `electrician` for a
+    #: rewiring, a consultation or a day-hire alike. Operations set it per variant; a variant
+    #: without one falls back to its dispatch skill, so the composer never opens on nothing.
+    pricing_skill_code = serializers.SerializerMethodField()
     latest_proposal_status = serializers.SerializerMethodField()
     latest_proposal_rejection_reason = serializers.SerializerMethodField()
 
@@ -376,6 +381,7 @@ class EnquirySummarySerializer(serializers.ModelSerializer[VendorInvitation]):
             "fixed_visit_earning_paise",
             "fixed_visit_status",
             "responds_by",
+            "pricing_skill_code",
             "latest_proposal_status",
             "latest_proposal_rejection_reason",
             "created_at",
@@ -385,6 +391,12 @@ class EnquirySummarySerializer(serializers.ModelSerializer[VendorInvitation]):
     @extend_schema_field(serializers.CharField(allow_blank=True))
     def get_approximate_area(self, obj: VendorInvitation) -> str:
         return requirement_area_label(obj.requirement)
+
+    @extend_schema_field(serializers.CharField())
+    def get_pricing_skill_code(self, obj: VendorInvitation) -> str:
+        configuration = obj.requirement.configuration
+        configured = configuration.pricing_skill_code if configuration is not None else ""
+        return configured or obj.requirement.variant.required_skill_code
 
     def _latest_proposal(self, obj: VendorInvitation) -> Proposal | None:
         ordered = getattr(obj, "ordered_proposals", None)
@@ -469,6 +481,10 @@ _SITE_ADDRESS_DISCLOSED_STATUSES = (
 
 class EnquiryDetailSerializer(EnquirySummarySerializer):
     answers = serializers.JSONField(source="snapshot.answers", read_only=True)
+    #: The same answers as the Customer's own words — option labels, not codes — using the
+    #: configuration's question schema (`crew_brief`, the projection the A3 crew offer already
+    #: carries). `answers` stays for compatibility; a screen should render this.
+    brief = serializers.SerializerMethodField()
     budget_min_paise = serializers.IntegerField(
         source="snapshot.budget_min_paise",
         read_only=True,
@@ -502,6 +518,7 @@ class EnquiryDetailSerializer(EnquirySummarySerializer):
         fields = (
             *EnquirySummarySerializer.Meta.fields,
             "answers",
+            "brief",
             "budget_min_paise",
             "budget_max_paise",
             "required_tax_basis",
@@ -518,6 +535,13 @@ class EnquiryDetailSerializer(EnquirySummarySerializer):
         from apps.requirements.proposals import required_tax_basis  # noqa: PLC0415 - import cycle
 
         return required_tax_basis(obj.requirement)
+
+    @extend_schema_field(CrewBriefLineSerializer(many=True))
+    def get_brief(self, obj: VendorInvitation) -> list[dict[str, str]]:
+        return [
+            {"code": line.code, "question": line.question, "value": line.value}
+            for line in crew_brief.brief_lines(obj.requirement)
+        ]
 
     def get_proposals(self, obj: VendorInvitation) -> list[dict[str, Any]]:
         ordered = getattr(obj, "ordered_proposals", None)
@@ -683,12 +707,43 @@ class ProposalMaterialLineSerializer(serializers.Serializer[dict[str, Any]]):
 
 
 class ProposalItemLineSerializer(serializers.Serializer[dict[str, Any]]):
-    category = serializers.CharField(max_length=80)
+    """One priced line. A catalog line names its `work_item_id` and is band-checked at
+    submission; any other line is a custom item the Partner added on site (`price_book`)."""
+
+    category = serializers.CharField(max_length=80, required=False, allow_blank=True)
     title = serializers.CharField(max_length=200)
     unit = serializers.ChoiceField(choices=sorted(financials.ALLOWED_UNITS))
     quantity = serializers.DecimalField(max_digits=12, decimal_places=3, min_value=Decimal("0.001"))
     rate_paise = serializers.IntegerField(min_value=1)
     amount_paise = serializers.IntegerField(read_only=True)
+    work_item_id = serializers.UUIDField(required=False, allow_null=True)
+    is_custom = serializers.BooleanField(required=False)
+
+
+class ProposalMaterialListLineSerializer(serializers.Serializer[dict[str, Any]]):
+    """One thing the Customer should buy. Quantities and a spec — **never a price**.
+
+    Materials are the Customer's to purchase on every project (owner decision, 2026-08-29). The
+    server suggests this list from the tapped catalog items' recipes; the Partner corrects it
+    after the visit; the Customer shops from it. `unit` is free text for the same reason
+    `ProposalMaterialLineSerializer.unit` is: coils, boxes and bags are all real.
+    """
+
+    title = serializers.CharField(max_length=200)
+    spec = serializers.CharField(max_length=200, required=False, allow_blank=True)
+    unit = serializers.CharField(max_length=32, required=False, allow_blank=True)
+    quantity = serializers.DecimalField(max_digits=12, decimal_places=3, min_value=Decimal("0.001"))
+    note = serializers.CharField(max_length=200, required=False, allow_blank=True)
+
+    def to_representation(self, instance: Any) -> dict[str, Any]:
+        line = instance if isinstance(instance, dict) else {}
+        return {
+            "title": str(line.get("title") or ""),
+            "spec": str(line.get("spec") or ""),
+            "unit": str(line.get("unit") or ""),
+            "quantity": str(line.get("quantity") or "1"),
+            "note": str(line.get("note") or ""),
+        }
 
 
 class ProposalLabourLineSerializer(serializers.Serializer[dict[str, Any]]):
@@ -713,6 +768,7 @@ class ProposalFinancialSummarySerializer(serializers.Serializer[dict[str, Any]])
     material_lines = ProposalMaterialLineSerializer(many=True)
     other_charges = ProposalOtherChargeSerializer(many=True)
     stages = ProposalStageSerializer(many=True)
+    suggested_material_list = ProposalMaterialListLineSerializer(many=True)
     line_subtotal_paise = serializers.IntegerField(min_value=0)
     material_total_paise = serializers.IntegerField(min_value=0)
     authorized_charges_paise = serializers.IntegerField(min_value=0)
@@ -735,6 +791,7 @@ class ProposalSerializer(serializers.ModelSerializer[Proposal]):
 
     stages = ProposalStageSerializer(many=True, read_only=True)
     material_lines = ProposalMaterialLineSerializer(many=True, read_only=True)
+    material_list = ProposalMaterialListLineSerializer(many=True, read_only=True)
     item_lines = ProposalItemLineSerializer(many=True, read_only=True)
     labour_lines = ProposalLabourLineSerializer(many=True, read_only=True)
     other_charges = ProposalOtherChargeSerializer(many=True, read_only=True)
@@ -787,6 +844,8 @@ class ProposalSerializer(serializers.ModelSerializer[Proposal]):
             "scope_summary",
             "stages",
             "material_lines",
+            "material_list",
+            "material_brand_tier",
             "warranty_terms",
             "valid_until",
             "vendor_confirmed_at",
@@ -832,6 +891,12 @@ class ProposalCreateSerializer(serializers.Serializer[dict[str, Any]]):
     #: A5 only. Refused on an A3 quote — a workforce quote is a rate per worker per day, and a
     #: vendor supplying their own materials on a labour hire is not a shape this platform brokers.
     material_lines = ProposalMaterialLineSerializer(many=True, required=False)
+    #: A5 only. The shopping list the Customer buys from — quantities, never money.
+    material_list = ProposalMaterialListLineSerializer(many=True, required=False)
+    #: No `default`: a default makes the generated client treat the field as required.
+    material_brand_tier = serializers.ChoiceField(
+        choices=Proposal.MaterialBrandTier.choices, required=False, allow_blank=True
+    )
     estimate_type = serializers.ChoiceField(choices=Proposal.EstimateType.choices, required=False)
     item_lines = ProposalItemLineSerializer(many=True, required=False)
     labour_lines = ProposalLabourLineSerializer(many=True, required=False)

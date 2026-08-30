@@ -7,6 +7,7 @@ import {
   labourLineAmount,
   materialLineAmount,
   type CommercialEstimateDraft,
+  type MaterialListLineDraft,
 } from "../model/commercial-estimate-draft";
 import type { ProposalFinancialSummary } from "../queries";
 
@@ -26,12 +27,15 @@ export function EstimatePreviewSheet({
   draft,
   preview,
   vendorName,
+  materialList = [],
 }: {
   open: boolean;
   onClose: () => void;
   draft: CommercialEstimateDraft;
   preview: ProposalFinancialSummary | undefined;
   vendorName: string;
+  /** What the customer buys — quantities and a spec, never a price (1.48.0). */
+  materialList?: readonly MaterialListLineDraft[];
 }) {
   const lines =
     draft.mode === "ITEM_WISE"
@@ -102,6 +106,32 @@ export function EstimatePreviewSheet({
             ))}
           </ul>
         </Block>
+
+        {materialList.length > 0 ? (
+          <Block title="What you need to buy">
+            <p className="text-xs text-text-muted">
+              {draft.materialBrandTier === "PREMIUM"
+                ? "Premium brands"
+                : draft.materialBrandTier === "STANDARD"
+                  ? "Standard brands"
+                  : "Any brand"}{" "}
+              · you buy these, the estimate covers the work
+            </p>
+            <ul className="mt-1 list-none divide-y divide-line p-0 text-sm">
+              {materialList.map((row) => (
+                <li key={`${row.title}|${row.unit}`} className="flex justify-between gap-3 py-1.5">
+                  <span>
+                    <span className="font-medium">{row.title}</span>
+                    {row.spec ? <span className="block text-xs text-text-muted">{row.spec}</span> : null}
+                  </span>
+                  <span className="shrink-0 font-semibold tabular-nums">
+                    {row.quantity} {row.unit}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </Block>
+        ) : null}
 
         <Block title="How they pay">
           <ol className="list-none p-0 text-sm">

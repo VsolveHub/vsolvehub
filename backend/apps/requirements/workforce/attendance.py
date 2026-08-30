@@ -264,6 +264,23 @@ def respond_attendance(
         )
     if stage.status == EngagementStage.Status.AWAITING_REVIEW:
         stages.approve_stage(stage_id=stage.id, actor=actor)
+    settlement.refresh_from_db()
+    # The supervisor's side of this tap. Until now the customer's confirmation moved the stage
+    # and told nobody, so the lead learned the day was agreed only by opening it.
+    enqueue_outbox_event(
+        aggregate_type="engagement",
+        aggregate_id=engagement.id,
+        event_type="m2.shift.attendance_confirmed",
+        idempotency_key=f"shift-attendance-confirmed:{attendance.id}",
+        payload={
+            "engagement_id": str(engagement.id),
+            "stage_id": str(stage.id),
+            "shift_date": stage.scheduled_on.isoformat() if stage.scheduled_on else "",
+            "workers_present": attendance.present_count,
+            "workers_expected": attendance.expected_count,
+            "amount_paise": settlement.amount_paise,
+        },
+    )
     attendance.refresh_from_db()
     return attendance
 
@@ -330,6 +347,19 @@ def _dispute_attendance(
             stage=stage,
             opened_by=actor,
             detail=attendance.dispute_note or "The customer disputed the attendance count.",
+        )
+        # The stage dispute above carries its own partner notice; this branch had none.
+        enqueue_outbox_event(
+            aggregate_type="engagement",
+            aggregate_id=stage.engagement_id,
+            event_type="m2.shift.attendance_disputed",
+            idempotency_key=f"shift-attendance-disputed:{attendance.id}",
+            payload={
+                "engagement_id": str(stage.engagement_id),
+                "stage_id": str(stage.id),
+                "workers_present": attendance.present_count,
+                "workers_expected": attendance.expected_count,
+            },
         )
     attendance.refresh_from_db()
     return attendance

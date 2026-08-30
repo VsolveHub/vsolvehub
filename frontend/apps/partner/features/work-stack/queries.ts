@@ -104,6 +104,12 @@ export function useWorkStack() {
             enquiries: enquiries.data?.pages.flatMap((page) => page.results) ?? [],
             engagements: engagements.data?.results ?? [],
             jobs: mergeJobs(allJobs.data, completedJobs.data),
+            // `EnquirySummary` publishes no server clock of its own — the crew
+            // offers read is the one query in this merge that does, so its
+            // instant is reused for the enquiry lapse check too. See
+            // `toWorkItems`'s own `serverNow` doc for why this is not a second
+            // source of truth and never falls back to the device clock.
+            serverNow: offers.data?.server_now ?? null,
           }),
     [
       isPending,

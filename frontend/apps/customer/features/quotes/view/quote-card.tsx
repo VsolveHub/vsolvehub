@@ -1,9 +1,10 @@
 "use client";
 
-import { Badge, Button, cn } from "@vsolve/ui";
+import { Badge, Button, Disclosure, cn } from "@vsolve/ui";
 import Link from "next/link";
 
-import { firstStageOf, type QuoteCardView } from "../adapters";
+import { firstStageOf, materialCountLabel, type QuoteCardView } from "../adapters";
+import { MaterialListRows } from "./material-list-rows";
 import { VendorMark, VendorTrustLine } from "./vendor-trust-line";
 
 /**
@@ -244,6 +245,19 @@ export function QuoteCard({
           ) : null}
         </div>
       </label>
+
+      {/* What the Customer buys — outside the radio's label, so opening the
+          list does not also pick the estimate. Quantities and specs only;
+          the list carries no prices by contract. */}
+      {card.materialList.length > 0 ? (
+        <div className="border-t border-line px-4 py-2">
+          <Disclosure
+            summary={`🛒 What you need to buy · ${materialCountLabel(card.materialList.length)}`}
+          >
+            <MaterialListRows rows={card.materialList} />
+          </Disclosure>
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-3">
         <Link

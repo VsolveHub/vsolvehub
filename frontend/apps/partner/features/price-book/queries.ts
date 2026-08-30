@@ -14,13 +14,23 @@ import { getApiClient } from "@/lib/api/browser";
  * one never goes stale on the other.
  */
 
-export function usePriceBook(serviceAreaId?: string) {
+/**
+ * @param skill Narrow to one trade — the enquiry's `pricing_skill_code` — so the
+ *   composer never mixes a plumber's and an electrician's catalogue on one
+ *   estimate. Omitted on the rate-card screen, which lists every trade.
+ */
+export function usePriceBook(serviceAreaId?: string, skill?: string) {
   return useQuery({
-    queryKey: m2QueryKeys.priceBook.list(serviceAreaId),
+    queryKey: m2QueryKeys.priceBook.list(serviceAreaId, skill),
     queryFn: () =>
       request(() =>
         getApiClient().GET("/api/v1/partner/price-book/", {
-          params: { query: serviceAreaId ? { service_area_id: serviceAreaId } : {} },
+          params: {
+            query: {
+              ...(serviceAreaId ? { service_area_id: serviceAreaId } : {}),
+              ...(skill ? { skill } : {}),
+            },
+          },
         }),
       ),
   });

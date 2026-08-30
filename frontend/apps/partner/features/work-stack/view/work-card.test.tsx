@@ -66,4 +66,31 @@ describe("WorkCard — a project enquiry", () => {
     expect(screen.queryByText("₹ ?")).not.toBeInTheDocument();
     expect(screen.queryByText(/no price/i)).not.toBeInTheDocument();
   });
+
+  it("shows the status chip in an action tone, distinct from a live offer's warning tone", () => {
+    const item: WorkItem = {
+      kind: "enquiry",
+      key: "enquiry:e1",
+      href: "/work/enquiries/e1",
+      amountPaise: null,
+      amountLabel: null,
+      urgency: "needs_price",
+      respondsBy: "2026-08-21T10:00:00Z",
+      whenIso: "2026-08-24T00:00:00Z",
+      whenIsDay: true,
+      durationMinutes: null,
+      areaLabel: "Kukatpally, Hyderabad",
+      actionLabel: "Review & book visit",
+      title: "Interior fit-out project",
+      stateLabel: "Waiting for your answer",
+      accessibleName: "Interior fit-out project, Waiting for your answer",
+    };
+
+    render(<WorkCard item={item} />);
+
+    const chip = screen.getByText("Waiting for your answer");
+    // `Badge`'s `action` tone class — see `STATE_TONE` in `work-home.tsx`,
+    // which keys every card's chip tone off its own urgency.
+    expect(chip.className).toContain("bg-signal-50");
+  });
 });

@@ -1,11 +1,15 @@
 "use client";
 
-import { Button, ErrorState, formatMoney } from "@vsolve/ui";
+import { Button, ErrorState, FactTile, Sheet, cn, formatMoney } from "@vsolve/ui";
+import { useServerCountdown } from "@vsolve/query";
+import { useState } from "react";
 
+import { Pictogram } from "@/components/pictogram";
 import type { EnquiryRecord } from "@/features/enquiry/model/wire";
+import type { DeclineReasonCode } from "@/features/enquiry/model/decline-reasons";
 import { useAcceptEnquiry, useDeclineEnquiry } from "@/features/enquiry/queries";
 
-import { describeVisitDuration, formatVisitInstant } from "../model/slot-grid";
+import { describeVisitDuration } from "../model/slot-grid";
 
 /**
  * Answering a visit offer, now that there is nothing to schedule.
@@ -14,32 +18,52 @@ import { describeVisitDuration, formatVisitInstant } from "../model/slot-grid";
  *
  * `VisitResponse` stood here until contract 1.44.0. It fetched a grid of
  * candidate slots, let the partner choose one, and confirmed it. That whole
- * surface — `/enquiries/{id}/visit-slots/`, `VisitSlotGrid`,
- * `VisitSlotConfirmation` — was removed from the published contract, because
- * BE-2 moved the choice to the customer. There is no endpoint left through
- * which a partner can propose or pick a time.
+ * surface was removed from the published contract, because BE-2 moved the
+ * choice to the customer. There is no endpoint left through which a partner can
+ * propose or pick a time.
  *
  * So the offer arrives fixed: `fixed_visit_start`, its duration, what it pays,
  * and `responds_by` as the deadline. Two answers, and neither is a calendar.
  *
- * The note about there being nothing to schedule is deliberate and stays.
- * A partner who has answered the old offers will look for the picker, and an
- * absence with no explanation reads as a broken screen rather than a changed
- * rule.
+ * ## The visuals come from the gallery artboard
+ *
+ * `gallery/fixed-time-offer-screen.tsx` drew this at full size from sample
+ * props: four fact tiles, the earning, a countdown ring. This is that design
+ * on the live path — same tiles, same two-tier buttons — mounted inside the
+ * enquiry screen, which already owns the header. The countdown is
+ * `useServerCountdown` against `responds_by`, calibrated by the enquiry read's
+ * own `server_now`, so a phone with a fast clock does not show a dead offer.
+ *
+ * ## Passing asks why, in three tiles
+ *
+ * The published decline vocabulary has six codes; the three a partner standing
+ * in the street actually means are distance, availability and trade. They map
+ * straight onto `TOO_FAR`, `NO_CAPACITY` and `OUT_OF_SCOPE` — no new code is
+ * invented, and the other three stay reachable from the full decline dialog on
+ * workforce enquiries.
  */
 
 export interface FixedTimeOfferProps {
   enquiry: EnquiryRecord;
 }
 
+const PASS_REASONS: readonly { code: DeclineReasonCode; label: string; icon: "distance" | "date" | "papers" }[] = [
+  { code: "TOO_FAR", label: "Too far", icon: "distance" },
+  { code: "NO_CAPACITY", label: "Busy then", icon: "date" },
+  { code: "OUT_OF_SCOPE", label: "Not my kind of work", icon: "papers" },
+];
+
+/** `2 · π · 66`, the radius the artboard draws the ring at. */
+const RING_CIRCUMFERENCE = 414.7;
+
 export function FixedTimeOffer({ enquiry }: FixedTimeOfferProps) {
-  // The browser's own zone. `formatVisitInstant` reports back when it cannot
-  // honour one, which matters on a device with a zone Intl does not carry — a
-  // visit shown in the wrong hour is worse than one shown without a zone.
+  // The browser's own zone: the partner is standing in it.
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const accept = useAcceptEnquiry(enquiry.id);
   const decline = useDeclineEnquiry(enquiry.id);
+  const [passing, setPassing] = useState(false);
   const busy = accept.isPending || decline.isPending;
+  const countdown = useServerCountdown(enquiry.respondsBy, 1000);
 
   // An enquiry with no fixed visit is not an offer this screen can answer. It
   // renders the fact rather than an empty shell: the alternative is a partner
@@ -55,28 +79,84 @@ export function FixedTimeOffer({ enquiry }: FixedTimeOfferProps) {
     );
   }
 
+  const starts = new Date(enquiry.fixedVisitStart);
+  const dateLabel = Number.isNaN(starts.getTime())
+    ? enquiry.fixedVisitStart
+    : new Intl.DateTimeFormat("en-IN", { weekday: "short", day: "numeric", month: "short", timeZone }).format(starts);
+  const timeLabel = Number.isNaN(starts.getTime())
+    ? ""
+    : new Intl.DateTimeFormat("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone }).format(starts);
+  const startsLabel =
+    enquiry.fixedVisitDurationMinutes === null
+      ? timeLabel
+      : `${timeLabel} · ${describeVisitDuration(enquiry.fixedVisitDurationMinutes)}`;
+  const windowMs =
+    enquiry.respondsBy === null
+      ? 0
+      : Math.max(0, new Date(enquiry.respondsBy).getTime() - new Date(enquiry.createdAt).getTime());
+  const fraction =
+    countdown === null || windowMs <= 0 ? 0 : Math.min(1, Math.max(0, countdown.remainingMs / windowMs));
+
   return (
     <section className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <p className="text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-text-muted">
-          The customer chose this time
-        </p>
-        <p className="text-lg font-bold tracking-[-0.02em] text-text">
-          {formatVisitInstant(enquiry.fixedVisitStart, timeZone).label}
-        </p>
-        <p className="text-sm text-text-secondary">
-          {enquiry.fixedVisitDurationMinutes === null
-            ? "Duration not given"
-            : describeVisitDuration(enquiry.fixedVisitDurationMinutes)}
-          {enquiry.fixedVisitEarningPaise === null
-            ? null
-            : ` · you receive ${formatMoney(enquiry.fixedVisitEarningPaise)}`}
-        </p>
+      <div className="flex flex-col items-center gap-2 rounded-card bg-[linear-gradient(135deg,var(--color-signal-400)_0%,var(--color-action)_55%,var(--color-action-active)_100%)] px-4 py-5 shadow-raised">
+        {countdown !== null ? (
+          <div className="relative h-[120px] w-[120px]">
+            <svg width="120" height="120" viewBox="0 0 150 150" aria-hidden>
+              <circle cx="75" cy="75" r="66" className="fill-text/12" />
+              <circle cx="75" cy="75" r="66" fill="none" className="stroke-text/18" strokeWidth="11" />
+              <circle
+                cx="75"
+                cy="75"
+                r="66"
+                fill="none"
+                className="stroke-text"
+                strokeWidth="11"
+                strokeLinecap="round"
+                strokeDasharray={RING_CIRCUMFERENCE}
+                strokeDashoffset={RING_CIRCUMFERENCE * (1 - fraction)}
+                transform="rotate(-90 75 75)"
+              />
+            </svg>
+            <div
+              role="timer"
+              aria-live="polite"
+              aria-label={countdown.announce}
+              className="absolute inset-0 flex flex-col items-center justify-center"
+            >
+              <Pictogram name="time" size="sm" className="text-text" />
+              <span aria-hidden className="text-3xl font-extrabold leading-tight tabular-nums text-text">
+                {countdown.display}
+              </span>
+            </div>
+          </div>
+        ) : null}
+
+        {enquiry.fixedVisitEarningPaise === null ? null : (
+          <>
+            <span className="text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-action-text opacity-80">
+              You receive
+            </span>
+            <span className="-mt-1 text-[2.75rem] font-extrabold leading-none tracking-[-0.025em] tabular-nums text-action-text">
+              {formatMoney(enquiry.fixedVisitEarningPaise)}
+            </span>
+          </>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-2.5">
+        <FactTile icon={<Pictogram name="papers" size="md" />} label="Service" value={enquiry.serviceName} />
+        <FactTile
+          icon={<Pictogram name="distance" size="md" />}
+          label="Area"
+          value={enquiry.approximateArea.trim() === "" ? "Not given" : enquiry.approximateArea}
+        />
+        <FactTile icon={<Pictogram name="date" size="md" />} label="Date" value={dateLabel} />
+        <FactTile icon={<Pictogram name="time" size="md" />} label="Starts" value={startsLabel} />
       </div>
 
       <p className="text-sm leading-6 text-text-secondary">
-        Take it or pass — there is nothing to schedule. The first professional to
-        accept gets the visit.
+        The customer picked this time. Take it or pass — there is nothing to schedule.
       </p>
 
       {accept.isError ? (
@@ -89,21 +169,24 @@ export function FixedTimeOffer({ enquiry }: FixedTimeOfferProps) {
       ) : null}
 
       <div className="flex flex-col gap-2.5">
-        <Button
-          block
-          size="lg"
+        <button
+          type="button"
           onClick={() => accept.mutate()}
-          disabled={busy}
-          loading={accept.isPending}
-          loadingLabel="Accepting"
+          disabled={busy || countdown?.isExpired === true}
+          className="flex h-20 items-center justify-center gap-3 rounded-[20px] bg-success-text shadow-[0_3px_0_var(--color-success-active)] disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >
-          Take this visit
-        </Button>
+          <Pictogram name="yes" size="lg" className="text-surface" />
+          <span className="text-xl font-bold text-surface">
+            {accept.isPending ? "Accepting…" : "Take this visit"}
+          </span>
+        </button>
         <Button
           block
           variant="outline"
           size="lg"
-          onClick={() => decline.mutate({ reasonCode: "NO_CAPACITY" })}
+          className="h-16"
+          icon={<Pictogram name="no" size="md" className="text-text-muted" />}
+          onClick={() => setPassing(true)}
           disabled={busy}
           loading={decline.isPending}
           loadingLabel="Passing"
@@ -111,6 +194,38 @@ export function FixedTimeOffer({ enquiry }: FixedTimeOfferProps) {
           Pass on this one
         </Button>
       </div>
+
+      <Sheet
+        open={passing}
+        onOpenChange={setPassing}
+        title="Why pass?"
+        footer={
+          <Button variant="ghost" onClick={() => setPassing(false)}>
+            Keep it open
+          </Button>
+        }
+      >
+        <div className="grid grid-cols-3 gap-2">
+          {PASS_REASONS.map((reason) => (
+            <button
+              key={reason.code}
+              type="button"
+              disabled={busy}
+              onClick={() =>
+                decline.mutate({ reasonCode: reason.code }, { onSettled: () => setPassing(false) })
+              }
+              className={cn(
+                "flex min-h-24 flex-col items-center justify-center gap-2 rounded-card border border-line bg-surface p-2 text-center",
+                "hover:bg-surface-hover disabled:opacity-60",
+                "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring",
+              )}
+            >
+              <Pictogram name={reason.icon} size="lg" className="text-action-secondary" />
+              <span className="text-xs font-semibold leading-tight text-text">{reason.label}</span>
+            </button>
+          ))}
+        </div>
+      </Sheet>
     </section>
   );
 }

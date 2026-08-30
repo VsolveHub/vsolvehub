@@ -41,7 +41,7 @@ and device-token storage. Deliberately out of scope.
 import json
 import math
 import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from datetime import datetime, timedelta
 from typing import Any, cast
 from uuid import UUID
@@ -182,7 +182,9 @@ def offer_event_frames(
         # database connection for its entire life.
         close_old_connections()
         rows = list(
-            NotificationIntent.objects.filter(_stream_filter(recipient_id=recipient_id, since=last_seen))
+            NotificationIntent.objects.filter(
+                _stream_filter(recipient_id=recipient_id, since=last_seen)
+            )
             .exclude(status=NotificationIntent.Status.SUPPRESSED)
             .order_by("created_at", "id")
         )
@@ -214,7 +216,7 @@ class EventStreamRenderer(BaseRenderer):
         self,
         data: object,
         accepted_media_type: str | None = None,
-        renderer_context: dict[str, object] | None = None,
+        renderer_context: Mapping[str, Any] | None = None,
     ) -> bytes:
         if data is None:
             return b""
@@ -222,7 +224,7 @@ class EventStreamRenderer(BaseRenderer):
             return data
         if isinstance(data, str):
             return data.encode("utf-8")
-        return JSONRenderer().render(data, accepted_media_type, renderer_context)
+        return bytes(JSONRenderer().render(data, accepted_media_type, renderer_context))
 
 
 class PartnerOfferStreamView(APIView):

@@ -1,15 +1,16 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { Schemas } from "@vsolve/api-client";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * The booking-fee confirmation — `M2-FE-428`.
+ * The booking-fee confirmation — `M2-FE-428`, screen 3 of the revamped flow.
  *
- * Two rules carry the weight here and both are about restraint: the screen must
- * not name the supervisor while the offer is only held, and the dialog must not
- * charge anything until it is confirmed.
+ * The screen itself is now the confirmation — no dialog stacked on top of it —
+ * so the two rules that carry the weight are still about restraint: it must
+ * not name the supervisor while the offer is only held, and it must not charge
+ * anything until the pay control is pressed.
  */
 
 const client = { GET: vi.fn(), POST: vi.fn(), PATCH: vi.fn(), PUT: vi.fn(), DELETE: vi.fn() };
@@ -117,46 +118,31 @@ describe("BookCrewFeeScreen", () => {
     // Vendor identity is released by the confirmation, never by the hold —
     // otherwise anybody reaching this screen and never paying would collect the
     // identities of the leads who accepted.
-    expect(await screen.findByText(/A supervisor accepted your job/)).toBeInTheDocument();
-    expect(
-      screen.getByText(/introduce them by name the moment the booking is confirmed/),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/A supervisor accepted/)).toBeInTheDocument();
   });
 
-  it("shows the fee as the rail's hero and the crew's cash separately", async () => {
+  it("shows the booking fee and the crew's daily cash as two separate lines", async () => {
     client.GET.mockResolvedValue(ok(state()));
     renderScreen();
 
     expect(await screen.findByText("₹300")).toBeInTheDocument();
-    expect(screen.getByText("₹5,100")).toBeInTheDocument();
-    // The per-day figure is the server's `lead_day_receipt_paise`, not the total
-    // divided by the day count.
-    expect(screen.getByText("₹2,550 at the end of each day")).toBeInTheDocument();
+    expect(screen.getByText("₹2,550")).toBeInTheDocument();
   });
 
-  it("charges nothing until the dialog is confirmed", async () => {
+  it("charges nothing until the pay control is pressed", async () => {
     client.GET.mockResolvedValue(ok(state()));
     renderScreen();
 
-    fireEvent.click(await screen.findByRole("button", { name: /Pay ₹300 and confirm/ }));
-
-    const dialog = await screen.findByRole("dialog");
-    expect(dialog).toBeInTheDocument();
-    expect(client.POST).not.toHaveBeenCalled();
-
-    // Dismissing is a cancel. The hold survives it and nothing is charged.
-    fireEvent.click(within(dialog).getByRole("button", { name: "Not now" }));
+    expect(await screen.findByRole("button", { name: /Pay ₹300 & confirm/ })).toBeInTheDocument();
     expect(client.POST).not.toHaveBeenCalled();
   });
 
-  it("starts the checkout only from the dialog's own action", async () => {
+  it("starts the checkout from the pay control", async () => {
     client.GET.mockResolvedValue(ok(state()));
     client.POST.mockResolvedValue(ok({ payment_attempt_id: "attempt-1" }, 201));
     renderScreen();
 
-    fireEvent.click(await screen.findByRole("button", { name: /Pay ₹300 and confirm/ }));
-    const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Pay ₹300" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Pay ₹300 & confirm/ }));
 
     await waitFor(() =>
       expect(client.POST).toHaveBeenCalledWith(

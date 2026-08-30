@@ -14,6 +14,7 @@ import {
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
+import { firstScreen } from "../model/active-screens";
 import { requirementReducer, type RequirementAction } from "../model/machine";
 import { SCREENS, type Screen } from "../model/screens";
 import {
@@ -25,7 +26,7 @@ import {
 } from "../model/state";
 
 /**
- * One state container for the whole two-screen requirement.
+ * One state container for the whole three-screen requirement.
  *
  * One reducer rather than per-screen state is what makes going back a *screen
  * change* instead of a navigation: nothing remounts, nothing refetches and
@@ -159,8 +160,14 @@ export function clearPersistedRequirement(categorySlug: string): void {
 }
 
 /** Storage-free, for the hydration reason documented on `RESTORE_INTENT`. */
-function start(categorySlug: string): RequirementDraftState {
-  return initialDraftState(categorySlug);
+function start({
+  categorySlug,
+  screens,
+}: {
+  categorySlug: string;
+  screens: readonly Screen[];
+}): RequirementDraftState {
+  return initialDraftState(categorySlug, firstScreen(screens));
 }
 
 /**
@@ -181,15 +188,36 @@ export interface RequirementProviderProps {
   categorySlug: string;
   /** Whether a probable duplicate is on screen and unresolved. See `M2-FE-210`. */
   hasUnresolvedDuplicate?: boolean;
+  /**
+   * The catalogue's required question codes for step 1.
+   *
+   * Before the first save there is no server verdict, and without this list the
+   * guard could only refuse an untouched form — one answered tile out of seven
+   * unlocked Continue. The container reads the codes off the published
+   * questions; the server remains the authority once it has spoken.
+   */
+  requiredAnswerCodes?: readonly string[];
+  /**
+   * The screens this variant actually walks — `activeScreens(questions)`.
+   *
+   * Defaults to the full budget. A question-free (visit-first) brief passes
+   * `["where_when", "visits_send"]`: the reducer then opens on "Where and
+   * when", steps through that list, and a `?step=what` in the URL is ignored
+   * rather than restored onto a screen with nothing on it. Read once, on
+   * mount — the variant is a route prop and does not change under a draft.
+   */
+  screens?: readonly Screen[];
   children: ReactNode;
 }
 
 export function RequirementProvider({
   categorySlug,
   hasUnresolvedDuplicate = false,
+  requiredAnswerCodes,
+  screens = SCREENS,
   children,
 }: RequirementProviderProps) {
-  const [state, dispatch] = useReducer(requirementReducer, categorySlug, start);
+  const [state, dispatch] = useReducer(requirementReducer, { categorySlug, screens }, start);
   const today = useMemo(() => todayIso(), []);
   const [hasRestoredIntent, setHasRestoredIntent] = useState(false);
 
@@ -256,8 +284,8 @@ export function RequirementProvider({
   useEffect(() => {
     if (restoredStep.current) return;
     restoredStep.current = true;
-    if (stepParam === null || !isScreen(stepParam)) return;
-    dispatch({ type: "RESTORE_SCREEN", screen: stepParam });
+    if (stepParam === null || !isScreen(stepParam) || !screens.includes(stepParam)) return;
+    dispatch({ type: "RESTORE_SCREEN", screen: stepParam, screens });
     // Mount only. `stepParam` changes on every step from here on and re-running
     // would fight the writer below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -271,12 +299,12 @@ export function RequirementProvider({
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   }, [pathname, router, searchParams, state.screen, stepParam]);
 
-  const blocked = blockedReason(state, today, hasUnresolvedDuplicate);
+  const blocked = blockedReason(state, today, hasUnresolvedDuplicate, requiredAnswerCodes);
 
   const goTo = useCallback((screen: Screen) => dispatch({ type: "GO_TO", screen }), []);
   const open = useCallback((screen: Screen) => dispatch({ type: "OPEN", screen }), []);
-  const advance = useCallback(() => dispatch({ type: "ADVANCE" }), []);
-  const back = useCallback(() => dispatch({ type: "BACK" }), []);
+  const advance = useCallback(() => dispatch({ type: "ADVANCE", screens }), [screens]);
+  const back = useCallback(() => dispatch({ type: "BACK", screens }), [screens]);
 
   const value = useMemo<RequirementContextValue>(
     () => ({
@@ -284,7 +312,7 @@ export function RequirementProvider({
       dispatch,
       hasRestoredIntent,
       blocked,
-      canContinue: canAdvance(state, today, hasUnresolvedDuplicate),
+      canContinue: canAdvance(state, today, hasUnresolvedDuplicate, requiredAnswerCodes),
       today,
       goTo,
       open,
@@ -297,6 +325,7 @@ export function RequirementProvider({
       blocked,
       today,
       hasUnresolvedDuplicate,
+      requiredAnswerCodes,
       goTo,
       open,
       advance,

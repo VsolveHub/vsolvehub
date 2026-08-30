@@ -251,7 +251,7 @@ describe("BookCrewScreen rate rail", () => {
       "/api/v1/requirements/",
       expect.anything(),
     );
-    expect(screen.queryByText("₹5,400")).not.toBeInTheDocument();
+    expect(screen.queryByText("₹900")).not.toBeInTheDocument();
   });
 
   it("prices the size only after the complete plan is confirmed", async () => {
@@ -302,14 +302,15 @@ describe("BookCrewScreen rate rail", () => {
     render(<BookCrewScreen service={service} variant={variant} />, { wrapper });
     await openRate();
 
-    // Every one of these is a field on the payload. The per-day cash is the
-    // load-bearing case: it is `lead_day_receipt_paise`, not the total divided
-    // by the day count.
-    expect(await screen.findByText("₹5,400")).toBeInTheDocument();
-    expect(screen.getByText("₹5,100")).toBeInTheDocument();
-    expect(screen.getByText("₹2,550 at the end of each day")).toBeInTheDocument();
-    expect(screen.getByText("₹900")).toBeInTheDocument();
-    expect(screen.getByText(/You pay ₹300 only when a supervisor accepts/)).toBeInTheDocument();
+    // The trimmed rail shows exactly two figures — the day rate and the
+    // booking fee — both fields on the payload, plus the booking control that
+    // states the fee again rather than a total this screen would compute.
+    expect(await screen.findByText("₹900")).toBeInTheDocument();
+    expect(screen.getByText(/a day to the crew/)).toBeInTheDocument();
+    expect(screen.getByText(/₹300 booking fee/)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Book — pay ₹300 when accepted/ }),
+    ).toBeInTheDocument();
   });
 
   it("shows no amounts at all when the server publishes no rate", async () => {
@@ -342,7 +343,9 @@ describe("BookCrewScreen rate rail", () => {
       await screen.findByText(/We do not have a published day rate for this yet/),
     ).toBeInTheDocument();
     // The fail-closed rule: no booking control, and no invented figure.
-    expect(screen.queryByRole("button", { name: "Book this crew" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Book — pay/ }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Get quotes instead" })).toBeInTheDocument();
     expect(screen.queryByText(/^₹/)).not.toBeInTheDocument();
   });

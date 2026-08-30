@@ -18,7 +18,6 @@ import { CompletionRating } from "@/features/ratings/view/completion-rating";
 import { evidenceIndex, toProjectView } from "@/features/project/adapters";
 import { useProject } from "@/features/project/queries";
 import { ProjectDecisions, ProjectWarranty } from "@/features/project/view/project-panels";
-import { CashDemandReport } from "@/features/shift-day/view/cash-demand-report";
 import { toAmendmentsView, toEngagementView, type EngagementView, type StageView } from "../adapters";
 import {
   isSimulatedCaptureUnavailable,
@@ -27,9 +26,8 @@ import {
   useFundStage,
   useSimulateStageCapture,
 } from "../queries";
-import { CrewBookingSummary } from "./crew-booking-summary";
-import { CrewDayPanel } from "./crew-day-panel";
-import { PaymentReceipt } from "./payment-receipt";
+import { LeadOnlyHub } from "./lead-only-hub";
+import { Receipt } from "./receipt";
 import { ProjectCompletionCodePanel } from "./project-completion-code";
 import { AgreedWorkPanel } from "./agreed-work-panel";
 import { AgreementHistory } from "./agreement-history";
@@ -189,6 +187,19 @@ export function EngagementScreen({ engagementId }: EngagementScreenProps) {
     if (isProject) void projectQuery.refetch();
   };
 
+  // The A3 booking hub — screens 5 through 10 and 12 of the post-booking
+  // redesign. Its own return, not a branch further down: the hub replaces
+  // every panel below rather than sitting among them, and reaching it through
+  // the shared render would mean threading `isProject`/`nouns`/`fundingStage`
+  // state that a workforce booking never uses.
+  if (view.mode === "lead_only") {
+    return (
+      <Wrapper>
+        <LeadOnlyHub view={view} onRefresh={refetchAll} />
+      </Wrapper>
+    );
+  }
+
   return (
     <Wrapper>
       {isProject ? (
@@ -201,7 +212,10 @@ export function EngagementScreen({ engagementId }: EngagementScreenProps) {
       ) : (
         <header>
           <div className="flex flex-wrap items-start justify-between gap-2">
-            <h1 className="text-xl font-semibold text-text">{nouns.engagementTitle}</h1>
+            <div className="min-w-0">
+              <p className="text-xs font-bold uppercase tracking-[0.12em] text-text-muted">{nouns.engagementTitle}</p>
+              <h1 className="mt-0.5 text-xl font-semibold text-text">{view.serviceName ?? nouns.engagementTitle}</h1>
+            </div>
             <div className="flex shrink-0 flex-wrap items-center gap-2">
               {view.isDisputed ? <Badge tone="danger">Problem raised</Badge> : null}
               <EngagementStatusBadge status={view.status} />
@@ -213,22 +227,6 @@ export function EngagementScreen({ engagementId }: EngagementScreenProps) {
         </header>
       )}
 
-      {/* A3 opens as a receipt: which days, how much cash, who is coming. The
-          rest of this screen — progress, agreed work, stages, disputes — sits
-          below it unchanged, because a Customer who came back to check a
-          settlement still needs all of it. */}
-      {view.mode === "lead_only" ? (
-        <div className="mt-4">
-          <CrewBookingSummary
-            view={view}
-            receiptHref={`/engagements/${view.engagementId}/receipt`}
-            detailAnchor="#engagement-detail"
-          >
-            <CrewDayPanel requirementId={view.requirementId} />
-          </CrewBookingSummary>
-        </div>
-      ) : null}
-
       <div id="engagement-detail" />
 
       {isProject ? null : <ModePanel view={view} />}
@@ -237,9 +235,9 @@ export function EngagementScreen({ engagementId }: EngagementScreenProps) {
           the server's own numbers. */}
       {isProject ? null : <ProgressPanel view={view} nouns={nouns} />}
 
-      {/* `M2-FE-509`: who is doing the work, the agreed crew composition and the
-          contact rule — read back off the quote the engagement was frozen from,
-          because the engagement projection carries none of it. */}
+      {/* `M2-FE-509`: who is doing the work. A3 reads the supervisor and the
+          frozen terms off the engagement itself (1.49.0); A5 reads the quote
+          the engagement was frozen from. */}
       <AgreedWorkPanel
         engagement={view}
         nouns={nouns}
@@ -360,19 +358,6 @@ export function EngagementScreen({ engagementId }: EngagementScreenProps) {
         />
       ) : null}
 
-      {/* `M2-FE-515` — reachable from the booking as a whole and not only from
-          one day. A report that needed a live shift-day to attach to would be
-          one nobody could file the next morning, which is why the endpoint takes
-          the stage as optional and why this call site sends none. */}
-      {view.canReportCashDemand ? (
-        <CashDemandReport
-          engagementId={engagementId}
-          stageId={null}
-          amendmentHref="#amendments-heading"
-          className="mt-8 border-t border-line pt-6"
-        />
-      ) : null}
-
       {isProject ? (
         <section aria-label="Agreement versions" className="mt-6">
           <details className="group overflow-hidden rounded-card border border-line bg-surface shadow-card">
@@ -452,7 +437,7 @@ export function EngagementScreen({ engagementId }: EngagementScreenProps) {
               <Chevron />
             </summary>
             <div className="border-t border-line bg-canvas px-4 pb-4 sm:px-5">
-              <PaymentReceipt view={view} />
+              <Receipt engagementId={view.engagementId} variant="inline" />
               <div className="mt-4 grid gap-2 sm:grid-cols-2">
                 <Link href={requestLink} className={buttonStyles({ variant: "outline", className: "justify-between" })}>
                   Open request history
@@ -476,15 +461,7 @@ export function EngagementScreen({ engagementId }: EngagementScreenProps) {
               you.
             </p>
 
-            {/* A3 only: the day the crew is due is the one day this booking needs an
-                answer from the Customer. Silent on every other day. */}
-            {/* `CrewDayPanel` used to be mounted here as well. It now sits in the
-                confirmation summary's rail at the top, which is where somebody
-                opening this screen on the morning of a shift is looking — and two
-                mounts meant two copies of the same two buttons, either of which
-                could be pressed. */}
-
-            <PaymentReceipt view={view} />
+            <Receipt engagementId={view.engagementId} variant="inline" />
 
             <div className="mt-3 flex flex-wrap gap-2">
               <Link href={requestLink} className={buttonStyles({ variant: "outline" })}>
@@ -560,8 +537,11 @@ function ProjectHero({
           <div>
             <p className="text-sm font-semibold text-navy-100">Your project</p>
             <h1 className="mt-1 text-3xl font-extrabold leading-tight sm:text-4xl">
-              {focus?.label ?? "Project journey"}
+              {view.serviceName ?? focus?.label ?? "Project journey"}
             </h1>
+            {view.serviceName !== null && focus !== null ? (
+              <p className="mt-1 text-sm font-semibold text-navy-100">{focus.label}</p>
+            ) : null}
             {view.createdAt !== null ? (
               <p className="mt-2 text-sm font-medium text-navy-100">Agreed {view.createdAt}</p>
             ) : null}
@@ -871,9 +851,11 @@ function ModePanel({ view }: { view: EngagementView }) {
             number is published anywhere at 1.25.0, so this says when contact is
             permitted and never implies a number is available here. */}
         <p className="mt-2 text-sm text-text-secondary">
-          {view.contactReleasedAt !== null
-            ? `You can contact each other from ${view.contactReleasedAt}. We do not show their number on this screen — it reaches you the way we agreed with them.`
-            : "Contact details are not released yet."}
+          {view.partnerContact !== null
+            ? `${view.partnerContact.name}'s number is on the card below.`
+            : view.contactReleasedAt !== null
+              ? `You can contact each other from ${view.contactReleasedAt}.`
+              : "Contact details are not released yet."}
         </p>
       </section>
     );

@@ -78,6 +78,7 @@ TRANSACTIONAL_PURPOSES = frozenset(
         "m2.crew.vendor_no_show",
         "m2.rate_card.fell_back",
         "m2.visit_plan.charged",
+        "m2.visit.booked",
         # No longer written: a selection opens the engagement directly and there is no
         # reconfirmation to summon anybody to. Kept because intents carrying this purpose
         # are still in the database, and the rule that they could never be muted has to keep
@@ -117,6 +118,12 @@ TRANSACTIONAL_PURPOSES = frozenset(
         "m2.engagement.redispatched",
         "m2.engagement.capability_suspended",
         "m2.safety.incident_reported",
+        # The lead's side of the A3 day. An offer lapses in minutes, and the rest is money.
+        "m2.crew_offer.invited",
+        "m2.booking_fee.forfeited",
+        "m2.shift.attendance_confirmed",
+        "m2.shift.attendance_disputed",
+        "m2.vendor.cash_demand_reported",
     }
 )
 

@@ -406,6 +406,9 @@ export function toOnsiteRequest(input: {
     exclusions: draft.exclusions.map((line) => line.trim()).filter((line) => line !== ""),
     warranty_terms: draft.warrantyTerms.trim(),
     valid_until: draft.validUntil,
+    // Required on the wire since 1.48.0. The preset composer prices materials
+    // itself rather than handing the customer a list, so no tier applies.
+    material_brand_tier: "",
   };
 }
 

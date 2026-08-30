@@ -147,6 +147,16 @@ describe("where a notice leads", () => {
     ).toBe("/work/enquiries/invite-2");
   });
 
+  it("opens a crew offer notice on the offer's own screen", () => {
+    // The id is the invitation id — the same key `work-item.ts`'s
+    // `CREW_OFFER_HREF` composes — and the offer is on a two-minute clock, so
+    // the notice has to land on the accept button, not on the stack.
+    expect(targetHref({ kind: "CREW_OFFER", id: "inv-9" })).toBe("/work/offers/inv-9");
+    expect(targetHref({ kind: "CREW_OFFER", id: "inv-9" }, [WORKFORCE_WORKSPACE])).toBe(
+      "/work/offers/inv-9",
+    );
+  });
+
   it("leads nowhere for a kind this build has never heard of", () => {
     // `kind` is published as a bare string, so a future target type reaches this
     // bundle as an unknown word. Nothing is the honest rendering.

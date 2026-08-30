@@ -5,7 +5,7 @@ import { describeError, isLifecycleUnsupported } from "@vsolve/query";
 import { BROWSE_HREF, requestHref } from "@/lib/routes";
 import { ErrorState, useIsWideScreen } from "@vsolve/ui";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useAddresses } from "@/features/addresses/queries";
 import {
@@ -42,7 +42,9 @@ import {
   type RequirementService,
   type RequirementVariant,
 } from "../adapters";
-import { SCREENS, screenIndex } from "../model/screens";
+import { activeScreens, firstScreen, stepNumber } from "../model/active-screens";
+import { eventBriefShape } from "../model/event-brief";
+import { screenIndex } from "../model/screens";
 import { clearPersistedRequirement, RequirementProvider, useRequirement } from "./requirement-context";
 import {
   useCreateRequirement,
@@ -69,6 +71,14 @@ import { WhereWhenScreen } from "./where-when-screen";
  * Step 1 of 3 — What needs doing?
  * Step 2 of 3 — Where and when?
  * Step 3 of 3 — Choose visits & send
+ *
+ * ## Visit-first briefs skip step 1
+ *
+ * A variant that publishes no questions has nothing to show on "What needs
+ * doing", so the flow opens on "Where and when" and counts "1 of 2" — see
+ * `model/active-screens.ts`. The server draft is still created on the first
+ * Continue (with `{}` answers); only the trigger moved from leaving step 1 to
+ * leaving step 2.
  */
 
 export interface RequirementFlowProps {
@@ -81,8 +91,25 @@ export interface RequirementFlowProps {
 }
 
 export function RequirementFlow(props: RequirementFlowProps) {
+  // The step-1 guard needs the catalogue's required codes before the server
+  // has given a verdict; the provider cannot read the variant, so they are
+  // derived here from the same question set the screens render.
+  const questions = useMemo(
+    () => selectionOnlyQuestionSet(props.service.slug, toQuestionSet(props.variant)).questions,
+    [props.service.slug, props.variant],
+  );
+  const requiredAnswerCodes = useMemo(
+    () => questions.filter((question) => question.required).map((question) => question.code),
+    [questions],
+  );
+  const screens = useMemo(() => activeScreens(questions), [questions]);
+
   return (
-    <RequirementProvider categorySlug={props.service.slug}>
+    <RequirementProvider
+      categorySlug={props.service.slug}
+      requiredAnswerCodes={requiredAnswerCodes}
+      screens={screens}
+    >
       <FlowBody {...props} />
     </RequirementProvider>
   );
@@ -232,8 +259,30 @@ function FlowBody({
     state.requirementId ?? existingDraftId(requestsQuery.data ?? [], service.slug);
 
   const questionSet = selectionOnlyQuestionSet(service.slug, toQuestionSet(variant));
+  const briefShape = eventBriefShape(questionSet.questions);
+  const requiredAnswerCodes = questionSet.questions
+    .filter((question) => question.required)
+    .map((question) => question.code);
+  // The screens this brief walks. Same derivation the provider was given, so
+  // the reducer, the step meter and the desktop rail all agree on the count.
+  const screens = activeScreens(questionSet.questions);
+  // Visit-first is the A5 shape: a pro visits, measures and quotes, so the
+  // date is the visit date and there is no flexibility band or deadline to
+  // ask. Read off the variant rather than the verdict because the verdict
+  // does not exist until the first save — which, on a question-free brief,
+  // is the Continue *after* this screen. Events keep their own date wording.
+  const visitFirst =
+    variant.fulfilment_archetype === "A5_CUSTOM_PROJECT" && !briefShape.isEvent;
 
-  const serviceQuestion = questionSet.questions.find((question) => question.kind === "choice");
+  // `?selected_service=` is the service-picker brief's one choice — a brief
+  // whose whole step 1 is a single choice question (the fit-out picker). On a
+  // brief with several questions the first choice is merely the first
+  // question, and syncing it to the URL would re-apply it on reload and skip
+  // the rest of step 1.
+  const serviceQuestion =
+    questionSet.questions.length === 1
+      ? questionSet.questions.find((question) => question.kind === "choice")
+      : undefined;
   const chosenService =
     serviceQuestion === undefined
       ? null
@@ -329,7 +378,7 @@ function FlowBody({
 
     if (initialSelection === null || initialSelection === undefined) return;
 
-    const question = questionSet.questions.find((candidate) => candidate.kind === "choice");
+    const question = serviceQuestion;
     if (question === undefined) return;
     if (!(question.options ?? []).some((option) => option.value === initialSelection)) return;
 
@@ -348,7 +397,7 @@ function FlowBody({
     hasRestoredIntent,
     initialSelection,
     isWriting,
-    questionSet.questions,
+    serviceQuestion,
     state.requirementId,
   ]);
 
@@ -473,13 +522,32 @@ function FlowBody({
   }
 
   const addressLine = addressSummaryLine(addresses.data ?? [], state.addressId);
+  const setupAccessQuestion = briefShape.setupAccessQuestion;
+  const setupAccessControl =
+    setupAccessQuestion === null
+      ? null
+      : {
+          question: setupAccessQuestion,
+          value:
+            typeof state.answers[setupAccessQuestion.code] === "string"
+              ? (state.answers[setupAccessQuestion.code] as string)
+              : null,
+          onChange: (value: string) =>
+            dispatch({ type: "ANSWER", questionCode: setupAccessQuestion.code, value }),
+        };
   const chosenPlanPrice =
     planTiers.find((tier) => tier.planSize === chosenPlanSize)?.priceLabel ?? null;
   const needsVisitPlanSelection = isA5 && chosenPlanSize === null;
   const needsVisitSlotSelection =
     isA5 && chosenPlanSize !== null && selectedVisitSlotTokens === null;
 
-  const stateSectionBlocks = briefSectionBlocks(state, today, false);
+  const stateSectionBlocks = briefSectionBlocks(
+    state,
+    today,
+    false,
+    requiredAnswerCodes,
+    screens,
+  );
   const sectionBlocks = {
     ...stateSectionBlocks,
     visits_send:
@@ -641,18 +709,14 @@ function FlowBody({
   }
 
   if (!isWide) {
-    const stepFor: Record<Screen, number> = {
-      what: 1,
-      where_when: 2,
-      visits_send: 3,
-    };
     const isFinal = state.screen === "visits_send";
 
     return (
       <WizardShell
         title={service.name}
-        step={stepFor[state.screen]}
-        onBack={() => (state.screen === "what" ? router.back() : back())}
+        step={stepNumber(screens, state.screen)}
+        total={screens.length}
+        onBack={() => (state.screen === firstScreen(screens) ? router.back() : back())}
         onContinue={() => {
           if (!isFinal) {
             void handleAdvance();
@@ -681,7 +745,7 @@ function FlowBody({
 
         {state.screen === "what" ? (
           <MobileWhatScreen
-            questions={questionSet.questions}
+            questions={briefShape.whatQuestions}
             answers={state.answers}
             onAnswer={(code, value) => dispatch({ type: "ANSWER", questionCode: code, value })}
           />
@@ -704,6 +768,9 @@ function FlowBody({
             onFlexibilityDays={(days) => dispatch({ type: "SET_FLEXIBILITY_DAYS", days })}
             serviceBy={state.serviceBy}
             onServiceBy={(isoDate) => dispatch({ type: "SET_SERVICE_BY", serviceBy: isoDate })}
+            eventMode={briefShape.isEvent}
+            visitFirst={visitFirst}
+            setupAccess={setupAccessControl}
           />
         ) : (
           <VisitsSendScreen
@@ -714,6 +781,8 @@ function FlowBody({
             requestedStart={state.requestedStart}
             flexibilityDays={state.flexibilityDays}
             serviceBy={state.serviceBy}
+            eventMode={briefShape.isEvent}
+            visitFirst={visitFirst}
             visitPlanChooser={
               isA5 && state.requirementId !== null ? (
                 <MobileVisitPlanChooser
@@ -739,9 +808,9 @@ function FlowBody({
       notice={notices}
       heading={`Tell us about ${service.name.toLowerCase()}`}
       intro="Nobody prices work like this without seeing it, so this is a brief — not a checkout."
-      activeIndex={screenIndex(state.screen)}
+      activeIndex={screenIndex(state.screen, screens)}
       onSelectSection={(index) => {
-        const screen = SCREENS[index];
+        const screen = screens[index];
         if (screen !== undefined) open(screen);
       }}
       onSend={handleSend}
@@ -749,19 +818,25 @@ function FlowBody({
       isSaving={isWriting || sendActionPending}
       blocked={briefBlocked}
       sections={[
-        {
-          title: "What needs doing",
-          blocked: sectionBlocks.what,
-          children: (
-            <WhatScreen
-              categoryName={service.name}
-              questions={questionSet.questions}
-              isChoosing={isWriting}
-              unsupportedQuestions={questionSet.unsupported}
-              hideHeading
-            />
-          ),
-        },
+        // Only the sections this brief walks. A question-free variant renders
+        // two; the rail numbers whatever it is handed.
+        ...(screens.includes("what")
+          ? [
+              {
+                title: "What needs doing",
+                blocked: sectionBlocks.what,
+                children: (
+                  <WhatScreen
+                    categoryName={service.name}
+                    questions={briefShape.whatQuestions}
+                    isChoosing={isWriting}
+                    unsupportedQuestions={questionSet.unsupported}
+                    hideHeading
+                  />
+                ),
+              },
+            ]
+          : []),
         {
           title: "Where and when",
           blocked: sectionBlocks.where_when,
@@ -770,6 +845,9 @@ function FlowBody({
               addressPicker={<RequirementAddressPicker variantId={variant.id} />}
               minDate={today}
               hideHeading
+              eventMode={briefShape.isEvent}
+              visitFirst={visitFirst}
+              setupAccessQuestion={briefShape.setupAccessQuestion}
             />
           ),
         },
@@ -785,6 +863,8 @@ function FlowBody({
               requestedStart={state.requestedStart}
               flexibilityDays={state.flexibilityDays}
               serviceBy={state.serviceBy}
+              eventMode={briefShape.isEvent}
+              visitFirst={visitFirst}
               visitPlanChooser={
                 isA5 && state.requirementId !== null ? (
                   <VisitPlanChooser

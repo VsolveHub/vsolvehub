@@ -199,7 +199,7 @@ describe("where a notice leads", () => {
     await waitFor(() =>
       expect(screen.getByRole("link", { name: /open.*the job is open/i })).toHaveAttribute(
         "href",
-        "/workforce/shifts/eng-1",
+        "/work/jobs/eng-1",
       ),
     );
   });

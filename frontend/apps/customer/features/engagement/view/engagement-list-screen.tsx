@@ -282,7 +282,7 @@ function EngagementRow({
         <div className="min-w-0">
           <h2 className="font-semibold text-text">
             <Link href={engagementHref} className="hover:underline">
-              {row.activeStageLabel ?? nouns.engagementTitle}
+              {row.serviceName ?? row.activeStageLabel ?? nouns.engagementTitle}
             </Link>
           </h2>
           {row.activeStageOn !== null ? (

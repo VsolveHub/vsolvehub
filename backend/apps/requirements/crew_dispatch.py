@@ -303,8 +303,9 @@ def _invite_crew_wave(
         if len(chosen) >= size:
             break
 
-    invitations = [
-        VendorInvitation.objects.create(
+    invitations: list[VendorInvitation] = []
+    for partner in chosen:
+        invitation = VendorInvitation.objects.create(
             requirement=requirement,
             partner=partner,
             snapshot=snapshot,
@@ -313,8 +314,24 @@ def _invite_crew_wave(
             responds_by=responds_by,
             ranking_provenance=provenance,
         )
-        for partner in chosen
-    ]
+        # The lead's push. Before this the wave wrote rows and said nothing, so on a wall-clock
+        # deadline of minutes the only lead who could answer was one already looking at the app.
+        enqueue_outbox_event(
+            aggregate_type="vendor_invitation",
+            aggregate_id=invitation.id,
+            event_type="m2.crew_offer.invited",
+            idempotency_key=f"m2-crew-offer-invited:{invitation.id}",
+            payload={
+                "requirement_id": str(requirement.id),
+                "vendor_invitation_id": str(invitation.id),
+                "partner_id": str(partner.id),
+                "crew_size": booking.headcount,
+                "days": booking.days,
+                "amount_paise": booking.lead_receipt_paise,
+                "responds_by": responds_by.isoformat(),
+            },
+        )
+        invitations.append(invitation)
     booking.wave = wave
     booking.save(update_fields=("wave", "updated_at"))
     return invitations
@@ -492,6 +509,16 @@ def accept_crew_offer(*, invitation_id: uuid.UUID) -> RateCardBooking:
 
     policy = rate_cards.cascade_policy(requirement)
     matching.accept_invitation(invitation_id=invitation.id)
+    # First accept wins, so the rest of the wave is over. Left `INVITED`, those offers sat in the
+    # other leads' inboxes until the sweep caught them, and a lead who opened one was told a race
+    # had happened. Withdrawn here, under the same lock, they are gone the moment it is decided.
+    for sibling_id in (
+        VendorInvitation.objects.select_for_update()
+        .filter(requirement=requirement, status=VendorInvitation.Status.INVITED)
+        .exclude(pk=invitation.id)
+        .values_list("id", flat=True)
+    ):
+        matching.withdraw_invitation(invitation_id=sibling_id, reason_code="offer_taken")
 
     booking.status = RateCardBooking.Status.OFFER_HELD
     booking.accepted_invitation = invitation
@@ -1214,6 +1241,39 @@ def breached_decline_rates(*, window_hours: int, at: datetime | None = None) -> 
 # ---------------------------------------------------------------------------
 # Sweep selectors. `tasks.py` decides only *when* to look.
 # ---------------------------------------------------------------------------
+
+
+def reconcile_lapsed_offers(
+    *,
+    requirement_id: uuid.UUID | None = None,
+    partner: PartnerProfile | None = None,
+    limit: int = 20,
+) -> int:
+    """Expire lapsed crew offers now, and let their cascades move. Returns how many moved.
+
+    The sweep does this on the beat. This does the same thing on **read**: the Customer opening
+    their request, or a lead opening the offers inbox, is the moment the answer matters, and
+    waiting a beat tick for it meant a Customer staring at "finding your crew" while every offer
+    had already died. Scoped to one requirement or one Partner so a read never pays for the whole
+    city, and bounded so a read never pays for more than a handful. Idempotent: an offer already
+    expired is skipped by `expire_crew_offer_and_advance` itself.
+    """
+    lapsed = VendorInvitation.objects.filter(
+        status=VendorInvitation.Status.INVITED,
+        responds_by__isnull=False,
+        responds_by__lt=timezone.now(),
+        requirement__rate_card_booking__status=RateCardBooking.Status.MATCHING,
+    )
+    if requirement_id is not None:
+        lapsed = lapsed.filter(requirement_id=requirement_id)
+    if partner is not None:
+        lapsed = lapsed.filter(partner=partner)
+    moved = 0
+    for invitation_id in list(lapsed.values_list("id", flat=True)[:limit]):
+        with transaction.atomic():
+            expire_crew_offer_and_advance(invitation_id=invitation_id)
+        moved += 1
+    return moved
 
 
 def expired_crew_offer_ids(*, at: datetime | None = None) -> list[uuid.UUID]:

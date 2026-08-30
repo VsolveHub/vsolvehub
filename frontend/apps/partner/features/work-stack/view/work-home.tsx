@@ -2,7 +2,7 @@
 
 import { ApiRequestError } from "@vsolve/api-client";
 import { useServerCountdown, type Countdown } from "@vsolve/query";
-import { ErrorState, Spinner, cn, formatMoney } from "@vsolve/ui";
+import { Badge, ErrorState, Spinner, cn, formatMoney } from "@vsolve/ui";
 import Link from "next/link";
 import { useSyncExternalStore, type ReactNode } from "react";
 
@@ -578,23 +578,21 @@ function ScheduleFacts({ item }: { readonly item: WorkItem }) {
  * many words, and names `href` as what separates them. It does: an A3 offer
  * opens its own detail screen, an A1 offer opens the inbox that answers it.
  *
- * ## The lapse guard, and why it lives here rather than in the adapter
+ * ## A lapsed offer is not drawn at all
  *
- * `toWorkItems` filters A3 offers through `isOfferLive` against the server's
- * own `server_now`, but deliberately applies no equivalent clock to A1 offers —
- * Celery owns those deadlines and `status` is the truth. The consequence is
- * that an A1 offer whose deadline has passed but whose next five-second poll
- * has not landed sorts to the very top of the stack, since the comparator reads
- * a dead deadline as the most urgent thing a Partner owns.
- *
- * So the card checks. `useServerCountdown` measures against the calibrated
- * server clock rather than the device's, and a lapsed one drops the heat
- * gradient and the countdown instead of shouting. It is not removed: the server
- * decides what is expired, this only decides what to shout about.
+ * `toWorkItems` already keeps a dead offer out of the stack it hands this
+ * screen — the backend fix the Owner asked for, plus `isOfferLive`'s own
+ * server-clock guard for A3. What is left to close here is the gap *inside one
+ * poll*: an offer that was live when the list last landed and expires while a
+ * Partner is still looking at the card. `useServerCountdown` — the calibrated
+ * server clock, never the device's — is what notices that moment, and the
+ * card removes itself rather than repainting as a "lapsed" card nobody asked
+ * for any more: the query's own poll (fifteen seconds for A3, five for A1)
+ * lands shortly after and redraws the stack without it.
  */
 function LiveOfferCard({ item }: { item: WorkItem }) {
   const countdown = useServerCountdown(item.respondsBy, 1000);
-  const lapsed = countdown?.isExpired ?? false;
+  if (countdown?.isExpired) return null;
 
   return (
     <Link
@@ -602,13 +600,11 @@ function LiveOfferCard({ item }: { item: WorkItem }) {
       aria-label={cardLabel(item)}
       className={cn(
         CARD,
-        lapsed
-          ? "border border-line bg-surface"
-          : "bg-[linear-gradient(135deg,var(--color-signal-400)_0%,var(--color-action)_55%,var(--color-action-active)_100%)] shadow-[0_4px_12px_color-mix(in_oklab,var(--color-action-active)_32%,transparent)]",
+        "bg-[linear-gradient(135deg,var(--color-signal-400)_0%,var(--color-action)_55%,var(--color-action-active)_100%)] shadow-[0_4px_12px_color-mix(in_oklab,var(--color-action-active)_32%,transparent)]",
       )}
     >
       <span className="flex items-center gap-2.75">
-        <span className={cn(TILE, lapsed ? "bg-surface-sunken" : "bg-surface")}>
+        <span className={cn(TILE, "bg-surface")}>
           <Pictogram name="now" size="lg" className="text-text" />
         </span>
 
@@ -626,7 +622,7 @@ function LiveOfferCard({ item }: { item: WorkItem }) {
           </span>
         </span>
 
-        {countdown && !lapsed ? <CountdownDial countdown={countdown} /> : null}
+        {countdown ? <CountdownDial countdown={countdown} /> : null}
       </span>
 
       <span className="text-text">
@@ -642,6 +638,23 @@ function LiveOfferCard({ item }: { item: WorkItem }) {
 }
 
 /**
+ * The tone every card's status chip renders in, keyed off the same urgency
+ * that already picks the card's own colour — so the badge reinforces the
+ * card rather than arguing with it. `not_chosen` and `closed` share `neutral`:
+ * both are over, and neither is a warning or a failure on the vendor's part.
+ */
+const STATE_TONE: Record<WorkItem["urgency"], "warning" | "action" | "info" | "neutral" | "success"> =
+  {
+    live: "warning",
+    needs_price: "action",
+    doing: "info",
+    answered: "neutral",
+    settled: "success",
+    not_chosen: "neutral",
+    closed: "neutral",
+  };
+
+/**
  * What the job is, which is the first thing a card has to say.
  *
  * `WorkItem.accessibleName` was built as an `sr-only` string on the rule that
@@ -652,12 +665,12 @@ function LiveOfferCard({ item }: { item: WorkItem }) {
  */
 function CardTitle({ item }: { item: WorkItem }) {
   return (
-    <span className="flex min-w-0 flex-col gap-0.5">
+    <span className="flex min-w-0 flex-col gap-1">
       <span className="truncate text-base font-semibold leading-snug">{item.title}</span>
       {item.stateLabel === null ? null : (
-        <span className="truncate text-[0.6875rem] font-bold uppercase tracking-[0.04em] opacity-70">
+        <Badge tone={STATE_TONE[item.urgency]} className="w-fit truncate">
           {item.stateLabel}
-        </span>
+        </Badge>
       )}
     </span>
   );
@@ -881,9 +894,7 @@ function AnsweredCard({ item }: { item: WorkItem }) {
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-px text-info-text">
         <span className="truncate text-[0.9375rem] font-semibold leading-snug">{item.title}</span>
-        <span className="truncate text-xs font-semibold opacity-75">
-          Waiting for the customer to decide
-        </span>
+        <span className="truncate text-xs font-semibold opacity-75">{item.stateLabel}</span>
       </span>
       <Pictogram name="go" size="sm" className="shrink-0 text-info-text" />
     </Link>
@@ -907,9 +918,7 @@ function OutcomeCard({ item }: { item: WorkItem }) {
         <span className="truncate text-[0.9375rem] font-semibold leading-snug text-text">
           {item.title}
         </span>
-        <span className="text-xs font-semibold capitalize text-text-muted">
-          {item.stateLabel}
-        </span>
+        <span className="text-xs font-semibold text-text-muted">{item.stateLabel}</span>
       </span>
       <Pictogram name="go" size="sm" className="shrink-0 text-text-muted" />
     </Link>

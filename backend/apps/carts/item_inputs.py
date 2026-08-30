@@ -64,6 +64,14 @@ def validate_scope(*, schema: dict[str, object], scope: dict[str, object]) -> No
             minimum = definition.get("minimum")
             if isinstance(minimum, int) and value < minimum:
                 raise ValueError(f"Scope question '{code}' is below its minimum value.")
+        elif definition.get("kind") == "MULTI_SELECT":
+            # A list of option codes. The same leniency as SELECT applies to the
+            # codes themselves; the shape is what is enforced, because a scalar
+            # here silently reads as one answer where several were offered.
+            if not isinstance(value, list) or not all(isinstance(entry, str) for entry in value):
+                raise ValueError(f"Scope question '{code}' requires a list of option codes.")
+            if definition.get("required") and len(value) == 0:
+                raise ValueError(f"Scope question '{code}' is required.")
         elif definition.get("kind") not in {"TEXT", "BOOLEAN", "SELECT"}:
             raise ValueError("The selected task has an unsupported scope configuration.")
 

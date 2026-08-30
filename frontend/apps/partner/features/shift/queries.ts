@@ -128,30 +128,6 @@ export function useShiftDay(engagementId: string, stageId: string, enabled = tru
  * list today.
  */
 
-/**
- * Every safety report on this engagement, readable by both parties.
- *
- * Empty is the ordinary answer and the server returns `200` for it, so an empty
- * list is rendered as "nothing reported" rather than as a failure.
- */
-export function useSafetyIncidents(engagementId: string, enabled = true) {
-  return useQuery({
-    queryKey: m2QueryKeys.engagements.safetyIncidents(engagementId),
-    queryFn: () =>
-      request(() =>
-        getApiClient().GET("/api/v1/engagements/{engagement_id}/safety-incidents/", {
-          params: { path: { engagement_id: engagementId } },
-        }),
-      ),
-    enabled: enabled && engagementId !== "",
-    ...M2_FRESHNESS.engagementDetail,
-    retry: (failureCount, error) =>
-      error instanceof ApiRequestError && [401, 403, 404].includes(error.status)
-        ? false
-        : failureCount < 2,
-  });
-}
-
 /* --------------------------------------------------------------------------
    Recovery
    -------------------------------------------------------------------------- */
@@ -250,6 +226,95 @@ export function useAssignShiftCrew(scope: ShiftCommandScope) {
       await invalidateForM2Command(queryClient, "assign_crew", scope);
     },
     onError: reread,
+    retry: false,
+  });
+}
+
+/** One of the days "Copy to all N days" walks. */
+export interface CrewCopyDay {
+  readonly stageId: string;
+  readonly label: string;
+}
+
+export interface CopyCrewInput {
+  readonly days: readonly CrewCopyDay[];
+  readonly membershipIds: readonly string[];
+  readonly reasonCode?: string;
+}
+
+/**
+ * What "Copy to all N days" reports when a day refuses.
+ *
+ * The days before it are already on the record — the walk is sequential and
+ * stops at the first refusal — so the screen names the day that failed and the
+ * ones that went through rather than one anonymous banner.
+ */
+export class CrewCopyFailure extends Error {
+  constructor(
+    readonly failedDay: CrewCopyDay,
+    readonly completed: readonly CrewCopyDay[],
+    override readonly cause: unknown,
+  ) {
+    super(`Crew copy failed on ${failedDay.label}`);
+    this.name = "CrewCopyFailure";
+  }
+}
+
+export function isCrewCopyFailure(error: unknown): error is CrewCopyFailure {
+  return error instanceof CrewCopyFailure;
+}
+
+/**
+ * The same crew on every remaining day — one `assign_crew` per day, in order,
+ * stopping at the first refusal.
+ *
+ * Sequential on purpose: `m2_crew_conflict` is a per-person, per-date rule and
+ * a day that refuses is the day to look at, not a reason to keep sending.
+ * Each day's key is the same one `useAssignShiftCrew` would use for it, so a
+ * retry of the walk replays the days that went through instead of re-sending.
+ */
+export function useAssignCrewToDays(engagementId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: CopyCrewInput) => {
+      const completed: CrewCopyDay[] = [];
+      for (const day of input.days) {
+        const assign: AssignCrewInput = {
+          membershipIds: input.membershipIds,
+          ...(input.reasonCode === undefined ? {} : { reasonCode: input.reasonCode }),
+        };
+        const operation = assignOperationId(day.stageId, assign);
+        try {
+          await request(() =>
+            getApiClient().POST("/api/v1/engagement-stages/{stage_id}/crew/", {
+              params: {
+                path: { stage_id: day.stageId },
+                header: { "Idempotency-Key": getStableIdempotencyKey(operation) },
+              },
+              body: {
+                membership_ids: [...input.membershipIds],
+                reason_code: input.reasonCode ?? "",
+              },
+            }),
+          );
+        } catch (cause) {
+          throw new CrewCopyFailure(day, completed, cause);
+        }
+        clearIdempotencyKey(operation);
+        completed.push(day);
+        await invalidateForM2Command(queryClient, "assign_crew", {
+          engagementId,
+          stageId: day.stageId,
+        });
+      }
+      return completed;
+    },
+    onError: () => {
+      void queryClient.invalidateQueries({
+        queryKey: m2QueryKeys.engagements.detail(engagementId),
+      });
+    },
     retry: false,
   });
 }

@@ -317,6 +317,11 @@ class M2VariantConfiguration(models.Model):
         on_delete=models.PROTECT,
         related_name="m2_variant_configurations",
     )
+    #: The **trade** this variant's estimates are priced from — the `Skill.code` whose work-item
+    #: catalogue (`requirements.WorkItem`) the composer opens: `electrician` for a rewiring, a
+    #: consultation and a day-hire alike. Distinct from `required_skill_code`, which is the
+    #: dispatch capability and is per service. Blank falls back to `required_skill_code`.
+    pricing_skill_code = models.SlugField(max_length=100, blank=True)
     #: Hours from submission to the first usable quote, and to the full set. Owner decision 2.
     first_quote_sla_hours = models.PositiveSmallIntegerField(null=True, blank=True)
     quote_delivery_sla_hours = models.PositiveSmallIntegerField(null=True, blank=True)

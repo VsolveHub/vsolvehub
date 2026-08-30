@@ -6,6 +6,8 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { AccessRefusal } from "@/features/access/view/access-refusal";
+import { useRequirement } from "@/features/requirement/queries";
+import { titleForSlug } from "@/features/requirement/view/my-requests-screen";
 import { estimateConfirmHref, estimateQuestionsHref, requestQuotesHref } from "@/lib/routes";
 
 import { firstStageOf, scopeGaps, type QuoteCardView } from "../adapters";
@@ -19,6 +21,7 @@ import {
 import { timelineLabel, validityLabel } from "./quote-card";
 import { RejectQuoteDialog } from "./reject-quote-dialog";
 import { RevisionRequestDialog } from "./revision-request-dialog";
+import { ShoppingListCard } from "./shopping-list-card";
 import { VendorMark, VendorTrustLine } from "./vendor-trust-line";
 
 /**
@@ -34,9 +37,38 @@ import { VendorMark, VendorTrustLine } from "./vendor-trust-line";
  * narrative, the trust row, the pay-to-start figure up front, the thread with
  * the professional, and a way to ask for a change without turning them down.
  */
-export function EstimateDetailScreen({ requirementId, proposalId }: { requirementId: string; proposalId: string }) {
+export function EstimateDetailScreen({
+  requirementId,
+  proposalId,
+  embedded = false,
+  hideShoppingList = false,
+}: {
+  requirementId: string;
+  proposalId: string;
+  /**
+   * Rendered inside the estimates page rather than on its own route — the
+   * case of exactly one estimate, where a card that says "read the full
+   * estimate" is a tap between the Customer and the only thing there is to
+   * read. Drops the page frame and the "All estimates" link; keeps everything
+   * else, including Choose.
+   */
+  embedded?: boolean;
+  /**
+   * The estimates page renders the shopping-list card in its own right-hand
+   * column when there is one estimate; this keeps the document from showing
+   * it twice.
+   */
+  hideShoppingList?: boolean;
+}) {
   const access = useEntitledQuoteList(requirementId);
   const selectionQuery = useSelection(requirementId);
+  // Only for naming the shopping list when it is shared — "What to buy —
+  // Bathroom renovation". The estimate itself never waits on this read.
+  const requirementQuery = useRequirement(requirementId);
+  const serviceName =
+    requirementQuery.data === undefined
+      ? "this job"
+      : titleForSlug(requirementQuery.data.category_slug);
   const reject = useRejectQuote();
   const revalidate = useRevalidateQuote();
   const revision = useRequestRevision();
@@ -87,11 +119,22 @@ export function EstimateDetailScreen({ requirementId, proposalId }: { requiremen
   const chooseable = canChoose && card.isSelectable && !card.isExpired;
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-4 pb-28 pt-5 sm:px-6">
+    <div
+      className={cn(
+        "flex w-full flex-col gap-5 pb-28",
+        embedded ? "" : "mx-auto max-w-3xl px-4 pt-5 sm:px-6",
+      )}
+    >
       <div className="flex items-center justify-between gap-3">
-        <Link href={requestQuotesHref(requirementId)} className="text-sm font-semibold text-text-link hover:underline">
-          ← All estimates
-        </Link>
+        {embedded ? (
+          <p className="text-[0.6875rem] font-extrabold uppercase tracking-[0.14em] text-text-muted">
+            Your estimate
+          </p>
+        ) : (
+          <Link href={requestQuotesHref(requirementId)} className="text-sm font-semibold text-text-link hover:underline">
+            ← All estimates
+          </Link>
+        )}
         <ShareButton card={card} />
       </div>
 
@@ -177,11 +220,25 @@ export function EstimateDetailScreen({ requirementId, proposalId }: { requiremen
               <PriceLine key={`c-${index}`} title={charge.label} note="Named charge" amount={charge.amountLabel} />
             ))}
             {card.materials.map((material, index) => (
-              <PriceLine key={`m-${index}`} title={material.title} note={material.quantityLabel === null ? "Material, paid as an advance" : `${material.quantityLabel} · material, paid as an advance`} amount={material.amountLabel ?? "—"} />
+              // "Materials the pro supplies", said in full: the shopping list
+              // below is materials the Customer buys, and one word for both
+              // is how somebody pays for a fitting twice.
+              <PriceLine key={`m-${index}`} title={material.title} note={material.quantityLabel === null ? "Materials the pro supplies · paid as an advance" : `${material.quantityLabel} · materials the pro supplies · paid as an advance`} amount={material.amountLabel ?? "—"} />
             ))}
           </ul>
           <p className="mt-2 text-xs text-text-muted">Every line is already inside the total above.</p>
         </Section>
+      ) : null}
+
+      {!hideShoppingList ? (
+        <ShoppingListCard
+          requirementId={requirementId}
+          proposalId={proposalId}
+          rows={card.materialList}
+          brandTierLabel={card.brandTierLabel}
+          vendorName={card.vendorName}
+          serviceName={serviceName}
+        />
       ) : null}
 
       {card.rateLabel !== null ? (

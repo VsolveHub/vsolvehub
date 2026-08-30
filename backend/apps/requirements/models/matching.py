@@ -295,6 +295,10 @@ class Proposal(models.Model):
     minimum_days = models.PositiveSmallIntegerField(null=True, blank=True)
     worker_count = models.PositiveSmallIntegerField(null=True, blank=True)
 
+    class MaterialBrandTier(models.TextChoices):
+        STANDARD = "STANDARD", "Standard"
+        PREMIUM = "PREMIUM", "Premium"
+
     estimate_type = models.CharField(
         max_length=16,
         choices=EstimateType.choices,
@@ -367,6 +371,14 @@ class Proposal(models.Model):
     #: What the vendor will actually do, in their own words. The lines say what each rupee buys;
     #: this says what the job is. Blank on every quote written before it existed.
     scope_summary = models.TextField(blank=True)
+    #: What the Customer should buy before work starts — **never money**. Materials are the
+    #: Customer's to purchase on every project; this is the list the vendor's tapped items
+    #: produced (`price_book.shopping_list_for_lines`) and then corrected after the visit. Each
+    #: entry: `{title, spec, unit, quantity, note}`. Distinct from `material_lines`, which are
+    #: priced advances and reconcile into `total_paise`.
+    material_list = models.JSONField(default=list, blank=True, encoder=DjangoJSONEncoder)
+    #: A label for the shopping list, so "1.5 sq mm wire" reads as one brand tier or the other.
+    material_brand_tier = models.CharField(max_length=16, blank=True)
     valid_until = models.DateTimeField(null=True, blank=True)
 
     #: Set when Operations captured this by phone. The vendor still confirms before the Customer

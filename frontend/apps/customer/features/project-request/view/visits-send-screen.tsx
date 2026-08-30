@@ -9,10 +9,10 @@ import type { RequirementQuestionView } from "@/features/requirement/adapters";
  * Step 3 of 3 — Choose visits & send.
  *
  * Contains:
- * - Compact read-only service facts
+ * - Compact read-only service facts, as the catalogue's labels (never codes)
  * - Compact read-only site/date facts
  * - 1/2/3 estimate selector
- * - Isolated slot container ready for generated backend slot contract
+ * - One Customer-owned time per requested estimate
  * - Direct submission path
  */
 
@@ -26,6 +26,10 @@ export interface VisitsSendScreenProps {
   serviceBy: string | null;
   visitPlanChooser?: ReactNode;
   visitSlotChooser?: ReactNode;
+  /** Event-shaped brief: the date is the event date and has no flexibility. */
+  eventMode?: boolean;
+  /** Visit-first (A5) brief: the date is the visit date, never "± n days". */
+  visitFirst?: boolean;
 }
 
 const DAY_FORMATTER = new Intl.DateTimeFormat("en-IN", {
@@ -41,6 +45,23 @@ function formatDay(isoDate: string | null): string | null {
   return DAY_FORMATTER.format(new Date(year, month - 1, day));
 }
 
+/** An answer as the words the Customer tapped, or null when it says nothing. */
+export function answerLabel(question: RequirementQuestionView, value: unknown): string | null {
+  if (value === undefined || value === null || value === "") return null;
+  if (question.kind === "boolean") return value === true ? "Yes" : "No";
+  const options = question.options ?? [];
+  if (question.kind === "multi") {
+    if (!Array.isArray(value) || value.length === 0) return null;
+    return value
+      .map((entry) => options.find((option) => option.value === entry)?.label ?? String(entry))
+      .join(" + ");
+  }
+  if (question.kind === "choice") {
+    return options.find((option) => option.value === value)?.label ?? String(value);
+  }
+  return String(value);
+}
+
 export function VisitsSendScreen({
   serviceName,
   questions,
@@ -51,32 +72,34 @@ export function VisitsSendScreen({
   serviceBy,
   visitPlanChooser,
   visitSlotChooser,
+  eventMode = false,
+  visitFirst = false,
 }: VisitsSendScreenProps) {
   const answeredFacts: { label: string; value: string }[] = [];
-  for (const q of questions) {
-    const val = answers[q.code];
-    if (val !== undefined && val !== null && val !== "") {
-      let displayValue = String(val);
-      if (q.kind === "boolean") {
-        displayValue = val === true ? "Yes" : "No";
-      } else if (q.kind === "choice" && q.options) {
-        const matched = q.options.find((opt) => opt.value === val);
-        if (matched) displayValue = matched.label;
-      }
-      answeredFacts.push({ label: q.label, value: displayValue });
-    }
+  for (const question of questions) {
+    const label = answerLabel(question, answers[question.code]);
+    if (label !== null) answeredFacts.push({ label: question.label, value: label });
   }
 
   const formattedStart = formatDay(requestedStart);
   const formattedDeadline = formatDay(serviceBy);
+  const singleDate = eventMode || visitFirst;
 
   return (
     <div className="flex flex-col gap-4">
       <ScreenHeading title="Choose visits & send" />
 
-      {/* Service Facts Recap */}
+      {/* Service Facts Recap. With no answers — a visit-first brief that asked
+          nothing — the card is the service name alone: no empty list, no
+          divider under a heading with nothing beneath it. */}
       <section className="rounded-card border border-line bg-surface p-4">
-        <div className="flex items-center gap-2 border-b border-line pb-2 mb-3">
+        <div
+          className={
+            answeredFacts.length > 0
+              ? "flex items-center gap-2 border-b border-line pb-2 mb-3"
+              : "flex items-center gap-2"
+          }
+        >
           <CheckCircle2 className="h-4 w-4 text-action-secondary shrink-0" aria-hidden />
           <h3 className="text-sm font-bold text-text">{serviceName}</h3>
         </div>
@@ -89,19 +112,21 @@ export function VisitsSendScreen({
               </div>
             ))}
           </dl>
-        ) : (
-          <p className="text-xs text-text-muted">Standard requirement details</p>
-        )}
+        ) : null}
       </section>
 
       {/* Site & Date Facts Recap */}
       <section className="rounded-card border border-line bg-surface p-4">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-text-muted mb-2">Location & Schedule</h3>
+        <h3 className="text-xs font-bold uppercase tracking-wider text-text-muted mb-2">
+          {eventMode ? "Venue & date" : "Location & Schedule"}
+        </h3>
         <div className="flex flex-col gap-2.5 text-sm">
           <div className="flex items-start gap-2.5">
             <MapPin className="h-4 w-4 text-text-muted shrink-0 mt-0.5" aria-hidden />
             <div className="min-w-0 flex-1">
-              <span className="block text-xs font-medium text-text-muted">Site address</span>
+              <span className="block text-xs font-medium text-text-muted">
+                {eventMode ? "Venue" : "Site address"}
+              </span>
               <span className="block font-semibold text-text truncate">
                 {addressLine ?? "No address selected"}
               </span>
@@ -111,10 +136,14 @@ export function VisitsSendScreen({
           <div className="flex items-start gap-2.5">
             <Calendar className="h-4 w-4 text-text-muted shrink-0 mt-0.5" aria-hidden />
             <div className="min-w-0 flex-1">
-              <span className="block text-xs font-medium text-text-muted">Start date</span>
+              <span className="block text-xs font-medium text-text-muted">
+                {eventMode ? "Event date" : visitFirst ? "Pro comes from" : "Start date"}
+              </span>
               <span className="block font-semibold text-text">
-                {formattedStart ?? "Not specified"}{" "}
-                {flexibilityDays > 0 ? `(± ${flexibilityDays} days)` : "(Exact date)"}
+                {formattedStart ?? "Not specified"}
+                {singleDate
+                  ? null
+                  : ` ${flexibilityDays > 0 ? `(± ${flexibilityDays} days)` : "(Exact date)"}`}
               </span>
             </div>
           </div>

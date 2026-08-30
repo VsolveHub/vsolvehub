@@ -41,7 +41,7 @@ import {
   useRequirement as useRequirementRecord,
   useSaveRequirement,
 } from "@/features/requirement/queries";
-import { toRateDisclosureView, toRateUnavailableView } from "../adapters";
+import { toRateDisclosureView, toRateTermsView, toRateUnavailableView } from "../adapters";
 import {
   clearCrewBookingIntent,
   readCrewBookingIntent,
@@ -94,7 +94,7 @@ import { JobFormError, JobFormScreen } from "./mobile/job-form-screen";
 import { RateScreen } from "./mobile/rate-screen";
 import { OccasionFields, OccasionScreen, occasionAnswered } from "./occasion-screen";
 import { PresetQuestions, requiredAnswersPresent } from "./preset-questions";
-import { RateRail } from "./rate-rail";
+import { RateTermsLink } from "./rate-terms-sheet";
 import { WorkPickerScreen, WorkTypeIcon } from "./work-picker-screen";
 
 /**
@@ -689,7 +689,6 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
     return (
       <RateScreen
         rate={rate}
-        city={address?.city ?? null}
         isStale={previewQuery.isFetching}
         onBack={() => setBookingStep("details")}
         onBook={() => void handleBook()}
@@ -700,7 +699,6 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
             <EventSummaryCard lines={eventSummary} onChange={() => setBookingStep("details")} />
           ) : undefined
         }
-        crewLabel={isEvent && mixLabel !== null ? "Whole event at this rate" : undefined}
         unavailable={
           rate === null && state !== null && !previewQuery.isFetching ? (
             <RateUnavailable
@@ -963,9 +961,8 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
         <RailLayout
           railLabel="What this costs"
           rail={
-            <RateRail
+            <TrimmedRateRail
               rate={rate}
-              cityLabel={address?.city ?? null}
               isStale={
                 previewQuery.isFetching ||
                 (size !== null && settledSize !== null && !sameSize(size, settledSize))
@@ -1023,12 +1020,6 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
                 {isEvent ? "Change event plan" : "Change crew plan"}
               </Button>
             </section>
-            <div className="rounded-[18px] border border-warning-line bg-warning-surface p-4">
-              <p className="text-sm font-bold text-text">Pay the crew directly after each day.</p>
-              <p className="mt-1 text-sm leading-6 text-text-secondary">
-                Vsolve charges only the booking fee shown in the rate panel, and only after a supervisor accepts.
-              </p>
-            </div>
             <RailFooterNotices book={book} />
           </div>
         </RailLayout>
@@ -1299,6 +1290,54 @@ function RailFooterNotices({
 }
 
 /**
+ * The desktop rail, trimmed to screen 13's shape: two money lines and one
+ * link to everything else. Replaces `RateRail`, which repeated the whole
+ * disclosure — inclusions, overtime, add-ons, the cancellation window, the
+ * wage-money promise — beside a form that already shows it once the Customer
+ * books. That explanation lives in `RateTermsSheet` now.
+ */
+function TrimmedRateRail({
+  rate,
+  isStale,
+  placeholder,
+  footer,
+}: {
+  rate: ReturnType<typeof toRateDisclosureView>;
+  isStale: boolean;
+  placeholder: string;
+  footer: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div
+        aria-busy={isStale || undefined}
+        className={cn(
+          "rounded-card border border-line bg-surface p-4 transition-opacity duration-fast",
+          isStale && "opacity-60",
+        )}
+      >
+        {rate === null ? (
+          <p className="text-sm leading-6 text-text-secondary">{placeholder}</p>
+        ) : (
+          <>
+            <p className="text-sm font-semibold text-text">
+              {rate.dayRateLabel} a day to the crew
+            </p>
+            <p className="mt-1 text-sm text-text-secondary">
+              {rate.bookingFeeLabel} booking fee when a supervisor accepts
+            </p>
+          </>
+        )}
+      </div>
+
+      {footer}
+
+      {rate !== null ? <RateTermsLink terms={toRateTermsView(rate)} /> : null}
+    </div>
+  );
+}
+
+/**
  * Why there is no price yet, in the order the Customer can act on.
  *
  * The address comes first because it is the only one that makes pricing
@@ -1417,11 +1456,8 @@ function RailFooter({
         loading={isBooking}
         loadingLabel="Booking your crew"
       >
-        Book this crew
+        Book — pay {rate.bookingFeeLabel} when accepted
       </Button>
-      <p className="text-center text-[0.8125rem] leading-5 text-text-secondary">
-        You pay {rate.bookingFeeLabel} only when a supervisor accepts.
-      </p>
     </div>
   );
 }

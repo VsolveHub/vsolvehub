@@ -36,7 +36,9 @@ import {
   useRevalidateQuote,
   useSelection,
 } from "../queries";
+import { EstimateDetailScreen } from "./estimate-detail-screen";
 import { QuoteCard } from "./quote-card";
+import { ShoppingListCard } from "./shopping-list-card";
 import { QuoteComparison } from "./quote-comparison";
 import { RejectQuoteDialog } from "./reject-quote-dialog";
 import { RevisionRequestDialog } from "./revision-request-dialog";
@@ -190,6 +192,7 @@ export function QuotesScreen({ requirementId, requestHref }: QuotesScreenProps) 
         accessPending={access.isPending}
         entitled={access.entitled}
         isA5={isA5}
+        serviceName={requestLabel}
         quotesError={access.error}
         onRetryQuotes={access.refetch}
         list={list}
@@ -272,6 +275,7 @@ function QuoteBody({
   accessPending,
   entitled,
   isA5,
+  serviceName,
   quotesError,
   onRetryQuotes,
   list,
@@ -291,6 +295,8 @@ function QuoteBody({
   accessPending: boolean;
   entitled: boolean;
   isA5: boolean;
+  /** Names the shopping list when it is shared — "What to buy — Full home rewiring". */
+  serviceName: string;
   quotesError: unknown;
   onRetryQuotes: () => void;
   list: QuoteListView | null;
@@ -378,9 +384,28 @@ function QuoteBody({
   );
 
   if (!canCompare) {
+    // One estimate: show the whole document here rather than a card that
+    // links to it. Nothing to compare, nothing to summarise.
+    const only = list.cards[0]!;
     return (
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
-        <div className="min-w-0">{cards}</div>
+        <div className="min-w-0">
+          <EstimateDetailScreen
+            requirementId={requirementId}
+            proposalId={only.proposalId}
+            embedded
+            hideShoppingList
+          />
+        </div>
+        <div className="flex flex-col gap-4">
+        <ShoppingListCard
+          requirementId={requirementId}
+          proposalId={only.proposalId}
+          rows={only.materialList}
+          brandTierLabel={only.brandTierLabel}
+          vendorName={only.vendorName}
+          serviceName={serviceName}
+        />
         <aside className="rounded-[14px] border border-line bg-surface p-5 shadow-card">
           <p className="text-[0.6875rem] font-extrabold uppercase tracking-[0.14em] text-text-muted">More choice</p>
           <h2 className="mt-2 text-xl font-extrabold leading-tight tracking-tight text-text">
@@ -395,6 +420,7 @@ function QuoteBody({
             </Button>
           ) : null}
         </aside>
+        </div>
       </div>
     );
   }

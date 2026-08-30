@@ -47,7 +47,7 @@ price loaded later has a later `effective_from` and wins on the same ordering
 """
 
 from dataclasses import dataclass
-from datetime import date, time, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Any
 
 from django.conf import settings
@@ -98,7 +98,8 @@ from apps.partners.models import (
     Skill,
 )
 from apps.payouts.models import PartnerPayoutAccount
-from apps.requirements.models import M2AccessPrice, RateCard
+from apps.requirements import financials
+from apps.requirements.models import CommercialPolicy, M2AccessPrice, RateCard
 from apps.requirements.rate_cards import publish_rate_card
 
 #: The words that make an invented value identifiable forever. Written into `source_reference` on
@@ -108,6 +109,8 @@ DEV_SEED_MARKER = "DEV SEED — not an owner decision"
 #: One fixed date for every effective-dated row, so a rerun updates rather than stacks, and so a
 #: real price loaded on any later date supersedes these without anybody deleting them first.
 DEV_SEED_EFFECTIVE_FROM = date(2026, 1, 1)
+#: The one placeholder `CommercialPolicy` version this command activates (BE-5A gate).
+COMMERCIAL_POLICY_VERSION = 1
 
 #: Its own phone block, like every other seed command. `+9170100` is `seed_trade_partners`,
 #: `+9170200` is `seed_replacement_partner`, `+9195…` is the console demo and `+9199…` is density.
@@ -216,6 +219,7 @@ _SCOPE_KIND_BY_QUESTION_KIND: dict[str, str] = {
     ServiceQuestion.Kind.TEXT: "TEXT",
     ServiceQuestion.Kind.BOOLEAN: "BOOLEAN",
     ServiceQuestion.Kind.SINGLE_CHOICE: "SELECT",
+    ServiceQuestion.Kind.MULTIPLE_CHOICE: "MULTI_SELECT",
 }
 
 #: One authored option: `(code, label, description)`.
@@ -232,7 +236,7 @@ QuestionSeed = tuple[str, str, str, bool, int | None, tuple[QuestionOptionSeed, 
 #: person short. The catalogue is where that sentence belongs — the booking screen renders whatever
 #: help the server publishes and authors none of its own.
 QUESTION_HELP: dict[str, str] = {
-    "worker_count": "A supervisor is included with every crew.",
+    "worker_count": "They come with their own tools.",
     "duration_days": "Consecutive days, 8-hour shifts.",
     "floor_area_sqft": "A rough number is fine. Vendors measure on the visit.",
     "fittings_count": "Taps, showers, WCs, basins.",
@@ -248,6 +252,11 @@ QUESTION_HELP: dict[str, str] = {
     "cleanup_count": "Keeping the venue and washrooms presentable through the event.",
     "setup_count": "Furniture, decor and equipment before and after.",
     "staff_meal_provided": "Customary for shifts over six hours.",
+    # Event lighting & decor. The budget line matters most: decorators design *to*
+    # a budget, and without one the first quote is a guess the customer churns on.
+    "decor_areas": "Tap everything you want decorated.",
+    "budget_band": "A range helps decorators design to it. It is not a commitment.",
+    "setup_access": "Most decorators set up the evening before or early that morning.",
 }
 
 #: `(code, prompt, kind, required, minimum)`. The A3 set answers `services.infer_archetype`'s
@@ -428,6 +437,9 @@ class ProjectSeed:
     #: Key into `catalog.seed_images.SEED_IMAGE_POOLS` for the tile photo and this
     #: service's cover. Blank seeds no photo and the client falls back to the icon.
     image_subject: str = ""
+    #: The trade catalogue estimates are priced from (`M2VariantConfiguration.pricing_skill_code`).
+    #: Blank until that trade's price book is authored in `seed_price_book_demo`.
+    pricing_skill: str = ""
     #: The sentence on the service card and at the top of the brief. Author it —
     #: a customer never reads "(development fixture)".
     short_description: str = ""
@@ -442,6 +454,7 @@ class ProjectSeed:
 A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
     ProjectSeed(
         slug=A5_SERVICE_SLUG,
+        pricing_skill="carpenter",
         name="Interior fit-out project",
         variant_name="Fit-out, priced on site",
         icon_key=ServiceIconKey.CUSTOM_PROJECT,
@@ -449,7 +462,8 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
         subcategory_slug="interior-fit-outs",
         subcategory_name="Interior fit-outs",
         subcategory_display_order=20,
-        questions=A5_QUESTIONS,
+        # Visit-first: the fit-out kind only. Space, size and budget are the visit's.
+        questions=A5_QUESTIONS[:1],
         image_subject="interior-fit-out",
         short_description=(
             "A full interior fit-out, measured on site and priced in writing by up to "
@@ -458,6 +472,7 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
     ),
     ProjectSeed(
         slug="full-bathroom-renovation",
+        pricing_skill="plumber",
         name="Full bathroom renovation",
         variant_name="Renovation, priced on site",
         icon_key=ServiceIconKey.PLUMBING,
@@ -465,37 +480,9 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
         subcategory_slug="renovation-projects",
         subcategory_name="Renovation projects",
         subcategory_display_order=30,
-        questions=(
-            (
-                "rooms_scope",
-                "Which rooms are we working on?",
-                ServiceQuestion.Kind.SINGLE_CHOICE,
-                True,
-                None,
-                (
-                    ("one-bathroom", "One bathroom", ""),
-                    ("two-bathrooms", "Two bathrooms", ""),
-                    ("bathrooms-kitchen", "Bathrooms + kitchen", ""),
-                    ("whole-flat", "Whole flat", ""),
-                ),
-            ),
-            (
-                "fittings_count",
-                "How many fittings need installing?",
-                ServiceQuestion.Kind.NUMBER,
-                True,
-                1,
-                None,
-            ),
-            (
-                "water_supply_working",
-                "Is the water supply working?",
-                ServiceQuestion.Kind.BOOLEAN,
-                True,
-                None,
-                None,
-            ),
-        ),
+        # Visit-first: the tile is the requirement. Rooms, fittings and the state of the
+        # supply are what the plumber sees on the visit.
+        questions=(),
         image_subject="bathroom-renovation",
         short_description=(
             "Strip-out to finish: your bathroom rebuilt, measured on site and priced in "
@@ -504,6 +491,7 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
     ),
     ProjectSeed(
         slug="full-home-painting",
+        pricing_skill="painter",
         name="Full home painting",
         variant_name="Painting, priced on site",
         icon_key=ServiceIconKey.CUSTOM_PROJECT,
@@ -511,45 +499,8 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
         subcategory_slug="renovation-projects",
         subcategory_name="Renovation projects",
         subcategory_display_order=30,
-        questions=(
-            (
-                "paint_scope",
-                "What are we painting?",
-                ServiceQuestion.Kind.SINGLE_CHOICE,
-                True,
-                None,
-                (
-                    ("interior-only", "Interior only", "Walls and ceilings inside the home."),
-                    ("exterior-only", "Exterior only", "Outside walls, grills and gates."),
-                    (
-                        "interior-exterior",
-                        "Interior + exterior",
-                        "The whole property, inside and out.",
-                    ),
-                ),
-            ),
-            (
-                "home_size",
-                "How big is the home?",
-                ServiceQuestion.Kind.SINGLE_CHOICE,
-                True,
-                None,
-                (
-                    ("1bhk", "1 BHK", ""),
-                    ("2bhk", "2 BHK", ""),
-                    ("3bhk", "3 BHK", ""),
-                    ("villa-duplex", "Villa or duplex", ""),
-                ),
-            ),
-            (
-                "repaint_over_existing",
-                "Is this a repaint over existing paint?",
-                ServiceQuestion.Kind.BOOLEAN,
-                True,
-                None,
-                None,
-            ),
-        ),
+        # Visit-first: the tile is the requirement; size and condition are measured on the visit.
+        questions=(),
         image_subject="painting",
         short_description=(
             "Whole-home painting, measured on site — surface prep, paint and finish "
@@ -558,6 +509,7 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
     ),
     ProjectSeed(
         slug="modular-kitchen-fit-out",
+        pricing_skill="carpenter",
         name="Modular kitchen fit-out",
         variant_name="Kitchen, priced on site",
         icon_key=ServiceIconKey.CARPENTRY,
@@ -565,37 +517,9 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
         subcategory_slug="renovation-projects",
         subcategory_name="Renovation projects",
         subcategory_display_order=30,
-        questions=(
-            (
-                "kitchen_layout",
-                "What shape is the kitchen?",
-                ServiceQuestion.Kind.SINGLE_CHOICE,
-                True,
-                None,
-                (
-                    ("l-shaped", "L-shaped", ""),
-                    ("u-shaped", "U-shaped", ""),
-                    ("parallel", "Parallel", ""),
-                    ("straight", "Straight", ""),
-                ),
-            ),
-            (
-                "counter_length_ft",
-                "Counter length in feet",
-                ServiceQuestion.Kind.NUMBER,
-                True,
-                1,
-                None,
-            ),
-            (
-                "appliances_included",
-                "Should built-in appliances be included?",
-                ServiceQuestion.Kind.BOOLEAN,
-                True,
-                None,
-                None,
-            ),
-        ),
+        # Visit-first: shape, counter length, finish and appliances are what the carpenter
+        # measures and discusses on the visit.
+        questions=(),
         image_subject="modular-kitchen",
         short_description=(
             "A modular kitchen designed around your layout, measured on site and priced "
@@ -604,6 +528,7 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
     ),
     ProjectSeed(
         slug="full-home-rewiring",
+        pricing_skill="electrician",
         name="Full home rewiring",
         variant_name="Rewiring, priced on site",
         icon_key=ServiceIconKey.ELECTRICAL,
@@ -611,29 +536,10 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
         subcategory_slug="renovation-projects",
         subcategory_name="Renovation projects",
         subcategory_display_order=30,
-        questions=(
-            (
-                "property_type",
-                "What is being rewired?",
-                ServiceQuestion.Kind.SINGLE_CHOICE,
-                True,
-                None,
-                (
-                    ("apartment", "Apartment", ""),
-                    ("independent-house", "Independent house", ""),
-                    ("commercial-space", "Shop or office", ""),
-                ),
-            ),
-            ("point_count", "How many points?", ServiceQuestion.Kind.NUMBER, True, 1, None),
-            (
-                "supply_live",
-                "Is the mains supply on at the site?",
-                ServiceQuestion.Kind.BOOLEAN,
-                True,
-                None,
-                None,
-            ),
-        ),
+        # Visit-first (owner decision, 2026-08-29): the catalogue tile *is* the requirement.
+        # Nothing about size or points is asked — the electrician measures on the visit — so
+        # the brief goes straight to Where and when.
+        questions=(),
         image_subject="house-wiring",
         short_description=(
             "Complete rewiring for a home or shop — points, boards and safety checks, "
@@ -642,6 +548,7 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
     ),
     ProjectSeed(
         slug="event-catering",
+        pricing_skill="event-catering",
         name="Event catering",
         variant_name="Menu, priced per plate",
         icon_key=ServiceIconKey.SERVICE,
@@ -649,29 +556,19 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
         subcategory_slug="event-services",
         subcategory_name="Event services",
         subcategory_display_order=40,
+        # One tap - the one thing a caterer must know before the tasting visit. Guests, meal
+        # and menu are planned on it.
         questions=(
             (
-                "meal_type",
-                "Which meal are we serving?",
-                ServiceQuestion.Kind.SINGLE_CHOICE,
-                True,
-                None,
-                (
-                    ("breakfast", "Breakfast", ""),
-                    ("lunch", "Lunch", ""),
-                    ("dinner", "Dinner", ""),
-                ),
-            ),
-            ("guest_count", "Guests", ServiceQuestion.Kind.NUMBER, True, 1, None),
-            (
                 "menu_preference",
-                "What kind of menu?",
+                "What kind of food?",
                 ServiceQuestion.Kind.SINGLE_CHOICE,
                 True,
                 None,
                 (
                     ("veg", "Pure veg", ""),
                     ("veg-nonveg", "Veg + non-veg", ""),
+                    ("jain", "Jain or satvik", ""),
                 ),
             ),
         ),
@@ -688,6 +585,7 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
     # ------------------------------------------------------------------
     ProjectSeed(
         slug="electrician-consultation",
+        pricing_skill="electrician",
         name="Book an electrician consultation",
         variant_name="On-site consultation and estimate",
         icon_key=ServiceIconKey.ELECTRICAL,
@@ -695,30 +593,20 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
         subcategory_slug="consultation",
         subcategory_name="Book a consultation",
         subcategory_display_order=99,
+        # One tap: the thing that changes what the electrician brings. Everything else is the
+        # visit's job (visit-first, owner decision 2026-08-29).
         questions=(
             (
                 "work_type",
-                "What kind of work is it?",
+                "What's going on?",
                 ServiceQuestion.Kind.SINGLE_CHOICE,
                 True,
                 None,
                 (
-                    ("new-wiring", "New wiring or points", ""),
-                    ("repairs", "Repairs and faults", ""),
-                    ("renovation", "Renovation work", ""),
-                    ("not-sure", "Not sure yet", ""),
-                ),
-            ),
-            (
-                "property_type",
-                "What is the property?",
-                ServiceQuestion.Kind.SINGLE_CHOICE,
-                True,
-                None,
-                (
-                    ("apartment", "Apartment", ""),
-                    ("independent-house", "Independent house", ""),
-                    ("shop-office", "Shop or office", ""),
+                    ("tripping", "Power keeps tripping", "MCB trips, sparks or a burning smell."),
+                    ("new-points", "New points or fittings", "Sockets, lights, fans, AC points."),
+                    ("renovation", "Renovation work", "Rewiring a room, a home or a shop."),
+                    ("not-sure", "Not sure", "The electrician works it out on the visit."),
                 ),
             ),
         ),
@@ -730,6 +618,7 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
     ),
     ProjectSeed(
         slug="plumber-consultation",
+        pricing_skill="plumber",
         name="Book a plumber consultation",
         variant_name="On-site consultation and estimate",
         icon_key=ServiceIconKey.PLUMBING,
@@ -737,30 +626,21 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
         subcategory_slug="consultation",
         subcategory_name="Book a consultation",
         subcategory_display_order=99,
+        # One tap: what the plumber brings. Everything else is the visit's job (visit-first,
+        # owner decision 2026-08-29).
         questions=(
             (
                 "work_type",
-                "What kind of work is it?",
+                "What's going on?",
                 ServiceQuestion.Kind.SINGLE_CHOICE,
                 True,
                 None,
                 (
-                    ("new-plumbing", "New plumbing lines", ""),
-                    ("repairs", "Repairs and leaks", ""),
-                    ("renovation", "Bathroom or kitchen renovation", ""),
-                    ("not-sure", "Not sure yet", ""),
-                ),
-            ),
-            (
-                "property_type",
-                "What is the property?",
-                ServiceQuestion.Kind.SINGLE_CHOICE,
-                True,
-                None,
-                (
-                    ("apartment", "Apartment", ""),
-                    ("independent-house", "Independent house", ""),
-                    ("shop-office", "Shop or office", ""),
+                    ("leak", "Leak or seepage", "Dripping tap, wet wall, ceiling patch."),
+                    ("new-fittings", "New taps or fittings", "WC, basin, shower, geyser line."),
+                    ("blockage", "Blocked drain", "Sink, floor trap or main line."),
+                    ("renovation", "Bathroom or kitchen redo", "New lines for a rebuild."),
+                    ("not-sure", "Not sure", "The plumber works it out on the visit."),
                 ),
             ),
         ),
@@ -772,6 +652,7 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
     ),
     ProjectSeed(
         slug="custom-furniture-work",
+        pricing_skill="carpenter",
         name="Custom furniture & woodwork",
         variant_name="Furniture, priced on site",
         icon_key=ServiceIconKey.CARPENTRY,
@@ -779,6 +660,7 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
         subcategory_slug="renovation-projects",
         subcategory_name="Renovation projects",
         subcategory_display_order=30,
+        # One tap - what the carpenter comes prepared for. Material and size are the visit's.
         questions=(
             (
                 "furniture_type",
@@ -787,26 +669,13 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
                 True,
                 None,
                 (
-                    ("wardrobe", "Wardrobe", ""),
-                    ("tv-unit", "TV unit", ""),
+                    ("wardrobe", "Wardrobe", "Sliding or hinged, loft on top."),
+                    ("tv-unit", "TV unit", "Wall panel, floor unit or both."),
                     ("study-table", "Study table or desk", ""),
-                    ("full-set", "Several pieces", ""),
+                    ("bed", "Bed with storage", ""),
+                    ("full-set", "Several pieces", "The carpenter lists them on the visit."),
                 ),
             ),
-            (
-                "material_preference",
-                "Which material?",
-                ServiceQuestion.Kind.SINGLE_CHOICE,
-                True,
-                None,
-                (
-                    ("plywood", "Plywood with laminate", ""),
-                    ("mdf", "MDF", ""),
-                    ("solid-wood", "Solid wood", ""),
-                    ("not-sure", "Not sure yet", ""),
-                ),
-            ),
-            ("piece_count", "How many pieces?", ServiceQuestion.Kind.NUMBER, True, 1, None),
         ),
         image_subject="carpentry",
         short_description=(
@@ -816,6 +685,7 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
     ),
     ProjectSeed(
         slug="central-ac-ducting",
+        pricing_skill="ac-technician",
         name="Central AC & ducting work",
         variant_name="Ducted cooling, priced on site",
         icon_key=ServiceIconKey.AIR_CONDITIONING,
@@ -823,29 +693,8 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
         subcategory_slug="ac-projects",
         subcategory_name="AC projects",
         subcategory_display_order=30,
-        questions=(
-            (
-                "property_type",
-                "Where is the system going?",
-                ServiceQuestion.Kind.SINGLE_CHOICE,
-                True,
-                None,
-                (
-                    ("home", "Home", ""),
-                    ("office", "Office", ""),
-                    ("shop", "Shop or showroom", ""),
-                ),
-            ),
-            ("area_sqft", "Roughly how big, in sq ft?", ServiceQuestion.Kind.NUMBER, True, 1, None),
-            (
-                "existing_ducting",
-                "Is there existing ducting?",
-                ServiceQuestion.Kind.BOOLEAN,
-                True,
-                None,
-                None,
-            ),
-        ),
+        # Visit-first: the tile is the requirement; size and condition are measured on the visit.
+        questions=(),
         image_subject="hvac-duct",
         short_description=(
             "Ducted and multi-room cooling designed for your space — surveyed on site "
@@ -854,6 +703,7 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
     ),
     ProjectSeed(
         slug="bridal-event-makeup",
+        pricing_skill="bridal-event-makeup",
         name="Bridal & event makeup",
         variant_name="Package, priced after consultation",
         icon_key=ServiceIconKey.MAKEUP,
@@ -861,10 +711,12 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
         subcategory_slug="bridal-events",
         subcategory_name="Bridal & events",
         subcategory_display_order=90,
+        # One tap - the occasion sets the look the artist prepares for. People, trial and call
+        # time are agreed at the consultation.
         questions=(
             (
                 "occasion",
-                "What is the occasion?",
+                "What's the occasion?",
                 ServiceQuestion.Kind.SINGLE_CHOICE,
                 True,
                 None,
@@ -875,15 +727,6 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
                     ("party", "Party or shoot", ""),
                 ),
             ),
-            ("people_count", "For how many people?", ServiceQuestion.Kind.NUMBER, True, 1, None),
-            (
-                "trial_needed",
-                "Do you want a trial session first?",
-                ServiceQuestion.Kind.BOOLEAN,
-                True,
-                None,
-                None,
-            ),
         ),
         image_subject="bridal-makeup",
         short_description=(
@@ -893,6 +736,7 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
     ),
     ProjectSeed(
         slug="home-demolition",
+        pricing_skill="home-demolition",
         name="Demolition & debris removal",
         variant_name="Demolition, priced on site",
         icon_key=ServiceIconKey.CUSTOM_PROJECT,
@@ -900,10 +744,11 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
         subcategory_slug="demolition",
         subcategory_name="Demolition",
         subcategory_display_order=40,
+        # One tap - crew size follows from it. Debris, floor and access are agreed on the visit.
         questions=(
             (
                 "demolition_scope",
-                "What is coming down?",
+                "What's coming down?",
                 ServiceQuestion.Kind.SINGLE_CHOICE,
                 True,
                 None,
@@ -914,14 +759,6 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
                     ("full-structure", "A full structure", ""),
                 ),
             ),
-            (
-                "debris_removal",
-                "Should we take the debris away?",
-                ServiceQuestion.Kind.BOOLEAN,
-                True,
-                None,
-                None,
-            ),
         ),
         image_subject="demolition",
         short_description=(
@@ -931,6 +768,7 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
     ),
     ProjectSeed(
         slug="tiling-flooring-work",
+        pricing_skill="tiling-flooring-work",
         name="Tiling & flooring work",
         variant_name="Tiling, priced on site",
         icon_key=ServiceIconKey.CUSTOM_PROJECT,
@@ -938,6 +776,7 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
         subcategory_slug="tiling-flooring",
         subcategory_name="Tiling & flooring",
         subcategory_display_order=50,
+        # One tap - it changes the tiles the tiler comes to measure for. Area is the visit's.
         questions=(
             (
                 "surface",
@@ -951,15 +790,6 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
                     ("both", "Floors and walls", ""),
                 ),
             ),
-            ("area_sqft", "Roughly how big, in sq ft?", ServiceQuestion.Kind.NUMBER, True, 1, None),
-            (
-                "material_provided",
-                "Are you supplying the tiles?",
-                ServiceQuestion.Kind.BOOLEAN,
-                True,
-                None,
-                None,
-            ),
         ),
         image_subject="tiling",
         short_description=(
@@ -969,6 +799,7 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
     ),
     ProjectSeed(
         slug="terrace-waterproofing",
+        pricing_skill="terrace-waterproofing",
         name="Terrace & bathroom waterproofing",
         variant_name="Waterproofing, priced on site",
         icon_key=ServiceIconKey.CUSTOM_PROJECT,
@@ -976,10 +807,11 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
         subcategory_slug="waterproofing",
         subcategory_name="Waterproofing",
         subcategory_display_order=60,
+        # One tap - the surface decides the treatment the waterproofer brings. Size is the visit's.
         questions=(
             (
                 "surface",
-                "Where is the problem?",
+                "Where's the problem?",
                 ServiceQuestion.Kind.SINGLE_CHOICE,
                 True,
                 None,
@@ -990,15 +822,6 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
                     ("basement", "Basement or wall", ""),
                 ),
             ),
-            ("area_sqft", "Roughly how big, in sq ft?", ServiceQuestion.Kind.NUMBER, True, 1, None),
-            (
-                "leakage_active",
-                "Is it leaking right now?",
-                ServiceQuestion.Kind.BOOLEAN,
-                True,
-                None,
-                None,
-            ),
         ),
         image_subject="terrace",
         short_description=(
@@ -1008,6 +831,7 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
     ),
     ProjectSeed(
         slug="event-lighting-decor",
+        pricing_skill="event-lighting-decor",
         name="Event lighting & decor",
         variant_name="Decor, priced per event",
         icon_key=ServiceIconKey.SERVICE,
@@ -1015,26 +839,48 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
         subcategory_slug="lighting-decor",
         subcategory_name="Lighting & decor",
         subcategory_display_order=50,
+        # The real-world brief a decorator quotes from — occasion, what to decorate,
+        # the look, the venue, scale and budget. Every question is a tap; the one
+        # TEXT line is optional and the client shows it only behind "Something
+        # else" (`docs/superpowers/plans/2026-08-29-event-decor-flow-audit-and-redesign.md`).
+        # Visit-first (owner decision 2026-08-30): the occasion is the one thing the decorator
+        # must know before coming. Areas, look, guests, budget and setup access moved to the
+        # visit; the multi-select and budget machinery stays in the platform for other briefs.
         questions=(
             (
                 "event_type",
-                "What is the event?",
+                "What's the occasion?",
                 ServiceQuestion.Kind.SINGLE_CHOICE,
                 True,
                 None,
                 (
-                    ("wedding", "Wedding", ""),
-                    ("birthday", "Birthday", ""),
-                    ("corporate", "Corporate event", ""),
-                    ("festival", "Festival or pooja", ""),
+                    (
+                        "wedding",
+                        "Wedding function",
+                        "Haldi, mehendi, sangeet, reception or the wedding day.",
+                    ),
+                    ("birthday", "Birthday", "First birthday, kids' party or a milestone."),
+                    ("engagement", "Engagement or roka", "Ring ceremony and pre-wedding events."),
+                    (
+                        "house-function",
+                        "House or religious function",
+                        "Housewarming, pooja, naming or cradle ceremony.",
+                    ),
+                    (
+                        "baby",
+                        "Baby shower or seemantham",
+                        "Godh bharai and welcome-baby functions.",
+                    ),
+                    ("corporate", "Corporate event", "Launches, office parties, conferences."),
+                    ("festival", "Festival", "Ganesh Chaturthi, Diwali or a community event."),
+                    ("other", "Something else", "Tell us in a line and we pass it along."),
                 ),
             ),
-            ("guest_count", "Roughly how many guests?", ServiceQuestion.Kind.NUMBER, True, 1, None),
             (
-                "venue_booked",
-                "Is the venue already booked?",
-                ServiceQuestion.Kind.BOOLEAN,
-                True,
+                "event_description",
+                "Tell us about the event",
+                ServiceQuestion.Kind.TEXT,
+                False,
                 None,
                 None,
             ),
@@ -1397,6 +1243,8 @@ class DaySeed:
     short_description: str
     included: tuple[str, ...]
     excluded: tuple[str, ...]
+    #: The trade catalogue the day-hire's labour lines are priced from. Blank = none yet.
+    pricing_skill: str = ""
 
 
 #: The two sizing questions every day-hire form ends with, labelled per trade. The codes are
@@ -1531,6 +1379,7 @@ EVENT_STAFF_QUESTIONS: tuple[QuestionSeed, ...] = (
 A3_DAY_SEEDS: tuple[DaySeed, ...] = (
     DaySeed(
         slug=A3_SERVICE_SLUG,
+        pricing_skill="construction-helper",
         name="Construction helpers",
         variant_name="Helpers by the day",
         icon_key=ServiceIconKey.WORKFORCE,
@@ -1571,6 +1420,7 @@ A3_DAY_SEEDS: tuple[DaySeed, ...] = (
     ),
     DaySeed(
         slug="electrician-by-the-day",
+        pricing_skill="electrician",
         name="Electrician by the day",
         variant_name="Full-day electrician",
         icon_key=ServiceIconKey.ELECTRICAL,
@@ -1615,6 +1465,7 @@ A3_DAY_SEEDS: tuple[DaySeed, ...] = (
     ),
     DaySeed(
         slug="plumber-by-the-day",
+        pricing_skill="plumber",
         name="Plumber by the day",
         variant_name="Full-day plumber",
         icon_key=ServiceIconKey.PLUMBING,
@@ -1658,6 +1509,7 @@ A3_DAY_SEEDS: tuple[DaySeed, ...] = (
     ),
     DaySeed(
         slug="painter-by-the-day",
+        pricing_skill="painter",
         name="Painter by the day",
         variant_name="Full-day painter",
         icon_key=ServiceIconKey.CUSTOM_PROJECT,
@@ -1830,6 +1682,7 @@ class Command(BaseCommand):
                 excluded=day.excluded,
             )
             self._seed_a3_configuration(
+                pricing_skill=day.pricing_skill,
                 variant=a3_variant,
                 skill=skill,
                 preset_questions=day.preset_questions,
@@ -1867,7 +1720,9 @@ class Command(BaseCommand):
             )
 
         for a5_variant, project in zip(a5_variants, A5_PROJECT_SEEDS, strict=True):
-            self._seed_a5_configuration(variant=a5_variant, questions=project.questions)
+            self._seed_a5_configuration(
+                variant=a5_variant, questions=project.questions, pricing_skill=project.pricing_skill
+            )
         prices_written, prices_skipped = self._seed_access_prices()
 
         vendors = self._seed_vendors(
@@ -1876,6 +1731,7 @@ class Command(BaseCommand):
             skills=tuple(skills),
             count=max(1, int(options["vendors"])),
         )
+        self._seed_commercial_policy()
 
         self._report(
             wage_floors_written=wage_floors_written,
@@ -2210,6 +2066,7 @@ class Command(BaseCommand):
         skill: Skill,
         preset_questions: tuple[QuestionSeed, ...],
         questions: tuple[QuestionSeed, ...],
+        pricing_skill: str = "",
     ) -> None:
         self._upsert_configuration(
             variant=variant,
@@ -2221,6 +2078,7 @@ class Command(BaseCommand):
             registration_questions=A3_REGISTRATION_QUESTIONS,
             extra={
                 "wage_floor_skill": skill,
+                "pricing_skill_code": pricing_skill,
                 # The quote-flow clocks stay set: revision 4 demoted that path to the thin-supply
                 # fallback rather than deleting it, and a fallback with no SLA never closes.
                 "first_quote_sla_hours": FIRST_QUOTE_SLA_HOURS,
@@ -2266,6 +2124,7 @@ class Command(BaseCommand):
         *,
         variant: ServiceVariant,
         questions: tuple[QuestionSeed, ...],
+        pricing_skill: str = "",
     ) -> None:
         self._upsert_configuration(
             variant=variant,
@@ -2275,6 +2134,7 @@ class Command(BaseCommand):
             questions=questions,
             registration_questions=(),
             extra={
+                "pricing_skill_code": pricing_skill,
                 # Reconfirmation reuses `first_quote_sla_hours`, so an A5 variant needs it too —
                 # without it a selected vendor has no deadline and `reconfirm_by` is null.
                 "first_quote_sla_hours": FIRST_QUOTE_SLA_HOURS,
@@ -2340,6 +2200,70 @@ class Command(BaseCommand):
             },
         )
         return configuration
+
+    def _seed_commercial_policy(self) -> None:
+        """Activate one placeholder `CommercialPolicy` so an A5 estimate can be priced at all.
+
+        `financials.active_policy` fails closed by design — BE-5A says Finance/legal approve the
+        supplier-of-record, tax, fee and commission model — and until this step nothing in
+        development ever activated one, so every estimate preview answered
+        `m2_financial_policy_unavailable`. Same three doors as every other placeholder here:
+        marked `DEV SEED`, idempotent by version, and a policy somebody activated on purpose (no
+        marker) is left exactly as it is with a warning.
+
+        Every figure below stands in for an owner decision: 18% on every service category, a
+        2% Customer-paid platform fee taxed at 18%, 5% commission on the Partner quote, no
+        statutory withholding.
+        """
+        active = CommercialPolicy.objects.filter(status=CommercialPolicy.Status.ACTIVE).first()
+        if active is not None and DEV_SEED_MARKER not in active.approval_reference:
+            self.stdout.write(
+                self.style.WARNING(
+                    f"Commercial policy version {active.version} is somebody's real decision "
+                    "(no DEV SEED marker); left untouched."
+                )
+            )
+            return
+        if active is not None:
+            return
+        actor = (
+            User.objects.filter(is_staff=True).order_by("date_joined").first()
+            or User.objects.order_by("date_joined").first()
+        )
+        if actor is None:
+            raise CommandError("No user exists to record as the policy approver.")
+        tax_categories = sorted(
+            {
+                "services-standard",
+                "labour",
+                *ServiceVariant.objects.exclude(tax_category_code="").values_list(
+                    "tax_category_code", flat=True
+                ),
+            }
+        )
+        financials.activate_policy(
+            actor=actor,
+            version=COMMERCIAL_POLICY_VERSION,
+            approval_reference=f"{DEV_SEED_MARKER}. BE-5A supplier/tax/fee policy",
+            effective_from=timezone.make_aware(datetime.combine(DEV_SEED_EFFECTIVE_FROM, time.min)),
+            effective_until=None,
+            supplier_of_record=CommercialPolicy.SupplierOfRecord.PARTNER,
+            material_supplier_of_record=CommercialPolicy.SupplierOfRecord.PARTNER,
+            visit_supplier_of_record=CommercialPolicy.SupplierOfRecord.VSOLVE,
+            tax_basis=CommercialPolicy.TaxBasis.EXCLUSIVE,
+            tax_rates_bps=dict.fromkeys(tax_categories, 1800),
+            material_tax_category="services-standard",
+            charge_tax_categories=dict.fromkeys(
+                sorted(financials.ALLOWED_CHARGE_CODES), "services-standard"
+            ),
+            platform_fee_treatment=CommercialPolicy.PlatformFeeTreatment.CUSTOMER,
+            platform_fee_bps=200,
+            platform_fee_tax_bps=1_800,
+            commission_bps=500,
+            commission_basis=CommercialPolicy.AmountBasis.PARTNER_QUOTE,
+            withholding_bps=0,
+            withholding_basis=CommercialPolicy.AmountBasis.NONE,
+        )
 
     def _seed_wage_floor(self, *, skill: Skill, seed: DaySeed) -> bool:
         existing = MinimumWageFloor.objects.filter(

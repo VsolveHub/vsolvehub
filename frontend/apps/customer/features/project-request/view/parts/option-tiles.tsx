@@ -18,12 +18,19 @@ import type { LucideIcon } from "lucide-react";
  * block. A letter is plain; a wrong pictogram is misleading — see the icon
  * model's own note.
  *
- * ## One radiogroup, native inputs
+ * ## One group, native inputs
  *
- * Same pattern as the visit-plan chooser: an `sr-only` radio per tile so focus,
+ * Same pattern as the visit-plan chooser: an `sr-only` input per tile so focus,
  * arrow keys and the accessible name all come from the platform, and the
  * selection state is also in words (`aria-checked` plus the ring) rather than
  * colour alone.
+ *
+ * ## Single or multi
+ *
+ * A single-choice question is a radiogroup with one `value`; a multi-select
+ * question ("What should we decorate?") passes `values` and `onToggle` instead
+ * and renders checkboxes. Same tile, same grid — only the input type and the
+ * group role change, so the two kinds of question look alike on screen.
  */
 
 export interface OptionTileItem {
@@ -34,14 +41,12 @@ export interface OptionTileItem {
   icon: LucideIcon | null;
 }
 
-export interface OptionTilesProps {
+interface OptionTilesBaseProps {
   /** The question, for the group's accessible name. */
   label: string;
-  /** The question code, used as the radio group name. */
+  /** The question code, used as the input group name. */
   name: string;
   options: readonly OptionTileItem[];
-  value: string | null;
-  onChange: (value: string) => void;
   /**
    * Tiles per row on a phone. Two fits labels of most lengths; three suits
    * short-word scales like Yes/No/Not sure.
@@ -49,22 +54,36 @@ export interface OptionTilesProps {
   columns?: 2 | 3;
 }
 
-export function OptionTiles({
-  label,
-  name,
-  options,
-  value,
-  onChange,
-  columns = 2,
-}: OptionTilesProps) {
+export interface SingleOptionTilesProps extends OptionTilesBaseProps {
+  value: string | null;
+  onChange: (value: string) => void;
+  values?: undefined;
+  onToggle?: undefined;
+}
+
+export interface MultiOptionTilesProps extends OptionTilesBaseProps {
+  values: readonly string[];
+  onToggle: (value: string) => void;
+  value?: undefined;
+  onChange?: undefined;
+}
+
+export type OptionTilesProps = SingleOptionTilesProps | MultiOptionTilesProps;
+
+export function OptionTiles(props: OptionTilesProps) {
+  const { label, name, options, columns = 2 } = props;
+  const multiple = props.values !== undefined;
+
   return (
     <div
-      role="radiogroup"
+      role={multiple ? "group" : "radiogroup"}
       aria-label={label}
       className={cn("grid gap-2.5", columns === 3 ? "grid-cols-3" : "grid-cols-2 sm:grid-cols-3")}
     >
       {options.map((option) => {
-        const checked = value === option.value;
+        const checked = multiple
+          ? props.values.includes(option.value)
+          : props.value === option.value;
         const Icon = option.icon;
 
         return (
@@ -83,11 +102,13 @@ export function OptionTiles({
             )}
           >
             <input
-              type="radio"
+              type={multiple ? "checkbox" : "radio"}
               name={name}
               value={option.value}
               checked={checked}
-              onChange={() => onChange(option.value)}
+              onChange={() =>
+                multiple ? props.onToggle(option.value) : props.onChange(option.value)
+              }
               className="sr-only"
             />
 
@@ -127,6 +148,13 @@ export function OptionTiles({
       })}
     </div>
   );
+}
+
+/** Flip one value in a multi-select answer. Exported for the screens' reducers. */
+export function toggleValue(values: readonly string[], value: string): string[] {
+  return values.includes(value)
+    ? values.filter((entry) => entry !== value)
+    : [...values, value];
 }
 
 /** The first letter that exists, uppercased — "fan repair" -> "F". */

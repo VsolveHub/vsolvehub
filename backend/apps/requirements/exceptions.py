@@ -567,3 +567,46 @@ class PurchasesPausedError(RequirementDomainError):
             status_code=409,
             retryable=True,
         )
+
+
+# ---------------------------------------------------------------------------
+# The vendor price book (`price_book.py`). Every rule is enforced at quote submission against
+# the live catalogue and the live policy — never trusted from a composer.
+# ---------------------------------------------------------------------------
+
+
+class GuardrailPolicyUnavailableError(RequirementDomainError):
+    def __init__(self, message: str = "") -> None:
+        super().__init__(
+            code="m2_guardrail_policy_unavailable",
+            message=message
+            or "Rate-card pricing is not set up for your city yet. Nothing has been sent.",
+            status_code=409,
+        )
+
+
+class WorkItemRateUnavailableError(RequirementDomainError):
+    def __init__(self, message: str = "") -> None:
+        super().__init__(
+            code="m2_work_item_rate_unavailable",
+            message=message or "This item has no published rate in your service area yet.",
+            status_code=409,
+        )
+
+
+class RateOutsideBandError(RequirementDomainError):
+    def __init__(self, message: str = "") -> None:
+        super().__init__(
+            code="rate_outside_band",
+            message=message or "That rate is outside the allowed range for this item.",
+            status_code=400,
+        )
+
+
+class CustomTitleScreenedError(RequirementDomainError):
+    def __init__(self, message: str = "") -> None:
+        super().__init__(
+            code="custom_title_screened",
+            message=message or "An item name cannot carry a phone number, email address or link.",
+            status_code=400,
+        )

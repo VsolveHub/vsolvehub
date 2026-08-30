@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 
-import { ReceiptDocument } from "@/features/engagement/view/receipt-document";
+import { Receipt } from "@/features/engagement/view/receipt";
 
 /**
- * The receipt for one engagement's access fee.
+ * The receipt for one booking's fee.
  *
  * Dynamic and never indexed — it is somebody's payment record.
  */
@@ -22,7 +22,7 @@ export default async function ReceiptPage({
   const { engagementId } = await params;
   return (
     <main>
-      <ReceiptDocument engagementId={engagementId} />
+      <Receipt engagementId={engagementId} variant="document" />
     </main>
   );
 }

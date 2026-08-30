@@ -251,6 +251,10 @@ class RequirementRateCardView(APIView):
         except RequirementDomainError as exc:
             _raise_api_error(exc)
         headcount, days = _requested_size(request)
+        # Whoever reads first settles what the beat has not reached yet — see
+        # `crew_dispatch.reconcile_lapsed_offers`.
+        crew_dispatch.reconcile_lapsed_offers(requirement_id=requirement.id)
+        requirement.refresh_from_db()
         return Response(
             RateCardStateSerializer(
                 _rate_card_state_payload(requirement, headcount=headcount, days=days)

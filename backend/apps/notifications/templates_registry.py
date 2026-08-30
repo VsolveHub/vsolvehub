@@ -62,6 +62,47 @@ class RenderedNotification(NamedTuple):
 #: notification later; a body is what is read in the feed.
 _TEMPLATES: dict[str, tuple[str, str]] = {
     # ---- A3: rate-card crews -------------------------------------------------------------
+    #: The lead's push. Everything needed to say yes is in the title, because the offer lapses
+    #: in minutes and a body is a tap away.
+    "m2_crew_offer_invited": (
+        "New job: {crew_size} · {days} days · {amount} to you",
+        "Open it now — the first lead to answer gets it.",
+    ),
+    "m2_booking_fee_forfeited_partner": (
+        "{amount} travel compensation added",
+        "The customer cancelled late or did not show. Part of their booking fee is yours for "
+        "the wasted trip; it lands in your earnings.",
+    ),
+    "m2_booking_fee_waived_partner": (
+        "Confirmed — this job is yours",
+        "You are the replacement crew on this job. There is no booking fee on a replacement, so "
+        "nothing is waiting on the customer. The address is on the job page.",
+    ),
+    "m2_crew_vendor_no_show_partner": (
+        "Reported as not arrived",
+        "The customer says your crew did not come. The job has gone to another lead and this is "
+        "recorded against your standing. If that is wrong, support can look at it.",
+    ),
+    "m2_engagement_opened_partner_crew": (
+        "Confirmed — address unlocked",
+        "The customer paid the booking fee. Open the job for the address and their number, and "
+        "name the crew for day one.",
+    ),
+    "m2_shift_attendance_confirmed_partner": (
+        "{workers_present} of {workers_expected} confirmed — collect {amount}",
+        "The customer agreed today's count. Collect {amount} from them directly, then tap "
+        '"Got paid" on the day.',
+    ),
+    "m2_shift_attendance_disputed_partner": (
+        "The customer disagrees with today's count",
+        "Today's day is not agreed. Support will call both of you; nothing changes on the other "
+        "days.",
+    ),
+    "m2_cash_demand_reported_partner": (
+        "A report was filed on this job",
+        "The customer reported being asked for money outside the published rate. Support will "
+        "call you. Anything owed on this job is held until they have.",
+    ),
     "m2_crew_offer_accepted": (
         "A crew is holding your dates",
         "{partner_name} can send {headcount} for your job. They are holding the dates while you "
@@ -90,9 +131,9 @@ _TEMPLATES: dict[str, tuple[str, str]] = {
     # whole point: this one reports a **pause**, not a product change, so the body has to say that
     # the request is untouched and name the ways out without picking one.
     "m2_rate_card_exhausted": (
-        "No crew accepted yet",
-        "Nothing has been charged. You can search wider, switch to quotes, or cancel — your "
-        "request is exactly as you left it.",
+        "No partner available right now",
+        "Nobody accepted your job at the published rate. Nothing has been charged — open it to "
+        "search wider, get quotes instead, or cancel.",
     ),
     # ---- A5: visit-first projects --------------------------------------------------------
     "m2_invitation_received": (
@@ -104,6 +145,10 @@ _TEMPLATES: dict[str, tuple[str, str]] = {
         "Your site visits are booked",
         "Your visit plan is paid and {visit_count} scheduled. Each professional will estimate on "
         "site.",
+    ),
+    "m2_visit_booked_partner": (
+        "The customer paid — your visit is confirmed",
+        "The exact address is now in your visit workspace. Do not travel before the visit time.",
     ),
     "m2_proposal_rejected": (
         "Your quote was not selected",

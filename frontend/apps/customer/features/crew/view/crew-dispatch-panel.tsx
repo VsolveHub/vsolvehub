@@ -15,7 +15,6 @@ import {
   ConfirmAction,
   Disclosure,
   RailLayout,
-  RailMoney,
   Skeleton,
   buttonStyles,
   useIsWideScreen,
@@ -30,29 +29,29 @@ import { AccessRefusal } from "@/features/access/view/access-refusal";
 // destination is not a function of any record — every A3 engagement lands in the
 // same list — and `lib/routes` exists precisely so both sides of the
 // server/client boundary can name a route without a function crossing it.
-import { BROWSE_HREF, engagementHref, engagementListHref } from "@/lib/routes";
+import { engagementHref, engagementListHref } from "@/lib/routes";
 import {
   confirmedCrewName,
   toBookingView,
   toCascadeView,
   toFeeMoneyView,
+  toRateTermsView,
   type BookingView,
   type CascadeView,
   type FeeMoneyView,
+  type RateTermsView,
 } from "../adapters";
 import {
   useCancelBooking,
   useCancelUnmatchedRequest,
   useChooseQuotesInstead,
-  useConfirmCrewArrival,
   useRateCardState,
-  useReportCrewNoShow,
   useRetryCrewSearch,
 } from "../queries";
 import { CascadeStrip } from "./cascade-strip";
 import { MatchingScreen } from "./mobile/matching-screen";
 import { NoCrewScreen } from "./mobile/no-crew-screen";
-import { RateDisclosure } from "./rate-disclosure";
+import { RateTermsLink } from "./rate-terms-sheet";
 
 /**
  * The A3 instant booking on `/requests/[id]` — `M2-FE-427` and `M2-FE-429`.
@@ -121,13 +120,11 @@ export function CrewDispatchPanel({
   const isWide = useIsWideScreen();
   const rateQuery = useRateCardState(requirementId);
   const cancel = useCancelBooking();
-  const arrival = useConfirmCrewArrival();
-  const noShow = useReportCrewNoShow();
   const retrySearch = useRetryCrewSearch();
   const chooseQuotes = useChooseQuotesInstead();
   const cancelUnmatched = useCancelUnmatchedRequest();
 
-  const [confirming, setConfirming] = useState<"cancel" | "no_show" | null>(null);
+  const [confirming, setConfirming] = useState<"cancel" | null>(null);
 
   const state = rateQuery.data ?? null;
 
@@ -181,11 +178,9 @@ export function CrewDispatchPanel({
       <>
         <MatchingScreen
           serviceName={serviceName}
-          booking={booking}
           cascade={toCascadeView(state.cascade ?? null)}
-          addressLine={requestFacts?.addressLine ?? null}
-          startsOn={requestFacts?.startsOn ?? null}
-          editHref={`/requests/${requirementId}`}
+          terms={toRateTermsView(booking)}
+          crewLine={crewLineOf(booking, requestFacts?.startsOn ?? null)}
           onBack={() => router.push("/requests")}
           onCancel={canCancelBooking(state) ? () => setConfirming("cancel") : undefined}
           isCancelling={cancel.isPending}
@@ -212,7 +207,7 @@ export function CrewDispatchPanel({
     return (
       <NoCrewScreen
         serviceName={serviceName}
-        booking={booking}
+        dayRateLabel={booking.dayRateLabel}
         onBack={() => router.push("/requests")}
         onSearchWider={() => retrySearch.mutate({ requirementId })}
         onGetQuotes={() => chooseQuotes.mutate({ requirementId })}
@@ -254,7 +249,7 @@ export function CrewDispatchPanel({
           <CascadeHolding
             booking={booking}
             cascade={toCascadeView(state.cascade ?? null)}
-            requirementId={requirementId}
+            terms={toRateTermsView(booking)}
           />
         </RailLayout>
       ) : null}
@@ -279,7 +274,7 @@ export function CrewDispatchPanel({
 
       {phase === "exhausted" ? (
         <NobodyAccepted
-          booking={booking}
+          dayRateLabel={booking.dayRateLabel}
           isPending={
             retrySearch.isPending || chooseQuotes.isPending || cancelUnmatched.isPending
           }
@@ -296,35 +291,17 @@ export function CrewDispatchPanel({
       {phase === "cancelled" ? (
         <div className="rounded-card border border-line bg-surface-sunken p-4">
           <p className="font-semibold text-text">This booking was cancelled</p>
-          <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
-            No crew is coming. What happened to the booking fee is below.
-          </p>
+          <p className="mt-1 text-sm text-text-secondary">No crew is coming.</p>
         </div>
       ) : null}
 
       {fee !== null ? <FeeOutcome phase={feePhase} fee={fee} /> : null}
 
-      {/* The frozen terms stay readable at every status after booking — a
+      {/* The frozen terms are one link away at every status after booking — a
           Customer settling a day needs the published rate they agreed to, not
-          whatever the card says this week. */}
-      {phase !== "fell_back" ? (
-        <RateDisclosure
-          rate={{
-            headcount: booking.headcount,
-            days: booking.days,
-            dayRateLabel: booking.dayRateLabel,
-            totalLabel: booking.totalLabel,
-            leadReceiptLabel: booking.leadReceiptLabel,
-            leadDayReceiptLabel: booking.leadDayReceiptLabel,
-            bookingFeeLabel: booking.bookingFeeLabel,
-            standardDayHours: booking.standardDayHours,
-            overtimeHourlyLabel: booking.overtimeHourlyLabel,
-            inclusions: booking.inclusions,
-            addOns: booking.addOns,
-          }}
-          isBooked
-        />
-      ) : null}
+          whatever the card says this week, and the explanation of it now lives
+          in one sheet rather than a card repeated on every screen. */}
+      {phase !== "fell_back" ? <RateTermsLink terms={toRateTermsView(booking)} /> : null}
 
       {canCancelBooking(state) ? (
         <div>
@@ -339,7 +316,7 @@ export function CrewDispatchPanel({
       ) : null}
 
       <AccessRefusal
-        error={cancel.error ?? arrival.error ?? noShow.error}
+        error={cancel.error}
         attempting="update this booking"
         supportAction={supportAction}
       />
@@ -355,29 +332,9 @@ export function CrewDispatchPanel({
         isPending={cancel.isPending}
       />
 
-      <ConfirmAction
-        open={confirming === "no_show"}
-        onOpenChange={(open) => setConfirming(open ? "no_show" : null)}
-        title="Report that nobody arrived"
-        consequence={
-          <>
-            This says the crew did not turn up.{" "}
-            <strong className="font-semibold">
-              Your {booking.bookingFeeLabel} booking fee is refunded in full
-            </strong>
-            , we look for another crew at the same rate at no extra cost, and the
-            supervisor&rsquo;s standing with us carries the record. Nobody earns
-            anything from a crew that did not arrive.
-          </>
-        }
-        confirmLabel="They did not come"
-        onConfirm={() => {
-          noShow.mutate({ requirementId });
-          setConfirming(null);
-        }}
-        pending={noShow.isPending}
-        destructive
-      />
+      {/* Arrival and no-show are recorded on the booking — `CrewDayPanel` on
+          the engagement — because they name a crew, and this screen is the
+          request. Nothing here opens them. */}
     </section>
   );
 }
@@ -404,38 +361,40 @@ export function CrewDispatchPanel({
 function CascadeHolding({
   booking,
   cascade,
-  requirementId,
+  terms,
 }: {
   booking: BookingView;
   cascade: CascadeView | null;
-  requirementId: string;
+  terms: RateTermsView;
 }) {
   return (
-    <div className="flex flex-col gap-5" role="status">
+    <div className="flex flex-col gap-3" role="status">
       <div>
         <h2 className="text-xl font-bold text-text">Finding your crew</h2>
-        <p className="mt-1 text-sm text-text-secondary">Usually within 2 hours</p>
-        <p className="mt-3 max-w-prose text-[0.9375rem] leading-6 text-text">
-          {cascade !== null && cascade.hasOffersOut
-            ? `${cascade.offersOut} ${
-                cascade.offersOut === 1 ? "supervisor" : "supervisors"
-              } nearby ${cascade.offersOut === 1 ? "has" : "have"} this job. The first to accept gets it.`
-            : `We have sent this to supervisors who can field ${
-                booking.headcount === 1 ? "one person" : `${booking.headcount} people`
-              } at our published rate. The first one to accept gets it.`}
+        <p className="mt-1 text-sm text-text-secondary">
+          {booking.headcount} {booking.headcount === 1 ? "person" : "people"} ·{" "}
+          {booking.days} {booking.days === 1 ? "day" : "days"}
         </p>
       </div>
 
-      {cascade !== null ? (
-        <div>
-          <CascadeStrip cascade={cascade} />
-          <p className="mt-2 text-sm leading-6 text-text-secondary">
-            We widen the search on our own. The rate never changes to find someone.
-          </p>
-        </div>
+      {cascade !== null && cascade.hasOffersOut ? (
+        <p className="text-[0.9375rem] leading-6 text-text">
+          {cascade.offersOut} {cascade.offersOut === 1 ? "supervisor" : "supervisors"} nearby{" "}
+          {cascade.offersOut === 1 ? "has" : "have"} this. First to accept gets it.
+        </p>
       ) : null}
 
-      <WhileYouWait requirementId={requirementId} />
+      {cascade !== null ? <CascadeStrip cascade={cascade} /> : null}
+
+      <p className="text-sm font-semibold text-text">₹0 charged so far</p>
+
+      <p className="text-sm leading-6 text-text-secondary">
+        We&rsquo;ll message you when someone accepts. You can close this.
+      </p>
+
+      <div>
+        <RateTermsLink terms={terms} />
+      </div>
     </div>
   );
 }
@@ -470,15 +429,11 @@ function CancelBookingConfirm({
       title="Cancel this crew booking"
       consequence={
         <>
-          No crew will come. There is a free-cancellation window that runs until a
-          set number of hours before your start date —{" "}
+          No crew will come.{" "}
           <strong className="font-semibold">
-            cancel inside it and the {feeLabel} booking fee comes back to you in
-            full
+            Inside the free window the {feeLabel} fee comes back in full
           </strong>
-          . Cancel after it and the fee is forfeited: part of it pays the
-          supervisor for turning other work down, and the rest is ours. We will
-          tell you exactly which happened as soon as you confirm.
+          ; after it, the fee is forfeited. We tell you which as soon as you confirm.
         </>
       }
       confirmLabel="Cancel the booking"
@@ -540,32 +495,7 @@ function WaitingRail({
         </dl>
       </div>
 
-      <RailMoney
-        rows={[
-          {
-            label: `${booking.dayRateLabel} per person per day`,
-            amount: booking.totalLabel,
-            emphasis: true,
-          },
-          {
-            label: "Cash to the crew",
-            note: `${booking.leadDayReceiptLabel} at the end of each day`,
-            amount: booking.leadReceiptLabel,
-          },
-        ]}
-      />
-
-      <div className="rounded-card border border-success-line bg-success-surface p-4">
-        <p className="text-sm font-bold text-text">Nothing charged yet.</p>
-        <p className="mt-0.5 text-sm leading-5 text-text-secondary">
-          {booking.bookingFeeLabel} when someone accepts, nothing if nobody does.
-        </p>
-      </div>
-
-      <p className="text-sm leading-5 text-text-secondary">
-        We will text and email you the moment a crew is confirmed. You can close
-        this page.
-      </p>
+      <p className="text-sm font-semibold text-text">₹0 charged so far</p>
 
       {onCancel !== null ? (
         <Button variant="ghost" onClick={onCancel} disabled={isCancelling}>
@@ -573,51 +503,6 @@ function WaitingRail({
         </Button>
       ) : null}
     </div>
-  );
-}
-
-/**
- * Two things to do on a screen whose whole point is that there is nothing to do.
- *
- * A page with one button on it makes that button the answer to every impulse,
- * and here the only button used to be **Cancel this request** — offered to
- * somebody whose actual feeling is impatience, not regret. These absorb it:
- * both are useful, neither is required, and the heading says so before either is
- * read.
- *
- * They are links rather than buttons because both go somewhere, which keeps
- * middle-click and open-in-new-tab working.
- */
-function WhileYouWait({ requirementId }: { requirementId: string }) {
-  return (
-    <section aria-labelledby="while-you-wait" className="rounded-card border border-line bg-surface p-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 id="while-you-wait" className="text-sm font-bold text-text">
-          While you wait
-        </h3>
-        <span className="text-xs text-text-muted">Nothing here is required</span>
-      </div>
-      <div className="mt-3 grid gap-2 sm:grid-cols-2">
-        <Link
-          href={`/requests/${requirementId}#details`}
-          className="rounded-control border border-line-strong bg-surface p-3 transition-colors duration-fast hover:bg-surface-hover"
-        >
-          <span className="block text-sm font-semibold text-text">Add site instructions</span>
-          <span className="mt-0.5 block text-sm text-text-secondary">
-            Gate, parking, who to ask for
-          </span>
-        </Link>
-        <Link
-          href={BROWSE_HREF}
-          className="rounded-control border border-line-strong bg-surface p-3 transition-colors duration-fast hover:bg-surface-hover"
-        >
-          <span className="block text-sm font-semibold text-text">Book another crew</span>
-          <span className="mt-0.5 block text-sm text-text-secondary">
-            Different job, same address
-          </span>
-        </Link>
-      </div>
-    </section>
   );
 }
 
@@ -638,19 +523,21 @@ function FallbackHandoff({ booking }: { booking: BookingView }) {
         </p>
         <Badge tone="warning">Now collecting quotes</Badge>
       </div>
-      <p className="mt-2 max-w-prose text-sm leading-6 text-text">
-        We asked everyone we could and widened the search{" "}
-        {booking.wave > 1 ? `${booking.wave} times` : "as far as we could"}. Rather
-        than promise you a crew we cannot confirm, we have moved this request to
-        the ordinary route: professionals will send you their own quotes and you
-        choose one.
+      <p className="mt-2 text-sm leading-6 text-text">
+        Professionals will now send you their own quotes and you choose one.
       </p>
-      <p className="mt-2 max-w-prose text-sm leading-6 text-text-secondary">
-        <strong className="font-semibold text-text">Nothing has been charged</strong>{" "}
-        — the booking fee is only ever taken against a crew that accepted, and
-        none did. Your request, your dates and everything you told us carried
-        across.
+      <p className="mt-2 text-sm leading-6 text-text-secondary">
+        <strong className="font-semibold text-text">Nothing has been charged.</strong>
       </p>
+      <div className="mt-2">
+        <Disclosure summary="What happened?">
+          We widened the search{" "}
+          {booking.wave > 1 ? `${booking.wave} times` : "as far as we could"} and no
+          supervisor took the job at the published rate. Rather than promise a crew we
+          cannot confirm, we moved this request to the quote route. Your request, dates
+          and everything you told us carried across.
+        </Disclosure>
+      </div>
     </div>
   );
 }
@@ -673,52 +560,57 @@ function OfferHeld({
   feePhase: BookingFeePhase;
 }) {
   const countdown = useServerCountdown(holdExpiresAt);
+  const terms = toRateTermsView(booking);
 
   return (
     <div className="rounded-card border border-success-line bg-success-surface p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <p className="font-semibold text-text">A supervisor has accepted your job</p>
-        <Badge tone="success">Holding it for you</Badge>
-      </div>
-      <p className="mt-2 max-w-prose text-sm leading-6 text-text">
-        They have taken it at our published rate and are holding{" "}
-        {booking.headcount === 1 ? "one person" : `${booking.headcount} people`} for
-        your dates.
+        <p className="font-semibold text-text">A supervisor accepted</p>
         {countdown !== null && !countdown.isExpired ? (
-          <>
-            {" "}
-            The hold lasts{" "}
-            <strong className="font-semibold" aria-label={countdown.announce}>
-              {countdown.display}
-            </strong>{" "}
-            longer.
-          </>
-        ) : null}
+          <Badge tone="success">
+            Holding {booking.headcount === 1 ? "1 person" : `${booking.headcount} people`}{" "}
+            <span aria-label={countdown.announce}>{countdown.display}</span>
+          </Badge>
+        ) : (
+          <Badge tone="success">Holding it for you</Badge>
+        )}
+      </div>
+
+      <p className="mt-3 text-sm font-semibold text-text">
+        Booking fee <span data-numeric>{booking.bookingFeeLabel}</span>
       </p>
-      <p className="mt-2 max-w-prose text-sm leading-6 text-text-secondary">
-        Pay the {booking.bookingFeeLabel} booking fee to confirm them. If you do
-        not, the hold lapses and we keep looking —{" "}
-        <strong className="font-semibold text-text">nothing is charged</strong>{" "}
-        either way.
+      <p className="mt-0.5 text-sm leading-6 text-text-secondary">
+        Now, on UPI, to Vsolve. Refunded if nobody turns up.
       </p>
+      <p className="mt-2 text-sm leading-6 text-text-secondary">
+        Then <span data-numeric>{booking.leadDayReceiptLabel}</span> a day to the crew, paid
+        by you each evening.
+      </p>
+
       {feePhase === "pending" ? (
-        <p className="mt-3 max-w-prose text-sm leading-6 text-text" role="status">
-          We are confirming your payment. This updates itself when your bank or UPI
-          app tells us the outcome — do not pay again.
+        <p className="mt-3 text-sm leading-6 text-text" role="status">
+          Confirming your payment… don&rsquo;t pay again.
         </p>
       ) : canCheckOut ? (
         <div className="mt-3">
           <Link href={bookCrewFeeHref} className={buttonStyles({ variant: "primary" })}>
-            Confirm this crew — {booking.bookingFeeLabel}
+            Pay {booking.bookingFeeLabel} & confirm
           </Link>
+          <p className="mt-2 text-xs leading-5 text-text-secondary">
+            Not now — hold lapses, ₹0 charged
+          </p>
         </div>
       ) : null}
+
+      <div className="mt-3">
+        <RateTermsLink terms={terms} />
+      </div>
     </div>
   );
 }
 
 /**
- * A confirmed booking, said once — and then handed over.
+ * A confirmed booking, said once — and then handed over — screen 4.
  *
  * This used to be the beginning of a long screen: the crew, the money, the day
  * controls, the fee outcome and the frozen rate terms, all on `/requests/[id]`.
@@ -726,10 +618,9 @@ function OfferHeld({
  * asked for and its job ends when somebody accepts; a booking is what is
  * happening, and it is where a Customer goes to act.
  *
- * So this states the outcome in two sentences and links to the booking. The
- * explanation of how paying the crew works moves behind a disclosure, because a
- * Customer re-reading a confirmed request is checking who is coming and when,
- * not re-learning the settlement model.
+ * So this is one line and one button. `FeeOutcome` and the rate-terms link
+ * render beside this from the panel above, not inside it — the spec's "below
+ * it nothing except `FeeOutcome` ... and Rate & terms".
  */
 function CrewConfirmed({
   booking,
@@ -742,54 +633,18 @@ function CrewConfirmed({
 }) {
   return (
     <div className="rounded-card border border-success-line bg-success-surface p-4">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <p className="font-semibold text-text">Your crew is confirmed</p>
-        <Badge tone="success">Booked</Badge>
-      </div>
-      <p className="mt-2 max-w-prose text-sm leading-6 text-text">
-        {crewName !== null ? (
-          <>
-            <strong className="font-semibold">{crewName}</strong> is bringing{" "}
-          </>
-        ) : (
-          "A supervisor is bringing "
-        )}
-        {booking.headcount === 1 ? "one person" : `${booking.headcount} people`} for{" "}
-        {booking.days} {booking.days === 1 ? "day" : "days"}.
-      </p>
-
-      {/* Stays open, deliberately. That Vsolve does not hold the money for the
-          work is the one thing an A3 Customer must know before anybody starts,
-          and a promise nobody expanded is a promise nobody read. */}
-      <p className="mt-2 max-w-prose text-sm leading-6 text-text-secondary">
-        You pay them{" "}
-        <strong className="font-semibold text-text">{booking.leadReceiptLabel}</strong> directly, at
-        the end of each day. We never hold that money.
-      </p>
-
-      <div className="mt-2">
-        <Disclosure summary="How does paying them work?">
-          Agree the day rate with the supervisor before work starts — it is the
-          published rate on your booking and they may not charge above it. Pay at
-          the end of each day, in cash or however you both agree. V Solve Hub is
-          not part of that payment, so keep your own record of what you have
-          handed over.
-        </Disclosure>
-      </div>
-
-      {/* Deep-links at last. `RateCardState` published no engagement id until
-          1.36.0, so this could only offer the whole list — and everything the
-          Customer now wants after confirmation lives on the booking. Falls back
-          to the list when the id is absent, which is the brief window between a
-          verified fee and the engagement row it creates. */}
-      <div className="mt-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-text">
+          <span aria-hidden>✅</span> Booked · {crewName ?? "A supervisor"} ·{" "}
+          {booking.headcount === 1 ? "1 person" : `${booking.headcount} people`}
+        </p>
         <Link
           href={
             engagementId === null ? engagementListHref("lead_only") : engagementHref(engagementId)
           }
-          className={buttonStyles({ variant: "outline" })}
+          className={buttonStyles({ variant: "outline", size: "sm" })}
         >
-          Open this booking
+          Open booking
         </Link>
       </div>
     </div>
@@ -799,7 +654,7 @@ function CrewConfirmed({
 /* --------------------------------------------------------------------------
    Where the money went
 
-   Day one moved to `features/engagement/view/crew-day-panel.tsx`. Recording an
+   Day one lives in `features/engagement/view/today-card.tsx`. Recording an
    arrival needs to name a booking, and this screen is the request.
    -------------------------------------------------------------------------- */
 
@@ -822,9 +677,8 @@ function FeeOutcome({ phase, fee }: { phase: BookingFeePhase; fee: FeeMoneyView 
           </p>
           <Badge tone="warning">Forfeited</Badge>
         </div>
-        <p className="mt-2 max-w-prose text-sm leading-6 text-text">
-          The crew travelled to your site and could not work. We do not give the
-          fee back in that case, and we do not keep all of it either:
+        <p className="mt-2 text-sm leading-6 text-text">
+          The crew travelled and could not work, so the fee was split:
         </p>
         <dl className="mt-3 divide-y divide-warning-line rounded-card border border-warning-line bg-surface">
           {fee.travelCompensationLabel !== null ? (
@@ -860,9 +714,8 @@ function FeeOutcome({ phase, fee }: { phase: BookingFeePhase; fee: FeeMoneyView 
           </p>
           <Badge tone="info">Refunded</Badge>
         </div>
-        <p className="mt-2 max-w-prose text-sm leading-6 text-text">
-          Nobody earns anything from a crew that did not deliver — not the
-          supervisor and not us. It reaches your account the way you paid it.
+        <p className="mt-2 text-sm leading-6 text-text">
+          It reaches your account the way you paid it.
         </p>
         <ReceiptLine fee={fee} />
       </div>
@@ -873,9 +726,8 @@ function FeeOutcome({ phase, fee }: { phase: BookingFeePhase; fee: FeeMoneyView 
     return (
       <div className="rounded-card border border-line bg-surface p-4">
         <p className="font-semibold text-text">Your crew arrived</p>
-        <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
-          The {fee.amountLabel} booking fee is settled. Everything else is between
-          you and the supervisor — pay for each day at the end of it.
+        <p className="mt-1 text-sm leading-6 text-text-secondary">
+          The {fee.amountLabel} booking fee is settled; pay the crew each day directly.
         </p>
         <ReceiptLine fee={fee} />
       </div>
@@ -886,9 +738,8 @@ function FeeOutcome({ phase, fee }: { phase: BookingFeePhase; fee: FeeMoneyView 
     return (
       <div className="rounded-card border border-danger-line bg-danger-surface p-4">
         <p className="font-semibold text-text">That payment did not go through</p>
-        <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
-          You have not been charged. If a supervisor is still holding the job,
-          paying now keeps it.
+        <p className="mt-1 text-sm leading-6 text-text-secondary">
+          You have not been charged — pay now to keep the crew.
         </p>
       </div>
     );
@@ -909,8 +760,7 @@ function ReceiptLine({ fee }: { fee: FeeMoneyView }) {
   if (fee.receiptNumber === null) return null;
   return (
     <p className="mt-3 text-sm text-text-muted">
-      Receipt reference <span data-numeric>{fee.receiptNumber}</span> — quote it if
-      you talk to us about this payment.
+      Receipt <span data-numeric>{fee.receiptNumber}</span>
     </p>
   );
 }
@@ -950,7 +800,7 @@ function ReceiptLine({ fee }: { fee: FeeMoneyView }) {
  * mis-tap from gone.
  */
 function NobodyAccepted({
-  booking,
+  dayRateLabel,
   isPending,
   error,
   onRetry,
@@ -958,7 +808,7 @@ function NobodyAccepted({
   onCancel,
   supportAction,
 }: {
-  booking: BookingView;
+  dayRateLabel: string;
   isPending: boolean;
   error: unknown;
   onRetry: () => void;
@@ -970,49 +820,36 @@ function NobodyAccepted({
 
   return (
     <div className="rounded-card border border-warning-line bg-warning-surface p-4">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <p className="font-semibold text-text">No crew accepted yet</p>
-        <Badge tone="warning">Waiting on you</Badge>
+      <div className="flex flex-col items-center gap-1 py-2 text-center">
+        <span aria-hidden className="text-2xl">
+          😕
+        </span>
+        <p className="font-semibold text-text">No one free at this rate</p>
+        <p className="text-sm text-text-secondary">Nothing charged.</p>
       </div>
 
-      <p className="mt-2 max-w-prose text-sm leading-6 text-text">
-        We asked every supervisor who could field{" "}
-        {booking.headcount === 1 ? "one person" : `${booking.headcount} people`} near
-        you, and none of them took it. That happens most often when the dates are
-        close or the crew is large.
-      </p>
-      <p className="mt-2 max-w-prose text-sm leading-6 text-text-secondary">
-        <strong className="font-semibold text-text">Nothing has been charged</strong>{" "}
-        and your request is exactly as you left it. Three ways forward:
-      </p>
+      <div className="mt-3 flex flex-col gap-2">
+        <Button block onClick={onRetry} loading={isPending} loadingLabel="Widening the search">
+          Search wider (same rate)
+        </Button>
+        <Button block variant="secondary" onClick={onChooseQuotes} disabled={isPending}>
+          Get quotes instead
+        </Button>
+        <Button
+          block
+          variant="ghost"
+          onClick={() => setConfirmingCancel(true)}
+          disabled={isPending}
+        >
+          Cancel
+        </Button>
+      </div>
 
-      <div className="mt-4 flex flex-col gap-3">
-        <div>
-          <Button onClick={onRetry} loading={isPending} loadingLabel="Widening the search">
-            Keep looking — search wider
-          </Button>
-          <p className="mt-1 max-w-prose text-xs leading-5 text-text-secondary">
-            Goes out to supervisors further away, at the same {booking.dayRateLabel}{" "}
-            published rate. We do not raise the price to find someone — the rate is
-            set for your city, and the crew is paid it directly.
-          </p>
-        </div>
-
-        <div>
-          <Button variant="secondary" onClick={onChooseQuotes} disabled={isPending}>
-            Get quotes instead
-          </Button>
-          <p className="mt-1 max-w-prose text-xs leading-5 text-text-secondary">
-            Vendors send you their own prices for this job. Slower than instant
-            booking, and the price will vary.
-          </p>
-        </div>
-
-        <div>
-          <Button variant="ghost" onClick={() => setConfirmingCancel(true)} disabled={isPending}>
-            Cancel this request
-          </Button>
-        </div>
+      <div className="mt-3">
+        <Disclosure summary="What &ldquo;quotes instead&rdquo; means">
+          Professionals send their own price instead of the published{" "}
+          {dayRateLabel} day rate. It is slower, and nothing is charged to ask for one.
+        </Disclosure>
       </div>
 
       <div className="mt-3">
@@ -1027,7 +864,7 @@ function NobodyAccepted({
         open={confirmingCancel}
         onOpenChange={setConfirmingCancel}
         title="Cancel this request?"
-        consequence="Nothing has been charged and nothing will be. You can ask again later, though you would need to describe the job once more."
+        consequence="Nothing has been charged and nothing will be."
         confirmLabel="Cancel the request"
         cancelLabel="Keep it open"
         onConfirm={() => {
@@ -1039,4 +876,11 @@ function NobodyAccepted({
       />
     </div>
   );
+}
+
+/** "4 people · 3 days · from Mon" — the waiting screen's one summary line. */
+function crewLineOf(booking: BookingView, startsOn: string | null): string {
+  const people = `${booking.headcount} ${booking.headcount === 1 ? "person" : "people"}`;
+  const days = `${booking.days} ${booking.days === 1 ? "day" : "days"}`;
+  return startsOn === null ? `${people} · ${days}` : `${people} · ${days} · from ${startsOn}`;
 }

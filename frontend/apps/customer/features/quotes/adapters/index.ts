@@ -119,6 +119,67 @@ function toMaterialViews(
 }
 
 /* --------------------------------------------------------------------------
+   The shopping list — what the Customer buys, contract 1.48.0
+   -------------------------------------------------------------------------- */
+
+/** One line of `CustomerProposal.material_list`. Not re-exported by `@vsolve/query` yet. */
+type MaterialListLine = CustomerProposal["material_list"][number];
+
+/**
+ * One thing the Customer should buy. Quantities and a spec — **never a price**.
+ *
+ * Materials are always the Customer's to buy on a visit-first project, so every
+ * estimate carries this list beside the priced `material_lines` (the advances
+ * the pro supplies). The two are different fields and render under different
+ * headings; nothing here is inside the total.
+ */
+export interface QuoteMaterialListRowView {
+  title: string;
+  /** "16 A, white" — what makes it the right one. Null when the pro gave none. */
+  spec: string | null;
+  /** "5 Nos", or the bare number where the pro set no unit. */
+  quantityLabel: string;
+  /** A short aside — "any brand", "match the existing". Null when absent. */
+  note: string | null;
+}
+
+function toMaterialListViews(
+  lines: readonly MaterialListLine[],
+): readonly QuoteMaterialListRowView[] {
+  return lines
+    .filter((line) => line.title.trim() !== "")
+    .map((line) => {
+      // `spec`, `unit` and `note` are `@default ""` on the wire and so optional
+      // in the generated type; absent and blank mean the same thing here.
+      const unit = (line.unit ?? "").trim();
+      const spec = (line.spec ?? "").trim();
+      const note = (line.note ?? "").trim();
+      const quantity = trimQuantity(line.quantity);
+      return {
+        title: line.title.trim(),
+        spec: spec === "" ? null : spec,
+        quantityLabel: unit === "" ? quantity : `${quantity} ${unit}`,
+        note: note === "" ? null : note,
+      };
+    });
+}
+
+/**
+ * The brand class the pro sized the list for, in words a shop understands.
+ *
+ * Two tiers on the wire and a blank; anything else is a tier this bundle has
+ * no words for and renders nothing rather than a code.
+ */
+const BRAND_TIER_LABEL: Record<string, string> = {
+  STANDARD: "Standard tier (Finolex / Anchor class)",
+  PREMIUM: "Premium tier (Polycab / Legrand class)",
+};
+
+export function brandTierLabel(tier: string): string | null {
+  return BRAND_TIER_LABEL[tier] ?? null;
+}
+
+/* --------------------------------------------------------------------------
    Priced lines — how the vendor built the number
    -------------------------------------------------------------------------- */
 
@@ -159,7 +220,8 @@ function toItemLineViews(lines: readonly ProposalItemLine[]): readonly QuoteItem
     const quantity = trimQuantity(line.quantity);
     const unit = UNIT_LABELS[line.unit] ?? line.unit;
     return {
-      category: line.category.trim(),
+      // Optional since 1.48.0 — a custom line the Partner added on site may carry none.
+      category: (line.category ?? "").trim(),
       title: line.title.trim(),
       quantityLabel:
         quantity === "1" && line.unit === "job"
@@ -327,6 +389,14 @@ export interface QuoteCardView {
    */
   materials: readonly QuoteMaterialView[];
 
+  /**
+   * What the Customer buys themselves — quantities and specs, no prices.
+   * Distinct from `materials` above, which the pro supplies inside the total.
+   */
+  materialList: readonly QuoteMaterialListRowView[];
+  /** "Standard tier (Finolex / Anchor class)", or null when the pro set none. */
+  brandTierLabel: string | null;
+
   inclusions: readonly string[];
   exclusions: readonly string[];
   /** What the vendor will do, in their own words. Null on an estimate written before 1.47.0. */
@@ -435,6 +505,8 @@ export function toQuoteCard(proposal: CustomerProposal, serverNow: string): Quot
 
     stages: toStageViews(proposal.stages),
     materials: toMaterialViews(proposal.material_lines),
+    materialList: toMaterialListViews(proposal.material_list),
+    brandTierLabel: brandTierLabel(proposal.material_brand_tier),
 
     inclusions: readLines(proposal.inclusions),
     exclusions: readLines(proposal.exclusions),
@@ -597,6 +669,12 @@ function joinOrNull(lines: readonly string[]): string | null {
   return lines.length === 0 ? null : lines.join(" · ");
 }
 
+/** "1 item" / "4 items". Null for none, so an all-empty row drops out. */
+export function materialCountLabel(count: number): string | null {
+  if (count === 0) return null;
+  return count === 1 ? "1 item" : `${count} items`;
+}
+
 /**
  * The comparison table, built once from the cards.
  *
@@ -722,6 +800,13 @@ export function toComparisonRows(cards: readonly QuoteCardView[]): readonly Comp
             ? `Labour-wise (${card.labourLines.length} ${card.labourLines.length === 1 ? "role" : "roles"})`
             : null,
       ),
+    },
+    {
+      // A count, never a cost: the list carries no prices by contract, and
+      // the number of things to buy is the one figure that compares.
+      label: "Materials to buy",
+      equivalent: true,
+      values: cards.map((card) => materialCountLabel(card.materialList.length)),
     },
     {
       label: "Valid until",

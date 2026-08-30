@@ -59,11 +59,16 @@ const TONE = {
 export interface EngagementCardProps {
   readonly engagement: Engagement;
   readonly wording: StageWording;
-  /** `/workforce/shifts` or `/projects/stages`. */
-  readonly basePath: string;
 }
 
-export function EngagementCard({ engagement, wording, basePath }: EngagementCardProps) {
+/**
+ * Every engagement opens on `/work/jobs/[id]`, whichever archetype it is —
+ * that route resolves the kind itself. The old `/workforce/shifts/[id]` and
+ * `/projects/stages/[id]` are 308 redirects to it.
+ */
+const JOB_HREF = (id: string) => `/work/jobs/${id}`;
+
+export function EngagementCard({ engagement, wording }: EngagementCardProps) {
   const status = describeEngagementStatus(engagement, wording);
   const totals = agreedTotals(engagement);
   const progress = stageProgress(engagement);
@@ -79,7 +84,7 @@ export function EngagementCard({ engagement, wording, basePath }: EngagementCard
   return (
     <Card className="p-0">
       <Link
-        href={`${basePath}/${engagement.id}`}
+        href={JOB_HREF(engagement.id)}
         className="flex min-h-20 items-center justify-between gap-3 rounded-card px-4 py-3 hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
       >
         <span className="flex min-w-0 flex-col gap-1.5">

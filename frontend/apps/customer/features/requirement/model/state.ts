@@ -1,4 +1,4 @@
-import { type Screen, nextScreen, screenIndex } from "./screens";
+import { SCREENS, type Screen, nextScreen, screenIndex } from "./screens";
 
 /**
  * The requirement draft, and the guards that protect every step forward.
@@ -9,7 +9,7 @@ import { type Screen, nextScreen, screenIndex } from "./screens";
  * explanation, which answers are still missing — is held as a verdict and never
  * recomputed locally.
  *
- * That split is what keeps the two-screen flow honest. The client does not own
+ * That split is what keeps the three-screen flow honest. The client does not own
  * the question schema, so it cannot disagree with the server about whether a
  * requirement is complete; it can only be out of date, which is visible.
  *
@@ -202,7 +202,7 @@ export interface RequirementDraftState {
   flexibilityDays: number;
 
   /**
-   * Stored attachments on a resumed historical draft. Nothing in the two-screen
+   * Stored attachments on a resumed historical draft. Nothing in the three-screen
    * flow adds to this — capture was removed — and the guards ignore it.
    */
   attachments: readonly DraftAttachment[];
@@ -217,11 +217,16 @@ export interface RequirementDraftState {
   duplicateOverridden: boolean;
 }
 
-export function initialDraftState(categorySlug: string): RequirementDraftState {
+/**
+ * @param screen Where the flow opens. `what` unless the variant publishes no
+ *   questions, in which case the container passes the first *active* screen
+ *   (`activeScreens`) so the Customer never lands on an empty step.
+ */
+export function initialDraftState(categorySlug: string, screen: Screen = "what"): RequirementDraftState {
   return {
     requirementId: null,
     categorySlug,
-    screen: "what",
+    screen,
     visited: [],
     answers: {},
     verdict: null,
@@ -317,18 +322,27 @@ function blockedDates(state: RequirementDraftState, today: string): BlockReason 
  * @param today ISO date in the Customer's timezone, supplied by the caller.
  * @param hasUnresolvedDuplicate Whether a probable duplicate is on screen and
  *   has been neither merged nor explicitly overridden.
+ * @param requiredAnswerCodes The catalogue's required question codes, when the
+ *   caller has them. Used only before the first server verdict exists.
  */
 export function blockedReason(
   state: RequirementDraftState,
   today: string,
   hasUnresolvedDuplicate = false,
+  requiredAnswerCodes?: readonly string[],
 ): BlockReason | null {
   switch (state.screen) {
     case "what": {
       // The server owns validity. Before the first save there is no verdict, so
-      // an empty answer set is the only thing the client can refuse on its own —
-      // and it refuses, because "next" on an untouched form is never intended.
+      // the client checks what it can: every question the catalogue marked
+      // required, when the container passed that list, and otherwise only that
+      // the form is not untouched — "next" on an empty form is never intended.
       if (state.verdict === null) {
+        if (requiredAnswerCodes !== undefined && requiredAnswerCodes.length > 0) {
+          return requiredAnswerCodes.every((code) => isAnswered(state.answers[code]))
+            ? null
+            : "REQUIRED_ANSWER_MISSING";
+        }
         return Object.keys(state.answers).some((code) => isAnswered(state.answers[code]))
           ? null
           : "REQUIRED_ANSWER_MISSING";
@@ -378,8 +392,9 @@ export function canAdvance(
   state: RequirementDraftState,
   today: string,
   hasUnresolvedDuplicate = false,
+  requiredAnswerCodes?: readonly string[],
 ): boolean {
-  return blockedReason(state, today, hasUnresolvedDuplicate) === null;
+  return blockedReason(state, today, hasUnresolvedDuplicate, requiredAnswerCodes) === null;
 }
 
 /** The three brief sections, in the order the page renders them. */
@@ -389,24 +404,26 @@ export type BriefSection = (typeof BRIEF_SECTIONS)[number];
 
 /**
  * What is still missing in each section of the one-page brief.
+ *
+ * @param screens The sections the variant actually walks (`activeScreens`).
+ *   A section not in the list answers `null`: a brief that never asked step 1
+ *   cannot be held up by it.
  */
 export function briefSectionBlocks(
   state: RequirementDraftState,
   today: string,
   hasUnresolvedDuplicate = false,
+  requiredAnswerCodes?: readonly string[],
+  screens: readonly Screen[] = BRIEF_SECTIONS,
 ): Record<BriefSection, BlockReason | null> {
+  const blockFor = (section: BriefSection): BlockReason | null =>
+    screens.includes(section)
+      ? blockedReason({ ...state, screen: section }, today, hasUnresolvedDuplicate, requiredAnswerCodes)
+      : null;
   return {
-    what: blockedReason({ ...state, screen: "what" }, today, hasUnresolvedDuplicate),
-    where_when: blockedReason(
-      { ...state, screen: "where_when" },
-      today,
-      hasUnresolvedDuplicate,
-    ),
-    visits_send: blockedReason(
-      { ...state, screen: "visits_send" },
-      today,
-      hasUnresolvedDuplicate,
-    ),
+    what: blockFor("what"),
+    where_when: blockFor("where_when"),
+    visits_send: blockFor("visits_send"),
   };
 }
 
@@ -435,8 +452,11 @@ export function canNavigateTo(state: RequirementDraftState, target: Screen): boo
  * the last screen has no successor, and "submit" is a different action with its
  * own guard.
  */
-export function advance(state: RequirementDraftState): RequirementDraftState {
-  const next = nextScreen(state.screen);
+export function advance(
+  state: RequirementDraftState,
+  screens: readonly Screen[] = SCREENS,
+): RequirementDraftState {
+  const next = nextScreen(state.screen, screens);
   if (next === null) return state;
   return {
     ...state,

@@ -222,7 +222,7 @@ describe("unpublished endpoints stay out of production", () => {
       "lib/api/public.ts",
       "lib/api/private.ts",
       "features/payment/view/receipt.tsx",
-      "features/engagement/view/receipt-document.tsx",
+      "features/engagement/view/receipt.tsx",
     ];
 
     const offenders = productionSources

@@ -91,9 +91,7 @@ class OperationsWorkItemCollectionView(APIView):
             OpenApiParameter(
                 name="skill_id", type=OpenApiTypes.UUID, location=OpenApiParameter.QUERY
             ),
-            OpenApiParameter(
-                name="status", type=OpenApiTypes.STR, location=OpenApiParameter.QUERY
-            ),
+            OpenApiParameter(name="status", type=OpenApiTypes.STR, location=OpenApiParameter.QUERY),
         ],
         responses={200: WorkItemSerializer(many=True), 403: ApiErrorSerializer},
     )
@@ -253,9 +251,7 @@ class OperationsCustomWorkItemReviewQueueView(APIView):
             .select_related("partner", "partner__business_profile")
             .order_by("-created_at")
         )
-        return Response(
-            CustomWorkItemReviewListSerializer({"reviews": reviews}).data
-        )
+        return Response(CustomWorkItemReviewListSerializer({"reviews": reviews}).data)
 
 
 class OperationsCustomWorkItemReviewResolveView(APIView):
@@ -307,7 +303,15 @@ class PartnerPriceBookView(APIView):
                 required=False,
                 description="One of the Partner's own active service areas. Defaults to their "
                 "sole area when they serve only one.",
-            )
+            ),
+            OpenApiParameter(
+                name="skill",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description="Narrow to one trade's catalogue - the enquiry's "
+                "`pricing_skill_code`. Omitted, every trade the Partner prices from is listed.",
+            ),
         ],
         responses={200: PriceBookListSerializer, 403: ApiErrorSerializer, 404: ApiErrorSerializer},
     )
@@ -317,7 +321,10 @@ class PartnerPriceBookView(APIView):
             service_area = _partner_service_area(request=request)
         except RequirementDomainError as exc:
             _raise_api_error(exc)
-        entries = price_book.price_book_for_partner(partner=profile, service_area=service_area)
+        skill = request.query_params.get("skill") or None
+        entries = price_book.price_book_for_partner(
+            partner=profile, service_area=service_area, skill_code=skill
+        )
         payload = {
             "items": [
                 {
@@ -328,6 +335,9 @@ class PartnerPriceBookView(APIView):
                     "ceiling_paise": entry.ceiling_paise,
                     "partner_rate_paise": entry.partner_rate_paise,
                     "partner_is_active": entry.partner_is_active,
+                    "is_default_rate": entry.is_default_rate,
+                    "trade_code": entry.trade_code,
+                    "trade_name": entry.trade_name,
                 }
                 for entry in entries
             ]

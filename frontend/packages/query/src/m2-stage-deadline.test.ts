@@ -16,6 +16,8 @@ const stage: Schemas["EngagementStage"] = {
     platform_fee_paise: 0,
     total_due_paise: 118_000,
   },
+  // Nullable since 1.49.0: a project milestone has no shift-day summary.
+  shift_summary: null,
   kind: "WORK",
   starts_on: "2026-08-21",
   duration_days: 5,

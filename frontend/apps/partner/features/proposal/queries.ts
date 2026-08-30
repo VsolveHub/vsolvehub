@@ -8,7 +8,7 @@ import {
   type Schemas,
 } from "@vsolve/api-client";
 import { M2_FRESHNESS, invalidateForM2Command, m2QueryKeys } from "@vsolve/query";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getApiClient } from "@/lib/api/browser";
 
@@ -159,6 +159,15 @@ export function useProposalFinancialPreview(input: {
   invitationId: string;
   fingerprint: string;
   body: ProposalPreviewRequest | null;
+  /**
+   * Keep the last answered preview on screen while the next one is in flight.
+   *
+   * The tap flow derives the customer's shopping list from
+   * `suggested_material_list`, and a list that blinks empty on every keystroke
+   * is a list nobody can edit. `isPlaceholderData` still says which it is, and
+   * the fingerprint gate on Send is unaffected — a placeholder is never current.
+   */
+  keepPrevious?: boolean;
 }) {
   return useQuery<ProposalFinancialSummary>({
     queryKey: m2QueryKeys.proposals.preview(input.invitationId, input.fingerprint),
@@ -172,6 +181,7 @@ export function useProposalFinancialPreview(input: {
     staleTime: Number.POSITIVE_INFINITY,
     gcTime: 5 * 60 * 1000,
     retry: false,
+    ...(input.keepPrevious ? { placeholderData: keepPreviousData } : {}),
   });
 }
 
@@ -348,6 +358,53 @@ export function isNotQuotable(error: unknown): boolean {
     error instanceof ApiRequestError &&
     (error.status === 409 || error.code === "m2_invitation_expired")
   );
+}
+
+/**
+ * A catalogue line's rate sits outside the city band (1.48.0). The message
+ * names the ₹ range, so it is shown verbatim beside the rate.
+ */
+export function isRateOutsideBand(error: unknown): boolean {
+  return error instanceof ApiRequestError && error.code === "rate_outside_band";
+}
+
+/** A custom line's title was screened out (1.48.0). Shown beside the title. */
+export function isCustomTitleScreened(error: unknown): boolean {
+  return error instanceof ApiRequestError && error.code === "custom_title_screened";
+}
+
+/** No band policy or no reference rate is published for this city yet (409). */
+export function isRateCardUnavailable(error: unknown): boolean {
+  return (
+    error instanceof ApiRequestError &&
+    (error.code === "m2_guardrail_policy_unavailable" ||
+      error.code === "m2_work_item_rate_unavailable")
+  );
+}
+
+/**
+ * Which line a 1.48.0 refusal points at, when the envelope says.
+ *
+ * `details` is `unknown` on the contract; a `work_item_id`, `title` or numeric
+ * `index` is read if present and nothing is guessed otherwise — the caller
+ * falls back to the lines the client's own band check can identify.
+ */
+export function refusedLineOf(error: unknown): {
+  readonly workItemId: string | null;
+  readonly title: string | null;
+  readonly index: number | null;
+} {
+  const none = { workItemId: null, title: null, index: null };
+  if (!(error instanceof ApiRequestError)) return none;
+  const details = error.details;
+  if (typeof details !== "object" || details === null || Array.isArray(details)) return none;
+  const record = details as Record<string, unknown>;
+  const index = record.index ?? record.line_index;
+  return {
+    workItemId: typeof record.work_item_id === "string" ? record.work_item_id : null,
+    title: typeof record.title === "string" ? record.title : null,
+    index: typeof index === "number" && Number.isInteger(index) ? index : null,
+  };
 }
 
 /** Belongs to another Partner, or this session holds no Partner profile. */

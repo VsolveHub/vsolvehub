@@ -1,5 +1,63 @@
 # API Contract Changelog
 
+## 1.49.0 - The crew booking, readable from one engagement
+
+- `EngagementSerializer` gains four nullable fields. `crew_terms` is the frozen rate-card
+  snapshot behind an A3 agreement (headcount, days, per-worker day rate, the lead's daily and
+  total receipt, the booking fee, shift length, overtime rate, add-ons, inclusions) — null on a
+  quote-flow engagement. `site_address`, `customer_contact` and `partner_contact` are disclosed
+  once `contact_released_at` is stamped, which on A3 is the moment the booking fee verifies;
+  before this a confirmed lead had no endpoint that told them where to go.
+- `EngagementStageSerializer.shift_summary`: the state of a crew day at a glance (crew named,
+  arrival, the supervisor's count, the customer's answer, the settlement status and amount) so
+  a job page can draw every day without one shift-day read per day. Null on project stages.
+- New outbox events, all routed to the vendor's in-app feed: `m2.crew_offer.invited` (the
+  push a lead never had), `m2.booking_fee.forfeited` (travel compensation landed),
+  `m2.shift.attendance_confirmed` (the customer agreed the count — collect this much),
+  `m2.shift.attendance_disputed`, and `m2.vendor.cash_demand_reported`. `m2.booking_fee.waived`
+  and `m2.crew.vendor_no_show` now reach both sides. On a `LEAD_ONLY` engagement the partner
+  copy for `m2.engagement.opened` and `m2.stage.disputed` no longer talks about a quote or a
+  held payment.
+- Notification target kind `CREW_OFFER` (id = the invitation) — opens the offer screen rather
+  than the enquiry inbox.
+
+## 1.48.0 - The vendor price book, wired; estimates carry a shopping list
+
+- New Partner operations `GET /partner/price-book/` (`m2_partner_price_book_read`) and
+  `PUT /partner/price-book/items/{work_item_id}/` (`m2_partner_price_book_item_set`): the
+  ops-curated work-item catalogue for the Partner's skills and one city, each entry carrying the
+  reference rate, the allowed band, the Partner's own rate and `is_default_rate` (true until they
+  save one — an unsaved rate *is* the city reference, so a new Partner can quote on day one).
+- New Operations operations for the catalogue (`/operations/work-items/…`), the guardrail
+  policy (`/operations/quote-guardrails/…`) and the custom-item queue
+  (`/operations/custom-item-reviews/…`).
+- `WorkItem` publishes `group` (the composer tab), `material_recipe` (what one unit consumes)
+  and `bundle_quantities` (quick-set quantities keyed by set code).
+- `ProposalItemLine` gains optional `work_item_id` and `is_custom`; `category` is now optional. A
+  catalogue line is band-checked at preview and submission (`rate_outside_band`); a custom line
+  is accepted as-is once its title passes contact screening (`custom_title_screened`). There is
+  no review queue and no share cap — an on-site estimate must be able to go out.
+- `ProposalCreateRequest` accepts `material_list` (what the Customer should buy — quantities and
+  a spec, never money; materials are always the Customer's to purchase) and
+  `material_brand_tier` (`STANDARD` / `PREMIUM` / blank). `Proposal` and `CustomerProposal`
+  publish both. `ProposalFinancialSummary` (the preview) publishes `suggested_material_list`,
+  built from the tapped catalogue items' recipes and rounded up to sellable packs.
+- `EnquiryDetail` gains `brief`: the Customer's answers as `{code, question, value}` lines in
+  the catalogue's own words (option labels, not codes) — the projection `CrewOffer.brief` has
+  carried since 1.46.0. `answers` remains for compatibility.
+- New `GET /requirements/{id}/quotes/{proposal_id}/shopping-list/download/` (`m2_quote_shopping_list_pdf`):
+  the estimate's shopping list as a V Solve Hub-branded PDF naming the professional; quantities
+  and specs only. Same entitlement as `m2_quote_list`.
+- `EnquirySummary`/`EnquiryDetail` gain `pricing_skill_code`: the trade whose price book the
+  composer opens (`electrician` for a rewiring, a consultation or a day-hire alike; falls back to
+  the dispatch skill). `GET /partner/price-book/` accepts `?skill=` to narrow to that trade, and
+  every `PriceBookEntry` carries `trade_code` / `trade_name`. Additive.
+- `Engagement` gains `service_name` and `service_slug` (read through the requirement), so the
+  agreement screens title themselves "Full home rewiring" rather than "Project". Additive.
+- New partner notification `m2.visit.booked` (template `m2_visit_booked_partner`) when a plan
+  payment confirms a held visit. Not a contract operation; recorded because clients render it.
+- Removed: `Proposal.misc_bps` / `margin_bps` columns (never published, never written).
+
 ## 1.47.0 - Estimates a Customer can act on
 
 - `CustomerProposal` gains `scope_summary`, `questions` (the clarification thread with that
