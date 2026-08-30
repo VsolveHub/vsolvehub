@@ -25,20 +25,21 @@ export interface FactTileProps {
   value: ReactNode;
   /** Withheld until some server-side condition is met. */
   locked?: boolean;
+  /** Optional click handler to view detailed information. */
+  onClick?: () => void;
   className?: string;
 }
 
-export function FactTile({ icon, label, value, locked = false, className }: FactTileProps) {
-  return (
-    <div
-      className={cn(
-        "flex items-center gap-3 rounded-card p-3",
-        locked
-          ? "border border-dashed border-warm-400 bg-transparent"
-          : "border border-line bg-surface",
-        className,
-      )}
-    >
+export function FactTile({
+  icon,
+  label,
+  value,
+  locked = false,
+  onClick,
+  className,
+}: FactTileProps) {
+  const content = (
+    <>
       <span
         aria-hidden
         className={cn(
@@ -49,7 +50,7 @@ export function FactTile({ icon, label, value, locked = false, className }: Fact
         {icon}
       </span>
 
-      <span className="flex min-w-0 flex-col">
+      <span className="flex min-w-0 flex-col text-left">
         <span className="text-[10px] font-bold uppercase tracking-[0.06em] text-text-muted">
           {label}
         </span>
@@ -62,6 +63,25 @@ export function FactTile({ icon, label, value, locked = false, className }: Fact
           {value}
         </span>
       </span>
-    </div>
+    </>
   );
+
+  const containerClassName = cn(
+    "flex items-center gap-3 rounded-card p-3",
+    locked
+      ? "border border-dashed border-warm-400 bg-transparent"
+      : "border border-line bg-surface",
+    onClick && "cursor-pointer text-left transition-all hover:bg-surface-hover active:scale-[0.98]",
+    className,
+  );
+
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={containerClassName}>
+        {content}
+      </button>
+    );
+  }
+
+  return <div className={containerClassName}>{content}</div>;
 }

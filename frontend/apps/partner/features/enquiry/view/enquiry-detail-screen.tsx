@@ -145,15 +145,7 @@ function EnquiryDecision({ detail }: { readonly detail: EnquiryDetail }) {
 
   return (
     <Screen>
-      <div className="flex items-center gap-3 bg-[linear-gradient(160deg,var(--color-navy-700)_0%,var(--color-navy-900)_100%)] p-4">
-        <button
-          type="button"
-          onClick={() => router.back()}
-          className="grid h-11 w-11 place-items-center rounded-2xl bg-surface/[.13] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-        >
-          <Pictogram name="back" size="md" className="text-surface" />
-          <span className="sr-only">Back</span>
-        </button>
+      <div className="flex items-center justify-between gap-3 bg-[linear-gradient(160deg,var(--color-navy-700)_0%,var(--color-navy-900)_100%)] p-4">
         {/*
           The service name is the header.
 
@@ -194,11 +186,7 @@ function EnquiryDecision({ detail }: { readonly detail: EnquiryDetail }) {
         <RequirementSummary enquiry={enquiry} />
       </div>
 
-      {enquiry.status !== "INVITED" ? (
-        <div className="px-4 pt-4">
-          <ClarificationThread enquiry={enquiry} />
-        </div>
-      ) : null}
+      <ClarificationThread enquiry={enquiry} />
 
       {isProject ? (
         <div className="px-4 pt-4">

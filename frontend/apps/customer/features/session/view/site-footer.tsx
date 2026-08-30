@@ -3,31 +3,10 @@ import { Logo } from "@vsolve/ui";
 
 export function SiteFooter() {
   return (
-    <footer className="bg-[#E5E1DC] pt-12 pb-24 md:pt-16 md:pb-12 text-navy-900 border-t border-[#D9D4CC]">
+    <footer className="hidden md:block bg-[#E5E1DC] pt-16 pb-12 text-navy-900 border-t border-[#D9D4CC]">
       <div className="mx-auto max-w-[1216px] px-4 sm:px-6 lg:px-8">
-        
-        {/* Mobile Minimal Footer */}
-        <div className="flex md:hidden flex-col items-center justify-center text-center">
-          <Link href="/" aria-label="V Solve Hub home" className="inline-block transition-opacity hover:opacity-90">
-            <span className="font-bold tracking-tight text-xl text-navy-900">V Solve Hub</span>
-          </Link>
-          <p className="mt-4 text-xs font-medium leading-relaxed text-navy-800 max-w-[280px]">
-            Professional home services you can trust. We bring expertise directly to your door.
-          </p>
-          
-          <div className="flex items-center gap-6 mt-8 text-xs font-semibold text-navy-800">
-            <Link href="/privacy" className="hover:text-action transition-colors">Company</Link>
-            <Link href="/contact" className="hover:text-action transition-colors">Support</Link>
-            <Link href="/join-pro" className="hover:text-action transition-colors">Partners</Link>
-          </div>
-          
-          <p className="mt-10 text-[0.65rem] font-medium text-navy-800/60">
-            © 2026 V Solve Hub. All rights reserved.
-          </p>
-        </div>
-
         {/* Desktop Detailed Footer */}
-        <div className="hidden md:grid grid-cols-1 gap-10 md:grid-cols-4 md:gap-8">
+        <div className="grid grid-cols-1 gap-10 md:grid-cols-4 md:gap-8">
           {/* Brand Column */}
           <div className="flex flex-col gap-4">
             <Link href="/" aria-label="V Solve Hub home" className="inline-block transition-opacity hover:opacity-90">
@@ -85,7 +64,7 @@ export function SiteFooter() {
           </div>
         </div>
 
-        <div className="hidden md:flex mt-12 md:mt-16 flex-col md:flex-row items-center justify-between gap-4 border-t border-navy-900/10 pt-8">
+        <div className="flex mt-12 md:mt-16 flex-col md:flex-row items-center justify-between gap-4 border-t border-navy-900/10 pt-8">
           <p className="text-xs font-medium text-navy-800/80">
             © {new Date().getFullYear()} V Solve Hub. All rights reserved.
           </p>

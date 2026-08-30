@@ -1,7 +1,6 @@
 "use client";
 
 import { Card, FactList, ScheduleSummary } from "@vsolve/ui";
-import { Lock } from "lucide-react";
 
 import { shortDate } from "@/lib/format";
 import { budgetLine } from "../model/requirement-facts";
@@ -65,15 +64,6 @@ export function RequirementSummary({ enquiry }: RequirementSummaryProps) {
           ]}
         />
       ) : null}
-
-      <p className="flex items-start gap-2 text-xs leading-5 text-text-muted">
-        <Lock size={14} aria-hidden className="mt-0.5 shrink-0" />
-        <span>
-          {enquiry.archetype === "A5_CUSTOM_PROJECT"
-            ? "Only the approximate area is shown before booking. The exact site address appears in your visit workspace after customer payment confirms the visit; the customer’s name and phone stay private."
-            : "Only the approximate area is shown with this quote request. The customer’s exact address, name and phone stay private."}
-        </span>
-      </p>
     </Card>
   );
 }

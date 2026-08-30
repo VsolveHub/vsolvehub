@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { formatMoney, cn } from "@vsolve/ui";
 import { ChevronRight, ClipboardList, X } from "lucide-react";
 
@@ -238,6 +239,7 @@ export function CategoryTileBrowser({
   services: readonly ServiceCard[];
   activeTileSlug: string | null;
 }) {
+  const router = useRouter();
   const [selectedServiceForModal, setSelectedServiceForModal] = useState<ServiceCard | null>(null);
   const tiles = groupByTile(category, services);
 
@@ -379,6 +381,10 @@ export function CategoryTileBrowser({
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
+                            if (service.request_archetypes.length > 0) {
+                              router.push(serviceHref(service, category.slug));
+                              return;
+                            }
                             setSelectedServiceForModal(service);
                           }}
                           className="inline-flex shrink-0 items-center justify-center font-bold shadow-xs transition-colors rounded-lg px-3.5 h-8 text-xs bg-navy-900 text-white hover:bg-navy-800 active:scale-95 cursor-pointer"

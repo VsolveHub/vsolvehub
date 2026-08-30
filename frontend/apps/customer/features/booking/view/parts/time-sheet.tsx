@@ -77,7 +77,7 @@ export function TimeSheet({
               <label
                 key={time}
                 className={cn(
-                  "flex min-h-12 cursor-pointer items-center justify-center rounded-[14px] border px-1 py-2",
+                  "relative flex min-h-12 cursor-pointer items-center justify-center rounded-[14px] border px-1 py-2",
                   "text-[15px] font-semibold tabular-nums transition-colors duration-fast",
                   "has-[:focus-visible]:outline has-[:focus-visible]:outline-2",
                   "has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-focus-ring",

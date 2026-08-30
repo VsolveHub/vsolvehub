@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, ErrorState, FactTile, Sheet, cn, formatMoney } from "@vsolve/ui";
+import { Button, Dialog, ErrorState, FactTile, Sheet, cn, formatMoney } from "@vsolve/ui";
 import { useServerCountdown } from "@vsolve/query";
 import { useState } from "react";
 
@@ -62,6 +62,7 @@ export function FixedTimeOffer({ enquiry }: FixedTimeOfferProps) {
   const accept = useAcceptEnquiry(enquiry.id);
   const decline = useDeclineEnquiry(enquiry.id);
   const [passing, setPassing] = useState(false);
+  const [showingAreaDetail, setShowingAreaDetail] = useState(false);
   const busy = accept.isPending || decline.isPending;
   const countdown = useServerCountdown(enquiry.respondsBy, 1000);
 
@@ -101,8 +102,8 @@ export function FixedTimeOffer({ enquiry }: FixedTimeOfferProps) {
     <section className="flex flex-col gap-4">
       <div className="flex flex-col items-center gap-2 rounded-card bg-[linear-gradient(135deg,var(--color-signal-400)_0%,var(--color-action)_55%,var(--color-action-active)_100%)] px-4 py-5 shadow-raised">
         {countdown !== null ? (
-          <div className="relative h-[120px] w-[120px]">
-            <svg width="120" height="120" viewBox="0 0 150 150" aria-hidden>
+          <div className="relative h-[132px] w-[132px]">
+            <svg width="132" height="132" viewBox="0 0 150 150" aria-hidden>
               <circle cx="75" cy="75" r="66" className="fill-text/12" />
               <circle cx="75" cy="75" r="66" fill="none" className="stroke-text/18" strokeWidth="11" />
               <circle
@@ -124,8 +125,14 @@ export function FixedTimeOffer({ enquiry }: FixedTimeOfferProps) {
               aria-label={countdown.announce}
               className="absolute inset-0 flex flex-col items-center justify-center"
             >
-              <Pictogram name="time" size="sm" className="text-text" />
-              <span aria-hidden className="text-3xl font-extrabold leading-tight tabular-nums text-text">
+              <Pictogram name="time" size="xs" className="text-text mb-0.5" />
+              <span
+                aria-hidden
+                className={cn(
+                  "font-black leading-tight tabular-nums text-text tracking-tight",
+                  countdown.display.length > 5 ? "text-xl" : "text-2xl",
+                )}
+              >
                 {countdown.display}
               </span>
             </div>
@@ -150,6 +157,7 @@ export function FixedTimeOffer({ enquiry }: FixedTimeOfferProps) {
           icon={<Pictogram name="distance" size="md" />}
           label="Area"
           value={enquiry.approximateArea.trim() === "" ? "Not given" : enquiry.approximateArea}
+          onClick={() => setShowingAreaDetail(true)}
         />
         <FactTile icon={<Pictogram name="date" size="md" />} label="Date" value={dateLabel} />
         <FactTile icon={<Pictogram name="time" size="md" />} label="Starts" value={startsLabel} />
@@ -194,6 +202,37 @@ export function FixedTimeOffer({ enquiry }: FixedTimeOfferProps) {
           Pass on this one
         </Button>
       </div>
+
+      <Dialog
+        open={showingAreaDetail}
+        onOpenChange={setShowingAreaDetail}
+        title="Location details"
+        description="Approximate area for this visit"
+        footer={
+          <Button variant="secondary" onClick={() => setShowingAreaDetail(false)}>
+            Done
+          </Button>
+        }
+      >
+        <div className="flex flex-col gap-4 py-2">
+          <div className="flex items-start gap-3 rounded-card border border-line bg-surface-sunken p-4">
+            <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-selected-surface text-text-link">
+              <Pictogram name="distance" size="md" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-text-muted">
+                Area / Neighbourhood
+              </span>
+              <p className="mt-1 text-base font-bold text-navy-900 leading-snug break-words">
+                {enquiry.approximateArea.trim() === "" ? "Not given" : enquiry.approximateArea}
+              </p>
+            </div>
+          </div>
+          <p className="text-xs leading-relaxed text-text-secondary">
+            Before a visit is confirmed, only the approximate locality is shown. The exact doorstep address and directions will appear directly in your visit workspace once accepted.
+          </p>
+        </div>
+      </Dialog>
 
       <Sheet
         open={passing}

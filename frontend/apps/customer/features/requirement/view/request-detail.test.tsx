@@ -5,6 +5,14 @@ import { describe, expect, it, vi } from "vitest";
 import type { RequestRowView, TimelineEventView } from "../adapters";
 import { RequestDetail } from "./request-detail";
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    back: vi.fn(),
+    push: vi.fn(),
+    replace: vi.fn(),
+  }),
+}));
+
 /**
  * One request's page.
  *
@@ -111,5 +119,10 @@ describe("the header", () => {
       "href",
       "/requests/req-1/quotes",
     );
+  });
+
+  it("renders a back button to navigate to the previous view", () => {
+    renderDetail();
+    expect(screen.getByRole("button", { name: "Go back" })).toBeInTheDocument();
   });
 });

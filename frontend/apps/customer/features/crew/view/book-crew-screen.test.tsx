@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { Schemas } from "@vsolve/api-client";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -18,9 +18,10 @@ import { writeCrewBookingIntent } from "../model/booking-intent";
 
 const client = { GET: vi.fn(), POST: vi.fn(), PATCH: vi.fn(), PUT: vi.fn(), DELETE: vi.fn() };
 const push = vi.fn();
+const replace = vi.fn();
 
 vi.mock("@/lib/api/browser", () => ({ getApiClient: () => client }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push, replace }) }));
 
 const { BookCrewScreen } = await import("./book-crew-screen");
 
@@ -163,6 +164,7 @@ function respondToReads(state = rateState()) {
   client.GET.mockImplementation((path: string) => {
     if (path === ADDRESS_PATH) return Promise.resolve(ok([address]));
     if (path === RATE_PATH) return Promise.resolve(ok(state));
+    if (path === "/api/v1/requirements/") return Promise.resolve(ok({ results: [] }));
     return Promise.resolve(ok(null));
   });
 }
@@ -178,9 +180,15 @@ function respondToWrites() {
 
 /** Picks the saved address through the dialog, which is what makes the rail price. */
 async function chooseAddress() {
-  fireEvent.click(await screen.findByRole("button", { name: /choose the address/i }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: /choose the address|change address/i }),
+  );
   const dialog = await screen.findByRole("dialog");
   fireEvent.click(within(dialog).getByRole("radio", { name: /Site/ }));
+  const useButton = within(dialog).queryByRole("button", { name: "Use this address" });
+  if (useButton) {
+    fireEvent.click(useButton);
+  }
 }
 
 /** Confirms step one. This must remain a local-only choice. */
@@ -222,6 +230,7 @@ beforeEach(() => {
   for (const method of Object.values(client)) method.mockReset();
   push.mockReset();
   window.sessionStorage.clear();
+  window.scrollTo = vi.fn();
   Object.defineProperty(window, "matchMedia", {
     configurable: true,
     value: vi.fn(() => ({
@@ -233,7 +242,9 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  cleanup();
   queryClient.clear();
+  window.sessionStorage.clear();
 });
 
 describe("BookCrewScreen rate rail", () => {
@@ -383,6 +394,7 @@ describe("BookCrewScreen booking", () => {
       "/api/v1/requirements/",
       expect.anything(),
     );
+    window.sessionStorage.clear();
   });
 
   it("asks for a sentence only when Something else is chosen", async () => {
@@ -393,7 +405,7 @@ describe("BookCrewScreen booking", () => {
     fireEvent.click(await screen.findByRole("radio", { name: /^Something else/ }));
     fireEvent.click(screen.getByRole("button", { name: "Plan this crew" }));
 
-    expect(screen.getByLabelText("Tell us what the work is")).toBeInTheDocument();
+    expect(screen.getByLabelText(/Tell us what the work is/)).toBeInTheDocument();
   });
 
   it("saves the size on screen before booking it", async () => {
@@ -516,7 +528,7 @@ describe("BookCrewScreen for event staff", () => {
 
     expect(await screen.findByRole("heading", { name: "Staff your event, role by role." })).toBeInTheDocument();
     expect(screen.getByText("Nobody yet")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "See my live rate" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Continue to Crew" })).toBeDisabled();
     expect(rateSizes()).toHaveLength(0);
   });
 
@@ -529,13 +541,16 @@ describe("BookCrewScreen for event staff", () => {
     fireEvent.click(await screen.findByRole("radio", { name: /^Wedding/ }));
     fireEvent.click(screen.getByRole("radio", { name: "Under 50" }));
     fireEvent.click(screen.getByRole("radio", { name: /^Buffet/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue to Crew" }));
     // 40 guests at a buffet: one serving person. The customer wants three.
     expect(screen.getByText(/1 person × 1 day/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "More waiters and serving staff" }));
     fireEvent.click(screen.getByRole("button", { name: "More waiters and serving staff" }));
 
     // A bigger crowd would suggest five — but three was theirs, and it stays.
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
     fireEvent.click(screen.getByRole("radio", { name: "100 to 200" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue to Crew" }));
     expect(screen.getByText(/3 people × 1 day/)).toBeInTheDocument();
   });
 
@@ -548,6 +563,7 @@ describe("BookCrewScreen for event staff", () => {
     fireEvent.click(await screen.findByRole("radio", { name: /^Wedding/ }));
     fireEvent.click(screen.getByRole("radio", { name: "100 to 200" }));
     fireEvent.click(screen.getByRole("radio", { name: /^Buffet/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue to Crew" }));
     // 150 guests at a buffet starts the crew with five serving staff, already
     // on the roster rather than in a sentence. The customer adjusts from there.
     expect(screen.getByText(/we have started you with/)).toBeInTheDocument();
@@ -558,8 +574,9 @@ describe("BookCrewScreen for event staff", () => {
     fireEvent.click(screen.getByRole("button", { name: "More bar and beverage staff" }));
     expect(screen.getByText(/8 people × 1 day/)).toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole("button", { name: "Continue to Date & Venue" }));
     await chooseAddress();
-    fireEvent.change(screen.getByLabelText(/Event date/), { target: { value: "2026-09-14" } });
+    fireEvent.change(screen.getByLabelText(/Start from/), { target: { value: "2026-09-14" } });
     fireEvent.change(screen.getByLabelText(/Reporting time/), { target: { value: "17:00" } });
     fireEvent.click(screen.getByRole("radio", { name: "Black and white formal" }));
     fireEvent.click(screen.getByRole("radio", { name: "Yes" }));

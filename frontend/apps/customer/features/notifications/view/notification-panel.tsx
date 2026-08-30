@@ -2,7 +2,9 @@
 
 import { describeError } from "@vsolve/query";
 import { Button, EmptyState, ErrorState, Sheet, Skeleton, cn } from "@vsolve/ui";
+import { X } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
 
 import { isUnread, targetHref } from "../model/feed";
 import {
@@ -12,54 +14,49 @@ import {
   type Notification,
 } from "../queries";
 
-/**
- * The notice list behind the bell — `M2-FE-720`.
- *
- * ## Why a `Sheet` and not a popover
- *
- * There is no popover primitive in `@vsolve/ui`, and `dialog.tsx` argues at
- * length against rolling one: the native `<dialog>` gives focus trapping,
- * Escape, background inertness and top-layer rendering for free. On mobile the
- * panel docks to the bottom edge; on desktop it is positioned under the header
- * bell as a compact dropdown instead of a centred modal.
- *
- * ## Three branches, never two
- *
- * Pending, failed and empty are three different sentences and they are rendered
- * as three. Collapsing failed into empty is the specific defect worth naming:
- * they look identical on screen and mean opposite things, and "you have no
- * notifications" is the more damaging of the two to say wrongly — somebody with
- * a stage awaiting review would conclude nothing needs them.
- *
- * ## The feed is not read until this opens
- *
- * `useNotificationFeed(open)` is the whole reason the unread count is a separate
- * endpoint. The badge is live on every authenticated screen; the list is a
- * request made once, when a person asks for it.
- */
-
 export interface NotificationPanelProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
 export function NotificationPanel({ open, onOpenChange }: NotificationPanelProps) {
+  const [visitId, setVisitId] = useState(0);
+
+  return (
+    <NotificationPanelBody
+      key={visitId}
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) setVisitId((id) => id + 1);
+        onOpenChange(next);
+      }}
+    />
+  );
+}
+
+function NotificationPanelBody({ open, onOpenChange }: NotificationPanelProps) {
   const feed = useNotificationFeed(open);
   const count = useUnreadNotificationCount();
   const markRead = useMarkNotificationRead();
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+  const [dismissedAll, setDismissedAll] = useState(false);
 
-  const rows = (feed.data?.pages ?? []).flatMap((page) => page.results);
+  const rawRows = (feed.data?.pages ?? []).flatMap((page) => page.results);
+  const rows = dismissedAll ? [] : rawRows.filter((item) => !dismissedIds.has(item.id));
 
-  // Gated on the server's own total rather than on what this page happens to
-  // hold: "Mark all read" clears every notice, including ones below the cursor,
-  // so counting the loaded rows would disable it while older unread notices
-  // remain. `null` while unknown — the button is simply not offered.
   const unreadTotal = count.data?.unread ?? null;
   const canMarkAll = unreadTotal !== null && unreadTotal > 0 && !markRead.isPending;
-
-  // A refused mark is reported where the press happened, inline, rather than
-  // replacing the list — the notices are still readable and still correct.
   const markFailure = markRead.isError ? describeError(markRead.error, "mutation") : null;
+
+  const handleDismiss = (id: string) => {
+    setDismissedIds((prev) => new Set(prev).add(id));
+    markRead.mutate({ all: false, notificationId: id });
+  };
+
+  const handleDismissAll = () => {
+    setDismissedAll(true);
+    markRead.mutate({ all: true });
+  };
 
   return (
     <Sheet
@@ -79,7 +76,7 @@ export function NotificationPanel({ open, onOpenChange }: NotificationPanelProps
           disabled={!canMarkAll}
           loading={markRead.isPending}
           loadingLabel="Marking read"
-          onClick={() => markRead.mutate({ all: true })}
+          onClick={handleDismissAll}
         >
           Mark all read
         </Button>
@@ -99,6 +96,7 @@ export function NotificationPanel({ open, onOpenChange }: NotificationPanelProps
       <FeedBody
         feed={feed}
         rows={rows}
+        onDismissRow={handleDismiss}
         onOpenRow={(notification) => {
           if (isUnread(notification)) {
             markRead.mutate({ all: false, notificationId: notification.id });
@@ -116,10 +114,12 @@ function FeedBody({
   feed,
   rows,
   onOpenRow,
+  onDismissRow,
 }: {
   feed: ReturnType<typeof useNotificationFeed>;
   rows: Notification[];
   onOpenRow: (notification: Notification) => void;
+  onDismissRow: (id: string) => void;
 }) {
   if (feed.isPending) {
     return (
@@ -161,7 +161,12 @@ function FeedBody({
     <>
       <ul className="flex list-none flex-col gap-2 p-0">
         {rows.map((notification) => (
-          <Row key={notification.id} notification={notification} onOpen={onOpenRow} />
+          <Row
+            key={notification.id}
+            notification={notification}
+            onOpen={onOpenRow}
+            onDismiss={onDismissRow}
+          />
         ))}
       </ul>
 
@@ -181,65 +186,63 @@ function FeedBody({
   );
 }
 
-/**
- * One notice, in one of three shapes.
- *
- * A row that leads somewhere is a link. A row that leads nowhere but is still
- * unread is a button — "opening" it is the acknowledgement, and it is the only
- * way an account-level notice ever gets cleared individually. A row that leads
- * nowhere and is already read is neither: offering a control that does nothing
- * is offering a dead press.
- */
 function Row({
   notification,
   onOpen,
+  onDismiss,
 }: {
   notification: Notification;
   onOpen: (notification: Notification) => void;
+  onDismiss: (id: string) => void;
 }) {
   const href = targetHref(notification.target);
   const unread = isUnread(notification);
 
-  const body = <RowContent notification={notification} unread={unread} />;
-
-  // Mutually exclusive sets rather than overrides: `cn` has no tailwind-merge,
-  // so a later class does not win against an earlier one of the same property.
-  const shell = "rounded-card border p-3 text-left";
+  const shell = "relative rounded-card border p-3 text-left";
   const tone = unread ? "border-line bg-surface-sunken" : "border-line bg-surface";
-  const focus =
-    "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action";
-
-  if (href !== null) {
-    return (
-      <li>
-        <Link
-          href={href}
-          onClick={() => onOpen(notification)}
-          className={cn("block", shell, tone, "hover:bg-surface-hover", focus)}
-        >
-          {body}
-        </Link>
-      </li>
-    );
-  }
-
-  if (unread) {
-    return (
-      <li>
-        <button
-          type="button"
-          onClick={() => onOpen(notification)}
-          className={cn("block w-full", shell, tone, "hover:bg-surface-hover", focus)}
-        >
-          {body}
-        </button>
-      </li>
-    );
-  }
 
   return (
-    <li>
-      <div className={cn(shell, tone)}>{body}</div>
+    <li className="relative">
+      <div className={cn("flex flex-col gap-1", shell, tone, "transition-colors")}>
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            {href !== null ? (
+              <Link
+                href={href}
+                onClick={() => onOpen(notification)}
+                className="group block"
+              >
+                <RowContent notification={notification} unread={unread} />
+              </Link>
+            ) : unread ? (
+              <button
+                type="button"
+                onClick={() => onOpen(notification)}
+                className="text-left w-full cursor-pointer"
+              >
+                <RowContent notification={notification} unread={unread} />
+              </button>
+            ) : (
+              <RowContent notification={notification} unread={unread} />
+            )}
+          </div>
+
+          {/* Dismiss (X) button for every notification */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              onDismiss(notification.id);
+            }}
+            title="Remove notification"
+            aria-label={`Remove notification: ${notification.title}`}
+            className="shrink-0 -mr-1 -mt-1 grid size-7 place-items-center rounded-full text-text-muted hover:bg-surface-hover hover:text-navy-900 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action cursor-pointer"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+      </div>
     </li>
   );
 }

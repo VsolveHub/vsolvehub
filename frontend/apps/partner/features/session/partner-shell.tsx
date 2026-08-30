@@ -433,7 +433,7 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
         */}
         <ShellContent
           paddingBottom={
-            chromeMode === "full" && isApprovedPartner ? "pb-32 lg:pb-12" : "pb-6 lg:pb-12"
+            chromeMode === "full" && isApprovedPartner ? "pb-32 lg:pb-12" : "pb-0 lg:pb-0"
           }
         >
           {children}

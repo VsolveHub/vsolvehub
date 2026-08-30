@@ -724,13 +724,7 @@ function FlowBody({
           }
           handleSend();
         }}
-        canContinue={
-          isFinal && (needsVisitPlanSelection || needsVisitSlotSelection)
-            ? coreBriefBlocked === null
-            : isFinal
-              ? canSubmit
-              : canContinue
-        }
+        canContinue={isFinal ? canSubmit : canContinue}
         isSaving={wizardActionPending}
         continueLabel={isFinal ? sendLabel : "Continue"}
         reassurance={

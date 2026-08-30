@@ -7,6 +7,7 @@ import { FieldLabel, ScreenHeading } from "@/features/booking/view/mobile-screen
 import { DateSheet } from "@/features/booking/view/parts/date-sheet";
 import { PickerRow } from "@/features/booking/view/parts/picker-row";
 import { Segmented } from "@/features/booking/view/parts/segmented";
+import { Calendar, MapPin } from "lucide-react";
 import type { RequirementQuestionView } from "@/features/requirement/adapters";
 import { iconForOption } from "../model/option-icons";
 import { AnsweredOptionalRow, OptionalRow } from "./parts/optional-row";
@@ -137,6 +138,7 @@ export function WhereWhenScreen({
           value={addressLine}
           placeholder={eventMode ? "Choose where the event is" : "Choose where the work is"}
           onOpen={onOpenAddress}
+          icon={<MapPin className="size-5" />}
           trailing="word"
           emphasis
         />
@@ -155,6 +157,8 @@ export function WhereWhenScreen({
           value={formatDay(requestedStart)}
           placeholder={eventMode ? "Choose the date" : "Choose a date"}
           onOpen={() => setStartOpen(true)}
+          icon={<Calendar className="size-5" />}
+          trailing="word"
         />
         {visitFirst && !eventMode ? (
           <p className="mt-1.5 text-xs leading-5 text-text-muted">{VISIT_FIRST_REASSURANCE}</p>

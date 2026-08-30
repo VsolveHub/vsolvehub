@@ -1,19 +1,10 @@
 "use client";
 
-import { Button, Textarea, cn } from "@vsolve/ui";
-import { useState } from "react";
+import { Button, cn } from "@vsolve/ui";
+import { CheckCheck, Send } from "lucide-react";
+import { useRef, useEffect, useState } from "react";
 
 import type { QuestionView } from "../adapters";
-
-/**
- * A clarification thread, drawn as one.
- *
- * Still not a chat. The record is `RequirementQuestion`: one question, at most
- * one answer, three open questions per asker at a time. What changes is the
- * *reading* — a professional's question and the Customer's answer used to be
- * two unrelated timeline rows with nothing to press, and the customer-asks
- * half had an endpoint and no screen.
- */
 
 const MAX_OPEN_QUESTIONS = 3;
 
@@ -40,129 +31,186 @@ export function QuestionThread({
   onAsk?: (question: string) => void;
   isAnswering: boolean;
   isAsking: boolean;
-  /** False before the entitlement that makes the vendor addressable. */
   canAsk: boolean;
 }) {
   const [draft, setDraft] = useState("");
-  const openMine = questions.filter((question) => question.askedByRole === "CUSTOMER" && question.answer === null).length;
+  const endRef = useRef<HTMLDivElement>(null);
+
+  const openMine = questions.filter(
+    (question) => question.askedByRole === "CUSTOMER" && question.answer === null,
+  ).length;
   const left = Math.max(0, MAX_OPEN_QUESTIONS - openMine);
-  const who = vendorName ?? "the professional";
+  const who = vendorName ?? "Professional";
+
+  // Check if there is an unanswered question from the vendor that needs answering
+  const pendingVendorQuestion = questions.find(
+    (q) => (q.askedByRole === "VENDOR" || q.askedByRole === "OPERATIONS") && q.answer === null,
+  );
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [questions.length]);
+
+  function handleSubmit() {
+    if (draft.trim() === "" || isAnswering || isAsking) return;
+
+    if (pendingVendorQuestion) {
+      onAnswer(pendingVendorQuestion.id, draft.trim());
+      setDraft("");
+    } else if (onAsk && canAsk && left > 0) {
+      onAsk(draft.trim());
+      setDraft("");
+    }
+  }
 
   return (
-    <div className="flex flex-col gap-4">
-      {questions.length === 0 ? (
-        <p className="rounded-card border border-line bg-surface-sunken p-4 text-sm leading-6 text-text-secondary">
-          Nothing asked yet. Questions are about the work — what is included, what happens to the
-          old fittings, when they can start.
-        </p>
-      ) : (
-        <ol className="flex list-none flex-col gap-4 p-0">
-          {questions.map((question) => (
-            <li key={question.id} className="flex flex-col gap-2">
-              <Bubble side={question.askedByRole === "CUSTOMER" ? "mine" : "theirs"} at={question.askedAt} who={question.askedByRole === "CUSTOMER" ? "You" : who}>
-                {question.question}
-              </Bubble>
-              {question.answer !== null ? (
-                <Bubble
-                  side={question.askedByRole === "CUSTOMER" ? "theirs" : "mine"}
-                  at={question.answeredAt ?? question.askedAt}
-                  who={question.askedByRole === "CUSTOMER" ? who : "You"}
-                >
-                  {question.answer}
-                </Bubble>
-              ) : question.askedByRole === "VENDOR" ? (
-                <AnswerBox questionId={question.id} onAnswer={onAnswer} isPending={isAnswering} />
-              ) : (
-                <p className="pl-2 text-xs text-text-muted">Waiting for {who} to answer.</p>
-              )}
-            </li>
-          ))}
-        </ol>
-      )}
-
-      {onAsk !== undefined ? (
-        <div className="rounded-[14px] border border-line bg-surface p-3">
-          {canAsk ? (
-            <>
-              <Textarea
-                rows={2}
-                maxLength={2000}
-                placeholder={`Ask ${who} a question…`}
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                disabled={left === 0}
-              />
-              <div className="mt-2 flex items-center justify-between gap-3">
-                <p className="text-xs text-text-muted">
-                  {left === 0
-                    ? "Wait for a reply before asking another."
-                    : `${left} ${left === 1 ? "question" : "questions"} left before a reply`}
-                </p>
-                <Button
-                  size="sm"
-                  disabled={draft.trim() === "" || left === 0}
-                  loading={isAsking}
-                  loadingLabel="Sending"
-                  onClick={() => {
-                    onAsk(draft.trim());
-                    setDraft("");
-                  }}
-                >
-                  Send
-                </Button>
-              </div>
-            </>
-          ) : (
-            <p className="text-sm leading-6 text-text-secondary">
-              You can ask {who} a question once their estimate is readable.
+    <div className="flex flex-1 flex-col justify-between">
+      {/* Messages Stream */}
+      <div className="flex-1 space-y-4 py-3">
+        {questions.length === 0 ? (
+          <div className="rounded-card border border-line bg-surface-sunken p-6 text-center text-sm text-text-secondary">
+            <p className="font-semibold text-text">No questions asked yet</p>
+            <p className="mt-1 text-xs text-text-muted">
+              Use this chat to ask {who} about job scope, timing, materials, or site details.
             </p>
-          )}
-        </div>
-      ) : null}
+          </div>
+        ) : (
+          <ol className="flex list-none flex-col gap-3 p-0 m-0">
+            {questions.map((question) => {
+              const isVendor = question.askedByRole === "VENDOR" || question.askedByRole === "OPERATIONS";
+              return (
+                <li key={question.id} className="flex flex-col gap-2">
+                  {/* First message / Question */}
+                  <ChatBubble
+                    side={isVendor ? "theirs" : "mine"}
+                    who={isVendor ? who : "You"}
+                    at={question.askedAt}
+                  >
+                    {question.question}
+                  </ChatBubble>
 
-      <p className="text-xs leading-5 text-text-muted">
-        Questions are about the work only. Phone numbers are shared when you choose a
-        professional and they confirm.
-      </p>
+                  {/* Reply message / Answer if present */}
+                  {question.answer !== null && question.answer.trim() !== "" ? (
+                    <ChatBubble
+                      side={isVendor ? "mine" : "theirs"}
+                      who={isVendor ? "You" : who}
+                      at={question.answeredAt ?? question.askedAt}
+                    >
+                      {question.answer}
+                    </ChatBubble>
+                  ) : isVendor ? (
+                    <p className="text-left text-[11px] font-medium text-warning-text pl-2">
+                      Waiting for your reply below…
+                    </p>
+                  ) : (
+                    <p className="text-right text-[11px] font-medium text-text-muted pr-2">
+                      Waiting for {who} to answer…
+                    </p>
+                  )}
+                </li>
+              );
+            })}
+            <div ref={endRef} />
+          </ol>
+        )}
+      </div>
+
+      {/* Bottom Sticky Composer */}
+      <div className="sticky bottom-0 z-10 -mx-4 -mb-5 border-t border-line bg-white px-4 pt-3 pb-[max(1.25rem,calc(env(safe-area-inset-bottom)+0.75rem))] shadow-lg sm:-mx-6 sm:px-6">
+        <div className="flex items-center justify-between text-[11px] font-medium text-text-muted mb-1.5 px-1">
+          <span>
+            {pendingVendorQuestion ? `Replying to ${who}` : `Message ${who}`}
+          </span>
+          {canAsk && !pendingVendorQuestion ? (
+            <span>{left} {left === 1 ? "question" : "questions"} left</span>
+          ) : null}
+        </div>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSubmit();
+          }}
+          className="flex items-center gap-2"
+        >
+          <div className="relative flex-1">
+            <textarea
+              rows={1}
+              maxLength={2000}
+              placeholder={
+                pendingVendorQuestion
+                  ? `Type your answer to ${who}…`
+                  : canAsk && left > 0
+                    ? `Ask ${who} a question…`
+                    : "Wait for a reply before asking another…"
+              }
+              value={draft}
+              onChange={(e) => {
+                setDraft(e.target.value);
+                e.target.style.height = "auto";
+                e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
+              }}
+              disabled={isAnswering || isAsking || (!pendingVendorQuestion && (!canAsk || left === 0))}
+              className="w-full resize-none rounded-[22px] border border-line bg-[#F8F9FA] px-4 py-2.5 text-sm text-navy-900 leading-5 placeholder:text-text-muted focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-900/20 max-h-32 min-h-[44px] box-border"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSubmit();
+                }
+              }}
+            />
+          </div>
+
+          <Button
+            type="submit"
+            size="md"
+            disabled={
+              draft.trim() === "" ||
+              isAnswering ||
+              isAsking ||
+              (!pendingVendorQuestion && (!canAsk || left === 0))
+            }
+            loading={isAnswering || isAsking}
+            className="size-11 shrink-0 rounded-full p-0 flex items-center justify-center bg-navy-900 text-white hover:bg-navy-800"
+            aria-label="Send message"
+          >
+            <Send className="size-4" />
+          </Button>
+        </form>
+      </div>
     </div>
   );
 }
 
-function Bubble({ side, at, who, children }: { side: "mine" | "theirs"; at: string; who: string; children: string }) {
+function ChatBubble({
+  side,
+  at,
+  who,
+  children,
+}: {
+  side: "mine" | "theirs";
+  at: string;
+  who: string;
+  children: string;
+}) {
+  const isMine = side === "mine";
   return (
-    <div className={cn("flex flex-col gap-1", side === "mine" ? "items-end" : "items-start")}>
+    <div className={cn("flex flex-col gap-1", isMine ? "items-end" : "items-start")}>
       <div
         className={cn(
-          "max-w-[85%] whitespace-pre-line rounded-[16px] px-3.5 py-2.5 text-sm leading-6",
-          side === "mine" ? "rounded-br-[4px] bg-navy-900 text-white" : "rounded-bl-[4px] border border-line bg-surface text-text",
+          "max-w-[85%] whitespace-pre-line rounded-[18px] px-4 py-2.5 text-sm leading-relaxed shadow-2xs",
+          isMine
+            ? "rounded-br-[4px] bg-navy-900 text-white font-normal"
+            : "rounded-bl-[4px] border border-line/70 bg-surface text-navy-900 font-normal",
         )}
       >
         {children}
       </div>
-      <p className="px-1 text-[11px] text-text-muted">
-        {who} · {formatAt(at)}
-      </p>
-    </div>
-  );
-}
-
-function AnswerBox({ questionId, onAnswer, isPending }: { questionId: string; onAnswer: (questionId: string, answer: string) => void; isPending: boolean }) {
-  const [answer, setAnswer] = useState("");
-  return (
-    <div className="ml-2 rounded-[14px] border border-warning-line bg-warning-surface p-3">
-      <p className="text-xs font-bold uppercase tracking-[0.06em] text-warning-text">Waiting on you</p>
-      <Textarea
-        rows={2}
-        maxLength={2000}
-        className="mt-2"
-        placeholder="Your answer…"
-        value={answer}
-        onChange={(event) => setAnswer(event.target.value)}
-      />
-      <div className="mt-2 flex justify-end">
-        <Button size="sm" disabled={answer.trim() === ""} loading={isPending} loadingLabel="Sending" onClick={() => onAnswer(questionId, answer.trim())}>
-          Answer
-        </Button>
+      <div className="flex items-center gap-1 px-1.5 text-[11px] text-text-muted">
+        <span>{who}</span>
+        <span>·</span>
+        <span>{formatAt(at)}</span>
+        {isMine ? <CheckCheck className="size-3.5 text-info-text inline ml-0.5" /> : null}
       </div>
     </div>
   );

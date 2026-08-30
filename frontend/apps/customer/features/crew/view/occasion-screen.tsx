@@ -6,7 +6,11 @@ import { FieldLabel, MobileScreen, ScreenHeading } from "@/features/booking/view
 import { Segmented } from "@/features/booking/view/parts/segmented";
 import type { RequirementQuestionView } from "@/features/requirement/adapters";
 
-import { EVENT_TYPE_CODE } from "../model/event-flow";
+import {
+  EVENT_TYPE_CODE,
+  GUEST_BAND_CODE,
+  SERVICE_STYLE_CODE,
+} from "../model/event-flow";
 import { EventTypeIcon } from "./event-icons";
 import { requiredAnswersPresent } from "./preset-questions";
 
@@ -15,14 +19,7 @@ import { requiredAnswersPresent } from "./preset-questions";
  *
  * Asked first because it is the question a customer answers without thinking,
  * and because the answer shapes the next screen: the crowd and the service
- * style are what let the crew composer suggest a serving headcount. Everything
- * rendered here is the catalogue's own question list; this screen only decides
- * which control each shape gets.
- *
- * The occasion is a grid of tiles rather than a column of cards — five options
- * with a picture each fit on one phone screen, where five described cards do
- * not. The description survives as the tile's second line on a wide screen and
- * as the selected tile's caption on a phone.
+ * style are what let the crew composer suggest a serving headcount.
  */
 
 export interface OccasionFieldsProps {
@@ -31,6 +28,7 @@ export interface OccasionFieldsProps {
   onAnswer: (code: string, value: unknown) => void;
   hiddenCodes?: readonly string[];
   wide?: boolean;
+  filterCodes?: readonly string[];
 }
 
 export function occasionAnswered(
@@ -40,89 +38,427 @@ export function occasionAnswered(
   return requiredAnswersPresent(questions, answers);
 }
 
+/** Small checkbox indicator for card selection states. */
+function SelectionCheckbox({ checked }: { checked: boolean }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "grid size-5 place-items-center rounded-md border transition-all duration-150",
+        checked
+          ? "border-navy-900 bg-navy-900 text-signal-300 shadow-xs"
+          : "border-line-strong bg-white/60 group-hover:border-navy-900/60 dark:bg-surface",
+      )}
+    >
+      <svg
+        viewBox="0 0 16 16"
+        fill="none"
+        className={cn(
+          "size-3.5 transition-all duration-150 stroke-current",
+          checked ? "scale-100 opacity-100" : "scale-50 opacity-0",
+        )}
+        strokeWidth="2.5"
+      >
+        <path d="m3.5 8.5 3 3 6-6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </span>
+  );
+}
+
+/** Modern selection cards for "What's the occasion?" */
+export function OccasionTypeCards({
+  question,
+  value,
+  onSelect,
+  wide = false,
+}: {
+  question: RequirementQuestionView;
+  value: unknown;
+  onSelect: (value: string) => void;
+  wide?: boolean;
+}) {
+  const options = question.options ?? [];
+
+  if (!wide) {
+    return (
+      <div>
+        <FieldLabel>{question.label}</FieldLabel>
+        <div role="radiogroup" aria-label={question.label} className="grid grid-cols-2 gap-2.5">
+          {options.map((option) => {
+            const checked = option.value === value;
+            return (
+              <label
+                key={option.value}
+                className={cn(
+                  "crew-option-enter group relative flex cursor-pointer flex-col items-center justify-center text-center rounded-[20px] border p-3.5",
+                  "transition-[border-color,background-color,box-shadow,transform] duration-base ease-out",
+                  "has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-focus-ring",
+                  "active:translate-y-0 active:scale-[0.97] motion-reduce:transform-none",
+                  checked
+                    ? "border-navy-900 bg-selected-surface shadow-sm ring-1.5 ring-navy-900/10"
+                    : "border-line bg-surface shadow-2xs hover:border-line-strong",
+                  "min-h-[108px]",
+                )}
+              >
+                <input
+                  type="radio"
+                  name={question.code}
+                  value={option.value}
+                  checked={checked}
+                  onChange={() => onSelect(option.value)}
+                  className="sr-only"
+                />
+                <div className="absolute right-2.5 top-2.5">
+                  <SelectionCheckbox checked={checked} />
+                </div>
+                <span
+                  aria-hidden
+                  className={cn(
+                    "grid size-11 place-items-center rounded-[14px] transition-all duration-base",
+                    checked ? "bg-navy-900 text-signal-300 shadow-xs" : "bg-action-surface text-navy-800",
+                  )}
+                >
+                  <EventTypeIcon code={option.value} className="size-6" />
+                </span>
+                <span className="mt-2.5 block text-[13.5px] font-bold leading-tight text-navy-950">
+                  {option.label}
+                </span>
+              </label>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <FieldLabel>{question.label}</FieldLabel>
+      <div
+        role="radiogroup"
+        aria-label={question.label}
+        className="grid gap-3.5 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5"
+      >
+        {options.map((option, index) => {
+          const checked = option.value === value;
+          return (
+            <label
+              key={option.value}
+              style={{ animationDelay: `${Math.min(index, 5) * 40}ms` }}
+              className={cn(
+                "crew-option-enter group relative flex cursor-pointer flex-col items-center justify-center text-center rounded-[22px] border p-4",
+                "transition-[border-color,background-color,box-shadow,transform] duration-200 ease-out",
+                "has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-focus-ring",
+                "active:translate-y-0 active:scale-[0.97] motion-reduce:transform-none",
+                checked
+                  ? "border-navy-900 bg-gradient-to-b from-selected-surface to-surface shadow-md ring-2 ring-navy-900/15 dark:bg-selected-surface -translate-y-1"
+                  : "border-line/80 bg-surface shadow-2xs hover:-translate-y-1 hover:border-line-strong hover:shadow-sm hover:bg-surface-hover/50",
+                "min-h-[120px]",
+              )}
+            >
+              <input
+                type="radio"
+                name={question.code}
+                value={option.value}
+                aria-label={option.label}
+                checked={checked}
+                onChange={() => onSelect(option.value)}
+                className="sr-only"
+              />
+
+              <div className="absolute right-3 top-3">
+                <SelectionCheckbox checked={checked} />
+              </div>
+
+              <span
+                aria-hidden
+                className={cn(
+                  "grid size-13 place-items-center rounded-[16px] transition-all duration-200",
+                  checked
+                    ? "bg-navy-900 text-signal-300 shadow-sm scale-105"
+                    : "bg-action-surface/80 text-navy-800 group-hover:bg-action-surface group-hover:text-navy-950 group-hover:scale-105",
+                )}
+              >
+                <EventTypeIcon code={option.value} className="size-7" />
+              </span>
+
+              <span className="mt-3 block text-[14.5px] font-bold leading-tight text-navy-950 tracking-tight">
+                {option.label}
+              </span>
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** Guest count selection cards / chips */
+export function GuestBandSelector({
+  question,
+  value,
+  onSelect,
+  wide = false,
+}: {
+  question: RequirementQuestionView;
+  value: unknown;
+  onSelect: (value: string) => void;
+  wide?: boolean;
+}) {
+  const options = question.options ?? [];
+
+  if (!wide) {
+    return (
+      <div>
+        <FieldLabel>{question.label}</FieldLabel>
+        <Segmented
+          label={question.label}
+          name={question.code}
+          options={options.map((option) => ({ value: option.value, label: option.label }))}
+          value={typeof value === "string" ? value : null}
+          onChange={onSelect}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <FieldLabel>{question.label}</FieldLabel>
+      <div
+        role="radiogroup"
+        aria-label={question.label}
+        className="grid grid-cols-2 gap-3 sm:grid-cols-4"
+      >
+        {options.map((option) => {
+          const checked = option.value === value;
+          return (
+            <label
+              key={option.value}
+              className={cn(
+                "group relative flex cursor-pointer flex-col items-center justify-center rounded-[16px] border px-4 py-3.5 text-center",
+                "transition-all duration-150 ease-out",
+                "has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-focus-ring",
+                "active:scale-[0.98] motion-reduce:transform-none",
+                checked
+                  ? "border-navy-900 bg-selected-surface/50 shadow-sm ring-2 ring-navy-900/10 font-bold"
+                  : "border-line bg-surface hover:border-line-strong hover:shadow-sm",
+              )}
+            >
+              <input
+                type="radio"
+                name={question.code}
+                value={option.value}
+                aria-label={option.label}
+                checked={checked}
+                onChange={() => onSelect(option.value)}
+                className="sr-only"
+              />
+              <span
+                aria-hidden
+                className={cn(
+                  "mb-1.5 grid size-8 place-items-center rounded-full text-xs font-bold transition-colors",
+                  checked ? "bg-navy-900 text-signal-300" : "bg-action-surface text-navy-700",
+                )}
+              >
+                <svg viewBox="0 0 20 20" fill="none" className="size-4" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M10 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM4 17a6 6 0 0 1 12 0" strokeLinecap="round" />
+                </svg>
+              </span>
+              <span className="block text-sm font-bold text-text">{option.label}</span>
+              <span className="text-[11px] font-medium text-text-muted">guests</span>
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** Food service selection cards */
+export function FoodServiceSelector({
+  question,
+  value,
+  onSelect,
+  wide = false,
+}: {
+  question: RequirementQuestionView;
+  value: unknown;
+  onSelect: (value: string) => void;
+  wide?: boolean;
+}) {
+  const options = question.options ?? [];
+
+  if (!wide) {
+    return (
+      <div>
+        <FieldLabel>{question.label}</FieldLabel>
+        <div
+          role="radiogroup"
+          aria-label={question.label}
+          className="grid gap-2 grid-cols-1"
+        >
+          {options.map((option) => {
+            const checked = option.value === value;
+            return (
+              <label
+                key={option.value}
+                className={cn(
+                  "flex min-h-14 cursor-pointer items-center gap-3 rounded-[14px] border px-3.5 py-2.5",
+                  "transition-colors duration-fast",
+                  "has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-focus-ring",
+                  checked
+                    ? "border-selected bg-selected-surface"
+                    : "border-line bg-surface hover:border-line-strong",
+                )}
+              >
+                <input
+                  type="radio"
+                  name={question.code}
+                  value={option.value}
+                  checked={checked}
+                  onChange={() => onSelect(option.value)}
+                  className="sr-only"
+                />
+                <span
+                  aria-hidden
+                  className={cn(
+                    "grid size-5 shrink-0 place-items-center rounded-full border-2 transition-colors duration-fast",
+                    checked ? "border-selected bg-selected" : "border-line-strong bg-surface",
+                  )}
+                >
+                  <span className={cn("size-2 rounded-full bg-white", checked ? "opacity-100" : "opacity-0")} />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-text">{option.label}</span>
+                  {option.description ? (
+                    <span className="block text-[13px] leading-5 text-text-secondary">
+                      {option.description}
+                    </span>
+                  ) : null}
+                </span>
+              </label>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <FieldLabel>{question.label}</FieldLabel>
+      <div
+        role="radiogroup"
+        aria-label={question.label}
+        className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
+      >
+        {options.map((option) => {
+          const checked = option.value === value;
+          return (
+            <label
+              key={option.value}
+              className={cn(
+                "group relative flex cursor-pointer items-start gap-3.5 rounded-[18px] border p-4",
+                "transition-all duration-150 ease-out",
+                "has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-focus-ring",
+                "active:scale-[0.99] motion-reduce:transform-none",
+                checked
+                  ? "border-navy-900 bg-selected-surface/50 shadow-sm ring-2 ring-navy-900/10"
+                  : "border-line bg-surface hover:border-line-strong hover:shadow-sm",
+              )}
+            >
+              <input
+                type="radio"
+                name={question.code}
+                value={option.value}
+                aria-label={option.label}
+                checked={checked}
+                onChange={() => onSelect(option.value)}
+                className="sr-only"
+              />
+              <span
+                aria-hidden
+                className={cn(
+                  "mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border-2 transition-colors duration-fast",
+                  checked ? "border-navy-900 bg-navy-900" : "border-line-strong bg-surface group-hover:border-navy-900",
+                )}
+              >
+                <span className={cn("size-2 rounded-full bg-signal-300", checked ? "opacity-100" : "opacity-0")} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-bold text-text">{option.label}</span>
+                {option.description ? (
+                  <span className="mt-0.5 block text-xs leading-5 text-text-secondary">
+                    {option.description}
+                  </span>
+                ) : null}
+              </span>
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function OccasionFields({
   questions,
   answers,
   onAnswer,
   hiddenCodes = [],
   wide = false,
+  filterCodes,
 }: OccasionFieldsProps) {
+  const visibleQuestions = questions.filter(
+    (question) =>
+      !hiddenCodes.includes(question.code) &&
+      (filterCodes === undefined || filterCodes.includes(question.code)),
+  );
+
   return (
     <div className="flex flex-col gap-6">
-      {questions.map((question) => {
-        if (hiddenCodes.includes(question.code)) return null;
+      {visibleQuestions.map((question) => {
         const value = answers[question.code];
         const options = question.options ?? [];
 
         if (question.code === EVENT_TYPE_CODE && question.kind === "choice") {
-          const selected = options.find((option) => option.value === value) ?? null;
           return (
-            <div key={question.code}>
-              <FieldLabel>{question.label}</FieldLabel>
-              <div
-                role="radiogroup"
-                aria-label={question.label}
-                className={cn("grid gap-2.5", wide ? "sm:grid-cols-3 lg:grid-cols-5" : "grid-cols-2")}
-              >
-                {options.map((option, index) => {
-                  const checked = option.value === value;
-                  return (
-                    <label
-                      key={option.value}
-                      style={{ animationDelay: `${Math.min(index, 5) * 40}ms` }}
-                      className={cn(
-                        "crew-option-enter group flex cursor-pointer flex-col items-start gap-2.5 rounded-[18px] border p-3.5 text-left",
-                        "transition-[border-color,background-color,box-shadow,transform] duration-base ease-out",
-                        "has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-focus-ring",
-                        "active:translate-y-0 active:scale-[0.99] motion-reduce:transform-none",
-                        checked
-                          ? "-translate-y-0.5 border-selected bg-selected-surface shadow-raised"
-                          : "border-line bg-surface shadow-card hover:-translate-y-0.5 hover:border-line-strong",
-                        wide ? "min-h-[132px]" : "min-h-[104px]",
-                      )}
-                    >
-                      <input
-                        type="radio"
-                        name={question.code}
-                        value={option.value}
-                        checked={checked}
-                        onChange={() => onAnswer(question.code, option.value)}
-                        className="sr-only"
-                      />
-                      <span
-                        aria-hidden
-                        className={cn(
-                          "grid size-11 place-items-center rounded-[13px] transition-colors duration-base",
-                          checked ? "bg-navy-900 text-signal-300" : "bg-action-surface text-navy-700",
-                        )}
-                      >
-                        <EventTypeIcon code={option.value} />
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block text-[15px] font-bold leading-5 text-text">
-                          {option.label}
-                        </span>
-                        {wide && option.description ? (
-                          <span className="mt-1 block text-[13px] leading-5 text-text-secondary">
-                            {option.description}
-                          </span>
-                        ) : null}
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-              {!wide && selected?.description ? (
-                <p className="mt-2.5 text-[13px] leading-5 text-text-secondary" aria-live="polite">
-                  {selected.description}
-                </p>
-              ) : null}
-            </div>
+            <OccasionTypeCards
+              key={question.code}
+              question={question}
+              value={value}
+              onSelect={(next) => onAnswer(question.code, next)}
+              wide={wide}
+            />
+          );
+        }
+
+        if (question.code === GUEST_BAND_CODE && question.kind === "choice") {
+          return (
+            <GuestBandSelector
+              key={question.code}
+              question={question}
+              value={value}
+              onSelect={(next) => onAnswer(question.code, next)}
+              wide={wide}
+            />
+          );
+        }
+
+        if (question.code === SERVICE_STYLE_CODE && question.kind === "choice") {
+          return (
+            <FoodServiceSelector
+              key={question.code}
+              question={question}
+              value={value}
+              onSelect={(next) => onAnswer(question.code, next)}
+              wide={wide}
+            />
           );
         }
 
         if (question.kind === "choice" && options.every((option) => !option.description)) {
-          // A short scale — the guest bands — as one joined track.
           return (
             <div key={question.code}>
               <FieldLabel>{question.label}</FieldLabel>
@@ -150,8 +486,6 @@ export function OccasionFields({
         }
 
         if (question.kind === "choice") {
-          // Described options — how food is served — keep their sentence, as a
-          // compact row each rather than a card.
           return (
             <div key={question.code}>
               <FieldLabel>{question.label}</FieldLabel>
@@ -218,7 +552,7 @@ export function OccasionFields({
             <Input
               value={typeof value === "string" ? value : ""}
               onChange={(event) => onAnswer(question.code, event.target.value)}
-              placeholder="A sentence is enough"
+              placeholder="A sentence is enough (e.g. Annual gala dinner for 120 guests)"
             />
           </Field>
         );
@@ -272,3 +606,4 @@ export function OccasionScreen({
     </MobileScreen>
   );
 }
+

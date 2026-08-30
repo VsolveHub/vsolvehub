@@ -91,8 +91,10 @@ function OnsiteEstimate({
     );
   }
 
-  if (query.isError) {
-    const presentation = describeError(query.error, "read");
+  if (query.isError || query.data === undefined) {
+    const presentation = query.error
+      ? describeError(query.error, "read")
+      : describeError(new Error("This enquiry did not load."), "read");
     const forbidden = isEnquiryForbidden(query.error);
     return (
       <div className="flex flex-col gap-4">
@@ -113,24 +115,15 @@ function OnsiteEstimate({
     );
   }
 
-  const enquiry = readEnquiryRecord(query.data);
+  const record = readEnquiryRecord(query.data);
 
   return (
     <div className="flex flex-col gap-4">
-      {back}
-
-      <header className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold text-text">{enquiry.serviceName}</h1>
-        <p className="text-sm leading-6 text-text-secondary">
-          Put a price on what the job needs.
-        </p>
-      </header>
-
       {sent ? (
         <SentConfirmation proposal={sent} enquiryHref={enquiryHref} />
       ) : (
         <OnsiteComposerWithRevision
-          enquiry={enquiry}
+          enquiry={record}
           enquiryHref={enquiryHref}
           onSubmitted={setSent}
         />
@@ -233,7 +226,7 @@ function SentConfirmation({
       <p className="text-sm leading-6 text-text-secondary">
         Revision {proposal.revision} · recorded {new Date(proposal.submitted_at).toLocaleString()}
       </p>
-      <Link href="/work" className={buttonStyles()}>
+      <Link href="/work/all" className={buttonStyles()}>
         Go to Work
       </Link>
       <Link href={enquiryHref} className={buttonStyles({ variant: "outline" })}>
