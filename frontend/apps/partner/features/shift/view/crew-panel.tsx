@@ -19,6 +19,7 @@ import { useMemo, useState } from "react";
 
 import { Pictogram } from "@/components/pictogram";
 import { usePartnerCrew } from "@/features/crew/queries";
+import { crewGenderLabel } from "@/features/crew/view/crew-gender";
 
 import {
   isCrewCopyFailure,
@@ -156,6 +157,13 @@ export function CrewPanel({ day, scope, canAssign, bookedFor, remainingDays, onS
                     <span className="text-xs text-text-muted">
                       {member.phone_masked}
                       {member.is_supervisor ? " · Supervisor" : ""}
+                      {/* The gate this screen submits into counts men and women, and a name is
+                          not a reliable signal of either -- which is the whole reason the field
+                          exists. Without it here a supervisor picks blind and meets the refusal
+                          by chance rather than by mistake. Shown only when recorded: a blank is
+                          chased on the roster screen, which has the count and the control, and
+                          nagging about it on a job that asks for no mix is noise. */}
+                      {member.gender === "" ? "" : ` · ${crewGenderLabel(member.gender)}`}
                     </span>
                   </span>
                 </button>
@@ -169,7 +177,10 @@ export function CrewPanel({ day, scope, canAssign, bookedFor, remainingDays, onS
               </span>
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate text-sm font-semibold text-text-secondary">{member.display_name}</span>
-                <span className="text-xs text-text-muted">{INELIGIBILITY_WORDING[why]}</span>
+                <span className="text-xs text-text-muted">
+                  {INELIGIBILITY_WORDING[why]}
+                  {member.gender === "" ? "" : ` · ${crewGenderLabel(member.gender)}`}
+                </span>
               </span>
             </li>
           ))}
