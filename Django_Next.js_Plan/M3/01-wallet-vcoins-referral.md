@@ -47,6 +47,86 @@ The customer UI shows the server-computed burn cap and applied amount; it never 
 | Partial unlock | One grant rule may require **one** completion or **many**; each rule carries its own `completions_required` |
 | Balance presentation | API publishes **promised**, **locked**, **spendable**, and **expiring_soon** separately — no single misleading “balance” |
 
+### 2.2.1 V Coins — earn tiers (order value & booking sequence)
+
+Flat `coins_amount` on a rule is not enough for real campaigns. Operations configures **one or more
+`CoinEarnTier` rows** per `CoinGrantRule` when the rule uses tiered earning.
+
+| `earn_mode` (on rule) | When to use |
+| --- | --- |
+| `FLAT` | Single `coins_amount` on the rule (signup welcome, simple promos) |
+| `TIERED_ORDER_VALUE` | Coins depend on **order payable paise** at earn time (e.g. booking completed) |
+| `TIERED_BOOKING_SEQUENCE` | Coins depend on **which numbered completion** this is for the customer (1st, 2nd, 3rd…) |
+
+```text
+CoinEarnTier
+------------
+grant_rule_id
+tier_kind                 ORDER_VALUE | BOOKING_SEQUENCE  (must match rule earn_mode)
+min_order_paise           nullable — for ORDER_VALUE (inclusive lower bound)
+max_order_paise           nullable — for ORDER_VALUE; null = no upper bound (₹2,000+)
+min_booking_sequence      nullable — for BOOKING_SEQUENCE (inclusive; 1 = first booking)
+max_booking_sequence      nullable — inclusive upper bound; null = no upper bound
+coins_amount              integer ≥ 1
+sort_order                Operations display
+```
+
+**Order-value example** (admin-configured bands):
+
+| Order payable | Coins earned |
+| --- | --- |
+| ₹0–499 | 10 |
+| ₹500–999 | 25 |
+| ₹1,000–1,999 | 60 |
+| ₹2,000+ | 100 |
+
+Implemented as tier rows: `(0, 49999)`, `(50000, 99999)`, `(100000, 199999)`, `(200000, null)` paise.
+
+**Booking-sequence example**:
+
+| Customer's completion # | Coins earned |
+| --- | --- |
+| 1st booking | 500 |
+| 2nd booking | 200 |
+| 3rd booking | 300 |
+
+Implemented as tier rows: `min_booking_sequence` 1–1 → 500, 2–2 → 200, 3–3 → 300. Uses
+`CustomerCompletion` count + 1 at earn time (same completion definition as §3.4).
+
+| Rule | Detail |
+| --- | --- |
+| Tier selection | Pick the single tier whose bounds contain the order paise or sequence `n`; non-overlapping bands enforced in Operations validation |
+| Snapshot | Tier table copied into `CoinGrant` / grant metadata at promise time when rule is versioned |
+| Versioning | Changing earn tiers publishes a new rule version or `effective_from` — same grandfathering pattern as referral (no retroactive change to promised grants) |
+
+### 2.2.2 V Coins — customer eligibility (campaign audience)
+
+Signup-triggered coins are not enough. Each `CoinGrantRule` declares **who** may receive it:
+
+| `customer_eligibility` | Meaning |
+| --- | --- |
+| `ALL_CUSTOMERS` | No audience filter |
+| `NEW_CUSTOMER` | Customer has **zero** platform completions (`CustomerCompletion` count = 0) at trigger time |
+| `EXISTING_CUSTOMER` | Customer has **≥ 1** completion at trigger time |
+| `REACTIVATED_CUSTOMER` | Customer's **last completion** is older than `reactivation_inactive_days` (admin-configured on the rule) |
+
+**Example:** “Get 1,000 V Coins on your first booking after 90 days inactive”:
+
+```text
+grant_trigger          = BOOKING_COMPLETED
+customer_eligibility   = REACTIVATED_CUSTOMER
+reactivation_inactive_days = 90
+earn_mode              = FLAT (or tiered)
+coins_amount / tiers   = 1000
+```
+
+| Field (on `CoinGrantRule`) | Notes |
+| --- | --- |
+| `customer_eligibility` | required; default `ALL_CUSTOMERS` |
+| `reactivation_inactive_days` | required when eligibility = `REACTIVATED_CUSTOMER`; ignored otherwise |
+
+Eligibility is evaluated **server-side at grant time**; UI may show campaign copy but never decides audience.
+
 ### 2.3 V Coins — expiry
 
 | Decision | Value |
@@ -57,26 +137,191 @@ The customer UI shows the server-computed burn cap and applied amount; it never 
 | Burn order | **FIFO by soonest expiry** among spendable coins (document in runbook; prevents customer surprise) |
 | Expiry job | Celery sweep marks expired buckets; immutable `EXPIRE` ledger rows |
 
+### 2.3.1 V Coins — burn reservation & concurrency (hard invariant)
+
+Burning coins at checkout must survive **concurrent payment attempts**, same as wallet.
+
+| Invariant | |
+| --- | --- |
+| **Spendable coins** | `promised_unlocked_spendable - reserved_for_attempts - already_burned >= 0` at all times |
+| **Reservation** | On `PaymentAttempt` create with `coin_burn_amount`, **reserve** coins (append-only `RESERVED` ledger rows or bucket lock) inside the same transaction as validation |
+| **Capture / release** | Success → `BURN`; failure/timeout → `RELEASE` reservation |
+| **Concurrency** | `SELECT FOR UPDATE` on `WalletAccount` / coin balance aggregate (or per-customer coin lock row) before reserve |
+
+**Failure scenario (must not happen):**
+
+```text
+Customer has 1,000 spendable coins
+Checkout A → burns 700   ┐
+Checkout B → burns 600   ┘  both must NOT succeed — only 1,000 consumable total
+```
+
+Second concurrent attempt must fail validation or block until the first attempt releases or captures.
+C5 concurrency tests are **mandatory** for this path (§2.7.1, Wave C5).
+
 ### 2.4 Referral — who, when, how much
 
 | Decision | Value |
 | --- | --- |
 | Qualifying event (default) | **Referee’s first completed booking** on the platform |
 | Who can be rewarded | **Operations-configurable per program version:** referrer only, referee only, or **both** with separate amounts |
-| Reward form | Wallet credit (INR) and/or V Coins — configurable per side per program version |
-| Amounts | **Configurable** per program version (e.g. referrer ₹100 + referee 500 coins) |
+| Reward form | Wallet credit (INR) and/or V Coins — configurable per side |
+| Base amounts | **Volume tiers** per program version (§2.4.1) — not a single flat rate only |
+| Referee side | Flat per program version **or** per-tier overrides where Operations configures them |
 
-### 2.5 Referral — program changes & grandfathering
+### 2.4.1 Referral — volume tiers (referrer reward by successful referral count)
+
+Operations configures **tiered referrer rewards** based on how many **successful referrals** the
+referrer has already been **paid for**. The threshold for each tier (e.g. 5) and the reward amount
+(e.g. ₹200) are **both admin-configurable** — nothing is hard-coded.
+
+#### What counts as a “successful referral”
+
+| Counts toward tier | Does **not** count |
+| --- | --- |
+| Referee signed up via referrer's link **and** met the qualifying event (default: **first completed booking**) **and** referrer reward was **issued** (`ReferralAttribution.status = REWARDED`) | Signup alone |
+| | Pending attributions (referee has not completed yet) |
+| | Qualified but not yet paid |
+| | Failed / fraud / ineligible attributions |
+
+Tier progression uses **rewarded successful referrals only** — not signups, not clicks.
+
+#### Admin-configurable tiers (example only — `5` is not fixed)
+
+Operations sets one or more rows on each `ReferralProgramVersion`. **Every number is configurable:**
+
+| Field (admin sets) | Example value | Meaning |
+| --- | --- | --- |
+| `min_qualified_referrals` | `1` | From the **1st** successful referral onward, pay this amount until a higher tier applies |
+| `referrer_wallet_paise` | `10000` | ₹100 per successful referral at this tier |
+| `min_qualified_referrals` | `5` | From the **5th** successful referral onward, pay this amount |
+| `referrer_wallet_paise` | `20000` | ₹200 per successful referral at this tier |
+
+The owner example “₹100 each, ₹200 after 5 successful referrals” is implemented as **two tier rows**
+with `min=1` and `min=5`. Operations could instead set `min=3`, `min=10`, or any other thresholds.
+
+| Referrer's successful referral # (this payout) | Reward (example tiers min=1 ₹100, min=5 ₹200) |
+| --- | --- |
+| 1st–4th successful referral | ₹100 each |
+| 5th successful referral onward | ₹200 each |
+
+**Admin configures tiers** on each `ReferralProgramVersion`:
+
+```text
+ReferralProgramRewardTier
+----------------------------
+program_version_id
+min_qualified_referrals     inclusive threshold — admin-configured integer ≥ 1 (not a platform constant)
+referrer_wallet_paise       nullable
+referrer_coins_amount       nullable
+referee_wallet_paise        nullable — optional per-tier override
+referee_coins_amount        nullable — optional per-tier override
+sort_order                  display order in Operations UI
+```
+
+| Rule | Detail |
+| --- | --- |
+| Tier meaning | `min_qualified_referrals = N` (admin-set) applies when this payout is the referrer's **Nth** (or later) **successful, rewarded** referral |
+| Tier selection | At payout: `n = referrer_successful_rewarded_count + 1`. Pick the tier with the **highest** `min_qualified_referrals` where `n >= min_qualified_referrals` |
+| Minimum tiers | Every program version must have at least one tier with `min_qualified_referrals = 1` |
+| No gaps required | Tiers need not cover every integer — unmatched `n` falls back to the tier with `min_qualified_referrals = 1` |
+| **Unlimited tiers** | Operations may add **as many tier rows as needed** per version (e.g. min=1, 5, 10, 25, 50…) — no platform cap on tier count |
+| **Future higher payouts** | Raising pay after more successful referrals = add a new tier row with a higher `min_qualified_referrals` and higher amount — no code change |
+| Snapshot | Full tier table is part of the program version; attributions store `program_version_id` at signup — payout uses **that version's tiers**, not the live program |
+| Immutability | `ReferralReward` stores the **computed** amounts at issuance (tier id + paise/coins applied) — corrections only via Operations adjustment |
+
+**Worked example** (illustrative thresholds — admin could change `5` to any value):
+
+```text
+Program v1 tiers (Operations-configured):
+  min=1  → referrer ₹100   # every successful referral from #1 until a higher tier applies
+  min=5  → referrer ₹200   # from the 5th successful referral onward
+
+Referrer A — only REWARDED attributions count:
+  successful rewarded count → this payout n → tier → paid
+  0 → 1 → min=1  → ₹100   (referee #1 completed booking; referrer paid)
+  1 → 2 → min=1  → ₹100
+  3 → 4 → min=1  → ₹100
+  4 → 5 → min=5  → ₹200   (5th successful referral)
+  9 → 10 → min=5 → ₹200
+```
+
+**Future extensibility example** (same program version — admin adds tiers in Operations):
+
+```text
+Program v1 tiers (updated by publishing v2 — old attributions unchanged):
+  min=1   → ₹100
+  min=5   → ₹200
+  min=10  → ₹300    # more money after 10 successful referrals
+  min=25  → ₹500    # more again after 25
+```
+
+Each threshold and amount is a separate admin-configured row. No deploy required to add tiers —
+only a new `ReferralProgramVersion` (see §2.5).
+
+**Grandfathering with tiers:** User B signs up under v1 (tiers min=1 ₹100, min=5 ₹200). Owner
+publishes v2 (e.g. min=1 ₹150, min=3 ₹250) on Friday. A's pending attribution for B still pays v1
+tier rates when B **completes their first booking**; a new referee C on Saturday uses v2 tiers.
+
+**Customer visibility:** Referral page shows the **active program's** tier schedule from Operations
+(e.g. “₹100 per successful referral · ₹200 after **5** successful referrals” — the **5** comes from
+admin config, not code). Pending referrals show separately; they do not advance tier count until
+successful.
+
+### 2.5 Referral — program changes, grandfathering & clear history
+
+**Owner requirement (locked):** Operations must be able to **change referral rewards at any time**
+(for new signups) and **add higher payouts after more successful referrals** in the future — **without
+recalculating or reducing amounts already promised or paid** on earlier attributions. All terms must
+be **stored clearly** for audit and support.
 
 | Decision | Value |
 | --- | --- |
-| Program versioning | Every change creates a new **`ReferralProgramVersion`** with `effective_from` |
-| At attribution | When a referee **signs up** via referral link/code, store **`program_version_id`** on the attribution |
-| Pending rewards | Pay out using the **snapshotted version** attached to that attribution |
-| Retroactivity | **Forbidden** — raising or lowering rewards globally does **not** change amounts for users already attributed under an older version |
-| Completed rewards | Immutable; corrections only via Operations adjustment with audit |
+| Program versioning | Every reward change creates a new **`ReferralProgramVersion`** with `effective_from` — **never edit tiers in place** on a version that already has attributions |
+| At attribution | When a referee **signs up**, store **`program_version_id`** on `ReferralAttribution` plus a **`terms_snapshot`** JSON copy of that version's tier table at signup time |
+| Pending rewards | Pay out using the **snapshotted version** on the attribution — not the currently active program |
+| Retroactivity | **Forbidden** — changing the live program does **not** change amounts for attributions already created (pending or rewarded) |
+| Completed rewards | **Immutable** — `ReferralReward` rows are never rewritten; corrections only via Operations adjustment with audit |
+| Version archive | Old program versions remain **read-only** in Operations with full tier table and effective dates — never deleted while attributions reference them |
+| Active vs historical | Customer referral page shows **active** program tiers; Operations shows **version history** and per-attribution which version applies |
 
-**Example:** Program v1 gives referrer ₹100. User B signs up with A’s code on Monday. On Friday owner changes to ₹200 for **new** attributions only. A still receives ₹100 when B completes first booking; a new referee C on Saturday earns A ₹200.
+#### 2.5.1 Changing rewards safely (what Operations does)
+
+```text
+Owner wants higher rewards / new tier after 10 referrals
+        │
+        ▼
+Create ReferralProgramVersion v2 (effective_from = now)
+  └── copy or redefine ReferralProgramRewardTier rows
+        │
+        ▼
+New signups after effective_from → attribution stores program_version_id = v2
+Existing pending attributions   → still program_version_id = v1 (unchanged)
+Already REWARDED attributions   → ReferralReward rows unchanged forever
+```
+
+| State of attribution | After owner publishes v2 |
+| --- | --- |
+| Referee signed up under v1, still pending | Pays **v1** tiers when they complete |
+| Referee signs up after v2 effective | Pays **v2** tiers |
+| Already REWARDED under v1 | **No change** — historical `ReferralReward` is the record of truth |
+
+#### 2.5.2 Data saved clearly (audit trail)
+
+Every referral leaves a reconstructable paper trail:
+
+| Record | What it preserves |
+| --- | --- |
+| `ReferralProgramVersion` | Version label, `effective_from`, qualifying event, reward sides |
+| `ReferralProgramRewardTier` | Immutable rows per version — full tier table at publish time |
+| `ReferralAttribution` | `program_version_id`, `terms_snapshot` (JSON tier table at signup), referrer, referee, status, timestamps |
+| `ReferralReward` | `program_version_id`, `tier_id`, `payout_sequence_n`, wallet/coins amounts actually paid, `paid_at`, link to wallet/coin ledger |
+
+`terms_snapshot` on attribution ensures support can answer “what was promised when this user signed up?”
+even if tier rows are later archived. `ReferralReward` answers “what was actually paid and under
+which tier?”
+
+**Example:** Program v1 tiers: referrer ₹100 (1–4 referrals), ₹200 from 5th. User B signs up with A’s code on Monday. On Friday owner publishes v2 with higher tiers for **new** attributions only. A still receives v1 tier amounts when B completes; a new referee C on Saturday earns under v2 tiers. Operations can open B's attribution and see `program_version_id=v1` and the snapshotted tier table from Monday.
 
 ### 2.6 Referral — link, code & signup-only apply
 
@@ -89,6 +334,19 @@ The customer UI shows the server-computed burn cap and applied amount; it never 
 | Server truth | Attribution is created only when signup **completes** with a valid code; auto-fill alone is not enough |
 | Already registered | Logged-in users or existing accounts **cannot** attach a referral retroactively |
 
+### 2.6.1 Referral — one attribution per referee (uniqueness)
+
+A customer (referee) may be referred **at most once** in their lifetime.
+
+| Rule | Detail |
+| --- | --- |
+| Database | `UNIQUE(referee_id)` on `ReferralAttribution` |
+| Behaviour | First valid signup with a referral code **wins**; later codes at signup are **rejected** (or silently ignored — pick reject with clear error in API; document in contract proposal) |
+| Impossible state | Customer B referred by A **and** C **and** D — **forbidden** |
+| Ops override | Fraud merge / manual correction only via Operations adjustment with audit — not a second attribution row |
+
+Signup-only apply (§2.6) plus this constraint closes the “stack referrers” loophole.
+
 ### 2.7 Wallet — top-up limits
 
 | Decision | Value |
@@ -96,6 +354,25 @@ The customer UI shows the server-computed burn cap and applied amount; it never 
 | Min / max top-up | **Operations-configurable** (`WalletTopUpPolicy` or platform settings) — not hard-coded |
 | Validation | Server rejects top-up below min or above max; customer sees the configured limits on the top-up screen |
 | Effective dating | Optional `effective_from` if limits change over time (same pattern as burn policy) |
+
+### 2.7.1 Wallet — balance invariant & concurrency (hard invariant)
+
+| Invariant | |
+| --- | --- |
+| **Available balance** | `SUM(credits) - SUM(reserved_debits) - SUM(captured_debits) >= 0` — never negative |
+| **Reservation** | `reserve_wallet` runs inside payment-attempt create; writes `RESERVED` `WalletTransaction` rows |
+| **Concurrency** | Lock `WalletAccount` (`SELECT FOR UPDATE`) before reading balance and reserving |
+
+**Failure scenario (must not happen):**
+
+```text
+Wallet = ₹500
+Request A → spends ₹400   ┐
+Request B → spends ₹300   ┘  both must NOT succeed
+```
+
+Second concurrent checkout must fail with insufficient wallet balance (or queue behind lock). C5
+concurrency tests are **mandatory** (Wave C5, `M3-BE-252`).
 
 ### 2.8 Refunds — wallet, payment, coins
 
@@ -121,7 +398,7 @@ WalletTransaction      append-only; signed amount_paise; never UPDATE balance co
 | --- | --- |
 | `kind` | `TOP_UP`, `CHECKOUT_DEBIT`, `CHECKOUT_RELEASE`, `REFUND_CREDIT`, `REFERRAL_CREDIT`, `ADJUSTMENT` |
 | `status` (for debits) | `RESERVED` at attempt create → `CAPTURED` or `RELEASED` on outcome |
-| Balance | `SUM(amount_paise)` — no stored balance column |
+| Balance | `SUM(amount_paise)` — no stored balance column; **available ≥ 0** invariant (§2.7.1) |
 | Top-up | `PaymentAttempt` purpose `WALLET_TOP_UP`; credit only on verified capture |
 
 ```text
@@ -131,20 +408,31 @@ WalletTopUpPolicy      Operations-configurable min_paise, max_paise, effective_f
 ### 3.2 V Coins
 
 ```text
-CoinGrantRule          Operations-authored; versioned; effective-dated
+CoinGrantRule          Operations-authored; versioned; effective-dated; earn_mode; customer_eligibility
+CoinEarnTier           optional tier rows per rule (order value or booking sequence)
 CoinGrant              one row per customer per rule application (promised bucket)
-CoinTransaction        append-only: EARN_PROMISE, UNLOCK, BURN, EXPIRE, ADJUSTMENT
+CoinTransaction        append-only: EARN_PROMISE, UNLOCK, BURN, EXPIRE, RESERVE, RELEASE, ADJUSTMENT
 ```
 
 | `CoinGrantRule` fields (planning) | |
 | --- | --- |
-| `name` | e.g. "Diwali 2026", "Signup welcome" |
-| `coins_amount` | integer ≥ 1 |
+| `name` | e.g. "Diwali 2026", "Signup welcome", "Reactivation 90-day" |
+| `earn_mode` | `FLAT`, `TIERED_ORDER_VALUE`, `TIERED_BOOKING_SEQUENCE` |
+| `coins_amount` | used when `earn_mode=FLAT`; ignored when tiered |
 | `completions_required` | 0 = immediate on grant event, 1+ = locked until N completions |
 | `grant_trigger` | `SIGNUP`, `REFERRAL_QUALIFIED`, `BOOKING_COMPLETED`, `MANUAL_OPS` |
+| `customer_eligibility` | `ALL_CUSTOMERS`, `NEW_CUSTOMER`, `EXISTING_CUSTOMER`, `REACTIVATED_CUSTOMER` |
+| `reactivation_inactive_days` | required when `REACTIVATED_CUSTOMER` |
 | `expires_at` | nullable |
 | `effective_from` / `effective_until` | rule visibility |
 | `is_active` | soft off without deleting history |
+
+| `CoinEarnTier` fields (planning) | |
+| --- | --- |
+| `tier_kind` | `ORDER_VALUE` or `BOOKING_SEQUENCE` |
+| `min_order_paise` / `max_order_paise` | order-value bands (paise); `max` null = unlimited upper |
+| `min_booking_sequence` / `max_booking_sequence` | completion # bands; `max` null = unlimited upper |
+| `coins_amount` | coins earned when band matches |
 
 | `CoinBurnPolicy` fields (planning) | |
 | --- | --- |
@@ -155,11 +443,57 @@ CoinTransaction        append-only: EARN_PROMISE, UNLOCK, BURN, EXPIRE, ADJUSTME
 ### 3.3 Referral
 
 ```text
-ReferralProgramVersion   effective_from, referrer_reward_*, referee_reward_*, qualifying_event
-ReferralCode             per referrer; unique code + canonical share_url
-ReferralAttribution      referee + program_version_id (frozen at signup)
-ReferralReward           per side; links to wallet/coin grant when paid
+ReferralProgramVersion     effective_from, qualifying_event, reward_sides (referrer/referee/both)
+ReferralProgramRewardTier  volume tiers per version — unlimited rows; admin-configured thresholds (§2.4.1)
+ReferralCode               per referrer; unique code + canonical share_url
+ReferralAttribution        referee + program_version_id + terms_snapshot (frozen at signup)
+ReferralReward             per side; version + tier + payout_sequence_n + computed amounts; immutable after pay
 ```
+
+| `ReferralProgramVersion` fields (planning) | |
+| --- | --- |
+| `qualifying_event` | default: `REFEREE_FIRST_COMPLETED_BOOKING` |
+| `reward_sides` | `REFERRER_ONLY`, `REFEREE_ONLY`, `BOTH` |
+| `referee_wallet_paise` | optional flat referee amount when not tiered per side |
+| `referee_coins_amount` | optional flat referee coins when not tiered per side |
+| `effective_from` / `effective_until` | version visibility |
+| `is_active` | soft off without deleting history |
+
+| `ReferralProgramRewardTier` fields (planning) | |
+| --- | --- |
+| `min_qualified_referrals` | **Admin-configured** inclusive threshold — successful rewarded referrals required before this tier applies (e.g. 1, 5, 10 — not hard-coded) |
+| `referrer_wallet_paise` | nullable INR credit to referrer |
+| `referrer_coins_amount` | nullable coins to referrer |
+| `referee_wallet_paise` | nullable — overrides version flat for this tier when set |
+| `referee_coins_amount` | nullable — overrides version flat for this tier when set |
+
+**Payout algorithm (server-only):**
+
+```text
+successful_rewarded_count = count(ReferralAttribution where referrer=A, status=REWARDED)
+  # only attributions where referee met qualifying event and referrer was paid
+n = successful_rewarded_count + 1
+tier = max tier in attribution's snapshotted version (terms_snapshot / program_version_id) where min_qualified_referrals <= n
+write ReferralReward rows: program_version_id, tier_id, payout_sequence_n=n, amounts — immutable after insert
+```
+
+| `ReferralAttribution` fields (planning) | |
+| --- | --- |
+| `referrer_id` / `referee_id` | parties — **`UNIQUE(referee_id)`** one attribution per referee lifetime (§2.6.1) |
+| `program_version_id` | FK — version active at signup |
+| `terms_snapshot` | JSON copy of full tier table + version metadata at signup (§2.5.2) |
+| `attributed_at` | signup timestamp |
+| `status` | see below |
+
+| `ReferralReward` fields (planning) | |
+| --- | --- |
+| `attribution_id` | which referral |
+| `program_version_id` | version used at payout (matches attribution) |
+| `tier_id` | which tier row applied |
+| `payout_sequence_n` | referrer's nth successful payout (the `n` used in tier selection) |
+| `wallet_paise` / `coins_amount` | actual amounts paid per side |
+| `paid_at` | issuance timestamp |
+| `wallet_transaction_id` / `coin_grant_id` | link to ledger — auditable |
 
 | `ReferralAttribution.status` | |
 | --- | --- |
@@ -574,11 +908,11 @@ All marketing levers live in Operations — **no hard-coded percentages in front
 
 | Screen (planning) | Actions |
 | --- | --- |
-| **Coin grant rules** | CRUD rules; set amount, unlock completions, expiry, trigger, schedule |
+| **Coin grant rules** | CRUD rules; **earn tiers** editor; eligibility audience; unlock N; expiry; trigger; effective dates |
 | **Coin burn policy** | Set max % and coin value; effective dating; preview on sample order |
 | **Wallet top-up policy** | Set min/max top-up in paise; effective dating |
-| **Referral programs** | New version; set referrer/referee rewards; qualifying event; effective_from |
-| **Referral attributions** | Read-only queue; fraud mark; manual qualify/deny with reason |
+| **Referral programs** | Create **new version** (never edit in-place if attributions exist); **tier table** with unlimited rows; version **history** read-only; tier preview |
+| **Referral attributions** | Read-only queue; show `program_version_id` + **terms_snapshot**; fraud mark; manual qualify/deny with reason |
 | **Wallet liability** | Sum of customer balances; top-ups vs debits report |
 | **Adjustments** | Maker-checker wallet/coin adjustments with reason |
 
@@ -593,7 +927,7 @@ All marketing levers live in Operations — **no hard-coded percentages in front
 | Signup | `?ref=` **auto-fills** referral field; attribution on OTP signup; show **promised coins** from active rules |
 | Account → Wallet | Balance, top-up (shows configured min/max), transaction history |
 | Account → Coins | Promised / locked / spendable / expiring buckets |
-| Account → Referral | My code, **copy link**, pending vs earned rewards (no “enter code” — signup only) |
+| Account → Referral | My code, **copy link**, **tier schedule** (e.g. ₹100 each · ₹200 after 5), pending vs earned per referral |
 | Checkout | Toggle use wallet; toggle use coins; server shows cap (“Max 30% of this order”) |
 
 ### Partner
@@ -645,8 +979,9 @@ Create under `contracts/proposals/`:
 
 ### Wave C2 — Coin rules engine
 
-- [ ] `CoinGrantRule` + `CoinBurnPolicy` Operations CRUD
-- [ ] Grant on signup (promised + locked)
+- [ ] `CoinGrantRule` + `CoinEarnTier` + `CoinBurnPolicy` Operations CRUD
+- [ ] Grant on signup (promised + locked) with eligibility filters
+- [ ] Earn on `BOOKING_COMPLETED` — tier selection by order value or booking sequence
 - [ ] `CustomerCompletion` model + `UNIQUE(customer_id, source_type, source_id)` (§3.4)
 - [ ] `record_completion_for_customer` — real `get_or_create`; **no** mutable counter column
 - [ ] Unlock on booking completion (configurable N) — driven by `CustomerCompletion` count
@@ -662,15 +997,20 @@ Create under `contracts/proposals/`:
 
 ### Wave C4 — Referral
 
-- [ ] Program versioning + attribution snapshot
+- [ ] `ReferralProgramVersion` + `ReferralProgramRewardTier` Operations CRUD (volume tiers §2.4.1)
+- [ ] Program versioning + attribution snapshot at signup
 - [ ] Apply referral at **signup only** (`?ref=` auto-fill → attribution on account create)
 - [ ] Qualify on first completed booking (configurable event hook)
-- [ ] Issue rewards per snapshotted version
-- [ ] Customer referral page
+- [ ] Tier selection at payout: `n = successful_rewarded_count + 1` → highest matching tier (thresholds admin-configured per tier row)
+- [ ] Issue rewards — store `tier_id` + computed amounts on `ReferralReward` (immutable)
+- [ ] Customer referral page — tier schedule + earned history per referral
 
 ### Wave C5 — Hardening
 
-- [ ] Idempotency + concurrency tests (owner runs)
+- [ ] Idempotency tests (owner runs)
+- [ ] **Wallet concurrency** — two parallel checkouts cannot spend more than available balance (§2.7.1)
+- [ ] **Coin concurrency** — two parallel checkouts cannot reserve/burn more than spendable coins (§2.3.1)
+- [ ] Referral `UNIQUE(referee_id)` — second code at signup rejected
 - [ ] Fraud: self-referral, duplicate device (minimum rules)
 - [ ] `docs/runbooks/m3-wallet-coins-referral-smoke.md`
 - [ ] M3 Phase C acceptance scenarios (below)
@@ -686,10 +1026,22 @@ Create under `contracts/proposals/`:
 | C-03 | Signup shows 500 promised coins, 0 spendable until 1st completion |
 | C-04 | Rule requires 3 completions → unlocks only after third |
 | C-05 | Festival coins expire; evergreen coins do not |
-| C-06 | Referrer ₹100 under v1; program changes to ₹200; v1 attribution still pays ₹100 |
+| C-05a | Order-value earn tiers: ₹500 order → 25 coins per configured bands |
+| C-05b | Booking-sequence earn tiers: 1st completion 500 coins, 2nd 200, 3rd 300 |
+| C-05c | `REACTIVATED_CUSTOMER` rule: 1,000 coins only when last completion > 90 days ago |
+| C-05d | `NEW_CUSTOMER` rule does not fire for customer with prior completion |
+| C-06 | Referrer under v1 tiers (₹100 / ₹200@5); program changes to v2; v1 attribution still pays v1 tier amounts |
 | C-07 | Both sides rewarded when configured |
+| C-07a | Admin-configured tiers: e.g. 1st–4th **successful** referral ₹100, 5th+ ₹200 — threshold `5` is Operations config, not code |
+| C-07b | Tier count uses **REWARDED** attributions only (qualifying event met + paid); signups/pending do not advance tier |
+| C-07c | Tier selection uses `successful_rewarded_count + 1`; replay cannot pay twice at a different tier |
+| C-07d | Admin adds tier min=10 ₹300 in **new program version** — pending v1 attributions still pay v1; new signups pay v2 |
+| C-07e | Attribution stores `terms_snapshot`; `ReferralReward` stores version + tier + `payout_sequence_n` — Operations can audit promised vs paid |
+| C-07f | Referee B attributed to A only — signup with C's code after B exists → rejected (`UNIQUE(referee_id)`) |
 | C-08 | Checkout: ₹200 wallet + ₹300 Razorpay + allocations sum to ₹500 |
 | C-09 | Failed payment releases wallet reservation |
+| C-09a | **Concurrency:** wallet ₹500; parallel ₹400 + ₹300 attempts — at most one succeeds; balance never negative |
+| C-09b | **Concurrency:** 1,000 spendable coins; parallel 700 + 600 burn attempts — at most 1,000 coins consumed total |
 | C-10 | Operations adjustment appears in audit trail |
 | C-11 | `?ref=CODE` on signup URL auto-fills referral; attribution after OTP signup |
 | C-12 | Refund restores wallet + Razorpay portions; burned coins not restored |
@@ -716,6 +1068,9 @@ Create under `contracts/proposals/`:
 | **OQ-02** | Referral **signup only**; unique code + share link; `?ref=` auto-fills signup form |
 | **OQ-03** | Refund restores **wallet + Razorpay**; **does not** restore burned coins |
 | **OQ-04** | Wallet top-up **min/max configurable** in Operations |
+| **OQ-06** | Referral **volume tiers** — unlimited admin-configured thresholds; change rewards via **new program version**; `terms_snapshot` + immutable `ReferralReward`; **`UNIQUE(referee_id)`** |
+| **OQ-07** | Coin **earn tiers** — `CoinEarnTier` by order value or booking sequence; **customer eligibility** audience on each rule |
+| **OQ-08** | Wallet **available ≥ 0** and coin **spendable ≥ reserved+burned** — mandatory C5 concurrency tests |
 
 ### Still open — need your call
 
