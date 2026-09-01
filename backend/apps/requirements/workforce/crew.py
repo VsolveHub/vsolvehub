@@ -11,7 +11,7 @@ The boundary: nothing here records what happened on the day. The moment the crew
 """
 
 import uuid
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import date
 
 from django.db import transaction
@@ -75,6 +75,7 @@ def assign_crew(
     stage_id: uuid.UUID,
     actor: User,
     membership_ids: Sequence[uuid.UUID],
+    roles: Mapping[uuid.UUID, str] | None = None,
     reason_code: str = "",
 ) -> list[StageCrewAssignment]:
     """Name the workers coming to one shift-day. Partner command (`assign_crew` in §6).
@@ -106,6 +107,14 @@ def assign_crew(
        This is the last gate before somebody travels. It is deliberately a refusal and not a
        warning -- a lead who discovers on site that he cannot staff what was sold is the failure
        this whole feature exists to prevent.
+
+    `roles` records which role each worker was named into. It is **not** a fifth-and-a-half
+    refusal: the mix gate above compares totals, and a role that does not line up produces a
+    warning on the screen (`crew_mix.role_fulfilment`) rather than a block. Swapping somebody
+    between roles on the morning of an event is ordinary, and the attendance shortfall path
+    already settles a day that did not go to plan. What the column buys is a record -- a shift
+    settled without it cannot be reconstructed afterwards, which is why it is written now and
+    enforced later, if ever.
 
     The crew may not exceed the headcount the Customer booked. More workers than were agreed is a
     scope amendment at the published rate (`M2-BE-538`), not a longer list on an assignment screen.
@@ -146,6 +155,7 @@ def assign_crew(
         busy_crew_member_ids=_busy_crew_member_ids(shift_date=shift_date, stage=stage),
     )
     _assert_mix_met(engagement=engagement, memberships=memberships)
+    wanted_roles = _validated_roles(engagement=engagement, roles=roles or {})
 
     current = {
         assignment.membership_id: assignment
@@ -175,6 +185,14 @@ def assign_crew(
 
     for membership in memberships:
         if membership.id in current:
+            # Already on the day. The command is the whole crew every time, so a re-send is how a
+            # supervisor moves somebody between roles -- releasing and re-adding them would file a
+            # substitution in the Customer's notifications for a change they did not make.
+            existing = current[membership.id]
+            role = wanted_roles.get(membership.id, "")
+            if role and existing.role_code != role:
+                existing.role_code = role
+                existing.save(update_fields=("role_code", "updated_at"))
             continue
         StageCrewAssignment.objects.create(
             stage=stage,
@@ -182,6 +200,7 @@ def assign_crew(
             membership=membership,
             crew_member=membership.crew_member,
             shift_date=shift_date,
+            role_code=wanted_roles.get(membership.id, ""),
             is_supervisor=membership.is_supervisor,
             assigned_by=actor,
         )
@@ -273,3 +292,17 @@ def _names(names: Sequence[str]) -> str:
     if len(names) == 1:
         return names[0]
     return f"{', '.join(names[:-1])} and {names[-1]}"
+
+
+def _validated_roles(
+    *, engagement: Engagement, roles: Mapping[uuid.UUID, str]
+) -> dict[uuid.UUID, str]:
+    """Keep only role codes this requirement actually published.
+
+    A code the catalogue does not carry is dropped rather than refused. It is a hint about how the
+    crew is arranged, not a commitment: refusing the whole assignment because a client sent a stale
+    role would stop a supervisor naming a crew over something that changes nothing about who turns
+    up.
+    """
+    allowed = crew_mix.role_codes(engagement.requirement)
+    return {membership_id: code for membership_id, code in roles.items() if code in allowed}

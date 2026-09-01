@@ -72,6 +72,9 @@ export function CrewPanel({ day, scope, canAssign, bookedFor, remainingDays, onS
   const onTheDay = useMemo(() => assignedMembershipIds(day), [day]);
   const [selected, setSelected] = useState<readonly string[] | null>(null);
   const [reason, setReason] = useState<CrewReleaseReason>("substituted");
+  /* Which role each ticked worker is named into. Null until touched, so a refetch that
+     rearranges the day is reflected rather than overwritten by a stale local guess. */
+  const [roleDraft, setRoleDraft] = useState<Readonly<Record<string, string>> | null>(null);
 
   // Null until touched, so a refetch that changes the day's crew is reflected.
   const ticked = selected ?? onTheDay;
@@ -91,6 +94,12 @@ export function CrewPanel({ day, scope, canAssign, bookedFor, remainingDays, onS
 
   const counter = headcount === null ? `${ticked.length}` : `${ticked.length} / ${headcount}`;
   const reasonInput = removing.length > 0 ? { reasonCode: reason } : {};
+
+  /* Roles exist only on a job that asked for a men/women split, which is a minority of them.
+     Everywhere else this whole block is absent rather than rendered empty. */
+  const roleOptions = day.role_fulfilment;
+  const roles = roleDraft ?? assignedRoles(day);
+  const shortRoles = roleOptions.filter((row) => !row.is_met);
 
   return (
     <section className="flex flex-col gap-4" aria-labelledby="crew-heading">
@@ -167,6 +176,33 @@ export function CrewPanel({ day, scope, canAssign, bookedFor, remainingDays, onS
                     </span>
                   </span>
                 </button>
+
+                {/* Only for a ticked worker on a job that asks for roles. The gate this screen
+                    submits into counts totals, so this changes no refusal -- what it buys is the
+                    record, and the warning below that reads from it. */}
+                {on && roleOptions.length > 0 ? (
+                  <label className="mt-1 flex items-center gap-2 pl-10 text-xs text-text-secondary">
+                    Working as
+                    <select
+                      value={roles[member.membership_id] ?? ""}
+                      disabled={locked}
+                      onChange={(event) =>
+                        setRoleDraft({
+                          ...roles,
+                          [member.membership_id]: event.target.value,
+                        })
+                      }
+                      className="min-h-9 rounded-control border border-line bg-surface px-2 text-xs text-text disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+                    >
+                      <option value="">Not set</option>
+                      {roleOptions.map((row) => (
+                        <option key={row.role_code} value={row.role_code}>
+                          {row.role_label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
               </li>
             );
           })}
@@ -207,12 +243,14 @@ export function CrewPanel({ day, scope, canAssign, bookedFor, remainingDays, onS
           )}
 
           <div className="flex flex-col gap-2">
+            <RoleGapNotice rows={shortRoles} />
+
             <Button
               type="button"
               block
               onClick={() =>
                 assign.mutate(
-                  { membershipIds: ticked, ...reasonInput },
+                  { membershipIds: ticked, roles, ...reasonInput },
                   {
                     onSuccess: () => {
                       setSelected(null);
@@ -336,5 +374,54 @@ function CopyFailure({ error }: { readonly error: unknown }) {
       severity="warning"
       reference={presentation.reference}
     />
+  );
+}
+
+
+/** Which role each worker on the day is already named into, keyed by membership id. */
+function assignedRoles(day: ShiftDay): Readonly<Record<string, string>> {
+  const roles: Record<string, string> = {};
+  for (const member of day.crew) {
+    if (member.membership_id !== null && member.role_code !== "") {
+      roles[member.membership_id] = member.role_code;
+    }
+  }
+  return roles;
+}
+
+/**
+ * Roles the named crew does not cover.
+ *
+ * **A warning, and deliberately not a block.** The server refuses on totals -- five men and two
+ * women, roles collapsed -- which is a floor rather than the promise the offer screen makes: that
+ * gate passes with both women on setup while the customer asked for them on the serving line.
+ * This is what says so.
+ *
+ * It does not disable the save. Swapping somebody between roles on the morning of an event is
+ * ordinary, the supervisor is standing somewhere we cannot see, and the attendance shortfall path
+ * already settles a day that did not go to plan. A supervisor who reads this and saves anyway has
+ * made a decision; one who is blocked has an argument with a screen.
+ *
+ * The wording comes from the server (`gap`), so this screen and any other cannot describe the same
+ * shortfall differently.
+ */
+function RoleGapNotice({ rows }: { readonly rows: readonly ShiftDay["role_fulfilment"][number][] }) {
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="rounded-card border border-warning-line bg-warning-surface px-3.5 py-3">
+      <p className="text-sm font-bold text-warning-text">Not what the customer asked for</p>
+      <ul className="mt-1.5 flex list-none flex-col gap-1 p-0">
+        {rows.map((row) => (
+          <li key={row.role_code} className="text-sm leading-5 text-warning-text">
+            <span className="font-semibold">{row.role_label}</span> — asked for {row.wanted_men} men
+            and {row.wanted_women} women, named {row.named_men} and {row.named_women}. {row.gap}.
+          </li>
+        ))}
+      </ul>
+      <p className="mt-1.5 text-xs leading-5 text-warning-text">
+        You can still save. Vsolve only holds you to the totals.
+      </p>
+    </div>
   );
 }

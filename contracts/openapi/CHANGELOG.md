@@ -1,5 +1,24 @@
 # API Contract Changelog
 
+## 1.55.0 - Which role a worker was named into, recorded before it is enforced
+
+- `StageCrewAssignment` gains **`role_code`**, published on every shift-day crew row, and the crew
+  assign command accepts an optional **`roles`** map (membership id -> role code). Blank on every
+  job that asks for no roles, which is most of them. A code the requirement does not publish is
+  dropped rather than refused: it describes how a crew is arranged, not who is turning up.
+- New **`role_fulfilment`** on the shift-day read and the assign response: per role, `wanted_men` /
+  `wanted_women` against `named_men` / `named_women`, plus `is_met` and a server-composed `gap`
+  ("1 woman short") so two clients cannot word the same shortfall differently.
+- **This is a warning, not a gate.** `assign_crew` still refuses on totals -- five men and two
+  women, roles collapsed -- and that is deliberately a floor rather than the promise the offer
+  screen makes: a lead can satisfy it with both women on setup while the Customer asked for them on
+  the serving line. `role_fulfilment` is what lets a screen say so without blocking a supervisor
+  who has a good reason to swap somebody on the morning of an event, which is ordinary and which
+  the attendance shortfall path already settles.
+- Recorded now, enforced later if ever. The strictness is a branch in `_assert_mix_met` and can
+  change any day; the column cannot be backfilled, because a shift settled without it is history
+  nobody can reconstruct.
+
 ## 1.54.0 - Recording what a worker is, on a row several agencies share
 
 - `CrewMember` (the roster read) gains **`gender`**: `MAN` / `WOMAN` / `OTHER` / `UNDISCLOSED`, or

@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.54.0)
- * Checksum: eef9b8f1fa339989
+ * Source:   contracts/openapi/v1.yaml (version 1.55.0)
+ * Checksum: 556d247fe877c6ef
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -6390,6 +6390,9 @@ export interface components {
          */
         CrewAssignRequest: {
             membership_ids: string[];
+            roles?: {
+                [key: string]: string;
+            };
             /** @default  */
             reason_code: string;
         };
@@ -11016,6 +11019,24 @@ export interface components {
          * @enum {string}
          */
         RevisionRequestStatusEnum: "OPEN" | "ANSWERED" | "DECLINED";
+        /**
+         * @description One role, as booked against as named.
+         *
+         *     **A warning, never a refusal.** `assign_crew` refuses on totals -- five men and two women,
+         *     roles collapsed -- which is a floor rather than the promise the offer screen makes. This is
+         *     what lets the assignment screen say "you have named two women, both on setup; the customer
+         *     asked for two on the serving line" without blocking a supervisor who has a good reason.
+         */
+        RoleFulfilment: {
+            readonly role_code: string;
+            readonly role_label: string;
+            readonly wanted_men: number;
+            readonly wanted_women: number;
+            readonly named_men: number;
+            readonly named_women: number;
+            readonly is_met: boolean;
+            readonly gap: string;
+        };
         RoleSwitchRequest: {
             role: string;
         };
@@ -11431,6 +11452,7 @@ export interface components {
             readonly scheduled_on: string | null;
             readonly stage_status: string;
             readonly crew: components["schemas"]["StageCrewMember"][];
+            readonly role_fulfilment: components["schemas"]["RoleFulfilment"][];
             readonly attendance: components["schemas"]["ShiftAttendance"] | null;
             readonly settlement: components["schemas"]["DaySettlement"] | null;
             readonly per_worker_paise: number;
@@ -11567,6 +11589,7 @@ export interface components {
         };
         StageCrewList: {
             readonly crew: components["schemas"]["StageCrewMember"][];
+            readonly role_fulfilment: components["schemas"]["RoleFulfilment"][];
             readonly expected_count: number;
             /** Format: date */
             readonly shift_date: string | null;
@@ -11592,6 +11615,7 @@ export interface components {
             readonly status: string;
             /** Format: date-time */
             readonly assigned_at: string;
+            readonly role_code: string;
         };
         StageDisputeDecisionRequest: {
             outcome: components["schemas"]["StageDisputeOutcomeEnum"];

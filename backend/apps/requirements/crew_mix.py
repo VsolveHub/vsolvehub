@@ -35,6 +35,7 @@ disagreeing numbers on one screen is worse than either of them alone.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -47,11 +48,14 @@ __all__ = [
     "WOMEN_SUFFIX",
     "CrewMixLine",
     "MixShortfall",
+    "RoleFulfilment",
     "RosterMix",
     "assert_mix_consistent",
     "gendered_codes",
     "mix_lines",
     "requested_mix",
+    "role_codes",
+    "role_fulfilment",
     "roster_mix",
     "shortfall_against",
 ]
@@ -214,6 +218,84 @@ def assert_mix_consistent(requirement: CustomerRequirement) -> None:
                 f"'{name}' asks for {_answer_int(answers, code)} people but the men and women "
                 f"add up to {parts}.",
             )
+
+
+@dataclass(frozen=True, slots=True)
+class RoleFulfilment:
+    """One role, as booked against as named.
+
+    The soft half of the mix rules. `_assert_mix_met` refuses on totals -- five men and two women,
+    roles collapsed -- and that is a floor rather than the promise the offer screen makes: a lead
+    can satisfy it with both women on setup while the Customer asked for them on the serving line.
+
+    This is what lets a screen say so. It is **not** a refusal and must not become one by accident:
+    swapping somebody between roles on the morning of an event is ordinary, and the attendance
+    shortfall path already settles a day that did not go to plan. A warning a supervisor can act on
+    beats a block they have to argue with.
+    """
+
+    role_code: str
+    role_label: str
+    wanted_men: int
+    wanted_women: int
+    named_men: int
+    named_women: int
+
+    @property
+    def is_met(self) -> bool:
+        return self.named_men >= self.wanted_men and self.named_women >= self.wanted_women
+
+    def describe_gap(self) -> str:
+        """ "1 woman short", or "" when this role is covered."""
+        parts = []
+        if self.named_men < self.wanted_men:
+            short = self.wanted_men - self.named_men
+            parts.append(f"{short} {'man' if short == 1 else 'men'}")
+        if self.named_women < self.wanted_women:
+            short = self.wanted_women - self.named_women
+            parts.append(f"{short} {'woman' if short == 1 else 'women'}")
+        return f"{' and '.join(parts)} short" if parts else ""
+
+
+def role_fulfilment(
+    requirement: CustomerRequirement,
+    named: Sequence[tuple[str, str]],
+) -> list[RoleFulfilment]:
+    """Every requested role, with what has actually been named into it.
+
+    @param named `(role_code, gender)` for each assigned worker. A blank role means somebody was
+        named without one -- an older assignment, or a supervisor who skipped the picker -- and
+        they count toward no role rather than being spread across all of them.
+    """
+    counts: dict[str, tuple[int, int]] = {}
+    for role_code, gender in named:
+        if not role_code:
+            continue
+        men, women = counts.get(role_code, (0, 0))
+        if gender == CrewMember.Gender.MAN:
+            counts[role_code] = (men + 1, women)
+        elif gender == CrewMember.Gender.WOMAN:
+            counts[role_code] = (men, women + 1)
+
+    rows: list[RoleFulfilment] = []
+    for line in mix_lines(requirement):
+        named_men, named_women = counts.get(line.role_code, (0, 0))
+        rows.append(
+            RoleFulfilment(
+                role_code=line.role_code,
+                role_label=line.role_label,
+                wanted_men=line.men,
+                wanted_women=line.women,
+                named_men=named_men,
+                named_women=named_women,
+            )
+        )
+    return rows
+
+
+def role_codes(requirement: CustomerRequirement) -> frozenset[str]:
+    """The role codes a worker may be assigned into on this requirement."""
+    return frozenset(line.role_code for line in mix_lines(requirement))
 
 
 def roster_mix(partner: PartnerProfile, *, verified_only: bool = False) -> RosterMix:

@@ -11,6 +11,8 @@ screen still green — which is exactly the kind of rule that has to be held by 
 by a comment.
 """
 
+from typing import Any
+
 import pytest
 
 from apps.partners.models import CrewMember
@@ -97,3 +99,99 @@ def _count_one(gender: str) -> crew_mix.RosterMix:
     men = 1 if gender == CrewMember.Gender.MAN else 0
     women = 1 if gender == CrewMember.Gender.WOMAN else 0
     return crew_mix.RosterMix(men=men, women=women, unknown=1 - men - women)
+
+
+class TestRoleFulfilment:
+    """The soft half: what each role was booked for, against what was named into it.
+
+    Never a refusal. `assign_crew` refuses on totals, and these rows are what let a screen say
+    which role is wrong without blocking a supervisor who has a reason.
+    """
+
+    def test_a_role_covered_by_the_right_people_is_met(self) -> None:
+        rows = crew_mix.role_fulfilment(
+            _requirement({"waiter_count": 2, "waiter_men": 1, "waiter_women": 1}),
+            [("waiter_count", CrewMember.Gender.MAN), ("waiter_count", CrewMember.Gender.WOMAN)],
+        )
+
+        assert [row.is_met for row in rows] == [True]
+        assert rows[0].describe_gap() == ""
+
+    def test_the_right_totals_in_the_wrong_roles_are_caught(self) -> None:
+        """The failure the aggregate gate cannot see, and the reason these rows exist.
+
+        Five men and two women is exactly what was booked, so the hard gate passes -- and both
+        women are lifting furniture while the Customer asked for them on the serving line.
+        """
+        requirement = _requirement(
+            {
+                "waiter_count": 5,
+                "waiter_men": 3,
+                "waiter_women": 2,
+                "setup_count": 2,
+                "setup_men": 2,
+                "setup_women": 0,
+            }
+        )
+        named = [("waiter_count", CrewMember.Gender.MAN)] * 5 + [
+            ("setup_count", CrewMember.Gender.WOMAN)
+        ] * 2
+
+        rows = {row.role_code: row for row in crew_mix.role_fulfilment(requirement, named)}
+
+        assert rows["waiter_count"].describe_gap() == "2 women short"
+        assert rows["setup_count"].describe_gap() == "2 men short"
+
+    def test_a_worker_named_without_a_role_counts_toward_none_of_them(self) -> None:
+        """Rather than being spread across every role, which would fake a coverage nobody chose."""
+        rows = crew_mix.role_fulfilment(
+            _requirement({"waiter_count": 1, "waiter_men": 0, "waiter_women": 1}),
+            [("", CrewMember.Gender.WOMAN)],
+        )
+
+        assert rows[0].named_women == 0
+        assert rows[0].describe_gap() == "1 woman short"
+
+    def test_more_people_than_booked_is_not_a_gap(self) -> None:
+        """Over-staffing a role is the lead's business; the gap is about what is missing."""
+        rows = crew_mix.role_fulfilment(
+            _requirement({"waiter_count": 1, "waiter_men": 1, "waiter_women": 0}),
+            [("waiter_count", CrewMember.Gender.MAN)] * 3,
+        )
+
+        assert rows[0].is_met
+        assert rows[0].describe_gap() == ""
+
+
+#: The two roles these cases use, in the shape `M2VariantConfiguration.question_schema` publishes.
+#: Built here rather than read from the catalogue: the seeded configuration lives in the dev
+#: database and pytest runs against a fresh one, and `mix_lines` reads a schema and an answers
+#: map and nothing else -- so a stub keeps these pure and fast, and keeps them passing on a
+#: machine that has never run the seed.
+_SCHEMA: dict[str, Any] = {
+    "version": 1,
+    "questions": [
+        {"code": "waiter_count", "label": "Waiters and serving staff", "kind": "INTEGER"},
+        {"code": "waiter_men", "label": "Waiters and serving staff - men", "kind": "INTEGER"},
+        {"code": "waiter_women", "label": "Waiters and serving staff - women", "kind": "INTEGER"},
+        {"code": "setup_count", "label": "Setup and teardown crew", "kind": "INTEGER"},
+        {"code": "setup_men", "label": "Setup and teardown crew - men", "kind": "INTEGER"},
+        {"code": "setup_women", "label": "Setup and teardown crew - women", "kind": "INTEGER"},
+    ],
+}
+
+
+class _Configuration:
+    question_schema = _SCHEMA
+
+
+class _Requirement:
+    """Requirement-shaped: `mix_lines` reads `.configuration` and `.answers` and nothing else."""
+
+    def __init__(self, answers: dict[str, object]) -> None:
+        self.configuration = _Configuration()
+        self.answers = answers
+
+
+def _requirement(answers: dict[str, object]) -> Any:
+    return _Requirement(answers)

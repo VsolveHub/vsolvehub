@@ -167,6 +167,15 @@ export interface ShiftCommandScope {
 export interface AssignCrewInput {
   /** The **whole** intended crew, every time. See below. */
   readonly membershipIds: readonly string[];
+  /**
+   * Which role each worker is named into, keyed by membership id (1.55.0).
+   *
+   * Optional and partial. A job that asks for no men/women split sends nothing,
+   * and the server drops a code the requirement does not publish rather than
+   * refusing the call — this describes how the crew is arranged, not who is
+   * turning up, and a stale code must not stop a supervisor naming a crew.
+   */
+  readonly roles?: Readonly<Record<string, string>>;
   /** Why anybody currently on the day is coming off it. Stored against the release. */
   readonly reasonCode?: string;
 }
@@ -183,7 +192,14 @@ export interface AssignCrewInput {
  */
 function assignOperationId(stageId: string, input: AssignCrewInput): string {
   const ids = [...input.membershipIds].sort().join(",");
-  return `m2-shift-crew:${stageId}:${ids}:${input.reasonCode ?? ""}`;
+  // Roles are part of the command, so moving somebody between roles is a different
+  // one and earns its own key. Sorted for the same reason the ids are: two renders
+  // that produce the same arrangement must not fingerprint differently.
+  const roles = Object.entries(input.roles ?? {})
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([id, role]) => `${id}=${role}`)
+    .join(",");
+  return `m2-shift-crew:${stageId}:${ids}:${roles}:${input.reasonCode ?? ""}`;
 }
 
 /**
@@ -217,6 +233,7 @@ export function useAssignShiftCrew(scope: ShiftCommandScope) {
           },
           body: {
             membership_ids: [...input.membershipIds],
+            roles: { ...(input.roles ?? {}) },
             reason_code: input.reasonCode ?? "",
           },
         }),

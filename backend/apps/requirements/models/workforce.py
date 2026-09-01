@@ -87,6 +87,17 @@ class StageCrewAssignment(models.Model):
         related_name="stage_assignments",
     )
     shift_date = models.DateField()
+    #: Which role the Customer booked this person into -- `waiter_count`, `setup_count`, the
+    #: catalogue's own role code. Blank on every job that asks for no roles at all, which is most
+    #: of them.
+    #:
+    #: **Recorded before it is enforced, deliberately.** The mix gate compares totals: five men and
+    #: two women, roles collapsed. That is a floor, not the promise the offer screen makes -- a
+    #: lead can meet it with both women on setup while the Customer asked for them on the serving
+    #: line. Tightening the gate is a branch in `_assert_mix_met` and can happen any day; the
+    #: column cannot be backfilled, because a shift settled without it is history nobody can
+    #: reconstruct. So the data lands first and the strictness is decided after.
+    role_code = models.SlugField(max_length=80, blank=True)
     is_supervisor = models.BooleanField(default=False)
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.ASSIGNED)
     assigned_by = models.ForeignKey(

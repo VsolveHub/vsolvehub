@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.54.0
+  version: 1.55.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -17092,6 +17092,12 @@ components:
             format: uuid
           maxItems: 40
           minItems: 1
+        roles:
+          type: object
+          additionalProperties:
+            type: string
+            maxLength: 80
+            pattern: ^[-a-zA-Z0-9_]+$
         reason_code:
           type: string
           default: ''
@@ -28612,6 +28618,49 @@ components:
         * `OPEN` - Waiting for the vendor
         * `ANSWERED` - Answered with a revised estimate
         * `DECLINED` - Declined by the vendor
+    RoleFulfilment:
+      type: object
+      description: |-
+        One role, as booked against as named.
+
+        **A warning, never a refusal.** `assign_crew` refuses on totals -- five men and two women,
+        roles collapsed -- which is a floor rather than the promise the offer screen makes. This is
+        what lets the assignment screen say "you have named two women, both on setup; the customer
+        asked for two on the serving line" without blocking a supervisor who has a good reason.
+      properties:
+        role_code:
+          type: string
+          readOnly: true
+        role_label:
+          type: string
+          readOnly: true
+        wanted_men:
+          type: integer
+          readOnly: true
+        wanted_women:
+          type: integer
+          readOnly: true
+        named_men:
+          type: integer
+          readOnly: true
+        named_women:
+          type: integer
+          readOnly: true
+        is_met:
+          type: boolean
+          readOnly: true
+        gap:
+          type: string
+          readOnly: true
+      required:
+      - gap
+      - is_met
+      - named_men
+      - named_women
+      - role_code
+      - role_label
+      - wanted_men
+      - wanted_women
     RoleSwitchRequest:
       type: object
       properties:
@@ -29701,6 +29750,11 @@ components:
           items:
             $ref: '#/components/schemas/StageCrewMember'
           readOnly: true
+        role_fulfilment:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleFulfilment'
+          readOnly: true
         attendance:
           allOf:
           - $ref: '#/components/schemas/ShiftAttendance'
@@ -29740,6 +29794,7 @@ components:
       - overtime_hourly_paise
       - per_worker_paise
       - position
+      - role_fulfilment
       - scheduled_on
       - server_now
       - settlement
@@ -30016,6 +30071,11 @@ components:
           items:
             $ref: '#/components/schemas/StageCrewMember'
           readOnly: true
+        role_fulfilment:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleFulfilment'
+          readOnly: true
         expected_count:
           type: integer
           readOnly: true
@@ -30031,6 +30091,7 @@ components:
       required:
       - crew
       - expected_count
+      - role_fulfilment
       - server_now
       - shift_date
     StageCrewMember:
@@ -30071,6 +30132,9 @@ components:
           type: string
           format: date-time
           readOnly: true
+        role_code:
+          type: string
+          readOnly: true
       required:
       - assigned_at
       - display_name
@@ -30078,6 +30142,7 @@ components:
       - is_verified
       - membership_id
       - phone_masked
+      - role_code
       - status
       - verified_at
     StageDisputeDecisionRequest:
