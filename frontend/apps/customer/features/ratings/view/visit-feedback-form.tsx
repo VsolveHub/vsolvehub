@@ -17,6 +17,27 @@ export function isVisitWorkComplete(status: string | null | undefined): boolean 
   return status != null && COMPLETED_VISIT_STATUSES.has(status);
 }
 
+/**
+ * Whether this visit is one the customer can still be asked to rate.
+ *
+ * ## Why this is not a type predicate
+ *
+ * It was declared `): bookingId is string`, which TypeScript refuses outright
+ * when the parameter is a binding pattern (TS1230) -- and the refusal was doing
+ * everyone a favour, because the predicate could not have worked either. A
+ * predicate narrows *the argument*, and every caller builds a throwaway object
+ * literal to pass in. Narrowing that literal tells you nothing about
+ * `unit.booking_id`, which is the value that actually reaches the form.
+ *
+ * Worse, it failed quietly: an invalid predicate is still a callable function,
+ * so the guard compiled at every call site and simply narrowed nothing. The one
+ * caller that needed a non-null id got `string | null` anyway
+ * (`group-detail.tsx`), and the other had already given up and narrowed by hand.
+ *
+ * So this returns a plain boolean, and callers narrow the id themselves -- on
+ * the value they are going to use, which is the only place narrowing is worth
+ * anything.
+ */
 export function canShowVisitFeedback({
   bookingId,
   isPaid,
@@ -27,7 +48,7 @@ export function canShowVisitFeedback({
   readonly isPaid: boolean;
   readonly unitStatus: string;
   readonly bookingStatus: string | null;
-}): bookingId is string {
+}): boolean {
   return (
     isPaid &&
     bookingId !== null &&

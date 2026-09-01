@@ -400,6 +400,27 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
   const canCancel = !isTerminal(group) && !isPartnerOnTheWay;
   const canRefresh = !isTerminal(group) && !isPartnerOnTheWay;
   const isSinglePaidVisit = isPaid && group.units.length === 1;
+  /*
+    The id of the one visit to ask about, or null.
+
+    Computed here rather than inside the JSX because this is where the null
+    check can actually narrow: `canShowVisitFeedback` returns a boolean (see its
+    own note on why it is not a type predicate), so the guarantee that
+    `VisitFeedbackForm` needs -- a real id -- has to come from testing the value
+    being handed to it.
+  */
+  const singleVisitFeedbackUnit = isSinglePaidVisit ? group.units[0] : undefined;
+  const singleVisitFeedbackId =
+    singleVisitFeedbackUnit !== undefined &&
+    singleVisitFeedbackUnit.booking_id !== null &&
+    canShowVisitFeedback({
+      bookingId: singleVisitFeedbackUnit.booking_id,
+      isPaid,
+      unitStatus: singleVisitFeedbackUnit.status,
+      bookingStatus: singleVisitFeedbackUnit.booking_status,
+    })
+      ? singleVisitFeedbackUnit.booking_id
+      : null;
   const isMultiPaidVisit = isPaid && group.units.length > 1;
   const usesTwoColumn = isAwaitingPayment || isSinglePaidVisit || isMultiPaidVisit;
   const isSingleVisitHelp =
@@ -639,16 +660,9 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
           <MobilePaymentBottomBar group={group} />
         ) : null}
 
-        {isSinglePaidVisit &&
-        group.units[0] !== undefined &&
-        canShowVisitFeedback({
-          bookingId: group.units[0].booking_id,
-          isPaid,
-          unitStatus: group.units[0].status,
-          bookingStatus: group.units[0].booking_status,
-        }) ? (
-          <VisitFeedbackForm bookingId={group.units[0].booking_id} isComplete />
-        ) : null}
+        {singleVisitFeedbackId === null ? null : (
+          <VisitFeedbackForm bookingId={singleVisitFeedbackId} isComplete />
+        )}
 
         {isMultiPaidVisit ? (
           <CompletedVisitsFeedback units={group.units} isPaid={isPaid} />
