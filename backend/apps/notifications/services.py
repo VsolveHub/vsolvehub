@@ -11,7 +11,8 @@ Nothing here retries in-process. A failed delivery is recorded and the intent is
 sweep, because a retry loop inside a request holds a transaction open across a provider's bad day.
 """
 
-from typing import Any
+import hashlib
+from typing import Any, Final
 from uuid import UUID
 
 from django.db import transaction
@@ -206,6 +207,49 @@ def _opted_out(recipient: User, purpose: str, channel: str) -> bool:
     ).exists()
 
 
+#: The column every composed key has to fit. Read from the field rather than written down, so
+#: widening the column later cannot leave a stale number here disagreeing with it.
+#: The field API types `max_length` as `int | None`, None meaning unbounded -- which this column
+#: is not. The fallback keeps the annotation honest without pretending that case is reachable.
+IDEMPOTENCY_KEY_MAX_LENGTH: Final[int] = (
+    NotificationIntent._meta.get_field("idempotency_key").max_length or 128
+)
+
+#: Hex characters of SHA-256 kept when a key has to be shortened. Sixty-four bits, against a space
+#: of keys that are already scoped to one recipient and one event.
+_DIGEST_LENGTH: Final[int] = 16
+
+
+def fit_idempotency_key(key: str) -> str:
+    """Make a composed idempotency key fit the column, without losing what it distinguishes.
+
+    Every caller builds one of these by concatenation -- `notify_for_outbox_event` wraps the
+    outbox event's own key in `in-app:{key}:{recipient_id}`, the escalation ladder appends a
+    channel -- and `OutboxEvent.idempotency_key` is exactly as wide as this one. A key read from
+    that column and grown by forty-four characters therefore cannot be written back, which is a
+    `DataError` inside the outbox handler: the event retries to `FAILED` and the notification is
+    never delivered, silently.
+
+    Enforced here rather than at each call site because this module owns the column. A rule
+    applied at two of three callers is a rule the third does not know about.
+
+    **Plain truncation would be worse than the crash.** These keys carry what distinguishes them
+    at the *end* -- a timestamp, a recipient id -- so `key[:128]` would collapse two different
+    events into one and drop the second notification entirely. So the head is kept for reading and
+    a digest of the **whole** key is appended: same input always yields the same output, and two
+    inputs sharing a prefix do not collide.
+
+    A key that already fits is returned untouched. These are grepped for during support, and
+    hashing every one of them to accommodate the rare long one would trade a daily cost for a
+    rare one.
+    """
+    if len(key) <= IDEMPOTENCY_KEY_MAX_LENGTH:
+        return key
+    digest = hashlib.sha256(key.encode("utf-8")).hexdigest()[:_DIGEST_LENGTH]
+    head = key[: IDEMPOTENCY_KEY_MAX_LENGTH - _DIGEST_LENGTH - 1]
+    return f"{head}:{digest}"
+
+
 @transaction.atomic
 def request_notification(
     *,
@@ -234,6 +278,10 @@ def request_notification(
     if channel == NotificationIntent.Channel.IN_APP:
         assert_template_registered(template_code)
 
+    # Fitted before the lookup as well as the write, so a key that had to be shortened still
+    # deduplicates against itself. Doing it only on the way in would make every retry of a long
+    # key miss its own row and send again.
+    idempotency_key = fit_idempotency_key(idempotency_key)
     if idempotency_key:
         existing = NotificationIntent.objects.filter(idempotency_key=idempotency_key).first()
         if existing is not None:
