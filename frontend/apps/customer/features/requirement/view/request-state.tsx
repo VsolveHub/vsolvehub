@@ -85,7 +85,7 @@ export const REQUEST_STATE_COPY: Record<RequestState, RequestStateCopy> = {
   // exist yet, so this must not read as "quotes ready" — the Customer has bought
   // a visit, not a price.
   VISITS_BOOKED: {
-    label: "A visit is booked",
+    label: "Visit booked",
     explanation:
       "A professional is coming to see the job and write you an estimate on site. Any visit you paid for that never happens refunds its share on its own.",
     nextStep: "Nothing to do until they come.",

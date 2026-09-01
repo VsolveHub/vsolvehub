@@ -88,7 +88,7 @@ export default async function ServiceDetailPage({ params }: PageProps) {
 
         <div className="mb-6">
           <Link
-            href={`/catalog/${categorySlug}`}
+            href={`/catalog/${categorySlug}?tile=${service.subcategory_slug}`}
             className="inline-flex items-center gap-2 text-xs font-black text-navy-900 bg-white border border-[#e7e2da] px-4 py-2.5 rounded-full shadow-2xs hover:shadow-sm hover:border-[#EA580C] hover:text-[#EA580C] transition-all duration-300 cursor-pointer"
           >
             <svg viewBox="0 0 20 20" fill="currentColor" className="size-3.5 rotate-180">
@@ -101,7 +101,7 @@ export default async function ServiceDetailPage({ params }: PageProps) {
         <Breadcrumbs
           trail={[
             { label: "Services", href: "/catalog" },
-            { label: category.name, href: `/catalog/${category.slug}` },
+            { label: category.name, href: `/catalog/${category.slug}?tile=${service.subcategory_slug}` },
             { label: service.name, href: `/catalog/${categorySlug}/${service.slug}` },
           ]}
         />
@@ -314,7 +314,7 @@ export default async function ServiceDetailPage({ params }: PageProps) {
 
         <section className="mt-12 mb-4 flex justify-center">
           <Link
-            href={`/catalog/${category.slug}`}
+            href={`/catalog/${category.slug}?tile=${service.subcategory_slug}`}
             className="group inline-flex h-12 items-center justify-center rounded-full bg-white px-7 text-[0.95rem] font-medium text-navy-900 shadow-sm transition-all duration-300 hover:-translate-y-[2px] hover:shadow-md border border-line/40 hover:border-navy-300 gap-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
           >
             <span aria-hidden="true" className="transition-transform group-hover:-translate-x-1">&larr;</span> 

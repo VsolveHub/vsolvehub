@@ -2,7 +2,8 @@
 
 import { describeError } from "@vsolve/query";
 import { Badge, Button, Dialog, EmptyState, ErrorState, Skeleton } from "@vsolve/ui";
-import { useState } from "react";
+import { Home, MapPin, MoreVertical, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import {
   formatAddressLine,
@@ -58,6 +59,39 @@ interface Pin {
   longitude: string;
 }
 
+function AddressBookHeader({
+  onAdd,
+  adding,
+}: {
+  onAdd: () => void;
+  adding: boolean;
+}) {
+  return (
+    <div className="mb-4 flex flex-col gap-3 min-[380px]:flex-row min-[380px]:items-start min-[380px]:justify-between md:hidden">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2.5">
+          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#FFF4EC] text-[#EA580C]">
+            <MapPin className="size-4" strokeWidth={2.2} aria-hidden />
+          </span>
+          <h2 className="text-lg font-extrabold text-navy-900">Saved addresses</h2>
+        </div>
+        <p className="mt-2 text-sm leading-relaxed text-text-secondary">
+          Where we send someone when you book. Pick one at checkout instead of typing it again.
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onAdd}
+        disabled={adding}
+        className="inline-flex h-11 shrink-0 items-center justify-center gap-1 self-start rounded-full border border-[#EA580C] bg-white px-3.5 text-sm font-bold text-[#EA580C] shadow-xs transition-colors hover:bg-[#FFF8F3] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:opacity-70"
+      >
+        <Plus className="size-4" strokeWidth={2.4} aria-hidden />
+        Add address
+      </button>
+    </div>
+  );
+}
+
 function AddressRow({
   address,
   onEdit,
@@ -69,42 +103,141 @@ function AddressRow({
   onDelete: () => void;
   isOnlyAddress: boolean;
 }) {
-  return (
-    <li className="rounded-card border border-line bg-surface p-4">
-      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-base font-semibold text-text">
-              {address.label || "Saved address"}
-            </h3>
-            {address.is_default ? <Badge tone="info">Default</Badge> : null}
-            {isGeocoded(address) ? null : <Badge tone="warning">Not pinned</Badge>}
-          </div>
-          <p className="mt-1 text-sm text-text-secondary">{formatAddressLine(address)}</p>
-          {address.landmark ? (
-            <p className="mt-0.5 text-sm text-text-muted">Near {address.landmark}</p>
-          ) : null}
-        </div>
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuId = useId();
 
-        <div className="flex shrink-0 gap-1">
-          <Button variant="ghost" onClick={onEdit}>
-            Edit
-          </Button>
-          {/* Deleting the last address is allowed — Django decides, not this
-              screen — but it is worth not making it the easiest thing to hit. */}
-          <Button variant="ghost" onClick={onDelete}>
-            Delete
-          </Button>
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onPointerDown(event: PointerEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [menuOpen]);
+
+  return (
+    <li className="overflow-hidden rounded-2xl border border-[#ece7e0] bg-white shadow-xs">
+      <div className="flex items-start gap-3 p-4">
+        <span className="mt-0.5 grid size-11 shrink-0 place-items-center rounded-full bg-[#FFF4EC] text-[#EA580C]">
+          <Home className="size-5" strokeWidth={2} aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-base font-extrabold text-navy-900">
+                  {address.label || "Saved address"}
+                </h3>
+                {address.is_default ? (
+                  <Badge tone="info" className="rounded-md px-2 py-0.5">
+                    Default
+                  </Badge>
+                ) : null}
+                {isGeocoded(address) ? null : <Badge tone="warning">Not pinned</Badge>}
+              </div>
+              <p className="mt-1 break-words text-sm leading-relaxed text-text-secondary">
+                {formatAddressLine(address)}
+              </p>
+              {address.landmark ? (
+                <p className="mt-0.5 break-words text-sm text-text-muted">Near {address.landmark}</p>
+              ) : null}
+            </div>
+            <div ref={menuRef} className="relative shrink-0">
+              <button
+                type="button"
+                aria-label={`More actions for ${address.label || "saved address"}`}
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                aria-controls={menuId}
+                onClick={() => setMenuOpen((open) => !open)}
+                className="grid size-11 place-items-center rounded-full text-text-secondary transition-colors hover:bg-[#FAF9F7] hover:text-navy-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+              >
+                <MoreVertical className="size-5" strokeWidth={2} aria-hidden />
+              </button>
+              {menuOpen ? (
+                <div
+                  id={menuId}
+                  role="menu"
+                  className="absolute right-0 z-10 mt-1 min-w-[9.5rem] overflow-hidden rounded-xl border border-line bg-white py-1 shadow-md"
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-semibold text-navy-900 hover:bg-[#FAF9F7]"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onEdit();
+                    }}
+                  >
+                    <Pencil className="size-3.5" strokeWidth={2} aria-hidden />
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-semibold text-red-600 hover:bg-red-50"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onDelete();
+                    }}
+                  >
+                    <Trash2 className="size-3.5" strokeWidth={2} aria-hidden />
+                    Delete
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </div>
         </div>
       </div>
 
+      <div className="grid grid-cols-2 border-t border-[#ece7e0]">
+        <button
+          type="button"
+          onClick={onEdit}
+          className="inline-flex min-h-11 items-center justify-center gap-1.5 border-r border-[#ece7e0] text-sm font-bold text-navy-800 transition-colors hover:bg-[#FAF9F7] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus-ring"
+        >
+          <Pencil className="size-3.5" strokeWidth={2.2} aria-hidden />
+          Edit
+        </button>
+        {/* Deleting the last address is allowed — Django decides, not this
+            screen — but it is worth not making it the easiest thing to hit. */}
+        <button
+          type="button"
+          onClick={onDelete}
+          className="inline-flex min-h-11 items-center justify-center gap-1.5 text-sm font-bold text-red-600 transition-colors hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus-ring"
+        >
+          <Trash2 className="size-3.5" strokeWidth={2.2} aria-hidden />
+          Delete
+        </button>
+      </div>
+
       {isOnlyAddress && !isGeocoded(address) ? (
-        <p className="mt-3 text-sm text-warning-text">
+        <p className="border-t border-[#ece7e0] px-4 py-3 text-sm text-warning-text">
           Pin this address before you book — we cannot send anyone to an address
           without one.
         </p>
       ) : null}
     </li>
+  );
+}
+
+function AddressPromoArt() {
+  return (
+    <svg viewBox="0 0 88 72" className="h-16 w-20 shrink-0" aria-hidden>
+      <rect x="18" y="28" width="48" height="32" rx="4" fill="#FFE8D4" />
+      <path d="M14 32 42 12l28 20" fill="#FDBA8C" />
+      <rect x="36" y="42" width="12" height="18" rx="1.5" fill="#EA580C" />
+      <circle cx="64" cy="18" r="12" fill="#EA580C" />
+      <path
+        d="M64 11.5c-3.2 0-5.8 2.5-5.8 5.6 0 4.2 5.8 10.4 5.8 10.4s5.8-6.2 5.8-10.4c0-3.1-2.6-5.6-5.8-5.6Z"
+        fill="white"
+      />
+      <circle cx="64" cy="17.1" r="2.1" fill="#EA580C" />
+    </svg>
   );
 }
 
@@ -290,21 +423,31 @@ export function AddressBook() {
       </p>
 
       {addresses.length === 0 ? (
-        <EmptyState
-          title="No saved addresses"
-          description="Save an address and we can send someone to the right door, and check that we cover your area before you book."
-          action={
-            <Button
-              onClick={() => void startCreate()}
-              loading={pinLocation.isPinning}
-              loadingLabel="Finding your location"
-            >
-              Add an address
-            </Button>
-          }
-        />
+        <div className="rounded-[1.25rem] border border-[#ece7e0] bg-white p-4 shadow-xs md:rounded-none md:border-0 md:bg-transparent md:p-0 md:shadow-none">
+          <AddressBookHeader
+            onAdd={() => void startCreate()}
+            adding={pinLocation.isPinning && editing.mode === "closed"}
+          />
+          <EmptyState
+            title="No saved addresses"
+            description="Save an address and we can send someone to the right door, and check that we cover your area before you book."
+            action={
+              <Button
+                onClick={() => void startCreate()}
+                loading={pinLocation.isPinning}
+                loadingLabel="Finding your location"
+              >
+                Add an address
+              </Button>
+            }
+          />
+        </div>
       ) : (
-        <>
+        <div className="rounded-[1.25rem] border border-[#ece7e0] bg-white p-4 shadow-xs md:rounded-none md:border-0 md:bg-transparent md:p-0 md:shadow-none">
+          <AddressBookHeader
+            onAdd={() => void startCreate()}
+            adding={pinLocation.isPinning && editing.mode === "closed"}
+          />
           <ul className="flex flex-col gap-3">
             {addresses.map((address) => (
               <AddressRow
@@ -317,7 +460,35 @@ export function AddressBook() {
             ))}
           </ul>
 
-          <div className="mt-4">
+          <div className="mt-4 flex items-start gap-3 rounded-2xl border border-[#dbeafe] bg-[#eff6ff] px-3.5 py-3 md:hidden">
+            <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-full bg-white text-[#2563eb]">
+              <ShieldCheck className="size-4" strokeWidth={2.1} aria-hidden />
+            </span>
+            <p className="min-w-0 text-sm leading-relaxed text-[#1e40af]">
+              Your default address will be used for faster checkout.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => void startCreate()}
+            disabled={pinLocation.isPinning && editing.mode === "closed"}
+            aria-label="Add another address"
+            className="mt-4 flex w-full items-center gap-3 rounded-2xl border border-[#fde8d4] bg-[#FFF6EE] px-4 py-3.5 text-left transition-colors hover:bg-[#FFEFDF] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:opacity-70 md:hidden"
+          >
+            <span className="grid size-10 shrink-0 place-items-center rounded-full bg-white text-[#EA580C] shadow-xs">
+              <MapPin className="size-5" strokeWidth={2.1} aria-hidden />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-extrabold text-navy-900">Add more addresses</span>
+              <span className="mt-0.5 block text-xs leading-relaxed text-text-secondary">
+                Save multiple addresses and choose the one that works best for you.
+              </span>
+            </span>
+            <AddressPromoArt />
+          </button>
+
+          <div className="mt-4 hidden md:block">
             <Button
               variant="outline"
               onClick={() => void startCreate()}
@@ -327,7 +498,7 @@ export function AddressBook() {
               Add another address
             </Button>
           </div>
-        </>
+        </div>
       )}
 
       <Dialog

@@ -20,6 +20,7 @@ import type { ReactNode } from "react";
 import searchAnimationData from "@/features/bookings/view/search-lottie.json";
 import { calendarDay, formatVisitSlot, type VisitSlotRow, type VisitTrackerView } from "../adapters";
 import { AccessRefusal } from "./access-refusal";
+import { VisitDetailAside, VisitDetailPrimary } from "./visit-detail-body";
 import { VendorIdentity } from "./vendor-identity";
 
 const LottiePlayer = dynamic(
@@ -84,6 +85,8 @@ const LottiePlayer = dynamic(
  */
 
 export interface VisitTrackerProps {
+  /** The request this plan belongs to. Needed to inline a lone visit's page. */
+  requirementId: string;
   phase: VisitPlanPhase;
   tracker: VisitTrackerView | null;
 
@@ -174,6 +177,7 @@ export interface VisitTrackerProps {
 }
 
 export function VisitTracker({
+  requirementId,
   phase,
   tracker,
   isLoading,
@@ -228,7 +232,9 @@ export function VisitTracker({
     return <VendorSearchPanel tracker={tracker} />;
   }
 
-  const rail = (
+  const bookedAlone = bookedSingleVisit(tracker);
+
+  const planRail = (
         <VisitPlanRail
           phase={phase}
           tracker={tracker}
@@ -243,6 +249,82 @@ export function VisitTracker({
           brief={brief}
         />
   );
+
+  const visitCommands =
+    bookedAlone === null ? null : (
+      <VisitDetailAside
+        row={bookedAlone}
+        requirementId={requirementId}
+        supportAction={supportAction}
+      />
+    );
+
+  const rail =
+    bookedAlone === null ? (
+      planRail
+    ) : (
+      <div className="flex flex-col gap-4">
+        {planRail}
+        {visitCommands}
+      </div>
+    );
+
+  if (bookedAlone !== null && tracker !== null) {
+    const singleMain = (
+      <div className="flex flex-col gap-4">
+        <VisitDetailPrimary
+          row={bookedAlone}
+          planSize={tracker.planSize}
+          requirementId={requirementId}
+          supportAction={supportAction}
+          headingLevel="h2"
+          chargeSummary={
+            tracker.isCharged ? { amountLabel: bookedAlone.money.amountLabel } : null
+          }
+        />
+        <Disclosure summary="How these visits work">
+          <PlanStatement phase={phase} tracker={tracker} />
+          {tracker.rows.some((row) => row.vendor === null) ? (
+            <p className="mt-2 max-w-prose text-sm leading-6 text-text-secondary">
+              We do not show you who has been invited. Once somebody confirms a time
+              we tell you their name and show you their photograph, because they are
+              coming into your home — their phone number stays with us until you have
+              agreed the work.
+            </p>
+          ) : null}
+        </Disclosure>
+        {slot === "main" ? (
+          <div className="lg:hidden">
+            <VisitPlanRail
+              embedded
+              phase={phase}
+              tracker={tracker}
+              checkoutAvailable={checkoutAvailable}
+              checkoutPriceLabel={checkoutPriceLabel}
+              onStartCheckout={onStartCheckout}
+              isStartingCheckout={isStartingCheckout}
+              checkoutError={checkoutError}
+              canSimulatePendingCapture={canSimulatePendingCapture}
+              onSimulatePendingCapture={onSimulatePendingCapture}
+              planSwitcher={planSwitcher}
+              brief={brief}
+            />
+          </div>
+        ) : null}
+        {slot === "main" ? (
+          <div className="flex flex-col gap-4 lg:hidden">{visitCommands}</div>
+        ) : null}
+      </div>
+    );
+
+    if (slot === "rail") return rail;
+    if (slot === "main") return singleMain;
+    return (
+      <RailLayout railLabel="Your visit plan" rail={rail}>
+        {singleMain}
+      </RailLayout>
+    );
+  }
 
   const main = (
     <section
@@ -416,6 +498,19 @@ export function VisitTracker({
       {main}
     </RailLayout>
   );
+}
+
+/**
+ * A plan of one booked visit — the only case the request page inlines.
+ *
+ * Two or more rows keep the glance list. A lone unfilled slot stays on the
+ * searching / awaiting surface, because there is no visit record to show.
+ */
+function bookedSingleVisit(tracker: VisitTrackerView | null): VisitSlotRow | null {
+  if (tracker === null || tracker.rows.length !== 1) return null;
+  const row = tracker.rows[0];
+  if (row === undefined || row.visitId === null) return null;
+  return row;
 }
 
 function VendorSearchPanel({ tracker }: { tracker: VisitTrackerView }) {

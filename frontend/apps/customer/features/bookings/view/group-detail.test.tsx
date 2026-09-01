@@ -179,9 +179,10 @@ describe("recovery is read from the server", () => {
     client.GET.mockResolvedValue(ok(group({ status: "BOOKED", recovery_action: "NONE" })));
 
     renderDetail();
-    await screen.findByText(/everything is confirmed/i);
+    expect(await screen.findByRole("heading", { name: "Your visit" })).toBeInTheDocument();
 
     expect(screen.queryByTestId("recovery-action")).not.toBeInTheDocument();
+    expect(screen.queryByText(/everything is confirmed/i)).not.toBeInTheDocument();
   });
 
   it("says payment is needed when the server says so", async () => {
@@ -203,12 +204,15 @@ describe("the screen says whether it is up to date", () => {
     expect(await screen.findByText(/keeps going without it/i)).toBeInTheDocument();
   });
 
-  it("says a finished booking will not change again, rather than implying live updates", async () => {
+  it("does not keep the group-status card on a booked visit", async () => {
     client.GET.mockResolvedValue(ok(group({ status: "BOOKED", recovery_action: "NONE" })));
 
     renderDetail();
 
-    expect(await screen.findByText(/will not change again/i)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Your visit" })).toBeInTheDocument();
+    expect(screen.queryByText(/will not change again/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/keeps going without it/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/everything is confirmed/i)).not.toBeInTheDocument();
   });
 });
 
@@ -336,8 +340,12 @@ describe("paid booking presentation", () => {
 
     renderDetail();
 
-    expect(await screen.findByRole("heading", { name: "Your booking" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Your visit" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Your visit" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Your booking" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Everything is confirmed.")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("This booking is finished, so it will not change again."),
+    ).not.toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Reschedule" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cancel this visit" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /track this visit/i })).not.toBeInTheDocument();
@@ -454,7 +462,10 @@ describe("paid booking presentation", () => {
 
     renderDetail();
 
-    expect(await screen.findByRole("heading", { name: "Visit 1 of 2" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Your visits" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Your booking" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Everything is confirmed.")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Visit 1 of 2" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Visit 2 of 2" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Payment summary" })).toBeInTheDocument();
     expect(screen.getByText("Booking total")).toBeInTheDocument();

@@ -106,7 +106,7 @@ export function verifyResponsiveAccessibility(appName: string, routes: RouteUnde
         await route.ready(page);
 
         await expect(page.locator("main")).toHaveCount(1);
-        await expect(page.locator("h1")).toHaveCount(1);
+        await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
       });
 
       test("is reachable by keyboard with a visible focus indicator", async ({ page }) => {

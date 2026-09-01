@@ -1,6 +1,17 @@
 import { ApiNetworkError, ApiRequestError } from "@vsolve/api-client";
 import { render, screen } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
+
+vi.mock("@/features/catalog/components/catalog-service-thumb", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/features/catalog/components/catalog-service-thumb")>();
+  return {
+    ...actual,
+    CatalogServiceThumb: () => null,
+    CatalogServiceThumbRow: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  };
+});
 
 import type { RequestRowView } from "../adapters";
 import { RequestsList } from "./requests-list";
@@ -8,15 +19,8 @@ import { RequestsList } from "./requests-list";
 /**
  * `M2-FE-213` and `M2-FE-215`.
  *
- * Three properties, and all three are about not saying something untrue to
- * somebody who is waiting:
- *
- * 1. A request whose promised deadline has passed does not read as on track.
- * 2. It also does not read as SLA-breached, which is a server transition with a
- *    refund attached.
- * 3. No quote's author is named before unlock, on any state.
- *
- * Fixtures live here and nowhere else — execution plan §2.
+ * The list row is compact: service name, status badge, and one line of when or
+ * what to do. Essays and next-step footers live on the detail screen.
  */
 
 /** Relative to the real clock, because `serverClock` falls back to it uncalibrated. */
@@ -34,6 +38,7 @@ function row(overrides: Partial<RequestRowView> = {}): RequestRowView {
     closure: null,
     lastActivityAt: null,
     lifecycleExplanation: "You are hiring people for a period of time.",
+    categorySlug: "housekeeping-staff",
     ...overrides,
   };
 }
@@ -95,8 +100,6 @@ describe("when the read fails", () => {
   });
 
   it("keeps rows already on screen and marks them as possibly stale", () => {
-    // A stale list is more useful than a blank page — as long as it says it is
-    // stale.
     renderList({ error: new ApiNetworkError("offline", null) });
 
     expect(screen.getByText(/this list may be out of date/i)).toBeInTheDocument();
@@ -105,11 +108,13 @@ describe("when the read fails", () => {
 });
 
 describe("a request that is still matching", () => {
-  it("says what we are doing and how long we promised", () => {
+  it("shows the status badge and the quote promise on one line", () => {
     renderList();
 
     expect(screen.getByText(/finding professionals/i)).toBeInTheDocument();
     expect(screen.getByText(/quotes promised in/i)).toBeInTheDocument();
+    expect(screen.queryByText(/we are inviting professionals/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/last update/i)).not.toBeInTheDocument();
   });
 
   it("claims no progress it cannot see", () => {
@@ -121,21 +126,12 @@ describe("a request that is still matching", () => {
 });
 
 describe("a request whose promised deadline has passed", () => {
-  it("says we are late rather than that we are on track", () => {
+  it("shows the delayed badge without the full explanation essay", () => {
     renderList({ requests: [row({ deadlineAt: TWO_HOURS_AGO })] });
 
     expect(screen.getByText(/running late/i)).toBeInTheDocument();
-    expect(screen.getByText(/we said you would have quotes by now/i)).toBeInTheDocument();
-  });
-
-  it("does not claim a breach, a closure or a refund", () => {
-    // All three are server decisions. A countdown reaching zero authorises none
-    // of them.
-    renderList({ requests: [row({ deadlineAt: TWO_HOURS_AGO })] });
-
-    expect(screen.queryByText(/refund/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/closed/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/nothing has been decided/i)).toBeInTheDocument();
+    expect(screen.queryByText(/we said you would have quotes by now/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/nothing has been decided/i)).not.toBeInTheDocument();
   });
 
   it("stops counting down once the promise is gone", () => {
@@ -145,8 +141,8 @@ describe("a request whose promised deadline has passed", () => {
   });
 });
 
-describe("the closed states read differently", () => {
-  it("separates 'nobody covers this' from 'we ran out of time'", () => {
+describe("the closed states read differently on the badge", () => {
+  it("separates 'nobody covers this' from 'we ran out of time' by label", () => {
     renderList({
       requests: [
         row({ id: "a", status: "CLOSED_NO_SUPPLY", closure: "NO_SUPPLY", deadlineAt: null }),
@@ -155,24 +151,25 @@ describe("the closed states read differently", () => {
     });
 
     expect(screen.getByText(/nobody available/i)).toBeInTheDocument();
-    expect(screen.getByText(/we invited every professional/i)).toBeInTheDocument();
     expect(screen.getByText(/we missed our deadline/i)).toBeInTheDocument();
-    expect(screen.getByText(/refunded in full/i)).toBeInTheDocument();
+    expect(screen.queryByText(/we invited every professional/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/refunded in full/i)).not.toBeInTheDocument();
   });
 
-  it("explains an expired request in terms of the date the Customer chose", () => {
+  it("shows the expired badge without the detail-screen next step", () => {
     renderList({
       requests: [row({ status: "CLOSED_EXPIRED", closure: "EXPIRED", deadlineAt: null })],
     });
 
     expect(screen.getByText(/your date has passed/i)).toBeInTheDocument();
-    expect(screen.getByText(/start again with a new date/i)).toBeInTheDocument();
+    expect(screen.queryByText(/start again with a new date/i)).not.toBeInTheDocument();
   });
 
-  it("never presents a chosen-but-unconfirmed professional as a booking", () => {
+  it("shows waiting-for-confirmation on the badge only", () => {
     renderList({ requests: [row({ status: "SELECTED", deadlineAt: null })] });
 
-    expect(screen.getByText(/this is not a booking until they do/i)).toBeInTheDocument();
+    expect(screen.getByText(/waiting for the professional/i)).toBeInTheDocument();
+    expect(screen.queryByText(/this is not a booking until they do/i)).not.toBeInTheDocument();
   });
 });
 
@@ -181,27 +178,6 @@ describe("the pre-unlock identity rule", () => {
     renderList({ requests: [row({ status: "QUOTES_READY", teaserCount: 3, deadlineAt: null })] });
 
     expect(screen.getByText(/3 quotes waiting/i)).toBeInTheDocument();
-    // The row renders only what the adapter gave it, and the adapter carries no
-    // vendor field at all. This is the assertion that notices if one is added.
     expect(screen.queryByText(/sent by/i)).not.toBeInTheDocument();
-  });
-});
-
-describe("the support action", () => {
-  it("is offered where we are the reason there is nothing to show", () => {
-    renderList({
-      requests: [row({ status: "CLOSED_SLA_BREACH", closure: "SLA_BREACH", deadlineAt: null })],
-      supportActionFor: () => <button type="button">Talk to us</button>,
-    });
-
-    expect(screen.getByRole("button", { name: /talk to us/i })).toBeInTheDocument();
-  });
-
-  it("is not offered on a request that is simply still running", () => {
-    // Attaching it everywhere trains people to ignore it on the one state that
-    // needs it.
-    renderList({ supportActionFor: () => <button type="button">Talk to us</button> });
-
-    expect(screen.queryByRole("button", { name: /talk to us/i })).not.toBeInTheDocument();
   });
 });

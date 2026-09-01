@@ -1,7 +1,12 @@
 import { redirect } from "next/navigation";
 
-import { activityTabHref } from "@/features/activity/model/routes";
+import { bookingStatusHref, toBookingStatusTab } from "@/features/activity/model/booking-status";
 
-export default function BookingsPage(): never {
-  redirect(activityTabHref("booked"));
+export default async function BookingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string }>;
+}): Promise<never> {
+  const { status } = await searchParams;
+  redirect(bookingStatusHref(toBookingStatusTab(status)));
 }

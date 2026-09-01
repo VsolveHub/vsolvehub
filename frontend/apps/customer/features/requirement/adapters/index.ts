@@ -262,6 +262,8 @@ export interface RequestRowView {
   lastActivityAt: string | null;
   /** The server's plain-language reading of the requirement. Never an archetype. */
   lifecycleExplanation: string | null;
+  /** Catalogue category, so the bookings row can resolve the service cover. */
+  categorySlug: string | null;
 }
 
 /* --------------------------------------------------------------------------
@@ -492,6 +494,7 @@ export function toRequestRow(summary: RequirementSummary, title: string): Reques
     closure: toClosureReason(summary.closure_reason),
     lastActivityAt: summary.last_activity_at ?? null,
     lifecycleExplanation: summary.lifecycle_explanation,
+    categorySlug: summary.category_slug?.trim() ? summary.category_slug.trim() : null,
   };
 }
 
@@ -537,6 +540,7 @@ export function toRequestHeader(draft: RequirementDraft, title: string): Request
     closure: null,
     lastActivityAt: null,
     lifecycleExplanation: draft.lifecycle_explanation,
+    categorySlug: draft.category_slug?.trim() ? draft.category_slug.trim() : null,
   };
 }
 

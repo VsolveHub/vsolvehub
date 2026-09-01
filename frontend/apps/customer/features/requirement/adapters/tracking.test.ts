@@ -86,6 +86,10 @@ describe("my-requests rows", () => {
     );
   });
 
+  it("carries the category slug so the bookings row can resolve the catalogue cover", () => {
+    expect(toRequestRow(summary(), "Housekeeping staff")?.categorySlug).toBe("housekeeping-staff");
+  });
+
   it("refuses a status this build has no copy for", () => {
     // Cast because the schema's enum is a claim about a *document*, and this
     // test is about the *bytes*: the day Django grows a thirteenth status,

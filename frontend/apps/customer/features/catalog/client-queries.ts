@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery, type QueryClient } from "@tanstack/react-query";
+import { useQueries, useQuery, type QueryClient } from "@tanstack/react-query";
 import { request, type Schemas } from "@vsolve/api-client";
 import {
   STATIC_CONTENT,
@@ -10,6 +10,8 @@ import {
 } from "@vsolve/query";
 
 import { getApiClient } from "@/lib/api/browser";
+
+import { findCatalogService, type CatalogServiceHint } from "./service-cover";
 
 /**
  * Client-side catalog reads through TanStack Query.
@@ -74,6 +76,38 @@ export function useServiceDetail(serviceSlug: string | null, enabled = true) {
     ...serviceDetailQuery(serviceSlug ?? ""),
     enabled: enabled && serviceSlug !== null && serviceSlug.length > 0,
   });
+}
+
+/**
+ * Every published `ServiceCard`, keyed the same way the category listing is.
+ *
+ * Booking, request and engagement rows look up `cover.url` from this index so a
+ * catalogue image change on the service page is the image the bookings page
+ * shows. The per-category reads are the listing endpoint — not a second media
+ * map, and not `GET /services/` which has no cover.
+ */
+export function useCatalogServiceIndex() {
+  const categoriesQuery = useCategories();
+  const categories = categoriesQuery.data ?? [];
+  const serviceQueries = useQueries({
+    queries: categories.map((category) => ({
+      ...categoryServicesQuery(category.slug),
+      enabled: categoriesQuery.isSuccess,
+    })),
+  });
+
+  const services: ServiceCard[] = [];
+  for (const query of serviceQueries) {
+    if (query.data) services.push(...query.data);
+  }
+
+  return {
+    services,
+    find: (hint: CatalogServiceHint) => findCatalogService(services, hint),
+    isPending:
+      categoriesQuery.isPending ||
+      (categoriesQuery.isSuccess && serviceQueries.some((query) => query.isPending)),
+  };
 }
 
 export function fetchCategories(queryClient: QueryClient) {

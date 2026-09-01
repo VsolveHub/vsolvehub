@@ -133,13 +133,6 @@ export function ArrivalCodePanel({
               </span>
             </button>
           )}
-          <p className="mt-3 max-w-prose text-sm leading-6 text-text-secondary">
-            Give it to them only once they are standing with you.{" "}
-            <strong className="font-semibold text-text">
-              They type it into their app
-            </strong>
-            , and that is what starts the visit.
-          </p>
         </>
       ) : (
         <p className="mt-2 max-w-prose text-sm leading-6 text-text-secondary">

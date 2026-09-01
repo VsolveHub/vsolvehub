@@ -381,6 +381,11 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
   const isSinglePaidVisit = isPaid && group.units.length === 1;
   const isMultiPaidVisit = isPaid && group.units.length > 1;
   const usesTwoColumn = isAwaitingPayment || isSinglePaidVisit || isMultiPaidVisit;
+  // The visit cards already name the booking. Repeating "Your booking" /
+  // "Everything is confirmed." on a live visit is a second status layer the
+  // customer does not act on.
+  const showBookingSummaryCard =
+    !isAwaitingPayment && group.status !== "BOOKED" && group.status !== "COMPLETED";
   const isSingleVisitHelp =
     group.units.length === 1 &&
     !isAwaitingPayment &&
@@ -412,7 +417,11 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
             : "space-y-4 pb-20 lg:pb-12"
         }
       >
-        {!isAwaitingPayment ? (
+        {isMultiPaidVisit ? (
+          <h1 className="text-2xl font-bold text-text">Your visits</h1>
+        ) : null}
+
+        {showBookingSummaryCard ? (
           <div className="rounded-card border border-line bg-surface p-5 shadow-xs">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>

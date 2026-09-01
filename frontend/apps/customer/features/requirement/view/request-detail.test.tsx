@@ -34,6 +34,7 @@ function request(overrides: Partial<RequestRowView> = {}): RequestRowView {
     closure: "SLA_BREACH",
     lastActivityAt: null,
     lifecycleExplanation: "You are hiring people for a period of time.",
+    categorySlug: "housekeeping-staff",
     ...overrides,
   };
 }

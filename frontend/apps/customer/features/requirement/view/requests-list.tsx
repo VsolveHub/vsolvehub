@@ -5,15 +5,20 @@ import { Button, EmptyState, ErrorState, Skeleton } from "@vsolve/ui";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import {
+  BookingListBody,
+  CatalogServiceThumbRow,
+  formatBookingDay,
+} from "@/features/catalog/components/catalog-service-thumb";
+
 import type { RequestRowView } from "../adapters";
 import {
   isClosedState,
-  isOurFailure,
   requestState,
   showsQuoteDeadline,
   type RequestState,
 } from "../model/request-state";
-import { RequestStateBadge, REQUEST_STATE_COPY } from "./request-state";
+import { RequestStateBadge } from "./request-state";
 
 /**
  * `My requests` — `M2-FE-213`, with the honest states of `M2-FE-215`.
@@ -56,41 +61,49 @@ function remainingPhrase(announce: string): string {
   return announce.replace(/ left$/, "");
 }
 
-function LastActivity({ at }: { at: string }) {
-  return (
-    <p className="text-sm text-text-secondary">
-      Last update{" "}
-      <time dateTime={at}>
-        {new Date(at).toLocaleString("en-IN", {
-          day: "numeric",
-          month: "short",
-          hour: "numeric",
-          minute: "2-digit",
-        })}
-      </time>
-    </p>
-  );
+function requestListLine(
+  state: RequestState,
+  request: RequestRowView,
+  remaining: string | null,
+): { text: string; action: boolean } | null {
+  if (request.teaserCount > 0) {
+    return {
+      text:
+        request.teaserCount === 1
+          ? "1 quote waiting"
+          : `${request.teaserCount} quotes waiting`,
+      action: true,
+    };
+  }
+  if (state === "DRAFT") {
+    return { text: "Finish and send", action: true };
+  }
+  if (showsQuoteDeadline(state) && remaining !== null) {
+    return { text: `Quotes promised in ${remaining}`, action: false };
+  }
+  if (state === "UNLOCKED") {
+    return { text: "Compare them and choose one", action: true };
+  }
+  if (request.serviceBy !== null) {
+    return { text: formatBookingDay(request.serviceBy), action: false };
+  }
+  return null;
 }
 
 export interface RequestRowProps {
   request: RequestRowView;
   /** Where the row goes. Injected — this feature does not own the route table. */
   href: string;
-  /** Rendered inside the state notice where support is the honest next step. */
-  supportAction?: ReactNode;
   /**
-   * Whether this request is over.
-   *
-   * A closed request is still worth keeping — a Customer looks one up to see
-   * what happened, or to start the same job again — but it is not news, and it
-   * must not read like a live one. It keeps every word it had and loses the
-   * emphasis: sunken surface, no hover affordance, and the whole card at 70%
-   * until it is pointed at.
+   * Kept so existing callers can pass it. Support lives on the request detail
+   * now — the list row is only name, when, and status.
    */
+  supportAction?: ReactNode;
+  /** Kept so tabbed lists can mark past rows without changing the card. */
   isClosed?: boolean;
 }
 
-export function RequestRow({ request, href, supportAction, isClosed = false }: RequestRowProps) {
+export function RequestRow({ request, href }: RequestRowProps) {
   // Derived during render from the server clock, so the delayed state appears
   // the moment the promise passes rather than on the next refetch.
   const countdown = useServerCountdown(request.deadlineAt, 60_000);
@@ -98,71 +111,27 @@ export function RequestRow({ request, href, supportAction, isClosed = false }: R
     status: request.status,
     quoteDeadlineRemainingMs: countdown?.remainingMs ?? null,
   });
-  const copy = REQUEST_STATE_COPY[state];
+  const remaining =
+    showsQuoteDeadline(state) && countdown !== null && !countdown.isExpired
+      ? remainingPhrase(countdown.announce)
+      : null;
+  const line = requestListLine(state, request, remaining);
 
   return (
-    <li
-      className={
-        isClosed
-          ? "rounded-card border border-line bg-surface-sunken opacity-70 transition-opacity hover:opacity-100"
-          : "rounded-card border border-line bg-surface"
-      }
-    >
+    <li className="rounded-card border border-line bg-surface">
       <Link
         href={href}
         className="block rounded-card p-4 hover:border-warm-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
       >
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-base font-semibold text-text">{request.title}</h2>
-          <RequestStateBadge state={state} />
-        </div>
-
-        {request.lifecycleExplanation !== null ? (
-          <p className="mt-1 text-sm text-text-secondary">{request.lifecycleExplanation}</p>
-        ) : null}
-
-        <p className="mt-2 text-sm text-text-secondary">{copy.explanation}</p>
-
-        <div className="mt-2 flex flex-col gap-0.5">
-          {/* A count, never an identity. Who quoted is withheld until unlock,
-              and this row is the first place that rule can be broken. */}
-          {request.teaserCount > 0 ? (
-            <p className="text-sm text-text">
-              {request.teaserCount === 1
-                ? "1 quote waiting"
-                : `${request.teaserCount} quotes waiting`}
-            </p>
-          ) : null}
-
-          {showsQuoteDeadline(state) && countdown !== null && !countdown.isExpired ? (
-            <p className="text-sm text-text-secondary">
-              Quotes promised in{" "}
-              <span className="font-medium text-text">
-                {remainingPhrase(countdown.announce)}
-              </span>
-            </p>
-          ) : null}
-
-          {request.lastActivityAt !== null ? <LastActivity at={request.lastActivityAt} /> : null}
-        </div>
+        <CatalogServiceThumbRow hint={{ name: request.title, categorySlug: request.categorySlug }}>
+          <BookingListBody
+            title={request.title}
+            badge={<RequestStateBadge state={state} />}
+            detail={line?.text}
+            detailAction={line?.action === true}
+          />
+        </CatalogServiceThumbRow>
       </Link>
-
-      {/* The next step sits outside the link, because it can carry its own
-          action and a button inside an anchor is a control nobody can reach
-          without also following the link.
-
-          It is rendered whenever the state has one, not only where support is
-          offered. `M2-FE-215` asks for a truthful next step, and a closed
-          request explaining why it closed without saying what to do about it is
-          half the answer — which is what the row did before. */}
-      {copy.nextStep !== null ? (
-        <div className="border-t border-line p-4">
-          <p className="max-w-prose text-sm leading-6 text-text">{copy.nextStep}</p>
-          {isOurFailure(state) && supportAction !== undefined ? (
-            <div className="mt-3">{supportAction}</div>
-          ) : null}
-        </div>
-      ) : null}
     </li>
   );
 }
