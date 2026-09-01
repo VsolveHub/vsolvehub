@@ -24,6 +24,7 @@ design into executable scope without redefining global policy.
 12. [Feature and edge-case register](./11-feature-and-edge-case-register.md)
 13. [Booking groups and fulfilment planning](./12-booking-groups-and-fulfilment-planning.md)
 14. [Milestone 1](./M1/README.md)
+15. [Milestone 3](./M3/README.md) — planning; wallet, V Coins, referral, categories, live payments
 
 There is no document-precedence chain. If two active documents disagree, the plan is defective and
 must be corrected in the same change. The decision register explains *why* a rule exists; the domain
