@@ -53,8 +53,8 @@
 - [ ] `M3-BE-201` ADR-0010 customer wallet & loyalty scope (`docs/adr/`)
 - [ ] `M3-BE-202` Contract proposals: wallet, coins, referral, operations loyalty
 - [ ] `M3-BE-203` Models: `WalletAccount`, `WalletTransaction`
-- [ ] `M3-BE-204` Models: `CoinGrantRule`, `CoinGrant`, `CoinTransaction`, `CoinBurnPolicy`
-- [ ] `M3-BE-205` Models: `ReferralProgramVersion`, `ReferralCode`, `ReferralAttribution`, `ReferralReward`
+- [ ] `M3-BE-204` Models: `CoinGrantRule`, `CoinEarnTier`, `CoinGrant`, `CoinTransaction`, `CoinBurnPolicy`
+- [ ] `M3-BE-205` Models: `ReferralProgramVersion`, `ReferralProgramRewardTier`, `ReferralCode`, `ReferralAttribution`, `ReferralReward`
 - [ ] `M3-BE-206` `apps/loyalty/` module scaffold — **folded into M3-BE-207** (minimal C0b tree only)
 
 ### C0b — M1 completion outbox hook (`M3-BE-207` — next implementation; planning locked)
@@ -83,9 +83,10 @@ Single task; do not jump to wallet/coin models.
 
 ### C2 — V Coins engine
 
-- [ ] `M3-BE-221` Operations CRUD: `CoinGrantRule` (amount, unlock N, expiry, trigger)
+- [ ] `M3-BE-221` Operations CRUD: `CoinGrantRule` + `CoinEarnTier` (earn_mode, eligibility, unlock N, expiry, trigger)
 - [ ] `M3-BE-222` Operations CRUD: `CoinBurnPolicy` (max %, coin value paise, effective dates)
-- [ ] `M3-BE-223` Grant on signup — promised + locked buckets
+- [ ] `M3-BE-223` Grant on signup — promised + locked buckets; eligibility filters (§2.2.2)
+- [ ] `M3-BE-227` Earn on booking complete — tier selection by order value or booking sequence (§2.2.1)
 - [ ] `M3-BE-224` `CustomerCompletion` ledger — `UNIQUE(customer_id, source_type, source_id)`; unlock only on `get_or_create(created=True)` (§3.4)
 - [ ] `M3-BE-225` Celery: coin expiry sweep (FIFO burn order documented)
 - [ ] `M3-BE-226` `GET /customer/coins/` — promised / locked / spendable / expiring_soon
@@ -99,26 +100,30 @@ Single task; do not jump to wallet/coin models.
 - [ ] `M3-BE-231` Extend `POST /payment-attempts/` — `wallet_amount_paise`, `coin_burn_amount`
 - [ ] `M3-BE-232` Checkout preview: max burn from active policy (server-only math)
 - [ ] `M3-BE-233` Refund: wallet portion → wallet; Razorpay portion → provider; coins not restored
+- [ ] `M3-BE-235` Coin `RESERVE` / `RELEASE` on payment attempt (concurrency-safe burn path)
 - [ ] `M3-FE-231` Payment workspace — wallet toggle + coin toggle + server caps
 - [ ] `M3-FE-232` Split display: wallet + coins + Razorpay remainder
 - [ ] `M3-BE-234` Regression tests: ADR-0003 allocation sum invariant with splits
 
 ### C4 — Referral
 
-- [ ] `M3-BE-241` Operations: `ReferralProgramVersion` CRUD (referrer/referee rewards, qualifying event)
-- [ ] `M3-BE-242` Referral attribution at **signup only** — `?ref=` param, auto-fill, snapshot `program_version_id`
+- [ ] `M3-BE-241` Operations: `ReferralProgramVersion` + `ReferralProgramRewardTier` CRUD (volume tiers §2.4.1)
+- [ ] `M3-BE-242` Referral attribution at **signup only** — `?ref=` param, auto-fill, snapshot `program_version_id` + **`terms_snapshot`**
 - [ ] `M3-BE-243` Qualifying hook: default **first completed booking**
-- [ ] `M3-BE-244` Reward issuance per **snapshotted version** (no retroactive changes)
-- [ ] `M3-BE-245` Self-referral + basic fraud guards
+- [ ] `M3-BE-244` Tier selection at payout; immutable `ReferralReward` (version, tier, `payout_sequence_n`); never rewrite paid rows
+- [ ] `M3-BE-245` Self-referral + basic fraud guards + **`UNIQUE(referee_id)`** on attribution (§2.6.1)
+- [ ] `M3-BE-246` Publish referral changes as **new program version only**; version history read-only in Operations
 - [ ] `M3-FE-240` Signup page: read `?ref=` from URL, auto-fill referral field
-- [ ] `M3-FE-241` Account → Referral (code, copy link, pending/earned — no late code entry)
-- [ ] `M3-OPS-241` Referral program versions + attribution queue
+- [ ] `M3-FE-241` Account → Referral (code, copy link, **tier schedule**, pending/earned — no late code entry)
+- [ ] `M3-OPS-241` Referral program versions + **tier editor** + attribution queue
 
 ### C5 — Phase C acceptance
 
 - [ ] `M3-DOC-251` Runbook `docs/runbooks/m3-wallet-coins-referral-smoke.md`
-- [ ] `M3-QA-251` Acceptance scenarios C-01 … C-10 (owner manual pass)
-- [ ] `M3-BE-252` Object-level auth + concurrency tests (owner runs)
+- [ ] `M3-QA-251` Acceptance scenarios C-01 … C-23+ (owner manual pass)
+- [ ] `M3-BE-252` Object-level auth tests (owner runs)
+- [ ] `M3-BE-253` **Wallet concurrency** — parallel checkout cannot drive balance below zero (§2.7.1, C-09a)
+- [ ] `M3-BE-254` **Coin concurrency** — parallel checkout cannot burn more than spendable (§2.3.1, C-09b)
 
 **Phase C exit gate:** All scenarios in `01-wallet-vcoins-referral.md` §9 pass on staging.
 
@@ -176,6 +181,12 @@ Do not mark `[x]` until owner manual pass. Agents do not run pytest; owner runs 
 | 2026-09-01 | Coins visible on signup as promised; spendable after N completions (configurable) |
 | 2026-09-01 | Coin expiry per rule (festival TTL or none) |
 | 2026-09-01 | Referral: configurable referrer/referee rewards; qualify on first completed booking |
+| 2026-09-01 | Referral **volume tiers** — admin configures each threshold and reward; **successful referral** = qualifying event met + paid |
+| 2026-09-01 | Referral reward changes via **new program version only** — pending/paid attributions untouched; `terms_snapshot` + immutable `ReferralReward` for clear audit |
+| 2026-09-01 | Unlimited tier rows per version — e.g. higher pay after 10, 25, 50 successful referrals without code changes |
+| 2026-09-01 | Coin **earn tiers** (`CoinEarnTier`) — order-value bands and booking-sequence bands; **customer eligibility** (`NEW` / `EXISTING` / `REACTIVATED` / `ALL`) |
+| 2026-09-01 | Wallet **available ≥ 0** + coin spendable invariant — mandatory C5 concurrency tests (`M3-BE-253`, `M3-BE-254`) |
+| 2026-09-01 | Referral **`UNIQUE(referee_id)`** — one attribution per customer lifetime; first valid signup wins |
 | 2026-09-01 | Referral program changes grandfathered — snapshot version at attribution |
 | 2026-09-01 | Referral signup-only; unique link + code; `?ref=` auto-fill on signup |
 | 2026-09-01 | Refund: restore wallet + Razorpay; never restore burned coins |
