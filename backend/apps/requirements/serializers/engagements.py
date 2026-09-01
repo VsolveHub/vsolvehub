@@ -37,6 +37,7 @@ from apps.requirements.models import (
 from apps.requirements.selectors import access_receipt_for
 
 from .enquiries import (
+    ProposalIncludedSupplyLineSerializer,
     ProposalItemLineSerializer,
     ProposalLabourLineSerializer,
     ProposalMaterialLineSerializer,
@@ -270,6 +271,7 @@ class CustomerProposalSerializer(serializers.ModelSerializer[Proposal]):
     stages = ProposalStageSerializer(many=True, read_only=True)
     material_lines = ProposalMaterialLineSerializer(many=True, read_only=True)
     material_list = ProposalMaterialListLineSerializer(many=True, read_only=True)
+    included_supply_list = ProposalIncludedSupplyLineSerializer(many=True, read_only=True)
     item_lines = ProposalItemLineSerializer(many=True, read_only=True)
     labour_lines = ProposalLabourLineSerializer(many=True, read_only=True)
     other_charges = ProposalOtherChargeSerializer(many=True, read_only=True)
@@ -321,6 +323,8 @@ class CustomerProposalSerializer(serializers.ModelSerializer[Proposal]):
             "material_lines",
             "material_list",
             "material_brand_tier",
+            "material_fulfilment_mode",
+            "included_supply_list",
             "warranty_terms",
             "valid_until",
             "submitted_at",

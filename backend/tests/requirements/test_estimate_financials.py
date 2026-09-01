@@ -9,9 +9,9 @@ from http import HTTPStatus
 import pytest
 from django.utils import timezone
 
-from apps.catalog.models import ServiceVariant
+from apps.catalog.models import M2VariantConfiguration, ServiceVariant
 from apps.partners.models import PartnerBusinessProfile
-from apps.requirements import financials
+from apps.requirements import financials, proposals
 from apps.requirements.exceptions import (
     FinancialPolicyUnavailableError,
     InstallmentMismatchError,
@@ -20,7 +20,7 @@ from apps.requirements.exceptions import (
 )
 from apps.requirements.models import CommercialPolicy, Proposal
 
-from .conftest import M2World, draft_requirement
+from .conftest import M2World, draft_requirement, invitation_for, submitted_requirement
 
 pytestmark = pytest.mark.django_db
 
@@ -248,3 +248,76 @@ def test_mixed_estimate_modes_unsupported_charges_and_installment_gaps_are_rejec
         )
     with pytest.raises(InstallmentMismatchError):
         _calculate(world, stages=[{"title": "Deposit", "amount_paise": 100_000}])
+
+
+def test_customer_procured_recipes_are_published_as_a_shopping_list(
+    world: M2World,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _tax_profile(world)
+    _policy(world)
+    recipe = [{"title": "Copper wire", "quantity": "2", "unit": "coil"}]
+    monkeypatch.setattr(financials.price_book, "shopping_list_for_lines", lambda _lines: recipe)
+
+    result = _calculate(world)
+
+    assert result.material_fulfilment_mode == Proposal.MaterialFulfilmentMode.CUSTOMER_PROCURES
+    assert result.suggested_material_list == recipe
+    assert result.suggested_included_supply_list == []
+
+
+def test_partner_turnkey_recipes_are_disclosure_not_a_customer_shopping_list(
+    world: M2World,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    configuration = world.project_variant.m2_configurations.get(status="ACTIVE")
+    configuration.material_fulfilment_mode = (
+        M2VariantConfiguration.MaterialFulfilmentMode.PARTNER_TURNKEY
+    )
+    configuration.save(update_fields=("material_fulfilment_mode",))
+    _tax_profile(world)
+    _policy(world)
+    recipe = [{"title": "Warm-white fairy lights", "quantity": "12", "unit": "string"}]
+    monkeypatch.setattr(financials.price_book, "shopping_list_for_lines", lambda _lines: recipe)
+
+    result = _calculate(world)
+
+    assert result.material_fulfilment_mode == Proposal.MaterialFulfilmentMode.PARTNER_TURNKEY
+    assert result.suggested_material_list == []
+    assert result.suggested_included_supply_list == recipe
+    assert result.calculation_snapshot["material_fulfilment_mode"] == "PARTNER_TURNKEY"
+
+
+def test_partner_turnkey_submission_cannot_assign_a_customer_shopping_list(
+    world: M2World,
+) -> None:
+    configuration = world.project_variant.m2_configurations.get(status="ACTIVE")
+    configuration.material_fulfilment_mode = (
+        M2VariantConfiguration.MaterialFulfilmentMode.PARTNER_TURNKEY
+    )
+    configuration.save(update_fields=("material_fulfilment_mode",))
+    requirement = submitted_requirement(
+        world=world,
+        archetype=ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT,
+    )
+    invitation = invitation_for(requirement=requirement, partner=world.vendor, accepted=True)
+
+    with pytest.raises(ProposalShapeError, match="cannot ask the Customer to buy"):
+        proposals.submit_proposal(
+            invitation_id=invitation.id,
+            material_list=[{"title": "Flowers", "quantity": "10", "unit": "bunch"}],
+        )
+
+
+def test_customer_procured_submission_cannot_publish_turnkey_supplies(world: M2World) -> None:
+    requirement = submitted_requirement(
+        world=world,
+        archetype=ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT,
+    )
+    invitation = invitation_for(requirement=requirement, partner=world.vendor, accepted=True)
+
+    with pytest.raises(ProposalShapeError, match="cannot publish a Partner-turnkey supply list"):
+        proposals.submit_proposal(
+            invitation_id=invitation.id,
+            included_supply_list=[{"title": "Copper wire", "quantity": "2", "unit": "coil"}],
+        )

@@ -1263,7 +1263,6 @@ CATALOG: tuple[tuple[str, str, str, str, str, tuple[TradeSeed, ...], str], ...] 
 )
 
 
-
 class Command(BaseCommand):
     help = "Seed the priced Technician, Beautician, Home and Pet task catalog. Adds; never prunes."
 

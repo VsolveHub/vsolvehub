@@ -68,8 +68,7 @@ class Command(BaseCommand):
             action="append",
             default=[],
             help=(
-                "A phone number to leave untouched even if it would otherwise qualify. "
-                "Repeatable."
+                "A phone number to leave untouched even if it would otherwise qualify. Repeatable."
             ),
         )
 
@@ -125,8 +124,7 @@ class Command(BaseCommand):
 
             self.stdout.write(
                 self.style.SUCCESS(
-                    f"DELETED: {label}"
-                    + (" (+ CustomerProfile)" if had_customer_profile else "")
+                    f"DELETED: {label}" + (" (+ CustomerProfile)" if had_customer_profile else "")
                 )
             )
             deleted += 1

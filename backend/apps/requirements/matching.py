@@ -691,8 +691,17 @@ def _max_slots(requirement: CustomerRequirement) -> int:
 
 
 @transaction.atomic
-def dispatch_customer_visit_share(*, share_id: uuid.UUID) -> list[VendorInvitation]:
-    """Broadcast one immutable Customer-selected time to every eligible, available Partner."""
+def dispatch_customer_visit_share(
+    *, share_id: uuid.UUID, settle_on_empty: bool = True
+) -> list[VendorInvitation]:
+    """Broadcast one immutable Customer-selected time to every eligible, available Partner.
+
+    `settle_on_empty` separates the two callers honestly. At submission (the default), a market
+    with nobody eligible settles `NO_PROFESSIONAL_FOUND` on the spot — the Customer is told
+    before anything is charged, which is the promise the exhaustion test holds. The retry sweep
+    passes `False`: a wave that died is "nobody new is free *yet*", and the sweep owns the
+    decision of when *yet* runs out (`retry_or_settle_customer_visit_share`'s deadline floor).
+    """
 
     share = (
         VisitPlanShare.objects.select_for_update(of=("self",))
@@ -768,6 +777,17 @@ def dispatch_customer_visit_share(*, share_id: uuid.UUID) -> list[VendorInvitati
     policy_deadline = _invitation_deadline(requirement)
     latest_deadline = starts_at - timedelta(minutes=15)
     responds_by = min(policy_deadline, latest_deadline) if policy_deadline else latest_deadline
+    # The wall-clock answer window (owner decision, 2026-09-01). A fixed-visit offer is a yes/no
+    # on a time the Customer already chose, broadcast first-accept-wins — `first_quote_sla_hours`
+    # is a clock sized for *writing a quote*, and borrowing it here handed a 30-second decision a
+    # two-day countdown. The sweep re-dispatches an unanswered share to newly free Partners, so a
+    # short window converges instead of dead-ending. Null keeps the old ceiling.
+    configuration = requirement.configuration
+    timeout_seconds = (
+        configuration.fixed_visit_offer_timeout_seconds if configuration is not None else None
+    )
+    if timeout_seconds:
+        responds_by = min(responds_by, timezone.now() + timedelta(seconds=timeout_seconds))
     responds_by = max(timezone.now(), responds_by)
     invitations: list[VendorInvitation] = []
     for partner in evaluation.ordered:
@@ -807,7 +827,8 @@ def dispatch_customer_visit_share(*, share_id: uuid.UUID) -> list[VendorInvitati
         invitations.append(invitation)
 
     if (
-        not invitations
+        settle_on_empty
+        and not invitations
         and not VendorInvitation.objects.filter(
             requested_visit_share=share,
             status=VendorInvitation.Status.INVITED,
@@ -866,6 +887,62 @@ def settle_customer_visit_offer_exhaustion(*, share_id: uuid.UUID) -> VisitPlanS
         },
     )
     return share
+
+
+@transaction.atomic
+def retry_or_settle_customer_visit_share(*, share_id: uuid.UUID) -> list[VendorInvitation]:
+    """Keep a Customer-chosen visit searching, or settle it honestly at the last moment.
+
+    Before this existed, the death of the last live invitation settled the share to
+    `NO_PROFESSIONAL_FOUND` immediately — a dead end, when the honest answer was "nobody who was
+    free at dispatch time said yes *yet*". Re-dispatch reaches only Partners not already asked
+    (`dispatch_customer_visit_share` skips anyone with an invitation on this share), so retrying
+    is how a Partner who finishes another job an hour later still gets the offer.
+
+    Settlement happens for exactly two reasons: the visit is now too close to staff
+    (`starts_at - 15min`, the same floor the dispatch deadline uses), or the requirement has
+    closed under the share. While neither holds and nobody new is free, the share simply stays
+    `SEARCHING` and the sweep asks again — which is what "searching" ought to mean.
+    """
+    share = (
+        VisitPlanShare.objects.select_for_update(of=("self",))
+        .select_related("plan__requirement")
+        .get(pk=share_id)
+    )
+    if share.matching_status != VisitPlanShare.MatchingStatus.SEARCHING:
+        return []
+    if VendorInvitation.objects.filter(
+        requested_visit_share=share,
+        status=VendorInvitation.Status.INVITED,
+    ).exists():
+        return []
+
+    starts_at = share.requested_start
+    requirement = share.plan.requirement
+    too_late = starts_at is None or starts_at - timedelta(minutes=15) <= timezone.now()
+    if too_late or requirement.status not in CustomerRequirement.LIVE_STATUSES:
+        settle_customer_visit_offer_exhaustion(share_id=share.id)
+        return []
+    return dispatch_customer_visit_share(share_id=share.id, settle_on_empty=False)
+
+
+def searching_visit_share_ids(*, at: datetime | None = None) -> list[uuid.UUID]:
+    """Shares still promised to a Customer with nobody currently holding the offer."""
+
+    del at  # The moment matters to the per-share command, which re-reads its own clock.
+    live = VendorInvitation.objects.filter(
+        requested_visit_share=models.OuterRef("pk"),
+        status=VendorInvitation.Status.INVITED,
+    )
+    return list(
+        VisitPlanShare.objects.filter(
+            matching_status=VisitPlanShare.MatchingStatus.SEARCHING,
+            requested_start__isnull=False,
+        )
+        .annotate(has_live_offer=models.Exists(live))
+        .filter(has_live_offer=False)
+        .values_list("id", flat=True)
+    )
 
 
 @transaction.atomic
@@ -1153,8 +1230,10 @@ def expire_invitation_and_replace(*, invitation_id: uuid.UUID) -> list[VendorInv
     expire_invitation(invitation_id=locked.pk)
 
     if locked.requested_visit_share_id is not None:
-        settle_customer_visit_offer_exhaustion(share_id=locked.requested_visit_share_id)
-        return []
+        # Not a dead end any more: the share re-dispatches to Partners who became free after the
+        # last wave, and settles `NO_PROFESSIONAL_FOUND` only once the visit is too close to
+        # staff. The requirement lock above covers the share's requirement, so this nests safely.
+        return retry_or_settle_customer_visit_share(share_id=locked.requested_visit_share_id)
 
     requirement = CustomerRequirement.objects.get(pk=locked.requirement_id)
     if requirement.status not in CustomerRequirement.LIVE_STATUSES:
@@ -1179,6 +1258,70 @@ def expired_invitation_ids(*, at: datetime | None = None) -> list[uuid.UUID]:
             responds_by__lt=moment,
         ).values_list("id", flat=True)
     )
+
+
+@transaction.atomic
+def top_up_quote_wave(*, requirement_id: uuid.UUID) -> list[VendorInvitation]:
+    """Refill a live quote wave to its promised size, and say so honestly when nobody is left.
+
+    The Customer chose a quote count; keeping that many live candidatures is the platform's job,
+    not theirs. `invite_wave` already computes the free slots under the requirement lock and
+    refuses over-inviting, so this adds no new accounting — only the missing caller.
+
+    When a top-up finds nobody (every eligible vendor already asked, nobody new free yet), the
+    thin-supply event is emitted **once per requirement** — `enqueue_outbox_event` dedupes on the
+    idempotency key — so the Customer hears "we have asked everyone" exactly once while the sweep
+    keeps quietly retrying.
+    """
+    requirement = CustomerRequirement.objects.select_for_update().get(pk=requirement_id)
+    if requirement.status not in CustomerRequirement.LIVE_STATUSES:
+        return []
+    free_slots = _max_slots(requirement) - live_slot_count(requirement)
+    if free_slots <= 0:
+        return []
+    invited = invite_wave(requirement_id=requirement.pk, size=free_slots)
+    if not invited:
+        enqueue_outbox_event(
+            aggregate_type="customer_requirement",
+            aggregate_id=requirement.pk,
+            event_type="m2.quote_wave.thin_supply",
+            idempotency_key=f"m2-quote-thin-supply:{requirement.pk}",
+            payload={"requirement_id": str(requirement.pk)},
+        )
+    return invited
+
+
+def underfilled_quote_requirement_ids() -> list[uuid.UUID]:
+    """Live quote-flow requirements holding fewer slots than the Customer was promised.
+
+    A5 is deliberately excluded: its slots are visit-plan shares with their own re-dispatch sweep,
+    and counting a share broadcast's many `INVITED` rows against `plan_size` here would misread a
+    healthy search as a full one. Rate-card A3 bookings own their own cascade for the same reason.
+
+    The ceiling comparison runs in Python because `_max_slots` is configuration- and
+    plan-dependent; the candidate set is bounded (live requirements only) and the sweep batches,
+    so per-row reads are the honest cost of not duplicating the slot rule in SQL.
+    """
+    dispatchable = RateCardBooking.objects.filter(
+        requirement=models.OuterRef("pk"),
+        status__in=RateCardBooking.DISPATCHABLE_STATUSES,
+    )
+    opened = VendorInvitation.objects.filter(requirement=models.OuterRef("pk"))
+    candidates = (
+        CustomerRequirement.objects.filter(status__in=CustomerRequirement.LIVE_STATUSES)
+        .exclude(archetype=ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT)
+        .annotate(has_rate_card_dispatch=models.Exists(dispatchable))
+        .filter(has_rate_card_dispatch=False)
+        # The opening wave belongs to `open_matching_on_submission`; a requirement no wave has
+        # ever touched is either seconds old or deliberately unopened, and neither is a top-up.
+        .annotate(matching_opened=models.Exists(opened))
+        .filter(matching_opened=True)
+    )
+    return [
+        requirement.pk
+        for requirement in candidates
+        if live_slot_count(requirement) < _max_slots(requirement)
+    ]
 
 
 def open_matching_on_submission(*, requirement_id: uuid.UUID) -> list[VendorInvitation]:

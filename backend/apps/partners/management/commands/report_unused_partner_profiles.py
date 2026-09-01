@@ -116,7 +116,7 @@ class Command(BaseCommand):
                     self.style.WARNING(
                         "  NOTE: this phone number also has a CustomerProfile. Deleting the "
                         "PartnerProfile does not touch it either way, since they are independent "
-                        "records off the same User — but the account is not fully \"unused\"."
+                        'records off the same User — but the account is not fully "unused".'
                     )
                 )
 

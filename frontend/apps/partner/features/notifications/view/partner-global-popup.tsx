@@ -31,7 +31,16 @@ export function PartnerGlobalPopup() {
     if (shouldSelect) switchRole.mutate(PARTNER_ROLE);
   }, [shouldSelect, switchRole]);
 
-  const enabled = !session.isPending && hasPartner && isReceivingOffers;
+  const partnerReady = !session.isPending && hasPartner;
 
-  return <PartnerLiveDelivery enabled={enabled} />;
+  return (
+    <PartnerLiveDelivery
+      offersEnabled={partnerReady && isReceivingOffers}
+      // Fixed-visit offers and enquiry invitations are dispatched by availability
+      // and capability, not by the go-online toggle — a Partner invited on a
+      // five-minute clock must be interrupted whether or not they pressed Go
+      // Online for same-day work. Only the A1 stream stays presence-gated.
+      invitationsEnabled={partnerReady}
+    />
+  );
 }

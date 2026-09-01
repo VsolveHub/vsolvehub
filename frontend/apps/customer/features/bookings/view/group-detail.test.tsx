@@ -62,6 +62,19 @@ afterEach(() => {
   queryClient.clear();
 });
 
+describe("navigation", () => {
+  it("links back to the canonical Bookings page", async () => {
+    client.GET.mockResolvedValue(ok(group()));
+
+    renderDetail();
+
+    expect(await screen.findByRole("link", { name: "Back to Bookings" })).toHaveAttribute(
+      "href",
+      "/activity",
+    );
+  });
+});
+
 describe("every unit is rendered on its own terms", () => {
   it("shows each visit with its own status, timing and lines", async () => {
     client.GET.mockResolvedValue(

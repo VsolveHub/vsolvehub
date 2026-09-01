@@ -14,8 +14,9 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any, cast
 
-from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand, CommandError, CommandParser
 from django.db import transaction
 
 from apps.catalog.icons import ServiceIconKey
@@ -45,6 +46,11 @@ A3 = ServiceVariant.BookingArchetype.A3_TIME_BLOCK
 A5 = ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT
 
 
+# One decoded JSON object out of the dump. `Any` for the values is the honest type: the
+# file is external input whose shape this command validates as it reads, key by key.
+JsonObject = dict[str, Any]
+
+
 def default_dump_path() -> Path:
     repo = Path(__file__).resolve().parents[5]
     exports = repo / "exports"
@@ -59,7 +65,7 @@ def default_dump_path() -> Path:
 class Command(BaseCommand):
     help = "Load exports/*/catalog_live.json (Cloudflare images + services) into this database."
 
-    def add_arguments(self, parser) -> None:
+    def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument(
             "--path",
             type=Path,
@@ -69,7 +75,9 @@ class Command(BaseCommand):
 
     @transaction.atomic
     def handle(self, *_args: object, **options: object) -> None:
-        path: Path = options["path"] or default_dump_path()
+        # `options` is `dict[str, object]`, so the parser's own `type=Path` is
+        # invisible to mypy here; the cast is where that knowledge re-enters.
+        path: Path = cast("Path | None", options["path"]) or default_dump_path()
         if not path.is_file():
             raise CommandError(f"dump not found: {path}")
         catalog = json.loads(path.read_text(encoding="utf-8"))
@@ -141,7 +149,7 @@ class Command(BaseCommand):
         )
 
     def _load_service(
-        self, tile: Subcategory, payload: dict
+        self, tile: Subcategory, payload: JsonObject
     ) -> tuple[Service, list[ServiceVariant]]:
         icon_key = payload.get("icon_key") or ServiceIconKey.SERVICE
         if icon_key not in ServiceIconKey.values:
@@ -165,7 +173,7 @@ class Command(BaseCommand):
             variants.append(self._load_variant(service, option, position))
         return service, variants
 
-    def _seed_cover(self, service: Service, payload: dict) -> None:
+    def _seed_cover(self, service: Service, payload: JsonObject) -> None:
         media_rows = payload.get("media") or []
         cover_url = payload.get("cover_image_url") or ""
         alt_text = service.name
@@ -198,7 +206,7 @@ class Command(BaseCommand):
         existing.is_active = True
         existing.save(update_fields=("url", "alt_text", "is_active"))
 
-    def _seed_policies(self, service: Service, payload: dict) -> None:
+    def _seed_policies(self, service: Service, payload: JsonObject) -> None:
         variants = payload.get("variants") or []
         skill = (variants[0].get("skill_code") if variants else "") or ""
         content = content_for_trade(skill)
@@ -231,12 +239,11 @@ class Command(BaseCommand):
                 defaults={"title": title, "text": text, "is_active": True},
             )
 
-    def _load_variant(self, service: Service, option: dict, position: int) -> ServiceVariant:
+    def _load_variant(self, service: Service, option: JsonObject, position: int) -> ServiceVariant:
         minutes = int(option.get("work_minutes") or 60) or 60
         min_minutes = int(option.get("min_minutes") or minutes) or minutes
         max_minutes = int(option.get("max_minutes") or minutes) or minutes
-        if max_minutes < min_minutes:
-            max_minutes = min_minutes
+        max_minutes = max(max_minutes, min_minutes)
         recommended = min(max(minutes, min_minutes), max_minutes)
         archetype = option.get("booking_archetype") or A1
         variant, _ = ServiceVariant.objects.update_or_create(
@@ -323,6 +330,11 @@ class Command(BaseCommand):
         )
 
     def _seed_m2_config(self, variant: ServiceVariant) -> None:
+        material_mode = (
+            M2VariantConfiguration.MaterialFulfilmentMode.NOT_APPLICABLE
+            if variant.booking_archetype == ServiceVariant.BookingArchetype.A3_TIME_BLOCK
+            else M2VariantConfiguration.MaterialFulfilmentMode.CUSTOMER_PROCURES
+        )
         M2VariantConfiguration.objects.update_or_create(
             variant=variant,
             version=1,
@@ -330,6 +342,7 @@ class Command(BaseCommand):
                 "status": M2VariantConfiguration.Status.ACTIVE,
                 "question_schema": {"version": 1, "questions": []},
                 "registration_question_schema": {},
+                "material_fulfilment_mode": material_mode,
                 "max_quotes": 3,
             },
         )

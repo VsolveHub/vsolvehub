@@ -1,4 +1,4 @@
-import { Button, FactTile } from "@vsolve/ui";
+import { Button, FactTile, cn } from "@vsolve/ui";
 
 import { Pictogram } from "@/components/pictogram";
 

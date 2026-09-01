@@ -1,6 +1,7 @@
 "use client";
 
 import { Button, Sheet, cn, formatMoney } from "@vsolve/ui";
+import { PackageCheck } from "lucide-react";
 
 import {
   itemLineAmount,
@@ -28,6 +29,7 @@ export function EstimatePreviewSheet({
   preview,
   vendorName,
   materialList = [],
+  partnerTurnkey = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -36,6 +38,7 @@ export function EstimatePreviewSheet({
   vendorName: string;
   /** What the customer buys — quantities and a spec, never a price (1.48.0). */
   materialList?: readonly MaterialListLineDraft[];
+  partnerTurnkey?: boolean;
 }) {
   const lines =
     draft.mode === "ITEM_WISE"
@@ -68,6 +71,18 @@ export function EstimatePreviewSheet({
             </div>
           </div>
         </div>
+
+        {partnerTurnkey ? (
+          <div className="flex gap-3 rounded-card border border-success-line bg-success-surface p-3 text-success-text">
+            <PackageCheck className="mt-0.5 size-5 shrink-0" aria-hidden />
+            <div>
+              <p className="text-sm font-bold">Materials, setup and removal included</p>
+              <p className="mt-0.5 text-xs leading-5">
+                The decorator manages the full supply. You do not need to shop for décor materials.
+              </p>
+            </div>
+          </div>
+        ) : null}
 
         <Block title="What you get">
           {draft.scopeSummary.trim() === "" ? (
@@ -108,14 +123,17 @@ export function EstimatePreviewSheet({
         </Block>
 
         {materialList.length > 0 ? (
-          <Block title="What you need to buy">
+          <Block title={partnerTurnkey ? "Materials & finish included" : "What you need to buy"}>
             <p className="text-xs text-text-muted">
-              {draft.materialBrandTier === "PREMIUM"
-                ? "Premium brands"
-                : draft.materialBrandTier === "STANDARD"
-                  ? "Standard brands"
-                  : "Any brand"}{" "}
-              · you buy these, the estimate covers the work
+              {partnerTurnkey
+                ? "Supplied, installed and managed by the decorator · already inside the estimate"
+                : `${
+                    draft.materialBrandTier === "PREMIUM"
+                      ? "Premium brands"
+                      : draft.materialBrandTier === "STANDARD"
+                        ? "Standard brands"
+                        : "Any brand"
+                  } · you buy these, the estimate covers the work`}
             </p>
             <ul className="mt-1 list-none divide-y divide-line p-0 text-sm">
               {materialList.map((row) => (

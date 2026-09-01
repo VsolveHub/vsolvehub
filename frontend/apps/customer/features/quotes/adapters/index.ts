@@ -123,15 +123,16 @@ function toMaterialViews(
    -------------------------------------------------------------------------- */
 
 /** One line of `CustomerProposal.material_list`. Not re-exported by `@vsolve/query` yet. */
-type MaterialListLine = CustomerProposal["material_list"][number];
+type MaterialListLine =
+  | CustomerProposal["material_list"][number]
+  | CustomerProposal["included_supply_list"][number];
 
 /**
  * One thing the Customer should buy. Quantities and a spec — **never a price**.
  *
- * Materials are always the Customer's to buy on a visit-first project, so every
- * estimate carries this list beside the priced `material_lines` (the advances
- * the pro supplies). The two are different fields and render under different
- * headings; nothing here is inside the total.
+ * Customer-procured estimates carry this as a shopping list. Turnkey estimates
+ * reuse the same display shape for `included_supply_list`, but the two fields
+ * retain different meanings and render under different headings.
  */
 export interface QuoteMaterialListRowView {
   title: string;
@@ -394,6 +395,10 @@ export interface QuoteCardView {
    * Distinct from `materials` above, which the pro supplies inside the total.
    */
   materialList: readonly QuoteMaterialListRowView[];
+  /** Materials supplied and managed by the professional inside the quoted rates. */
+  includedSupplyList: readonly QuoteMaterialListRowView[];
+  /** Explicit server configuration; screens never infer procurement from a service slug. */
+  materialFulfilmentMode: CustomerProposal["material_fulfilment_mode"];
   /** "Standard tier (Finolex / Anchor class)", or null when the pro set none. */
   brandTierLabel: string | null;
 
@@ -506,6 +511,8 @@ export function toQuoteCard(proposal: CustomerProposal, serverNow: string): Quot
     stages: toStageViews(proposal.stages),
     materials: toMaterialViews(proposal.material_lines),
     materialList: toMaterialListViews(proposal.material_list),
+    includedSupplyList: toMaterialListViews(proposal.included_supply_list),
+    materialFulfilmentMode: proposal.material_fulfilment_mode,
     brandTierLabel: brandTierLabel(proposal.material_brand_tier),
 
     inclusions: readLines(proposal.inclusions),

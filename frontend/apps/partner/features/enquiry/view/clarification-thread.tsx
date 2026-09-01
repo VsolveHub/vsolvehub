@@ -1,7 +1,7 @@
 "use client";
 
 import { describeError } from "@vsolve/query";
-import { Button, ErrorState, cn } from "@vsolve/ui";
+import { Button, ErrorState, cn, useHydrated } from "@vsolve/ui";
 import {
   ArrowLeft,
   CheckCheck,
@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 import type { EnquiryRecord } from "../model/wire";
 import { useAnswerQuestion, useAskQuestion } from "../queries";
@@ -26,6 +27,9 @@ import { useAnswerQuestion, useAskQuestion } from "../queries";
 
 const MAX_OPEN = 3;
 
+/** Mirrors the id `PartnerShell`'s focused header renders. */
+const HEADER_ACTION_SLOT_ID = "partner-header-action";
+
 function when(iso: string): string {
   return new Date(iso).toLocaleString("en-IN", {
     day: "numeric",
@@ -35,8 +39,31 @@ function when(iso: string): string {
   });
 }
 
-export function ClarificationThread({ enquiry }: { readonly enquiry: EnquiryRecord }) {
-  const [isOpen, setIsOpen] = useState(false);
+export interface ClarificationThreadProps {
+  readonly enquiry: EnquiryRecord;
+  /**
+   * Controlled open state. Omit and the component owns it.
+   *
+   * The enquiry screen drives it because two other controls open this thread —
+   * the customer card's "Message" button and the "Something's wrong" sheet —
+   * and a component that owned its own state could not be opened by either.
+   */
+  readonly open?: boolean;
+  readonly onOpenChange?: (open: boolean) => void;
+}
+
+export function ClarificationThread({
+  enquiry,
+  open,
+  onOpenChange,
+}: ClarificationThreadProps) {
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const isOpen = open ?? uncontrolledOpen;
+  const setIsOpen = (next: boolean) => {
+    setUncontrolledOpen(next);
+    onOpenChange?.(next);
+  };
+  const headerSlot = useHeaderActionSlot();
   const ask = useAskQuestion(enquiry.id);
   const answer = useAnswerQuestion(enquiry.id);
   const [draft, setDraft] = useState("");
@@ -63,22 +90,32 @@ export function ClarificationThread({ enquiry }: { readonly enquiry: EnquiryReco
 
   return (
     <>
-      {/* Floating Action Button (FAB) in bottom right corner */}
-      <div className="fixed bottom-6 right-6 z-40">
-        <button
-          type="button"
-          onClick={() => setIsOpen(true)}
-          aria-label="Open chat with customer"
-          className="group relative flex size-14 items-center justify-center rounded-full bg-navy-900 text-white shadow-2xl transition-all duration-200 hover:scale-105 hover:bg-navy-800 active:scale-95 cursor-pointer ring-4 ring-white/90"
-        >
-          <MessageCircle className="size-6 transition-transform group-hover:scale-110" />
-          {enquiry.questions.length > 0 ? (
-            <span className="absolute -top-1 -right-1 flex min-w-5 h-5 items-center justify-center rounded-full bg-signal-500 px-1.5 text-[11px] font-extrabold text-white shadow-xs">
-              {enquiry.questions.length}
-            </span>
-          ) : null}
-        </button>
-      </div>
+      {/*
+        The trigger lives in the app bar, not in a floating bubble.
+
+        The bubble was `fixed bottom-6 right-6`, which is exactly where the
+        sticky action bar and the last card now are — it covered the "Estimate"
+        step of the progress rail and clipped the button under it. A chat entry
+        point is navigation, and this screen already has a place for that.
+      */}
+      {headerSlot === null
+        ? null
+        : createPortal(
+            <button
+              type="button"
+              onClick={() => setIsOpen(true)}
+              aria-label="Open chat with customer"
+              className="group relative grid size-11 place-items-center rounded-control text-text-secondary hover:bg-surface-sunken hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+            >
+              <MessageCircle className="size-5" />
+              {enquiry.questions.length > 0 ? (
+                <span className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-signal-500 px-1 text-[10px] font-extrabold text-white">
+                  {enquiry.questions.length}
+                </span>
+              ) : null}
+            </button>,
+            headerSlot,
+          )}
 
       {/* Full-Page Messaging Experience */}
       {isOpen ? (
@@ -86,7 +123,7 @@ export function ClarificationThread({ enquiry }: { readonly enquiry: EnquiryReco
           role="dialog"
           aria-modal="true"
           aria-label="Chat with Customer"
-          className="fixed inset-0 z-[100] flex flex-col bg-[#F4F6F8] animate-in fade-in slide-in-from-bottom-3 duration-200"
+          className="fixed inset-0 z-[100] flex flex-col bg-canvas animate-in fade-in slide-in-from-bottom-3 duration-200"
         >
           {/* Top Navigation Bar */}
           <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between border-b border-line bg-surface px-4 shadow-2xs">
@@ -235,7 +272,7 @@ export function ClarificationThread({ enquiry }: { readonly enquiry: EnquiryReco
                       e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
                     }}
                     disabled={left === 0 || ask.isPending}
-                    className="w-full resize-none rounded-[22px] border border-line bg-[#F8F9FA] px-4 py-2.5 text-sm text-navy-900 leading-5 placeholder:text-text-muted focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-900/20 max-h-32 min-h-[44px] box-border"
+                    className="w-full resize-none rounded-[22px] border border-line bg-surface-sunken px-4 py-2.5 text-sm text-navy-900 leading-5 placeholder:text-text-muted focus:bg-surface focus:outline-none focus:ring-2 focus:ring-navy-900/20 max-h-32 min-h-[44px] box-border"
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
@@ -275,7 +312,6 @@ export function ClarificationThread({ enquiry }: { readonly enquiry: EnquiryReco
 
 function ChatBubble({
   side,
-  who,
   at,
   children,
 }: {
@@ -338,4 +374,26 @@ function AnswerBox({ onAnswer, pending }: { onAnswer: (text: string) => void; pe
       </div>
     </div>
   );
+}
+
+/**
+ * The app bar's action slot, once it exists in the DOM.
+ *
+ * `PartnerShell`'s focused header renders an empty, correctly sized box on the
+ * trailing side of every detail route. Portalling into it keeps this feature's
+ * trigger out of the shell's imports — the shell has no business knowing an
+ * enquiry has a chat thread — while still putting the control where a header
+ * control belongs.
+ *
+ * Returns null on the first render and on any route whose header has no slot,
+ * which is what makes it safe: the thread simply has no trigger there rather
+ * than throwing.
+ */
+function useHeaderActionSlot(): HTMLElement | null {
+  // `useHydrated` rather than `useState` + `useEffect`: the effect version
+  // schedules a state update during the commit that just finished, which is the
+  // cascading render `react-hooks/set-state-in-effect` exists to prevent. The
+  // lookup itself is a read of a DOM node the shell mounted above this
+  // component and never replaces, so it is stable for the life of the route.
+  return useHydrated() ? document.getElementById(HEADER_ACTION_SLOT_ID) : null;
 }

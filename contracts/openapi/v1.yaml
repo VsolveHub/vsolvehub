@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.50.0
+  version: 1.52.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -15094,6 +15094,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ProposalMaterialListLineRequest'
+        included_supply_list:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalIncludedSupplyLineRequest'
         material_brand_tier:
           oneOf:
           - $ref: '#/components/schemas/MaterialBrandTierEnum'
@@ -17963,6 +17967,15 @@ components:
         material_brand_tier:
           type: string
           readOnly: true
+        material_fulfilment_mode:
+          allOf:
+          - $ref: '#/components/schemas/MaterialFulfilmentModeEnum'
+          readOnly: true
+        included_supply_list:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalIncludedSupplyLine'
+          readOnly: true
         warranty_terms:
           type: string
           readOnly: true
@@ -17982,11 +17995,13 @@ components:
       - estimate_type
       - exclusions
       - id
+      - included_supply_list
       - inclusions
       - item_lines
       - labour_lines
       - line_subtotal_paise
       - material_brand_tier
+      - material_fulfilment_mode
       - material_lines
       - material_list
       - minimum_days
@@ -19249,6 +19264,12 @@ components:
         pricing_skill_code:
           type: string
           readOnly: true
+        material_fulfilment_mode:
+          nullable: true
+          readOnly: true
+          oneOf:
+          - $ref: '#/components/schemas/MaterialFulfilmentModeEnum'
+          - $ref: '#/components/schemas/NullEnum'
         latest_proposal_status:
           type: string
           nullable: true
@@ -19304,6 +19325,14 @@ components:
           - $ref: '#/components/schemas/PartnerSiteAddress'
           nullable: true
           readOnly: true
+        customer_name:
+          type: string
+          nullable: true
+          readOnly: true
+        customer_phone:
+          type: string
+          nullable: true
+          readOnly: true
         server_now:
           type: string
           readOnly: true
@@ -19316,6 +19345,8 @@ components:
       - budget_min_paise
       - category_slug
       - created_at
+      - customer_name
+      - customer_phone
       - decline_reason_code
       - fixed_visit_duration_minutes
       - fixed_visit_earning_paise
@@ -19324,6 +19355,7 @@ components:
       - id
       - latest_proposal_rejection_reason
       - latest_proposal_status
+      - material_fulfilment_mode
       - pricing_skill_code
       - proposals
       - questions
@@ -19412,6 +19444,12 @@ components:
         pricing_skill_code:
           type: string
           readOnly: true
+        material_fulfilment_mode:
+          nullable: true
+          readOnly: true
+          oneOf:
+          - $ref: '#/components/schemas/MaterialFulfilmentModeEnum'
+          - $ref: '#/components/schemas/NullEnum'
         latest_proposal_status:
           type: string
           nullable: true
@@ -19436,6 +19474,7 @@ components:
       - id
       - latest_proposal_rejection_reason
       - latest_proposal_status
+      - material_fulfilment_mode
       - pricing_skill_code
       - requested_start
       - requirement_id
@@ -20494,6 +20533,16 @@ components:
       description: |-
         * `STANDARD` - Standard
         * `PREMIUM` - Premium
+    MaterialFulfilmentModeEnum:
+      enum:
+      - NOT_APPLICABLE
+      - CUSTOMER_PROCURES
+      - PARTNER_TURNKEY
+      type: string
+      description: |-
+        * `NOT_APPLICABLE` - Not applicable
+        * `CUSTOMER_PROCURES` - Customer procures
+        * `PARTNER_TURNKEY` - Partner supplies turnkey
     ModeEnum:
       enum:
       - SAME_PARTNER_SEQUENTIAL
@@ -25383,6 +25432,15 @@ components:
         material_brand_tier:
           type: string
           readOnly: true
+        material_fulfilment_mode:
+          allOf:
+          - $ref: '#/components/schemas/MaterialFulfilmentModeEnum'
+          readOnly: true
+        included_supply_list:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalIncludedSupplyLine'
+          readOnly: true
         warranty_terms:
           type: string
           readOnly: true
@@ -25409,12 +25467,14 @@ components:
       - estimate_type
       - exclusions
       - id
+      - included_supply_list
       - inclusions
       - invitation
       - item_lines
       - labour_lines
       - line_subtotal_paise
       - material_brand_tier
+      - material_fulfilment_mode
       - material_lines
       - material_list
       - minimum_days
@@ -25482,6 +25542,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ProposalMaterialListLineRequest'
+        included_supply_list:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalIncludedSupplyLineRequest'
         material_brand_tier:
           oneOf:
           - $ref: '#/components/schemas/MaterialBrandTierEnum'
@@ -25557,6 +25621,12 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ProposalMaterialListLine'
+        suggested_included_supply_list:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalIncludedSupplyLine'
+        material_fulfilment_mode:
+          $ref: '#/components/schemas/MaterialFulfilmentModeEnum'
         line_subtotal_paise:
           type: integer
           minimum: 0
@@ -25608,6 +25678,7 @@ components:
       - item_lines
       - labour_lines
       - line_subtotal_paise
+      - material_fulfilment_mode
       - material_lines
       - material_total_paise
       - other_charges
@@ -25618,10 +25689,68 @@ components:
       - platform_fee_tax_paise
       - policy_version
       - stages
+      - suggested_included_supply_list
       - suggested_material_list
       - tax_basis
       - taxable_value_paise
       - withholding_paise
+    ProposalIncludedSupplyLine:
+      type: object
+      description: |-
+        One material/specification included inside a Partner-turnkey quoted rate.
+
+        This deliberately shares the quantity/spec/note wire shape with a shopping-list row while
+        remaining a different field: it is disclosure, not a task for the Customer and not another
+        amount to add to the estimate.
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        spec:
+          type: string
+          maxLength: 200
+        unit:
+          type: string
+          maxLength: 32
+        quantity:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,9}(?:\.\d{0,3})?$
+        note:
+          type: string
+          maxLength: 200
+      required:
+      - quantity
+      - title
+    ProposalIncludedSupplyLineRequest:
+      type: object
+      description: |-
+        One material/specification included inside a Partner-turnkey quoted rate.
+
+        This deliberately shares the quantity/spec/note wire shape with a shopping-list row while
+        remaining a different field: it is disclosure, not a task for the Customer and not another
+        amount to add to the estimate.
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        spec:
+          type: string
+          maxLength: 200
+        unit:
+          type: string
+          maxLength: 32
+        quantity:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,9}(?:\.\d{0,3})?$
+        note:
+          type: string
+          maxLength: 200
+      required:
+      - quantity
+      - title
     ProposalItemLine:
       type: object
       description: |-
@@ -25846,10 +25975,10 @@ components:
       description: |-
         One thing the Customer should buy. Quantities and a spec — **never a price**.
 
-        Materials are the Customer's to purchase on every project (owner decision, 2026-08-29). The
-        server suggests this list from the tapped catalog items' recipes; the Partner corrects it
-        after the visit; the Customer shops from it. `unit` is free text for the same reason
-        `ProposalMaterialLineSerializer.unit` is: coils, boxes and bags are all real.
+        Used only when the service configuration says `CUSTOMER_PROCURES`. The server suggests this
+        list from the tapped catalog items' recipes; the Partner corrects it after the visit; the
+        Customer shops from it. Turnkey services use `included_supply_list` instead. `unit` is free
+        text because coils, boxes and bags are all real.
       properties:
         title:
           type: string
@@ -25875,10 +26004,10 @@ components:
       description: |-
         One thing the Customer should buy. Quantities and a spec — **never a price**.
 
-        Materials are the Customer's to purchase on every project (owner decision, 2026-08-29). The
-        server suggests this list from the tapped catalog items' recipes; the Partner corrects it
-        after the visit; the Customer shops from it. `unit` is free text for the same reason
-        `ProposalMaterialLineSerializer.unit` is: coils, boxes and bags are all real.
+        Used only when the service configuration says `CUSTOMER_PROCURES`. The server suggests this
+        list from the tapped catalog items' recipes; the Partner corrects it after the visit; the
+        Customer shops from it. Turnkey services use `included_supply_list` instead. `unit` is free
+        text because coils, boxes and bags are all real.
       properties:
         title:
           type: string
@@ -25987,6 +26116,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ProposalMaterialListLineRequest'
+        included_supply_list:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalIncludedSupplyLineRequest'
         material_brand_tier:
           oneOf:
           - $ref: '#/components/schemas/MaterialBrandTierEnum'

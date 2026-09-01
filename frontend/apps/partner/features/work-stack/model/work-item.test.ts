@@ -97,6 +97,7 @@ function enquiry(overrides: Partial<EnquirySummary> = {}): EnquirySummary {
     service_by: "2026-08-25",
     responds_by: "2026-08-20T10:00:00Z",
     pricing_skill_code: "electrician",
+    material_fulfilment_mode: "PARTNER_TURNKEY",
     latest_proposal_status: null,
     latest_proposal_rejection_reason: null,
     created_at: "2026-08-19T06:00:00Z",

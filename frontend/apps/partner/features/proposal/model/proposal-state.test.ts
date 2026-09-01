@@ -150,7 +150,7 @@ describe("finding the quote after a reload", () => {
   });
 
   it("tells the vendor plainly rather than showing an empty quote", () => {
-    expect(UNREADABLE_PROPOSAL_NOTICE).toMatch(/cannot show you the quote itself/i);
-    expect(UNREADABLE_PROPOSAL_NOTICE).toMatch(/replaces whatever is with the customer/i);
+    expect(UNREADABLE_PROPOSAL_NOTICE).toMatch(/could not load the quote itself/i);
+    expect(UNREADABLE_PROPOSAL_NOTICE).toMatch(/replaces whatever is with them/i);
   });
 });

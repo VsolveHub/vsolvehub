@@ -89,7 +89,10 @@ def test_randomized_partitions_are_complete_disjoint_bounded_and_deterministic()
         items = _items(rng, rng.randint(1, MAX_PROPERTY_ITEMS))
         rules = _rules(rng, items)
         with patch(
-            "apps.carts.planning._eligible_partner_ids",
+            # Patched where it is *used*: the planning god-module became a package and
+            # `grouping.py` imported this name into its own namespace, so patching the
+            # package-level re-export left the real query running against the fake area.
+            "apps.carts.planning.grouping._eligible_partner_ids",
             return_value=(uuid4(),),
         ):
             try:

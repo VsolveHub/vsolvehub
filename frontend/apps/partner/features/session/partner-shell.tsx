@@ -127,6 +127,10 @@ function FocusedHeader({ pathname }: { pathname: string }) {
   let title = "Details";
   if (pathname.startsWith("/work/offers")) {
     title = "Work Offer";
+  } else if (pathname.endsWith("/arrival")) {
+    // Before the `/work/enquiries` branch: every arrival route is nested under
+    // it, and the longest match is the one that names the screen you are on.
+    title = "Arrival code";
   } else if (pathname.startsWith("/work/enquiries")) {
     title = "Enquiry";
   } else if (pathname.startsWith("/work/jobs")) {
@@ -147,7 +151,13 @@ function FocusedHeader({ pathname }: { pathname: string }) {
           <ArrowLeft size={20} />
         </button>
         <h1 className="truncate px-2 text-base font-semibold text-text">{title}</h1>
-        <div className="h-11 w-11" aria-hidden="true" />
+        {/*
+          The trailing slot. It was a spacer holding the title centred; it still
+          is, and a detail screen may now portal one control into it — the
+          enquiry chat does. The shell deliberately does not know what: it owns
+          the header's shape, not any feature's actions.
+        */}
+        <div id="partner-header-action" className="flex h-11 w-11 items-center justify-center" />
       </div>
     </header>
   );

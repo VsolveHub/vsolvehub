@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { MapPin, Calendar, CheckCircle2, Clock } from "lucide-react";
+import { Calendar, CheckCircle2, Clock, MapPin, PackageCheck } from "lucide-react";
 import { ScreenHeading } from "@/features/booking/view/mobile-screen";
 import type { RequirementQuestionView } from "@/features/requirement/adapters";
 
@@ -159,6 +159,18 @@ export function VisitsSendScreen({
           ) : null}
         </div>
       </section>
+
+      {eventMode ? (
+        <section className="flex gap-3 rounded-card border border-success-line bg-success-surface p-4 text-success-text">
+          <PackageCheck className="mt-0.5 size-5 shrink-0" aria-hidden />
+          <div>
+            <h3 className="text-sm font-bold text-text">Your decorator handles the materials</h3>
+            <p className="mt-1 text-sm leading-6 text-text-secondary">
+              After the visit, each decorator sends one complete supply-and-install estimate. You see every item and finish, but you do not need to shop for décor materials.
+            </p>
+          </div>
+        </section>
+      ) : null}
 
       {/* 1/2/3 Estimate Selector */}
       {visitPlanChooser}

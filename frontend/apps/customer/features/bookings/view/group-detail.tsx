@@ -2,6 +2,7 @@
 
 import { describeError, useServerCountdown } from "@vsolve/query";
 import { Button, Dialog, ErrorState, Skeleton, buttonStyles } from "@vsolve/ui";
+import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -73,6 +74,22 @@ import { MobilePaymentBottomBar, PaymentSummarySideCard } from "./payment-summar
  * a real person to name.
  */
 
+
+function BackToBookingsLink() {
+  return (
+    <Link
+      href="/activity"
+      className={buttonStyles({
+        variant: "outline",
+        size: "sm",
+        className: "w-fit gap-1 px-3",
+      })}
+    >
+      <ChevronLeft className="size-4" strokeWidth={2.2} aria-hidden />
+      Back to Bookings
+    </Link>
+  );
+}
 
 /**
  * A unit's own state, with no reference to its siblings.
@@ -339,6 +356,7 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
   if (groupQuery.isPending) {
     return (
       <div className="flex flex-col gap-3">
+        <BackToBookingsLink />
         <Skeleton className="h-8 w-56" />
         <Skeleton className="h-32 w-full" />
         <Skeleton className="h-32 w-full" />
@@ -348,12 +366,15 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
 
   if (groupQuery.isError || !group) {
     return (
-      <ErrorState
-        title="We could not load this booking"
-        message={describeError(groupQuery.error, "read").message}
-        actionLabel="Try again"
-        onAction={() => void groupQuery.refetch()}
-      />
+      <div className="flex flex-col gap-4">
+        <BackToBookingsLink />
+        <ErrorState
+          title="We could not load this booking"
+          message={describeError(groupQuery.error, "read").message}
+          actionLabel="Try again"
+          onAction={() => void groupQuery.refetch()}
+        />
+      </div>
     );
   }
 
@@ -412,6 +433,8 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
             : "space-y-4 pb-20 lg:pb-12"
         }
       >
+        <BackToBookingsLink />
+        {/* Header section with status badge (shown when !isAwaitingPayment; when awaiting payment, details live in PaymentSummarySideCard) */}
         {!isAwaitingPayment ? (
           <div className="rounded-card border border-line bg-surface p-5 shadow-xs">
             <div className="flex flex-wrap items-start justify-between gap-3">

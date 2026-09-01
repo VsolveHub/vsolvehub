@@ -1,7 +1,7 @@
 "use client";
 
 import { describeError, hasWorkspaceAction, useServerCountdown, type Countdown } from "@vsolve/query";
-import { ConfirmAction, ErrorState, Spinner, formatMoney } from "@vsolve/ui";
+import { ConfirmAction, ErrorState, Spinner, cn, formatMoney } from "@vsolve/ui";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";

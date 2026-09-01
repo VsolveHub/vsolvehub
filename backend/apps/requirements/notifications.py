@@ -141,6 +141,24 @@ NOTIFICATION_ROUTES: tuple[NotificationRoute, ...] = (
         audience=Audience.PARTNER,
         partner_template="m2_invitation_received",
     ),
+    #: The fixed-visit offer — a Customer-chosen time broadcast first-accept-wins. This was the
+    #: one offer type with no consumer at all: emitted at `matching.dispatch_customer_visit_share`
+    #: and never routed, so the only Partner who saw it was one already staring at the Work list.
+    NotificationRoute(
+        event_type="m2.fixed_visit_offer.received",
+        purpose="m2.fixed_visit_offer.received",
+        audience=Audience.PARTNER,
+        partner_template="m2_fixed_visit_offer_received",
+    ),
+    #: The quote wave ran out of vendors below the Customer's promised count. Sent once per
+    #: requirement — the top-up sweep keeps retrying quietly, and a second notice would report
+    #: the same fact as fresh bad news.
+    NotificationRoute(
+        event_type="m2.quote_wave.thin_supply",
+        purpose="m2.quote_wave.thin_supply",
+        audience=Audience.CUSTOMER,
+        customer_template="m2_quote_wave_thin_supply",
+    ),
     NotificationRoute(
         event_type="m2.visit_plan.charged",
         purpose="m2.visit_plan.charged",
@@ -619,7 +637,11 @@ def _context_for_route(route: NotificationRoute, context: dict[str, Any]) -> dic
             }
         return context
 
-    if route.event_type not in ("m2.invitation.received", "m2.crew_offer.invited"):
+    if route.event_type not in (
+        "m2.invitation.received",
+        "m2.crew_offer.invited",
+        "m2.fixed_visit_offer.received",
+    ):
         return context
 
     invitation_id = context.get("invitation_id")
@@ -629,14 +651,18 @@ def _context_for_route(route: NotificationRoute, context: dict[str, Any]) -> dic
     if route.event_type == "m2.crew_offer.invited":
         # A crew offer opens on the offer screen, not the enquiry inbox: it has a two-minute
         # clock and one button, and the enquiry page would show it as a quote to write.
-        return {**context, "target_kind": "CREW_OFFER", "target_id": invitation_id}
-
-    archetype = context.get("archetype")
-    target_kind = (
-        "PROJECT_INVITATION"
-        if archetype == ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT
-        else "WORKFORCE_INVITATION"
-    )
+        target_kind = "CREW_OFFER"
+    elif route.event_type == "m2.fixed_visit_offer.received":
+        # A fixed-visit offer is answered on the enquiry screen, whose project branch renders
+        # the take-or-pass card. The id is the invitation, which is what that route is keyed by.
+        target_kind = "PROJECT_INVITATION"
+    else:
+        archetype = context.get("archetype")
+        target_kind = (
+            "PROJECT_INVITATION"
+            if archetype == ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT
+            else "WORKFORCE_INVITATION"
+        )
     return {**context, "target_kind": target_kind, "target_id": invitation_id}
 
 

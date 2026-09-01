@@ -154,8 +154,9 @@ describe("the estimate a vendor builds on one scroll", () => {
     // built by code this rewrite did not touch, from a draft this rewrite
     // produced, and it still carries the stage the vendor tapped.
     expect(request).toMatchObject({
-      invitation: "11111111-1111-1111-1111-111111111111",
-      site_visit: "22222222-2222-2222-2222-222222222222",
+      // The generated request's own key names — `_id` suffixed since 1.44.0.
+      invitation_id: "11111111-1111-1111-1111-111111111111",
+      site_visit_id: "22222222-2222-2222-2222-222222222222",
     });
   });
 

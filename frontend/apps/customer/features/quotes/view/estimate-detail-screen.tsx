@@ -2,7 +2,7 @@
 
 import { blocksNewSelection } from "@vsolve/query";
 import { Badge, Button, ErrorState, Skeleton, buttonStyles, cn } from "@vsolve/ui";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, MessageCircle } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -24,6 +24,7 @@ import { timelineLabel, validityLabel } from "./quote-card";
 import { RejectQuoteDialog } from "./reject-quote-dialog";
 import { RevisionRequestDialog } from "./revision-request-dialog";
 import { ShoppingListCard } from "./shopping-list-card";
+import { IncludedSupplyCard } from "./included-supply-card";
 import { VendorMark, VendorTrustLine } from "./vendor-trust-line";
 
 /**
@@ -247,7 +248,9 @@ export function EstimateDetailScreen({
         </Section>
       ) : null}
 
-      {!hideShoppingList ? (
+      {card.materialFulfilmentMode === "PARTNER_TURNKEY" ? (
+        <IncludedSupplyCard rows={card.includedSupplyList} />
+      ) : !hideShoppingList ? (
         <ShoppingListCard
           requirementId={requirementId}
           proposalId={proposalId}
@@ -298,7 +301,8 @@ export function EstimateDetailScreen({
 
       <div className="grid grid-cols-2 gap-2">
         <Link href={estimateQuestionsHref(requirementId, proposalId)} className={cn(buttonStyles({ variant: "outline" }), "justify-center")}>
-          💬 Ask them{openQuestions > 0 ? ` (${openQuestions} waiting)` : ""}
+          <MessageCircle className="size-4" aria-hidden />
+          Ask them{openQuestions > 0 ? ` (${openQuestions} waiting)` : ""}
         </Link>
         {card.isExpired ? (
           card.hasAskedForRevalidation ? (

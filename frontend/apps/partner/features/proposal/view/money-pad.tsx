@@ -3,7 +3,7 @@
 import { Button, cn, formatMoney } from "@vsolve/ui";
 import { useState } from "react";
 
-import { Pictogram, type PictogramName } from "@/components/pictogram";
+import { type PictogramName } from "@/components/pictogram";
 
 /**
  * A price, entered by tapping.
@@ -54,7 +54,7 @@ const MAXIMUM_RUPEES = 100_000_000;
 
 export function MoneyPad({
   title,
-  icon,
+  icon: _icon,
   amountPaise,
   onChange,
   onDone,

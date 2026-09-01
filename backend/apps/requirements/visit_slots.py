@@ -22,7 +22,7 @@ live map of their competitors' diaries.
 """
 
 from dataclasses import dataclass, replace
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from itertools import pairwise
 from typing import Any
 from uuid import UUID
@@ -76,6 +76,43 @@ def visit_duration_minutes(requirement: CustomerRequirement) -> int:
             "We have not set how long a visit takes for this service yet. Support can help.",
         )
     return int(minutes)
+
+
+def latest_visit_date(requirement: CustomerRequirement) -> date | None:
+    """The last local day a site visit can still serve this request.
+
+    Two dates cap it, and the **earlier** one wins. A visit after `requested_start` — the day the
+    work itself happens — estimates a job that can no longer be done, and no deadline extension
+    changes that: Operations moving `service_by` keeps the request alive for matching, it does not
+    move the event. A visit after `service_by` is a visit to a request the expiry sweep is about
+    to close. Preferring either date alone reopens days the other has already ruled out.
+
+    `None` when the Customer gave no date at all: no ceiling, the same honest gap the expiry
+    sweep already tolerates.
+    """
+    ceilings: list[date] = []
+    if requirement.requested_start is not None:
+        ceilings.append(timezone.localtime(requirement.requested_start).date())
+    if requirement.service_by is not None:
+        ceilings.append(requirement.service_by)
+    return min(ceilings) if ceilings else None
+
+
+def assert_visit_serves_event_date(
+    *, requirement: CustomerRequirement, starts_at: datetime
+) -> None:
+    """Refuse a visit time past the day the work is needed.
+
+    The grid already stops at the ceiling, so an ordinary client never trips this. It exists for
+    everything the grid cannot bound: a signed token issued before the deadline moved, a
+    reschedule pushing an existing visit later, an ad-hoc time typed straight into the API.
+    """
+    ceiling = latest_visit_date(requirement)
+    if ceiling is not None and timezone.localtime(starts_at).date() > ceiling:
+        raise VisitSlotUnavailableError(
+            "That time is after the date this work is needed "
+            f"({ceiling.strftime('%d %b %Y')}). Pick a visit on or before it."
+        )
 
 
 def sign_visit_slot(*, invitation_id: UUID, starts_at: datetime, duration_minutes: int) -> str:
@@ -211,6 +248,10 @@ def candidate_customer_visit_starts(*, requirement: CustomerRequirement) -> Book
             starts_at=starts_at,
             duration_minutes=duration,
         ),
+        # An event on the 5th must not offer a visit on the 6th. The grid ends at the event
+        # date rather than the fixed week, and `choose_customer_visit_slots` re-asserts the
+        # same ceiling so a stale signed token cannot slip past a shortened grid.
+        last_day=latest_visit_date(requirement),
     )
 
 
@@ -268,6 +309,8 @@ def choose_customer_visit_slots(
         raise VisitSlotUnavailableError("Choose different, non-overlapping visit times.")
     if any(choice.starts_at <= timezone.now() for choice in choices):
         raise VisitSlotUnavailableError("One of those times has passed. Refresh and choose again.")
+    for choice in choices:
+        assert_visit_serves_event_date(requirement=requirement, starts_at=choice.starts_at)
     if any(
         not _customer_choice_is_still_available(requirement=requirement, choice=choice)
         for choice in choices
@@ -312,6 +355,7 @@ def replace_customer_visit_slot(
     if share.matching_status != VisitPlanShare.MatchingStatus.NO_PROFESSIONAL_FOUND:
         raise VisitSlotUnavailableError("Only an unmatched visit time can be replaced.")
     choice = read_customer_visit_slot(slot_id=slot_id, requirement_id=requirement.id)
+    assert_visit_serves_event_date(requirement=requirement, starts_at=choice.starts_at)
     sibling_choices = [
         VisitSlotChoice(row.requested_start, int(row.duration_minutes))
         for row in share.plan.shares.exclude(pk=share.pk)
@@ -383,6 +427,9 @@ def candidate_visit_starts(*, invitation: VendorInvitation) -> BookingWindows:
             starts_at=starts_at,
             duration_minutes=duration,
         ),
+        # Same ceiling as the Customer grid: a vendor must not be offered a visit day the
+        # work itself cannot survive past.
+        last_day=latest_visit_date(requirement),
     )
     return remove_requirement_conflicts(windows=windows, requirement=requirement)
 

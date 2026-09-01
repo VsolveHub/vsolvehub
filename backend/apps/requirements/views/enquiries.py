@@ -24,7 +24,7 @@ from apps.partners.exceptions import PartnerDomainError
 from apps.partners.permissions import IsPartnerUser
 from apps.requirements import access, attachments, matching, proposals
 from apps.requirements.exceptions import RequirementDomainError, RequirementNotFoundError
-from apps.requirements.models import SiteVisit
+from apps.requirements.models import CustomerRequirement, SiteVisit
 from apps.requirements.selectors import (
     invitation_for_partner,
     partner_invitations,
@@ -224,9 +224,15 @@ class PartnerEnquiryDeclineView(ThrottledWriteMixin, APIView):
                     reason_code=serializer.validated_data["reason_code"],
                 )
                 if declined.requested_visit_share_id is not None:
-                    matching.settle_customer_visit_offer_exhaustion(
+                    matching.retry_or_settle_customer_visit_share(
                         share_id=declined.requested_visit_share_id
                     )
+                elif declined.requirement.status in CustomerRequirement.LIVE_STATUSES:
+                    # The refill every other slot release already had. Expiry replaces
+                    # one-for-one, a Customer rejection replaces one-for-one — a vendor
+                    # pressing Decline was the one exit that released the slot and told
+                    # nobody, quietly shrinking the quote count the Customer was promised.
+                    matching.invite_wave(requirement_id=declined.requirement_id, size=1)
             except RequirementDomainError as exc:
                 _raise_api_error(exc)
 

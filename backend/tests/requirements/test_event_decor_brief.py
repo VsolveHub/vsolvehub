@@ -97,6 +97,7 @@ def _decor_variant() -> ServiceVariant:
         version=1,
         status=M2VariantConfiguration.Status.ACTIVE,
         question_schema=DECOR_SCHEMA,
+        material_fulfilment_mode=M2VariantConfiguration.MaterialFulfilmentMode.PARTNER_TURNKEY,
         first_quote_sla_hours=8,
         quote_delivery_sla_hours=24,
     )

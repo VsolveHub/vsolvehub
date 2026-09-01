@@ -1,7 +1,7 @@
 import { Card, buttonStyles } from "@vsolve/ui";
 import { Headphones, Mail, MessageCircle, Phone } from "lucide-react";
 
-const PHONE = "+917330764634";
+import { PARTNER_SUPPORT_PHONE as PHONE } from "../contact";
 
 export function BookingSupport({ reference }: { readonly reference: string }) {
   const message = encodeURIComponent(`Hi VsolveHub Partner Support, I need help with job ${reference}.`);

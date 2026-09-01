@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { useRouter } from "next/navigation";
 import { describe, expect, it, vi } from "vitest";
 
@@ -95,7 +95,9 @@ describe("handing a job back", () => {
   it("requires a reason before the submit button enables", () => {
     renderVisit(confirmedVisit());
 
-    screen.getByRole("button", { name: /^Hand this job back/ }).click();
+    // fireEvent rather than a bare DOM .click(): outside act(), React never
+    // flushes the state update that expands the form.
+    fireEvent.click(screen.getByRole("button", { name: /^Hand this job back/ }));
 
     // The expanded form's submit is the exact verb — no consequence line there,
     // because the panel above it already carries the explanation.
@@ -130,7 +132,7 @@ describe("a partial completion", () => {
 
     renderVisit(visit);
 
-    screen.getByRole("button", { name: "Part done" }).click();
+    fireEvent.click(screen.getByRole("button", { name: "Part done" }));
 
     expect(screen.getByRole("textbox", { name: "What happened — Deep clean" })).toBeInTheDocument();
   });

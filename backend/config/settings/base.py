@@ -309,7 +309,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.50.0",
+    "VERSION": "1.52.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -834,6 +834,20 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.requirements.tasks.sweep_expired_invitations",
         # 2 minutes. Expiring an invitation releases a quote slot and invites a replacement, so
         # this is the sweep the delivery SLA actually depends on.
+        "schedule": 60.0 * 2,
+    },
+    "sweep-underfilled-quote-waves": {
+        "task": "apps.requirements.tasks.sweep_underfilled_quote_waves",
+        # 2 minutes, like the expiry sweep it complements. This is the safety net under the
+        # inline refills: it catches slots freed by paths with no refill of their own, and it
+        # re-reaches vendors who became eligible only after the opening wave went out.
+        "schedule": 60.0 * 2,
+    },
+    "sweep-searching-visit-shares": {
+        "task": "apps.requirements.tasks.sweep_searching_visit_shares",
+        # 2 minutes. A SEARCHING share with no live offer is a Customer watching a spinner; each
+        # tick re-dispatches to newly free Partners or settles honestly once the visit is too
+        # close to staff.
         "schedule": 60.0 * 2,
     },
     "sweep-expired-proposals": {

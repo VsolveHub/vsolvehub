@@ -239,6 +239,6 @@ export function describeDeadline(state: DeadlineState): string {
     case "closing":
       return "This is close to its deadline. Accepting now is the only way to keep the slot.";
     case "passed":
-      return "By our clock the window has closed. Vsolve decides when an enquiry actually expires, so this may still be open — re-read before assuming it is gone.";
+      return "By our clock the window has closed. Vsolve decides when an enquiry actually expires, so this may still be open — re-read before assuming anything.";
   }
 }
