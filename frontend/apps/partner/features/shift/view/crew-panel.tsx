@@ -19,6 +19,7 @@ import { useMemo, useState } from "react";
 
 import { Pictogram } from "@/components/pictogram";
 import { usePartnerCrew } from "@/features/crew/queries";
+import type { CrewMemberRecord } from "@/features/capability/adapters/wire";
 import { crewGenderLabel } from "@/features/crew/view/crew-gender";
 
 import {
@@ -99,7 +100,16 @@ export function CrewPanel({ day, scope, canAssign, bookedFor, remainingDays, onS
      Everywhere else this whole block is absent rather than rendered empty. */
   const roleOptions = day.role_fulfilment;
   const roles = roleDraft ?? assignedRoles(day);
-  const shortRoles = roleOptions.filter((row) => !row.is_met);
+  /* Recomputed against the crew being arranged, not the crew last saved.
+
+     `day.role_fulfilment` is the server's answer about what is *stored*, and the whole value of
+     showing it here is that a supervisor sees the gap before committing -- so while the selection
+     is a draft the server has never seen, the server's numbers describe a different crew. The
+     **wanted** side stays the server's, because that is a fact about the booking; only the
+     **named** side is local, because only this screen knows what is ticked. */
+  const shortRoles = previewFulfilment(roleOptions, roles, ticked, split.eligible).filter(
+    (row) => !row.is_met,
+  );
 
   return (
     <section className="flex flex-col gap-4" aria-labelledby="crew-heading">
@@ -243,7 +253,9 @@ export function CrewPanel({ day, scope, canAssign, bookedFor, remainingDays, onS
           )}
 
           <div className="flex flex-col gap-2">
-            <RoleGapNotice rows={shortRoles} />
+            {/* Only once somebody is ticked. With nothing named every role is trivially short,
+                and a warning that is red on arrival is one a supervisor learns to scroll past. */}
+            <RoleGapNotice rows={ticked.length === 0 ? [] : shortRoles} />
 
             <Button
               type="button"
@@ -414,8 +426,9 @@ function RoleGapNotice({ rows }: { readonly rows: readonly ShiftDay["role_fulfil
       <ul className="mt-1.5 flex list-none flex-col gap-1 p-0">
         {rows.map((row) => (
           <li key={row.role_code} className="text-sm leading-5 text-warning-text">
-            <span className="font-semibold">{row.role_label}</span> — asked for {row.wanted_men} men
-            and {row.wanted_women} women, named {row.named_men} and {row.named_women}. {row.gap}.
+            <span className="font-semibold">{row.role_label}</span> — asked for{" "}
+            {people(row.wanted_men, "man")} and {people(row.wanted_women, "woman")}, named{" "}
+            {row.named_men} and {row.named_women}. {row.gap}.
           </li>
         ))}
       </ul>
@@ -424,4 +437,54 @@ function RoleGapNotice({ rows }: { readonly rows: readonly ShiftDay["role_fulfil
       </p>
     </div>
   );
+}
+
+
+/** "1 man", "2 men", "0 women". Plurals the customer's own numbers earn. */
+function people(count: number, noun: "man" | "woman"): string {
+  if (count === 1) return `1 ${noun}`;
+  return `${count} ${noun === "man" ? "men" : "women"}`;
+}
+
+
+/**
+ * The server's per-role expectation, counted against the crew currently ticked.
+ *
+ * Deliberately not a second implementation of the rule: `wanted_men` / `wanted_women` and the
+ * labels come straight from the server's `role_fulfilment`, and this only recounts the half the
+ * server cannot know — who is ticked right now, and which role they have been dropped into. The
+ * moment the draft is saved the server's own numbers say the same thing.
+ */
+function previewFulfilment(
+  rows: readonly ShiftDay["role_fulfilment"][number][],
+  roles: Readonly<Record<string, string>>,
+  ticked: readonly string[],
+  roster: readonly CrewMemberRecord[],
+): readonly ShiftDay["role_fulfilment"][number][] {
+  const genderOf = new Map(roster.map((member) => [member.membership_id, member.gender]));
+
+  return rows.map((row) => {
+    let namedMen = 0;
+    let namedWomen = 0;
+    for (const membershipId of ticked) {
+      if (roles[membershipId] !== row.role_code) continue;
+      const gender = genderOf.get(membershipId);
+      if (gender === "MAN") namedMen += 1;
+      else if (gender === "WOMAN") namedWomen += 1;
+    }
+    const shortMen = Math.max(0, row.wanted_men - namedMen);
+    const shortWomen = Math.max(0, row.wanted_women - namedWomen);
+    const gap = [
+      shortMen > 0 ? people(shortMen, "man") : null,
+      shortWomen > 0 ? people(shortWomen, "woman") : null,
+    ].filter((part): part is string => part !== null);
+
+    return {
+      ...row,
+      named_men: namedMen,
+      named_women: namedWomen,
+      is_met: gap.length === 0,
+      gap: gap.length === 0 ? "" : `${gap.join(" and ")} short`,
+    };
+  });
 }
