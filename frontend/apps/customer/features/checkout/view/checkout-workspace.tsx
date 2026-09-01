@@ -2,7 +2,7 @@
 
 import type { Schemas } from "@vsolve/api-client";
 import { describeError } from "@vsolve/query";
-import { Button, Dialog, ErrorState, Skeleton, buttonStyles, useHydrated } from "@vsolve/ui";
+import { Button, ErrorState, Skeleton, buttonStyles, useHydrated } from "@vsolve/ui";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -15,6 +15,11 @@ import {
   useUpdateAddress,
 } from "@/features/booking/queries";
 import { preferredAddressId } from "@/features/addresses/queries";
+import {
+  coordsOnlyAddress,
+  getDevicePosition,
+  locateErrorMessage,
+} from "@/features/addresses/locate-device";
 import { AddressStage } from "@/features/booking/view/address-stage";
 import { useProfileCompletionGate } from "@/features/account/view/profile-completion-dialog";
 import { useCustomerSession } from "@/features/session/queries";
@@ -54,7 +59,6 @@ import { ConfirmBookingIllustration } from "./checkout-illustrations";
 import {
   CheckoutCancellationPanel,
   CheckoutCard,
-  CheckoutSectionHeading,
   SecureBookingBadge,
   checkoutCardClass,
 } from "./checkout-section";
@@ -101,8 +105,12 @@ export function CheckoutWorkspace() {
   const phoneNumber = mounted ? session.phoneNumber : null;
 
   const [addressId, setAddressId] = useState<string | null>(null);
-  /** Reopens the address picker for a row that is already filled in. */
-  const [isEditingAddress, setIsEditingAddress] = useState(false);
+  /**
+   * Incremented to open the address picker. A counter rather than a boolean:
+   * after the customer dismisses it, the same `true` cannot request a second
+   * open. See `AddressStage`'s `openSignal`.
+   */
+  const [addressOpenSignal, setAddressOpenSignal] = useState(0);
   /**
    * `null` means "nobody has decided" — the modal then follows the derived
    * default below. An explicit `true`/`false` is the customer opening or
@@ -249,25 +257,18 @@ export function CheckoutWorkspace() {
   async function locate(): Promise<Schemas["ReverseGeocodeResponse"] | null> {
     setLocationError(null);
     try {
-      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        if (typeof navigator === "undefined" || !navigator.geolocation) {
-          reject(new Error("Location permission is not available on this device."));
-          return;
-        }
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          maximumAge: 30_000,
-          timeout: 12_000,
-        });
-      });
-      return await reverseGeocode.mutateAsync({
-        latitude: position.coords.latitude.toFixed(6),
-        longitude: position.coords.longitude.toFixed(6),
-      });
-    } catch {
-      setLocationError(
-        "We could not find you. Check location permission for this site and try again.",
-      );
+      const position = await getDevicePosition();
+      const latitude = position.coords.latitude.toFixed(6);
+      const longitude = position.coords.longitude.toFixed(6);
+      try {
+        return await reverseGeocode.mutateAsync({ latitude, longitude });
+      } catch {
+        // A pin without a street is still a pin. The form opens with whatever
+        // we have so a geocoder outage does not trap the Customer on popup 1.
+        return coordsOnlyAddress(latitude, longitude);
+      }
+    } catch (error) {
+      setLocationError(locateErrorMessage(error));
       return null;
     }
   }
@@ -281,7 +282,6 @@ export function CheckoutWorkspace() {
         is_default: addresses.length === 0,
       });
       setAddressId(created.id);
-      setIsEditingAddress(false);
       setChosenStarts(new Map());
       setPlanSetId(null);
       setQuoteId(null);
@@ -308,6 +308,22 @@ export function CheckoutWorkspace() {
       longitude: resolved.longitude,
       source: "REVERSE_GEOCODED",
     });
+  }
+
+  function openAddressPicker() {
+    setAddressOpenSignal((signal) => signal + 1);
+  }
+
+  /**
+   * A different address is a different service area, so every time chosen
+   * against the old grouping is meaningless now.
+   */
+  function handleSelectAddress(address: Schemas["Address"]) {
+    setAddressId(address.id);
+    setChosenStarts(new Map());
+    setPlanSetId(null);
+    setQuoteId(null);
+    setSlotsOverride(null);
   }
 
   function handleConfirm() {
@@ -377,12 +393,9 @@ export function CheckoutWorkspace() {
                 icon={<PinIcon />}
                 label="Address"
                 isFirst={phoneNumber === null}
-                actionLabel={selectedAddress === null ? undefined : "Edit"}
-                onAction={
-                  selectedAddress === null
-                    ? undefined
-                    : () => setIsEditingAddress(true)
-                }
+                actionLabel={selectedAddress === null ? "Add address" : "Edit"}
+                actionVariant={selectedAddress === null ? "primary" : "outline"}
+                onAction={openAddressPicker}
               >
                 {selectedAddress === null ? (
                   <span>Choose where the work happens.</span>
@@ -434,7 +447,7 @@ export function CheckoutWorkspace() {
                     </p>
                     <button
                       type="button"
-                      onClick={() => setIsEditingAddress(true)}
+                      onClick={openAddressPicker}
                       className="mt-2.5 inline-flex items-center gap-1 font-bold text-action hover:underline cursor-pointer"
                     >
                       Change address &rarr;
@@ -471,109 +484,6 @@ export function CheckoutWorkspace() {
                 </Link>
               </div>
             </div>
-
-            {/* The address picker is a step until one is chosen, and opens
-              as a modal popup when the row's Edit control is clicked. */}
-            {selectedAddress === null ? (
-              <section className={`${checkoutCardClass} p-5`}>
-                <CheckoutSectionHeading
-                  number={1}
-                  title="Where should we come?"
-                />
-                <div className="mt-4">
-                  <AddressStage
-                    addresses={addresses}
-                    isLoading={addressesQuery.isPending}
-                    serviceability={serviceabilityQuery.data ?? null}
-                    isCheckingServiceability={serviceabilityQuery.isFetching}
-                    selectedAddressId={effectiveAddressId}
-                    onSelect={(address) => {
-                      setAddressId(address.id);
-                      setIsEditingAddress(false);
-                      // A different address is a different service area, so every
-                      // time chosen against the old grouping is meaningless now.
-                      setChosenStarts(new Map());
-                      setPlanSetId(null);
-                      setQuoteId(null);
-                      setSlotsOverride(null);
-                    }}
-                    onUseCurrentLocation={handleUseCurrentLocation}
-                    isUsingCurrentLocation={
-                      reverseGeocode.isPending || createAddress.isPending
-                    }
-                    locationError={locationError}
-                    onUpdateAddress={(id, patch) =>
-                      updateAddress.mutate({ addressId: id, patch })
-                    }
-                    isUpdatingAddress={updateAddress.isPending}
-                    addNew={{
-                      onLocate: locate,
-                      isLocating: reverseGeocode.isPending,
-                      locateError: locationError,
-                      onCreate: create,
-                      isCreating: createAddress.isPending,
-                      createError:
-                        createAddress.error === null
-                          ? null
-                          : describeError(createAddress.error, "mutation").message,
-                      onPostalCodeChange: setDraftPostalCode,
-                      draftServiceability: draftServiceabilityQuery.data ?? null,
-                      isCheckingDraftServiceability: draftServiceabilityQuery.isFetching,
-                    }}
-                  />
-                </div>
-              </section>
-            ) : null}
-
-            {/* Address Edit Modal Popup */}
-            <Dialog
-              open={isEditingAddress}
-              onOpenChange={setIsEditingAddress}
-              title="Select Service Address"
-            >
-              <div className="mt-2">
-                <AddressStage
-                  addresses={addresses}
-                  isLoading={addressesQuery.isPending}
-                  serviceability={serviceabilityQuery.data ?? null}
-                  isCheckingServiceability={serviceabilityQuery.isFetching}
-                  selectedAddressId={effectiveAddressId}
-                  onSelect={(address) => {
-                    setAddressId(address.id);
-                    setIsEditingAddress(false);
-                    // A different address is a different service area, so every
-                    // time chosen against the old grouping is meaningless now.
-                    setChosenStarts(new Map());
-                    setPlanSetId(null);
-                    setQuoteId(null);
-                    setSlotsOverride(null);
-                  }}
-                  onUseCurrentLocation={handleUseCurrentLocation}
-                  isUsingCurrentLocation={
-                    reverseGeocode.isPending || createAddress.isPending
-                  }
-                  locationError={locationError}
-                  onUpdateAddress={(id, patch) =>
-                    updateAddress.mutate({ addressId: id, patch })
-                  }
-                  isUpdatingAddress={updateAddress.isPending}
-                  addNew={{
-                    onLocate: locate,
-                    isLocating: reverseGeocode.isPending,
-                    locateError: locationError,
-                    onCreate: create,
-                    isCreating: createAddress.isPending,
-                    createError:
-                      createAddress.error === null
-                        ? null
-                        : describeError(createAddress.error, "mutation").message,
-                    onPostalCodeChange: setDraftPostalCode,
-                    draftServiceability: draftServiceabilityQuery.data ?? null,
-                    isCheckingDraftServiceability: draftServiceabilityQuery.isFetching,
-                  }}
-                />
-              </div>
-            </Dialog>
 
             {planFailures !== null && cart ? (
               <div className="rounded-card border border-critical-200 bg-critical-50 p-5">
@@ -670,6 +580,42 @@ export function CheckoutWorkspace() {
             </div>
           </aside>
         </div>
+
+        {/* Behind the Address row's Add address / Edit control. Hidden as a
+            page block: `presentation="none"` draws only the dialog. */}
+        <AddressStage
+          presentation="none"
+          openSignal={addressOpenSignal}
+          addresses={addresses}
+          isLoading={addressesQuery.isPending}
+          serviceability={null}
+          isCheckingServiceability={false}
+          selectedAddressId={effectiveAddressId}
+          onSelect={handleSelectAddress}
+          onUseCurrentLocation={handleUseCurrentLocation}
+          isUsingCurrentLocation={
+            reverseGeocode.isPending || createAddress.isPending
+          }
+          locationError={locationError}
+          onUpdateAddress={(id, patch) =>
+            updateAddress.mutate({ addressId: id, patch })
+          }
+          isUpdatingAddress={updateAddress.isPending}
+          addNew={{
+            onLocate: locate,
+            isLocating: reverseGeocode.isPending,
+            locateError: locationError,
+            onCreate: create,
+            isCreating: createAddress.isPending,
+            createError:
+              createAddress.error === null
+                ? null
+                : describeError(createAddress.error, "mutation").message,
+            onPostalCodeChange: setDraftPostalCode,
+            draftServiceability: draftServiceabilityQuery.data ?? null,
+            isCheckingDraftServiceability: draftServiceabilityQuery.isFetching,
+          }}
+        />
 
         <SlotsModal
           open={slotsOpen}

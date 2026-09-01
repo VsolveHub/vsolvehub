@@ -3,15 +3,19 @@ import { describe, expect, it } from "vitest";
 import type { RequirementQuestionView } from "@/features/requirement/adapters";
 import {
   applyServingSuggestion,
+  crewGenderTotals,
   crewMixLabel,
+  genderMixPhrase,
   hiddenEventQuestionCodes,
   isEventCrewFlow,
   occasionQuestions,
   presentationQuestions,
   roleQuestions,
+  splitByGender,
   suggestedServers,
   syncHeadcount,
   withRoleCount,
+  withRoleGenderCount,
 } from "./event-flow";
 
 const questions: readonly RequirementQuestionView[] = [
@@ -105,6 +109,25 @@ describe("event crew flow", () => {
     expect(answers.worker_count).toBe(7);
     // No suggestion, no change.
     expect(applyServingSuggestion(answers, roles, null, 3).waiter_count).toBe(7);
+  });
+
+  it("splits a serving suggestion across men and women, and totals them", () => {
+    expect(splitByGender(3)).toEqual({ men: 2, women: 1 });
+    expect(splitByGender(5)).toEqual({ men: 3, women: 2 });
+    expect(genderMixPhrase(2, 1)).toBe("2 men · 1 woman");
+    expect(genderMixPhrase(1, 0)).toBe("1 man · 0 women");
+
+    const roles = roleQuestions(questions);
+    const answers = applyServingSuggestion({ duration_days: 1 }, roles, 3, null);
+    expect(answers.waiter_count).toBe(3);
+    expect(answers.waiter_count__men).toBe(2);
+    expect(answers.waiter_count__women).toBe(1);
+    expect(crewGenderTotals(roles, answers)).toEqual({ men: 2, women: 1, people: 3 });
+
+    const adjusted = withRoleGenderCount(answers, roles, "waiter_count", "women", 2);
+    expect(adjusted.waiter_count).toBe(4);
+    expect(adjusted.worker_count).toBe(4);
+    expect(crewGenderTotals(roles, adjusted)).toEqual({ men: 2, women: 2, people: 4 });
   });
 
   it("suggests a serving headcount from the crowd and the service style, and nothing otherwise", () => {

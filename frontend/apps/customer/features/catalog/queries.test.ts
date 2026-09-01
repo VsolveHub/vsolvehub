@@ -46,6 +46,21 @@ describe("getCategories", () => {
     await expect(getCategories()).resolves.toEqual([]);
   });
 
+  it("retries a refused connection then returns categories", async () => {
+    let calls = 0;
+    server.use(
+      http.get(`${API}/api/v1/categories/`, () => {
+        calls += 1;
+        if (calls === 1) return HttpResponse.error();
+        return HttpResponse.json([fixtures.category()]);
+      }),
+    );
+
+    const categories = await getCategories();
+    expect(categories).toHaveLength(1);
+    expect(calls).toBe(2);
+  });
+
   it("throws when the API is unreachable, so error.tsx handles it", async () => {
     server.use(http.get(`${API}/api/v1/categories/`, () => HttpResponse.error()));
 

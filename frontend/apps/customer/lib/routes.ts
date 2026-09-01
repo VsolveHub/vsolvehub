@@ -81,6 +81,23 @@ export function visitHref(requirementId: string, siteVisitId: string): string {
   return `/requests/${requirementId}/visits/${siteVisitId}`;
 }
 
+/** One Booking Group — the customer's multi-visit checkout record. */
+export function bookingGroupHref(groupId: string): string {
+  return `/bookings/${groupId}`;
+}
+
+/**
+ * One visit inside a Booking Group.
+ *
+ * Nested under the group because that is the customer's mental model — "my
+ * booking, the second visit" — and because the back link has somewhere honest
+ * to go. The booking id alone is enough for Django; the group id is for
+ * navigation and for reading sibling-unit context on the detail screen.
+ */
+export function bookingVisitHref(groupId: string, bookingId: string): string {
+  return `${bookingGroupHref(groupId)}/visits/${bookingId}`;
+}
+
 /** The Customer's list of requests. Where a failed record read falls back to. */
 export const REQUESTS_HREF = "/requests";
 

@@ -543,15 +543,15 @@ describe("BookCrewScreen for event staff", () => {
     fireEvent.click(screen.getByRole("radio", { name: /^Buffet/ }));
     fireEvent.click(screen.getByRole("button", { name: "Continue to Crew" }));
     // 40 guests at a buffet: one serving person. The customer wants three.
-    expect(screen.getByText(/1 person × 1 day/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "More waiters and serving staff" }));
-    fireEvent.click(screen.getByRole("button", { name: "More waiters and serving staff" }));
+    expect(screen.getByText(/1 person · 1 man · 0 women/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "More men for waiters and serving staff" }));
+    fireEvent.click(screen.getByRole("button", { name: "More men for waiters and serving staff" }));
 
     // A bigger crowd would suggest five — but three was theirs, and it stays.
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
     fireEvent.click(screen.getByRole("radio", { name: "100 to 200" }));
     fireEvent.click(screen.getByRole("button", { name: "Continue to Crew" }));
-    expect(screen.getByText(/3 people × 1 day/)).toBeInTheDocument();
+    expect(screen.getByText(/3 people · 3 men · 0 women/)).toBeInTheDocument();
   });
 
   it("prices the sum of the roles, and saves the roles beside the headcount", async () => {
@@ -567,12 +567,12 @@ describe("BookCrewScreen for event staff", () => {
     // 150 guests at a buffet starts the crew with five serving staff, already
     // on the roster rather than in a sentence. The customer adjusts from there.
     expect(screen.getByText(/we have started you with/)).toBeInTheDocument();
-    expect(screen.getByText(/5 people × 1 day/)).toBeInTheDocument();
+    expect(screen.getByText(/5 people · 3 men · 2 women/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "More waiters and serving staff" }));
-    fireEvent.click(screen.getByRole("button", { name: "More bar and beverage staff" }));
-    fireEvent.click(screen.getByRole("button", { name: "More bar and beverage staff" }));
-    expect(screen.getByText(/8 people × 1 day/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "More men for waiters and serving staff" }));
+    fireEvent.click(screen.getByRole("button", { name: "More men for bar and beverage staff" }));
+    fireEvent.click(screen.getByRole("button", { name: "More men for bar and beverage staff" }));
+    expect(screen.getByText(/8 people · 6 men · 2 women/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Continue to Date & Venue" }));
     await chooseAddress();

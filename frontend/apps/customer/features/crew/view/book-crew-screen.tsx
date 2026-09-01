@@ -68,8 +68,10 @@ import {
   STAFF_MEAL_CODE,
   STAFF_PREFERENCE_CODE,
   applyServingSuggestion,
+  crewGenderTotals,
   crewMix,
   crewMixLabel,
+  genderMixPhrase,
   hiddenEventQuestionCodes,
   occasionQuestions,
   presentationQuestions,
@@ -78,6 +80,7 @@ import {
   suggestedServers,
   syncHeadcount,
   withRoleCount,
+  withRoleGenderCount,
 } from "../model/event-flow";
 import {
   combineStart,
@@ -275,6 +278,7 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
   const presentation = useMemo(() => presentationQuestions(questions), [questions]);
   const daysQuestion = questions.find((question) => question.code === DURATION_CODE) ?? null;
   const crewTotal = roleTotal(roles, answers);
+  const crewGenders = crewGenderTotals(roles, answers);
   const suggestion = isEvent
     ? suggestedServers(answers[GUEST_BAND_CODE], answers[SERVICE_STYLE_CODE])
     : null;
@@ -282,6 +286,7 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
   const guestBandLabel = optionLabel(occasion, GUEST_BAND_CODE, answers);
   const serviceStyleLabel = optionLabel(occasion, SERVICE_STYLE_CODE, answers);
   const mixLabel = crewMixLabel(roles, answers);
+  const mix = crewMix(roles, answers);
 
   const localIntentRestored = useRef(false);
   const restoredServerDraftId = useRef<string | null>(null);
@@ -458,6 +463,10 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
 
   async function handleShowRate() {
     if ((await saveCrewDraft()) !== null) setBookingStep("rate");
+  }
+
+  function handleRoleGender(code: string, gender: "men" | "women", value: number) {
+    setAnswers((current) => withRoleGenderCount(current, roles, code, gender, value));
   }
 
   function handleAnswer(code: string, value: unknown) {
@@ -641,12 +650,14 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
         roles={roles}
         daysQuestion={daysQuestion}
         answers={answers}
-        onRoleCount={handleAnswer}
+        onRoleGender={handleRoleGender}
         onDays={(value) => handleAnswer(DURATION_CODE, value)}
         suggestion={suggestion}
         suggestionBasis={joinPresent([guestBandLabel === null ? null : `a ${guestBandLabel.toLowerCase()} guest`, serviceStyleLabel?.toLowerCase() ?? null], " ")}
-        total={crewTotal}
-        onContinue={() => setBookingStep("details")}
+        onContinue={() => {
+          setEventStep("schedule_venue");
+          setBookingStep("details");
+        }}
         onBack={() => setBookingStep("occasion")}
       />
     );
@@ -797,7 +808,7 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
       ) : null}
 
       {isEvent && planning ? (
-        <div className="grid items-start gap-7 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="grid items-start gap-7 lg:grid-cols-[minmax(0,1.85fr)_minmax(280px,1fr)]">
           <div className="flex flex-col gap-6">
             {eventStep === "occasion" ? (
               <section className="crew-stage-enter rounded-[24px] border border-line bg-surface p-6 shadow-sm sm:p-8">
@@ -830,13 +841,13 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
                 <SectionLabel
                   number="2"
                   title="How much help do you need?"
-                  caption="Set the crew by role, and how many days"
+                  caption="Set the crew by role, and how many men and women"
                 />
                 <CrewComposer
                   roles={roles}
                   daysQuestion={daysQuestion}
                   answers={answers}
-                  onRoleCount={handleAnswer}
+                  onRoleGender={handleRoleGender}
                   onDays={(value) => handleAnswer(DURATION_CODE, value)}
                   suggestion={suggestion}
                   suggestionBasis={joinPresent(
@@ -846,7 +857,6 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
                     ],
                     " ",
                   )}
-                  total={crewTotal}
                   wide
                 />
 
@@ -860,7 +870,6 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
                   </Button>
                   <Button
                     size="lg"
-                    disabled={!isCrewValid}
                     onClick={() => setEventStep("schedule_venue")}
                     className="min-w-44"
                   >
@@ -966,7 +975,7 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
             ) : null}
           </div>
 
-          <aside className="sticky top-6 rounded-[24px] bg-navy-900 p-6 text-white shadow-raised">
+          <aside className="sticky top-24 rounded-[24px] bg-navy-900 p-6 text-white shadow-raised">
             <div className="flex items-center justify-between">
               <p className="text-xs font-bold uppercase tracking-[0.14em] text-signal-300">
                 Event plan
@@ -980,6 +989,8 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
             <CrewConstellation
               count={crewTotal}
               days={size?.days ?? 1}
+              men={crewGenders.men}
+              women={crewGenders.women}
               compact
             />
 
@@ -997,7 +1008,23 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
                 label="Style"
                 value={serviceStyleLabel ?? "Choose food style"}
               />
-              <PlanLine label="Crew" value={mixLabel ?? "Add people"} />
+              {mix.length > 0 ? (
+                <div className="py-3">
+                  <p className="text-white/55">Crew breakdown</p>
+                  <ul className="mt-2 flex flex-col gap-1.5">
+                    {mix.map((line) => (
+                      <li key={line.code} className="flex items-start justify-between gap-3 text-sm">
+                        <span className="min-w-0 text-white/80">{line.label}</span>
+                        <span className="shrink-0 text-right font-semibold tabular-nums text-white">
+                          {genderMixPhrase(line.men, line.women)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <PlanLine label="Crew" value="Add people" />
+              )}
               <PlanLine label="Reports" value={whenLine ?? "Choose date and time"} />
               <PlanLine label="Venue" value={siteLine ?? "Add an address"} />
               <PlanLine
@@ -1397,12 +1424,24 @@ function SectionLabel({
 }
 
 /** The signature roster: it grows as the Customer adds people. */
-function CrewConstellation({ count, days, compact = false }: { count: number; days: number; compact?: boolean }) {
-  const visible = Math.min(Math.max(count, 1), 6);
+function CrewConstellation({
+  count,
+  days: _days,
+  men = 0,
+  women = 0,
+  compact = false,
+}: {
+  count: number;
+  days: number;
+  men?: number;
+  women?: number;
+  compact?: boolean;
+}) {
+  const visible = Math.min(Math.max(count, 1), 3);
   const empty = count < 1;
   return (
     <figure className={cn("group rounded-[22px] border border-white/10 bg-white/[0.07] backdrop-blur-sm", compact ? "mt-4 p-4" : "p-5")}>
-      <div className={cn("flex items-end justify-center gap-2", compact ? "min-h-20" : "min-h-28", empty && "opacity-40")} aria-hidden>
+      <div className={cn("flex items-end justify-center gap-3", compact ? "min-h-16" : "min-h-28", empty && "opacity-40")} aria-hidden>
         {Array.from({ length: visible }, (_, index) => (
           <span
             key={index}
@@ -1414,12 +1453,12 @@ function CrewConstellation({ count, days, compact = false }: { count: number; da
           </span>
         ))}
       </div>
-      <figcaption className="mt-4 flex items-baseline justify-between border-t border-white/10 pt-4">
+      <figcaption className="mt-4 flex items-baseline justify-between gap-3 border-t border-white/10 pt-4">
         <span className="text-sm text-white/65">Crew plan</span>
-        <strong className="text-lg tabular-nums text-white">
+        <strong className="text-right text-lg tabular-nums text-white">
           {empty
             ? "Nobody yet"
-            : `${count} ${count === 1 ? "person" : "people"} × ${days} ${days === 1 ? "day" : "days"}`}
+            : `${count} ${count === 1 ? "person" : "people"} · ${men} ${men === 1 ? "man" : "men"} · ${women} ${women === 1 ? "woman" : "women"}`}
         </strong>
       </figcaption>
     </figure>

@@ -22,6 +22,7 @@ import {
 } from "./tile-desktop-rating";
 import { TileCatalogAddButton } from "./tile-catalog-add-button";
 import { TileServiceDetailPanel } from "./tile-service-detail-panel";
+import { TileDesktopSeeAllModal } from "./tile-desktop-see-all-modal";
 
 type DesktopTile = {
   slug: string;
@@ -170,6 +171,7 @@ export function TileDesktopSplitPane({
   activeTile: DesktopTile;
 }) {
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
+  const [seeAllOpen, setSeeAllOpen] = useState(false);
   // Reset the detail pane when you switch tiles, during render rather than in an
   // effect: an effect would paint the previous tile's service for one frame
   // before clearing it. See https://react.dev/learn/you-might-not-need-an-effect
@@ -270,13 +272,14 @@ export function TileDesktopSplitPane({
             </ul>
           </section>
           {showSeeAll ? (
-            <Link
-              href={`/catalog/${category.slug}`}
-              className="mt-4 flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-navy-900 bg-white text-[13px] font-bold text-navy-900 transition-colors hover:bg-[#FAF9F7]"
+            <button
+              type="button"
+              onClick={() => setSeeAllOpen(true)}
+              className="mt-4 flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-navy-900 bg-white text-[13px] font-bold text-navy-900 transition-colors hover:bg-[#FAF9F7] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
             >
               See all services
               <span aria-hidden>→</span>
-            </Link>
+            </button>
           ) : null}
         </div>
         <div className="shrink-0 p-4 pt-2">
@@ -392,6 +395,13 @@ export function TileDesktopSplitPane({
           ) : null}
         </div>
       </div>
+
+      <TileDesktopSeeAllModal
+        open={seeAllOpen}
+        onOpenChange={setSeeAllOpen}
+        category={category}
+        tiles={tiles}
+      />
     </div>
   );
 }

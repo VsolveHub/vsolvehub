@@ -84,11 +84,90 @@ function countOf(value: unknown): number {
   return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : 0;
 }
 
+/** A sane ceiling for one gender stepper so a stuck plus-button cannot run away. */
+export const ROLE_COUNT_CAP = 50;
+
+export type CrewGender = "men" | "women";
+
+export function roleGenderKey(roleCode: string, gender: CrewGender): string {
+  return `${roleCode}__${gender}`;
+}
+
+/**
+ * How a suggested serving total is split across the two steppers.
+ *
+ * About two-thirds men: three serving staff open as 2 men and 1 woman, which is
+ * the mix the brief shows. The customer can change either number afterwards.
+ */
+export function splitByGender(total: number): { men: number; women: number } {
+  const n = Math.max(0, total);
+  const men = Math.round(n * (2 / 3));
+  return { men, women: n - men };
+}
+
+export function roleGenderCount(
+  answers: Readonly<Record<string, unknown>>,
+  roleCode: string,
+  gender: CrewGender,
+): number {
+  return countOf(answers[roleGenderKey(roleCode, gender)]);
+}
+
+/**
+ * People in one role: men + women when that split exists, otherwise the
+ * catalogue's single count (restored drafts from before the split).
+ */
+export function rolePeopleCount(
+  answers: Readonly<Record<string, unknown>>,
+  roleCode: string,
+): number {
+  const men = answers[roleGenderKey(roleCode, "men")];
+  const women = answers[roleGenderKey(roleCode, "women")];
+  if (typeof men === "number" || typeof women === "number") {
+    return countOf(men) + countOf(women);
+  }
+  return countOf(answers[roleCode]);
+}
+
 export function roleTotal(
   roles: readonly RequirementQuestionView[],
   answers: Readonly<Record<string, unknown>>,
 ): number {
-  return roles.reduce((total, role) => total + countOf(answers[role.code]), 0);
+  return roles.reduce((total, role) => total + rolePeopleCount(answers, role.code), 0);
+}
+
+export function crewGenderTotals(
+  roles: readonly RequirementQuestionView[],
+  answers: Readonly<Record<string, unknown>>,
+): { men: number; women: number; people: number } {
+  let men = 0;
+  let women = 0;
+  for (const role of roles) {
+    men += roleGenderCount(answers, role.code, "men");
+    women += roleGenderCount(answers, role.code, "women");
+  }
+  const people = roleTotal(roles, answers);
+  if (men + women === 0 && people > 0) {
+    return { men: people, women: 0, people };
+  }
+  return { men, women, people };
+}
+
+function writeRolePeople(
+  answers: Readonly<Record<string, unknown>>,
+  roles: readonly RequirementQuestionView[],
+  code: string,
+  men: number,
+  women: number,
+): Record<string, unknown> {
+  const next: Record<string, unknown> = {
+    ...answers,
+    [roleGenderKey(code, "men")]: men,
+    [roleGenderKey(code, "women")]: women,
+    [code]: men + women,
+  };
+  next[HEADCOUNT_CODE] = roleTotal(roles, next);
+  return next;
 }
 
 /**
@@ -97,6 +176,9 @@ export function roleTotal(
  * `worker_count` is what `rate_cards.preset_size`, matching and the shift-day
  * engine read, so it must always equal the roles the customer actually chose —
  * a stale headcount would price one crew and dispatch another.
+ *
+ * A single-number write puts everyone on the men stepper so older callers that
+ * do not know the split still produce a consistent roster.
  */
 export function withRoleCount(
   answers: Readonly<Record<string, unknown>>,
@@ -104,9 +186,27 @@ export function withRoleCount(
   code: string,
   value: number,
 ): Record<string, unknown> {
-  const next: Record<string, unknown> = { ...answers, [code]: Math.max(0, value) };
-  next[HEADCOUNT_CODE] = roleTotal(roles, next);
-  return next;
+  const n = Math.max(0, value);
+  return writeRolePeople(answers, roles, code, n, 0);
+}
+
+export function withRoleGenderCount(
+  answers: Readonly<Record<string, unknown>>,
+  roles: readonly RequirementQuestionView[],
+  code: string,
+  gender: CrewGender,
+  value: number,
+): Record<string, unknown> {
+  const capped = Math.min(ROLE_COUNT_CAP, Math.max(0, value));
+  const other: CrewGender = gender === "men" ? "women" : "men";
+  const otherCount = roleGenderCount(answers, code, other);
+  return writeRolePeople(
+    answers,
+    roles,
+    code,
+    gender === "men" ? capped : otherCount,
+    gender === "women" ? capped : otherCount,
+  );
 }
 
 /** The headcount re-derived from the roles, for answers restored from storage. */
@@ -114,7 +214,24 @@ export function syncHeadcount(
   answers: Readonly<Record<string, unknown>>,
   roles: readonly RequirementQuestionView[],
 ): Record<string, unknown> {
-  return { ...answers, [HEADCOUNT_CODE]: roleTotal(roles, answers) };
+  let next: Record<string, unknown> = { ...answers };
+  for (const role of roles) {
+    const menKey = roleGenderKey(role.code, "men");
+    const womenKey = roleGenderKey(role.code, "women");
+    if (typeof next[menKey] === "number" || typeof next[womenKey] === "number") {
+      next = writeRolePeople(
+        next,
+        roles,
+        role.code,
+        countOf(next[menKey]),
+        countOf(next[womenKey]),
+      );
+    } else {
+      next = writeRolePeople(next, roles, role.code, countOf(next[role.code]), 0);
+    }
+  }
+  next[HEADCOUNT_CODE] = roleTotal(roles, next);
+  return next;
 }
 
 /** The free-text follow-up is visible only behind the catalogue's `other` occasion. */
@@ -128,6 +245,12 @@ export interface CrewMixLine {
   code: string;
   label: string;
   count: number;
+  men: number;
+  women: number;
+}
+
+export function genderMixPhrase(men: number, women: number): string {
+  return `${men} ${men === 1 ? "man" : "men"} · ${women} ${women === 1 ? "woman" : "women"}`;
 }
 
 /** The chosen roles with a count, in the catalogue's order. */
@@ -136,7 +259,12 @@ export function crewMix(
   answers: Readonly<Record<string, unknown>>,
 ): readonly CrewMixLine[] {
   return roles
-    .map((role) => ({ code: role.code, label: role.label, count: countOf(answers[role.code]) }))
+    .map((role) => {
+      const men = roleGenderCount(answers, role.code, "men");
+      const women = roleGenderCount(answers, role.code, "women");
+      const count = rolePeopleCount(answers, role.code);
+      return { code: role.code, label: role.label, count, men, women };
+    })
     .filter((line) => line.count > 0);
 }
 
@@ -200,8 +328,9 @@ export function applyServingSuggestion(
 ): Record<string, unknown> {
   if (suggestion === null) return { ...answers };
   if (!roles.some((role) => role.code === SERVING_ROLE_CODE)) return { ...answers };
-  const current = countOf(answers[SERVING_ROLE_CODE]);
+  const current = rolePeopleCount(answers, SERVING_ROLE_CODE);
   const untouched = current === 0 || current === previousSuggestion;
   if (!untouched) return { ...answers };
-  return withRoleCount(answers, roles, SERVING_ROLE_CODE, suggestion);
+  const { men, women } = splitByGender(suggestion);
+  return writeRolePeople(answers, roles, SERVING_ROLE_CODE, men, women);
 }

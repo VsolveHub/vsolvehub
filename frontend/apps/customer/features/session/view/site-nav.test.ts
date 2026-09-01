@@ -29,6 +29,7 @@ describe("isCurrentTarget", () => {
       "/bookings",
       "/bookings/abc/pay",
       "/bookings/abc/receipt",
+      "/bookings/abc/visits/def",
       "/bookings/workforce",
       "/requests",
       "/requests/abc",

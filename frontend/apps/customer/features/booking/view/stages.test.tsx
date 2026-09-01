@@ -201,9 +201,8 @@ describe("address stage", () => {
 /**
  * The add-new mode, which exists only when a caller supplies `addNew`.
  *
- * The checkout workspace deliberately does not, so these also document the
- * boundary: the same dialog, one more door, and nothing changes for the caller
- * that has not opened it.
+ * Locating lives on the picker: **Use my location** fills the form, **Add a new
+ * address** opens it blank. The form itself has no pin control.
  */
 function AddNewHarness({
   onCreate = () => Promise.resolve(ADDRESS),
@@ -221,10 +220,12 @@ function AddNewHarness({
       provider: "test",
     } as Schemas["ReverseGeocodeResponse"]),
   createError = null,
+  locateError = null,
 }: {
   onCreate?: (draft: Schemas["AddressRequest"]) => Promise<Schemas["Address"] | null>;
   onLocate?: () => Promise<Schemas["ReverseGeocodeResponse"] | null>;
   createError?: string | null;
+  locateError?: string | null;
 }) {
   const { state, dispatch } = useWorkspace();
 
@@ -253,7 +254,7 @@ function AddNewHarness({
       addNew={{
         onLocate,
         isLocating: false,
-        locateError: null,
+        locateError,
         onCreate,
         isCreating: false,
         createError,
@@ -274,11 +275,23 @@ describe("address stage — adding a new address", () => {
     fireEvent.click(screen.getByRole("button", { name: /add a new address/i }));
 
     // `latitude`/`longitude` are required on `AddressRequest` and there is no
-    // forward geocoder, so the pin is a real precondition — and it is stated up
-    // front rather than sprung as a validation message on submit.
-    expect(screen.getByText(/pin the location first/i)).toBeInTheDocument();
+    // forward geocoder. The pin is taken on the picker, so a blank form cannot
+    // save — and the message says to go back rather than pretending typing is
+    // enough.
     fireEvent.submit(screen.getByRole("dialog").querySelector("#address-add-form")!);
     expect(onCreate).not.toHaveBeenCalled();
+    expect(screen.getByText(/go back and tap use my location/i)).toBeInTheDocument();
+  });
+
+  it("opens a blank form from add a new address, without the location banner", () => {
+    renderInWorkspace(<AddNewHarness />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Add address" }));
+    fireEvent.click(screen.getByRole("button", { name: /add a new address/i }));
+
+    expect(screen.queryByText(/location pinned/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/pin the location first/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/flat, plot or building/i)).toHaveValue("");
   });
 
   it("fills the form from the device and lets the customer correct it", async () => {
@@ -286,13 +299,14 @@ describe("address stage — adding a new address", () => {
     renderInWorkspace(<AddNewHarness onCreate={onCreate} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Add address" }));
-    fireEvent.click(screen.getByRole("button", { name: /add a new address/i }));
     fireEvent.click(screen.getByRole("button", { name: /use my location/i }));
 
     expect(await screen.findByText(/location pinned/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/flat, plot or building/i)).toHaveValue("Flat 402");
+    expect(screen.getByText(/add your flat or building number/i)).toBeInTheDocument();
+    // GPS cannot resolve a unit number, so the flat is left for them.
+    expect(screen.getByLabelText(/flat, plot or building/i)).toHaveValue("");
+    expect(screen.getByLabelText(/street, area/i)).toHaveValue("Kukatpally");
 
-    // The correction that the old save-immediately flow made impossible.
     fireEvent.change(screen.getByLabelText(/flat, plot or building/i), {
       target: { value: "Flat 903, B block" },
     });
@@ -320,6 +334,18 @@ describe("address stage — adding a new address", () => {
     expect(within(dialog).getByText(/that pincode is not valid/i)).toBeInTheDocument();
     // And the close affordance is never taken away, including mid-request.
     expect(within(dialog).getByRole("button", { name: /close/i })).toBeEnabled();
+  });
+
+  it("shows a locate failure on the picker so the customer can retry or type", () => {
+    renderInWorkspace(
+      <AddNewHarness locateError="Couldn't get your location. Add the address manually instead." />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Add address" }));
+
+    expect(screen.getByText(/couldn't get your location/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /use my location/i })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /add a new address/i })).toBeEnabled();
   });
 });
 
