@@ -131,13 +131,109 @@ Single task; do not jump to wallet/coin models.
 
 ## Phase D — Rental, Stay, Jobs
 
-*Plan doc `03-rental-stay-jobs-categories.md` not written yet.*
+**Design authority:** [03-rental-stay-jobs-categories.md](03-rental-stay-jobs-categories.md)
 
-- [ ] `M3-BE-301` Rental engine (inventory, calendar, deposits)
-- [ ] `M3-BE-302` Stay engine (listings, enquiry inbox)
-- [ ] `M3-BE-303` Careers engine (post/apply board)
-- [ ] `M3-FE-301` Customer + Partner + Operations surfaces for each
-- [ ] `M3-BE-304` Coins/wallet/referral work on new category checkouts
+### D0 — Foundation (ADR, contract proposals, shared schema)
+
+- [ ] `M3-BE-301` ADR-0011: A7/A9/A10 archetype engines — allocation pattern, deposit sub-lifecycle, asset/unit exclusion-constraint scoping
+- [ ] `M3-BE-302` Contract proposals: A7 rental, A9 stay, A10 listing (three files)
+- [ ] `M3-BE-303` `ServiceVariant.BookingArchetype` gains `A7_RENTAL`, `A9_STAY`, `A10_LISTING`; migration + inactive seed categories
+- [ ] `M3-BE-304` **[reserved]** Coins/wallet/referral checkout-split integration point for new-category checkouts — this wave only reserves the `PaymentAttempt.Purpose` values; implemented in D4 once Phase C Wave C3 lands
+- [ ] `M3-BE-305` `PartnerLedgerEntry` extension: nullable `rental_booking`/`stay_reservation` FKs + constraint widening
+- [ ] `M3-BE-306` `OperationsCase.case_type` new values (rental/stay/listing case types)
+
+**Exit gate:** ADR merged, proposals reviewed, migrations apply cleanly with no drift.
+
+### D1 — A7 rental engine
+
+- [ ] `M3-BE-311` Models: `RentalAsset`, `RentalMaintenancePeriod`, `A7VariantConfiguration`
+- [ ] `M3-BE-312` `AssetReservation` + `ExclusionConstraint` (serialized-asset path)
+- [ ] `M3-BE-313` Fungible pooled-asset capacity path (`select_for_update` + quantity check)
+- [ ] `M3-BE-314` `RentalBooking`, `RentalBookingLine` + status machine
+- [ ] `M3-BE-315` `RentalDeposit`, `RentalDepositTransaction` + status machine
+- [ ] `M3-BE-316` `RentalHandover`, `RentalReturnInspection` (evidence-required)
+- [ ] `M3-BE-317` `RentalExtension` command + conflict detection
+- [ ] `M3-BE-318` Settlement matrix (auto-approval tiers + Operations-required tier)
+- [ ] `M3-BE-319` `RentalPaymentAllocation` + checkout-free `PaymentAttempt.Purpose` values
+- [ ] `M3-BE-320` Availability selector (asset calendar grid)
+- [ ] `M3-BE-321` Operations commands: reassign asset, resolve deposit dispute, damage settlement override
+- [ ] `M3-BE-322` Expiry sweeps: `AssetReservation` TENTATIVE expiry, maintenance-driven auto-block
+- [ ] `M3-BE-323` PartnerCapability onboarding path for rental vendors
+- [ ] `M3-BE-324` `RentalListingGroup` browse/search selector — query-time rollup over `RentalAsset` with `quantity_available` (design doc §4.1a, §11)
+- [ ] `M3-BE-325` Customer-facing vendor-list endpoint for a selected product type — product-type-first, then owner-list browse (design doc §4.1a)
+- [ ] `M3-FE-311` Partner Assets/Bookings/Money workspace
+- [ ] `M3-FE-312` Customer rental browse/checkout/active-rental tracking
+- [ ] `M3-FE-313` Product-type browse -> vendor-list -> listing-group card UI, including de-duplicated quantity display (design doc §4.1a)
+
+**Exit gate:** `M3-A7-01` through `M3-A7-17` (see plan doc §12.1) pass on staging.
+
+### D2 — A9 stay engine
+
+- [ ] `M3-BE-331` Models: `Property`, `Unit`, `UnitPricingRule`, `UnitPricingOverride`, `PropertyPolicy`, `A9VariantConfiguration`
+- [ ] `M3-BE-332` `UnitReservation` + `ExclusionConstraint`
+- [ ] `M3-BE-333` `StayReservation`, `StayReservationLine` + status machine
+- [ ] `M3-BE-334` `StayDeposit`, `StayDepositTransaction` + status machine
+- [ ] `M3-BE-335` `StayCheckIn`, `StayCheckOut`, ID-verification recording
+- [ ] `M3-BE-336` `StayExtension` / late-checkout command
+- [ ] `M3-BE-337` Early-checkout settlement + cancellation-policy-band refund calculation
+- [ ] `M3-BE-338` `StayPaymentAllocation` + checkout-free `PaymentAttempt.Purpose` values
+- [ ] `M3-BE-339` Availability/search selector
+- [ ] `M3-BE-340` Operations commands: reassign unit, resolve deposit dispute
+- [ ] `M3-BE-341` Expiry sweeps + no-show grace-period sweep
+- [ ] `M3-BE-342` PartnerCapability onboarding path for property hosts
+- [ ] `M3-BE-343` `UnitType` model + migration; `UnitPricingRule`/`UnitPricingOverride` retargeted to `unit_type` with `duration_mode` (design doc §5.1a, §5.3, §11)
+- [ ] `M3-BE-344` Property-first and filter-first browse selectors over `UnitType`, reusing `ServiceQuestion`/`ServiceQuestionOption` for filter options (design doc §5.1a)
+- [ ] `M3-BE-345` `host_reassign_unit` command: re-checks the `UnitReservation` exclusion constraint against the candidate `Unit`, rejects if unavailable (design doc §5.1a, §8.2)
+- [ ] `M3-FE-321` Partner Properties/Reservations/Money workspace
+- [ ] `M3-FE-322` Customer stay search/checkout/active-reservation tracking, including property-first and filter-first entry points and de-duplicated `UnitType` cards
+- [ ] `M3-FE-323` Reassign-unit action on the Partner Reservations screen (design doc §5.7)
+
+**Exit gate:** `M3-A9-01` through `M3-A9-14` (see plan doc §12.2) pass on staging.
+
+### D3 — A10 listing engine
+
+- [ ] `M3-BE-351` Models: `Listing`, `ListingMedia`, `ListingModerationEvent`, `ListingReport`, `A10VariantConfiguration`
+- [ ] `M3-BE-352` Listing lifecycle commands + moderation workflow
+- [ ] `M3-BE-353` Models: `Application`, `ApplicationAttachment`, `ApplicationStatusEvent`, `ApplicationReport`
+- [ ] `M3-BE-354` Application lifecycle commands + duplicate/rate-limit guards
+- [ ] `M3-BE-355` Contact-reveal command + rate limiting
+- [ ] `M3-BE-356` Search/filter selector over `structured_fields`
+- [ ] `M3-BE-357` `VendorSubscriptionPlan`, `VendorSubscription` models + purchase/activation commands
+- [ ] `M3-BE-358` Checkout-free `PaymentAttempt.Purpose` values for subscription/premium
+- [ ] `M3-BE-359` Operations commands: moderate, remove, reinstate listing, resolve report
+- [ ] `M3-BE-360` Expiry sweeps: listing `expires_at`, subscription expiry
+- [ ] `M3-BE-361` PartnerCapability onboarding path for job posters
+- [ ] `M3-FE-331` Partner Listings/Leads/Billing workspace
+- [ ] `M3-FE-332` Customer listing browse/search/apply flow
+
+**Exit gate:** `M3-A10-01` through `M3-A10-16` (see plan doc §12.3) pass on staging.
+
+### D4 — Cross-archetype checkout integration (coins/wallet/referral)
+
+- [ ] `M3-BE-371` Verify wallet/coin split applies unchanged to A7/A9/A10 payment purposes (regression only)
+- [ ] `M3-BE-372` Referral qualifying-event/coin-unlock hook for rental/stay `COMPLETED` (owner decision OQ-D1; default: emit an equivalent `*.completed` outbox event following the `M3-BE-207` pattern)
+- [ ] `M3-BE-373` Refund-to-wallet path verified for rental/stay deposit and price refunds
+
+**Exit gate:** a wallet+coin+Razorpay split checkout succeeds on an A7 rental and an A9 stay booking; refund correctly routes wallet/Razorpay portions per archetype.
+
+### D5 — Operations surfaces and cross-archetype hardening
+
+- [ ] `M3-OPS-311` Operations rental-booking workspace
+- [ ] `M3-OPS-321` Operations stay-reservation workspace
+- [ ] `M3-OPS-331` Operations listing/moderation workspace + report queue
+- [ ] `M3-OPS-341` Operations subscription-plan configuration UI
+- [ ] `M3-BE-381` Object-level authorization regression tests across all three archetypes (owner runs)
+- [ ] `M3-BE-382` Concurrency regression suite: asset/unit exclusion races, deposit double-settlement, application duplicate-submit (owner runs)
+- [ ] `M3-DOC-391` Runbook `docs/runbooks/m3-rental-stay-listing-smoke.md`
+
+**Exit gate:** every scenario in the plan doc §12 passes on staging; runbook walked through once by the owner.
+
+### D6 — Phase D acceptance
+
+- [ ] `M3-QA-301` Full acceptance pass: §12.1/§12.2/§12.3 scenarios executed on staging (owner manual pass)
+- [ ] `M3-QA-302` Three new categories demonstrable end-to-end on staging (feeds `M3-QA-501`)
+
+**Phase D exit gate:** all scenarios in the plan doc §12 pass on staging.
 
 ---
 

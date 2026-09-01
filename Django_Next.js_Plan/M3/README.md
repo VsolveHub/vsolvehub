@@ -20,13 +20,13 @@ work without redefining platform invariants.
 | --- | --- |
 | [Master task board](task.md) | Phase status, task ids, dependencies, gates |
 | [Wallet, V Coins & Referral](01-wallet-vcoins-referral.md) | Owner decisions, domain model, configuration, APIs, acceptance |
+| [Rental, Stay & Jobs categories](03-rental-stay-jobs-categories.md) | A7 rental, A9 stay, A10 listing/careers engines — domain model, state machines, money architecture, acceptance |
 
 **Planned (not written yet)**
 
 | Document | Purpose |
 | --- | --- |
 | `02-real-payments-and-otp.md` | Razorpay live + MSG91 activation across existing flows |
-| `03-rental-stay-jobs-categories.md` | A7 rental, A9 stay, A10 listing/careers engines |
 | `04-operations-analytics.md` | Dashboards, exports, GST/TDS, report builder |
 | `05-acceptance-and-cutover.md` | Staging gates before M4 go-live |
 
