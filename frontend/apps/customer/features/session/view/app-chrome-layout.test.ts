@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { appChromeLayout, CUSTOMER_VIEWPORT_WIDTH_CLASS } from "./app-chrome-layout";
+import { appChromeLayout, CUSTOMER_VIEWPORT_WIDTH_CLASS, showFixedBackButton } from "./app-chrome-layout";
 
 describe("appChromeLayout", () => {
   it("binds static chrome to the same visual viewport as fixed navigation", () => {
@@ -43,5 +43,14 @@ describe("appChromeLayout", () => {
       contentMinHeightClass: "min-h-screen",
       hideMobileFooter: false,
     });
+  });
+
+  it("does not stack a circular back button on a claimed booking screen", () => {
+    expect(showFixedBackButton("/requests/book/event-staff-by-the-day", true)).toBe(false);
+    expect(showFixedBackButton("/book/crew", true)).toBe(false);
+  });
+
+  it("still shows the floating back on design artboards", () => {
+    expect(showFixedBackButton("/design/m2/choose-visits", false)).toBe(true);
   });
 });

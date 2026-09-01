@@ -9,7 +9,11 @@ import { useIsViewportClaimed } from "@/lib/focus-mode";
 import { BottomNav, SiteHeader } from "./site-header";
 import { SiteFooter } from "./site-footer";
 import { FixedBackButton } from "./fixed-back-button";
-import { appChromeLayout, CUSTOMER_VIEWPORT_WIDTH_CLASS } from "./app-chrome-layout";
+import {
+  appChromeLayout,
+  CUSTOMER_VIEWPORT_WIDTH_CLASS,
+  showFixedBackButton,
+} from "./app-chrome-layout";
 
 /**
  * The app's navigation, except where a screen has taken the viewport.
@@ -52,11 +56,10 @@ export function AppChrome({ children }: { children: ReactNode }) {
   // bar below it. It is a path check rather than a `claimViewport()` call
   // because those pages are server components with nothing to run the claim.
   if (claimed || pathname.startsWith("/design/")) {
-    // `/book/*` flows use `MobileScreen`, which already carries a back control in
-    // its own header. A second fixed button would stack on top of it.
-    const showFixedBack =
-      pathname.startsWith("/design/") ||
-      (claimed && !pathname.startsWith("/book/"));
+    // Claimed screens (`MobileScreen`) already carry a back control in their
+    // own header. A second fixed circle stacks on the title — `/requests/book/*`
+    // used to hit that because the old exception only matched `/book/*`.
+    const showFixedBack = showFixedBackButton(pathname, claimed);
 
     return (
       <>

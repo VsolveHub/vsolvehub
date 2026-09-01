@@ -70,5 +70,49 @@ describe("CustomerVisitSlotChooser", () => {
     expect(screen.getByRole("radio", { name: /9:00 am – 11:00 am/i })).toBeDisabled();
     expect(screen.getByText("Used by another visit")).toBeInTheDocument();
   });
+
+  it("only displays available slots, hiding passed and unavailable slots", () => {
+    const gridWithUnavailable: Schemas["VisitSlotGrid"] = {
+      ...RAW_GRID,
+      days: [
+        {
+          date: "2026-09-02",
+          is_today: false,
+          slots: [
+            {
+              id: "passed-slot",
+              starts_at: "2026-09-02T01:30:00Z",
+              ends_at: "2026-09-02T03:30:00Z",
+              is_available: false,
+              unavailable_reason: "PAST",
+            },
+            {
+              id: "available-slot",
+              starts_at: "2026-09-02T03:30:00Z",
+              ends_at: "2026-09-02T05:30:00Z",
+              is_available: true,
+              unavailable_reason: null,
+            },
+          ],
+        },
+      ],
+    };
+
+    render(
+      <CustomerVisitSlotChooser
+        planSize={1}
+        grid={readCustomerVisitSlotGrid(gridWithUnavailable)}
+        selectedStarts={[null]}
+        onChange={() => undefined}
+        isLoading={false}
+        error={null}
+        onRetry={() => undefined}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Visit 1. Choose a time." }));
+    expect(screen.queryByText("Already passed")).not.toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /9:00 am – 11:00 am/i })).toBeInTheDocument();
+  });
 });
 

@@ -125,7 +125,12 @@ export function FixedTimeOfferScreen({
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5">
             <Pictogram name="time" size="md" className="text-text" />
             <span className="sr-only">Time left</span>
-            <span className="text-[2.375rem] font-extrabold leading-tight tabular-nums text-text">
+            <span
+              className={cn(
+                "font-black leading-tight tabular-nums text-text tracking-tight",
+                countdownLabel.length > 5 ? "text-2xl" : "text-3xl",
+              )}
+            >
               {countdownLabel}
             </span>
           </div>

@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { formatMoney, cn } from "@vsolve/ui";
 import { ChevronRight, ClipboardList, X } from "lucide-react";
 
@@ -15,6 +16,36 @@ import { TileDesktopSplitPane } from "./tile-desktop-split-pane";
 import { useServiceDetail } from "../client-queries";
 import { serviceHref } from "../service-href";
 import type { Category, ServiceCard } from "../queries";
+
+function tileHref(tile: TileGroup, categorySlug: string): string {
+  const only = tile.services.length === 1 ? tile.services[0] : undefined;
+  if (only !== undefined) return serviceHref(only, categorySlug);
+  return `/catalog/${categorySlug}?tile=${tile.slug}`;
+}
+
+function TileGrid({ tiles, categorySlug }: { tiles: TileGroup[]; categorySlug: string }) {
+  return (
+    <ul className="grid list-none grid-cols-3 gap-x-3 gap-y-5 p-0 sm:grid-cols-4 sm:gap-x-4 lg:grid-cols-6">
+      {tiles.map((tile) => (
+        <li key={tile.slug} className="min-w-0">
+          <Link
+            href={tileHref(tile, categorySlug)}
+            className="group flex min-h-11 flex-col items-center gap-2 rounded-card active:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+          >
+            <ServicePhoto
+              imageUrl={tile.imageUrl}
+              iconKey={tile.iconKey}
+              className="shadow-xs transition-transform duration-slow ease-out group-hover:scale-[1.03] motion-reduce:transform-none"
+            />
+            <span className="line-clamp-2 w-full text-center text-[12px] font-semibold leading-tight text-text sm:text-[13px]">
+              {tile.name}
+            </span>
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 const A3_TIME_BLOCK = "A3_TIME_BLOCK";
 
@@ -238,6 +269,7 @@ export function CategoryTileBrowser({
   services: readonly ServiceCard[];
   activeTileSlug: string | null;
 }) {
+  const router = useRouter();
   const [selectedServiceForModal, setSelectedServiceForModal] = useState<ServiceCard | null>(null);
   const tiles = groupByTile(category, services);
 
@@ -250,8 +282,14 @@ export function CategoryTileBrowser({
     );
   }
 
-  // Active tile defaults to the selected one or the first one
-  const activeTile = tiles.find((tile) => tile.slug === activeTileSlug) ?? tiles[0];
+  const activeTile =
+    activeTileSlug !== null
+      ? tiles.find((tile) => tile.slug === activeTileSlug)
+      : undefined;
+
+  if (activeTile === undefined) {
+    return <TileGrid tiles={tiles} categorySlug={category.slug} />;
+  }
 
   return (
     <>
@@ -379,6 +417,10 @@ export function CategoryTileBrowser({
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
+                            if (service.request_archetypes.length > 0) {
+                              router.push(serviceHref(service, category.slug));
+                              return;
+                            }
                             setSelectedServiceForModal(service);
                           }}
                           className="inline-flex shrink-0 items-center justify-center font-bold shadow-xs transition-colors rounded-lg px-3.5 h-8 text-xs bg-navy-900 text-white hover:bg-navy-800 active:scale-95 cursor-pointer"

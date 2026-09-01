@@ -1,12 +1,14 @@
 "use client";
 
+import type { Schemas } from "@vsolve/api-client";
 import { describeError, useServerCountdown } from "@vsolve/query";
 import { Badge, Button, ErrorState, Skeleton } from "@vsolve/ui";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
-import { useBookingGroup } from "@/features/bookings/queries";
 import { useProfileCompletionGate } from "@/features/account/view/profile-completion-dialog";
+import { useBookingGroup, type BookingGroup } from "@/features/bookings/queries";
 import { Money } from "@/features/checkout/view/money";
 
 import { paymentPhase, canReconcile, type PaymentAttempt } from "../model/outcome";
@@ -20,6 +22,7 @@ import {
   useReconcilePayment,
   useSimulateCapture,
   useStartPayment,
+  type PaymentAllocation,
 } from "../queries";
 
 /**
@@ -54,15 +57,48 @@ function PaymentSkeleton() {
   );
 }
 
-/** Per-unit allocations, exactly as Django split them. */
-function AllocationList({ attempt }: { attempt: PaymentAttempt }) {
+/**
+ * Customer-facing names for a payment allocation.
+ *
+ * Allocations are Fulfilment Unit *lines* (service, tax/minimum-visit
+ * adjustment, platform fee), not visits. Labelling them "Visit {position + 1}"
+ * made a three-line bill read as Visit 2, Visit 3, Visit 4.
+ */
+const ALLOCATION_KIND_LABEL: Record<Schemas["QuoteLineKindEnum"], string> = {
+  SERVICE: "Service",
+  MINIMUM_VISIT_ADJUSTMENT: "Tax",
+  PLATFORM_FEE_ALLOCATION: "Platform fee",
+};
+
+function allocationLabel(
+  allocation: PaymentAllocation,
+  group: BookingGroup,
+): string {
+  const unit = group.units.find((candidate) => candidate.id === allocation.fulfilment_unit_id);
+  const line = unit?.lines.find((candidate) => candidate.id === allocation.fulfilment_line_id);
+  const kindName = line === undefined ? null : ALLOCATION_KIND_LABEL[line.kind];
+  const name = kindName ?? line?.label ?? `Item ${allocation.position + 1}`;
+  if (group.units.length > 1 && unit !== undefined) {
+    return `Visit ${unit.position + 1} · ${name}`;
+  }
+  return name;
+}
+
+/** Per-unit allocations, named from the booking's own lines. */
+function AllocationList({
+  attempt,
+  group,
+}: {
+  attempt: PaymentAttempt;
+  group: BookingGroup;
+}) {
   if (attempt.allocations.length === 0) return null;
 
   return (
     <ul className="mt-4 flex flex-col gap-1 text-sm">
       {attempt.allocations.map((allocation) => (
         <li key={allocation.id} className="flex justify-between gap-3">
-          <span className="text-text-secondary">Visit {allocation.position + 1}</span>
+          <span className="text-text-secondary">{allocationLabel(allocation, group)}</span>
           <span className="shrink-0 tabular-nums text-text-secondary">
             <Money value={allocation.amount} />
           </span>
@@ -72,7 +108,33 @@ function AllocationList({ attempt }: { attempt: PaymentAttempt }) {
   );
 }
 
+function bookingPageHref(groupId: string): string {
+  return `/bookings/${groupId}`;
+}
+
+/**
+ * Payment is done — leave `/pay` for the booking itself.
+ *
+ * Capture used to render "Your booking is paid for" on this route. That is a
+ * second page for a booking the customer already has. The booking screen is
+ * the source of truth once money has moved.
+ */
+function shouldReturnToBooking(
+  group: BookingGroup | null,
+  attempt: PaymentAttempt | null,
+): boolean {
+  if (attempt !== null && paymentPhase(attempt, serverNow()) === "paid") {
+    return true;
+  }
+  return (
+    group !== null &&
+    group.order_id !== null &&
+    group.recovery_action !== "PAYMENT_REQUIRED"
+  );
+}
+
 export function PaymentWorkspace({ groupId }: { groupId: string }) {
+  const router = useRouter();
   const profileGate = useProfileCompletionGate("payment");
   const groupQuery = useBookingGroup(groupId);
   const group = groupQuery.data ?? null;
@@ -95,6 +157,12 @@ export function PaymentWorkspace({ groupId }: { groupId: string }) {
   // so the poll picks it up without a second round trip.
   const attempt = attemptQuery.data ?? startPayment.data ?? null;
   const countdown = useServerCountdown(attempt?.expires_at ?? null);
+  const returnToBooking = shouldReturnToBooking(group, attempt);
+
+  useEffect(() => {
+    if (!returnToBooking) return;
+    router.replace(bookingPageHref(groupId));
+  }, [returnToBooking, groupId, router]);
 
   const refreshAttempt = useCallback(() => {
     void attemptQuery.refetch();
@@ -190,9 +258,13 @@ export function PaymentWorkspace({ groupId }: { groupId: string }) {
             : "This booking could not be found."
         }
         actionLabel="Back to my bookings"
-        onAction={() => undefined}
+        onAction={() => router.replace("/bookings")}
       />
     );
+  }
+
+  if (returnToBooking) {
+    return <PaymentSkeleton />;
   }
 
   // The server decides whether payment is due. Inferring it from the status
@@ -204,7 +276,7 @@ export function PaymentWorkspace({ groupId }: { groupId: string }) {
         title="This booking is not waiting for payment"
         message="Nothing is due right now. Your booking page has the current status."
         actionLabel="Back to this booking"
-        onAction={() => undefined}
+        onAction={() => router.replace(bookingPageHref(groupId))}
       />
     );
   }
@@ -310,7 +382,7 @@ export function PaymentWorkspace({ groupId }: { groupId: string }) {
           <span className="text-base font-semibold text-text">Amount</span>
           <Money value={attempt.amount} className="text-xl font-bold tabular-nums text-text" />
         </div>
-        <AllocationList attempt={attempt} />
+        <AllocationList attempt={attempt} group={group} />
       </div>
 
       {phase === "paid" ? (

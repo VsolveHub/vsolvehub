@@ -31,6 +31,15 @@ function ok<T>(data: T) {
   return { data, error: undefined, response: new Response(null, { status: 200 }) };
 }
 
+const ratingSummary = {
+  subject_kind: "CATALOG_BOOKING" as const,
+  subject_id: "booking-1",
+  can_rate: false,
+  counterparty_label: "Blockage Pro",
+  my_rating: null,
+  ratings: [],
+};
+
 let queryClient: QueryClient;
 
 function wrapper({ children }: { children: ReactNode }) {
@@ -270,6 +279,195 @@ describe("cancelling", () => {
 
     expect(screen.queryByRole("button", { name: /cancel this booking/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /refresh now/i })).not.toBeInTheDocument();
+  });
+});
+
+describe("paid booking presentation", () => {
+  it("offers reschedule and cancel on the single-visit overview, not a track page", async () => {
+    const paidGroup = group({
+      status: "BOOKED",
+      recovery_action: "NONE",
+      order_id: "order-1",
+      units: [
+        unit({
+          status: "BOOKED",
+          booking_id: "booking-1",
+          booking_status: "CONFIRMED",
+        }),
+      ],
+    });
+    const bookedVisit = {
+      id: "booking-1",
+      fulfilment_unit_id: "fu-1",
+      status: "CONFIRMED",
+      version: 1,
+      scheduled_start: "2026-09-01T03:00:00.000Z",
+      estimated_duration_minutes: 45,
+      partner_display_name: "Blockage Pro",
+      en_route_at: null,
+      arrived_at: null,
+      late_declared_at: null,
+      cancelled_at: null,
+      cancellation_reason: "",
+      work_tasks: [],
+      active_amendment: null,
+      completion: null,
+      cancellation_preview: {
+        band_code: "FREE",
+        fee_paise: 0,
+        fee_waiver: "",
+        refund_paise: 22800,
+        currency: "INR",
+      },
+      reschedule_preview: {
+        is_available: true,
+        unavailable_reason: "",
+        earliest_start: "2026-08-09T10:00:00+05:30",
+      },
+      server_now: "2026-08-31T15:00:00.000Z",
+    } satisfies import("@vsolve/api-client").Schemas["CustomerBooking"];
+
+    client.GET.mockImplementation((path: string) => {
+      if (path === "/api/v1/booking-groups/{group_id}/") return Promise.resolve(ok(paidGroup));
+      if (path === "/api/v1/bookings/{booking_id}/") return Promise.resolve(ok(bookedVisit));
+      if (path === "/api/v1/bookings/{booking_id}/ratings/") return Promise.resolve(ok(ratingSummary));
+      return Promise.resolve(refusal("not_found", 404));
+    });
+
+    renderDetail();
+
+    expect(await screen.findByRole("heading", { name: "Your booking" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Your visit" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Reschedule" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel this visit" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /track this visit/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /view your receipt/i })).toHaveAttribute(
+      "href",
+      "/bookings/group-1/receipt",
+    );
+    expect(screen.queryByRole("heading", { name: "We value your feedback" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Suggestions for you" })).not.toBeInTheDocument();
+    expect(screen.getByText("Can I reschedule this visit?")).toBeInTheDocument();
+    expect(screen.getByText("How does cancellation & refund work?")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Reschedule" }));
+    expect(await screen.findByText("Reschedule this visit")).toBeInTheDocument();
+  });
+
+  it("does not offer reschedule as a suggestion on a cancelled one-visit booking", async () => {
+    client.GET.mockImplementation((path: string) => {
+      if (path === "/api/v1/booking-groups/{group_id}/") {
+        return Promise.resolve(
+          ok(
+            group({
+              status: "CANCELLED",
+              recovery_action: "NONE",
+              order_id: "order-1",
+              units: [
+                unit({
+                  status: "CANCELLED",
+                  booking_id: "booking-1",
+                  booking_status: "CANCELLED",
+                }),
+              ],
+            }),
+          ),
+        );
+      }
+      return Promise.resolve(refusal("not_found", 404));
+    });
+
+    renderDetail();
+
+    expect(await screen.findByRole("heading", { name: "Your booking" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Suggestions for you" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "We value your feedback" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Need to reschedule/i })).not.toBeInTheDocument();
+    expect(screen.getByText("This booking was cancelled. Nothing has been charged.")).toBeInTheDocument();
+  });
+
+  it("opens the feedback dialog on a completed one-visit booking that can be rated", async () => {
+    client.GET.mockImplementation((path: string) => {
+      if (path === "/api/v1/booking-groups/{group_id}/") {
+        return Promise.resolve(
+          ok(
+            group({
+              status: "COMPLETED",
+              recovery_action: "NONE",
+              order_id: "order-1",
+              units: [
+                unit({
+                  status: "COMPLETED",
+                  booking_id: "booking-1",
+                  booking_status: "COMPLETED",
+                }),
+              ],
+            }),
+          ),
+        );
+      }
+      if (path === "/api/v1/bookings/{booking_id}/ratings/") {
+        return Promise.resolve(ok({ ...ratingSummary, can_rate: true }));
+      }
+      return Promise.resolve(refusal("not_found", 404));
+    });
+
+    renderDetail();
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "We value your feedback" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /view your receipt/i })).toHaveAttribute(
+      "href",
+      "/bookings/group-1/receipt",
+    );
+    expect(screen.queryByRole("heading", { name: "Suggestions for you" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Need to reschedule/i })).not.toBeInTheDocument();
+  });
+
+  it("opens the matching visit from each multi-visit card", async () => {
+    client.GET.mockResolvedValue(
+      ok(
+        group({
+          status: "BOOKED",
+          recovery_action: "NONE",
+          order_id: "order-1",
+          units: [
+            unit({
+              id: "fu-1",
+              position: 0,
+              status: "BOOKED",
+              booking_id: "booking-1",
+              booking_status: "CONFIRMED",
+            }),
+            unit({
+              id: "fu-2",
+              position: 1,
+              status: "BOOKED",
+              booking_id: "booking-2",
+              booking_status: "CONFIRMED",
+              lines: [unitLine({ id: "ul-2", label: "Geyser repair" })],
+            }),
+          ],
+        }),
+      ),
+    );
+
+    renderDetail();
+
+    expect(await screen.findByRole("heading", { name: "Visit 1 of 2" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Visit 2 of 2" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Payment summary" })).toBeInTheDocument();
+    expect(screen.getByText("Booking total")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /view your receipt/i })).toHaveAttribute(
+      "href",
+      "/bookings/group-1/receipt",
+    );
+    const details = screen.getAllByRole("link", { name: /view details/i });
+    expect(details[0]).toHaveAttribute("href", "/bookings/group-1/visits/booking-1");
+    expect(details[1]).toHaveAttribute("href", "/bookings/group-1/visits/booking-2");
+    expect(screen.queryByRole("link", { name: /track this visit/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Suggestions for you" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Can I reschedule this visit?")).not.toBeInTheDocument();
   });
 });
 

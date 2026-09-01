@@ -26,8 +26,9 @@ import type { WindowsView } from "../adapters";
  * able to produce.
  *
  * The wording of both is careful about what the times mean. They rule out what is past, too
- * soon or outside operating hours; they are **not** a promise that everything fits, because
- * only the planner (checkout) or the reschedule command (visit) can answer that.
+ * soon or outside operating hours by omitting those slots, not by showing them disabled. Days
+ * with nothing bookable are hidden the same way. They are **not** a promise that everything
+ * fits, because only the planner (checkout) or the reschedule command (visit) can answer that.
  */
 
 export interface PreferredStartPickerProps {
@@ -68,6 +69,7 @@ export function PreferredStartPicker({
   }
 
   const day = dayIndex === null ? null : bookableDays[dayIndex];
+  const availableWindows = day === null ? [] : day.windows.filter((window) => window.isAvailable);
 
   return (
     <div>
@@ -98,19 +100,16 @@ export function PreferredStartPicker({
             Pick a start time on {day.label}
           </legend>
           <div className="mt-2 flex flex-col gap-2">
-            {day.windows.map((window) => (
+            {availableWindows.map((window) => (
               <ChoiceCard
                 key={window.startsAt}
                 name="preferred-start"
                 value={window.startsAt}
                 checked={selectedStart === window.startsAt}
-                disabled={!window.isAvailable}
                 onSelect={onSelect}
                 title={window.label}
                 description={
-                  window.isAvailable
-                    ? [window.durationLabel, window.scarcityLabel].filter(Boolean).join(" · ")
-                    : (window.unavailableLabel ?? "Not available")
+                  [window.durationLabel, window.scarcityLabel].filter(Boolean).join(" · ") || null
                 }
               />
             ))}

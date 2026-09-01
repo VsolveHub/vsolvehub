@@ -264,7 +264,7 @@ export function RateCardEstimateComposer({
     step === 1 ? draft.mode !== null : step === 2 ? linesReady : true;
 
   return (
-    <div className="flex flex-col gap-4 pb-4">
+    <div className="flex flex-col gap-4 pb-24">
       {notice}
 
       <StepHeader
@@ -625,16 +625,6 @@ function StepHeader({
         ))}
       </ol>
       <div className="flex items-center gap-2">
-        {onBack ? (
-          <button
-            type="button"
-            onClick={onBack}
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-control border border-line bg-surface text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-          >
-            <span aria-hidden>‹</span>
-            <span className="sr-only">Back a step</span>
-          </button>
-        ) : null}
         <div className="min-w-0 flex-1">
           <h2 className="text-lg font-extrabold tracking-[-0.01em] text-text">{STEP_TITLES[step]}</h2>
           <p className="truncate text-xs text-text-secondary">
@@ -671,37 +661,39 @@ function StepDock({
   const lineCount = draft.mode === "LABOUR_WISE" ? draft.labourLines.length : draft.itemLines.length;
   const labour = selectedLineSubtotal(draft);
   return (
-    <aside className="sticky bottom-20 z-20 -mx-4 border-t border-line bg-surface px-4 pb-3 pt-3 shadow-[0_-4px_16px_rgb(69_63_55/0.08)]">
-      {step === 5 ? (
-        <div className="grid grid-cols-[auto_1fr] gap-2">
-          <Button size="lg" variant="outline" onClick={onPreview}>
-            Preview as customer
-          </Button>
-          <Button
-            block
-            size="lg"
-            disabled={blocked || !previewIsCurrent}
-            loading={isSubmitting}
-            loadingLabel="Sending estimate"
-            onClick={onSend}
-          >
-            Send estimate
-          </Button>
-        </div>
-      ) : (
-        <div className="flex items-center gap-3">
-          {step === 2 || step === 3 || step === 4 ? (
-            <span className="min-w-0 flex-1 text-sm font-semibold tabular-nums text-text-secondary">
-              {lineCount} {lineCount === 1 ? "item" : "items"} · Labour {labour === null ? "—" : formatMoney(labour)}
-            </span>
-          ) : (
-            <span className="flex-1" />
-          )}
-          <Button size="lg" disabled={!canContinue} onClick={onContinue}>
-            Continue
-          </Button>
-        </div>
-      )}
+    <aside className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-surface px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgb(69_63_55/0.08)]">
+      <div className="mx-auto max-w-xl">
+        {step === 5 ? (
+          <div className="grid grid-cols-[auto_1fr] gap-2">
+            <Button size="lg" variant="outline" onClick={onPreview}>
+              Preview as customer
+            </Button>
+            <Button
+              block
+              size="lg"
+              disabled={blocked || !previewIsCurrent}
+              loading={isSubmitting}
+              loadingLabel="Sending estimate"
+              onClick={onSend}
+            >
+              Send estimate
+            </Button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            {step === 2 || step === 3 || step === 4 ? (
+              <span className="min-w-0 flex-1 text-sm font-semibold tabular-nums text-text-secondary">
+                {lineCount} {lineCount === 1 ? "item" : "items"} · Labour {labour === null ? "—" : formatMoney(labour)}
+              </span>
+            ) : (
+              <span className="flex-1" />
+            )}
+            <Button size="lg" disabled={!canContinue} onClick={onContinue}>
+              Continue
+            </Button>
+          </div>
+        )}
+      </div>
     </aside>
   );
 }
@@ -1894,7 +1886,7 @@ function RateSheet({
         }}
       >
         {banded ? (
-          <p className={cn("text-center text-sm font-semibold", outside ? "text-danger-text" : "text-text-secondary")}>
+          <p className={cn("text-center text-xs font-semibold", outside ? "text-danger-text" : "text-text-secondary")}>
             Allowed {formatMoney(floorPaise)} – {formatMoney(ceilingPaise)}
           </p>
         ) : null}
@@ -1952,20 +1944,20 @@ function CustomItemSheet({
           });
         }}
       >
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-1.5">
           <Field label="What is it" error={tried && title.trim() === "" ? "Name the item." : undefined}>
-            <Input value={title} maxLength={120} onChange={(event) => setTitle(event.target.value)} />
+            <Input className="h-9 text-sm" value={title} maxLength={120} onChange={(event) => setTitle(event.target.value)} />
           </Field>
-          <div className="grid grid-cols-2 items-end gap-2">
-            <Field label="Unit">
-              <Select value={unit} onChange={(event) => setUnit(event.target.value as EstimateUnit)}>
-                {ESTIMATE_UNITS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </Select>
-            </Field>
+          <Field label="Unit">
+            <Select className="h-9 text-sm" value={unit} onChange={(event) => setUnit(event.target.value as EstimateUnit)}>
+              {ESTIMATE_UNITS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <div className="rounded-control border border-line/60 bg-surface-sunken/40 px-3 py-2">
             <QuantityStepper
               label="How many"
               value={quantity}
@@ -1975,7 +1967,7 @@ function CustomItemSheet({
               incrementLabel="One more"
             />
           </div>
-          <p className="text-xs text-text-muted">Rate per {unitShort(unit)}, below.</p>
+          <p className="text-[11px] text-text-muted">Rate per {unitShort(unit)}, below.</p>
         </div>
       </MoneyPad>
     </Sheet>
@@ -2025,12 +2017,13 @@ function CustomLabourSheet({
           });
         }}
       >
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-1">
           <Field label="Role" error={tried && role.trim() === "" ? "Name the role." : undefined}>
-            <Input value={role} maxLength={80} onChange={(event) => setRole(event.target.value)} />
+            <Input className="h-8 text-xs" value={role} maxLength={80} placeholder="e.g. Electrician, Helper" onChange={(event) => setRole(event.target.value)} />
           </Field>
-          <div className="grid grid-cols-1 gap-2 min-[360px]:grid-cols-2">
+          <div className="flex flex-col gap-1 rounded-control border border-line/60 bg-surface-sunken/40 px-2.5 py-1">
             <QuantityStepper label="People" value={people} onChange={setPeople} min={1} decrementLabel="One fewer person" incrementLabel="One more person" />
+            <div className="border-t border-line/40" />
             <QuantityStepper label="Days" value={days} onChange={setDays} min={1} decrementLabel="One day fewer" incrementLabel="One more day" />
           </div>
         </div>

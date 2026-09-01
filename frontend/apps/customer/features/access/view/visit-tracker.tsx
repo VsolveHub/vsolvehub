@@ -13,12 +13,49 @@ import {
   buttonStyles,
   cn,
 } from "@vsolve/ui";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import searchAnimationData from "@/features/bookings/view/search-lottie.json";
 import { calendarDay, formatVisitSlot, type VisitSlotRow, type VisitTrackerView } from "../adapters";
 import { AccessRefusal } from "./access-refusal";
 import { VendorIdentity } from "./vendor-identity";
+
+const LottiePlayer = dynamic(
+  () => {
+    if (typeof window === "undefined") return Promise.resolve(() => null);
+    try {
+      const canvas = document.createElement("canvas");
+      if (!canvas?.getContext?.("2d")) {
+        return Promise.resolve(() => null);
+      }
+    } catch {
+      return Promise.resolve(() => null);
+    }
+    return import("lottie-react").then((mod) => mod.Lottie ?? mod.default);
+  },
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex size-36 animate-pulse items-center justify-center">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2.2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="size-14 text-orange-600"
+          aria-hidden
+        >
+          <circle cx="11" cy="11" r="7" />
+          <path d="m21 21-4.35-4.35" />
+        </svg>
+      </div>
+    ),
+  },
+);
 
 /**
  * The A5 tracker — `M2-FE-421`, `M2-FE-422`, `M2-FE-424`.
@@ -409,23 +446,20 @@ function VendorSearchPanel({ tracker }: { tracker: VisitTrackerView }) {
         </div>
 
         <div className="order-1 mx-auto flex aspect-square w-full max-w-[17rem] items-center justify-center lg:order-2">
-          <div className="relative size-56 rounded-full bg-selected-surface">
-            <span className="absolute inset-4 rounded-full border border-navy-200" />
-            <span className="absolute inset-10 rounded-full border border-navy-200/80" />
-            <span className="absolute inset-16 rounded-full border border-navy-200/60" />
-            <span className="absolute left-1/2 top-1/2 h-px w-[45%] origin-left animate-spin bg-action motion-reduce:animate-none" />
-            <span className="absolute left-[58%] top-[24%] size-3 animate-ping rounded-full bg-action motion-reduce:animate-none" />
-            <span className="absolute left-[58%] top-[24%] size-3 rounded-full bg-action" />
-            <span className="absolute bottom-10 left-12 size-2 rounded-full bg-success-text" />
-            <span className="absolute right-12 top-16 size-2 rounded-full bg-success-text" />
-            <span className="absolute inset-0 flex items-center justify-center">
-              <span className="grid size-20 place-items-center rounded-full bg-surface text-action-active shadow-raised ring-1 ring-line">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="size-8">
-                  <circle cx="11" cy="11" r="6" />
-                  <path d="m16 16 4 4M11 8v6m-3-3h6" />
-                </svg>
-              </span>
-            </span>
+          <div className="relative flex size-56 sm:size-60 items-center justify-center">
+            <span className="absolute inset-0 rounded-full border border-orange-200/60 bg-orange-100/20 animate-ping [animation-duration:3.2s]" />
+            <span className="absolute inset-6 rounded-full border border-orange-200 bg-orange-50/60 animate-pulse [animation-duration:2.2s]" />
+
+            <div className="relative z-10 flex size-48 sm:size-52 items-center justify-center overflow-hidden rounded-full border-2 border-orange-200/90 bg-white shadow-xl">
+              <div className="relative z-20 flex size-full items-center justify-center p-2">
+                <LottiePlayer
+                  src={searchAnimationData}
+                  loop
+                  autoplay
+                  className="size-full max-h-[170px] max-w-[170px]"
+                />
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1066,17 +1100,14 @@ function SearchBeacon() {
   return (
     <div
       aria-hidden
-      className="relative grid size-28 shrink-0 place-items-center sm:size-20"
+      className="relative flex size-28 shrink-0 items-center justify-center overflow-hidden rounded-full border border-orange-200 bg-white shadow-sm sm:size-20"
     >
-      <span className="absolute inset-0 rounded-full bg-surface shadow-card ring-1 ring-info-line" />
-      <span className="absolute inset-3 rounded-full border border-info-line" />
-      <span className="absolute inset-6 rounded-full border border-info-line/80" />
-      <span className="absolute left-1/2 top-1/2 h-px w-[42%] origin-left animate-spin bg-action motion-reduce:animate-none" />
-      <span className="absolute left-[62%] top-[26%] size-3 animate-ping rounded-full bg-action motion-reduce:animate-none" />
-      <span className="absolute left-[62%] top-[26%] size-3 rounded-full bg-action" />
-      <span className="absolute grid size-10 place-items-center rounded-full bg-surface ring-1 ring-line sm:size-8">
-        <span className="size-2.5 rounded-full bg-action" />
-      </span>
+      <LottiePlayer
+        src={searchAnimationData}
+        loop
+        autoplay
+        className="size-full max-h-[85px] max-w-[85px]"
+      />
     </div>
   );
 }

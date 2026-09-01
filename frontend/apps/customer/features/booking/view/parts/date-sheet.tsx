@@ -159,7 +159,7 @@ export function DateSheet({
               <label
                 key={iso}
                 className={cn(
-                  "flex min-h-[68px] cursor-pointer flex-col items-center justify-center gap-0.5",
+                  "relative flex min-h-[68px] cursor-pointer flex-col items-center justify-center gap-0.5",
                   "rounded-[14px] border px-1 py-2 text-center transition-colors duration-fast",
                   "has-[:focus-visible]:outline has-[:focus-visible]:outline-2",
                   "has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-focus-ring",

@@ -7,7 +7,21 @@ import { useState } from "react";
 
 import { Money } from "@/features/checkout/view/money";
 import { BookingSupport } from "@/features/support/view/booking-support";
+import { bookingVisitHref } from "@/lib/routes";
 
+import { formatBookingWhen } from "./booking-format";
+import {
+  canShowVisitFeedback,
+  CompletedVisitsFeedback,
+  VisitFeedbackForm,
+} from "@/features/ratings/view/visit-feedback-form";
+
+import {
+  PaidGroupPaymentCard,
+  PaidVisitPaymentCard,
+  MultiVisitOverviewCard,
+  SingleVisitDetailCard,
+} from "./paid-visit-cards";
 import { ProfessionalCard } from "./professional-card";
 import { VisitProgress } from "./visit-progress";
 import { VisitStartCode } from "./visit-start-code";
@@ -59,15 +73,6 @@ import { MobilePaymentBottomBar, PaymentSummarySideCard } from "./payment-summar
  * a real person to name.
  */
 
-function formatWhen(instant: string): string {
-  return new Date(instant).toLocaleString("en-IN", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
 
 /**
  * A unit's own state, with no reference to its siblings.
@@ -101,7 +106,7 @@ function UnitCard({
       </div>
 
       <p className="mt-1 text-sm text-text-secondary">
-        <time dateTime={unit.starts_at}>{formatWhen(unit.starts_at)}</time>
+        <time dateTime={unit.starts_at}>{formatBookingWhen(unit.starts_at)}</time>
         {" · arrival window "}
         {unit.arrival_window_minutes} min · about {unit.estimated_duration_minutes} min of work
       </p>
@@ -180,7 +185,8 @@ function UnitCard({
       {/* Only once the unit has become a real Booking. */}
       {unit.booking_id ? (
         <Link
-          href={`/bookings/${groupId}/visits/${unit.booking_id}`}
+          href={bookingVisitHref(groupId, unit.booking_id)}
+          prefetch={false}
           className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-text-link hover:underline"
         >
           Track this visit
@@ -372,6 +378,13 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
   const isPartnerOnTheWay = isPartnerOnTheWayOrBeyond(group);
   const canCancel = !isTerminal(group) && !isPartnerOnTheWay;
   const canRefresh = !isTerminal(group) && !isPartnerOnTheWay;
+  const isSinglePaidVisit = isPaid && group.units.length === 1;
+  const isMultiPaidVisit = isPaid && group.units.length > 1;
+  const usesTwoColumn = isAwaitingPayment || isSinglePaidVisit || isMultiPaidVisit;
+  const isSingleVisitHelp =
+    group.units.length === 1 &&
+    !isAwaitingPayment &&
+    (isPaid || group.status === "CANCELLED");
 
   function describeCancelFailure(error: unknown): string {
     if (isGroupVersionConflict(error)) {
@@ -392,18 +405,24 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
         />
       ) : null}
 
-      <div className={isAwaitingPayment ? "lg:grid lg:grid-cols-12 lg:gap-8 items-start space-y-4 lg:space-y-0 pb-28 lg:pb-12" : "space-y-4 pb-20 lg:pb-12"}>
-        <div className={isAwaitingPayment ? "lg:col-span-7 space-y-4" : "space-y-4"}>
-        {/* Header section with status badge (shown when !isAwaitingPayment; when awaiting payment, details live in PaymentSummarySideCard) */}
+      <div
+        className={
+          isAwaitingPayment
+            ? "space-y-4 pb-28 lg:pb-12"
+            : "space-y-4 pb-20 lg:pb-12"
+        }
+      >
         {!isAwaitingPayment ? (
           <div className="rounded-card border border-line bg-surface p-5 shadow-xs">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h1 className="text-2xl font-bold text-text">
-                  {group.units.length} {group.units.length === 1 ? "visit" : "visits"}
+                  {isSinglePaidVisit
+                    ? "Your booking"
+                    : `${group.units.length} ${group.units.length === 1 ? "visit" : "visits"}`}
                 </h1>
                 <p className="mt-1 text-sm text-text-secondary">
-                  Booked {formatWhen(group.created_at)}
+                  Booked {formatBookingWhen(group.created_at)}
                 </p>
               </div>
               <GroupStatusBadge group={group} />
@@ -413,7 +432,7 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
               <AssignmentProgress group={group} />
             </div>
 
-            {group.order_id !== null ? (
+            {group.order_id !== null && !isSinglePaidVisit && !isMultiPaidVisit ? (
               <div className="mt-4">
                 <Link
                   href={`/bookings/${group.id}/receipt`}
@@ -455,66 +474,162 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
                       : "Updating automatically. You can close this page — it keeps going without it."}
             </p>
           </div>
-        ) : (
-          <div className="sr-only">
-            <AssignmentProgress group={group} />
-          </div>
-        )}
-
-        {/* Unit list */}
-        <ul className="flex flex-col gap-3">
-          {group.units.map((unit, index) => (
-            <UnitCard
-              key={unit.id}
-              unit={unit}
-              index={index}
-              total={group.units.length}
-              groupId={group.id}
-              isPaid={isPaid}
-            />
-          ))}
-        </ul>
-
-        {/* Action controls: Refresh & Cancel only available BEFORE partner is on the way & before terminal state */}
-        {canRefresh || canCancel ? (
-          <div className="mt-6 flex flex-wrap gap-3">
-            {canRefresh ? (
-              <Button variant="outline" onClick={() => void groupQuery.refetch()} disabled={groupQuery.isFetching}>
-                Refresh now
-              </Button>
-            ) : null}
-            {canCancel ? (
-              <Button variant="ghost" onClick={() => setIsCancelOpen(true)}>
-                Cancel this booking
-              </Button>
-            ) : null}
-          </div>
         ) : null}
 
-        {cancelGroup.isError && !isCancelOpen ? (
-          <p className="mt-3 text-sm text-critical" role="alert">
-            {describeCancelFailure(cancelGroup.error)}
-          </p>
-        ) : null}
+        <div
+          className={
+            usesTwoColumn
+              ? "lg:grid lg:grid-cols-12 lg:gap-8 items-start space-y-4 lg:space-y-0"
+              : undefined
+          }
+        >
+          <div className={usesTwoColumn ? (isAwaitingPayment ? "lg:col-span-7 min-w-0 space-y-4" : "lg:col-span-8 min-w-0 space-y-4") : "space-y-4"}>
+            {isAwaitingPayment ? (
+              <div className="sr-only">
+                <AssignmentProgress group={group} />
+              </div>
+            ) : null}
 
-        <p className="mt-4 text-xs text-text-secondary">
-          Reference <span className="font-mono tabular-nums">{group.id}</span>
-        </p>
+            {isSinglePaidVisit && group.units[0] !== undefined ? (
+              <SingleVisitDetailCard
+                unit={group.units[0]}
+                isPaid={isPaid}
+              />
+            ) : isMultiPaidVisit ? (
+              <ul className="flex flex-col gap-3">
+                {group.units.map((unit, index) => (
+                  <MultiVisitOverviewCard
+                    key={unit.id}
+                    unit={unit}
+                    index={index}
+                    total={group.units.length}
+                    groupId={group.id}
+                    isPaid={isPaid}
+                  />
+                ))}
+              </ul>
+            ) : (
+              <ul className="flex flex-col gap-3">
+                {group.units.map((unit, index) => (
+                  <UnitCard
+                    key={unit.id}
+                    unit={unit}
+                    index={index}
+                    total={group.units.length}
+                    groupId={group.id}
+                    isPaid={isPaid}
+                  />
+                ))}
+              </ul>
+            )}
 
-        <BookingSupport reference={group.id} />
-      </div>
+            {isAwaitingPayment ? (
+              <>
+                {canRefresh || canCancel ? (
+                  <div className="mt-6 flex flex-wrap gap-3">
+                    {canRefresh ? (
+                      <Button variant="outline" onClick={() => void groupQuery.refetch()} disabled={groupQuery.isFetching}>
+                        Refresh now
+                      </Button>
+                    ) : null}
+                    {canCancel ? (
+                      <Button variant="ghost" onClick={() => setIsCancelOpen(true)}>
+                        Cancel this booking
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
 
-      {/* Desktop Payment Summary Side Card */}
-      {isAwaitingPayment ? (
-        <div className="hidden lg:block lg:col-span-5">
-          <PaymentSummarySideCard group={group} />
+                {cancelGroup.isError && !isCancelOpen ? (
+                  <p className="mt-3 text-sm text-critical" role="alert">
+                    {describeCancelFailure(cancelGroup.error)}
+                  </p>
+                ) : null}
+
+                <p className="mt-4 text-xs text-text-secondary">
+                  Reference <span className="font-mono tabular-nums">{group.id}</span>
+                </p>
+
+                <BookingSupport reference={group.id} />
+              </>
+            ) : null}
+          </div>
+
+          {isAwaitingPayment ? (
+            <div className="hidden min-w-0 lg:col-span-5 lg:block">
+              <PaymentSummarySideCard group={group} />
+            </div>
+          ) : null}
+
+          {isSinglePaidVisit && group.units[0] !== undefined ? (
+            <div className="min-w-0 lg:col-span-4">
+              <PaidVisitPaymentCard
+                unit={group.units[0]}
+                groupId={group.id}
+                orderId={group.order_id}
+              />
+            </div>
+          ) : null}
+
+          {isMultiPaidVisit ? (
+            <div className="min-w-0 lg:col-span-4">
+              <PaidGroupPaymentCard group={group} />
+            </div>
+          ) : null}
         </div>
-      ) : null}
 
-      {/* Mobile Sticky Bottom Payment Bar */}
-      {isAwaitingPayment ? (
-        <MobilePaymentBottomBar group={group} />
-      ) : null}
+        {!isAwaitingPayment ? (
+          <div className="space-y-6">
+            {canRefresh || canCancel ? (
+              <div className="flex flex-wrap gap-3">
+                {canRefresh ? (
+                  <Button variant="outline" onClick={() => void groupQuery.refetch()} disabled={groupQuery.isFetching}>
+                    Refresh now
+                  </Button>
+                ) : null}
+                {canCancel ? (
+                  <Button variant="ghost" onClick={() => setIsCancelOpen(true)}>
+                    Cancel this booking
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
+
+            {cancelGroup.isError && !isCancelOpen ? (
+              <p className="text-sm text-critical" role="alert">
+                {describeCancelFailure(cancelGroup.error)}
+              </p>
+            ) : null}
+
+            <p className="text-xs text-text-secondary">
+              Reference <span className="font-mono tabular-nums">{group.id}</span>
+            </p>
+
+            <BookingSupport
+              reference={group.id}
+              variant={isSingleVisitHelp ? "faq" : "compact"}
+            />
+          </div>
+        ) : null}
+
+        {isAwaitingPayment ? (
+          <MobilePaymentBottomBar group={group} />
+        ) : null}
+
+        {isSinglePaidVisit &&
+        group.units[0] !== undefined &&
+        canShowVisitFeedback({
+          bookingId: group.units[0].booking_id,
+          isPaid,
+          unitStatus: group.units[0].status,
+          bookingStatus: group.units[0].booking_status,
+        }) ? (
+          <VisitFeedbackForm bookingId={group.units[0].booking_id} isComplete />
+        ) : null}
+
+        {isMultiPaidVisit ? (
+          <CompletedVisitsFeedback units={group.units} isPaid={isPaid} />
+        ) : null}
 
       <CancelSupportDialog
         group={group}

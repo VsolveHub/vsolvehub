@@ -10,6 +10,11 @@ import {
   useReverseGeocode,
   useUpdateAddress,
 } from "@/features/addresses/queries";
+import {
+  coordsOnlyAddress,
+  getDevicePosition,
+  locateErrorMessage,
+} from "@/features/addresses/locate-device";
 import { useServiceability } from "@/features/booking/queries";
 import { AddressStage } from "@/features/booking/view/address-stage";
 
@@ -126,28 +131,16 @@ export function CrewAddressPicker({
   async function locate(): Promise<Schemas["ReverseGeocodeResponse"] | null> {
     setLocationError(null);
     try {
-      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        if (typeof navigator === "undefined" || !navigator.geolocation) {
-          reject(new Error("Location permission is not available on this device."));
-          return;
-        }
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          maximumAge: 30_000,
-          timeout: 12_000,
-        });
-      });
-      return await reverseGeocode.mutateAsync({
-        latitude: position.coords.latitude.toFixed(6),
-        longitude: position.coords.longitude.toFixed(6),
-      });
-    } catch {
-      // Denied permission, a timeout and an unreachable geocoder all mean the
-      // same thing to the Customer: the pin is not coming from here. The
-      // message renders inside the dialog, next to the control they pressed.
-      setLocationError(
-        "We could not find you. Check location permission for this site and try again.",
-      );
+      const position = await getDevicePosition();
+      const latitude = position.coords.latitude.toFixed(6);
+      const longitude = position.coords.longitude.toFixed(6);
+      try {
+        return await reverseGeocode.mutateAsync({ latitude, longitude });
+      } catch {
+        return coordsOnlyAddress(latitude, longitude);
+      }
+    } catch (error) {
+      setLocationError(locateErrorMessage(error));
       return null;
     }
   }

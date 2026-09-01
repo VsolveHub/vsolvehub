@@ -320,7 +320,10 @@ function CountdownRing({
         <Pictogram name="time" size="md" className="text-text" />
         <span
           aria-hidden
-          className="text-[2.375rem] font-extrabold leading-tight tabular-nums text-text"
+          className={cn(
+            "font-black leading-tight tabular-nums text-text tracking-tight",
+            countdown.display.length > 5 ? "text-2xl" : "text-3xl",
+          )}
         >
           {countdown.display}
         </span>

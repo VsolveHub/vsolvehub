@@ -271,7 +271,7 @@ describe("BottomNav", () => {
       ...navigation.querySelectorAll<HTMLAnchorElement | HTMLButtonElement>("a, button"),
     ];
 
-    expect(destinations).toHaveLength(5);
+    expect(destinations).toHaveLength(4);
     for (const destination of destinations) {
       expect(destination).toHaveClass("min-w-0", "flex-1");
     }

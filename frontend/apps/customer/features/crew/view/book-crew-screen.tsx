@@ -68,7 +68,10 @@ import {
   STAFF_MEAL_CODE,
   STAFF_PREFERENCE_CODE,
   applyServingSuggestion,
+  crewGenderTotals,
+  crewMix,
   crewMixLabel,
+  genderMixPhrase,
   hiddenEventQuestionCodes,
   occasionQuestions,
   presentationQuestions,
@@ -77,6 +80,7 @@ import {
   suggestedServers,
   syncHeadcount,
   withRoleCount,
+  withRoleGenderCount,
 } from "../model/event-flow";
 import {
   combineStart,
@@ -88,11 +92,11 @@ import { DURATION_CODE, initialAnswers, presetSize, type PresetSize } from "../m
 import { useBookAtPublishedRate, useRateCardPreview } from "../queries";
 import { CrewAddressPicker } from "./crew-address-picker";
 import { CrewComposer, CrewScreen } from "./crew-composer";
-import { EventTypeIcon } from "./event-icons";
+import { EventTypeIcon, RoleIcon } from "./event-icons";
 import { EventSummaryCard, type SummaryLine } from "./event-summary";
 import { JobFormError, JobFormScreen } from "./mobile/job-form-screen";
 import { RateScreen } from "./mobile/rate-screen";
-import { OccasionFields, OccasionScreen, occasionAnswered } from "./occasion-screen";
+import { OccasionFields, OccasionScreen } from "./occasion-screen";
 import { PresetQuestions, requiredAnswersPresent } from "./preset-questions";
 import { RateTermsLink } from "./rate-terms-sheet";
 import { WorkPickerScreen, WorkTypeIcon } from "./work-picker-screen";
@@ -214,6 +218,11 @@ function joinPresent(parts: readonly (string | null)[], separator = " · "): str
   return present.length === 0 ? null : present.join(separator);
 }
 
+export type EventWizardStep =
+  | "occasion"
+  | "crew"
+  | "schedule_venue";
+
 export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
   const router = useRouter();
   const questionSet = useMemo(() => toQuestionSet(variant), [variant]);
@@ -242,6 +251,7 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
   const [bookingStep, setBookingStep] = useState<CrewBookingStep>(() =>
     initialCrewBookingStep(questions),
   );
+  const [eventStep, setEventStep] = useState<EventWizardStep>("occasion");
   /** Incremented to ask the address dialog to open. See `AddressStage`. */
   const [addressSignal, setAddressSignal] = useState(0);
   const isWide = useIsWideScreen();
@@ -268,6 +278,7 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
   const presentation = useMemo(() => presentationQuestions(questions), [questions]);
   const daysQuestion = questions.find((question) => question.code === DURATION_CODE) ?? null;
   const crewTotal = roleTotal(roles, answers);
+  const crewGenders = crewGenderTotals(roles, answers);
   const suggestion = isEvent
     ? suggestedServers(answers[GUEST_BAND_CODE], answers[SERVICE_STYLE_CODE])
     : null;
@@ -275,6 +286,7 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
   const guestBandLabel = optionLabel(occasion, GUEST_BAND_CODE, answers);
   const serviceStyleLabel = optionLabel(occasion, SERVICE_STYLE_CODE, answers);
   const mixLabel = crewMixLabel(roles, answers);
+  const mix = crewMix(roles, answers);
 
   const localIntentRestored = useRef(false);
   const restoredServerDraftId = useRef<string | null>(null);
@@ -300,7 +312,7 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
    * initializer, so the server and first client render stay identical.
    */
   useEffect(() => {
-    const restore = window.setTimeout(() => {
+    const restoreTimer = window.setTimeout(() => {
       const intent = readCrewBookingIntent(crewIntentStorage(), service.slug, variant.id);
       if (intent !== null) {
         const restored = isEvent ? syncHeadcount(intent.answers, roles) : intent.answers;
@@ -319,7 +331,7 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
       }
       localIntentRestored.current = true;
     }, 0);
-    return () => window.clearTimeout(restore);
+    return () => window.clearTimeout(restoreTimer);
   }, [isEvent, questions, roles, service.slug, variant.id]);
 
   useEffect(() => {
@@ -345,9 +357,16 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
     variant.id,
   ]);
 
+  /** Scrolls smoothly to top when advancing or navigating between wizard steps. */
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [eventStep, bookingStep]);
+
   useEffect(() => {
     const draft = requirementQuery.data;
-    if (draft === undefined) return;
+    if (draft === undefined || draft === null) return;
     if (draft.status !== "DRAFT") {
       clearCrewBookingIntent(crewIntentStorage(), service.slug);
       router.replace(requestHref(draft.id));
@@ -396,6 +415,7 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
         answers,
         language: "en-IN",
       });
+      restoredServerDraftId.current = draft.id;
       setRequirementId(draft.id);
       return draft.id;
     })().catch((error: unknown) => {
@@ -443,6 +463,10 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
 
   async function handleShowRate() {
     if ((await saveCrewDraft()) !== null) setBookingStep("rate");
+  }
+
+  function handleRoleGender(code: string, gender: "men" | "women", value: number) {
+    setAnswers((current) => withRoleGenderCount(current, roles, code, gender, value));
   }
 
   function handleAnswer(code: string, value: unknown) {
@@ -571,6 +595,18 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
       ]
     : [];
 
+  const handleExitFlow = () => {
+    if (
+      typeof window !== "undefined" &&
+      typeof window.history.state?.idx === "number" &&
+      window.history.state.idx > 0
+    ) {
+      router.back();
+    } else {
+      router.push("/catalog");
+    }
+  };
+
   /* ---------------------------------------------------------------------
      Phone
      --------------------------------------------------------------------- */
@@ -588,7 +624,7 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
         onContinue={() => {
           if (workLabel !== null) setBookingStep("details");
         }}
-        onBack={() => router.back()}
+        onBack={handleExitFlow}
       />
     );
   }
@@ -602,7 +638,7 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
         onAnswer={handleAnswer}
         hiddenCodes={hiddenCodes}
         onContinue={() => setBookingStep("crew")}
-        onBack={() => router.back()}
+        onBack={handleExitFlow}
       />
     );
   }
@@ -614,12 +650,14 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
         roles={roles}
         daysQuestion={daysQuestion}
         answers={answers}
-        onRoleCount={handleAnswer}
+        onRoleGender={handleRoleGender}
         onDays={(value) => handleAnswer(DURATION_CODE, value)}
         suggestion={suggestion}
         suggestionBasis={joinPresent([guestBandLabel === null ? null : `a ${guestBandLabel.toLowerCase()} guest`, serviceStyleLabel?.toLowerCase() ?? null], " ")}
-        total={crewTotal}
-        onContinue={() => setBookingStep("details")}
+        onContinue={() => {
+          setEventStep("schedule_venue");
+          setBookingStep("details");
+        }}
         onBack={() => setBookingStep("occasion")}
       />
     );
@@ -681,7 +719,7 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
           selectedWorkLabel={workQuestion === null ? null : (workLabel ?? "Selected work")}
           onChangeWork={workQuestion === null ? undefined : () => setBookingStep("work")}
           aboutPanel={workQuestion === null ? <CrewAboutPanel service={service} /> : null}
-          onBack={workQuestion === null ? () => router.back() : () => setBookingStep("work")}
+          onBack={workQuestion === null ? handleExitFlow : () => setBookingStep("work")}
         />
       );
     }
@@ -689,6 +727,7 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
     return (
       <RateScreen
         rate={rate}
+        city={address?.city ?? null}
         isStale={previewQuery.isFetching}
         onBack={() => setBookingStep("details")}
         onBook={() => void handleBook()}
@@ -699,6 +738,7 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
             <EventSummaryCard lines={eventSummary} onChange={() => setBookingStep("details")} />
           ) : undefined
         }
+        crewLabel={isEvent && mixLabel !== null ? "Whole event at this rate" : undefined}
         unavailable={
           rate === null && state !== null && !previewQuery.isFetching ? (
             <RateUnavailable
@@ -711,25 +751,45 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
       />
     );
   }
-
   /* ---------------------------------------------------------------------
      Wide screen
      --------------------------------------------------------------------- */
 
   const planning = bookingStep !== "rate";
-  const eventPlanReady = isEvent && occasionAnswered(occasion, answers);
+
+  const isOccasionValid = requiredAnswersPresent(occasion, answers);
+
+  const isCrewValid = crewTotal >= 1;
+
+  const isScheduleVenueValid =
+    requestedStart !== "" && reportingTime !== null && effectiveAddressId !== null;
+
+  const isPreferencesValid = presentation.every(
+    (q) =>
+      !q.required ||
+      (answers[q.code] !== undefined && answers[q.code] !== null && answers[q.code] !== ""),
+  );
 
   return (
     <div
-      key={planning ? "plan" : "rate"}
+      key={planning ? `plan-${eventStep}` : "rate"}
       className="crew-stage-enter mx-auto w-full max-w-6xl px-4 pb-16 pt-6 sm:px-6"
     >
       <DesktopBookingHero
         serviceName={service.name}
         step={bookingStep}
+        eventStep={eventStep}
         shape={shape}
-        count={isEvent ? crewTotal : (size?.headcount ?? 1)}
-        days={size?.days ?? 1}
+        _count={isEvent ? crewTotal : (size?.headcount ?? 1)}
+        _days={size?.days ?? 1}
+        onSelectEventStep={(step) => {
+          setBookingStep("details");
+          setEventStep(step);
+        }}
+        isOccasionValid={isOccasionValid}
+        isCrewValid={isCrewValid}
+        isScheduleVenueValid={isScheduleVenueValid}
+        isPreferencesValid={isPreferencesValid}
       />
 
       {questionSet.unsupported.length > 0 ? (
@@ -739,7 +799,7 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
         >
           <p className="font-semibold text-text">
             This service is not fully set up for instant booking yet
-          </p>
+</p>
           <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
             Part of the form is missing on our side, so a booking sent from here
             may be refused. Nothing you enter is charged for.
@@ -747,136 +807,85 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
         </div>
       ) : null}
 
-      {planning ? (
-        <div className="grid items-start gap-7 lg:grid-cols-[minmax(0,1fr)_320px]">
+      {isEvent && planning ? (
+        <div className="grid items-start gap-7 lg:grid-cols-[minmax(0,1.85fr)_minmax(280px,1fr)]">
           <div className="flex flex-col gap-6">
-            {isEvent ? (
-              <>
-                <section className="rounded-[20px] border border-line bg-surface p-5 shadow-sm sm:p-6">
-                  <SectionLabel number="1" title="What's the occasion?" caption="Helps us suggest the right crew" />
-                  <OccasionFields
-                    questions={occasion}
-                    answers={answers}
-                    onAnswer={handleAnswer}
-                    hiddenCodes={hiddenCodes}
-                    wide
-                  />
-                </section>
+            {eventStep === "occasion" ? (
+              <section className="crew-stage-enter rounded-[24px] border border-line bg-surface p-6 shadow-sm sm:p-8">
+                <SectionLabel
+                  number="1"
+                  title="What's the occasion?"
+                  caption="Helps us suggest the right crew"
+                />
+                <OccasionFields
+                  questions={occasion}
+                  answers={answers}
+                  onAnswer={handleAnswer}
+                  hiddenCodes={hiddenCodes}
+                  wide
+                />
 
-                <section
-                  className={cn(
-                    "rounded-[20px] border border-line bg-surface p-5 shadow-sm transition-opacity duration-base sm:p-6",
-                    !eventPlanReady && "opacity-60",
-                  )}
-                >
-                  <SectionLabel number="2" title="Who do you need?" caption="Set each role and the days" />
-                  <CrewComposer
-                    roles={roles}
-                    daysQuestion={daysQuestion}
-                    answers={answers}
-                    onRoleCount={handleAnswer}
-                    onDays={(value) => handleAnswer(DURATION_CODE, value)}
-                    suggestion={suggestion}
-                    suggestionBasis={joinPresent([guestBandLabel === null ? null : `a ${guestBandLabel.toLowerCase()} guest`, serviceStyleLabel?.toLowerCase() ?? null], " ")}
-                    total={crewTotal}
-                    wide
-                  />
-                </section>
-
-                <section className="rounded-[20px] border border-line bg-surface p-5 shadow-sm sm:p-6">
-                  <SectionLabel number="3" title="When, where and how they turn up" caption="Date, reporting time, venue and dress code" />
-                  <div className="flex flex-col gap-5">
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <Field label="Event date" required>
-                        <Input
-                          type="date"
-                          min={today}
-                          value={requestedStart}
-                          onChange={(event) => setRequestedStart(event.target.value)}
-                        />
-                      </Field>
-                      <Field
-                        label="Reporting time"
-                        description="When the crew should be at the venue, ready to work."
-                        required
-                      >
-                        <Select
-                          value={reportingTime ?? ""}
-                          onChange={(event) =>
-                            setReportingTime(event.target.value === "" ? null : event.target.value)
-                          }
-                        >
-                          <option value="">Choose a time</option>
-                          {reportingTimeOptions().map((time) => (
-                            <option key={time} value={time}>
-                              {formatReportingTime(time)}
-                            </option>
-                          ))}
-                        </Select>
-                      </Field>
-                    </div>
-                    <p className="-mt-2 text-xs leading-5 text-text-muted">
-                      One 8-hour shift from reporting time. After that, overtime runs only when you
-                      approve it in the app, at the published rate.
-                    </p>
-                    <div>
-                      <p className="mb-2.5 text-sm font-bold text-text">Venue</p>
-                      {addressPicker}
-                    </div>
-                    <PresetQuestions
-                      questions={presentation}
-                      answers={answers}
-                      hiddenCodes={hiddenCodes}
-                      onAnswer={handleAnswer}
-                    />
-                  </div>
-                </section>
-              </>
-            ) : (
-              <>
-                {workQuestion !== null ? (
-                  <button
-                    type="button"
-                    onClick={() => setBookingStep("work")}
-                    className="group flex min-h-20 items-center gap-4 rounded-[20px] border border-selected-line bg-selected-surface p-4 text-left transition-[border-color,box-shadow,transform] duration-base hover:-translate-y-0.5 hover:border-selected hover:shadow-raised active:translate-y-0 active:scale-[0.99] motion-reduce:transform-none"
+                <div className="mt-8 flex items-center justify-end border-t border-line pt-6">
+                  <Button
+                    size="lg"
+                    disabled={!isOccasionValid}
+                    onClick={() => setEventStep("crew")}
+                    className="min-w-44"
                   >
-                    <span className="grid size-12 shrink-0 place-items-center rounded-[14px] bg-navy-900 text-signal-300">
-                      <WorkTypeIcon code={workValue ?? "other"} />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-xs font-bold uppercase tracking-[0.11em] text-text-muted">
-                        Work selected
-                      </span>
-                      <span className="mt-1 block text-lg font-bold text-text">{workLabel}</span>
-                    </span>
-                    <span className="text-sm font-bold text-text-link group-hover:underline">Change</span>
-                  </button>
-                ) : (
-                  // The service IS the work: the flow opens on what a day of it covers.
-                  <CrewAboutPanel service={service} />
-                )}
+                    Continue to Crew
+                  </Button>
+                </div>
+              </section>
+            ) : eventStep === "crew" ? (
+              <section className="crew-stage-enter rounded-[24px] border border-line bg-surface p-6 shadow-sm sm:p-8">
+                <SectionLabel
+                  number="2"
+                  title="How much help do you need?"
+                  caption="Set the crew by role, and how many men and women"
+                />
+                <CrewComposer
+                  roles={roles}
+                  daysQuestion={daysQuestion}
+                  answers={answers}
+                  onRoleGender={handleRoleGender}
+                  onDays={(value) => handleAnswer(DURATION_CODE, value)}
+                  suggestion={suggestion}
+                  suggestionBasis={joinPresent(
+                    [
+                      guestBandLabel === null ? null : `a ${guestBandLabel.toLowerCase()} guest`,
+                      serviceStyleLabel?.toLowerCase() ?? null,
+                    ],
+                    " ",
+                  )}
+                  wide
+                />
 
-                <section className="rounded-[20px] border border-line bg-surface p-5 shadow-sm sm:p-6">
-                  <SectionLabel
-                    number={workQuestion === null ? "1" : "2"}
-                    title="How much help do you need?"
-                    caption="Set the crew and duration"
-                  />
-                  <PresetQuestions
-                    questions={detailQuestions}
-                    answers={answers}
-                    hiddenCodes={hiddenCodes}
-                    onAnswer={handleAnswer}
-                  />
-                </section>
-
-                <section className="rounded-[20px] border border-line bg-surface p-5 shadow-sm sm:p-6">
-                  <SectionLabel
-                    number={workQuestion === null ? "2" : "3"}
-                    title="Where and when?"
-                    caption="Date and saved address"
-                  />
-                  <div className="flex flex-col gap-5">
+                <div className="mt-8 flex items-center justify-between border-t border-line pt-6">
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    onClick={() => setEventStep("occasion")}
+                  >
+                    Back
+                  </Button>
+                  <Button
+                    size="lg"
+                    onClick={() => setEventStep("schedule_venue")}
+                    className="min-w-44"
+                  >
+                    Continue to Date & Venue
+                  </Button>
+                </div>
+              </section>
+            ) : (
+              <section className="crew-stage-enter rounded-[24px] border border-line bg-surface p-6 shadow-sm sm:p-8">
+                <SectionLabel
+                  number="3"
+                  title="Where and when?"
+                  caption="Date, reporting time, saved address and preferences"
+                />
+                <div className="flex flex-col gap-6">
+                  <div className="grid gap-4 sm:grid-cols-2">
                     <Field
                       label="Start from"
                       description="The first day you need the crew. If no supervisor has taken it by then we close the request — nothing is charged."
@@ -890,25 +899,67 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
                       />
                     </Field>
 
-                    <div>
-                      <p className="mb-2.5 text-sm font-bold text-text">Where</p>
-                      {addressPicker}
-                    </div>
+                    <Field
+                      label="Reporting time"
+                      description="When crew should report on site."
+                      required
+                    >
+                      <Select
+                        value={reportingTime ?? ""}
+                        onChange={(event) =>
+                          setReportingTime(
+                            event.target.value === "" ? null : event.target.value,
+                          )
+                        }
+                      >
+                        <option value="">Choose a time</option>
+                        {reportingTimeOptions().map((time) => (
+                          <option key={time} value={time}>
+                            {formatReportingTime(time)}
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
                   </div>
-                </section>
-              </>
-            )}
+                  <p className="-mt-2 text-xs leading-5 text-text-muted">
+                    One 8-hour shift from reporting time. After that, overtime runs only when you
+                    approve it in the app, at the published rate.
+                  </p>
 
-            <Button
-              block
-              size="lg"
-              disabled={!formComplete}
-              loading={createRequirement.isPending || saveRequirement.isPending}
-              loadingLabel="Preparing your live rate"
-              onClick={() => void handleShowRate()}
-            >
-              See my live rate
-            </Button>
+                  <div>
+                    <p className="mb-2.5 text-sm font-bold text-text">Venue address</p>
+                    {addressPicker}
+                  </div>
+
+                  <PresetQuestions
+                    questions={presentation}
+                    answers={answers}
+                    hiddenCodes={hiddenCodes}
+                    onAnswer={handleAnswer}
+                  />
+                </div>
+
+                <div className="mt-8 flex items-center justify-between border-t border-line pt-6">
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    onClick={() => setEventStep("crew")}
+                  >
+                    Back
+                  </Button>
+                  <Button
+                    size="lg"
+                    disabled={!formComplete}
+                    loading={createRequirement.isPending || saveRequirement.isPending}
+                    loadingLabel="Preparing your live rate"
+                    onClick={() => void handleShowRate()}
+                    className="min-w-44"
+                  >
+                    See my live rate
+                  </Button>
+                </div>
+              </section>
+            )}
 
             {writeError !== null ? (
               <ErrorState
@@ -924,37 +975,80 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
             ) : null}
           </div>
 
-          <aside className="sticky top-6 rounded-[22px] bg-navy-900 p-5 text-white shadow-raised">
-            <p className="text-xs font-bold uppercase tracking-[0.14em] text-signal-300">
-              {isEvent ? "Event plan" : "Crew plan"}
-            </p>
+          <aside className="sticky top-24 rounded-[24px] bg-navy-900 p-6 text-white shadow-raised">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-signal-300">
+                Event plan
+              </p>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-[11px] font-semibold text-white/80">
+                <span className="size-1.5 rounded-full bg-signal-400 animate-pulse" />
+                Live brief
+              </span>
+            </div>
+
             <CrewConstellation
-              count={isEvent ? crewTotal : (size?.headcount ?? 1)}
+              count={crewTotal}
               days={size?.days ?? 1}
+              men={crewGenders.men}
+              women={crewGenders.women}
               compact
             />
+
             <dl className="mt-5 divide-y divide-white/10 border-y border-white/10 text-sm">
-              {isEvent ? (
-                <>
-                  <PlanLine label="Occasion" value={joinPresent([eventTypeLabel, guestBandLabel === null ? null : `${guestBandLabel} guests`]) ?? "Choose occasion"} />
-                  <PlanLine label="Crew" value={mixLabel ?? "Add people"} />
-                  <PlanLine label="Reports" value={whenLine ?? "Choose date and time"} />
-                  <PlanLine label="Venue" value={siteLine ?? "Add an address"} />
-                </>
+              <PlanLine
+                label="Occasion"
+                value={
+                  joinPresent([
+                    eventTypeLabel,
+                    guestBandLabel === null ? null : `${guestBandLabel} guests`,
+                  ]) ?? "Choose occasion"
+                }
+              />
+              <PlanLine
+                label="Style"
+                value={serviceStyleLabel ?? "Choose food style"}
+              />
+              {mix.length > 0 ? (
+                <div className="py-3">
+                  <p className="text-white/55">Crew breakdown</p>
+                  <ul className="mt-2 flex flex-col gap-1.5">
+                    {mix.map((line) => (
+                      <li key={line.code} className="flex items-start justify-between gap-3 text-sm">
+                        <span className="min-w-0 text-white/80">{line.label}</span>
+                        <span className="shrink-0 text-right font-semibold tabular-nums text-white">
+                          {genderMixPhrase(line.men, line.women)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ) : (
-                <>
-                  <PlanLine
-                    label="Work"
-                    value={workQuestion === null ? service.name : (workLabel ?? "Choose work")}
-                  />
-                  <PlanLine label="Start" value={requestedStart === "" ? "Choose date" : formatShortDate(requestedStart)} />
-                  <PlanLine label="Site" value={siteLine ?? "Add an address"} />
-                </>
+                <PlanLine label="Crew" value="Add people" />
               )}
+              <PlanLine label="Reports" value={whenLine ?? "Choose date and time"} />
+              <PlanLine label="Venue" value={siteLine ?? "Add an address"} />
+              <PlanLine
+                label="Turnout"
+                value={
+                  joinPresent([
+                    optionLabel(presentation, DRESS_CODE_CODE, answers),
+                    answers[STAFF_MEAL_CODE] === true
+                      ? "Meal provided"
+                      : answers[STAFF_MEAL_CODE] === false
+                        ? "No meal"
+                        : null,
+                  ]) ?? "Set preferences"
+                }
+              />
             </dl>
-            <p className="mt-4 text-xs leading-5 text-white/60">
-              Nothing is sent until you ask for the live rate.
-            </p>
+
+            <div className="mt-4 flex items-start gap-2 text-xs leading-5 text-white/60">
+              <svg viewBox="0 0 16 16" fill="none" className="mt-0.5 size-4 shrink-0" stroke="currentColor" strokeWidth="1.8">
+                <rect x="3" y="6" width="10" height="8" rx="2" />
+                <path d="M5 6V4a3 3 0 1 1 6 0v2" />
+              </svg>
+              <span>Nothing is charged or sent until you review and confirm your live rate.</span>
+            </div>
           </aside>
         </div>
       ) : (
@@ -987,47 +1081,163 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
             />
           }
         >
-          <div className="flex flex-col gap-5">
-            <section className="rounded-[22px] border border-line bg-surface p-6 shadow-card">
-              <p className="text-xs font-bold uppercase tracking-[0.14em] text-signal-700">Ready to review</p>
-              <h2 className="mt-2 text-2xl font-bold tracking-tight text-text">
-                {isEvent ? "Your event, at a glance" : "Your crew, at a glance"}
-              </h2>
-              <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                {isEvent ? (
-                  eventSummary.map((line) => (
-                    <ReviewTile
-                      key={line.key}
-                      label={line.label}
-                      value={line.value ?? "Not chosen"}
-                      icon={line.icon}
+          {planning ? (
+            <div className="flex flex-col gap-6">
+              {workQuestion !== null ? (
+                <button
+                  type="button"
+                  onClick={() => setBookingStep("work")}
+                  className="group flex min-h-20 items-center gap-4 rounded-[20px] border border-selected-line bg-selected-surface p-4 text-left transition-[border-color,box-shadow,transform] duration-base hover:-translate-y-0.5 hover:border-selected hover:shadow-raised active:translate-y-0 active:scale-[0.99] motion-reduce:transform-none"
+                >
+                  <span className="grid size-12 shrink-0 place-items-center rounded-[14px] bg-navy-900 text-signal-300">
+                    <WorkTypeIcon code={workValue ?? "other"} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-xs font-bold uppercase tracking-[0.11em] text-text-muted">
+                      Work selected
+                    </span>
+                    <span className="mt-1 block text-lg font-bold text-text">{workLabel}</span>
+                  </span>
+                  <span className="text-sm font-bold text-text-link group-hover:underline">Change</span>
+                </button>
+              ) : (
+                <CrewAboutPanel service={service} />
+              )}
+
+              <section className="rounded-[20px] border border-line bg-surface p-5 shadow-sm sm:p-6">
+                <SectionLabel
+                  number={workQuestion === null ? "1" : "2"}
+                  title="How much help do you need?"
+                  caption="Set the crew and duration"
+                />
+                <PresetQuestions
+                  questions={detailQuestions}
+                  answers={answers}
+                  hiddenCodes={hiddenCodes}
+                  onAnswer={handleAnswer}
+                />
+              </section>
+
+              <section className="rounded-[20px] border border-line bg-surface p-5 shadow-sm sm:p-6">
+                <SectionLabel
+                  number={workQuestion === null ? "2" : "3"}
+                  title="Where and when?"
+                  caption="Date and saved address"
+                />
+                <div className="flex flex-col gap-5">
+                  <Field
+                    label="Start from"
+                    description="The first day you need the crew. If no supervisor has taken it by then we close the request — nothing is charged."
+                    required
+                  >
+                    <Input
+                      type="date"
+                      min={today}
+                      value={requestedStart}
+                      onChange={(event) => setRequestedStart(event.target.value)}
                     />
-                  ))
-                ) : (
-                  <>
-                    <ReviewTile
-                      label="Work"
-                      value={workQuestion === null ? service.name : (workLabel ?? "Selected work")}
-                      icon={<WorkTypeIcon code={workValue ?? "other"} />}
-                    />
-                    <ReviewTile label="Crew" value={`${size?.headcount ?? 1} ${(size?.headcount ?? 1) === 1 ? "person" : "people"} × ${size?.days ?? 1} ${(size?.days ?? 1) === 1 ? "day" : "days"}`} icon={<CrewIcon />} />
-                    <ReviewTile label="Starts" value={requestedStart === "" ? "Not chosen" : formatShortDate(requestedStart)} icon={<CalendarIcon />} />
-                    <ReviewTile label="Site" value={siteLine ?? "Not chosen"} icon={<PinIcon />} />
-                  </>
-                )}
-              </div>
-              <Button variant="outline" className="mt-5" onClick={() => setBookingStep("details")}>
-                {isEvent ? "Change event plan" : "Change crew plan"}
+                  </Field>
+
+                  <div>
+                    <p className="mb-2.5 text-sm font-bold text-text">Where</p>
+                    {addressPicker}
+                  </div>
+                </div>
+              </section>
+
+              <Button
+                block
+                size="lg"
+                disabled={!formComplete}
+                loading={createRequirement.isPending || saveRequirement.isPending}
+                loadingLabel="Preparing your live rate"
+                onClick={() => void handleShowRate()}
+              >
+                See my live rate
               </Button>
-            </section>
-            <RailFooterNotices book={book} />
-          </div>
+
+              {writeError !== null ? (
+                <ErrorState
+                  title="We could not save that"
+                  message={
+                    isLifecycleUnsupported(writeError)
+                      ? "We do not take crew bookings for this service yet. Nothing you entered has been sent."
+                      : describeError(writeError, "mutation").message
+                  }
+                  severity="error"
+                  inline
+                />
+              ) : null}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-5">
+              <section className="rounded-[22px] border border-line bg-surface p-6 shadow-card">
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-signal-700">Ready to review</p>
+                <h2 className="mt-2 text-2xl font-bold tracking-tight text-text">
+                  {isEvent ? "Your event, at a glance" : "Your crew, at a glance"}
+                </h2>
+                <p className="mt-1 text-sm leading-6 text-text-secondary">
+                  {isEvent
+                    ? "Review the roster, reporting time and venue before you book."
+                    : "Review the size, duration and site before you book."}
+                </p>
+
+                <div className="mt-6 border-t border-line pt-6">
+                  {isEvent ? (
+                    <EventRosterSummary
+                      answers={answers}
+                      roles={roles}
+                      questions={presentation}
+                      when={whenLine}
+                      site={siteLine}
+                    />
+                  ) : (
+                    <dl className="divide-y divide-line text-sm">
+                      <SummaryLine
+                        label="Work"
+                        value={workQuestion === null ? service.name : (workLabel ?? "Choose work")}
+                      />
+                      <SummaryLine
+                        label="Crew"
+                        value={
+                          joinPresent([
+                            size === null ? null : `${size.headcount} ${size.headcount === 1 ? "person" : "people"}`,
+                            size === null ? null : `${size.days} ${size.days === 1 ? "day" : "days"}`,
+                          ]) ?? "Set size"
+                        }
+                      />
+                      <SummaryLine label="Start" value={whenLine ?? "Choose start date"} />
+                      <SummaryLine label="Site" value={siteLine ?? "Add an address"} />
+                    </dl>
+                  )}
+                </div>
+
+                <Button
+                  variant="outline"
+                  className="mt-5"
+                  onClick={() => {
+                    setBookingStep("details");
+                    if (isEvent) setEventStep("occasion");
+                  }}
+                >
+                  {isEvent ? "Change event plan" : "Change crew plan"}
+                </Button>
+              </section>
+
+              <div className="rounded-[18px] border border-warning-line bg-warning-surface p-4">
+                <p className="text-sm font-bold text-text">Pay the crew directly after each day.</p>
+                <p className="mt-1 text-sm leading-6 text-text-secondary">
+                  Vsolve charges only the booking fee shown in the rate panel, and only after a supervisor accepts.
+                </p>
+              </div>
+              <RailFooterNotices book={book} />
+            </div>
+          )}
         </RailLayout>
       )}
     </div>
   );
 }
-
 /** The flow's stages in order, so a remembered step can be checked against the earliest earned one. */
 const STEP_ORDER: readonly CrewBookingStep[] = ["occasion", "work", "crew", "details", "rate"];
 
@@ -1035,70 +1245,127 @@ function stepIndex(step: CrewBookingStep): number {
   return STEP_ORDER.indexOf(step);
 }
 
+const EVENT_PILLS = [
+  { id: "occasion" as const, number: "1", label: "Occasion" },
+  { id: "crew" as const, number: "2", label: "Crew" },
+  { id: "schedule_venue" as const, number: "3", label: "Date & Venue" },
+  { id: "rate" as const, number: "4", label: "Review rate" },
+] as const;
+
 function DesktopBookingHero({
   serviceName,
   step,
+  eventStep,
   shape,
-  count,
-  days,
+  _count,
+  _days,
+  onSelectEventStep,
+  isOccasionValid = false,
+  isCrewValid = false,
+  isScheduleVenueValid = false,
+  isPreferencesValid = false,
 }: {
   serviceName: string;
   step: CrewBookingStep;
+  eventStep?: EventWizardStep;
   shape: "plain" | "work" | "event";
-  count: number;
-  days: number;
+  _count?: number;
+  _days?: number;
+  onSelectEventStep?: (step: EventWizardStep) => void;
+  isOccasionValid?: boolean;
+  isCrewValid?: boolean;
+  isScheduleVenueValid?: boolean;
+  isPreferencesValid?: boolean;
 }) {
-  // A service that publishes no work question has a two-step flow: the picker
-  // pill disappears rather than showing a step nobody will visit. An event's
-  // three planning sections live on one page, so it is two pills as well.
-  const labels =
+  const isEvent = shape === "event";
+
+  const genericLabels =
     shape === "work"
       ? ["Choose work", "Plan crew", "Review rate"]
-      : shape === "event"
-        ? ["Plan your event", "Review rate"]
-        : ["Plan crew", "Review rate"];
-  const activeIndex =
-    step === "rate" ? labels.length - 1 : shape === "work" && step !== "work" ? 1 : shape === "work" ? 0 : 0;
+      : ["Plan crew", "Review rate"];
+
+  const activeGenericIndex =
+    step === "rate"
+      ? genericLabels.length - 1
+      : shape === "work" && step !== "work"
+        ? 1
+        : shape === "work"
+          ? 0
+          : 0;
+
+  const activeEventIndex =
+    step === "rate"
+      ? 3
+      : eventStep === "occasion"
+        ? 0
+        : eventStep === "crew"
+          ? 1
+          : 2;
+
   return (
-    <header className="relative mb-7 overflow-hidden rounded-[28px] bg-navy-900 px-6 py-7 text-white sm:px-8 sm:py-9">
+    <header className="relative mb-7 overflow-hidden rounded-[28px] bg-navy-900 px-6 py-7 text-white sm:px-8 sm:py-8">
       <div aria-hidden className="absolute -right-16 -top-24 size-64 rounded-full bg-signal-500/20 blur-3xl" />
-      <div className="relative grid items-center gap-7 md:grid-cols-[1fr_300px]">
-        <div>
-          <Link
-            href="/catalog"
-            className="inline-flex min-h-11 items-center text-sm font-semibold text-white/75 transition-colors duration-base hover:text-white focus-visible:outline-white"
-          >
-            <svg viewBox="0 0 20 20" fill="none" className="mr-1 size-4" aria-hidden>
-              <path d="m12 5-5 5 5 5M7 10h9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            Browse crews
-          </Link>
-          <p className="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-signal-300">
-            {step === "rate" ? "Your live rate" : shape === "event" ? "Plan your event crew" : "Plan your crew"}
-          </p>
-          <h1 className="mt-2 max-w-xl text-balance text-3xl font-bold tracking-tight sm:text-4xl">
-            {step === "rate"
-              ? "One last look before you book."
-              : shape === "work"
-                ? `Build your ${serviceName.toLowerCase()} crew`
-                : shape === "event"
-                  ? "Staff your event, role by role."
-                  : serviceName}
-          </h1>
-          <div className="mt-5 flex flex-wrap items-center gap-2 text-sm text-white/80">
-            {labels.map((label, index) => (
+      <div className="relative">
+        <Link
+          href="/catalog"
+          className="inline-flex min-h-10 items-center text-sm font-semibold text-white/75 transition-colors duration-base hover:text-white focus-visible:outline-white"
+        >
+          <svg viewBox="0 0 20 20" fill="none" className="mr-1 size-4" aria-hidden>
+            <path d="m12 5-5 5 5 5M7 10h9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Browse crews
+        </Link>
+
+        <p className="mt-3 text-xs font-bold uppercase tracking-[0.18em] text-signal-300">
+          {isEvent ? "Plan your event crew" : "Plan your crew"}
+        </p>
+
+        <h1 className="mt-1.5 max-w-2xl text-balance text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl">
+          {isEvent ? "Staff your event, role by role." : `Build your ${serviceName.toLowerCase()} crew`}
+        </h1>
+
+        <div className="mt-5 flex flex-wrap items-center gap-2 text-sm text-white/80">
+          {isEvent ? (
+            EVENT_PILLS.map((pill, index) => {
+              const active = index === activeEventIndex;
+              const isCompleted =
+                (pill.id === "occasion" && isOccasionValid) ||
+                (pill.id === "crew" && isCrewValid) ||
+                (pill.id === "schedule_venue" && isScheduleVenueValid && isPreferencesValid);
+
+              const status = active ? "active" : isCompleted ? "complete" : "upcoming";
+              const canClick = pill.id !== "rate" && (isCompleted || active) && onSelectEventStep;
+
+              return (
+                <span key={pill.id} className="contents">
+                  {index > 0 ? <span aria-hidden className="text-white/30">&rarr;</span> : null}
+                  {canClick ? (
+                    <button
+                      type="button"
+                      onClick={() => onSelectEventStep(pill.id as EventWizardStep)}
+                      className="transition-transform duration-fast hover:scale-105 active:scale-100 focus-visible:outline-white"
+                    >
+                      <FlowPill number={pill.number} label={pill.label} status={status} />
+                    </button>
+                  ) : (
+                    <FlowPill number={pill.number} label={pill.label} status={status} />
+                  )}
+                </span>
+              );
+            })
+          ) : (
+            genericLabels.map((label, index) => (
               <span key={label} className="contents">
                 {index > 0 ? <span aria-hidden className="text-white/30">&rarr;</span> : null}
                 <FlowPill
                   number={`${index + 1}`}
                   label={label}
-                  status={index === activeIndex ? "active" : index < activeIndex ? "complete" : "upcoming"}
+                  status={index === activeGenericIndex ? "active" : index < activeGenericIndex ? "complete" : "upcoming"}
                 />
               </span>
-            ))}
-          </div>
+            ))
+          )}
         </div>
-        <CrewConstellation count={count} days={days} />
       </div>
     </header>
   );
@@ -1157,12 +1424,24 @@ function SectionLabel({
 }
 
 /** The signature roster: it grows as the Customer adds people. */
-function CrewConstellation({ count, days, compact = false }: { count: number; days: number; compact?: boolean }) {
-  const visible = Math.min(Math.max(count, 1), 6);
+function CrewConstellation({
+  count,
+  days: _days,
+  men = 0,
+  women = 0,
+  compact = false,
+}: {
+  count: number;
+  days: number;
+  men?: number;
+  women?: number;
+  compact?: boolean;
+}) {
+  const visible = Math.min(Math.max(count, 1), 3);
   const empty = count < 1;
   return (
     <figure className={cn("group rounded-[22px] border border-white/10 bg-white/[0.07] backdrop-blur-sm", compact ? "mt-4 p-4" : "p-5")}>
-      <div className={cn("flex items-end justify-center gap-2", compact ? "min-h-20" : "min-h-28", empty && "opacity-40")} aria-hidden>
+      <div className={cn("flex items-end justify-center gap-3", compact ? "min-h-16" : "min-h-28", empty && "opacity-40")} aria-hidden>
         {Array.from({ length: visible }, (_, index) => (
           <span
             key={index}
@@ -1174,12 +1453,12 @@ function CrewConstellation({ count, days, compact = false }: { count: number; da
           </span>
         ))}
       </div>
-      <figcaption className="mt-4 flex items-baseline justify-between border-t border-white/10 pt-4">
+      <figcaption className="mt-4 flex items-baseline justify-between gap-3 border-t border-white/10 pt-4">
         <span className="text-sm text-white/65">Crew plan</span>
-        <strong className="text-lg tabular-nums text-white">
+        <strong className="text-right text-lg tabular-nums text-white">
           {empty
             ? "Nobody yet"
-            : `${count} ${count === 1 ? "person" : "people"} × ${days} ${days === 1 ? "day" : "days"}`}
+            : `${count} ${count === 1 ? "person" : "people"} · ${men} ${men === 1 ? "man" : "men"} · ${women} ${women === 1 ? "woman" : "women"}`}
         </strong>
       </figcaption>
     </figure>
@@ -1191,6 +1470,83 @@ function PlanLine({ label, value }: { label: string; value: string }) {
     <div className="grid grid-cols-[64px_1fr] gap-3 py-3">
       <dt className="text-white/55">{label}</dt>
       <dd className="text-right font-semibold text-white">{value}</dd>
+    </div>
+  );
+}
+
+function SummaryLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between py-3 text-sm">
+      <dt className="text-text-secondary">{label}</dt>
+      <dd className="font-semibold text-text">{value}</dd>
+    </div>
+  );
+}
+
+function EventRosterSummary({
+  answers,
+  roles,
+  questions: _questions,
+  when,
+  site,
+}: {
+  answers: Readonly<Record<string, unknown>>;
+  roles: readonly RequirementQuestionView[];
+  questions: readonly RequirementQuestionView[];
+  when: string | null;
+  site: string | null;
+}) {
+  const mix = crewMix(roles, answers);
+  const eventType = answers[EVENT_TYPE_CODE];
+  const guestBand = answers[GUEST_BAND_CODE];
+  const serviceStyle = answers[SERVICE_STYLE_CODE];
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <ReviewTile
+          label="Occasion"
+          value={typeof eventType === "string" ? eventType : "Not set"}
+          icon={<RoleIcon code="waiter_count" />}
+        />
+        <ReviewTile
+          label="Guests & Food"
+          value={
+            joinPresent(
+              [
+                typeof guestBand === "string" ? `${guestBand} guests` : null,
+                typeof serviceStyle === "string" ? serviceStyle : null,
+              ],
+              " · ",
+            ) ?? "Not set"
+          }
+          icon={<RoleIcon code="bar_staff_count" />}
+        />
+        <ReviewTile
+          label="Reporting & Date"
+          value={when ?? "Not set"}
+          icon={<CalendarIcon />}
+        />
+        <ReviewTile
+          label="Venue"
+          value={site ?? "Not set"}
+          icon={<PinIcon />}
+        />
+      </div>
+
+      <div>
+        <p className="mb-2 text-xs font-bold uppercase tracking-[0.11em] text-text-muted">
+          Crew Roster
+        </p>
+        <div className="divide-y divide-line rounded-[16px] border border-line bg-surface-hover px-4">
+          {mix.map((line) => (
+            <div key={line.code} className="flex items-center justify-between py-3 text-sm">
+              <span className="font-medium text-text">{line.label}</span>
+              <span className="font-bold tabular-nums text-text">{line.count}</span>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1290,11 +1646,8 @@ function RailFooterNotices({
 }
 
 /**
- * The desktop rail, trimmed to screen 13's shape: two money lines and one
- * link to everything else. Replaces `RateRail`, which repeated the whole
- * disclosure — inclusions, overtime, add-ons, the cancellation window, the
- * wage-money promise — beside a form that already shows it once the Customer
- * books. That explanation lives in `RateTermsSheet` now.
+ * The desktop rail, trimmed to two money lines and a link to the rest.
+ * Replaces the deleted `RateRail` module on this branch.
  */
 function TrimmedRateRail({
   rate,
@@ -1456,8 +1809,11 @@ function RailFooter({
         loading={isBooking}
         loadingLabel="Booking your crew"
       >
-        Book — pay {rate.bookingFeeLabel} when accepted
+        Book this crew
       </Button>
+      <p className="text-center text-[0.8125rem] leading-5 text-text-secondary">
+        You pay {rate.bookingFeeLabel} only when a supervisor accepts.
+      </p>
     </div>
   );
 }

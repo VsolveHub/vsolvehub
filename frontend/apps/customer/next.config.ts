@@ -80,6 +80,10 @@ const nextConfig: NextConfig = {
     return [
       // A customer never sees the word "engagement"; the booking lives at /jobs/{id} now.
       { source: "/engagements/:path*", destination: "/jobs/:path*", permanent: true },
+      { source: "/requests", destination: "/activity?tab=requests", permanent: false },
+      { source: "/bookings", destination: "/activity?tab=booked", permanent: false },
+      { source: "/bookings/workforce", destination: "/activity?tab=booked", permanent: false },
+      { source: "/projects", destination: "/activity?tab=projects", permanent: false },
     ];
   },
   async rewrites() {

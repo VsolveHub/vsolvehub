@@ -4,27 +4,6 @@ const CHECKOUT_CARD =
   "overflow-hidden rounded-xl border border-line/80 bg-surface shadow-[0_1px_2px_rgba(0,17,46,0.05)]";
 export { CHECKOUT_CARD as checkoutCardClass };
 
-/** Numbered section heading used on the checkout page. */
-export function CheckoutSectionHeading({
-  number,
-  title,
-}: {
-  number: number;
-  title: string;
-}) {
-  return (
-    <div className="flex items-center gap-3">
-      <span
-        aria-hidden
-        className="flex size-8 shrink-0 items-center justify-center rounded-full bg-navy-900 text-sm font-bold text-white"
-      >
-        {number}
-      </span>
-      <h2 className="text-lg font-bold leading-none text-text">{title}</h2>
-    </div>
-  );
-}
-
 export function CheckoutCard({
   children,
   className,

@@ -332,7 +332,7 @@ const MOBILE_TARGETS: readonly MobileNavTarget[] = [
   { href: "/", label: "Home", shortLabel: "Home", icon: "home", private: false },
   { href: "/catalog", label: "Services", shortLabel: "Services", icon: "search", private: false },
   { href: "/activity", label: "Bookings", shortLabel: "Bookings", icon: "activity", private: false },
-  { href: "/account", label: "Profile", shortLabel: "Profile", icon: "profile", private: false },
+  { href: "/account", label: "Profile", shortLabel: "Profile", icon: "profile", private: true },
 ];
 
 const MOBILE_PATHS: Record<string, React.ReactNode> = {

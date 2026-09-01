@@ -18,6 +18,7 @@ import {
   buttonStyles,
   segmentStyles,
 } from "@vsolve/ui";
+import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -40,6 +41,7 @@ import { EstimateDetailScreen } from "./estimate-detail-screen";
 import { QuoteCard } from "./quote-card";
 import { ShoppingListCard } from "./shopping-list-card";
 import { QuoteComparison } from "./quote-comparison";
+import { QuestionInbox } from "./question-inbox";
 import { RejectQuoteDialog } from "./reject-quote-dialog";
 import { RevisionRequestDialog } from "./revision-request-dialog";
 import { SelectionStatus } from "./selection-status";
@@ -73,15 +75,27 @@ export interface QuotesScreenProps {
 
 function QuoteBreadcrumb({ requestLabel, requestHref }: { requestLabel: string; requestHref: string }) {
   return (
-    <nav aria-label="Breadcrumb" className="text-sm font-semibold text-text-muted">
-      <ol className="flex flex-wrap items-center gap-2">
-        <li><Link href="/activity" className="hover:text-text">Bookings</Link></li>
-        <li aria-hidden className="text-warm-400">›</li>
-        <li><Link href={requestHref} className="hover:text-text">{requestLabel}</Link></li>
-        <li aria-hidden className="text-warm-400">›</li>
-        <li className="font-extrabold text-text" aria-current="page">Estimates</li>
-      </ol>
-    </nav>
+    <div className="mb-4 flex items-center gap-3">
+      <button
+        type="button"
+        onClick={() => {
+          if (typeof window !== "undefined") window.history.back();
+        }}
+        aria-label="Go back"
+        className="inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-line bg-surface text-text shadow-2xs transition-colors hover:bg-surface-hover hover:text-text-primary active:scale-95 cursor-pointer"
+      >
+        <ChevronLeft className="size-5" strokeWidth={2.2} aria-hidden />
+      </button>
+      <nav aria-label="Breadcrumb" className="text-sm font-semibold text-text-muted">
+        <ol className="flex flex-wrap items-center gap-2">
+          <li><Link href="/activity" className="hover:text-text">Bookings</Link></li>
+          <li aria-hidden className="text-warm-400">›</li>
+          <li><Link href={requestHref} className="hover:text-text">{requestLabel}</Link></li>
+          <li aria-hidden className="text-warm-400">›</li>
+          <li className="font-extrabold text-text" aria-current="page">Estimates</li>
+        </ol>
+      </nav>
+    </div>
   );
 }
 
@@ -104,6 +118,7 @@ export function QuotesScreen({ requirementId, requestHref }: QuotesScreenProps) 
   const [revising, setRevising] = useState<string | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
   const [view, setView] = useState<"quotes" | "compare">("quotes");
+  const [chatOpen, setChatOpen] = useState(false);
 
   const list = access.list;
   const isA5 = access.isA5;
@@ -143,7 +158,7 @@ export function QuotesScreen({ requirementId, requestHref }: QuotesScreenProps) 
   const waiting = list === null ? [] : unansweredVendorQuestions(list.cards);
 
   return (
-    <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-4 px-4 py-5 sm:px-6 lg:px-0">
+    <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-4 px-4 pt-5 pb-28 sm:px-6 sm:pb-12 lg:px-0">
       <QuoteBreadcrumb requestLabel={requestLabel} requestHref={requestHref} />
       <header>
         <h1 className="text-[1.75rem] font-extrabold leading-tight tracking-tight text-text sm:text-[1.875rem]">
@@ -174,12 +189,13 @@ export function QuotesScreen({ requirementId, requestHref }: QuotesScreenProps) 
             {waiting.length === 1 ? `${waiting[0]!.card.vendorName ?? "A professional"} asked you a question` : `${waiting.length} questions are waiting on you`}
           </p>
           <p className="mt-0.5 text-sm leading-6 text-text-secondary">“{waiting[0]!.question.question}”</p>
-          <Link
-            href={estimateQuestionsHref(requirementId, waiting[0]!.card.proposalId)}
-            className={buttonStyles({ variant: "primary", size: "sm", className: "mt-2" })}
+          <button
+            type="button"
+            onClick={() => setChatOpen(true)}
+            className={buttonStyles({ variant: "primary", size: "sm", className: "mt-2 cursor-pointer" })}
           >
-            Answer
-          </Link>
+            Chat now
+          </button>
         </div>
       ) : null}
 
@@ -265,6 +281,13 @@ export function QuotesScreen({ requirementId, requestHref }: QuotesScreenProps) 
             { onSuccess: () => setRevising(null) },
           );
         }}
+      />
+      <QuestionInbox
+        requirementId={requirementId}
+        supportAction={supportAction}
+        open={chatOpen}
+        onOpenChange={setChatOpen}
+        showFab={false}
       />
     </div>
   );

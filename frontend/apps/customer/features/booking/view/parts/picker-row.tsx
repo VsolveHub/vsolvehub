@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { cn } from "@vsolve/ui";
 
 /**
@@ -31,6 +32,8 @@ export interface PickerRowProps {
   /** What to show in place of a value. Never a blank row. */
   placeholder: string;
   onOpen: () => void;
+  /** Optional icon to render on the leading side of the row. */
+  icon?: ReactNode;
   /**
    * The trailing affordance.
    *
@@ -51,6 +54,7 @@ export function PickerRow({
   value,
   placeholder,
   onOpen,
+  icon,
   trailing = "chevron",
   trailingWord,
   emphasis = false,
@@ -72,6 +76,17 @@ export function PickerRow({
           : "border-line bg-surface hover:bg-surface-hover",
       )}
     >
+      {icon ? (
+        <span
+          aria-hidden
+          className={cn(
+            "flex size-10 shrink-0 items-center justify-center rounded-control",
+            emphasis ? "bg-signal-200 text-action" : "bg-surface-sunken text-text-muted",
+          )}
+        >
+          {icon}
+        </span>
+      ) : null}
       <span aria-hidden className="min-w-0 flex-1">
         <span
           className={cn(

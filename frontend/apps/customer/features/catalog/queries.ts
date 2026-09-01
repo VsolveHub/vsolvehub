@@ -2,6 +2,7 @@ import "server-only";
 
 import { cache } from "react";
 import {
+  ApiNetworkError,
   ApiRequestError,
   request,
   type Schemas,
@@ -55,19 +56,48 @@ function isNotFound(error: unknown): boolean {
   return error instanceof ApiRequestError && error.status === 404;
 }
 
+/**
+ * Django's runserver (and Docker coming up) can refuse the first connect while
+ * still becoming healthy a moment later. One refused TCP is not "the catalog
+ * is down"; three in a row is.
+ *
+ * A persistent failure still throws — collapsing that into `[]` would tell
+ * the customer Vsolve Hub offers no services.
+ */
+const CATALOG_NETWORK_ATTEMPTS = 3;
+const CATALOG_RETRY_GAP_MS = process.env.VITEST ? 0 : 200;
+
+async function readCatalog<T>(operation: () => Promise<T>): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= CATALOG_NETWORK_ATTEMPTS; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      if (!(error instanceof ApiNetworkError) || attempt === CATALOG_NETWORK_ATTEMPTS) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, CATALOG_RETRY_GAP_MS * attempt));
+    }
+  }
+  throw lastError;
+}
+
 export const getCategories = cache(async (): Promise<Category[]> => {
   const api = createPublicApi(catalogPolicy([]));
-  return request(() => api.GET("/api/v1/categories/"));
+  return readCatalog(() => request(() => api.GET("/api/v1/categories/")));
 });
 
 export const getCategoryServices = cache(
   async (categorySlug: string): Promise<ServiceCard[] | null> => {
     const api = createPublicApi(catalogPolicy([CACHE_TAGS.category(categorySlug)]));
     try {
-      return await request(() =>
-        api.GET("/api/v1/categories/{category_slug}/services/", {
-          params: { path: { category_slug: categorySlug } },
-        }),
+      return await readCatalog(() =>
+        request(() =>
+          api.GET("/api/v1/categories/{category_slug}/services/", {
+            params: { path: { category_slug: categorySlug } },
+          }),
+        ),
       );
     } catch (error) {
       if (isNotFound(error)) return null;
@@ -79,10 +109,12 @@ export const getCategoryServices = cache(
 export const getService = cache(async (serviceSlug: string): Promise<ServiceDetail | null> => {
   const api = createPublicApi(catalogPolicy([CACHE_TAGS.service(serviceSlug)]));
   try {
-    return await request(() =>
-      api.GET("/api/v1/services/{service_slug}/", {
-        params: { path: { service_slug: serviceSlug } },
-      }),
+    return await readCatalog(() =>
+      request(() =>
+        api.GET("/api/v1/services/{service_slug}/", {
+          params: { path: { service_slug: serviceSlug } },
+        }),
+      ),
     );
   } catch (error) {
     if (isNotFound(error)) return null;
@@ -102,10 +134,12 @@ export const getServiceConfiguration = cache(
   async (serviceSlug: string): Promise<ServiceDetail | null> => {
     const api = createPublicApi(catalogPolicy([CACHE_TAGS.service(serviceSlug)]));
     try {
-      return await request(() =>
-        api.GET("/api/v1/services/{service_slug}/configuration/", {
-          params: { path: { service_slug: serviceSlug } },
-        }),
+      return await readCatalog(() =>
+        request(() =>
+          api.GET("/api/v1/services/{service_slug}/configuration/", {
+            params: { path: { service_slug: serviceSlug } },
+          }),
+        ),
       );
     } catch (error) {
       if (isNotFound(error)) return null;

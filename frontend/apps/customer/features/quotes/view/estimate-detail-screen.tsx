@@ -2,6 +2,7 @@
 
 import { blocksNewSelection } from "@vsolve/query";
 import { Badge, Button, ErrorState, Skeleton, buttonStyles, cn } from "@vsolve/ui";
+import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -18,6 +19,7 @@ import {
   useRevalidateQuote,
   useSelection,
 } from "../queries";
+import { QuestionInbox } from "./question-inbox";
 import { timelineLabel, validityLabel } from "./quote-card";
 import { RejectQuoteDialog } from "./reject-quote-dialog";
 import { RevisionRequestDialog } from "./revision-request-dialog";
@@ -131,9 +133,24 @@ export function EstimateDetailScreen({
             Your estimate
           </p>
         ) : (
-          <Link href={requestQuotesHref(requirementId)} className="text-sm font-semibold text-text-link hover:underline">
-            ← All estimates
-          </Link>
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== "undefined") window.history.back();
+              }}
+              aria-label="Back to all estimates"
+              className="inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-line bg-surface text-text shadow-2xs transition-colors hover:bg-surface-hover hover:text-text-primary active:scale-95 cursor-pointer"
+            >
+              <ChevronLeft className="size-5" strokeWidth={2.2} aria-hidden />
+            </button>
+            <Link
+              href={requestQuotesHref(requirementId)}
+              className="text-sm font-bold text-navy-900 hover:text-action transition-colors"
+            >
+              All estimates
+            </Link>
+          </div>
         )}
         <ShareButton card={card} />
       </div>
@@ -302,7 +319,7 @@ export function EstimateDetailScreen({
         )}
       </div>
 
-      {chooseable ? (
+      {chooseable && !embedded ? (
         <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-10 border-t border-line bg-surface px-4 py-3 shadow-raised md:bottom-0">
           <div className="mx-auto flex w-full max-w-3xl items-center gap-3">
             <div className="min-w-0 flex-1">
@@ -315,7 +332,7 @@ export function EstimateDetailScreen({
             </Link>
           </div>
         </div>
-      ) : !canChoose ? (
+      ) : !canChoose && !embedded ? (
         <p className="text-sm leading-6 text-text-secondary">You have already chosen a professional on this request. If it falls through, the others come back at no extra charge.</p>
       ) : null}
 
@@ -343,6 +360,7 @@ export function EstimateDetailScreen({
           );
         }}
       />
+      {!embedded ? <QuestionInbox requirementId={requirementId} /> : null}
     </div>
   );
 }

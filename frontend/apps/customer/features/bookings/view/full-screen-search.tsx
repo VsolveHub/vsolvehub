@@ -12,7 +12,18 @@ import { heldUnitCount } from "./group-status";
 import searchAnimationData from "./search-lottie.json";
 
 const LottiePlayer = dynamic(
-  () => import("lottie-react").then((mod) => mod.Lottie),
+  () => {
+    if (typeof window === "undefined") return Promise.resolve(() => null);
+    try {
+      const canvas = document.createElement("canvas");
+      if (!canvas?.getContext?.("2d")) {
+        return Promise.resolve(() => null);
+      }
+    } catch {
+      return Promise.resolve(() => null);
+    }
+    return import("lottie-react").then((mod) => mod.Lottie);
+  },
   {
     ssr: false,
     loading: () => (

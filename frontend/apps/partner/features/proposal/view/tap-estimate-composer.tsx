@@ -147,8 +147,8 @@ export function EstimateClosedDialog() {
           The customer has already continued with another professional. Your estimate was not
           sent.
         </p>
-        <Link href="/work" className={buttonStyles({ className: "mt-5 w-full" })}>
-          Back to work
+        <Link href="/work/all" className={buttonStyles({ className: "mt-5 w-full" })}>
+          Back to your work
         </Link>
       </div>
     </div>

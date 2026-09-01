@@ -41,3 +41,15 @@ export function appChromeLayout(pathname: string): AppChromeLayout {
   if (pathname === "/checkout") return CHECKOUT_CHROME_LAYOUT;
   return DEFAULT_CHROME_LAYOUT;
 }
+
+/**
+ * Whether the floating circular back control should render.
+ *
+ * Design-gallery artboards are server pages with no `MobileScreen`, so they
+ * still need it. A claimed viewport already has a header back control — stacking
+ * the circle on `/requests/book/*` is what covered "Book event staff".
+ */
+export function showFixedBackButton(pathname: string, claimed: boolean): boolean {
+  if (pathname.startsWith("/design/")) return true;
+  return !claimed;
+}

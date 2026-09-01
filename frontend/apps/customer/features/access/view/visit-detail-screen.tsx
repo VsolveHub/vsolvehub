@@ -12,7 +12,9 @@ import {
   buttonStyles,
 } from "@vsolve/ui";
 import { canReadFullEstimates } from "@vsolve/query";
+import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { toQuoteListView, type QuoteCardView } from "@/features/quotes/adapters";
@@ -279,7 +281,7 @@ function VisitEstimateSummary({
 /** A stable page width, with the visit record and arrival-code rail side by side. */
 function PageFrame({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">{children}</div>
+    <div className="mx-auto w-full max-w-6xl px-4 pt-6 pb-28 sm:px-6 sm:pb-12">{children}</div>
   );
 }
 
@@ -496,29 +498,41 @@ function VisitBreadcrumb({
   planSize: number;
 }) {
   return (
-    <nav aria-label="Breadcrumb">
-      <ol className="flex list-none flex-wrap items-center gap-2 p-0 text-sm font-medium text-text-secondary">
-        <li>
-          <Link href="/activity" className="hover:text-text hover:underline">
-            Bookings
-          </Link>
-        </li>
-        <li aria-hidden className="text-warm-400">
-          /
-        </li>
-        <li>
-          <Link href={requestHref(requirementId)} className="hover:text-text hover:underline">
-            Your request
-          </Link>
-        </li>
-        <li aria-hidden className="text-warm-400">
-          /
-        </li>
-        <li className="font-bold text-text" aria-current="page">
-          Visit {position} of {planSize}
-        </li>
-      </ol>
-    </nav>
+    <div className="mb-4 flex items-center gap-3">
+      <button
+        type="button"
+        onClick={() => {
+          if (typeof window !== "undefined") window.history.back();
+        }}
+        aria-label="Go back"
+        className="inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-line bg-surface text-text shadow-2xs transition-colors hover:bg-surface-hover hover:text-text-primary active:scale-95 cursor-pointer"
+      >
+        <ChevronLeft className="size-5" strokeWidth={2.2} aria-hidden />
+      </button>
+      <nav aria-label="Breadcrumb">
+        <ol className="flex list-none flex-wrap items-center gap-2 p-0 text-sm font-medium text-text-secondary">
+          <li>
+            <Link href="/activity" className="hover:text-text hover:underline">
+              Bookings
+            </Link>
+          </li>
+          <li aria-hidden className="text-warm-400">
+            /
+          </li>
+          <li>
+            <Link href={requestHref(requirementId)} className="hover:text-text hover:underline">
+              Your request
+            </Link>
+          </li>
+          <li aria-hidden className="text-warm-400">
+            /
+          </li>
+          <li className="font-bold text-text" aria-current="page">
+            Visit {position} of {planSize}
+          </li>
+        </ol>
+      </nav>
+    </div>
   );
 }
 

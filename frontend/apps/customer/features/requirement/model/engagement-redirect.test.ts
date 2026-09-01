@@ -9,7 +9,7 @@ describe("converted request navigation", () => {
 
   it("opens the project workspace once an engagement exists", () => {
     expect(engagementDestination("1c0c2fdd-c23b-4f26-8da2-d98d7530e469")).toBe(
-      "/engagements/1c0c2fdd-c23b-4f26-8da2-d98d7530e469",
+      "/jobs/1c0c2fdd-c23b-4f26-8da2-d98d7530e469",
     );
   });
 });

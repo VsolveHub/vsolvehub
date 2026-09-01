@@ -312,6 +312,8 @@ export interface DispatchApiOptions {
   groupReads?: Sequenced[];
   /** `POST /booking-groups/{id}/cancel/`. */
   cancel?: Sequenced;
+  /** `GET /bookings/{id}/`, consumed in order for visit detail screens. */
+  bookingReads?: Sequenced[];
   /** `GET /partner/offers/`, consumed in order. */
   offerReads?: Sequenced[];
   /** `POST /partner/offers/{id}/{action}/`, consumed in order. */
@@ -447,6 +449,35 @@ export async function installDispatchApi(page: Page, options: DispatchApiOptions
   await page.route(`${API}/booking-groups/*/cancel/`, (route) => {
     record(route);
     const response = options.cancel ?? { body: group({ status: "CANCELLED", version: 2 }) };
+    return respond(route, response.body, response.status ?? 200);
+  });
+
+  const nextBookingRead = sequence(
+    options.bookingReads ?? [
+      {
+        body: {
+          id: "booking-1",
+          fulfilment_unit_id: "fu-1",
+          status: "CONFIRMED",
+          version: 1,
+          scheduled_start: "2026-08-04T10:00:00Z",
+          estimated_duration_minutes: 45,
+          partner_display_name: "Carpenter Pro",
+          en_route_at: null,
+          arrived_at: null,
+          work_tasks: [],
+          completion: null,
+          reschedule_preview: { is_available: true, unavailable_reason: "" },
+          scope_amendments: [],
+          server_now: SERVER_NOW,
+          next_transition_at: null,
+        },
+      },
+    ],
+  );
+  await page.route(`${API}/bookings/*/`, (route) => {
+    record(route);
+    const response = nextBookingRead();
     return respond(route, response.body, response.status ?? 200);
   });
 

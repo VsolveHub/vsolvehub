@@ -278,7 +278,7 @@ function VisitTimeSheet({
               <label
                 key={candidate.date}
                 className={cn(
-                  "flex min-h-[68px] flex-col items-center justify-center rounded-card px-1 py-2 text-center",
+                  "relative flex min-h-[68px] flex-col items-center justify-center rounded-card px-1 py-2 text-center",
                   "transition-colors duration-fast has-[:focus-visible]:outline has-[:focus-visible]:outline-2",
                   "has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-focus-ring",
                   disabled
@@ -312,53 +312,62 @@ function VisitTimeSheet({
 
       {day === null ? (
         <p className="mt-4 text-sm text-text-secondary">Choose a day to see visit times.</p>
-      ) : (
-        <fieldset className="mt-5 border-0 p-0">
-          <legend className="text-sm font-semibold text-text">Choose a time</legend>
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            {day.slots.map((slot) => {
-              const overlapping = slotOverlapsAnotherSelection({
-                slot,
-                selectedStarts,
-                visitIndex,
-                grid,
-              });
-              const disabled = !slot.isAvailable || overlapping;
-              const checked = slot.startsAt === draftStart;
-              const helper = overlapping
-                ? "Used by another visit"
-                : (slot.unavailableLabel ?? "Available");
-              return (
-                <label
-                  key={slot.token}
-                  className={cn(
-                    "flex min-h-14 flex-col items-center justify-center rounded-card p-2 text-center",
-                    "transition-colors duration-fast has-[:focus-visible]:outline has-[:focus-visible]:outline-2",
-                    "has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-focus-ring",
-                    disabled
-                      ? "border border-line bg-surface-sunken opacity-60"
-                      : checked
-                        ? "cursor-pointer border-2 border-action-secondary bg-selected-surface"
-                        : "cursor-pointer border border-line bg-surface hover:bg-surface-hover",
-                  )}
-                >
-                  <input
-                    type="radio"
-                    name={`customer-visit-${visitIndex}-time`}
-                    value={slot.startsAt}
-                    checked={checked}
-                    disabled={disabled}
-                    onChange={() => onDraftStart(slot.startsAt)}
-                    className="sr-only"
-                  />
-                  <span className="text-sm font-bold tabular-nums text-text">{slot.label}</span>
-                  <span className="mt-0.5 text-[11px] font-medium text-text-muted">{helper}</span>
-                </label>
-              );
-            })}
-          </div>
-        </fieldset>
-      )}
+      ) : (() => {
+          const availableSlots = day.slots.filter((slot) => slot.isAvailable);
+          return (
+            <fieldset className="mt-5 border-0 p-0">
+              <legend className="text-sm font-semibold text-text">Choose a time</legend>
+              {availableSlots.length === 0 ? (
+                <p className="mt-3 text-sm text-text-secondary">
+                  No visit times are available on this day.
+                </p>
+              ) : (
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  {availableSlots.map((slot) => {
+                    const overlapping = slotOverlapsAnotherSelection({
+                      slot,
+                      selectedStarts,
+                      visitIndex,
+                      grid,
+                    });
+                    const disabled = overlapping;
+                    const checked = slot.startsAt === draftStart;
+                    const helper = overlapping ? "Used by another visit" : "Available";
+                    return (
+                      <label
+                        key={slot.token}
+                        className={cn(
+                          "relative flex min-h-14 flex-col items-center justify-center rounded-card p-2 text-center",
+                          "transition-colors duration-fast has-[:focus-visible]:outline has-[:focus-visible]:outline-2",
+                          "has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-focus-ring",
+                          disabled
+                            ? "border border-line bg-surface-sunken opacity-60"
+                            : checked
+                              ? "cursor-pointer border-2 border-action-secondary bg-selected-surface"
+                              : "cursor-pointer border border-line bg-surface hover:bg-surface-hover",
+                        )}
+                      >
+                        <input
+                          type="radio"
+                          name={`customer-visit-${visitIndex}-time`}
+                          value={slot.startsAt}
+                          checked={checked}
+                          disabled={disabled}
+                          onChange={() => onDraftStart(slot.startsAt)}
+                          className="sr-only"
+                        />
+                        <span className="text-sm font-bold tabular-nums text-text">{slot.label}</span>
+                        <span className="mt-0.5 text-[11px] font-medium text-text-muted">
+                          {helper}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </fieldset>
+          );
+        })()}
     </Sheet>
   );
 }

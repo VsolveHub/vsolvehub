@@ -71,32 +71,27 @@ export function MoneyPad({
   }
 
   return (
-    <section aria-labelledby="money-pad-heading" className="flex flex-col gap-3">
-      <h2 id="money-pad-heading" className="flex items-center gap-2 text-base font-semibold text-text">
-        <Pictogram name={icon} size="md" />
-        {title}
-      </h2>
-
-      {/* The amount is the largest thing on the screen. Digits and the rupee sign
-          are what a reader who reads nothing else still reads. */}
+    <section aria-label={title} className="flex flex-col gap-1.5">
+      {/* The amount is clearly readable in an ultra-compact card */}
       <p
         aria-live="polite"
-        className="rounded-card border-2 border-action bg-surface px-4 py-5 text-center text-4xl font-bold tabular-nums text-text"
+        className="rounded-card border-2 border-action bg-surface px-3 py-1 text-center text-2xl font-extrabold tabular-nums text-text shadow-2xs"
       >
         {formatMoney(rupees * 100)}
       </p>
 
       {children}
 
-      <div className="flex gap-2">
+      <div className="flex gap-1.5">
         {QUICK_ADD_RUPEES.map((step) => (
           <button
             key={step}
             type="button"
             onClick={() => commit(rupees + step)}
             className={cn(
-              "min-h-11 flex-1 rounded-full border border-info-line bg-info-surface",
-              "text-sm font-bold tabular-nums text-info-text",
+              "h-7 min-h-7 flex-1 rounded-full border border-info-line bg-info-surface",
+              "text-xs font-bold tabular-nums text-info-text",
+              "transition-colors active:bg-info-line/40 cursor-pointer",
               "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring",
             )}
           >
@@ -105,7 +100,7 @@ export function MoneyPad({
         ))}
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-3 gap-1">
         {["1", "2", "3", "4", "5", "6", "7", "8", "9", "000", "0"].map((key) => (
           <PadKey
             key={key}
@@ -120,15 +115,14 @@ export function MoneyPad({
         />
       </div>
 
-      <Button block size="lg" onClick={onDone}>
-        Done
-      </Button>
-
-      {/* Clearing is a separate, quiet control rather than a long-press on
-          backspace: a gesture nobody is told about is a gesture nobody uses. */}
-      <Button variant="ghost" onClick={() => commit(0)}>
-        Clear
-      </Button>
+      <div className="flex items-center gap-2 pt-0.5">
+        <Button variant="ghost" size="sm" className="shrink-0 px-3 text-xs text-text-secondary" onClick={() => commit(0)}>
+          Clear
+        </Button>
+        <Button block size="sm" className="flex-1 font-bold text-sm h-9" onClick={onDone}>
+          Done
+        </Button>
+      </div>
     </section>
   );
 }
@@ -148,9 +142,9 @@ function PadKey({
       onClick={onPress}
       aria-label={announce}
       className={cn(
-        "min-h-14 rounded-control border border-line bg-surface",
-        "text-xl font-bold tabular-nums text-text",
-        "active:bg-surface-sunken",
+        "h-8.5 min-h-[34px] rounded-control border border-line bg-surface",
+        "text-base font-bold tabular-nums text-text",
+        "transition-colors active:bg-surface-sunken cursor-pointer",
         "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring",
       )}
     >

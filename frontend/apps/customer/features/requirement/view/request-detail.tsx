@@ -2,7 +2,9 @@
 
 import { categorizeError, describeError, useServerCountdown } from "@vsolve/query";
 import { Button, ErrorState, Readout, Skeleton, cn } from "@vsolve/ui";
+import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 
 import { StatusCard, TapRow, TapRowGroup } from "@/components/patterns";
@@ -149,30 +151,41 @@ export interface RequestDetailProps {
 const TIMELINE_PREVIEW = 3;
 
 function RequestBreadcrumb({ current }: { current: string }) {
+  const router = useRouter();
   return (
-    <nav aria-label="Breadcrumb" className="mb-3 text-sm font-semibold text-text-muted">
-      <ol className="flex flex-wrap items-center gap-2">
-        <li>
-          <Link href="/activity" className="hover:text-text">
-            Bookings
-          </Link>
-        </li>
-        <li aria-hidden className="text-warm-400">
-          ›
-        </li>
-        <li>
-          <Link href="/requests" className="hover:text-text">
-            Requests
-          </Link>
-        </li>
-        <li aria-hidden className="text-warm-400">
-          ›
-        </li>
-        <li className="font-extrabold text-text" aria-current="page">
-          {current}
-        </li>
-      </ol>
-    </nav>
+    <div className="mb-4 flex items-center gap-3">
+      <button
+        type="button"
+        onClick={() => router.back()}
+        aria-label="Go back"
+        className="inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-line bg-surface text-text shadow-2xs transition-colors hover:bg-surface-hover hover:text-text-primary active:scale-95 cursor-pointer"
+      >
+        <ChevronLeft className="size-5" strokeWidth={2.2} aria-hidden />
+      </button>
+      <nav aria-label="Breadcrumb" className="text-sm font-semibold text-text-muted">
+        <ol className="flex flex-wrap items-center gap-2">
+          <li>
+            <Link href="/activity" className="hover:text-text">
+              Bookings
+            </Link>
+          </li>
+          <li aria-hidden className="text-warm-400">
+            ›
+          </li>
+          <li>
+            <Link href="/requests" className="hover:text-text">
+              Requests
+            </Link>
+          </li>
+          <li aria-hidden className="text-warm-400">
+            ›
+          </li>
+          <li className="font-extrabold text-text" aria-current="page">
+            {current}
+          </li>
+        </ol>
+      </nav>
+    </div>
   );
 }
 
@@ -238,7 +251,7 @@ export function RequestDetail({
     : false;
 
   return (
-    <div className="mx-auto w-full max-w-[1170px] px-4 py-5 sm:px-6 lg:px-0">
+    <div className="mx-auto w-full max-w-[1170px] px-4 pt-5 pb-28 sm:px-6 sm:pb-12 lg:px-0">
       <RequestBreadcrumb current={request?.title ?? "Request"} />
       <div className="grid gap-6 lg:grid-cols-[minmax(0,788px)_348px] lg:items-start">
         <div className="flex min-w-0 flex-col gap-6">
