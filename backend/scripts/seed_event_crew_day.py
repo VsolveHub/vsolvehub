@@ -183,13 +183,20 @@ def _explain_empty_wave(*, requirement: object, partner: PartnerProfile) -> None
     )
     print(f"  wanted: {men} men, {women} women ({requirement.answers.get('worker_count')} people)")
 
+    # Through `exhaust_cascade`, not `close_requirement`. Closing the requirement directly leaves
+    # any offer already sent to *another* lead sitting `INVITED` in their inbox, pointing at a job
+    # that no longer exists -- which is exactly what this script did on its first two runs, and
+    # what a partner then found they could not take. `exhaust_cascade` withdraws them.
+    crew_dispatch.exhaust_cascade(
+        requirement_id=requirement.id, reason_code="seed_script_no_candidates"
+    )
     services.close_requirement(
         requirement_id=requirement.id,
         status=CustomerRequirement.Status.CLOSED_CANCELLED,
         reason_code="seed_script_no_candidates",
         actor=requirement.customer,
     )
-    raise SystemExit("Closed the stranded requirement. Adjust MIX, or add crew to the roster.")
+    raise SystemExit("Parked and closed it. Adjust MIX, or add crew to the roster.")
 
 
 def _shift_day_url(engagement: Engagement) -> str | None:

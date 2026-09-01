@@ -208,6 +208,22 @@ def book_at_published_rate(
         ),
     )
     invitations = _invite_crew_wave(booking=booking, policy=policy)
+    if not invitations:
+        # Nobody is in reach at all, and this is the one wave where that is terminal rather than
+        # merely disappointing. `advance_cascade` already settles an empty wave for exactly the
+        # reason quoted in its own comment -- the Customer decides what happens rather than
+        # watching a holding state that will never resolve -- but that rule was written for the
+        # second wave onward and could not cover this one.
+        #
+        # It has to be handled here because every recovery in this cascade is driven by an
+        # invitation expiring: the sweep finds a lapsed offer and calls `advance_cascade`. A first
+        # wave that invites nobody leaves no invitation, so no sweep can ever fire and nothing can
+        # ever advance it. Left alone, the booking sits `MATCHING` at wave 0 for good.
+        #
+        # Free, and provably so: `booking_fees` only writes a fee from `accept_crew_offer` onward,
+        # and no lead was even asked.
+        exhaust_cascade(requirement_id=requirement.id, reason_code="no_eligible_leads")
+        booking.refresh_from_db()
     return RateCardBookingResult(booking=booking, requirement=requirement, invitations=invitations)
 
 
@@ -661,7 +677,20 @@ def advance_cascade(*, requirement_id: uuid.UUID) -> list[VendorInvitation]:
     ).exists():
         return []
 
-    policy = rate_cards.cascade_policy(requirement)
+    try:
+        policy = rate_cards.cascade_policy(requirement)
+    except PolicyUnavailableError:
+        # Fail closed, exactly as `cascade_progress` does over the same configuration and for the
+        # same reason. A variant with no cascade policy has no cascade to advance, and this is
+        # reached from a **read** -- `reconcile_lapsed_offers`, on the Customer's own request page
+        # -- so raising turned an unconfigured variant into a 500 on a page somebody was merely
+        # looking at.
+        #
+        # Doing nothing rather than parking the booking: a missing policy is Operations having not
+        # configured this service, not the market having no supply. Exhausting the Customer's
+        # request over a configuration gap would tell them nobody is available when nobody was
+        # ever asked.
+        return []
     if booking.wave >= _wave_ceiling(booking=booking, policy=policy):
         exhaust_cascade(requirement_id=requirement.id, reason_code="cascade_exhausted")
         return []

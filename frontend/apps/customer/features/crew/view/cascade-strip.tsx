@@ -15,11 +15,15 @@ export function CascadeStrip({ cascade }: { cascade: CascadeView }) {
   const total = cascade.waves.length;
   if (total < 1) return null;
   const current = cascade.waves.find((wave) => wave.state === "current");
-  const number = current?.number ?? total;
+  /* No current wave means none is out — which used to fall back to `total` and tell somebody
+     "Wave 4 of 4": we have searched as hard as we can, when in fact nothing had been searched at
+     all. The number is the server's or it is not shown; a count invented on this side of the wire
+     is worse than a blank line, because it is read as progress. */
+  if (current === undefined) return null;
 
   return (
     <p className="text-sm text-text-secondary">
-      Wave {number} of {total}
+      Wave {current.number} of {total}
     </p>
   );
 }
