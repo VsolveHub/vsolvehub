@@ -41,7 +41,7 @@ export const GROUP_STATUS_LABELS: Record<GroupStatus, string> = {
   PAYMENT_PENDING: "Ready for payment",
   BOOKED: "Booked",
   COMPLETED: "Completed",
-  REPLAN_REQUIRED: "Needs replanning",
+  REPLAN_REQUIRED: "Needs a new time",
   CANCELLED: "Cancelled",
   EXPIRED: "Expired",
   FAILED: "Could not be completed",

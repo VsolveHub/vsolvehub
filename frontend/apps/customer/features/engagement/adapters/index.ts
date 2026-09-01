@@ -710,6 +710,8 @@ export interface EngagementRowView {
   requirementId: string;
   /** "Full home rewiring", or null on a record that predates the field. */
   serviceName: string | null;
+  /** Catalogue slug so the list row uses the same cover as the service page. */
+  serviceSlug: string | null;
   mode: EngagementMode;
   status: Engagement["status"];
   /** The active stage's label, or null when every stage is settled. */
@@ -718,6 +720,7 @@ export interface EngagementRowView {
   activeStageOn: string | null;
   progress: { done: number; total: number };
   stagedTotalLabel: string;
+  stagedTotalPaise: number;
   fundedTotalLabel: string;
   nextAction: CustomerNextAction;
   /** The stage the next action is about, when it is about one. */
@@ -745,12 +748,14 @@ function toRow(engagement: Engagement): EngagementRowView {
     engagementId: view.engagementId,
     requirementId: view.requirementId,
     serviceName: view.serviceName,
+    serviceSlug: view.serviceSlug,
     mode: view.mode,
     status: view.status,
     activeStageLabel: active?.label ?? null,
     activeStageOn: active?.scheduledOn ?? null,
     progress: view.progress,
     stagedTotalLabel: view.stagedTotalLabel,
+    stagedTotalPaise: view.stagedTotalPaise,
     fundedTotalLabel: view.fundedTotalLabel,
     nextAction: view.nextAction,
     actionStageId,

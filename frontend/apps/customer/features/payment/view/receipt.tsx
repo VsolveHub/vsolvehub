@@ -14,7 +14,7 @@ import { useOrder, type Order, type TaxDocument } from "../queries";
 /**
  * Full-screen formal Tax Invoice & Receipt document view.
  * Includes Vsolve Hub logo, company GSTIN details, itemized service table,
- * payment summary, and a dedicated Download Receipt / Print trigger button.
+ * payment summary, and a dedicated Download Receipt trigger.
  */
 
 const DOCUMENT_LABELS: Record<TaxDocument["kind"], string> = {
@@ -32,12 +32,14 @@ const ORDER_STATUS_LABELS: Record<Order["status"], string> = {
 function TaxDocumentCard({ document }: { document: TaxDocument }) {
   return (
     <div className="rounded-lg border border-line bg-surface p-4 text-xs">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2">
-        <div className="font-semibold text-text">
+      <div className="flex items-start justify-between gap-2 border-b border-line pb-2">
+        <div className="min-w-0 font-semibold text-text">
           {DOCUMENT_LABELS[document.kind]}{" "}
-          <span className="font-mono text-text-secondary">{document.number}</span>
+          <span className="break-all font-mono text-text-secondary">{document.number}</span>
         </div>
-        {document.is_test ? <Badge tone="warning">Test document</Badge> : null}
+        <div className="flex shrink-0 items-center gap-2">
+          {document.is_test ? <Badge tone="warning">Test document</Badge> : null}
+        </div>
       </div>
 
       {document.issued_at !== null ? (
@@ -55,20 +57,20 @@ function TaxDocumentCard({ document }: { document: TaxDocument }) {
 
       <ul className="mt-2 space-y-1">
         {document.lines.map((line) => (
-          <li key={line.id} className="flex justify-between">
-            <span className="text-text">
+          <li key={line.id} className="flex items-start justify-between gap-3">
+            <span className="min-w-0 wrap-anywhere text-text">
               {line.label} {line.quantity > 1 ? `× ${line.quantity}` : ""}
             </span>
-            <span className="tabular-nums text-text-secondary">
+            <span className="shrink-0 tabular-nums text-text-secondary">
               <Money value={line.total} />
             </span>
           </li>
         ))}
       </ul>
 
-      <div className="mt-2 flex justify-between font-semibold text-text border-t border-line pt-2">
+      <div className="mt-2 flex justify-between gap-3 border-t border-line pt-2 font-semibold text-text">
         <span>Document Total</span>
-        <Money value={document.total} className="tabular-nums" />
+        <Money value={document.total} className="shrink-0 tabular-nums" />
       </div>
     </div>
   );
@@ -101,14 +103,20 @@ function DownloadInvoiceButton({ document }: { document: TaxDocument }) {
   }
 
   return (
-    <div>
+    <div className="min-w-0">
       <Button
         variant="primary"
         onClick={() => void download()}
         loading={state === "working"}
         loadingLabel="Preparing PDF"
+        className="h-11 max-w-full px-3 text-center leading-tight whitespace-normal md:px-5"
       >
-        Download invoice PDF
+        <span className="md:hidden">
+          Download invoice
+          <br />
+          PDF
+        </span>
+        <span className="hidden md:inline">Download invoice PDF</span>
       </Button>
       {state === "failed" ? (
         <p className="mt-1 text-xs text-danger-text" role="alert">
@@ -181,37 +189,34 @@ export function Receipt({ groupId }: { groupId: string }) {
   const invoice = order.tax_documents.find((document) => document.kind === "INVOICE") ?? null;
 
   return (
-    <div className="space-y-6">
+    <div className="w-full min-w-0 max-w-full space-y-6">
       {/* Top Action Bar (Screen only, hidden when printing) */}
-      <div className="flex flex-wrap items-center justify-between gap-4 print:hidden">
+      <div className="flex flex-col gap-3 print:hidden md:flex-row md:flex-wrap md:items-center md:justify-between md:gap-4">
         <Link
           href={`/bookings/${group.id}`}
-          className="text-sm font-semibold text-text-link hover:underline"
+          className="inline-flex min-h-11 items-center text-sm font-semibold text-text-link hover:underline"
         >
           ← Back to booking
         </Link>
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-2 md:gap-3">
           <Badge tone={order.status === "CONFIRMED" ? "success" : "neutral"}>
             {ORDER_STATUS_LABELS[order.status]}
           </Badge>
           {invoice === null ? null : <DownloadInvoiceButton document={invoice} />}
-          <Button
-            variant="outline"
-            onClick={() => window.print()}
-          >
+          <Button variant="outline" className="h-11 shrink-0 px-3 md:px-5" onClick={() => window.print()}>
             Print
           </Button>
         </div>
       </div>
 
       {/* Official Tax Invoice & Receipt Paper Document */}
-      <div className="rounded-xl border border-line bg-surface p-6 sm:p-10 shadow-sm print:border-none print:shadow-none print:p-0 space-y-8">
+      <div className="box-border w-full max-w-full space-y-8 overflow-x-hidden rounded-xl border border-line bg-surface p-4 shadow-sm print:border-none print:p-0 print:shadow-none sm:p-6 lg:p-10">
         
         {/* Document Header: Logo & Invoice Metadata */}
-        <div className="flex flex-wrap justify-between items-start gap-6 border-b border-line pb-6">
-          <div>
-            <Logo className="h-10 w-auto" />
-            <div className="mt-3 text-xs text-text-secondary space-y-0.5">
+        <div className="flex flex-col items-start justify-between gap-6 border-b border-line pb-6 md:flex-row">
+          <div className="min-w-0">
+            <Logo className="h-8 w-auto max-w-full md:h-10" />
+            <div className="mt-3 space-y-0.5 text-xs wrap-anywhere text-text-secondary">
               <p className="font-semibold text-text">Vsolve Hub Services India Pvt. Ltd.</p>
               <p>Home services and project marketplace</p>
               <p>Plot 12, Hitech City Road, Madhapur, Hyderabad, Telangana 500081</p>
@@ -219,19 +224,19 @@ export function Receipt({ groupId }: { groupId: string }) {
             </div>
           </div>
 
-          <div className="text-left sm:text-right space-y-1">
-            <h1 className="text-2xl font-bold uppercase text-text tracking-tight">
+          <div className="min-w-0 space-y-1 text-left md:text-right">
+            <h1 className="text-xl font-bold tracking-tight text-text uppercase md:text-2xl">
               Payment Receipt & Invoice
             </h1>
             <p className="text-xs text-text-secondary">
               Tax Invoice for Booking Reference{" "}
-              <span className="font-mono font-medium text-text">{group.id}</span>
+              <span className="break-all font-mono font-medium text-text">{group.id}</span>
             </p>
-            <div className="mt-2 inline-flex items-center gap-2">
+            <div className="mt-2 flex flex-wrap items-center gap-2 md:justify-end">
               <Badge tone={order.status === "CONFIRMED" ? "success" : "neutral"}>
                 {ORDER_STATUS_LABELS[order.status]}
               </Badge>
-              <span className="text-xs font-mono text-text-secondary">
+              <span className="break-all text-xs font-mono text-text-secondary">
                 Order Ref: {order.id}
               </span>
             </div>
@@ -239,22 +244,24 @@ export function Receipt({ groupId }: { groupId: string }) {
         </div>
 
         {/* Billed To & Service Information Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 bg-surface-sunken p-4 sm:p-5 rounded-lg border border-line text-sm">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-text-secondary mb-1">
+        <div className="grid grid-cols-1 gap-6 rounded-lg border border-line bg-surface-sunken p-4 text-sm md:grid-cols-2 sm:p-5">
+          <div className="min-w-0">
+            <p className="mb-1 text-xs font-bold tracking-wider text-text-secondary uppercase">
               Customer & Billing Details
             </p>
             <p className="font-semibold text-text">Service Account Holder</p>
-            <p className="text-xs text-text-secondary mt-1">
-              Order Reference: <span className="font-mono">{order.id}</span>
+            <p className="mt-1 text-xs text-text-secondary">
+              Order Reference:{" "}
+              <span className="break-all font-mono">{order.id}</span>
             </p>
             <p className="text-xs text-text-secondary">
-              Booking Reference: <span className="font-mono">{group.id}</span>
+              Booking Reference:{" "}
+              <span className="break-all font-mono">{group.id}</span>
             </p>
           </div>
 
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-text-secondary mb-1">
+          <div className="min-w-0">
+            <p className="mb-1 text-xs font-bold tracking-wider text-text-secondary uppercase">
               Fulfillment Summary
             </p>
             <p className="text-xs text-text-secondary">
@@ -266,7 +273,7 @@ export function Receipt({ groupId }: { groupId: string }) {
                 })}
               </span>
             </p>
-            <p className="text-xs text-text-secondary mt-1">
+            <p className="mt-1 text-xs text-text-secondary">
               Visits Scheduled:{" "}
               <span className="font-medium text-text">
                 {group.units.length} {group.units.length === 1 ? "visit" : "visits"}
@@ -275,24 +282,36 @@ export function Receipt({ groupId }: { groupId: string }) {
           </div>
         </div>
 
-        {/* Itemized Invoice Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm border-collapse">
+        {/* Itemized Invoice Table — table-fixed so amounts stay in view on a phone */}
+        <div className="w-full min-w-0 max-w-full">
+          <table className="w-full table-fixed border-collapse text-left text-sm">
+            <colgroup>
+              <col className="w-[10%]" />
+              <col className="w-[50%]" />
+              <col className="w-[15%]" />
+              <col className="w-[25%]" />
+            </colgroup>
             <thead>
-              <tr className="border-b border-line-strong bg-surface-sunken text-xs font-semibold uppercase tracking-wider text-text-secondary">
-                <th className="py-3 px-4">#</th>
-                <th className="py-3 px-4">Service / Description</th>
-                <th className="py-3 px-4 text-center">Qty</th>
-                <th className="py-3 px-4 text-right">Amount</th>
+              <tr className="border-b border-line-strong bg-surface-sunken text-xs font-semibold tracking-wider text-text-secondary uppercase">
+                <th className="px-1 py-3 md:px-4">#</th>
+                <th className="px-1 py-3 md:px-4">Service / Description</th>
+                <th className="px-1 py-3 text-center md:px-4">Qty</th>
+                <th className="px-1 py-3 text-right md:px-4">Amount</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
               {lines.map((line, index) => (
                 <tr key={line.id} className="hover:bg-surface-sunken/50">
-                  <td className="py-3 px-4 text-xs font-mono text-text-secondary">{index + 1}</td>
-                  <td className="py-3 px-4 font-medium text-text">{line.label}</td>
-                  <td className="py-3 px-4 text-center text-text-secondary">{line.quantity}</td>
-                  <td className="py-3 px-4 text-right font-mono tabular-nums text-text">
+                  <td className="px-1 py-3 align-top text-xs font-mono text-text-secondary md:px-4">
+                    {index + 1}
+                  </td>
+                  <td className="min-w-0 px-1 py-3 align-top font-medium wrap-anywhere text-text md:px-4">
+                    {line.label}
+                  </td>
+                  <td className="px-1 py-3 align-top text-center text-text-secondary md:px-4">
+                    {line.quantity}
+                  </td>
+                  <td className="px-1 py-3 align-top text-right font-mono tabular-nums text-text md:px-4">
                     <Money value={line.amount} />
                   </td>
                 </tr>
@@ -302,11 +321,11 @@ export function Receipt({ groupId }: { groupId: string }) {
         </div>
 
         {/* Financial Summary & Tax Documents */}
-        <div className="flex flex-col sm:flex-row justify-between items-start gap-6 border-t border-line pt-6">
-          <div className="w-full sm:w-1/2 space-y-3">
+        <div className="flex flex-col items-start justify-between gap-6 border-t border-line pt-6 lg:flex-row">
+          <div className="w-full min-w-0 space-y-3 lg:w-1/2">
             {order.tax_documents.length > 0 ? (
               <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-text-secondary mb-2">
+                <p className="mb-2 text-xs font-bold tracking-wider text-text-secondary uppercase">
                   Tax Documents
                 </p>
                 <div className="space-y-2">
@@ -318,28 +337,28 @@ export function Receipt({ groupId }: { groupId: string }) {
             ) : null}
           </div>
 
-          <div className="w-full sm:w-80 rounded-lg border border-line bg-surface-sunken p-4 space-y-3">
-            <div className="flex justify-between text-sm text-text-secondary">
+          <div className="w-full min-w-0 space-y-3 rounded-lg border border-line bg-surface-sunken p-4 lg:w-80 lg:shrink-0">
+            <div className="flex justify-between gap-3 text-sm text-text-secondary">
               <span>Subtotal</span>
-              <Money value={order.total} className="tabular-nums font-mono text-text" />
+              <Money value={order.total} className="shrink-0 font-mono tabular-nums text-text" />
             </div>
-            <div className="flex justify-between text-xs text-text-secondary">
+            <div className="flex justify-between gap-3 text-xs text-text-secondary">
               <span>Applicable Taxes & GST</span>
-              <span>Included</span>
+              <span className="shrink-0">Included</span>
             </div>
-            <div className="border-t border-line pt-3 flex justify-between items-baseline">
+            <div className="flex items-baseline justify-between gap-3 border-t border-line pt-3">
               <span className="text-base font-bold text-text">Total Paid</span>
-              <Money value={order.total} className="text-2xl font-bold tabular-nums text-text" />
+              <Money value={order.total} className="shrink-0 text-2xl font-bold tabular-nums text-text" />
             </div>
           </div>
         </div>
 
         {/* Document Footer Sign-off */}
-        <div className="border-t border-line pt-6 text-center text-xs text-text-secondary space-y-1">
-          <p className="font-medium text-text">
+        <div className="space-y-1 border-t border-line pt-6 text-center text-xs text-text-secondary">
+          <p className="text-pretty font-medium text-text">
             This is an official computer-generated tax invoice issued by Vsolve Hub Services India Pvt. Ltd.
           </p>
-          <p>Thank you for choosing Vsolve Hub for your home service needs!</p>
+          <p className="text-pretty">Thank you for choosing Vsolve Hub for your home service needs!</p>
         </div>
 
       </div>

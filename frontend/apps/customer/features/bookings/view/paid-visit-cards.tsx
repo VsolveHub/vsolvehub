@@ -96,7 +96,7 @@ export function SingleVisitDetailCard({
   return (
     <article className="rounded-card border border-line bg-surface p-5 shadow-xs">
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <h2 className="text-lg font-bold text-text">Your visit</h2>
+        <h1 className="text-lg font-bold text-text">Your visit</h1>
         <UnitStatusBadge unit={unit} />
       </div>
 

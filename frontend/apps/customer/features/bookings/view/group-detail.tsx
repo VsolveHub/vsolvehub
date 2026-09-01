@@ -423,6 +423,11 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
       : null;
   const isMultiPaidVisit = isPaid && group.units.length > 1;
   const usesTwoColumn = isAwaitingPayment || isSinglePaidVisit || isMultiPaidVisit;
+  // The visit cards already name the booking. Repeating "Your booking" /
+  // "Everything is confirmed." on a live visit is a second status layer the
+  // customer does not act on.
+  const showBookingSummaryCard =
+    !isAwaitingPayment && group.status !== "BOOKED" && group.status !== "COMPLETED";
   const isSingleVisitHelp =
     group.units.length === 1 &&
     !isAwaitingPayment &&
@@ -455,8 +460,17 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
         }
       >
         <BackToBookingsLink />
-        {/* Header section with status badge (shown when !isAwaitingPayment; when awaiting payment, details live in PaymentSummarySideCard) */}
-        {!isAwaitingPayment ? (
+
+        {isMultiPaidVisit ? (
+          <h1 className="text-2xl font-bold text-text">Your visits</h1>
+        ) : null}
+
+        {/* The status card, on the states that still have something to say. `showBookingSummaryCard`
+            narrows what used to be `!isAwaitingPayment`: on a live or finished booking the visit
+            cards already name it, and repeating "Everything is confirmed" above them is a second
+            status layer nobody acts on. When awaiting payment the details live in
+            `PaymentSummarySideCard` instead. */}
+        {showBookingSummaryCard ? (
           <div className="rounded-card border border-line bg-surface p-5 shadow-xs">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>

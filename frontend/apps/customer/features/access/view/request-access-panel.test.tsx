@@ -201,3 +201,131 @@ describe("request-detail visit payment", () => {
     );
   });
 });
+
+function scheduledVisit(id: string): Schemas["SiteVisit"] {
+  return {
+    id,
+    status: "SCHEDULED",
+    is_plan_visit: true,
+    timezone: "Asia/Kolkata",
+    vendor: {
+      display_name: "M2 Demo Vendor 1",
+      business_type: "INDIVIDUAL",
+      is_verified: true,
+      experience_years: 6,
+      photo_url: null,
+    },
+    fee_paise: 4950,
+    adjusts_against_final_price: true,
+    scheduled_for: "2026-09-04T02:30:00.000Z",
+    duration_minutes: 60,
+    arrival_confirmed_at: null,
+    arrival_method: "START_OTP",
+    completed_at: null,
+    estimate_due_at: null,
+    cancellation_reason_code: "",
+  };
+}
+
+function bookedShare(position: number): Schemas["VisitPlanShare"] {
+  return {
+    ...share(position),
+    status: "COMMITTED",
+    matching_status: "BOOKED",
+    committed_at: "2026-08-21T08:00:00.000Z",
+  };
+}
+
+function mockVisitReads(state: Schemas["VisitPlanState"]) {
+  client.GET.mockImplementation((path: string) => {
+    if (path === "/api/v1/requirements/{requirement_id}/visit-plan/") {
+      return Promise.resolve(ok(state));
+    }
+    if (path === "/api/v1/site-visits/{site_visit_id}/arrival-code/") {
+      return Promise.resolve(
+        ok<Schemas["VisitArrivalCode"]>({
+          code: "482916",
+          expires_at: "2026-09-04T02:45:00.000Z",
+          can_issue: true,
+          server_now: "2026-09-01T08:00:00.000Z",
+        }),
+      );
+    }
+    if (path === "/api/v1/requirements/{requirement_id}/quotes/") {
+      return Promise.resolve(
+        ok<Schemas["CustomerQuoteList"]>({
+          quotes: [],
+          non_responsive_rejections_remaining: null,
+          server_now: "2026-09-01T08:00:00.000Z",
+        }),
+      );
+    }
+    return Promise.reject(new Error(`Unexpected GET ${path}`));
+  });
+}
+
+function renderTracker(slot: "main" | "rail") {
+  return render(
+    <RequestAccessPanel
+      requirementId="req-1"
+      archetype="A5_CUSTOM_PROJECT"
+      quotesHref="/requests/req-1/quotes"
+      bookCrewFeeHref="/requests/req-1/book-crew"
+      slot={slot}
+    />,
+    { wrapper },
+  );
+}
+
+describe("request-detail single visit", () => {
+  it("inlines the visit on the request when there is only one booked visit", async () => {
+    mockVisitReads(
+      visitPlanState({
+        plan: plan({
+          status: "ACTIVE",
+          plan_size: 1,
+          price_paise: 4950,
+          chargeable_paise: 4950,
+          shares: [bookedShare(1)],
+          charged_at: "2026-08-21T07:30:00.000Z",
+        }),
+        visits: [scheduledVisit("visit-1")],
+        checkout_available: false,
+        can_read_full_estimates: true,
+      }),
+    );
+
+    renderTracker("main");
+
+    expect(await screen.findByRole("heading", { name: "Who is coming" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "What happens" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Arrival code" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Held for this visit" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "See every visit at a glance" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /open this visit/i })).not.toBeInTheDocument();
+  });
+
+  it("keeps the glance list when two visits are booked", async () => {
+    mockVisitReads(
+      visitPlanState({
+        plan: plan({
+          status: "ACTIVE",
+          shares: [bookedShare(1), bookedShare(2)],
+          charged_at: "2026-08-21T07:30:00.000Z",
+        }),
+        visits: [scheduledVisit("visit-1"), scheduledVisit("visit-2")],
+        checkout_available: false,
+        can_read_full_estimates: true,
+      }),
+    );
+
+    renderTracker("main");
+
+    expect(
+      await screen.findByRole("heading", { name: "See every visit at a glance" }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: /open this visit/i })).toHaveLength(2);
+    expect(screen.queryByRole("heading", { name: "Who is coming" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Arrival code" })).not.toBeInTheDocument();
+  });
+});

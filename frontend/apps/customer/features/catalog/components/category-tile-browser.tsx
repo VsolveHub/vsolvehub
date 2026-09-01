@@ -17,36 +17,6 @@ import { useServiceDetail } from "../client-queries";
 import { serviceHref } from "../service-href";
 import type { Category, ServiceCard } from "../queries";
 
-function tileHref(tile: TileGroup, categorySlug: string): string {
-  const only = tile.services.length === 1 ? tile.services[0] : undefined;
-  if (only !== undefined) return serviceHref(only, categorySlug);
-  return `/catalog/${categorySlug}?tile=${tile.slug}`;
-}
-
-function TileGrid({ tiles, categorySlug }: { tiles: TileGroup[]; categorySlug: string }) {
-  return (
-    <ul className="grid list-none grid-cols-3 gap-x-3 gap-y-5 p-0 sm:grid-cols-4 sm:gap-x-4 lg:grid-cols-6">
-      {tiles.map((tile) => (
-        <li key={tile.slug} className="min-w-0">
-          <Link
-            href={tileHref(tile, categorySlug)}
-            className="group flex min-h-11 flex-col items-center gap-2 rounded-card active:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-          >
-            <ServicePhoto
-              imageUrl={tile.imageUrl}
-              iconKey={tile.iconKey}
-              className="shadow-xs transition-transform duration-slow ease-out group-hover:scale-[1.03] motion-reduce:transform-none"
-            />
-            <span className="line-clamp-2 w-full text-center text-[12px] font-semibold leading-tight text-text sm:text-[13px]">
-              {tile.name}
-            </span>
-          </Link>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 const A3_TIME_BLOCK = "A3_TIME_BLOCK";
 
 export interface TileGroup {
@@ -282,24 +252,22 @@ export function CategoryTileBrowser({
     );
   }
 
+  // Home and `/catalog/{slug}` open the service list directly (first published
+  // tile when none is selected). The old subcategory grid is no longer a stop.
   const activeTile =
-    activeTileSlug !== null
+    (activeTileSlug !== null
       ? tiles.find((tile) => tile.slug === activeTileSlug)
-      : undefined;
-
-  if (activeTile === undefined) {
-    return <TileGrid tiles={tiles} categorySlug={category.slug} />;
-  }
+      : undefined) ?? tiles[0];
 
   return (
     <>
       {/* Desktop view: 3-pane split view matching desktop UI */}
-      <div className="hidden md:block w-full h-full min-h-0 flex-1">
+      <div className="hidden lg:block w-full h-full min-h-0 flex-1">
         <TileDesktopSplitPane category={category} tiles={tiles} activeTile={activeTile} />
       </div>
 
-      {/* Mobile view: 2-column vertical rail + sub-services + popup modal */}
-      <div className="md:hidden flex items-start gap-2 sm:gap-4 h-full min-h-0 flex-1">
+      {/* Mobile / tablet: vertical rail + service rows */}
+      <div className="lg:hidden flex items-start gap-2 sm:gap-4 h-full min-h-0 flex-1">
         {/* Left Column: Independently scrollable vertical category rail */}
         <nav
           aria-label={`${category.name} categories`}

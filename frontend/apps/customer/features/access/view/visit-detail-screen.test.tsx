@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import type { Schemas } from "@vsolve/api-client";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -132,10 +132,11 @@ describe("customer visit arrival", () => {
       { wrapper },
     );
 
-    expect(await screen.findByText("482916")).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: /arrived without using the code/i }),
-    ).not.toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Arrival code" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /arrived without using the code/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /show code/i }));
+    expect(screen.getByText("482916")).toBeInTheDocument();
     expect(client.POST).not.toHaveBeenCalled();
   });
 
@@ -217,7 +218,7 @@ describe("customer visit arrival", () => {
     expect(screen.getByText("₹10,000")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Read this estimate in full" })).toHaveAttribute(
       "href",
-      "/requests/requirement-1/quotes#estimate-proposal-1",
+      "/requests/requirement-1/quotes/proposal-1",
     );
   });
 });

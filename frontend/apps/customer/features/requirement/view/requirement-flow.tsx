@@ -726,7 +726,7 @@ function FlowBody({
         }}
         canContinue={isFinal ? canSubmit : canContinue}
         isSaving={wizardActionPending}
-        continueLabel={isFinal ? sendLabel : "Continue"}
+        continueLabel={isFinal ? "Send a request" : "Continue →"}
         reassurance={
           isFinal
             ? chosenPlanPrice === null
@@ -807,6 +807,10 @@ function FlowBody({
         const screen = screens[index];
         if (screen !== undefined) open(screen);
       }}
+      onContinue={() => {
+        void handleAdvance();
+      }}
+      onLeave={() => router.back()}
       onSend={handleSend}
       sendLabel={sendLabel}
       isSaving={isWriting || sendActionPending}

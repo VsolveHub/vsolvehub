@@ -24,7 +24,7 @@ export default async function BookingReceiptPage({
   const { groupId } = await params;
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-4 sm:px-6 pb-16 pt-6">
+    <main className="mx-auto w-full min-w-0 max-w-5xl overflow-x-hidden px-4 pt-6 pb-24 sm:px-6 md:pb-16">
       <Receipt groupId={groupId} />
     </main>
   );

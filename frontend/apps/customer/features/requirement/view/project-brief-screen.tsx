@@ -1,6 +1,7 @@
 "use client";
 
 import { Button, RailLayout, cn } from "@vsolve/ui";
+import { ChevronLeft } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { BlockReason } from "../model/state";
@@ -21,14 +22,12 @@ import { BLOCK_COPY } from "./block-copy";
  * is missing — the orientation a stepper gave, without a stepper's rule that you
  * may only move forwards.
  *
- * ## Why every section stays reachable
+ * ## Forward is gated; back is not
  *
- * The rail rows are buttons and none of them is ever disabled. Both sections
- * write to one draft, in any order, and gating section 2 behind section 1 would
- * rebuild the property that made the wizard wrong on desktop: somebody who
- * knows the dates but not the finish would be unable to enter the thing they
- * came to enter. The guards still hold at the *send*, where they belong, and
- * the rail says which section is holding it up.
+ * Continue (and a rail click onto a later section) will not leave a section that
+ * is still short — the same per-screen `blocked` the phone wizard uses. The
+ * send CTA still uses the whole-brief guard. Going back is always allowed, so
+ * somebody can fix an earlier answer without being trapped.
  *
  * ## There is no review step
  *
@@ -68,8 +67,19 @@ export interface ProjectBriefScreenProps {
    */
   activeIndex: number;
   onSelectSection: (index: number) => void;
+  /**
+   * Leave the current section for the next one. The flow runs the same saves
+   * the phone wizard runs (`handleAdvance`). Absent in tests that only care
+   * that the control asks to move forward.
+   */
+  onContinue?: () => void;
   /** Sends the brief. Runs the section saves first — see the flow container. */
   onSend: () => void;
+  /**
+   * Leave the brief from the first section. Same destination the phone wizard
+   * uses (`router.back`). Absent when that first section has nowhere to go.
+   */
+  onLeave?: () => void;
   /** The CTA's label — "Send to 2 professionals", from the chosen plan. */
   sendLabel: string;
   isSaving: boolean;
@@ -85,8 +95,9 @@ export function ProjectBriefScreen({
   sections,
   activeIndex,
   onSelectSection,
+  onContinue,
   onSend,
-  sendLabel,
+  onLeave,
   isSaving,
   blocked,
   notice,
@@ -98,11 +109,27 @@ export function ProjectBriefScreen({
   const current = Math.min(Math.max(activeIndex, 0), sections.length - 1);
   const section = sections[current];
   const isLast = current === sections.length - 1;
+  const currentBlocked = section?.blocked ?? null;
+  const canLeaveSection = currentBlocked === null;
   // Which section is holding the send up, so the rail can point at it by name
   // rather than reprinting a sentence the row beside it already carries. `-1`
   // is a real answer: a guard that belongs to the whole brief rather than to any
   // one section — an unresolved duplicate — has no row to send anybody to.
   const blockingIndex = sections.findIndex((item) => item.blocked !== null);
+
+  function openSection(index: number) {
+    if (!canOpenBriefSection(sections, index)) return;
+    onSelectSection(index);
+  }
+
+  function handleContinue() {
+    if (!canLeaveSection) return;
+    if (onContinue !== undefined) {
+      onContinue();
+      return;
+    }
+    onSelectSection(current + 1);
+  }
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
       <header className="mb-6">
@@ -128,7 +155,7 @@ export function ProjectBriefScreen({
                     section={item}
                     number={index + 1}
                     isCurrent={index === current}
-                    onSelect={() => onSelectSection(index)}
+                    onSelect={() => openSection(index)}
                   />
                 ))}
               </ol>
@@ -137,81 +164,102 @@ export function ProjectBriefScreen({
             <Button
               block
               size="lg"
-              onClick={onSend}
-              disabled={blocked !== null}
+              className="min-h-12"
+              onClick={isLast ? onSend : handleContinue}
+              disabled={isLast ? blocked !== null : !canLeaveSection}
               loading={isSaving}
-              loadingLabel="Sending your brief"
+              loadingLabel={isLast ? "Sending your brief" : "Saving"}
             >
-              {sendLabel}
+              {isLast ? "Send a request" : "Continue →"}
             </Button>
 
-            {/* A disabled button with no explanation is the most common way a
-                form dead-ends somebody — but the rows above now carry the reason
-                each section is short, so repeating the sentence here would print
-                it twice. This names the section instead, and opens it. */}
-            {blocked !== null && blockingIndex !== -1 ? (
-              <p className="text-sm leading-5 text-text-secondary">
-                <button
-                  type="button"
-                  onClick={() => onSelectSection(blockingIndex)}
-                  className="font-semibold text-text-link underline underline-offset-4"
-                >
-                  {sections[blockingIndex]?.title}
-                </button>{" "}
-                still needs something before you can send.
-              </p>
-            ) : blocked !== null ? (
-              // No section owns it — a whole-brief guard such as an unresolved
-              // duplicate. The reason is all there is to say, so it is said.
-              <p className="text-sm leading-5 text-text-secondary">{BLOCK_COPY[blocked]}</p>
-            ) : (
-              <p className="text-sm leading-5 text-text-secondary">
-                Free to send. Nothing is booked yet.
-              </p>
-            )}
+            <CtaHint
+              isLast={isLast}
+              currentBlocked={currentBlocked}
+              blocked={blocked}
+              blockingIndex={blockingIndex}
+              sections={sections}
+              onOpenSection={openSection}
+            />
 
             <WhatHappensNext />
           </div>
         }
       >
         <div className="flex flex-col gap-4">
-          {section ? <BriefSection section={section} number={current + 1} /> : null}
-
-          {/* Moving between sections belongs under the section, where somebody
-              finishing one is already looking. The rail's own CTA stays as the
-              always-visible way out for a Customer who has filled everything and
-              does not want to walk back through it. */}
-          <div className="flex items-center justify-between gap-3">
-            <Button
-              variant="ghost"
-              onClick={() => onSelectSection(current - 1)}
-              disabled={current === 0}
-            >
-              Back
-            </Button>
-
-            {isLast ? (
-              <Button
-                onClick={onSend}
-                disabled={blocked !== null}
-                loading={isSaving}
-                loadingLabel="Sending your brief"
-              >
-                {sendLabel}
-              </Button>
-            ) : (
-              // Never disabled by the section's own guard. Section 2 is not the
-              // place to refuse somebody because section 1 is thin — the send is,
-              // and it says so. A "Next" that dead-ends is how a form traps
-              // people who intended to come back.
-              <Button variant="outline" onClick={() => onSelectSection(current + 1)}>
-                Next
-              </Button>
-            )}
-          </div>
+          {section ? (
+            <BriefSection
+              section={section}
+              number={current + 1}
+              onBack={
+                current > 0
+                  ? () => openSection(current - 1)
+                  : onLeave
+              }
+            />
+          ) : null}
         </div>
       </RailLayout>
     </div>
+  );
+}
+
+/**
+ * Forward rail clicks may not skip a section that is still short. Backwards is
+ * always allowed — they may be going back to fix it.
+ */
+function canOpenBriefSection(
+  sections: readonly BriefSectionSpec[],
+  targetIndex: number,
+): boolean {
+  return sections.slice(0, targetIndex).every((item) => item.blocked === null);
+}
+
+function CtaHint({
+  isLast,
+  currentBlocked,
+  blocked,
+  blockingIndex,
+  sections,
+  onOpenSection,
+}: {
+  isLast: boolean;
+  currentBlocked: BlockReason | null;
+  blocked: BlockReason | null;
+  blockingIndex: number;
+  sections: readonly BriefSectionSpec[];
+  onOpenSection: (index: number) => void;
+}) {
+  if (!isLast) {
+    if (currentBlocked === null) return null;
+    return (
+      <p className="text-sm leading-5 text-text-secondary">{BLOCK_COPY[currentBlocked]}</p>
+    );
+  }
+
+  if (blocked !== null && blockingIndex !== -1) {
+    return (
+      <p className="text-sm leading-5 text-text-secondary">
+        <button
+          type="button"
+          onClick={() => onOpenSection(blockingIndex)}
+          className="font-semibold text-text-link underline underline-offset-4"
+        >
+          {sections[blockingIndex]?.title}
+        </button>{" "}
+        still needs something before you can send.
+      </p>
+    );
+  }
+
+  if (blocked !== null) {
+    return <p className="text-sm leading-5 text-text-secondary">{BLOCK_COPY[blocked]}</p>;
+  }
+
+  return (
+    <p className="text-sm leading-5 text-text-secondary">
+      Free to send. Nothing is booked yet.
+    </p>
   );
 }
 
@@ -222,13 +270,31 @@ export function ProjectBriefScreen({
  * instead: "1" announced before a heading is a bare digit, and the ordinal is
  * only useful if it is attached to what it numbers.
  */
-function BriefSection({ section, number }: { section: BriefSectionSpec; number: number }) {
+function BriefSection({
+  section,
+  number,
+  onBack,
+}: {
+  section: BriefSectionSpec;
+  number: number;
+  onBack?: () => void;
+}) {
   return (
     <section
       aria-labelledby={sectionId(section.title)}
       className="rounded-card border border-line bg-surface p-5"
     >
-      <div className="mb-4 flex flex-wrap items-baseline gap-3 border-b border-line pb-3">
+      <div className="mb-4 flex flex-wrap items-center gap-3 border-b border-line pb-3">
+        {onBack !== undefined ? (
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label="Go back"
+            className="inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-line bg-surface text-text shadow-2xs transition-colors hover:bg-surface-hover hover:text-text-primary active:scale-95 cursor-pointer"
+          >
+            <ChevronLeft className="size-5" strokeWidth={2.2} aria-hidden />
+          </button>
+        ) : null}
         <span
           aria-hidden
           className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-action-secondary text-sm font-bold text-action-secondary-text"

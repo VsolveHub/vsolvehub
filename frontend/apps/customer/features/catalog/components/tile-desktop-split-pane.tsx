@@ -311,7 +311,7 @@ export function TileDesktopSplitPane({
           className="no-scrollbar min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-8 py-6"
         >
           <Link
-            href={`/catalog/${category.slug}`}
+            href="/"
             className="inline-flex items-center gap-1.5 text-[13px] font-bold text-[#EA580C] hover:text-[#C2410C]"
           >
             <svg viewBox="0 0 20 20" fill="none" className="size-4" aria-hidden>

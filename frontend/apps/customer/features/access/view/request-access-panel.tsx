@@ -333,6 +333,7 @@ function A5Access({
       {(checkoutFlow) => (
         <VisitTracker
           slot={slot}
+          requirementId={requirementId}
           estimates={estimates}
           phase={state === null ? "choosing" : visitPlanPhase(state)}
           tracker={tracker}

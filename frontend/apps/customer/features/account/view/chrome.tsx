@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { cn } from "@vsolve/ui";
 
 /**
  * Shared furniture for the account screens.
@@ -21,22 +22,36 @@ export function AccountSection({
   description,
   action,
   children,
+  collapseHeaderOnMobile = false,
 }: {
   title: string;
   description: string;
   action?: ReactNode;
   children: ReactNode;
+  /** Addresses supplies its own mobile chrome; keep the desktop heading. */
+  collapseHeaderOnMobile?: boolean;
 }) {
   return (
-    <section className="rounded-card border border-line bg-surface p-5 sm:p-6">
-      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+    <section
+      className={cn(
+        "rounded-card border border-line bg-surface p-5 sm:p-6",
+        collapseHeaderOnMobile &&
+          "max-md:rounded-none max-md:border-0 max-md:bg-transparent max-md:p-0 max-md:shadow-none",
+      )}
+    >
+      <div
+        className={cn(
+          "flex flex-wrap items-start justify-between gap-x-4 gap-y-2",
+          collapseHeaderOnMobile && "max-md:hidden",
+        )}
+      >
         <div className="max-w-prose">
           <h2 className="text-lg font-bold text-text">{title}</h2>
           <p className="mt-1 text-sm text-text-secondary">{description}</p>
         </div>
         {action ? <div className="shrink-0">{action}</div> : null}
       </div>
-      <div className="mt-5">{children}</div>
+      <div className={cn("mt-5", collapseHeaderOnMobile && "max-md:mt-0")}>{children}</div>
     </section>
   );
 }
