@@ -294,6 +294,13 @@ class M2VariantConfiguration(models.Model):
         ACTIVE = "ACTIVE", "Active"
         RETIRED = "RETIRED", "Retired"
 
+    class MaterialFulfilmentMode(models.TextChoices):
+        """Who owns procurement for an estimate, independently of its A3/A5 lifecycle."""
+
+        NOT_APPLICABLE = "NOT_APPLICABLE", "Not applicable"
+        CUSTOMER_PROCURES = "CUSTOMER_PROCURES", "Customer procures"
+        PARTNER_TURNKEY = "PARTNER_TURNKEY", "Partner supplies turnkey"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     variant = models.ForeignKey(
         ServiceVariant,
@@ -322,6 +329,14 @@ class M2VariantConfiguration(models.Model):
     #: consultation and a day-hire alike. Distinct from `required_skill_code`, which is the
     #: dispatch capability and is per service. Blank falls back to `required_skill_code`.
     pricing_skill_code = models.SlugField(max_length=100, blank=True)
+    #: Procurement responsibility is a commercial product decision, not an inference from the
+    #: service slug or category. A3 day-hire explicitly uses `NOT_APPLICABLE`; every A5 variant is
+    #: configured as either customer-procured or Partner-turnkey. There is deliberately no model
+    #: default: silently choosing the wrong party changes who must spend money.
+    material_fulfilment_mode = models.CharField(
+        max_length=24,
+        choices=MaterialFulfilmentMode.choices,
+    )
     #: Hours from submission to the first usable quote, and to the full set. Owner decision 2.
     first_quote_sla_hours = models.PositiveSmallIntegerField(null=True, blank=True)
     quote_delivery_sla_hours = models.PositiveSmallIntegerField(null=True, blank=True)
@@ -342,6 +357,14 @@ class M2VariantConfiguration(models.Model):
     #: Business hours from submission to the first *confirmed visit slot* (A5's answer to
     #: `first_quote_sla_hours`). Owner decision 2.
     first_visit_sla_hours = models.PositiveSmallIntegerField(null=True, blank=True)
+    #: **Seconds**, not business hours — the fixed-visit offer's answer window (owner decision,
+    #: 2026-09-01). A fixed-visit offer is a yes/no on a Customer-chosen time, broadcast
+    #: first-accept-wins, and it borrowed `first_quote_sla_hours` — a clock sized for *writing a
+    #: quote* — which handed a 30-second decision a two-day countdown and held the Customer in
+    #: `SEARCHING` for days. Same reasoning as `crew_offer_timeout_seconds`: an instant product
+    #: cannot wait for a service area to open tomorrow morning. Null keeps the old ceiling —
+    #: honest, but slow — rather than inventing a number nobody approved.
+    fixed_visit_offer_timeout_seconds = models.PositiveIntegerField(null=True, blank=True)
     #: Business hours from submission by which every plan slot should be filled. An unfilled share
     #: auto-refunds once this passes. Owner decision 2.
     visit_plan_fill_sla_hours = models.PositiveSmallIntegerField(null=True, blank=True)

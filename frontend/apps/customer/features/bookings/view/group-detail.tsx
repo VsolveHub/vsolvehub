@@ -2,6 +2,7 @@
 
 import { describeError, useServerCountdown } from "@vsolve/query";
 import { Button, Dialog, ErrorState, Skeleton, buttonStyles } from "@vsolve/ui";
+import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -67,6 +68,22 @@ function formatWhen(instant: string): string {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function BackToBookingsLink() {
+  return (
+    <Link
+      href="/activity"
+      className={buttonStyles({
+        variant: "outline",
+        size: "sm",
+        className: "w-fit gap-1 px-3",
+      })}
+    >
+      <ChevronLeft className="size-4" strokeWidth={2.2} aria-hidden />
+      Back to Bookings
+    </Link>
+  );
 }
 
 /**
@@ -333,6 +350,7 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
   if (groupQuery.isPending) {
     return (
       <div className="flex flex-col gap-3">
+        <BackToBookingsLink />
         <Skeleton className="h-8 w-56" />
         <Skeleton className="h-32 w-full" />
         <Skeleton className="h-32 w-full" />
@@ -342,12 +360,15 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
 
   if (groupQuery.isError || !group) {
     return (
-      <ErrorState
-        title="We could not load this booking"
-        message={describeError(groupQuery.error, "read").message}
-        actionLabel="Try again"
-        onAction={() => void groupQuery.refetch()}
-      />
+      <div className="flex flex-col gap-4">
+        <BackToBookingsLink />
+        <ErrorState
+          title="We could not load this booking"
+          message={describeError(groupQuery.error, "read").message}
+          actionLabel="Try again"
+          onAction={() => void groupQuery.refetch()}
+        />
+      </div>
     );
   }
 
@@ -394,8 +415,9 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
 
       <div className={isAwaitingPayment ? "lg:grid lg:grid-cols-12 lg:gap-8 items-start space-y-4 lg:space-y-0 pb-28 lg:pb-12" : "space-y-4 pb-20 lg:pb-12"}>
         <div className={isAwaitingPayment ? "lg:col-span-7 space-y-4" : "space-y-4"}>
-        {/* Header section with status badge (shown when !isAwaitingPayment; when awaiting payment, details live in PaymentSummarySideCard) */}
-        {!isAwaitingPayment ? (
+          <BackToBookingsLink />
+          {/* Header section with status badge (shown when !isAwaitingPayment; when awaiting payment, details live in PaymentSummarySideCard) */}
+          {!isAwaitingPayment ? (
           <div className="rounded-card border border-line bg-surface p-5 shadow-xs">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>

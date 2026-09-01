@@ -62,6 +62,7 @@ export function CommercialEstimateFlow({
     submit.error && !refusedForVisit && !windowClosed
       ? describeError(submit.error, "mutation")
       : null;
+  const materialMode = enquiry.materialFulfilmentMode;
 
   function handleSend(request: ProposalRequest): void {
     if (visit === null || submit.isPending) return;
@@ -93,6 +94,16 @@ export function CommercialEstimateFlow({
           Back to the enquiry
         </Link>
       </Card>
+    );
+  }
+
+  if (materialMode !== "CUSTOMER_PROCURES" && materialMode !== "PARTNER_TURNKEY") {
+    return (
+      <ErrorState
+        title="This estimate is not configured yet"
+        message="Vsolve has not published who supplies materials for this service. Your draft is safe; try again after Operations updates the service."
+        severity="warning"
+      />
     );
   }
 
@@ -128,6 +139,7 @@ export function CommercialEstimateFlow({
         serviceName={enquiry.serviceName}
         brief={enquiry.brief}
         pricingSkillCode={enquiry.pricingSkillCode}
+        materialFulfilmentMode={materialMode}
         visitCompleted={visit.status === "COMPLETED"}
         isSubmitting={submit.isPending}
         submitError={submit.error}

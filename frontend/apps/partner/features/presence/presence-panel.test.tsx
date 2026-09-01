@@ -97,8 +97,10 @@ afterEach(() => {
 });
 
 async function goOnline() {
-  const areas = await screen.findByLabelText(/area you are working in/i);
-  fireEvent.change(areas, { target: { value: AREA.id } });
+  // The area moved behind a picker button + modal in the tap-first redesign;
+  // the old labelled <select> no longer exists.
+  fireEvent.click(await screen.findByRole("button", { name: /choose your area/i }));
+  fireEvent.click(await screen.findByRole("button", { name: new RegExp(AREA.name, "i") }));
   fireEvent.click(screen.getByRole("button", { name: /go online/i }));
 }
 

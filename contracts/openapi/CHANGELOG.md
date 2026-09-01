@@ -1,5 +1,23 @@
 # API Contract Changelog
 
+## 1.52.0 - Offers that interrupt, waves that refill, and the visit-day contact rung
+
+- `EnquiryDetailSerializer` gains `customer_name` and `customer_phone`, both nullable. The name —
+  first name only — discloses with the site address (a paid plan visit `SCHEDULED` or
+  `IN_PROGRESS`); the phone only from two hours before the slot (the arrival-code window) until
+  the visit completes, and disappears again after. Full contact both ways stays on the
+  engagement's `contact_released_at`, unchanged.
+- New outbox event `m2.fixed_visit_offer.received`, routed to the vendor's in-app feed (target
+  `PROJECT_INVITATION`) and carried on the partner SSE stream — the one offer type that
+  previously reached nobody. `m2.crew_offer.invited` joins the stream purposes too.
+- New outbox event `m2.quote_wave.thin_supply`, routed to the Customer once per requirement when
+  a wave top-up finds no eligible vendor while the quote count is below what was promised.
+- `M2VariantConfiguration.fixed_visit_offer_timeout_seconds` (nullable): the fixed-visit offer's
+  wall-clock answer window, capping the borrowed business-hours deadline. Behavioural, not
+  contractual: declines now refill quote slots, and searching visit shares re-dispatch until
+  `starts_at - 15min` instead of settling `NO_PROFESSIONAL_FOUND` on the first dead wave.
+- Removed: none.
+
 ## 1.49.0 - The crew booking, readable from one engagement
 
 - `EngagementSerializer` gains four nullable fields. `crew_terms` is the frozen rate-card

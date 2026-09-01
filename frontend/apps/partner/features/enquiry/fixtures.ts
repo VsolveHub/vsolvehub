@@ -36,6 +36,7 @@ export function enquirySummary(
     fixed_visit_status: null,
     responds_by: "2026-08-14T09:00:00Z",
     pricing_skill_code: "electrician",
+    material_fulfilment_mode: "NOT_APPLICABLE",
     latest_proposal_status: null,
     latest_proposal_rejection_reason: null,
     created_at: "2026-08-12T06:00:00Z",
@@ -67,6 +68,8 @@ export function enquiryDetail(
     questions: [],
     site_visits: [],
     site_address: null,
+    customer_name: null,
+    customer_phone: null,
     server_now: "2026-08-13T06:00:00Z",
     ...overrides,
   };
@@ -179,6 +182,8 @@ export function proposal(overrides: Partial<Schemas["Proposal"]> = {}): Schemas[
     // What the customer buys (1.48.0): quantities and a spec, never money.
     material_list: [],
     material_brand_tier: "",
+    material_fulfilment_mode: "NOT_APPLICABLE",
+    included_supply_list: [],
     inclusions: ["Own tools"],
     exclusions: [],
     stages: [],

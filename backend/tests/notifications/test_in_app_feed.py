@@ -142,6 +142,16 @@ def test_every_registered_template_renders_from_its_documented_context() -> None
         "headcount": "4 helpers",
         "days": "2 days",
         "visit_count": "2 visits",
+        # The write-time fallbacks every route guarantees (`_DETAIL_FALLBACKS` in
+        # `apps.requirements.notifications`): a template may legitimately name any of these,
+        # because `notify_for_outbox_event` setdefaults each one before the row is written.
+        "amount": "₹1,200",
+        "shift_date": "Mon, 1 Sep",
+        "crew_size": "4 workers",
+        "workers_present": "3",
+        "workers_expected": "4",
+        "extension_days": "2",
+        "deliverables": "3 deliverables",
     }
     for template_code in registered_template_codes():
         rendered = render_notification(template_code=template_code, context=context)

@@ -5,16 +5,16 @@ import { DECLINE_REASONS, describeDeclineReason, findDeclineReason } from "./dec
 /**
  * The decline vocabulary.
  *
- * It is client-owned because contract 1.21.0 publishes none — `reason_code` is
- * an unconstrained slug and Django stores whatever arrives. These tests fix the
- * shape of what this build sends so the day a server vocabulary lands, the diff
- * is visible rather than silent.
+ * Contract 1.24.0 published `InvitationDeclineReasonEnum`, so the codes here are
+ * the server's — uppercase enum members, not client-invented slugs. These tests
+ * fix what this build sends so a silently dropped or renamed code shows up as a
+ * diff rather than a `400`.
  */
 
 describe("the vocabulary", () => {
-  it("sends slugs, because Django stores them in a SlugField", () => {
+  it("sends the published enum members, verbatim", () => {
     for (const reason of DECLINE_REASONS) {
-      expect(reason.code).toMatch(/^[a-z][a-z0-9_]*$/);
+      expect(reason.code).toMatch(/^[A-Z][A-Z0-9_]*$/);
       expect(reason.code.length).toBeLessThanOrEqual(80);
     }
   });
@@ -34,14 +34,14 @@ describe("the vocabulary", () => {
   });
 
   it("never promises the customer sees the vendor's own rate", () => {
-    const budgetReason = findDeclineReason("rate_too_low");
+    const budgetReason = findDeclineReason("BUDGET_TOO_LOW");
     expect(budgetReason?.consequence).toMatch(/Your rate is not shared/i);
   });
 });
 
 describe("reading a code back", () => {
   it("finds a known reason", () => {
-    expect(findDeclineReason("no_capacity")?.label).toMatch(/booked/i);
+    expect(findDeclineReason("NO_CAPACITY")?.label).toMatch(/booked/i);
   });
 
   it("returns nothing for a code this build does not carry", () => {

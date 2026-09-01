@@ -490,6 +490,10 @@ function quotedOutcome(
   enquiry: EnquirySummary,
 ): "waiting" | "not_chosen" | "cancelled" | null {
   if (bucketOf(enquiry.status) !== "quoted") return null;
+  // Closed wins over everything: a customer who cancelled is not "waiting on
+  // the customer" no matter what state the quote was in when the door shut —
+  // that reading left a vendor watching a request that had already ended.
+  if (enquiry.requirement_status.startsWith("CLOSED_")) return "cancelled";
   if (enquiry.latest_proposal_status === "SUBMITTED") return "waiting";
   if (
     enquiry.latest_proposal_status === "REJECTED" &&
@@ -497,7 +501,6 @@ function quotedOutcome(
   ) {
     return "not_chosen";
   }
-  if (enquiry.requirement_status.startsWith("CLOSED_")) return "cancelled";
   return null;
 }
 

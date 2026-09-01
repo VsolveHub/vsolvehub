@@ -212,7 +212,9 @@ def test_resend_cooldown_returns_retryable_error() -> None:
 
 
 def test_otp_request_is_unavailable_when_rate_limiter_is_down(monkeypatch) -> None:
-    def redis_down(*args: object, **kwargs: object) -> bool:
+    # Underscored because this stands in for `cache.add`, whose signature it must
+    # accept in full and none of which it reads.
+    def redis_down(*_args: object, **_kwargs: object) -> bool:
         raise ConnectionError("redis down")
 
     monkeypatch.setattr("apps.identity.services.cache.add", redis_down)

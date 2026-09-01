@@ -31,6 +31,7 @@ from apps.requirements.handlers import (
     _ROUTED_BY_A_DEDICATED_HANDLER,
     handle_requirement_submitted,
 )
+from apps.requirements.models import VendorInvitation
 from apps.requirements.notifications import (
     _DETAIL_FALLBACKS,
     NOTIFICATION_ROUTES,
@@ -187,6 +188,9 @@ def test_a_crew_offer_names_the_lead_who_accepted(world: M2World) -> None:
     """ "Your crew is holding your dates" should say whose crew."""
 
     requirement = submitted_requirement(world=world)
+    # Submission's consumer opens the real wave, which already invited this vendor; the fixture
+    # invitation below would violate one-quote-invitation-per-partner on top of it.
+    VendorInvitation.objects.filter(requirement=requirement).delete()
     invitation = invitation_for(requirement=requirement, partner=world.vendor, accepted=True)
     event = _event(
         event_type="m2.crew_offer.accepted",
@@ -246,7 +250,14 @@ def test_a_redriven_event_tells_nobody_twice(world: M2World) -> None:
     second = notify_for_outbox_event(event)
 
     assert [intent.id for intent in first] == [intent.id for intent in second]
-    assert NotificationIntent.objects.filter(recipient=world.customer).count() == 1
+    # Scoped to this event's purpose: submission itself already notified the customer once
+    # (`open_matching_on_submission`'s consumer era), and that notice is not a duplicate of this.
+    assert (
+        NotificationIntent.objects.filter(
+            recipient=world.customer, purpose="m2.requirement.closed"
+        ).count()
+        == 1
+    )
 
 
 def test_an_unresolvable_recipient_produces_no_notice_rather_than_a_crash() -> None:
@@ -342,6 +353,8 @@ def test_a_quote_points_the_customer_at_the_quotes_screen(world: M2World) -> Non
     """Unlock-to-read has to open the quotes, not the request page it hangs under."""
 
     requirement = submitted_requirement(world=world)
+    # Same collision as the crew-offer test above: the opening wave already invited this vendor.
+    VendorInvitation.objects.filter(requirement=requirement).delete()
     invitation = invitation_for(requirement=requirement, partner=world.vendor)
     event = _event(
         event_type="m2.proposal.submitted",

@@ -36,6 +36,8 @@ function card(overrides: Partial<QuoteCardView> = {}): QuoteCardView {
     stages: [],
     materials: [],
     materialList: [],
+    includedSupplyList: [],
+    materialFulfilmentMode: "CUSTOMER_PROCURES",
     brandTierLabel: null,
     inclusions: [],
     exclusions: [],

@@ -23,6 +23,9 @@ describe("a stale estimate after the customer chose another vendor", () => {
 
     expect(screen.getByRole("dialog", { name: "Estimate closed" })).toBeInTheDocument();
     expect(screen.getByText(/already continued with another professional/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Back to work" })).toHaveAttribute("href", "/work");
+    expect(screen.getByRole("link", { name: "Back to your work" })).toHaveAttribute(
+      "href",
+      "/work/all",
+    );
   });
 });

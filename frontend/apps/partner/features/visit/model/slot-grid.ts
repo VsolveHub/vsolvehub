@@ -104,7 +104,7 @@ export function describeUnavailableReason(reason: UnavailableReason | null): str
  * and an old WebView on a cheap Android phone is exactly the device a vendor
  * reads this on. Probing once beats a try/catch around every slot.
  */
-function supportsTimeZone(timeZone: string): boolean {
+export function supportsTimeZone(timeZone: string): boolean {
   try {
     new Intl.DateTimeFormat("en-IN", { timeZone });
     return true;

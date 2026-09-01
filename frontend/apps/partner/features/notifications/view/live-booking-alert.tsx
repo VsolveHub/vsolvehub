@@ -16,7 +16,7 @@ import {
 } from "@/features/offers/live-events";
 import { useOfferCommand, usePartnerOffers, type Offer } from "@/features/offers/queries";
 import { permissionsFor, isEnquiryClosed } from "@/features/enquiry/model/enquiry-state";
-import { readEnquiryRecord } from "@/features/enquiry/model/wire";
+import { readEnquiryRecord, type EnquiryRecord } from "@/features/enquiry/model/wire";
 import { useAcceptEnquiry, useDeclineEnquiry, usePartnerEnquiry } from "@/features/enquiry/queries";
 import { DeclineDialog } from "@/features/enquiry/view/decline-dialog";
 import { RequirementSummary } from "@/features/enquiry/view/requirement-summary";
@@ -26,6 +26,9 @@ import { useBookingAlertSound } from "./use-booking-alert-sound";
 import { stopBookingAlertLoop } from "./booking-alert-audio";
 
 const LIVE_INVITATION_PURPOSE = "m2.invitation.received";
+/** The fixed-visit offer (1.52.0): a Customer-chosen time, first professional to take it wins. */
+const LIVE_FIXED_VISIT_PURPOSE = "m2.fixed_visit_offer.received";
+const LIVE_INVITATION_PURPOSES = new Set([LIVE_INVITATION_PURPOSE, LIVE_FIXED_VISIT_PURPOSE]);
 const LIVE_BOOKING_POLL_MS = 10_000;
 
 function BookingPopupTimer({
@@ -75,7 +78,7 @@ function isLiveBookingNotification(notification: {
   target?: { id?: string; kind?: string } | null;
 }): boolean {
   return (
-    notification.purpose === LIVE_INVITATION_PURPOSE &&
+    LIVE_INVITATION_PURPOSES.has(notification.purpose) &&
     isUnread(notification) &&
     typeof notification.target?.id === "string"
   );
@@ -98,6 +101,28 @@ interface LiveOfferSignal {
 type LiveBooking =
   | { kind: "offer"; offerId: string; payload: LiveOfferSignal }
   | { kind: "invitation"; invitationId: string; title: string; body: string };
+
+function bookingKey(booking: LiveBooking): string {
+  return booking.kind === "offer"
+    ? `offer:${booking.offerId}`
+    : `invitation:${booking.invitationId}`;
+}
+
+/**
+ * One deck, never stacked dialogs. FIFO within a kind; offers ahead of
+ * invitations — an A1 offer has 45 seconds and an invitation minutes at worst,
+ * so showing the slow one first would spend the fast one's whole window behind
+ * a dialog the Partner is reading.
+ */
+function enqueueBooking(queue: LiveBooking[], booking: LiveBooking): LiveBooking[] {
+  if (queue.some((pending) => bookingKey(pending) === bookingKey(booking))) return queue;
+  if (booking.kind === "invitation") return [...queue, booking];
+  let lastOffer = -1;
+  queue.forEach((pending, index) => {
+    if (pending.kind === "offer") lastOffer = index;
+  });
+  return [...queue.slice(0, lastOffer + 1), booking, ...queue.slice(lastOffer + 1)];
+}
 
 function formatWhen(instant: string | null | undefined): string | null {
   if (!instant) return null;
@@ -123,10 +148,12 @@ function bookingActionProps(onUserAction: () => void) {
 
 function OfferBookingPopup({
   booking,
+  waitingCount,
   onClose,
   onUserAction,
 }: {
   booking: Extract<LiveBooking, { kind: "offer" }>;
+  waitingCount: number;
   onClose: () => void;
   onUserAction: () => void;
 }) {
@@ -189,6 +216,12 @@ function OfferBookingPopup({
       }
     >
       <div className="flex flex-col gap-4">
+        {waitingCount > 0 ? (
+          <p aria-live="polite" className="text-xs font-semibold text-text-secondary">
+            {waitingCount} more waiting — answering this opens the next.
+          </p>
+        ) : null}
+
         {deadlineIso ? (
           <BookingPopupTimer deadlineIso={deadlineIso} onExpired={handleDismiss} />
         ) : null}
@@ -253,12 +286,56 @@ function OfferBookingPopup({
   );
 }
 
+/** The interrupt body for a fixed-visit offer: the designed offer card, compact. */
+function FixedVisitOfferSummary({ enquiry }: { readonly enquiry: EnquiryRecord }) {
+  const when = formatWhen(enquiry.fixedVisitStart);
+  const duration =
+    enquiry.fixedVisitDurationMinutes !== null ? `${enquiry.fixedVisitDurationMinutes} min` : null;
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="rounded-card bg-[linear-gradient(135deg,var(--color-signal-400)_0%,var(--color-action)_55%,var(--color-action-active)_100%)] px-4 py-4 text-center shadow-raised">
+        <p className="text-xs font-bold uppercase tracking-wide text-text/80">You receive</p>
+        <p className="text-4xl font-extrabold text-text">
+          {enquiry.fixedVisitEarningPaise !== null
+            ? formatMoney(enquiry.fixedVisitEarningPaise)
+            : "—"}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <FixedVisitFact label="Service" value={enquiry.serviceName} />
+        <FixedVisitFact label="Area" value={enquiry.approximateArea} />
+        <FixedVisitFact label="When" value={when ?? "—"} />
+        <FixedVisitFact label="On site" value={duration ?? "—"} />
+      </div>
+
+      <p className="text-sm leading-6 text-text-secondary">
+        The customer picked this time. Take it or pass — there is nothing to schedule.
+      </p>
+    </div>
+  );
+}
+
+function FixedVisitFact({ label, value }: { readonly label: string; readonly value: string }) {
+  return (
+    <div className="rounded-card border border-line bg-surface p-3">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
+        {label}
+      </p>
+      <p className="mt-0.5 truncate text-sm font-bold text-text">{value}</p>
+    </div>
+  );
+}
+
 function InvitationBookingPopup({
   booking,
+  waitingCount,
   onClose,
   onUserAction,
 }: {
   booking: Extract<LiveBooking, { kind: "invitation" }>;
+  waitingCount: number;
   onClose: () => void;
   onUserAction: () => void;
 }) {
@@ -268,6 +345,10 @@ function InvitationBookingPopup({
   const [declining, setDeclining] = useState(false);
 
   const enquiry = detailQuery.data ? readEnquiryRecord(detailQuery.data) : null;
+  /* A fixed-visit offer — the customer already picked the time — gets the
+     designed offer body and take-or-pass wording; an open enquiry keeps the
+     review-and-respond shape. Same accept command either way. */
+  const isFixedVisit = enquiry !== null && enquiry.fixedVisitStart !== null;
   const permissions = enquiry ? permissionsFor(enquiry.status) : null;
   const inFlight = accept.isPending || decline.isPending;
   const closed = enquiry !== null && isEnquiryClosed(enquiry.status);
@@ -294,7 +375,11 @@ function InvitationBookingPopup({
           if (!next && !inFlight) handleDismiss();
         }}
         title={booking.title}
-        description="A customer is waiting for your answer. Review the service and respond."
+        description={
+          isFixedVisit
+            ? "A customer booked a visit time near you."
+            : "A customer is waiting for your answer. Review the service and respond."
+        }
         dismissable={!inFlight}
         footer={
           <>
@@ -307,7 +392,7 @@ function InvitationBookingPopup({
               disabled={inFlight || !canDecline}
               {...bookingActionProps(onUserAction)}
             >
-              Decline
+              {isFixedVisit ? "Pass on this one" : "Decline"}
             </Button>
             <Button
               onClick={() => {
@@ -315,16 +400,22 @@ function InvitationBookingPopup({
                 accept.mutate(undefined, { onSuccess: () => onClose() });
               }}
               loading={accept.isPending}
-              loadingLabel="Accepting"
+              loadingLabel={isFixedVisit ? "Taking it" : "Accepting"}
               disabled={!canAccept}
               {...bookingActionProps(onUserAction)}
             >
-              Accept
+              {isFixedVisit ? "Take this visit" : "Accept"}
             </Button>
           </>
         }
       >
         <div className="flex flex-col gap-4">
+          {waitingCount > 0 ? (
+            <p aria-live="polite" className="text-xs font-semibold text-text-secondary">
+              {waitingCount} more waiting — answering this opens the next.
+            </p>
+          ) : null}
+
           {deadlineIso ? (
             <BookingPopupTimer deadlineIso={deadlineIso} onExpired={handleDismiss} />
           ) : null}
@@ -332,9 +423,13 @@ function InvitationBookingPopup({
           <div className="flex items-start gap-3 rounded-card border border-warning-line bg-warning-surface p-4">
             <AlertTriangle className="mt-0.5 size-6 shrink-0 text-warning-text" aria-hidden />
             <div className="min-w-0">
-              <p className="font-semibold text-warning-text">New customer enquiry</p>
+              <p className="font-semibold text-warning-text">
+                {isFixedVisit ? "First to take it gets it" : "New customer enquiry"}
+              </p>
               <p className="mt-1 text-sm leading-6 text-warning-text/90">
-                Review the service below and accept to respond, or decline to release the slot.
+                {isFixedVisit
+                  ? "This visit was offered to other professionals too. Answer before the timer runs out."
+                  : "Review the service below and accept to respond, or decline to release the slot."}
               </p>
             </div>
           </div>
@@ -345,15 +440,19 @@ function InvitationBookingPopup({
               Loading service details…
             </div>
           ) : enquiry ? (
-            <>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                  Service
-                </p>
-                <p className="mt-1 text-lg font-bold text-text">{enquiry.serviceName}</p>
-              </div>
-              <RequirementSummary enquiry={enquiry} />
-            </>
+            isFixedVisit ? (
+              <FixedVisitOfferSummary enquiry={enquiry} />
+            ) : (
+              <>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
+                    Service
+                  </p>
+                  <p className="mt-1 text-lg font-bold text-text">{enquiry.serviceName}</p>
+                </div>
+                <RequirementSummary enquiry={enquiry} />
+              </>
+            )
           ) : (
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
@@ -399,13 +498,20 @@ function InvitationBookingPopup({
  * an event.
  */
 export function PartnerLiveDelivery({
-  enabled,
+  offersEnabled,
+  invitationsEnabled,
 }: {
-  enabled: boolean;
+  /** A1 same-day offers: gated on the Partner's go-online presence. */
+  offersEnabled: boolean;
+  /** M2 invitations and fixed-visit offers: any signed-in Partner, presence or not. */
+  invitationsEnabled: boolean;
   workspaceKeys?: readonly string[];
 }) {
+  const enabled = offersEnabled || invitationsEnabled;
   const queryClient = useQueryClient();
-  const [booking, setBooking] = useState<LiveBooking | null>(null);
+  /** Pending interrupts, soonest-clock first; the head is the one on screen. */
+  const [queue, setQueue] = useState<LiveBooking[]>([]);
+  const booking = queue[0] ?? null;
   const [alertSound, setAlertSound] = useState(true);
   const offerDeduper = useRef(createOfferDeduper());
   const notificationDeduper = useRef(createIdDeduper("notification"));
@@ -419,7 +525,7 @@ export function PartnerLiveDelivery({
     (offerId: string, payload: LiveOfferSignal) => {
       if (!offerDeduper.current(offerId)) return;
       setAlertSound(true);
-      setBooking({ kind: "offer", offerId, payload });
+      setQueue((prev) => enqueueBooking(prev, { kind: "offer", offerId, payload }));
       void queryClient.invalidateQueries({ queryKey: queryKeys.partner.offers() });
     },
     [queryClient],
@@ -429,12 +535,14 @@ export function PartnerLiveDelivery({
     (payload: NotificationCreatedPayload, invitationId: string) => {
       if (!notificationDeduper.current(payload.notification_id)) return;
       setAlertSound(true);
-      setBooking({
-        kind: "invitation",
-        invitationId,
-        title: payload.title,
-        body: payload.body,
-      });
+      setQueue((prev) =>
+        enqueueBooking(prev, {
+          kind: "invitation",
+          invitationId,
+          title: payload.title,
+          body: payload.body,
+        }),
+      );
       void queryClient.invalidateQueries({ queryKey: m2QueryKeys.notifications.unreadCount() });
       void queryClient.invalidateQueries({ queryKey: m2QueryKeys.invitations.all });
     },
@@ -448,7 +556,10 @@ export function PartnerLiveDelivery({
 
   const closeBooking = useCallback(() => {
     stopAlertSound();
-    setBooking(null);
+    /* Answering or dismissing the head advances the deck to the next pending
+       interrupt rather than discarding it — a second offer that landed while
+       the first was on screen was never shown, so it cannot have been read. */
+    setQueue((prev) => prev.slice(1));
   }, [stopAlertSound]);
 
   /**
@@ -472,31 +583,36 @@ export function PartnerLiveDelivery({
     unreadInitialized.current = false;
     prevUnread.current = null;
     /* Going offline must also silence the alert loop — an external system — so
-       this cannot become a render-time derivation of `enabled`. */
+       this cannot become a render-time derivation of `enabled`. The whole deck
+       clears, not just the head: everything pending belonged to the online
+       spell that just ended. */
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    closeBooking();
-  }, [closeBooking, enabled]);
+    stopAlertSound();
+    setQueue([]);
+  }, [enabled, stopAlertSound]);
 
   useEffect(() => {
     if (!enabled) return;
 
     return subscribeToPartnerStream({
       onOfferCreated: (payload) => {
+        if (!offersEnabled) return;
         showOffer(payload.offer_id, payload);
       },
       onNotificationCreated: (payload) => {
-        if (payload.purpose !== LIVE_INVITATION_PURPOSE) return;
+        if (!invitationsEnabled) return;
+        if (!LIVE_INVITATION_PURPOSES.has(payload.purpose)) return;
         const invitationId = payload.target_id;
         if (!invitationId) return;
         showInvitation(payload, invitationId);
       },
     });
-  }, [enabled, showInvitation, showOffer]);
+  }, [enabled, invitationsEnabled, offersEnabled, showInvitation, showOffer]);
 
-  const offersQuery = usePartnerOffers(enabled);
+  const offersQuery = usePartnerOffers(offersEnabled);
 
   useEffect(() => {
-    if (!enabled || !offersQuery.isSuccess || !offersQuery.data) return;
+    if (!offersEnabled || !offersQuery.isSuccess || !offersQuery.data) return;
     /* Cached pages from before this online spell: not a baseline, not news. */
     if (enabledAt.current === null || offersQuery.dataUpdatedAt < enabledAt.current) return;
 
@@ -528,18 +644,24 @@ export function PartnerLiveDelivery({
       });
       break;
     }
-  }, [enabled, offersQuery.data, offersQuery.dataUpdatedAt, offersQuery.isSuccess, showOffer]);
+  }, [
+    offersEnabled,
+    offersQuery.data,
+    offersQuery.dataUpdatedAt,
+    offersQuery.isSuccess,
+    showOffer,
+  ]);
 
   const unreadQuery = useQuery({
     queryKey: m2QueryKeys.notifications.unreadCount(),
     queryFn: () => request(() => getApiClient().GET("/api/v1/notifications/unread-count/")),
-    enabled,
-    refetchInterval: enabled ? LIVE_BOOKING_POLL_MS : false,
+    enabled: invitationsEnabled,
+    refetchInterval: invitationsEnabled ? LIVE_BOOKING_POLL_MS : false,
     refetchIntervalInBackground: false,
   });
 
   useEffect(() => {
-    if (!enabled || !unreadQuery.isSuccess || unreadQuery.data === undefined) return;
+    if (!invitationsEnabled || !unreadQuery.isSuccess || unreadQuery.data === undefined) return;
     /* Cached count from before this online spell: not a baseline, not news. */
     if (enabledAt.current === null || unreadQuery.dataUpdatedAt < enabledAt.current) return;
 
@@ -607,7 +729,7 @@ export function PartnerLiveDelivery({
     prevUnread.current = unread;
     inspectFeed();
   }, [
-    enabled,
+    invitationsEnabled,
     queryClient,
     showInvitation,
     unreadQuery.data,
@@ -619,8 +741,10 @@ export function PartnerLiveDelivery({
 
   return (
     <BookingPopupWithSound
+      key={bookingKey(booking)}
       alertSound={alertSound}
       booking={booking}
+      waitingCount={queue.length - 1}
       onClose={closeBooking}
       onStopSound={stopAlertSound}
     />
@@ -630,11 +754,13 @@ export function PartnerLiveDelivery({
 function BookingPopupWithSound({
   alertSound,
   booking,
+  waitingCount,
   onClose,
   onStopSound,
 }: {
   alertSound: boolean;
   booking: LiveBooking;
+  waitingCount: number;
   onClose: () => void;
   onStopSound: () => void;
 }) {
@@ -643,6 +769,7 @@ function BookingPopupWithSound({
   const soundProps = {
     onUserAction: onStopSound,
     onClose,
+    waitingCount,
   };
 
   if (booking.kind === "offer") {

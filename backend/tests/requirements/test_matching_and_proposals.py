@@ -97,6 +97,11 @@ def _variant(
                 {"code": "deliverable", "kind": "TEXT"},
             ]
         },
+        material_fulfilment_mode=(
+            M2VariantConfiguration.MaterialFulfilmentMode.NOT_APPLICABLE
+            if archetype == ServiceVariant.BookingArchetype.A3_TIME_BLOCK
+            else M2VariantConfiguration.MaterialFulfilmentMode.CUSTOMER_PROCURES
+        ),
         first_quote_sla_hours=8,
         quote_delivery_sla_hours=24,
         max_quotes=THREE_SLOTS,

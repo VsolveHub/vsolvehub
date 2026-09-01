@@ -110,9 +110,7 @@ class Command(BaseCommand):
         # A blank in the export means "no authored art"; only --prune may act on that.
         return bool(wanted) or prune
 
-    def _restore_categories(
-        self, urls: dict[str, str], prune: bool, dry_run: bool
-    ) -> int:
+    def _restore_categories(self, urls: dict[str, str], prune: bool, dry_run: bool) -> int:
         changed = 0
         for category in Category.objects.all():
             wanted = urls.get(category.slug)

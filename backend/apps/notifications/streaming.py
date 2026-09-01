@@ -77,6 +77,10 @@ NOTIFICATION_CREATED_EVENT = "notification_created"
 PARTNER_IN_APP_STREAM_PURPOSES = frozenset(
     {
         "m2.invitation.received",
+        # Both offer purposes ride the stream because both are first-accept-wins: the delay the
+        # poll fallback tolerates is exactly the delay that loses the job to another Partner.
+        "m2.fixed_visit_offer.received",
+        "m2.crew_offer.invited",
         "m2.booking_fee.charged",
         "m2.engagement.opened",
     }

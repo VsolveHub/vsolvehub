@@ -18,12 +18,11 @@ from freezegun import freeze_time
 from rest_framework.test import APIClient
 
 from apps.notifications.models import NotificationIntent
+from apps.notifications.services import request_notification
 from apps.notifications.streaming import (
     NOTIFICATION_CREATED_EVENT,
     OFFER_CREATED_PURPOSE,
-    offer_event_frames,
 )
-from apps.notifications.services import request_notification
 from tests.assignments.same_day_offers import FROZEN_NOW, online_partner, same_day_offer
 from tests.assignments.test_group_dispatch import _partner_client
 

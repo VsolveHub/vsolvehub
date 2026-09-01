@@ -41,6 +41,8 @@ function estimate(overrides: Partial<QuoteCardView> = {}): QuoteCardView {
     ],
     materials: [],
     materialList: [],
+    includedSupplyList: [],
+    materialFulfilmentMode: "CUSTOMER_PROCURES",
     brandTierLabel: null,
     inclusions: ["Demolition & debris", "Waterproofing", "Plumbing rework"],
     exclusions: ["Sanitaryware"],
@@ -131,7 +133,7 @@ describe("the estimate card", () => {
       />,
     );
 
-    expect(screen.getByText("🛒 What you need to buy · 2 items")).toBeInTheDocument();
+    expect(screen.getByText("What you need to buy · 2 items")).toBeInTheDocument();
     expect(screen.getByText("Modular switch")).toBeInTheDocument();
     expect(screen.getByText("16 A, white")).toBeInTheDocument();
     expect(screen.getByText("5 Nos")).toBeInTheDocument();
@@ -141,6 +143,26 @@ describe("the estimate card", () => {
   it("shows no buy line when the list is empty", () => {
     render(<QuoteCard card={estimate({ materialList: [] })} index={0} isPicked={false} isRevalidating={false} {...hrefs} />);
 
+    expect(screen.queryByText(/What you need to buy/)).not.toBeInTheDocument();
+  });
+
+  it("makes a turnkey decoration estimate clear without showing a shopping list", () => {
+    render(
+      <QuoteCard
+        card={estimate({
+          materialFulfilmentMode: "PARTNER_TURNKEY",
+          includedSupplyList: [
+            { title: "Floral entrance arch", spec: "Fresh flowers", quantityLabel: "1 set", note: null },
+          ],
+        })}
+        index={0}
+        isPicked={false}
+        isRevalidating={false}
+        {...hrefs}
+      />,
+    );
+
+    expect(screen.getByText("Materials, setup & removal included")).toBeInTheDocument();
     expect(screen.queryByText(/What you need to buy/)).not.toBeInTheDocument();
   });
 

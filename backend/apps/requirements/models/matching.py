@@ -234,6 +234,11 @@ class Proposal(models.Model):
         ITEM_WISE = "ITEM_WISE", "Item-wise"
         LABOUR_WISE = "LABOUR_WISE", "Labour-wise"
 
+    class MaterialFulfilmentMode(models.TextChoices):
+        NOT_APPLICABLE = "NOT_APPLICABLE", "Not applicable"
+        CUSTOMER_PROCURES = "CUSTOMER_PROCURES", "Customer procures"
+        PARTNER_TURNKEY = "PARTNER_TURNKEY", "Partner supplies turnkey"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     requirement = models.ForeignKey(
         "requirements.CustomerRequirement",
@@ -379,6 +384,17 @@ class Proposal(models.Model):
     material_list = models.JSONField(default=list, blank=True, encoder=DjangoJSONEncoder)
     #: A label for the shopping list, so "1.5 sq mm wire" reads as one brand tier or the other.
     material_brand_tier = models.CharField(max_length=16, blank=True)
+    #: The configuration decision this estimate was submitted under. Snapshotted rather than read
+    #: from the live service so an accepted quotation never changes meaning after Operations edits
+    #: the catalogue.
+    material_fulfilment_mode = models.CharField(
+        max_length=24,
+        choices=MaterialFulfilmentMode.choices,
+    )
+    #: Materials/specifications the Partner includes in a turnkey rate. Quantities and notes are
+    #: disclosure only: their cost is already inside `item_lines`/`labour_lines`, so this list must
+    #: never be added to a total or funded as a second money rail.
+    included_supply_list = models.JSONField(default=list, blank=True, encoder=DjangoJSONEncoder)
     valid_until = models.DateTimeField(null=True, blank=True)
 
     #: Set when Operations captured this by phone. The vendor still confirms before the Customer

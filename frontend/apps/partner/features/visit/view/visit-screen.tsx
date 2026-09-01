@@ -107,6 +107,7 @@ export function VisitScreen({ invitationId }: { readonly invitationId: string })
             <VisitDayPanel
               enquiry={enquiry}
               estimateHref={`${enquiryHref}/estimate`}
+              arrivalHref={`${enquiryHref}/arrival`}
               isRefreshing={query.isFetching}
             />
           </>

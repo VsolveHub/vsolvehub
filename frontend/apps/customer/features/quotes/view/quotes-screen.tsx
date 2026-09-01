@@ -421,14 +421,16 @@ function QuoteBody({
           />
         </div>
         <div className="flex flex-col gap-4">
-        <ShoppingListCard
-          requirementId={requirementId}
-          proposalId={only.proposalId}
-          rows={only.materialList}
-          brandTierLabel={only.brandTierLabel}
-          vendorName={only.vendorName}
-          serviceName={serviceName}
-        />
+        {only.materialFulfilmentMode === "CUSTOMER_PROCURES" ? (
+          <ShoppingListCard
+            requirementId={requirementId}
+            proposalId={only.proposalId}
+            rows={only.materialList}
+            brandTierLabel={only.brandTierLabel}
+            vendorName={only.vendorName}
+            serviceName={serviceName}
+          />
+        ) : null}
         <aside className="rounded-[14px] border border-line bg-surface p-5 shadow-card">
           <p className="text-[0.6875rem] font-extrabold uppercase tracking-[0.14em] text-text-muted">More choice</p>
           <h2 className="mt-2 text-xl font-extrabold leading-tight tracking-tight text-text">

@@ -215,6 +215,11 @@ def _variant(
                 {"code": "deliverable", "kind": "TEXT"},
             ]
         },
+        material_fulfilment_mode=(
+            M2VariantConfiguration.MaterialFulfilmentMode.NOT_APPLICABLE
+            if archetype == ServiceVariant.BookingArchetype.A3_TIME_BLOCK
+            else M2VariantConfiguration.MaterialFulfilmentMode.CUSTOMER_PROCURES
+        ),
         first_quote_sla_hours=sla_hours,
         quote_delivery_sla_hours=None if sla_hours is None else sla_hours * 3,
         max_quotes=MAX_QUOTES,

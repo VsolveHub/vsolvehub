@@ -141,6 +141,18 @@ _TEMPLATES: dict[str, tuple[str, str]] = {
         "A customer has sent a new enquiry. Open it now to accept or quote before the slot moves "
         "on.",
     ),
+    #: The fixed-visit push. Like the crew offer's, the title carries everything needed to say
+    #: yes, because the offer is first-accept-wins and a body is a tap away.
+    "m2_fixed_visit_offer_received": (
+        "New visit offer: {amount} to you",
+        "A customer picked a visit time near you. First professional to take it gets it — open "
+        "it now.",
+    ),
+    "m2_quote_wave_thin_supply": (
+        "Fewer quotes than promised, for now",
+        "We have invited every available professional and are still short of your quote count. "
+        "The quotes already in are real — we keep inviting as professionals free up.",
+    ),
     "m2_visit_plan_charged": (
         "Your site visits are booked",
         "Your visit plan is paid and {visit_count} scheduled. Each professional will estimate on "

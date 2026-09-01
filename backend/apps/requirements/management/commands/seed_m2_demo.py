@@ -443,6 +443,7 @@ class ProjectSeed:
     #: The sentence on the service card and at the top of the brief. Author it —
     #: a customer never reads "(development fixture)".
     short_description: str = ""
+    material_fulfilment_mode: str = M2VariantConfiguration.MaterialFulfilmentMode.CUSTOMER_PROCURES
 
 
 #: Every A5 project the demo catalogue publishes. The design walkthrough follows
@@ -890,6 +891,7 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
             "Lighting, stage and decor planned around your venue — decorators visit and "
             "quote in writing for the whole event."
         ),
+        material_fulfilment_mode=M2VariantConfiguration.MaterialFulfilmentMode.PARTNER_TURNKEY,
     ),
 )
 
@@ -959,6 +961,11 @@ FIRST_QUOTE_SLA_HOURS = 24
 QUOTE_DELIVERY_SLA_HOURS = 72
 FIRST_VISIT_SLA_HOURS = 24
 VISIT_PLAN_FILL_SLA_HOURS = 72
+#: Owner decision, 2026-09-01. **Seconds**, wall clock — the fixed-visit offer's answer window.
+#: Five minutes rather than the crew cascade's two: a visit offer can land while the professional
+#: is up a ladder on another job, and the re-dispatch sweep means a missed window costs minutes,
+#: not the job. The `starts_at - 15min` ceiling still applies on top.
+FIXED_VISIT_OFFER_TIMEOUT_SECONDS = 300
 POST_VISIT_ESTIMATE_WINDOW_HOURS = 48
 #: How long an A5 plan visit occupies the vendor on the shared availability grid. No owner decision
 #: names it; there is simply no defensible default for "how long does a site visit take".
@@ -1721,7 +1728,10 @@ class Command(BaseCommand):
 
         for a5_variant, project in zip(a5_variants, A5_PROJECT_SEEDS, strict=True):
             self._seed_a5_configuration(
-                variant=a5_variant, questions=project.questions, pricing_skill=project.pricing_skill
+                variant=a5_variant,
+                questions=project.questions,
+                pricing_skill=project.pricing_skill,
+                material_fulfilment_mode=project.material_fulfilment_mode,
             )
         prices_written, prices_skipped = self._seed_access_prices()
 
@@ -2079,6 +2089,9 @@ class Command(BaseCommand):
             extra={
                 "wage_floor_skill": skill,
                 "pricing_skill_code": pricing_skill,
+                "material_fulfilment_mode": (
+                    M2VariantConfiguration.MaterialFulfilmentMode.NOT_APPLICABLE
+                ),
                 # The quote-flow clocks stay set: revision 4 demoted that path to the thin-supply
                 # fallback rather than deleting it, and a fallback with no SLA never closes.
                 "first_quote_sla_hours": FIRST_QUOTE_SLA_HOURS,
@@ -2124,7 +2137,8 @@ class Command(BaseCommand):
         *,
         variant: ServiceVariant,
         questions: tuple[QuestionSeed, ...],
-        pricing_skill: str = "",
+        pricing_skill: str,
+        material_fulfilment_mode: str,
     ) -> None:
         self._upsert_configuration(
             variant=variant,
@@ -2135,6 +2149,7 @@ class Command(BaseCommand):
             registration_questions=(),
             extra={
                 "pricing_skill_code": pricing_skill,
+                "material_fulfilment_mode": material_fulfilment_mode,
                 # Reconfirmation reuses `first_quote_sla_hours`, so an A5 variant needs it too —
                 # without it a selected vendor has no deadline and `reconfirm_by` is null.
                 "first_quote_sla_hours": FIRST_QUOTE_SLA_HOURS,
@@ -2143,6 +2158,7 @@ class Command(BaseCommand):
                 "non_responsive_rejection_cap": NON_RESPONSIVE_REJECTION_CAP,
                 "visit_duration_minutes": VISIT_DURATION_MINUTES,
                 "first_visit_sla_hours": FIRST_VISIT_SLA_HOURS,
+                "fixed_visit_offer_timeout_seconds": FIXED_VISIT_OFFER_TIMEOUT_SECONDS,
                 "visit_plan_fill_sla_hours": VISIT_PLAN_FILL_SLA_HOURS,
                 "post_visit_estimate_window_hours": POST_VISIT_ESTIMATE_WINDOW_HOURS,
                 "customer_no_show_refunds_platform_share": (

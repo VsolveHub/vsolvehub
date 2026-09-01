@@ -235,6 +235,7 @@ def build_arrival_window_grid(
     now: datetime,
     window_id: Callable[[datetime, int], str],
     not_before: datetime | None = None,
+    last_day: date | None = None,
 ) -> BookingWindows:
     """The arrival-window grid, built once and shared by everything that offers slots.
 
@@ -248,6 +249,11 @@ def build_arrival_window_grid(
     `not_before` marks slots inside a minimum-notice window `TOO_SOON` rather than hiding them.
     A customer looking for tomorrow morning should see that this evening exists and is too
     close, not find an unexplained hole in the grid.
+
+    `last_day` ends the grid early, in the area's own calendar. A site visit for an event on the
+    5th offered on the 6th is a slot for a job that can no longer be done, and unlike `TOO_SOON`
+    there is nothing to explain — days past the deadline simply do not exist for this booking.
+    `None` keeps the full `M1_SCHEDULED_MAX_DAYS` horizon, which is what the A1 checkout wants.
 
     The loop itself touches no database: `free_partner_ids` reads the snapshot in memory, and
     the operating windows were prefetched onto `area` by the caller. Query count is whatever
@@ -266,6 +272,8 @@ def build_arrival_window_grid(
     days: list[BookingWindowDay] = []
     for day_offset in range(settings.M1_SCHEDULED_MAX_DAYS + 1):
         local_date = today + timedelta(days=day_offset)
+        if last_day is not None and local_date > last_day:
+            break
         windows: list[BookingWindow] = []
         for opens_at, closes_at in operating_ranges_for_date(
             area=area,

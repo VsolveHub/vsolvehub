@@ -357,6 +357,7 @@ class EnquirySummarySerializer(serializers.ModelSerializer[VendorInvitation]):
     #: rewiring, a consultation or a day-hire alike. Operations set it per variant; a variant
     #: without one falls back to its dispatch skill, so the composer never opens on nothing.
     pricing_skill_code = serializers.SerializerMethodField()
+    material_fulfilment_mode = serializers.SerializerMethodField()
     latest_proposal_status = serializers.SerializerMethodField()
     latest_proposal_rejection_reason = serializers.SerializerMethodField()
 
@@ -382,6 +383,7 @@ class EnquirySummarySerializer(serializers.ModelSerializer[VendorInvitation]):
             "fixed_visit_status",
             "responds_by",
             "pricing_skill_code",
+            "material_fulfilment_mode",
             "latest_proposal_status",
             "latest_proposal_rejection_reason",
             "created_at",
@@ -397,6 +399,16 @@ class EnquirySummarySerializer(serializers.ModelSerializer[VendorInvitation]):
         configuration = obj.requirement.configuration
         configured = configuration.pricing_skill_code if configuration is not None else ""
         return configured or obj.requirement.variant.required_skill_code
+
+    @extend_schema_field(
+        serializers.ChoiceField(
+            choices=Proposal.MaterialFulfilmentMode.choices,
+            allow_null=True,
+        )
+    )
+    def get_material_fulfilment_mode(self, obj: VendorInvitation) -> str | None:
+        configuration = obj.requirement.configuration
+        return configuration.material_fulfilment_mode if configuration is not None else None
 
     def _latest_proposal(self, obj: VendorInvitation) -> Proposal | None:
         ordered = getattr(obj, "ordered_proposals", None)
@@ -509,6 +521,14 @@ class EnquiryDetailSerializer(EnquirySummarySerializer):
     #: payment. A verified plan payment promotes the visit to `SCHEDULED`, which is the first point
     #: at which the Partner both needs and is entitled to the exact destination.
     site_address = serializers.SerializerMethodField()
+    #: The visit-day contact rung (1.52.0). The visit fee buys a scheduled physical meeting, and
+    #: an address alone leaves the Partner anonymous at a gate with nobody to call. `customer_name`
+    #: — the first name only — discloses with the address; `customer_phone` only from two hours
+    #: before the slot (the arrival-code window) until the visit completes, and disappears again
+    #: after. Full contact both ways stays on the engagement's `contact_released_at`, unchanged —
+    #: this rung is scoped to the meeting the fee bought, not the relationship.
+    customer_name = serializers.SerializerMethodField()
+    customer_phone = serializers.SerializerMethodField()
     #: The one read carrying a hard `responds_by`. Without the server's own clock beside it a
     #: countdown is drawn against a browser clock that may have drifted, on the field that decides
     #: whether the vendor still has a slot.
@@ -527,6 +547,8 @@ class EnquiryDetailSerializer(EnquirySummarySerializer):
             "questions",
             "site_visits",
             "site_address",
+            "customer_name",
+            "customer_phone",
             "server_now",
         )
         read_only_fields = fields
@@ -569,6 +591,52 @@ class EnquiryDetailSerializer(EnquirySummarySerializer):
             "state": address.state,
             "postal_code": address.postal_code,
         }
+
+    @staticmethod
+    def _has_disclosed_visit(obj: VendorInvitation) -> bool:
+        """The same gate the address uses: a paid plan visit, genuinely scheduled or under way."""
+        return any(
+            visit.plan_share_id is not None and visit.status in _SITE_ADDRESS_DISCLOSED_STATUSES
+            for visit in obj.site_visits.all()
+        )
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_customer_name(self, obj: VendorInvitation) -> str | None:
+        """First name only, and only once the address itself is disclosed.
+
+        A first name costs nothing in disintermediation risk and is what a gate register or a
+        greeting actually needs. The generic fallback is deliberate: a visit to a customer whose
+        profile has no name still needs a word to use at the door.
+        """
+        if not self._has_disclosed_visit(obj):
+            return None
+        full_name = (obj.requirement.customer.full_name or "").strip()
+        return full_name.split()[0] if full_name else "Customer"
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_customer_phone(self, obj: VendorInvitation) -> str | None:
+        """The number, only while the meeting is operationally live.
+
+        From two hours before the slot — the arrival-code window, the platform's existing
+        definition of "the visit is now happening" — until completion. A Partner with days of
+        lead time and a phone number is the classic go-around-the-platform vector; a Partner at
+        the gate with no way to say "I'm outside" is a failed visit the customer paid for.
+        Completion ends the disclosure: post-visit contact belongs to the engagement.
+        """
+        now = timezone.now()
+        window = timedelta(seconds=settings.M2_VISIT_ARRIVAL_CODE_TTL_SECONDS)
+        for visit in obj.site_visits.all():
+            if visit.plan_share_id is None:
+                continue
+            if visit.status == SiteVisit.Status.IN_PROGRESS:
+                return obj.requirement.customer.phone_number
+            if (
+                visit.status == SiteVisit.Status.SCHEDULED
+                and visit.scheduled_for is not None
+                and visit.scheduled_for - window <= now
+            ):
+                return obj.requirement.customer.phone_number
+        return None
 
 
 class EnquiryDeclineSerializer(serializers.Serializer[dict[str, Any]]):
@@ -723,10 +791,10 @@ class ProposalItemLineSerializer(serializers.Serializer[dict[str, Any]]):
 class ProposalMaterialListLineSerializer(serializers.Serializer[dict[str, Any]]):
     """One thing the Customer should buy. Quantities and a spec — **never a price**.
 
-    Materials are the Customer's to purchase on every project (owner decision, 2026-08-29). The
-    server suggests this list from the tapped catalog items' recipes; the Partner corrects it
-    after the visit; the Customer shops from it. `unit` is free text for the same reason
-    `ProposalMaterialLineSerializer.unit` is: coils, boxes and bags are all real.
+    Used only when the service configuration says `CUSTOMER_PROCURES`. The server suggests this
+    list from the tapped catalog items' recipes; the Partner corrects it after the visit; the
+    Customer shops from it. Turnkey services use `included_supply_list` instead. `unit` is free
+    text because coils, boxes and bags are all real.
     """
 
     title = serializers.CharField(max_length=200)
@@ -744,6 +812,15 @@ class ProposalMaterialListLineSerializer(serializers.Serializer[dict[str, Any]])
             "quantity": str(line.get("quantity") or "1"),
             "note": str(line.get("note") or ""),
         }
+
+
+class ProposalIncludedSupplyLineSerializer(ProposalMaterialListLineSerializer):
+    """One material/specification included inside a Partner-turnkey quoted rate.
+
+    This deliberately shares the quantity/spec/note wire shape with a shopping-list row while
+    remaining a different field: it is disclosure, not a task for the Customer and not another
+    amount to add to the estimate.
+    """
 
 
 class ProposalLabourLineSerializer(serializers.Serializer[dict[str, Any]]):
@@ -769,6 +846,10 @@ class ProposalFinancialSummarySerializer(serializers.Serializer[dict[str, Any]])
     other_charges = ProposalOtherChargeSerializer(many=True)
     stages = ProposalStageSerializer(many=True)
     suggested_material_list = ProposalMaterialListLineSerializer(many=True)
+    suggested_included_supply_list = ProposalIncludedSupplyLineSerializer(many=True)
+    material_fulfilment_mode = serializers.ChoiceField(
+        choices=Proposal.MaterialFulfilmentMode.choices
+    )
     line_subtotal_paise = serializers.IntegerField(min_value=0)
     material_total_paise = serializers.IntegerField(min_value=0)
     authorized_charges_paise = serializers.IntegerField(min_value=0)
@@ -792,6 +873,7 @@ class ProposalSerializer(serializers.ModelSerializer[Proposal]):
     stages = ProposalStageSerializer(many=True, read_only=True)
     material_lines = ProposalMaterialLineSerializer(many=True, read_only=True)
     material_list = ProposalMaterialListLineSerializer(many=True, read_only=True)
+    included_supply_list = ProposalIncludedSupplyLineSerializer(many=True, read_only=True)
     item_lines = ProposalItemLineSerializer(many=True, read_only=True)
     labour_lines = ProposalLabourLineSerializer(many=True, read_only=True)
     other_charges = ProposalOtherChargeSerializer(many=True, read_only=True)
@@ -846,6 +928,8 @@ class ProposalSerializer(serializers.ModelSerializer[Proposal]):
             "material_lines",
             "material_list",
             "material_brand_tier",
+            "material_fulfilment_mode",
+            "included_supply_list",
             "warranty_terms",
             "valid_until",
             "vendor_confirmed_at",
@@ -893,6 +977,8 @@ class ProposalCreateSerializer(serializers.Serializer[dict[str, Any]]):
     material_lines = ProposalMaterialLineSerializer(many=True, required=False)
     #: A5 only. The shopping list the Customer buys from — quantities, never money.
     material_list = ProposalMaterialListLineSerializer(many=True, required=False)
+    #: A5 Partner-turnkey only. Specifications included in the quoted rate; never another total.
+    included_supply_list = ProposalIncludedSupplyLineSerializer(many=True, required=False)
     #: No `default`: a default makes the generated client treat the field as required.
     material_brand_tier = serializers.ChoiceField(
         choices=Proposal.MaterialBrandTier.choices, required=False, allow_blank=True

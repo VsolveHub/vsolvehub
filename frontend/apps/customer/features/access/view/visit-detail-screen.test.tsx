@@ -196,6 +196,8 @@ describe("customer visit arrival", () => {
           material_lines: [],
           material_list: [],
           material_brand_tier: "",
+          material_fulfilment_mode: "CUSTOMER_PROCURES",
+          included_supply_list: [],
           warranty_terms: "",
           valid_until: null,
           submitted_at: "2026-08-21T09:30:00.000Z",

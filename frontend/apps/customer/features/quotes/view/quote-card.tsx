@@ -1,6 +1,7 @@
 "use client";
 
 import { Badge, Button, Disclosure, cn } from "@vsolve/ui";
+import { PackageCheck } from "lucide-react";
 import Link from "next/link";
 
 import { firstStageOf, materialCountLabel, type QuoteCardView } from "../adapters";
@@ -197,6 +198,18 @@ export function QuoteCard({
           </div>
         ) : null}
 
+        {card.materialFulfilmentMode === "PARTNER_TURNKEY" ? (
+          <div className="mt-3 flex gap-2.5 rounded-[12px] border border-success-line bg-success-surface p-3 text-success-text">
+            <PackageCheck className="mt-0.5 size-5 shrink-0" aria-hidden />
+            <div>
+              <p className="text-sm font-bold">Materials, setup & removal included</p>
+              <p className="mt-0.5 text-xs leading-5 text-text-secondary">
+                The decorator handles the full supply. You only approve and pay the estimate.
+              </p>
+            </div>
+          </div>
+        ) : null}
+
         {card.inclusions.length > 0 || card.exclusions.length > 0 ? (
           <ul className="mt-3 grid list-none grid-cols-1 gap-x-3 gap-y-1 p-0 sm:grid-cols-2">
             {card.inclusions.slice(0, PREVIEW_INCLUSIONS).map((line) => (
@@ -230,7 +243,6 @@ export function QuoteCard({
         <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold">
           {validity !== null ? (
             <span className={validity.urgent ? "text-warning-text" : "text-text-muted"}>
-              {validity.urgent ? "⏱ " : ""}
               {validity.text}
             </span>
           ) : null}
@@ -249,10 +261,10 @@ export function QuoteCard({
       {/* What the Customer buys — outside the radio's label, so opening the
           list does not also pick the estimate. Quantities and specs only;
           the list carries no prices by contract. */}
-      {card.materialList.length > 0 ? (
+      {card.materialFulfilmentMode === "CUSTOMER_PROCURES" && card.materialList.length > 0 ? (
         <div className="border-t border-line px-4 py-2">
           <Disclosure
-            summary={`🛒 What you need to buy · ${materialCountLabel(card.materialList.length)}`}
+            summary={`What you need to buy · ${materialCountLabel(card.materialList.length)}`}
           >
             <MaterialListRows rows={card.materialList} />
           </Disclosure>

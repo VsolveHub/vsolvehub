@@ -73,6 +73,9 @@ TRANSACTIONAL_PURPOSES = frozenset(
         # preference screen that could switch these off would be a preference screen that breaks
         # the product's promises — the same sentence this frozenset already existed to enforce.
         "m2.invitation.received",
+        # First-accept-wins with a wall-clock timeout: a Partner who muted this would go on
+        # losing races they never knew had started.
+        "m2.fixed_visit_offer.received",
         "m2.crew_offer.accepted",
         "m2.booking_fee.charged",
         "m2.crew.vendor_no_show",

@@ -1676,14 +1676,14 @@ CARPENTER_ITEMS: tuple[ItemSeed, ...] = (
     ItemSeed("Helper", "day", "One helper for a full working day.", 650_00, group="Labour"),
 )
 
-# Event decor: the decorator's labour and setup priced per element, and the flowers, fabric and
-# lights the customer buys against it. Sizes are the quick sets: small (a home function),
-# medium (a hall), large (a lawn or a wedding).
+# Event decor: turnkey supply, installation and dismantling priced per installed element. Recipes
+# become the estimate's included-supplies schedule; the Customer never receives them as a shopping
+# list. Sizes are the quick sets: small (a home function), medium (a hall), large (a wedding).
 DECOR_ITEMS: tuple[ItemSeed, ...] = (
     ItemSeed(
         "Stage backdrop - per running foot",
         "running_ft",
-        "Stage or photo backdrop framed, draped and dressed, per running foot of width.",
+        "Turnkey stage or photo backdrop: frame, fabric, flowers, lights, setup and removal.",
         900_00,
         group="Stage",
         recipe=(
@@ -1696,7 +1696,7 @@ DECOR_ITEMS: tuple[ItemSeed, ...] = (
     ItemSeed(
         "Mandap or ceremony frame",
         "each",
-        "A four-pillar mandap or ceremony frame, dressed.",
+        "Turnkey four-pillar mandap or ceremony frame, supplied, dressed and removed.",
         12_000_00,
         group="Stage",
         recipe=(
@@ -1709,7 +1709,7 @@ DECOR_ITEMS: tuple[ItemSeed, ...] = (
     ItemSeed(
         "Entrance arch",
         "each",
-        "One flower or balloon arch at the entrance.",
+        "One supplied and installed flower or balloon arch, removed after the event.",
         3_500_00,
         group="Entrance",
         recipe=(
@@ -1721,7 +1721,7 @@ DECOR_ITEMS: tuple[ItemSeed, ...] = (
     ItemSeed(
         "Walkway with stands - per running foot",
         "running_ft",
-        "Pathway lined with flower stands or lanterns, per running foot.",
+        "Supplied, installed and removed flower stands or lanterns, per running foot.",
         250_00,
         group="Entrance",
         recipe=(_material("Fresh flowers", "marigold or roses, by season", "kg", "0.2"),),

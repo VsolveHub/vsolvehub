@@ -54,6 +54,8 @@ export interface EnquiryRow {
   readonly archetype: string;
   /** The trade whose price book the composer opens — `electrician`, `plumber`, … */
   readonly pricingSkillCode: string;
+  /** Who owns material procurement. Never inferred from the service slug. */
+  readonly materialFulfilmentMode: Schemas["MaterialFulfilmentModeEnum"] | null;
   readonly status: EnquiryStatus;
   readonly requestedStart: string | null;
   readonly serviceBy: string | null;
@@ -104,6 +106,13 @@ export interface EnquiryRecord extends EnquiryRow {
   /** Exact visit destination, released only once a paid visit is scheduled. */
   readonly siteAddress: Schemas["PartnerSiteAddress"] | null;
   /**
+   * The visit-day contact rung (1.52.0). First name with the address; the
+   * phone only from two hours before the slot until the visit completes.
+   * Both null outside their windows — the server decides, never this app.
+   */
+  readonly customerName: string | null;
+  readonly customerPhone: string | null;
+  /**
    * The server's own clock at the moment this enquiry was read (1.24.0).
    *
    * The `responds_by` countdown is measured against this, not against the
@@ -132,6 +141,7 @@ export function readEnquiryRow(summary: Schemas["EnquirySummary"]): EnquiryRow {
     approximateArea: summary.approximate_area,
     archetype: summary.archetype,
     pricingSkillCode: summary.pricing_skill_code,
+    materialFulfilmentMode: summary.material_fulfilment_mode,
     status: summary.status,
     requestedStart: nullableInstant(summary.requested_start),
     serviceBy: nullableInstant(summary.service_by),
@@ -156,6 +166,8 @@ export function readEnquiryRecord(detail: Schemas["EnquiryDetail"]): EnquiryReco
     questions: detail.questions,
     siteVisits: detail.site_visits,
     siteAddress: detail.site_address,
+    customerName: detail.customer_name,
+    customerPhone: detail.customer_phone,
     serverNow: detail.server_now,
   };
 }

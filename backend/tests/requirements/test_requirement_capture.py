@@ -80,6 +80,11 @@ def _configuration(
         version=1,
         status=M2VariantConfiguration.Status.ACTIVE,
         question_schema=QUESTION_SCHEMA,
+        material_fulfilment_mode=(
+            M2VariantConfiguration.MaterialFulfilmentMode.NOT_APPLICABLE
+            if variant.booking_archetype == ServiceVariant.BookingArchetype.A3_TIME_BLOCK
+            else M2VariantConfiguration.MaterialFulfilmentMode.CUSTOMER_PROCURES
+        ),
         first_quote_sla_hours=first_quote_sla_hours,
         quote_delivery_sla_hours=quote_delivery_sla_hours,
     )
@@ -247,6 +252,7 @@ def test_an_a1_variant_is_not_a_workforce_request() -> None:
         version=1,
         status=M2VariantConfiguration.Status.ACTIVE,
         question_schema=QUESTION_SCHEMA,
+        material_fulfilment_mode=M2VariantConfiguration.MaterialFulfilmentMode.NOT_APPLICABLE,
     )
 
     with pytest.raises(LifecycleNotSupportedError):

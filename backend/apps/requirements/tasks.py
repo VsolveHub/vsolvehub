@@ -897,6 +897,73 @@ def report_stuck_async_work() -> dict[str, int]:
     return watchdog.report_stuck_async_work()
 
 
+@shared_task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_jitter=True,
+    retry_kwargs={"max_retries": 8},
+)
+def top_up_one_quote_wave(_self: object, requirement_id: str) -> int:
+    """Refill one requirement's quote wave. Returns how many vendors were invited.
+
+    Idempotent by state: `top_up_quote_wave` recomputes the free slots under the requirement lock,
+    so an overlapping tick finds them already filled and invites nobody. The thin-supply notice
+    dedupes on its outbox idempotency key.
+    """
+    invited = matching.top_up_quote_wave(requirement_id=UUID(requirement_id))
+    return len(invited)
+
+
+@shared_task
+def sweep_underfilled_quote_waves() -> int:
+    """Keep every live quote wave at the size the Customer was promised.
+
+    The safety net under the inline refills (decline, rejection, withdrawal, expiry): it catches
+    any slot freed by a path with no refill of its own, and it re-reaches vendors who became
+    eligible only after the opening wave went out.
+    """
+    swept = 0
+    for requirement_id in matching.underfilled_quote_requirement_ids()[:SWEEP_BATCH_SIZE]:
+        top_up_one_quote_wave.delay(str(requirement_id))
+        swept += 1
+    return swept
+
+
+@shared_task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_jitter=True,
+    retry_kwargs={"max_retries": 8},
+)
+def redispatch_one_visit_share(_self: object, share_id: str) -> int:
+    """Re-dispatch or settle one searching visit share. Returns how many were invited.
+
+    Idempotent by state: `retry_or_settle_customer_visit_share` returns early on a share that is
+    no longer `SEARCHING` or that has a live offer, and `dispatch_customer_visit_share` skips
+    every Partner already asked, so a replay cannot double-invite.
+    """
+    invited = matching.retry_or_settle_customer_visit_share(share_id=UUID(share_id))
+    return len(invited)
+
+
+@shared_task
+def sweep_searching_visit_shares() -> int:
+    """Keep Customer-chosen visits searching until staffed, or settle them honestly.
+
+    Before this sweep, the death of a share's last invitation settled it `NO_PROFESSIONAL_FOUND`
+    on the spot — with a five-minute offer window, that would give up on a visit two days out
+    because three Partners were busy at 11am. Each tick re-dispatches to newly free Partners;
+    settlement waits for `starts_at - 15min`, the same floor the offer deadline uses.
+    """
+    swept = 0
+    for share_id in matching.searching_visit_share_ids()[:SWEEP_BATCH_SIZE]:
+        redispatch_one_visit_share.delay(str(share_id))
+        swept += 1
+    return swept
+
+
 @shared_task
 def purge_expired_attachments() -> dict[str, int]:
     """Delete attachment bytes on long-closed requests (`M2-BE-805`, `GAP-008`).

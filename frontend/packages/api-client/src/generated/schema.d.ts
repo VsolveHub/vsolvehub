@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.50.0)
- * Checksum: 752f94dcc854bf13
+ * Source:   contracts/openapi/v1.yaml (version 1.52.0)
+ * Checksum: 619d92f58ecc07af
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -5591,6 +5591,7 @@ export interface components {
             stages?: components["schemas"]["ProposalStageRequest"][];
             material_lines?: components["schemas"]["ProposalMaterialLineRequest"][];
             material_list?: components["schemas"]["ProposalMaterialListLineRequest"][];
+            included_supply_list?: components["schemas"]["ProposalIncludedSupplyLineRequest"][];
             material_brand_tier?: components["schemas"]["MaterialBrandTierEnum"] | components["schemas"]["BlankEnum"];
             estimate_type?: components["schemas"]["EstimateTypeEnum"];
             item_lines?: components["schemas"]["ProposalItemLineRequest"][];
@@ -6740,6 +6741,8 @@ export interface components {
             readonly material_lines: components["schemas"]["ProposalMaterialLine"][];
             readonly material_list: components["schemas"]["ProposalMaterialListLine"][];
             readonly material_brand_tier: string;
+            readonly material_fulfilment_mode: components["schemas"]["MaterialFulfilmentModeEnum"];
+            readonly included_supply_list: components["schemas"]["ProposalIncludedSupplyLine"][];
             readonly warranty_terms: string;
             /** Format: date-time */
             readonly valid_until: string | null;
@@ -7255,6 +7258,7 @@ export interface components {
             /** Format: date-time */
             readonly responds_by: string;
             readonly pricing_skill_code: string;
+            readonly material_fulfilment_mode: (components["schemas"]["MaterialFulfilmentModeEnum"] | components["schemas"]["NullEnum"]) | null;
             readonly latest_proposal_status: string | null;
             readonly latest_proposal_rejection_reason: string | null;
             /** Format: date-time */
@@ -7271,6 +7275,8 @@ export interface components {
             readonly questions: components["schemas"]["RequirementQuestion"][];
             readonly site_visits: components["schemas"]["SiteVisit"][];
             readonly site_address: components["schemas"]["PartnerSiteAddress"] | null;
+            readonly customer_name: string | null;
+            readonly customer_phone: string | null;
             readonly server_now: string;
         };
         /**
@@ -7305,6 +7311,7 @@ export interface components {
             /** Format: date-time */
             readonly responds_by: string;
             readonly pricing_skill_code: string;
+            readonly material_fulfilment_mode: (components["schemas"]["MaterialFulfilmentModeEnum"] | components["schemas"]["NullEnum"]) | null;
             readonly latest_proposal_status: string | null;
             readonly latest_proposal_rejection_reason: string | null;
             /** Format: date-time */
@@ -7769,6 +7776,13 @@ export interface components {
          * @enum {string}
          */
         MaterialBrandTierEnum: "STANDARD" | "PREMIUM";
+        /**
+         * @description * `NOT_APPLICABLE` - Not applicable
+         *     * `CUSTOMER_PROCURES` - Customer procures
+         *     * `PARTNER_TURNKEY` - Partner supplies turnkey
+         * @enum {string}
+         */
+        MaterialFulfilmentModeEnum: "NOT_APPLICABLE" | "CUSTOMER_PROCURES" | "PARTNER_TURNKEY";
         /**
          * @description * `SAME_PARTNER_SEQUENTIAL` - Same Partner sequential
          *     * `PARALLEL_ALLOWED` - Parallel allowed
@@ -9694,6 +9708,8 @@ export interface components {
             readonly material_lines: components["schemas"]["ProposalMaterialLine"][];
             readonly material_list: components["schemas"]["ProposalMaterialListLine"][];
             readonly material_brand_tier: string;
+            readonly material_fulfilment_mode: components["schemas"]["MaterialFulfilmentModeEnum"];
+            readonly included_supply_list: components["schemas"]["ProposalIncludedSupplyLine"][];
             readonly warranty_terms: string;
             /** Format: date-time */
             readonly valid_until: string | null;
@@ -9719,6 +9735,7 @@ export interface components {
             stages?: components["schemas"]["ProposalStageRequest"][];
             material_lines?: components["schemas"]["ProposalMaterialLineRequest"][];
             material_list?: components["schemas"]["ProposalMaterialListLineRequest"][];
+            included_supply_list?: components["schemas"]["ProposalIncludedSupplyLineRequest"][];
             material_brand_tier?: components["schemas"]["MaterialBrandTierEnum"] | components["schemas"]["BlankEnum"];
             estimate_type?: components["schemas"]["EstimateTypeEnum"];
             item_lines?: components["schemas"]["ProposalItemLineRequest"][];
@@ -9741,6 +9758,8 @@ export interface components {
             other_charges: components["schemas"]["ProposalOtherCharge"][];
             stages: components["schemas"]["ProposalStage"][];
             suggested_material_list: components["schemas"]["ProposalMaterialListLine"][];
+            suggested_included_supply_list: components["schemas"]["ProposalIncludedSupplyLine"][];
+            material_fulfilment_mode: components["schemas"]["MaterialFulfilmentModeEnum"];
             line_subtotal_paise: number;
             material_total_paise: number;
             authorized_charges_paise: number;
@@ -9756,6 +9775,36 @@ export interface components {
             tax_basis: components["schemas"]["ProposalTaxBasisEnum"];
             policy_version: number;
             calculation_snapshot: unknown;
+        };
+        /**
+         * @description One material/specification included inside a Partner-turnkey quoted rate.
+         *
+         *     This deliberately shares the quantity/spec/note wire shape with a shopping-list row while
+         *     remaining a different field: it is disclosure, not a task for the Customer and not another
+         *     amount to add to the estimate.
+         */
+        ProposalIncludedSupplyLine: {
+            title: string;
+            spec?: string;
+            unit?: string;
+            /** Format: decimal */
+            quantity: string;
+            note?: string;
+        };
+        /**
+         * @description One material/specification included inside a Partner-turnkey quoted rate.
+         *
+         *     This deliberately shares the quantity/spec/note wire shape with a shopping-list row while
+         *     remaining a different field: it is disclosure, not a task for the Customer and not another
+         *     amount to add to the estimate.
+         */
+        ProposalIncludedSupplyLineRequest: {
+            title: string;
+            spec?: string;
+            unit?: string;
+            /** Format: decimal */
+            quantity: string;
+            note?: string;
         };
         /**
          * @description One priced line. A catalog line names its `work_item_id` and is band-checked at
@@ -9868,10 +9917,10 @@ export interface components {
         /**
          * @description One thing the Customer should buy. Quantities and a spec — **never a price**.
          *
-         *     Materials are the Customer's to purchase on every project (owner decision, 2026-08-29). The
-         *     server suggests this list from the tapped catalog items' recipes; the Partner corrects it
-         *     after the visit; the Customer shops from it. `unit` is free text for the same reason
-         *     `ProposalMaterialLineSerializer.unit` is: coils, boxes and bags are all real.
+         *     Used only when the service configuration says `CUSTOMER_PROCURES`. The server suggests this
+         *     list from the tapped catalog items' recipes; the Partner corrects it after the visit; the
+         *     Customer shops from it. Turnkey services use `included_supply_list` instead. `unit` is free
+         *     text because coils, boxes and bags are all real.
          */
         ProposalMaterialListLine: {
             title: string;
@@ -9884,10 +9933,10 @@ export interface components {
         /**
          * @description One thing the Customer should buy. Quantities and a spec — **never a price**.
          *
-         *     Materials are the Customer's to purchase on every project (owner decision, 2026-08-29). The
-         *     server suggests this list from the tapped catalog items' recipes; the Partner corrects it
-         *     after the visit; the Customer shops from it. `unit` is free text for the same reason
-         *     `ProposalMaterialLineSerializer.unit` is: coils, boxes and bags are all real.
+         *     Used only when the service configuration says `CUSTOMER_PROCURES`. The server suggests this
+         *     list from the tapped catalog items' recipes; the Partner corrects it after the visit; the
+         *     Customer shops from it. Turnkey services use `included_supply_list` instead. `unit` is free
+         *     text because coils, boxes and bags are all real.
          */
         ProposalMaterialListLineRequest: {
             title: string;
@@ -9931,6 +9980,7 @@ export interface components {
             stages?: components["schemas"]["ProposalStageRequest"][];
             material_lines?: components["schemas"]["ProposalMaterialLineRequest"][];
             material_list?: components["schemas"]["ProposalMaterialListLineRequest"][];
+            included_supply_list?: components["schemas"]["ProposalIncludedSupplyLineRequest"][];
             material_brand_tier?: components["schemas"]["MaterialBrandTierEnum"] | components["schemas"]["BlankEnum"];
             estimate_type?: components["schemas"]["EstimateTypeEnum"];
             item_lines?: components["schemas"]["ProposalItemLineRequest"][];

@@ -557,13 +557,17 @@ export function resolveMaterialList(
   draft: CommercialEstimateDraft,
 ): MaterialListLineDraft[] {
   const removed = new Set(draft.materialRemovedKeys);
+  const addedByKey = new Map(draft.materialAdded.map((row) => [materialKey(row), row]));
   const seen = new Set<string>();
   const rows: MaterialListLineDraft[] = [];
   for (const line of suggested) {
     const key = materialKey(line);
     if (removed.has(key) || seen.has(key)) continue;
     seen.add(key);
-    const quantity = draft.materialQuantityEdits[key];
+    // The vendor's number wins over the preview's, whichever way they set it:
+    // an explicit quantity edit first, else the row they added themselves
+    // before the server got around to suggesting the same material.
+    const quantity = draft.materialQuantityEdits[key] ?? addedByKey.get(key)?.quantity;
     rows.push(quantity === undefined ? line : { ...line, quantity });
   }
   for (const line of draft.materialAdded) {
@@ -637,6 +641,31 @@ export function toMaterialListRequest(rows: readonly MaterialListLineDraft[]): M
       quantity: row.quantity,
       note: row.note.trim(),
     }));
+}
+
+/**
+ * Put one material schedule on exactly one wire field.
+ *
+ * Both fields deliberately share a row shape, but not a meaning: one is work
+ * for the customer, the other is disclosure of what the partner supplies.
+ */
+export function materialFulfilmentFields(
+  mode: "CUSTOMER_PROCURES" | "PARTNER_TURNKEY",
+  rows: readonly MaterialListLineDraft[],
+  brandTier: MaterialBrandTier,
+): Pick<ProposalRequest, "material_list" | "included_supply_list" | "material_brand_tier"> {
+  const materials = toMaterialListRequest(rows);
+  return mode === "PARTNER_TURNKEY"
+    ? {
+        material_list: [],
+        included_supply_list: materials,
+        material_brand_tier: "",
+      }
+    : {
+        material_list: materials,
+        included_supply_list: [],
+        material_brand_tier: brandTier,
+      };
 }
 
 /* ---------------------------------------------------------------------------

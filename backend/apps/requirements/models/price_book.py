@@ -80,8 +80,9 @@ class WorkItem(models.Model):
     #: The composer's tab this item sits under — "Points", "MCB / DB", "Labour". Operations-
     #: authored free text, grouped by exact match; blank lands under the catalog's last tab.
     group = models.CharField(max_length=40, blank=True)
-    #: What one unit of this item consumes, so the estimate can hand the Customer a shopping
-    #: list without the Partner typing one (materials are always the Customer's to buy). Each
+    #: What one unit of this item consumes, so the estimate can build either a Customer shopping
+    #: list or a Partner-turnkey included-supplies schedule without retyping it. The variant's
+    #: versioned `material_fulfilment_mode` decides which projection receives the recipe. Each
     #: entry: `{title, spec, unit, per_unit, pack_size?, pack_unit?}` — `per_unit` is the
     #: quantity per unit of work as a decimal string; a pack rounds the total up to what a
     #: shop actually sells ("90 m coil"). Empty for labour-day items and anything consumable-free.

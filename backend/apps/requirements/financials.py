@@ -57,6 +57,10 @@ class CalculationResult:
     #: What the Customer should buy, built from the catalog lines' material recipes. Quantities
     #: only; the Partner corrects it before sending and the corrected list is what is stored.
     suggested_material_list: list[dict[str, Any]]
+    #: The same recipe projection for Partner-turnkey work. It describes what the Partner includes
+    #: inside the quoted rates and never contributes money a second time.
+    suggested_included_supply_list: list[dict[str, Any]]
+    material_fulfilment_mode: str
 
     def as_payload(self) -> dict[str, Any]:
         return asdict(self)
@@ -66,6 +70,22 @@ def _bps(amount: int, basis_points: int) -> int:
     """Round half-up once per named allocation, using integer arithmetic."""
 
     return (amount * basis_points + 5_000) // 10_000
+
+
+def material_fulfilment_mode(requirement: CustomerRequirement) -> str:
+    """Return the versioned procurement decision, refusing an unconfigured A5 estimate."""
+
+    configuration = requirement.configuration
+    mode = configuration.material_fulfilment_mode if configuration is not None else ""
+    allowed = {
+        Proposal.MaterialFulfilmentMode.CUSTOMER_PROCURES,
+        Proposal.MaterialFulfilmentMode.PARTNER_TURNKEY,
+    }
+    if mode not in allowed:
+        raise FinancialPolicyUnavailableError(
+            "Operations has not configured who supplies materials for this service."
+        )
+    return str(mode)
 
 
 def _inclusive_tax(gross: int, basis_points: int) -> int:
@@ -312,6 +332,7 @@ def calculate_estimate(  # noqa: PLR0912, PLR0915 - mirrors the published money 
 
     if estimate_type not in Proposal.EstimateType.values:
         raise ProposalShapeError("Choose Item-wise or Labour-wise pricing.")
+    fulfilment_mode = material_fulfilment_mode(requirement)
     items = item_lines or []
     labour = labour_lines or []
     guardrail_policy_version: int | None = None
@@ -540,7 +561,9 @@ def calculate_estimate(  # noqa: PLR0912, PLR0915 - mirrors the published money 
         },
         "installments": installments,
         "materials": normal_materials,
+        "material_fulfilment_mode": fulfilment_mode,
     }
+    recipe_lines = price_book.shopping_list_for_lines(normal_items)
     return CalculationResult(
         estimate_type=estimate_type,
         item_lines=normal_items,
@@ -563,5 +586,15 @@ def calculate_estimate(  # noqa: PLR0912, PLR0915 - mirrors the published money 
         tax_basis=policy.tax_basis,
         policy_version=policy.version,
         calculation_snapshot=snapshot,
-        suggested_material_list=price_book.shopping_list_for_lines(normal_items),
+        suggested_material_list=(
+            recipe_lines
+            if fulfilment_mode == Proposal.MaterialFulfilmentMode.CUSTOMER_PROCURES
+            else []
+        ),
+        suggested_included_supply_list=(
+            recipe_lines
+            if fulfilment_mode == Proposal.MaterialFulfilmentMode.PARTNER_TURNKEY
+            else []
+        ),
+        material_fulfilment_mode=fulfilment_mode,
     )

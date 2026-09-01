@@ -666,6 +666,11 @@ def reschedule_plan_visit(*, visit: SiteVisit, scheduled_for: datetime) -> SiteV
     choice = visit_slots.VisitSlotChoice(starts_at=scheduled_for, duration_minutes=duration)
     if choice.starts_at <= timezone.now():
         raise VisitSlotUnavailableError("That time has passed. Pick another.")
+    # A reschedule must not push the visit past the day the work is needed — the one move the
+    # clamped picker grids cannot bound, because the request arrives as a bare timestamp.
+    visit_slots.assert_visit_serves_event_date(
+        requirement=visit.requirement, starts_at=choice.starts_at
+    )
 
     existing = list(
         Reservation.objects.select_for_update().filter(

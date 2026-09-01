@@ -24,7 +24,7 @@ from apps.foundation.services import enqueue_outbox_event
 from apps.identity.models import User
 from apps.partners.capabilities import assert_rate_meets_wage_floor
 from apps.partners.exceptions import WageFloorUnsetError
-from apps.requirements import access, financials, matching, pricing
+from apps.requirements import access, financials, matching, pricing, visit_slots
 from apps.requirements.exceptions import (
     FinancialPolicyUnavailableError,
     ProposalNotSelectableError,
@@ -358,6 +358,7 @@ def submit_proposal(  # noqa: PLR0912, PLR0915 - one transaction owns the append
     scope_summary: str = "",
     material_list: list[dict[str, Any]] | None = None,
     material_brand_tier: str = "",
+    included_supply_list: list[dict[str, Any]] | None = None,
 ) -> Proposal:
     """Submit a first quote, or a revision that supersedes the vendor's previous one.
 
@@ -407,8 +408,9 @@ def submit_proposal(  # noqa: PLR0912, PLR0915 - one transaction owns the append
     }
     site_visit: SiteVisit | None = None
     calculation: financials.CalculationResult | None = None
+    fulfilment_mode: str
     if requirement.archetype == ServiceVariant.BookingArchetype.A3_TIME_BLOCK:
-        if material_lines or material_list:
+        if material_lines or material_list or included_supply_list:
             raise ProposalShapeError("A workforce quote does not have material lines.")
         if item_lines or labour_lines or other_charges or estimate_type:
             raise ProposalShapeError("A workforce quote uses the published daily-rate fields.")
@@ -424,8 +426,19 @@ def submit_proposal(  # noqa: PLR0912, PLR0915 - one transaction owns the append
         tax_basis = Proposal.TaxBasis.INCLUSIVE
         tax_paise = 0
         commission_treatment = ""
+        fulfilment_mode = Proposal.MaterialFulfilmentMode.NOT_APPLICABLE
         _assert_a3_shape(payload)
     else:
+        fulfilment_mode = financials.material_fulfilment_mode(requirement)
+        if fulfilment_mode == Proposal.MaterialFulfilmentMode.PARTNER_TURNKEY:
+            if material_list or material_brand_tier:
+                raise ProposalShapeError(
+                    "A Partner-turnkey estimate cannot ask the Customer to buy materials."
+                )
+        elif included_supply_list:
+            raise ProposalShapeError(
+                "A customer-procured estimate cannot publish a Partner-turnkey supply list."
+            )
         _assert_warranty_is_funded(requirement=requirement, warranty_terms=warranty_terms)
         site_visit = _assert_completed_visit(invitation=invitation, site_visit_id=site_visit_id)
         calculation = financials.calculate_estimate(
@@ -524,6 +537,8 @@ def submit_proposal(  # noqa: PLR0912, PLR0915 - one transaction owns the append
         material_lines=material_lines or [],
         material_list=material_list or [],
         material_brand_tier=material_brand_tier,
+        material_fulfilment_mode=fulfilment_mode,
+        included_supply_list=included_supply_list or [],
         warranty_terms=warranty_terms,
         scope_summary=scope_summary.strip(),
         valid_until=valid_until,
@@ -1242,6 +1257,11 @@ def schedule_site_visit(*, site_visit_id: uuid.UUID, scheduled_for: Any) -> Site
     if visit.plan_share_id is not None:
         return access.reschedule_plan_visit(visit=visit, scheduled_for=scheduled_for)
 
+    # An ad-hoc visit is a bare timestamp with no grid in front of it, so the event-date
+    # ceiling every picker enforces has to be re-asserted here.
+    visit_slots.assert_visit_serves_event_date(
+        requirement=visit.requirement, starts_at=scheduled_for
+    )
     visit.status = SiteVisit.Status.SCHEDULED
     visit.scheduled_for = scheduled_for
     visit.save(update_fields=("status", "scheduled_for", "updated_at"))

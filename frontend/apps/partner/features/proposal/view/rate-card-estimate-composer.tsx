@@ -17,10 +17,12 @@ import {
   formatMoney,
 } from "@vsolve/ui";
 import {
+  ArrowLeft,
   Cable,
   Check,
   LayoutGrid,
   Lightbulb,
+  PackageCheck,
   Plus,
   ToggleRight,
   Trash2,
@@ -54,6 +56,7 @@ import {
   itemLineAmount,
   labourLineAmount,
   loadCommercialEstimate,
+  materialFulfilmentFields,
   materialKey,
   removeMaterial,
   resolveMaterialList,
@@ -128,6 +131,7 @@ export interface RateCardEstimateComposerProps {
   readonly brief: readonly BriefLine[];
   /** The enquiry's trade — narrows the rate card to one catalogue. */
   readonly pricingSkillCode: string;
+  readonly materialFulfilmentMode: "CUSTOMER_PROCURES" | "PARTNER_TURNKEY";
   readonly visitCompleted: boolean;
   readonly isSubmitting: boolean;
   /** The last refusal from Send, for the line-level codes. */
@@ -170,12 +174,14 @@ export function RateCardEstimateComposer({
   serviceName,
   brief,
   pricingSkillCode,
+  materialFulfilmentMode,
   visitCompleted,
   isSubmitting,
   submitError,
   onSend,
   notice,
 }: RateCardEstimateComposerProps) {
+  const partnerTurnkey = materialFulfilmentMode === "PARTNER_TURNKEY";
   const [draft, setDraft] = useState<CommercialEstimateDraft>(() =>
     withTemplateInstallments(loadCommercialEstimate(invitationId) ?? EMPTY_COMMERCIAL_ESTIMATE),
   );
@@ -226,14 +232,17 @@ export function RateCardEstimateComposer({
 
   const suggested = useMemo<readonly MaterialListLineDraft[]>(
     () =>
-      (preview.data?.suggested_material_list ?? []).map((row) => ({
+      (partnerTurnkey
+        ? (preview.data?.suggested_included_supply_list ?? [])
+        : (preview.data?.suggested_material_list ?? [])
+      ).map((row) => ({
         title: row.title,
         spec: row.spec ?? "",
         unit: row.unit ?? "",
         quantity: row.quantity,
         note: row.note ?? "",
       })),
-    [preview.data],
+    [partnerTurnkey, preview.data],
   );
   const materialList = useMemo(() => resolveMaterialList(suggested, draft), [suggested, draft]);
 
@@ -248,15 +257,11 @@ export function RateCardEstimateComposer({
     if (hasCommercialEstimateErrors(errors) || !previewIsCurrent || previewBody === null) return;
     onSend({
       ...previewBody,
-      material_list: materialList
-        .filter((row) => row.title.trim() !== "")
-        .map((row) => ({
-          title: row.title.trim(),
-          spec: row.spec.trim(),
-          unit: row.unit.trim(),
-          quantity: row.quantity,
-          note: row.note.trim(),
-        })),
+      ...materialFulfilmentFields(
+        materialFulfilmentMode,
+        materialList,
+        draft.materialBrandTier,
+      ),
     });
   }
 
@@ -272,11 +277,16 @@ export function RateCardEstimateComposer({
         serviceName={serviceName}
         brief={brief}
         visitCompleted={visitCompleted}
+        partnerTurnkey={partnerTurnkey}
         onBack={step === 1 ? null : () => setStep((step - 1) as Step)}
       />
 
       {step === 1 ? (
-        <ModeStep value={draft.mode} onChange={(mode) => update((current) => ({ ...current, mode }))} />
+        <ModeStep
+          value={draft.mode}
+          partnerTurnkey={partnerTurnkey}
+          onChange={(mode) => update((current) => ({ ...current, mode }))}
+        />
       ) : null}
 
       {step === 2 && draft.mode === "ITEM_WISE" ? (
@@ -357,6 +367,7 @@ export function RateCardEstimateComposer({
           waiting={preview.data === undefined && previewBody !== null}
           tier={draft.materialBrandTier}
           labourWise={draft.mode === "LABOUR_WISE"}
+          partnerTurnkey={partnerTurnkey}
           onTier={(materialBrandTier) => update((current) => ({ ...current, materialBrandTier }))}
           onQuantity={(row, quantity) => update((current) => setMaterialQuantity(current, row, quantity))}
           onRemove={(row) => update((current) => removeMaterial(current, row))}
@@ -383,6 +394,7 @@ export function RateCardEstimateComposer({
           errors={errors}
           lineErrors={lineRefusal}
           materialCount={materialList.length}
+          partnerTurnkey={partnerTurnkey}
           onFix={(target) => setStep(target)}
         />
       ) : null}
@@ -406,6 +418,7 @@ export function RateCardEstimateComposer({
         preview={previewIsCurrent ? preview.data : undefined}
         vendorName="Your estimate"
         materialList={materialList}
+        partnerTurnkey={partnerTurnkey}
       />
 
       {sheet?.kind === "rate" ? (
@@ -594,14 +607,17 @@ function StepHeader({
   serviceName,
   brief,
   visitCompleted,
+  partnerTurnkey,
   onBack,
 }: {
   step: Step;
   serviceName: string;
   brief: readonly BriefLine[];
   visitCompleted: boolean;
+  partnerTurnkey: boolean;
   onBack: (() => void) | null;
 }) {
+  const title = step === 3 && partnerTurnkey ? "Included materials & finish" : STEP_TITLES[step];
   const context = [
     ...brief.filter((line) => line.value.trim() !== "").map((line) => line.value.trim()),
     ...(visitCompleted ? ["visit done ✓"] : []),
@@ -619,14 +635,24 @@ function StepHeader({
             )}
           >
             <span className="sr-only">
-              Step {index}: {STEP_TITLES[index]}
+              Step {index}: {index === 3 && partnerTurnkey ? "Included materials & finish" : STEP_TITLES[index]}
             </span>
           </li>
         ))}
       </ol>
       <div className="flex items-center gap-2">
+        {onBack ? (
+          <button
+            type="button"
+            aria-label="Previous estimate step"
+            onClick={onBack}
+            className="grid size-11 shrink-0 place-items-center rounded-control border border-line bg-surface text-text hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+          >
+            <ArrowLeft className="size-5" aria-hidden />
+          </button>
+        ) : null}
         <div className="min-w-0 flex-1">
-          <h2 className="text-lg font-extrabold tracking-[-0.01em] text-text">{STEP_TITLES[step]}</h2>
+          <h2 className="text-lg font-extrabold tracking-[-0.01em] text-text">{title}</h2>
           <p className="truncate text-xs text-text-secondary">
             {serviceName}
             {context ? ` · ${context}` : ""}
@@ -704,17 +730,31 @@ function StepDock({
 
 function ModeStep({
   value,
+  partnerTurnkey,
   onChange,
 }: {
   value: EstimateMode | null;
+  partnerTurnkey: boolean;
   onChange: (mode: EstimateMode) => void;
 }) {
   return (
-    <div role="radiogroup" aria-label="How are you pricing this?" className="grid grid-cols-2 gap-3">
+    <div className="flex flex-col gap-3">
+      {partnerTurnkey ? (
+        <div className="flex gap-3 rounded-card border border-success-line bg-success-surface p-3 text-success-text">
+          <PackageCheck className="mt-0.5 size-5 shrink-0" aria-hidden />
+          <div>
+            <p className="text-sm font-bold">Quote the complete decoration outcome</p>
+            <p className="mt-0.5 text-xs leading-5">
+              Your rates include sourcing, delivery, setup and removal. The customer only approves and pays the estimate.
+            </p>
+          </div>
+        </div>
+      ) : null}
+      <div role="radiogroup" aria-label="How are you pricing this?" className="grid grid-cols-2 gap-3">
       {(
         [
-          ["ITEM_WISE", "Item-wise", "per point / per unit", Zap],
-          ["LABOUR_WISE", "Labour-wise", "electrician + helper × days", Users],
+          ["ITEM_WISE", "Item-wise", partnerTurnkey ? "per installed element" : "per point / per unit", Zap],
+          ["LABOUR_WISE", "Labour-wise", partnerTurnkey ? "team × days" : "trade team × days", Users],
         ] as const
       ).map(([mode, label, detail, Icon]) => {
         const selected = value === mode;
@@ -737,6 +777,7 @@ function ModeStep({
           </button>
         );
       })}
+      </div>
     </div>
   );
 }
@@ -1312,6 +1353,7 @@ function MaterialsStep({
   waiting,
   tier,
   labourWise,
+  partnerTurnkey,
   onTier,
   onQuantity,
   onRemove,
@@ -1321,6 +1363,7 @@ function MaterialsStep({
   waiting: boolean;
   tier: MaterialBrandTier;
   labourWise: boolean;
+  partnerTurnkey: boolean;
   onTier: (tier: MaterialBrandTier) => void;
   onQuantity: (row: MaterialListLineDraft, quantity: string) => void;
   onRemove: (row: MaterialListLineDraft) => void;
@@ -1329,12 +1372,24 @@ function MaterialsStep({
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm leading-6 text-text-secondary">
-        {labourWise
-          ? "List what the customer should buy before you start."
-          : "Auto-built from your points. Fix any quantity — you saw the site."}
+        {partnerTurnkey
+          ? labourWise
+            ? "List the materials and finish you will supply for this project. Keep their cost inside your quoted rates."
+            : "Auto-built from your installed items. Confirm what you will source, set up and remove. Their cost is already inside your rates."
+          : labourWise
+            ? "List what the customer should buy before you start."
+            : "Auto-built from your points. Fix any quantity — you saw the site."}
       </p>
 
-      <div role="radiogroup" aria-label="Brand tier" className="grid grid-cols-2 gap-2">
+      {partnerTurnkey ? (
+        <div className="flex gap-2 rounded-card border border-info-line bg-info-surface p-3 text-info-text">
+          <PackageCheck className="mt-0.5 size-5 shrink-0" aria-hidden />
+          <p className="text-xs leading-5">
+            The customer sees this full schedule, but has nothing to purchase or arrange.
+          </p>
+        </div>
+      ) : (
+        <div role="radiogroup" aria-label="Brand tier" className="grid grid-cols-2 gap-2">
         {(
           [
             ["STANDARD", "Standard"],
@@ -1359,10 +1414,11 @@ function MaterialsStep({
             </button>
           );
         })}
-      </div>
+        </div>
+      )}
 
       {waiting && rows.length === 0 ? (
-        <SkeletonRegion loading label="Working out what to buy">
+        <SkeletonRegion loading label={partnerTurnkey ? "Building the included material schedule" : "Working out what to buy"}>
           <div className="flex flex-col gap-2">
             <Skeleton className="h-14 w-full" />
             <Skeleton className="h-14 w-full" />
@@ -1371,7 +1427,9 @@ function MaterialsStep({
       ) : null}
 
       {!waiting && rows.length === 0 ? (
-        <p className="text-sm leading-6 text-text-muted">Nothing to buy yet.</p>
+        <p className="text-sm leading-6 text-text-muted">
+          {partnerTurnkey ? "No included materials listed yet." : "Nothing to buy yet."}
+        </p>
       ) : null}
 
       <ul className="flex list-none flex-col gap-2 p-0">
@@ -1399,7 +1457,7 @@ function MaterialsStep({
         ))}
       </ul>
 
-      <AddRow label="Add a material" onClick={onAdd} />
+      <AddRow label={partnerTurnkey ? "Add an included material" : "Add a material"} onClick={onAdd} />
     </div>
   );
 }
@@ -1735,6 +1793,7 @@ function ReviewStep({
   errors,
   lineErrors,
   materialCount,
+  partnerTurnkey,
   onFix,
 }: {
   draft: CommercialEstimateDraft;
@@ -1745,6 +1804,7 @@ function ReviewStep({
   errors: Readonly<Record<string, string>>;
   lineErrors: LineRefusal | null;
   materialCount: number;
+  partnerTurnkey: boolean;
   onFix: (step: Step) => void;
 }) {
   const lines =
@@ -1829,7 +1889,9 @@ function ReviewStep({
       ) : null}
 
       <p className="text-sm text-text-secondary">
-        Materials: {materialCount} {materialCount === 1 ? "item" : "items"} · customer buys
+        {partnerTurnkey
+          ? `Included materials: ${materialCount} ${materialCount === 1 ? "item" : "items"} · customer buys nothing`
+          : `Materials to buy: ${materialCount} ${materialCount === 1 ? "item" : "items"}`}
       </p>
     </div>
   );

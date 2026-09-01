@@ -235,7 +235,7 @@ function comparisonRows(cards: readonly QuoteCardView[], cheapest: number | null
       label: "Warranty",
       values: cards.map((card) =>
         card.warrantyTerms === null ? (
-          <span key={card.proposalId} className="font-semibold text-warning-text">Not stated ⚠</span>
+          <span key={card.proposalId} className="font-semibold text-warning-text">Not stated</span>
         ) : (
           card.warrantyTerms
         ),
@@ -267,8 +267,12 @@ function comparisonRows(cards: readonly QuoteCardView[], cheapest: number | null
     {
       // A count only. The list is priceless by contract, and what the
       // Customer buys is outside every total in the row above it.
-      label: "Materials to buy",
-      values: cards.map((card) => materialCountLabel(card.materialList.length)),
+      label: "Materials",
+      values: cards.map((card) =>
+        card.materialFulfilmentMode === "PARTNER_TURNKEY"
+          ? `Included by decorator · ${materialCountLabel(card.includedSupplyList.length)}`
+          : `You buy · ${materialCountLabel(card.materialList.length)}`,
+      ),
     },
     {
       label: "Tax",
