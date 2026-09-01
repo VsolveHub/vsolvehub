@@ -38,7 +38,6 @@ const questions: readonly RequirementQuestionView[] = [
   { code: "duration_days", label: "Days", kind: "number", required: true, minimum: 1 },
   { code: "dress_code", label: "Dress code", kind: "choice", required: true, options: [] },
   { code: "staff_meal_provided", label: "Meal?", kind: "boolean", required: true },
-  { code: "staff_preference", label: "Staff preference", kind: "choice", required: false, options: [] },
 ];
 
 describe("event crew flow", () => {
@@ -56,10 +55,10 @@ describe("event crew flow", () => {
       "service_style",
     ]);
     expect(roleQuestions(questions).map((q) => q.code)).toEqual(["waiter_count", "bar_staff_count"]);
+    // `staff_preference` is gone at contract 1.53.0 — the per-role steppers ask it properly.
     expect(presentationQuestions(questions).map((q) => q.code)).toEqual([
       "dress_code",
       "staff_meal_provided",
-      "staff_preference",
     ]);
   });
 
@@ -120,8 +119,11 @@ describe("event crew flow", () => {
     const roles = roleQuestions(questions);
     const answers = applyServingSuggestion({ duration_days: 1 }, roles, 3, null);
     expect(answers.waiter_count).toBe(3);
-    expect(answers.waiter_count__men).toBe(2);
-    expect(answers.waiter_count__women).toBe(1);
+    // The catalogue's own codes, not the invented `waiter_count__men` these used to be:
+    // an answer key no schema published, which `validate_scope` would have refused and
+    // `crew_brief` could never show the professional.
+    expect(answers.waiter_men).toBe(2);
+    expect(answers.waiter_women).toBe(1);
     expect(crewGenderTotals(roles, answers)).toEqual({ men: 2, women: 1, people: 3 });
 
     const adjusted = withRoleGenderCount(answers, roles, "waiter_count", "women", 2);
@@ -137,5 +139,28 @@ describe("event crew flow", () => {
     expect(suggestedServers("100-200", "no-food")).toBeNull();
     expect(suggestedServers(undefined, "buffet")).toBeNull();
     expect(suggestedServers("a-band-this-build-does-not-know", "buffet")).toBeNull();
+  });
+});
+
+/**
+ * A draft saved by the pre-1.53.0 build is still in somebody's browser storage, holding
+ * `waiter_count__men` keys the catalogue never published. Submitting one now earns a refusal
+ * naming a question that does not exist, so the restore path drops them.
+ */
+describe("drafts restored from before the catalogue owned the split", () => {
+  it("drops the invented keys and re-derives the split from the role totals", () => {
+    const roles = roleQuestions(questions);
+
+    const restored = syncHeadcount(
+      { duration_days: 1, waiter_count: 3, waiter_count__men: 2, waiter_count__women: 1 },
+      roles,
+    );
+
+    expect(restored.waiter_count__men).toBeUndefined();
+    expect(restored.waiter_count__women).toBeUndefined();
+    // The count survives, which is what the customer actually typed; the split resets to the
+    // single-number shape and they re-set it on the screen they are already looking at.
+    expect(restored.waiter_count).toBe(3);
+    expect(restored.worker_count).toBe(3);
   });
 });

@@ -43,7 +43,8 @@ function offer(overrides: Partial<CrewOffer> = {}): CrewOffer {
     requested_start: "2026-08-20T00:00:00Z",
     area_label: "Kondapur",
     brief: [],
-    server_now: NOW,
+    crew_mix: [],
+  server_now: NOW,
     ...overrides,
   };
 }

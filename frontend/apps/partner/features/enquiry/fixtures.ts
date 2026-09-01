@@ -67,6 +67,8 @@ export function enquiryDetail(
     proposals: [],
     questions: [],
     site_visits: [],
+    // Empty is the honest default: every service but event staff asks for no split.
+    crew_mix: [],
     site_address: null,
     customer_name: null,
     customer_phone: null,

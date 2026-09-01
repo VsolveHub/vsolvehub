@@ -66,7 +66,6 @@ import {
   GUEST_BAND_CODE,
   SERVICE_STYLE_CODE,
   STAFF_MEAL_CODE,
-  STAFF_PREFERENCE_CODE,
   applyServingSuggestion,
   crewGenderTotals,
   crewMix,
@@ -588,7 +587,9 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
               : answers[STAFF_MEAL_CODE] === false
                 ? "No meal"
                 : null,
-            optionLabel(presentation, STAFF_PREFERENCE_CODE, answers),
+            // `staff_preference` (any / female / male) is gone at contract 1.53.0. It asked
+            // once for the whole crew what the role steppers now ask per role, and a customer
+            // could answer it in contradiction of their own counts.
           ]),
           icon: <ShirtIcon />,
         },

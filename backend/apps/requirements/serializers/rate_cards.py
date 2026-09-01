@@ -323,6 +323,25 @@ class CrewBriefLineSerializer(serializers.Serializer[dict[str, Any]]):
     value = serializers.CharField(read_only=True)
 
 
+class CrewMixLineSerializer(serializers.Serializer[dict[str, Any]]):
+    """One role and the men/women the Customer asked for in it (`crew_mix`).
+
+    Structured rather than prose because the Partner does not read this, they *check* it: the
+    offer screen draws a counter per role, and the assignment screen ticks each one off as names
+    are added. A sentence cannot be counted against.
+
+    `role_label` is the catalogue's own words, resolved server-side, so no client hard-codes what a
+    "hostess" is. Roles nobody asked for are absent rather than zeroed -- "0 bartenders" is not a
+    fact a lead plans around.
+    """
+
+    role_code = serializers.CharField(read_only=True)
+    role_label = serializers.CharField(read_only=True)
+    men = serializers.IntegerField(read_only=True)
+    women = serializers.IntegerField(read_only=True)
+    total = serializers.IntegerField(read_only=True)
+
+
 class CrewOfferSerializer(serializers.Serializer[dict[str, Any]]):
     """One crew offer as the **lead** sees it (`M2-BE-435`).
 
@@ -366,6 +385,8 @@ class CrewOfferSerializer(serializers.Serializer[dict[str, Any]]):
     #: What the Customer asked for beyond a size — the occasion, the roles, the dress code — in
     #: the catalogue's order and words. Empty when the form asked nothing beyond a size.
     brief = CrewBriefLineSerializer(many=True, read_only=True)
+    #: The men/women split per role. Empty for every service that does not ask for one.
+    crew_mix = CrewMixLineSerializer(many=True, read_only=True)
     server_now = serializers.DateTimeField(read_only=True)
 
 
@@ -412,6 +433,8 @@ class CrewOfferAcceptedSerializer(serializers.Serializer[dict[str, Any]]):
     requested_start = serializers.DateTimeField(read_only=True, allow_null=True)
     #: The same brief the offer carried, so the held job still says what it is for.
     brief = CrewBriefLineSerializer(many=True, read_only=True)
+    #: The men/women split per role. Empty for every service that does not ask for one.
+    crew_mix = CrewMixLineSerializer(many=True, read_only=True)
     server_now = serializers.DateTimeField(read_only=True)
 
 

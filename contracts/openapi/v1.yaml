@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.52.0
+  version: 1.53.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -17267,6 +17267,40 @@ components:
       - membership_id
       - partner_id
       - partner_name
+    CrewMixLine:
+      type: object
+      description: |-
+        One role and the men/women the Customer asked for in it (`crew_mix`).
+
+        Structured rather than prose because the Partner does not read this, they *check* it: the
+        offer screen draws a counter per role, and the assignment screen ticks each one off as names
+        are added. A sentence cannot be counted against.
+
+        `role_label` is the catalogue's own words, resolved server-side, so no client hard-codes what a
+        "hostess" is. Roles nobody asked for are absent rather than zeroed -- "0 bartenders" is not a
+        fact a lead plans around.
+      properties:
+        role_code:
+          type: string
+          readOnly: true
+        role_label:
+          type: string
+          readOnly: true
+        men:
+          type: integer
+          readOnly: true
+        women:
+          type: integer
+          readOnly: true
+        total:
+          type: integer
+          readOnly: true
+      required:
+      - men
+      - role_code
+      - role_label
+      - total
+      - women
     CrewNoShowReasonCodeEnum:
       enum:
       - customer_no_show
@@ -17357,6 +17391,11 @@ components:
           items:
             $ref: '#/components/schemas/CrewBriefLine'
           readOnly: true
+        crew_mix:
+          type: array
+          items:
+            $ref: '#/components/schemas/CrewMixLine'
+          readOnly: true
         server_now:
           type: string
           format: date-time
@@ -17364,6 +17403,7 @@ components:
       required:
       - area_label
       - brief
+      - crew_mix
       - days
       - decline_reason_code
       - headcount
@@ -17450,6 +17490,11 @@ components:
           items:
             $ref: '#/components/schemas/CrewBriefLine'
           readOnly: true
+        crew_mix:
+          type: array
+          items:
+            $ref: '#/components/schemas/CrewMixLine'
+          readOnly: true
         server_now:
           type: string
           format: date-time
@@ -17458,6 +17503,7 @@ components:
       - add_on_rates
       - booking_id
       - brief
+      - crew_mix
       - days
       - headcount
       - hold_expires_at
@@ -19289,6 +19335,11 @@ components:
           items:
             $ref: '#/components/schemas/CrewBriefLine'
           readOnly: true
+        crew_mix:
+          type: array
+          items:
+            $ref: '#/components/schemas/CrewMixLine'
+          readOnly: true
         budget_min_paise:
           type: integer
           readOnly: true
@@ -19345,6 +19396,7 @@ components:
       - budget_min_paise
       - category_slug
       - created_at
+      - crew_mix
       - customer_name
       - customer_phone
       - decline_reason_code

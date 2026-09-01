@@ -26,7 +26,7 @@ from apps.partners.capabilities import assert_kyc_complete
 from apps.partners.exceptions import PartnerDomainError
 from apps.partners.models import Skill
 from apps.partners.permissions import IsOperationsUser, IsPartnerUser
-from apps.requirements import crew_brief, crew_dispatch, rate_cards
+from apps.requirements import crew_brief, crew_dispatch, crew_mix, rate_cards
 from apps.requirements.exceptions import RequirementDomainError, RequirementNotFoundError
 from apps.requirements.models import RateCardBooking, VendorInvitation
 from apps.requirements.selectors import invitation_for_partner
@@ -184,6 +184,11 @@ class PartnerCrewOfferAcceptView(ThrottledWriteMixin, APIView):
                     "requested_start": invitation.requirement.requested_start,
                     "brief": [
                         asdict(line) for line in crew_brief.brief_lines(invitation.requirement)
+                    ],
+                    # The mix the lead must check against their own roster before accepting.
+                    "crew_mix": [
+                        {**asdict(line), "total": line.total}
+                        for line in crew_mix.mix_lines(invitation.requirement)
                     ],
                     "server_now": timezone.now(),
                 }

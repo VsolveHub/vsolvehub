@@ -78,6 +78,14 @@ export interface EnquiryRecord extends EnquiryRow {
    */
   readonly brief: readonly BriefLine[];
   /**
+   * The men/women split per role (1.53.0), in the catalogue's own words.
+   *
+   * Empty for every service that does not ask for one. Structured rather than
+   * folded into `brief` because a lead counts this against their roster; the
+   * brief is prose and cannot be counted against.
+   */
+  readonly crewMix: readonly Schemas["CrewMixLine"][];
+  /**
    * The visit the customer already chose, published from contract 1.44.0.
    *
    * Null until they pick one. The partner never sets these — BE-2 moved the
@@ -155,6 +163,7 @@ export function readEnquiryRecord(detail: Schemas["EnquiryDetail"]): EnquiryReco
     ...readEnquiryRow(detail),
     answers: readAnswers(detail.answers),
     brief: Array.isArray(detail.brief) ? detail.brief : [],
+    crewMix: Array.isArray(detail.crew_mix) ? detail.crew_mix : [],
     fixedVisitStart: detail.fixed_visit_start,
     fixedVisitDurationMinutes: detail.fixed_visit_duration_minutes,
     fixedVisitEarningPaise: detail.fixed_visit_earning_paise,

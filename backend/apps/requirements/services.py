@@ -22,7 +22,7 @@ from apps.catalog.models import M2VariantConfiguration, ServiceVariant
 from apps.foundation.services import enqueue_outbox_event
 from apps.identity.models import User
 from apps.locations.models import Address, ServiceArea
-from apps.requirements import metrics
+from apps.requirements import crew_mix, metrics
 from apps.requirements.exceptions import (
     LifecycleNotSupportedError,
     RequirementDuplicateError,
@@ -407,6 +407,10 @@ def submit_requirement(
     configuration = requirement.configuration or active_configuration(requirement.variant)
     try:
         validate_scope(schema=configuration.question_schema, scope=requirement.answers)
+        # The role total and its two gendered halves are three numbers describing one crew, and a
+        # client that lets them drift apart sends a lead to a wedding for the wrong people. Checked
+        # here, at the last moment the Customer can still fix it.
+        crew_mix.assert_mix_consistent(requirement)
     except ValueError as exc:
         # The shared validator signals with ValueError. Left unwrapped it would leave the domain
         # as a 500; a Customer with an unanswered question deserves to be told which one.

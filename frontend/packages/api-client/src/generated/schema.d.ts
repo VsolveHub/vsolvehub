@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.52.0)
- * Checksum: 619d92f58ecc07af
+ * Source:   contracts/openapi/v1.yaml (version 1.53.0)
+ * Checksum: 50b743efda793eb9
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -6469,6 +6469,24 @@ export interface components {
             documents_verified_at: string | null;
         };
         /**
+         * @description One role and the men/women the Customer asked for in it (`crew_mix`).
+         *
+         *     Structured rather than prose because the Partner does not read this, they *check* it: the
+         *     offer screen draws a counter per role, and the assignment screen ticks each one off as names
+         *     are added. A sentence cannot be counted against.
+         *
+         *     `role_label` is the catalogue's own words, resolved server-side, so no client hard-codes what a
+         *     "hostess" is. Roles nobody asked for are absent rather than zeroed -- "0 bartenders" is not a
+         *     fact a lead plans around.
+         */
+        CrewMixLine: {
+            readonly role_code: string;
+            readonly role_label: string;
+            readonly men: number;
+            readonly women: number;
+            readonly total: number;
+        };
+        /**
          * @description * `customer_no_show` - Nobody was at the site
          *     * `gate_locked` - The site was locked
          *     * `vendor_no_show` - The crew did not arrive
@@ -6509,6 +6527,7 @@ export interface components {
             readonly requested_start: string | null;
             readonly area_label: string;
             readonly brief: components["schemas"]["CrewBriefLine"][];
+            readonly crew_mix: components["schemas"]["CrewMixLine"][];
             /** Format: date-time */
             readonly server_now: string;
         };
@@ -6547,6 +6566,7 @@ export interface components {
             /** Format: date-time */
             readonly requested_start: string | null;
             readonly brief: components["schemas"]["CrewBriefLine"][];
+            readonly crew_mix: components["schemas"]["CrewMixLine"][];
             /** Format: date-time */
             readonly server_now: string;
         };
@@ -7265,6 +7285,7 @@ export interface components {
             readonly created_at: string;
             readonly answers: unknown;
             readonly brief: components["schemas"]["CrewBriefLine"][];
+            readonly crew_mix: components["schemas"]["CrewMixLine"][];
             readonly budget_min_paise: number | null;
             readonly budget_max_paise: number | null;
             readonly required_tax_basis: string;

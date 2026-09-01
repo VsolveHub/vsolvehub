@@ -15,6 +15,7 @@ out because "0 bartenders" is not a fact a lead needs to plan around.
 from dataclasses import dataclass
 from typing import Any
 
+from apps.requirements import crew_mix
 from apps.requirements.models import CustomerRequirement
 
 #: The answers the offer already publishes as first-class fields. Repeating them as text would put
@@ -100,6 +101,11 @@ def brief_lines(requirement: CustomerRequirement) -> list[BriefLine]:
             continue
         code = definition.get("code")
         if not isinstance(code, str) or code in SIZE_CODES or code not in answers:
+            continue
+        # The men/women halves are carried as a structured table by `crew_mix`, not as prose.
+        # Six roles times two genders is twelve lines reading "Waiters and serving staff - men: 3",
+        # which is a spreadsheet pretending to be a brief. The role's own total still renders.
+        if code.endswith((crew_mix.MEN_SUFFIX, crew_mix.WOMEN_SUFFIX)):
             continue
         rendered = _render(definition, answers[code])
         if rendered is None:

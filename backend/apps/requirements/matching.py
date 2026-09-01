@@ -43,6 +43,7 @@ from apps.partners.models import (
     PartnerProfile,
     PartnerServiceArea,
 )
+from apps.requirements import crew_mix
 from apps.requirements.exceptions import (
     CapacityUnavailableError,
     InvitationExpiredError,
@@ -96,6 +97,7 @@ class ExclusionReason(models.TextChoices):
     UNRESPONSIVE = "unresponsive", "Has not responded recently"
     CAPACITY_COMMITTED = "capacity_committed", "Already committed for these dates"
     CREW_TOO_SMALL = "crew_too_small", "Roster smaller than the requested headcount"
+    CREW_MIX_UNMET = "crew_mix_unmet", "Roster cannot field the requested men/women mix"
     ALREADY_INVITED = "already_invited", "Already invited to this requirement"
     CLUSTER_ALREADY_HOLDS_SLOT = "cluster_already_holds_slot", "Same owner already holds a slot"
 
@@ -422,6 +424,9 @@ class _PoolFacts:
     requirement: CustomerRequirement
     starts_on: date
     requested_crew: int
+    #: The men/women split the Customer asked for, (0, 0) when they asked for none.
+    requested_men: int
+    requested_women: int
     fresh_since: datetime
     invited_partner_ids: set[uuid.UUID]
     held_clusters: set[str]
@@ -512,6 +517,21 @@ def _exclusions_for(*, partner: PartnerProfile, pool: _PoolFacts) -> list[str]:
         ).count()
         if roster < pool.requested_crew:
             reasons.append(ExclusionReason.CREW_TOO_SMALL)
+
+    if pool.requested_men or pool.requested_women:
+        # Unknown-tolerant on purpose. A lead is dropped only when even counting every
+        # gender-unrecorded worker as the gender needed still leaves them short -- so a roster that
+        # simply has not been asked yet stays in the pool. Excluding on missing data would empty
+        # this category on the day the field shipped, and it is the same call `RankingSignals`
+        # already makes by giving an unknown-distance vendor the median band.
+        shortfall = crew_mix.shortfall_against(
+            crew_mix.roster_mix(partner),
+            men=pool.requested_men,
+            women=pool.requested_women,
+            count_unknown=True,
+        )
+        if shortfall:
+            reasons.append(ExclusionReason.CREW_MIX_UNMET)
     return reasons
 
 
@@ -539,6 +559,7 @@ def evaluate_candidates(
     requested_starts_on, _ends_on = _requested_days(requirement)
     starts_on = starts_on_override or requested_starts_on
     requested_crew = int(requirement.answers.get("worker_count") or 0)
+    requested_men, requested_women = crew_mix.requested_mix(requirement)
     fresh_since = timezone.now() - timedelta(days=RESPONSIVENESS_WINDOW_DAYS)
 
     invited_partner_ids = (
@@ -581,6 +602,8 @@ def evaluate_candidates(
         requirement=requirement,
         starts_on=starts_on,
         requested_crew=requested_crew,
+        requested_men=requested_men,
+        requested_women=requested_women,
         fresh_since=fresh_since,
         invited_partner_ids=invited_partner_ids,
         held_clusters=held_clusters,

@@ -22,9 +22,37 @@ class CrewMember(models.Model):
     to one record and cannot be double-booked on one day.
     """
 
+    class Gender(models.TextChoices):
+        """What a worker is, for the one purpose a Customer may ask about it.
+
+        `UNDISCLOSED` is the worker declining to say and is **not** the same as blank: blank means
+        nobody has asked yet, which is the state every row starts in. Both are treated the same way
+        by the mix rules -- neither fills a gendered slot -- but only one of them is a question
+        still worth putting to the Partner.
+        """
+
+        MAN = "MAN", "Man"
+        WOMAN = "WOMAN", "Woman"
+        OTHER = "OTHER", "Other"
+        UNDISCLOSED = "UNDISCLOSED", "Prefers not to say"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     identity_hash = models.CharField(max_length=64, unique=True)
     display_name = models.CharField(max_length=120)
+    #: Recorded only because a Customer may book a crew by mix, and blank until somebody asks.
+    #:
+    #: **Blank is never male.** Every row that existed before this field starts blank, and a mix
+    #: rule that read blank as a man would quietly staff a wedding wrongly on day one. Only `MAN`
+    #: fills a man-slot and only `WOMAN` a woman-slot; `OTHER` and `UNDISCLOSED` count toward the
+    #: headcount and toward no gendered slot.
+    #:
+    #: **It is never inferred.** Not from `display_name`, not from a document, not from a photo.
+    #: The only writer is a Partner recording what the worker told them.
+    #:
+    #: **First write wins.** This row is one person across every agency that has registered them,
+    #: so an agency writing a value that contradicts one already here is refused
+    #: (`m2_crew_gender_conflict`) rather than allowed to flip another agency's roster.
+    gender = models.CharField(max_length=12, choices=Gender.choices, blank=True)
     #: The last four digits of the phone number, and nothing else.
     #:
     #: `identity_hash` is not reversible, so without this a roster of two people called Ramesh is

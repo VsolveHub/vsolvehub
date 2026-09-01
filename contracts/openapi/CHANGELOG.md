@@ -1,5 +1,31 @@
 # API Contract Changelog
 
+## 1.53.0 - The crew mix a Partner can see, and the roster that has to meet it
+
+- **`CrewMixLine`** is new, and `EnquiryDetail` and the A3 crew offer both gain `crew_mix`: a
+  list of `{role_code, role_label, men, women, total}` in the catalogue's own order and words.
+  Structured rather than prose, because the Partner does not read this so much as *check* it --
+  the offer screen counts a roster against it before accepting, and the assignment screen ticks
+  each role off as names are added. Roles nobody asked for are absent, not zeroed.
+- The men/women halves are **real catalogue questions** now (`<role>_men`, `<role>_women`,
+  `INTEGER`, optional) on a new `event-staff-by-the-day` configuration version. They replace the
+  client-invented `<role>__men` answer keys, which were not in any schema, were invisible to
+  `brief`, and would have been refused by `validate_scope` the first time an event-staff
+  requirement reached `submit_requirement`.
+- **`staff_preference` (`any` / `female` / `male`) is removed.** It asked once for the whole crew
+  what the roles now ask per role, and a Customer could answer it in contradiction of the counts
+  with nobody downstream able to see the disagreement. Requirements pin a `configuration`, so
+  in-flight ones keep reading the version they were captured under.
+- The gendered codes are excluded from `brief`'s prose lines, the way `worker_count` and
+  `duration_days` already are: twelve lines reading "Waiters and serving staff - men: 3" is a
+  spreadsheet, not a brief.
+- New refusal **`m2_crew_mix_unmet`** (409) on `POST /partner/crew-offers/{id}/accept/` and on
+  `assign_crew`. Distinct from `m2_roster_insufficient` because the remedies differ: one lead
+  needs more people, the other needs different people.
+- New matching exclusion reason **`crew_mix_unmet`**. Dispatch is deliberately unknown-tolerant --
+  a lead is excluded only when even counting every gender-unrecorded worker as the needed gender
+  leaves them short, so a roster nobody has been asked about stays in the pool.
+
 ## 1.52.0 - Offers that interrupt, waves that refill, and the visit-day contact rung
 
 - `EnquiryDetailSerializer` gains `customer_name` and `customer_phone`, both nullable. The name —

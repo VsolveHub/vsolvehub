@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { Pictogram, type PictogramName } from "@/components/pictogram";
+import { CrewMixTable } from "./crew-mix-table";
 import { usePartnerWorkspaceGrants } from "@/features/workspace/queries";
 import { WORKFORCE_WORKSPACE } from "@/features/workspace/registry";
 
@@ -191,6 +192,19 @@ function OfferDecision({
             {overtime === null ? null : <p className="text-text-secondary">{overtime}</p>}
           </div>
         )}
+        {/* Above the brief, because this is the one term on the offer a lead can accept
+            and then find they cannot meet. `verified_roster_size` is on the same screen,
+            so the footnote makes the comparison they are about to make explicit. */}
+        <CrewMixTable
+          lines={offer.crew_mix}
+          footnote={
+            offer.crew_mix.length === 0
+              ? undefined
+              : `Your verified crew list has ${offer.verified_roster_size} ${
+                  offer.verified_roster_size === 1 ? "person" : "people"
+                }. Vsolve checks the men and women on it when you accept, and again when you name the crew.`
+          }
+        />
         <BriefList brief={offer.brief} />
 
         <Link

@@ -513,6 +513,30 @@ class RosterInsufficientError(RequirementDomainError):
         )
 
 
+class CrewMixUnmetError(RequirementDomainError):
+    """The lead's verified roster cannot field the men/women mix the Customer booked.
+
+    Separate from `RosterInsufficientError` because they are different problems with different
+    remedies: one lead needs more people, the other needs different people, and telling somebody
+    with eight verified workers that their "roster is too small" for a five-person job sends them
+    to the wrong screen.
+
+    Raised only at accept and beyond. Dispatch is deliberately more forgiving -- see
+    `crew_mix` on why a roster with no gender recorded is invited rather than excluded.
+    """
+
+    def __init__(self, shortfall: str = "") -> None:
+        super().__init__(
+            code="m2_crew_mix_unmet",
+            message=(
+                f"This job needs {shortfall} than your verified crew list has."
+                if shortfall
+                else "Your verified crew list cannot cover the men and women this job needs."
+            ),
+            status_code=409,
+        )
+
+
 class BookingFeeNotChargeableError(RequirementDomainError):
     """A booking-fee checkout was attempted with no held accepted offer behind it.
 

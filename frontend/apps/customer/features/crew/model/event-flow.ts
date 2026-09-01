@@ -27,7 +27,6 @@ export const GUEST_BAND_CODE = "guest_band";
 export const SERVICE_STYLE_CODE = "service_style";
 export const DRESS_CODE_CODE = "dress_code";
 export const STAFF_MEAL_CODE = "staff_meal_provided";
-export const STAFF_PREFERENCE_CODE = "staff_preference";
 
 const OCCASION_CODES: readonly string[] = [
   EVENT_TYPE_CODE,
@@ -36,11 +35,7 @@ const OCCASION_CODES: readonly string[] = [
   SERVICE_STYLE_CODE,
 ];
 
-const PRESENTATION_CODES: readonly string[] = [
-  DRESS_CODE_CODE,
-  STAFF_MEAL_CODE,
-  STAFF_PREFERENCE_CODE,
-];
+const PRESENTATION_CODES: readonly string[] = [DRESS_CODE_CODE, STAFF_MEAL_CODE];
 
 /** A counted role: a number question other than the headcount, named `*_count`. */
 export function isRoleQuestion(question: RequirementQuestionView): boolean {
@@ -87,10 +82,52 @@ function countOf(value: unknown): number {
 /** A sane ceiling for one gender stepper so a stuck plus-button cannot run away. */
 export const ROLE_COUNT_CAP = 50;
 
+/** The catalogue's suffix for a role's total, which its two halves hang off. */
+const ROLE_COUNT_SUFFIX = "_count";
+
 export type CrewGender = "men" | "women";
 
+/** `waiter_count` -> `waiter`. The stem the catalogue hangs a role's three questions off. */
+function roleStem(roleCode: string): string {
+  return roleCode.endsWith(ROLE_COUNT_SUFFIX)
+    ? roleCode.slice(0, -ROLE_COUNT_SUFFIX.length)
+    : roleCode;
+}
+
+/**
+ * The catalogue's own code for one half of a role — `waiter_count` + `men` -> `waiter_men`.
+ *
+ * These used to be `waiter_count__men`: a key this client invented, which no
+ * configuration published. Three things followed from that and all three were
+ * invisible. `validate_scope` refuses an answer key the schema does not
+ * define, so the first event-staff requirement to reach `submit_requirement`
+ * would have been rejected naming a question the customer never saw.
+ * `crew_brief` iterates the schema, so the professional was never told the
+ * split. And matching sizes on `worker_count`, so nothing could act on it.
+ *
+ * Contract 1.53.0 publishes `<role>_men` and `<role>_women` as real questions.
+ * This function is the one place that knows how to spell them.
+ */
 export function roleGenderKey(roleCode: string, gender: CrewGender): string {
-  return `${roleCode}__${gender}`;
+  return `${roleStem(roleCode)}_${gender}`;
+}
+
+/**
+ * Drops the pre-1.53.0 `<role>__men` keys from a restored draft.
+ *
+ * A draft saved by the old build is still in somebody's browser storage, and
+ * those keys are now unknown to the schema — submitting one would earn a
+ * refusal naming a question that no longer exists. The counts are re-derived
+ * from the role totals by `syncHeadcount`, so dropping them loses nothing a
+ * customer typed except the split, which they re-set on a screen they are
+ * already looking at.
+ */
+export function withoutLegacyGenderKeys(
+  answers: Readonly<Record<string, unknown>>,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(answers).filter(([key]) => !key.includes("__")),
+  );
 }
 
 /**
@@ -214,7 +251,7 @@ export function syncHeadcount(
   answers: Readonly<Record<string, unknown>>,
   roles: readonly RequirementQuestionView[],
 ): Record<string, unknown> {
-  let next: Record<string, unknown> = { ...answers };
+  let next: Record<string, unknown> = withoutLegacyGenderKeys(answers);
   for (const role of roles) {
     const menKey = roleGenderKey(role.code, "men");
     const womenKey = roleGenderKey(role.code, "women");

@@ -43,8 +43,18 @@ from apps.partners.models import (
     PartnerCrewMembership,
     PartnerProfile,
 )
-from apps.requirements import crew_brief, matching, purchase_gates, rate_cards, services
+from apps.requirements import (
+    crew_brief,
+    matching,
+    purchase_gates,
+    rate_cards,
+    services,
+)
+from apps.requirements import (
+    crew_mix as crew_mix_module,
+)
 from apps.requirements.exceptions import (
+    CrewMixUnmetError,
     InvitationTransitionError,
     LifecycleNotSupportedError,
     PolicyUnavailableError,
@@ -426,6 +436,10 @@ class CrewOffer:
     #: the dress code. Without it a lead accepts a headcount and a day count and learns on site
     #: whether it was a wedding or a demolition. See `crew_brief`.
     brief: list[crew_brief.BriefLine]
+    #: The men/women split, per role. The one thing on this offer a lead must check against their
+    #: own roster **before** accepting -- everything else on the screen is money and dates, which
+    #: they can meet or not; this is the one they can be wrong about without noticing.
+    crew_mix: list[crew_mix_module.CrewMixLine]
 
 
 def crew_offer_for(invitation: VendorInvitation) -> CrewOffer | None:
@@ -450,6 +464,7 @@ def crew_offer_for(invitation: VendorInvitation) -> CrewOffer | None:
         responds_by=invitation.responds_by,
         verified_roster_size=verified_roster_size(invitation.partner),
         brief=crew_brief.brief_lines(invitation.requirement),
+        crew_mix=crew_mix_module.mix_lines(invitation.requirement),
     )
 
 
@@ -506,6 +521,21 @@ def accept_crew_offer(*, invitation_id: uuid.UUID) -> RateCardBooking:
 
     if verified_roster_size(invitation.partner) < booking.headcount:
         raise RosterInsufficientError()
+
+    # The mix, re-checked. The offer this lead is answering is a snapshot taken when the wave went
+    # out, and a roster changes -- a worker archived between invite and accept is exactly how a
+    # lead ends up holding a job they can no longer staff. Verified-only here for the same reason
+    # the headcount above is: this confirms a crew today.
+    men_wanted, women_wanted = crew_mix_module.requested_mix(requirement)
+    if men_wanted or women_wanted:
+        shortfall = crew_mix_module.shortfall_against(
+            crew_mix_module.roster_mix(invitation.partner, verified_only=True),
+            men=men_wanted,
+            women=women_wanted,
+            count_unknown=True,
+        )
+        if shortfall:
+            raise CrewMixUnmetError(shortfall.describe())
 
     policy = rate_cards.cascade_policy(requirement)
     matching.accept_invitation(invitation_id=invitation.id)

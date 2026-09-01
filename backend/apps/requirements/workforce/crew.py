@@ -21,13 +21,14 @@ from apps.foundation.services import enqueue_outbox_event
 from apps.identity.models import User
 from apps.partners.capabilities import assert_crew_available, assert_crew_roster_present
 from apps.partners.exceptions import CrewConflictError
-from apps.partners.models import PartnerCrewMembership
-from apps.requirements import stages
+from apps.partners.models import CrewMember, PartnerCrewMembership
+from apps.requirements import crew_mix, stages
 from apps.requirements.exceptions import (
     RequirementNotFoundError,
     StageTransitionError,
 )
 from apps.requirements.models import (
+    Engagement,
     EngagementStage,
     StageCrewAssignment,
 )
@@ -97,6 +98,14 @@ def assign_crew(
     4. **The global conflict** (`m2_crew_conflict`) — the same person promised through two
        agencies on one date. Raised here with the person and the date in the message, and held by
        `requirements_crew_member_one_shift_a_day` when two supervisors tap at the same instant.
+    5. **The mix** (`m2_crew_mix_unmet`) — the Customer booked so many men and so many women, and
+       these names do not add up to it. Exact here, unlike the dispatch filter that let this lead
+       be invited on an unrecorded roster: by now real people are being named for a real day, and
+       a worker with no gender on file is a question to answer rather than a benefit of the doubt.
+
+       This is the last gate before somebody travels. It is deliberately a refusal and not a
+       warning -- a lead who discovers on site that he cannot staff what was sold is the failure
+       this whole feature exists to prevent.
 
     The crew may not exceed the headcount the Customer booked. More workers than were agreed is a
     scope amendment at the published rate (`M2-BE-538`), not a longer list on an assignment screen.
@@ -136,6 +145,7 @@ def assign_crew(
         on_day=shift_date,
         busy_crew_member_ids=_busy_crew_member_ids(shift_date=shift_date, stage=stage),
     )
+    _assert_mix_met(engagement=engagement, memberships=memberships)
 
     current = {
         assignment.membership_id: assignment
@@ -216,3 +226,50 @@ def future_assignment_dates(*, membership: PartnerCrewMembership) -> list[date]:
         .order_by("shift_date")
         .values_list("shift_date", flat=True)
     )
+
+
+def _assert_mix_met(
+    *, engagement: Engagement, memberships: Sequence[PartnerCrewMembership]
+) -> None:
+    """The named crew must be the crew the Customer bought.
+
+    Counted from the people in front of us rather than from the roster, because the roster is what
+    a lead *could* field and this is what they *are* fielding. A worker whose gender is not on file
+    counts toward neither side, and the message says so by name -- "record who they are" is a thing
+    the supervisor can act on, where "mix unmet" is not.
+    """
+    requirement = engagement.requirement
+    men_wanted, women_wanted = crew_mix.requested_mix(requirement)
+    if not men_wanted and not women_wanted:
+        return
+
+    named = crew_mix.RosterMix(
+        men=sum(1 for m in memberships if m.crew_member.gender == CrewMember.Gender.MAN),
+        women=sum(1 for m in memberships if m.crew_member.gender == CrewMember.Gender.WOMAN),
+        unknown=0,
+    )
+    unrecorded = [m.crew_member.display_name for m in memberships if not m.crew_member.gender]
+    shortfall = crew_mix.shortfall_against(
+        named, men=men_wanted, women=women_wanted, count_unknown=False
+    )
+    if not shortfall:
+        return
+
+    if unrecorded:
+        raise CrewConflictError(
+            "This day was booked for "
+            f"{crew_mix.MixShortfall(men=men_wanted, women=women_wanted).describe()}"
+            f", and Vsolve has no record of whether {_names(unrecorded)} "
+            f"{'is' if len(unrecorded) == 1 else 'are'} a man or a woman. "
+            "Add that to your crew list and try again.",
+        )
+    raise CrewConflictError(
+        f"This day was booked for {men_wanted} men and {women_wanted} women. "
+        f"The crew you have named needs {shortfall.describe()}.",
+    )
+
+
+def _names(names: Sequence[str]) -> str:
+    if len(names) == 1:
+        return names[0]
+    return f"{', '.join(names[:-1])} and {names[-1]}"

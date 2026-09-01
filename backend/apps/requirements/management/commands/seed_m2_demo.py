@@ -1278,6 +1278,27 @@ def _size_questions(people_label: str) -> tuple[QuestionSeed, ...]:
 #: required and is the sum of them — the booking screen keeps it in step — because `preset_size`,
 #: matching and the shift-day engine all read that one code and nothing else. Order here is the
 #: order the screens ask in: the occasion, the crew, then how they should turn up.
+def _role_questions(stem: str, label: str) -> tuple[QuestionSeed, ...]:
+    """One crew role, as the three questions the catalogue publishes for it.
+
+    `<stem>_count` is the role's total and the only one of the three that carries the human label
+    and the display order -- `crew_mix` reads the label from here, and the Customer's app groups
+    the two steppers under it.
+
+    The halves are `required=False` because a role nobody wants is a role nobody answers. Zero is
+    the honest default, and a required field would force a Customer to type six zeroes to book
+    two waiters.
+
+    This replaces `staff_preference` (`any` / `female` / `male`), which asked the same question
+    once for the whole crew and could not say "two women on the bar, four men on setup".
+    """
+    return (
+        (f"{stem}_count", label, ServiceQuestion.Kind.NUMBER, False, 0, None),
+        (f"{stem}_men", f"{label} - men", ServiceQuestion.Kind.NUMBER, False, 0, None),
+        (f"{stem}_women", f"{label} - women", ServiceQuestion.Kind.NUMBER, False, 0, None),
+    )
+
+
 EVENT_STAFF_QUESTIONS: tuple[QuestionSeed, ...] = (
     (
         "event_type",
@@ -1332,19 +1353,15 @@ EVENT_STAFF_QUESTIONS: tuple[QuestionSeed, ...] = (
             ("no-food", "No food service", "Setup, reception and support only."),
         ),
     ),
-    ("waiter_count", "Waiters and serving staff", ServiceQuestion.Kind.NUMBER, False, 0, None),
-    ("bar_staff_count", "Bar and beverage staff", ServiceQuestion.Kind.NUMBER, False, 0, None),
-    ("hostess_count", "Guest reception", ServiceQuestion.Kind.NUMBER, False, 0, None),
-    (
-        "kitchen_helper_count",
-        "Kitchen and pantry helpers",
-        ServiceQuestion.Kind.NUMBER,
-        False,
-        0,
-        None,
-    ),
-    ("cleanup_count", "Cleanup and housekeeping", ServiceQuestion.Kind.NUMBER, False, 0, None),
-    ("setup_count", "Setup and teardown crew", ServiceQuestion.Kind.NUMBER, False, 0, None),
+    # Each role is three published questions: the total, which carries the label and the display
+    # order, and the two halves the Customer actually sets. `crew_mix.assert_mix_consistent`
+    # refuses a submission where they disagree, so the redundancy is enforced rather than trusted.
+    *_role_questions("waiter", "Waiters and serving staff"),
+    *_role_questions("bar_staff", "Bar and beverage staff"),
+    *_role_questions("hostess", "Guest reception"),
+    *_role_questions("kitchen_helper", "Kitchen and pantry helpers"),
+    *_role_questions("cleanup", "Cleanup and housekeeping"),
+    *_role_questions("setup", "Setup and teardown crew"),
     ("worker_count", "Staff", ServiceQuestion.Kind.NUMBER, True, 1, None),
     ("duration_days", "Days", ServiceQuestion.Kind.NUMBER, True, 1, None),
     (
@@ -1367,18 +1384,6 @@ EVENT_STAFF_QUESTIONS: tuple[QuestionSeed, ...] = (
         True,
         None,
         None,
-    ),
-    (
-        "staff_preference",
-        "Staff preference",
-        ServiceQuestion.Kind.SINGLE_CHOICE,
-        False,
-        None,
-        (
-            ("any", "Any", ""),
-            ("female", "Female staff", ""),
-            ("male", "Male staff", ""),
-        ),
     ),
 )
 

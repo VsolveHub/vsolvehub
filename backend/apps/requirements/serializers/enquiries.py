@@ -17,7 +17,7 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.partners.photos import partner_photo_url
-from apps.requirements import crew_brief, financials, proposals
+from apps.requirements import crew_brief, crew_mix, financials, proposals
 from apps.requirements.models import (
     Proposal,
     RequirementQuestion,
@@ -34,7 +34,7 @@ from apps.requirements.selectors import (
 )
 
 from .base import INVITATION_DECLINE_REASONS
-from .rate_cards import CrewBriefLineSerializer
+from .rate_cards import CrewBriefLineSerializer, CrewMixLineSerializer
 
 # ---------------------------------------------------------------------------
 # Clarification, shared by both roles
@@ -497,6 +497,9 @@ class EnquiryDetailSerializer(EnquirySummarySerializer):
     #: configuration's question schema (`crew_brief`, the projection the A3 crew offer already
     #: carries). `answers` stays for compatibility; a screen should render this.
     brief = serializers.SerializerMethodField()
+    #: The men/women split, per role, as a table the Partner can check a crew against.
+    #: Empty on every service that does not ask for one, which is all of them but event staff.
+    crew_mix = serializers.SerializerMethodField()
     budget_min_paise = serializers.IntegerField(
         source="snapshot.budget_min_paise",
         read_only=True,
@@ -539,6 +542,7 @@ class EnquiryDetailSerializer(EnquirySummarySerializer):
             *EnquirySummarySerializer.Meta.fields,
             "answers",
             "brief",
+            "crew_mix",
             "budget_min_paise",
             "budget_max_paise",
             "required_tax_basis",
@@ -563,6 +567,19 @@ class EnquiryDetailSerializer(EnquirySummarySerializer):
         return [
             {"code": line.code, "question": line.question, "value": line.value}
             for line in crew_brief.brief_lines(obj.requirement)
+        ]
+
+    @extend_schema_field(CrewMixLineSerializer(many=True))
+    def get_crew_mix(self, obj: VendorInvitation) -> list[dict[str, Any]]:
+        return [
+            {
+                "role_code": line.role_code,
+                "role_label": line.role_label,
+                "men": line.men,
+                "women": line.women,
+                "total": line.total,
+            }
+            for line in crew_mix.mix_lines(obj.requirement)
         ]
 
     def get_proposals(self, obj: VendorInvitation) -> list[dict[str, Any]]:

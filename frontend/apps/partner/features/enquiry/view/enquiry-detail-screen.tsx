@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 
 import { Pictogram } from "@/components/pictogram";
+import { CrewMixTable } from "@/features/crew-offer/view/crew-mix-table";
 import { FixedTimeOffer } from "@/features/visit/view/fixed-time-offer";
 import { SiteAddress } from "@/features/visit/view/site-address";
 import { useVisitDay, type VisitDayControls } from "@/features/visit/view/use-visit-day";
@@ -210,6 +211,11 @@ function EnquiryDecision({ detail }: { readonly detail: EnquiryDetail }) {
       <div className="flex flex-col gap-3 px-4 py-4">
         {/* NOW */}
         {isProject ? <ProjectNow enquiry={enquiry} visit={visit} closed={closed} /> : null}
+
+        {/* WHO THEY NEED — above the address on purpose. It is the one term on this
+            screen a vendor can be wrong about without noticing, and the only one they
+            must check against their own roster before committing. */}
+        <CrewMixTable lines={enquiry.crewMix} />
 
         {/* WHERE — see `showsDestination`. */}
         {isProject && showsDestination ? (
