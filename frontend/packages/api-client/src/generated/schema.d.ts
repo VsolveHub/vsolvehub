@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.53.0)
- * Checksum: 50b743efda793eb9
+ * Source:   contracts/openapi/v1.yaml (version 1.54.0)
+ * Checksum: eef9b8f1fa339989
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -3665,7 +3665,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** @description Skills and the supervisor flag. `display_name` is **not** editable: it belongs to the global crew member, and one agency renaming a person would rename them on every other roster. */
+        /** @description Skills, the supervisor flag and `gender`. `display_name` is **not** editable: it belongs to the global crew member, and one agency renaming a person would rename them on every other roster. `gender` is on that same global row and is editable anyway, because it is a fact about the person rather than something an agency typed. It fills a blank; a value contradicting one another agency already recorded is **refused**, never overwritten -- silently flipping it would change which jobs that other agency is dispatched for. There is no way to clear one. */
         patch: operations["m2_partner_crew_update"];
         trace?: never;
     };
@@ -6447,6 +6447,7 @@ export interface components {
             readonly documents_verified_at: string | null;
             /** Format: date-time */
             readonly added_at: string;
+            readonly gender: components["schemas"]["GenderEnum"] | components["schemas"]["BlankEnum"];
         };
         CrewMemberCreateRequest: {
             display_name: string;
@@ -6454,6 +6455,8 @@ export interface components {
             skill_codes?: string[];
             /** @default false */
             is_supervisor: boolean;
+            /** @default  */
+            gender: components["schemas"]["GenderEnum"] | components["schemas"]["BlankEnum"];
         };
         CrewMembershipVerificationRow: {
             /** Format: uuid */
@@ -7530,6 +7533,14 @@ export interface components {
          * @enum {string}
          */
         GateNextActionEnum: "SUBMIT_APPLICATION" | "ADD_PAYOUT_ACCOUNT" | "ADD_CREW_MEMBER";
+        /**
+         * @description * `MAN` - Man
+         *     * `WOMAN` - Woman
+         *     * `OTHER` - Other
+         *     * `UNDISCLOSED` - Prefers not to say
+         * @enum {string}
+         */
+        GenderEnum: "MAN" | "WOMAN" | "OTHER" | "UNDISCLOSED";
         GroupAddressChangeRequestRequest: {
             expected_version: number;
             /** Format: uuid */
@@ -9074,6 +9085,8 @@ export interface components {
         PatchedCrewMemberUpdateRequest: {
             skill_codes?: string[];
             is_supervisor?: boolean;
+            /** @default  */
+            gender: components["schemas"]["GenderEnum"] | components["schemas"]["BlankEnum"];
         };
         /** @description The customer-owned personal fields that may change independently of login. */
         PatchedCustomerProfileUpdateRequest: {
@@ -21714,6 +21727,15 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_crew_gender_conflict` when another agency has this person recorded as a different gender. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

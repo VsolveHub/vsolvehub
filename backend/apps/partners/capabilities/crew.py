@@ -18,7 +18,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.identity.hashing import keyed_hash
-from apps.partners.exceptions import CrewConflictError
+from apps.partners.exceptions import CrewConflictError, CrewGenderConflictError
 from apps.partners.models import (
     CrewAvailabilityException,
     CrewMember,
@@ -56,13 +56,21 @@ def add_crew_to_roster(
     phone_e164: str,
     skills: Sequence[Skill] = (),
     is_supervisor: bool = False,
+    gender: str = "",
 ) -> CrewRosterChange:
     """Add a worker to one roster, resolving them to a single global person."""
     identity = crew_identity_hash(phone_e164=phone_e164)
     crew_member, _ = CrewMember.objects.get_or_create(
         identity_hash=identity,
-        defaults={"display_name": display_name, "phone_suffix": phone_e164[-4:]},
+        defaults={
+            "display_name": display_name,
+            "phone_suffix": phone_e164[-4:],
+            "gender": gender,
+        },
     )
+    # Not in `defaults`: a person another agency registered first already exists, and this is the
+    # branch where a Partner is telling us something we did not know about them.
+    set_crew_gender(crew_member=crew_member, gender=gender)
     if not crew_member.phone_suffix:
         # Backfill for a person first registered before the suffix existed. Derived from the number
         # the caller just supplied, which resolved to this same identity hash, so it cannot be
@@ -92,6 +100,33 @@ def add_crew_to_roster(
     )
 
 
+def set_crew_gender(*, crew_member: CrewMember, gender: str) -> CrewMember:
+    """Record what a worker is, once, across every agency that has them.
+
+    **First write wins.** `CrewMember` is one row per person, so this field is shared: a second
+    agency writing a different value would change which jobs the *first* agency is eligible for
+    without them touching anything. So blank accepts, the same value is a no-op, and a
+    contradiction is refused (`m2_crew_gender_conflict`). There is no version of this the server
+    can decide -- one of the two agencies is wrong and only a person can say which.
+
+    Blank is not a value. Clearing a recorded gender is not offered: it would silently re-open
+    every gendered slot the worker had been filling, and there is no honest screen for "I would
+    like to un-know this".
+    """
+    if not gender:
+        return crew_member
+    if crew_member.gender == gender:
+        return crew_member
+    if crew_member.gender:
+        raise CrewGenderConflictError(
+            crew_member.display_name,
+            CrewMember.Gender(crew_member.gender).label,
+        )
+    crew_member.gender = gender
+    crew_member.save(update_fields=("gender", "updated_at"))
+    return crew_member
+
+
 def add_crew_member(
     *,
     partner: PartnerProfile,
@@ -116,16 +151,26 @@ def update_crew_member(
     membership: PartnerCrewMembership,
     skills: Sequence[Skill] | None = None,
     is_supervisor: bool | None = None,
+    gender: str = "",
 ) -> PartnerCrewMembership:
-    """Skills and the supervisor flag, and deliberately not the display name.
+    """Skills, the supervisor flag and gender -- and deliberately not the display name.
 
     The name belongs to the global `CrewMember`, which several agencies may share. One agency
     renaming a person would rename them on every other roster, so it is published read-only rather
     than published editable and then scoped in a way a later caller can forget.
+
+    Gender is on the same global row and is editable anyway, because the two are not the same
+    question. A name is something an agency chose to type and may want to change; gender is a fact
+    about the person that either is on file or is not, and a roster with it missing is a roster
+    that quietly loses gendered work. `set_crew_gender` is what keeps that safe -- it fills a blank
+    and refuses a contradiction, so an agency can add what it knows without overwriting what
+    another agency already knew.
     """
     if is_supervisor is not None and membership.is_supervisor != is_supervisor:
         membership.is_supervisor = is_supervisor
         membership.save(update_fields=("is_supervisor",))
+
+    set_crew_gender(crew_member=membership.crew_member, gender=gender)
 
     if skills is not None:
         wanted = {skill.id: skill for skill in skills}
@@ -177,6 +222,10 @@ class CrewRosterEntry:
     skill_codes: tuple[str, ...]
     documents_verified_at: datetime | None
     added_at: datetime
+    #: `MAN` / `WOMAN` / `OTHER` / `UNDISCLOSED`, or blank when nobody has asked. Blank is the
+    #: state that costs a Partner work: a Customer booking three women cannot be shown a roster
+    #: this worker might be on, so the screen that renders this says so rather than leaving a gap.
+    gender: str
 
 
 def masked_crew_phone(suffix: str) -> str:
@@ -212,6 +261,7 @@ def crew_roster(partner: PartnerProfile) -> list[CrewRosterEntry]:
             skill_codes=tuple(sorted(link.skill.code for link in membership.skills.all())),
             documents_verified_at=membership.documents_verified_at,
             added_at=membership.added_at,
+            gender=membership.crew_member.gender,
         )
         for membership in memberships
     ]

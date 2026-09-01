@@ -1,5 +1,21 @@
 # API Contract Changelog
 
+## 1.54.0 - Recording what a worker is, on a row several agencies share
+
+- `CrewMember` (the roster read) gains **`gender`**: `MAN` / `WOMAN` / `OTHER` / `UNDISCLOSED`, or
+  blank when nobody has recorded it. `CrewMemberCreateRequest` and the crew `PATCH` accept it.
+- **First write wins.** `CrewMember` is one row per person across every agency that has registered
+  them, so this field is shared. A blank accepts, the same value is a no-op, and a contradiction is
+  refused with the new **`m2_crew_gender_conflict`** (409) rather than overwritten -- silently
+  flipping it would change which jobs the *other* agency is dispatched for, without them touching
+  anything. There is no way to clear a recorded value.
+- `display_name` remains read-only for the same underlying reason and a different one: a name is
+  something an agency typed and might want to change, so one agency editing it would rename the
+  person on every other roster. Gender is a fact about the person, so it is editable-once instead
+  of not editable at all.
+- Blank is never male. Every row that existed before 1.53.0 starts blank, and blank, `OTHER` and
+  `UNDISCLOSED` alike fill a headcount and no gendered slot.
+
 ## 1.53.0 - The crew mix a Partner can see, and the roster that has to meet it
 
 - **`CrewMixLine`** is new, and `EnquiryDetail` and the A3 crew offer both gain `crew_mix`: a

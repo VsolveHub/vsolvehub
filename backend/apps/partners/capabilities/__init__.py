@@ -29,6 +29,7 @@ from .crew import (
     crew_roster,
     masked_crew_phone,
     set_crew_availability,
+    set_crew_gender,
     unavailable_crew_membership_ids,
     update_crew_member,
 )
@@ -112,6 +113,7 @@ __all__ = [
     "registration_question_schema",
     "request_capability",
     "set_crew_availability",
+    "set_crew_gender",
     "set_partner_languages",
     "submit_capability_for_review",
     "suspend_partner_a3_capabilities",

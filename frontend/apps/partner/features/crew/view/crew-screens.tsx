@@ -14,6 +14,7 @@ import {
   useAddCrewMember,
   useArchiveCrewMember,
   usePartnerCrew,
+  useUpdateCrewMember,
   type CrewAddResult,
 } from "../queries";
 import { CrewMemberForm } from "./crew-member-form";
@@ -61,11 +62,13 @@ function CrewRosterPanel() {
   const reference = useApplicationReference();
   const add = useAddCrewMember();
   const archive = useArchiveCrewMember();
+  const update = useUpdateCrewMember();
   const toast = useToast();
 
   const [isAdding, setIsAdding] = useState(false);
   const [phone, setPhone] = useState("");
   const [archivingId, setArchivingId] = useState<string | null>(null);
+  const [genderId, setGenderId] = useState<string | null>(null);
 
   const members = roster.data?.members ?? [];
   const view = describeRoster(members);
@@ -116,6 +119,19 @@ function CrewRosterPanel() {
             ? { membershipId: archivingId, message: describeError(archive.error, "mutation").message }
             : null
         }
+        onSetGender={(membershipId, gender) => {
+          setGenderId(membershipId);
+          update.mutate(
+            { membershipId, patch: { gender } },
+            { onSettled: () => setGenderId(null) },
+          );
+        }}
+        settingGenderId={update.isPending ? genderId : null}
+        genderError={
+          update.isError && genderId
+            ? { membershipId: genderId, message: describeError(update.error, "mutation").message }
+            : null
+        }
         onRetry={() => void roster.refetch()}
       />
 
@@ -148,6 +164,7 @@ function CrewRosterPanel() {
           phone_e164: phone,
           skill_codes: [],
           is_supervisor: false,
+          gender: "",
         }).filter((problem) => problem.field === "phone_e164" && phone.trim() !== "")}
         probableDuplicate={duplicateRow}
         pending={add.isPending}
@@ -164,6 +181,7 @@ function CrewRosterPanel() {
               phone_e164: input.phoneE164,
               skill_codes: [...input.skillCodes],
               is_supervisor: input.isSupervisor,
+              gender: input.gender,
             },
             { onSuccess: announce },
           );

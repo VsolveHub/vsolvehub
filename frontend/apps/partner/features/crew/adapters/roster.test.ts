@@ -24,6 +24,7 @@ function member(overrides: Partial<CrewMemberRecord> = {}): CrewMemberRecord {
     is_supervisor: false,
     skill_codes: [],
     documents_verified_at: null,
+    gender: "",
     added_at: "2026-08-01T06:00:00Z",
     ...overrides,
   };
@@ -35,6 +36,7 @@ function input(overrides: Partial<CrewMemberInput> = {}): CrewMemberInput {
     phone_e164: "+919876543210",
     skill_codes: [],
     is_supervisor: false,
+    gender: "",
     ...overrides,
   };
 }
@@ -142,5 +144,40 @@ describe("what the roster publishes", () => {
       describeRoster([member({ documents_verified_at: "2026-08-02T00:00:00Z" })]).active[0]
         ?.documentsVerified,
     ).toBe(true);
+  });
+});
+
+/**
+ * The gap a Partner cannot see coming. A worker with no gender on file fills a headcount and no
+ * gendered slot, so a roster of blanks passes dispatch — which is deliberately forgiving about
+ * unknowns — and is then refused at accept, or at assignment on the day.
+ */
+describe("crew with no gender recorded", () => {
+  it("counts only active members, because an archived one is nobody's shortfall", () => {
+    const view = describeRoster([
+      member({ membership_id: "m-1", gender: "" }),
+      member({ membership_id: "m-2", gender: "WOMAN" }),
+      member({ membership_id: "m-3", gender: "" }),
+      member({ membership_id: "m-4", gender: "", status: "ARCHIVED" }),
+    ]);
+
+    expect(view.genderUnrecordedCount).toBe(2);
+  });
+
+  it("is zero once every active worker is recorded", () => {
+    const view = describeRoster([
+      member({ membership_id: "m-1", gender: "MAN" }),
+      // Recorded, and still fills no gendered slot -- but it is not a question worth
+      // re-asking the Partner, so it is not counted as a gap.
+      member({ membership_id: "m-2", gender: "UNDISCLOSED" }),
+    ]);
+
+    expect(view.genderUnrecordedCount).toBe(0);
+  });
+
+  it("carries the gender onto the row the card renders", () => {
+    const view = describeRoster([member({ membership_id: "m-1", gender: "WOMAN" })]);
+
+    expect(view.active[0]?.gender).toBe("WOMAN");
   });
 });

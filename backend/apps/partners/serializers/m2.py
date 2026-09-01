@@ -16,6 +16,7 @@ from rest_framework import serializers
 from apps.partners.gates import GateNextAction, ProgressiveGate
 from apps.partners.models import (
     CrewAvailabilityException,
+    CrewMember,
     PartnerBusinessProfile,
     PartnerInsuranceDeclaration,
 )
@@ -303,6 +304,12 @@ class CrewMemberSerializer(serializers.Serializer[dict[str, object]]):
     skill_codes = serializers.ListField(child=serializers.CharField(), read_only=True)
     documents_verified_at = serializers.DateTimeField(read_only=True, allow_null=True)
     added_at = serializers.DateTimeField(read_only=True)
+    #: Blank until somebody records it. Blank is the state that costs the Partner work -- a
+    #: Customer booking women cannot be matched with a roster whose genders are unknown at the
+    #: strict gates -- so the roster screen shows the gap rather than hiding it.
+    gender = serializers.ChoiceField(
+        choices=CrewMember.Gender.choices, read_only=True, allow_blank=True
+    )
 
 
 class CrewListSerializer(serializers.Serializer[dict[str, object]]):
@@ -318,6 +325,9 @@ class CrewMemberCreateSerializer(serializers.Serializer[dict[str, object]]):
         default=list,
     )
     is_supervisor = serializers.BooleanField(required=False, default=False)
+    gender = serializers.ChoiceField(
+        choices=CrewMember.Gender.choices, required=False, allow_blank=True, default=""
+    )
 
 
 class CrewMemberUpdateSerializer(serializers.Serializer[dict[str, object]]):
@@ -333,3 +343,8 @@ class CrewMemberUpdateSerializer(serializers.Serializer[dict[str, object]]):
         required=False,
     )
     is_supervisor = serializers.BooleanField(required=False)
+    #: Fills a blank; a value contradicting another agency's is refused, never overwritten
+    #: (`m2_crew_gender_conflict`). Omitting it changes nothing -- there is no way to clear one.
+    gender = serializers.ChoiceField(
+        choices=CrewMember.Gender.choices, required=False, allow_blank=True, default=""
+    )

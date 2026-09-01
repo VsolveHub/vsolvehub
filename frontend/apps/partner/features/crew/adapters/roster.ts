@@ -172,6 +172,14 @@ export interface CrewRow {
   /** Operations checked their documents. Never inferred from being on the roster. */
   readonly documentsVerified: boolean;
   readonly isArchived: boolean;
+  /**
+   * `MAN` / `WOMAN` / `OTHER` / `UNDISCLOSED`, or `""` when nobody has recorded it.
+   *
+   * Blank is the state that costs the Partner work rather than a cosmetic gap: a Customer who
+   * books three women is matched against recorded genders at accept and at assignment, so a
+   * roster of blanks passes dispatch and then fails at the gate. The roster screen says so.
+   */
+  readonly gender: CrewMemberRecord["gender"];
 }
 
 export interface RosterView {
@@ -183,6 +191,14 @@ export interface RosterView {
   /** No supervisor means nobody can file "n of m present" when a shift runs. */
   readonly canReportAttendance: boolean;
   readonly isEmpty: boolean;
+  /**
+   * Active crew with no gender on file.
+   *
+   * Surfaced as a count because it is the one roster fact with a consequence a Partner cannot see
+   * coming: these people fill a headcount and no gendered slot, so a job asking for women is
+   * refused at accept however many of them are on the list.
+   */
+  readonly genderUnrecordedCount: number;
 }
 
 function toRow(member: CrewMemberRecord): CrewRow {
@@ -194,6 +210,7 @@ function toRow(member: CrewMemberRecord): CrewRow {
     skillCodes: member.skill_codes,
     documentsVerified: member.documents_verified_at !== null,
     isArchived: readCrewStatus(member.status) === "ARCHIVED",
+    gender: member.gender,
   };
 }
 
@@ -205,5 +222,7 @@ export function describeRoster(members: readonly CrewMemberRecord[]): RosterView
     supervisorCount: supervisors(members).length,
     canReportAttendance: canReportAttendance(members),
     isEmpty: members.length === 0,
+    genderUnrecordedCount: activeMembers(members).filter((member) => member.gender === "")
+      .length,
   };
 }

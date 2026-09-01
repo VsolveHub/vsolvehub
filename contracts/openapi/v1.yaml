@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.53.0
+  version: 1.54.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -9943,9 +9943,14 @@ paths:
   /api/v1/partner/crew/{membership_id}/:
     patch:
       operationId: m2_partner_crew_update
-      description: 'Skills and the supervisor flag. `display_name` is **not** editable:
-        it belongs to the global crew member, and one agency renaming a person would
-        rename them on every other roster.'
+      description: 'Skills, the supervisor flag and `gender`. `display_name` is **not**
+        editable: it belongs to the global crew member, and one agency renaming a
+        person would rename them on every other roster. `gender` is on that same global
+        row and is editable anyway, because it is a fact about the person rather than
+        something an agency typed. It fills a blank; a value contradicting one another
+        agency already recorded is **refused**, never overwritten -- silently flipping
+        it would change which jobs that other agency is dispatched for. There is no
+        way to clear one.'
       parameters:
       - in: path
         name: membership_id
@@ -9993,6 +9998,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_crew_gender_conflict` when another agency has this person
+            recorded as a different gender.'
   /api/v1/partner/crew/{membership_id}/archive/:
     post:
       operationId: m2_partner_crew_archive
@@ -17203,10 +17215,16 @@ components:
           type: string
           format: date-time
           readOnly: true
+        gender:
+          readOnly: true
+          oneOf:
+          - $ref: '#/components/schemas/GenderEnum'
+          - $ref: '#/components/schemas/BlankEnum'
       required:
       - added_at
       - display_name
       - documents_verified_at
+      - gender
       - is_supervisor
       - membership_id
       - phone_masked
@@ -17234,6 +17252,11 @@ components:
         is_supervisor:
           type: boolean
           default: false
+        gender:
+          default: ''
+          oneOf:
+          - $ref: '#/components/schemas/GenderEnum'
+          - $ref: '#/components/schemas/BlankEnum'
       required:
       - display_name
       - phone_e164
@@ -20013,6 +20036,18 @@ components:
         * `SUBMIT_APPLICATION` - Submit the Partner application
         * `ADD_PAYOUT_ACCOUNT` - Add a payout account
         * `ADD_CREW_MEMBER` - Add a crew member
+    GenderEnum:
+      enum:
+      - MAN
+      - WOMAN
+      - OTHER
+      - UNDISCLOSED
+      type: string
+      description: |-
+        * `MAN` - Man
+        * `WOMAN` - Woman
+        * `OTHER` - Other
+        * `UNDISCLOSED` - Prefers not to say
     GroupAddressChangeRequestRequest:
       type: object
       properties:
@@ -23855,6 +23890,11 @@ components:
             pattern: ^[-a-zA-Z0-9_]+$
         is_supervisor:
           type: boolean
+        gender:
+          default: ''
+          oneOf:
+          - $ref: '#/components/schemas/GenderEnum'
+          - $ref: '#/components/schemas/BlankEnum'
     PatchedCustomerProfileUpdateRequest:
       type: object
       description: The customer-owned personal fields that may change independently

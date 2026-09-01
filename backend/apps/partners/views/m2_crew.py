@@ -127,6 +127,7 @@ class PartnerCrewCollectionView(ThrottledWriteMixin, APIView):
                     phone_e164=values["phone_e164"],
                     skills=skills,
                     is_supervisor=values.get("is_supervisor", False),
+                    gender=values.get("gender", ""),
                 )
             except PartnerDomainError as exc:
                 _raise_api_error(exc)
@@ -157,15 +158,25 @@ class PartnerCrewDetailView(APIView):
         operation_id="m2_partner_crew_update",
         request=CrewMemberUpdateSerializer,
         description=(
-            "Skills and the supervisor flag. `display_name` is **not** editable: it belongs to the "
-            "global crew member, and one agency renaming a person would rename them on every other "
-            "roster."
+            "Skills, the supervisor flag and `gender`. `display_name` is **not** editable: it "
+            "belongs to the global crew member, and one agency renaming a person would rename "
+            "them on every other roster. "
+            "`gender` is on that same global row and is editable anyway, because it is a fact "
+            "about the person rather than something an agency typed. It fills a blank; a value "
+            "contradicting one another agency already recorded is **refused**, never overwritten "
+            "-- silently flipping it would change which jobs that other agency is dispatched for. "
+            "There is no way to clear one."
         ),
         responses={
             200: CrewMemberSerializer,
             400: ApiErrorSerializer,
             403: ApiErrorSerializer,
             404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_crew_gender_conflict` when another agency has this person "
+                "recorded as a different gender.",
+            ),
         },
     )
     def patch(self, request: Request, membership_id: uuid.UUID) -> Response:
@@ -185,6 +196,7 @@ class PartnerCrewDetailView(APIView):
                 membership=membership,
                 skills=skills,
                 is_supervisor=values.get("is_supervisor"),
+                gender=values.get("gender", ""),
             )
         except PartnerDomainError as exc:
             _raise_api_error(exc)
