@@ -1,7 +1,7 @@
 # M3 — Listings, Marketplace & Money Platform
 
 **Status:** Planning — no implementation started  
-**Commercial reference:** [`milestones.md`](../../milestones.md) Milestone 3 (₹75,000)  
+**Commercial reference:** [`milestones.md`](../../milestones.md) Milestone 3  
 **Effective date:** 2026-09-01
 
 Milestone 3 completes the **web platform on staging**: the last three service categories, live

@@ -11,7 +11,7 @@
 | **Project Start Date**     | 10 June 2026                                     |
 | **Target Completion Date** | 10 October 2026                                  |
 | **Total Project Duration** | ~4 Months                                        |
-| **Total Project Cost**     | ₹6,00,000/- (Rupees Six Lakhs Only)              |
+| **Total Project Cost**     | [confidential — see commercial agreement]        |
 
 
 ---
@@ -21,16 +21,16 @@
 
 | Description                                        | Amount          | Status                    |
 | -------------------------------------------------- | --------------- | ------------------------- |
-| Advance (Already Paid)                             | ₹1,00,000       | ✅ Paid                    |
-| **Milestone 0 — Prototype (Demoed & Approved)**    | ₹1,00,000       | ✅ Paid                    |
-| **Milestone 1 — Production Core (Backend + Website)** | ₹1,00,000    | 🔵 **In Progress**        |
-| **Milestone 2 — Workforce & Project Services (Web)**  | ₹75,000      | 🔵 **In Progress**        |
-| Milestone 3 — Full Implementation (All Flows + Payments + Wallet) | ₹75,000         | Upcoming                  |
-| Milestone 4 — Apps + Rapido + AI Chatbot + **Single Go-Live** | ₹1,00,000       | Upcoming                  |
-| Final Source Code & Project Handover               | ₹50,000         | Upcoming                  |
-| **Total Project Cost**                             | **₹6,00,000/-** |                           |
+| Advance (Already Paid)                             | [confidential]  | ✅ Paid                    |
+| **Milestone 0 — Prototype (Demoed & Approved)**    | [confidential]  | ✅ Paid                    |
+| **Milestone 1 — Production Core (Backend + Website)** | [confidential] | 🔵 **In Progress**        |
+| **Milestone 2 — Workforce & Project Services (Web)**  | [confidential] | 🔵 **In Progress**        |
+| Milestone 3 — Full Implementation (All Flows + Payments + Wallet) | [confidential]  | Upcoming                  |
+| Milestone 4 — Apps + Rapido + AI Chatbot + **Single Go-Live** | [confidential]  | Upcoming                  |
+| Final Source Code & Project Handover               | [confidential]  | Upcoming                  |
+| **Total Project Cost**                             | [confidential]  |                           |
 
-**Received to date: ₹2,00,000** (Advance + M0 Prototype) · **Balance: ₹4,00,000**
+**Received to date: [confidential]** (Advance + M0 Prototype) · **Balance: [confidential]**
 
 > **Current status:** Milestones 1 and 2 are running **in parallel**. Both are payable on milestone acceptance.
 
@@ -50,7 +50,7 @@
 ### Prototype — Core Platform Demonstration
 
 **Timeline:** Days 1–15 (Completed)
-**Payment:** ₹1,00,000 — *✅ Paid*
+**Payment:** [confidential — see commercial agreement] — *✅ Paid*
 
 **Delivered & Signed Off:**
 
@@ -74,7 +74,7 @@
 ### Production Core — Backend + Website (Fixed-Price Services)
 
 **Timeline:** 1 July 2026 → 31 July 2026 — *🔵 In Progress*
-**Payment:** ₹1,00,000 — *Due on milestone acceptance*
+**Payment:** [confidential — see commercial agreement] — *Due on milestone acceptance*
 
 > First production build. **Website only — no app, not live.** This is the foundation every later category reuses. The main work is building the **booking engine** for each service.
 
@@ -107,7 +107,7 @@
 ### Workforce & Project Services — Web Build
 
 **Timeline:** 1 August 2026 → 15 August 2026 — *🔵 In Progress (running in parallel with M1)*
-**Payment:** ₹75,000 — *Due on milestone acceptance*
+**Payment:** [confidential — see commercial agreement] — *Due on milestone acceptance*
 
 > Same backend/web foundation extended to crew & quote-based categories. **Still build phase — website only, not live.** The main work is the **booking engine** for each service.
 
@@ -132,7 +132,7 @@
 ### Listings & Marketplace — Full Implementation (All Flows + Payments + Wallet)
 
 **Timeline:** Aug 17th → 17 September 2026  
-**Payment:** ₹75,000
+**Payment:** [confidential — see commercial agreement]
 
 > Final web category group. By the end of this milestone the **entire web platform is fully implemented on staging** — every booking flow, all payments, OTP, wallet, V Coins and referral — but **not yet public.** The single go-live happens in Milestone 4.
 
@@ -170,7 +170,7 @@ By the close of Milestone 3 the **entire web platform is complete and integrated
 ### Apps + Rapido + AI Chatbot
 
 **Timeline:** 20th September 2026 → 10 October 2026  
-**Payment:** ₹1,00,000
+**Payment:** [confidential — see commercial agreement]
 
 > The mobile + real-time + AI milestone. **Only these four deliverables:**
 
@@ -203,7 +203,7 @@ If unplanned delays occur and we run out of time, we will go live with **all ser
 ## FINAL HANDOVER
 
 **Timeline:** 15 October 2026  
-**Payment:** ₹50,000
+**Payment:** [confidential — see commercial agreement]
 
 **Final Deliverables — the entire codebase & assets:**
 
@@ -252,13 +252,13 @@ Successfully completed only after: all milestones complete · all agreed feature
 
 | Stage        | Window    | What's Delivered                                                                                              | Live?       | Payment       |
 | ------------ | --------- | ------------------------------------------------------------------------------------------------------------- | ----------- | ------------- |
-| **Advance**  | Paid      | Kickoff                                                                                                       | —           | ₹1,00,000 ✅   |
-| **M0**       | Days 1–15 | Prototype (approved)                                                                                          | Demo only   | ₹1,00,000 ✅   |
-| **M1**       | Jul 1–31 🔵 In Progress | Backend + DB + APIs + Website + Booking Engines (Tech/Beauty/Home/Pet)                          | ❌ Not live  | ₹1,00,000     |
-| **M2**       | Aug 1–15 🔵 In Progress | Booking Engines (Construction/Manpower/Event) — *parallel with M1*                              | ❌ Not live  | ₹75,000       |
-| **M3**       | Aug 17–Sep 17 | All booking flows + Razorpay + OTP + Wallet/V Coins/Referral + Admin (Rentals/Stay/Jobs) — fully built on staging | ❌ Not live  | ₹75,000       |
-| **M4**       | Sep 20–Oct 10 | Customer App + Partner App + Rapido + AI Chatbot **— single go-live, all 11 live at once**                | ✅ All live  | ₹1,00,000     |
-| **Handover** | Oct 15    | Entire codebase & credentials                                                                                 | —           | ₹50,000       |
-| **Total**    |           |                                                                                                               |             | **₹6,00,000** |
+| **Advance**  | Paid      | Kickoff                                                                                                       | —           | [confidential] ✅ |
+| **M0**       | Days 1–15 | Prototype (approved)                                                                                          | Demo only   | [confidential] ✅ |
+| **M1**       | Jul 1–31 🔵 In Progress | Backend + DB + APIs + Website + Booking Engines (Tech/Beauty/Home/Pet)                          | ❌ Not live  | [confidential] |
+| **M2**       | Aug 1–15 🔵 In Progress | Booking Engines (Construction/Manpower/Event) — *parallel with M1*                              | ❌ Not live  | [confidential] |
+| **M3**       | Aug 17–Sep 17 | All booking flows + Razorpay + OTP + Wallet/V Coins/Referral + Admin (Rentals/Stay/Jobs) — fully built on staging | ❌ Not live  | [confidential] |
+| **M4**       | Sep 20–Oct 10 | Customer App + Partner App + Rapido + AI Chatbot **— single go-live, all 11 live at once**                | ✅ All live  | [confidential] |
+| **Handover** | Oct 15    | Entire codebase & credentials                                                                                 | —           | [confidential] |
+| **Total**    |           |                                                                                                               |             | [confidential] |
 
 
