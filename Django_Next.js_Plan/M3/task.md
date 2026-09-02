@@ -2,7 +2,7 @@
 
 **Scope:** Milestone 3 — Listings & Marketplace + full web money platform  
 **Status:** **Planning only** — no phase started  
-**Commercial payment:** ₹75,000 on acceptance (`milestones.md`)
+**Commercial terms:** see `milestones.md`
 
 **Start here for Phase C detail:** [01-wallet-vcoins-referral.md](01-wallet-vcoins-referral.md)
 
