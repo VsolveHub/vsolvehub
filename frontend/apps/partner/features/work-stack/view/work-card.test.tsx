@@ -94,3 +94,31 @@ describe("WorkCard — a project enquiry", () => {
     expect(chip.className).toContain("bg-signal-50");
   });
 });
+
+describe("WorkCard — a completed direct-paid crew job", () => {
+  it("states that the customer paid directly instead of promising a Vsolve payout", () => {
+    const item: WorkItem = {
+      kind: "engagement",
+      key: "engagement:g1",
+      href: "/work/jobs/g1",
+      amountPaise: 500_000,
+      amountLabel: "Collected directly",
+      urgency: "settled",
+      respondsBy: null,
+      whenIso: "2026-09-02T12:17:43Z",
+      whenIsDay: true,
+      durationMinutes: null,
+      areaLabel: null,
+      title: "Crew booking",
+      stateLabel: "Completed",
+      accessibleName: "Crew booking, Completed",
+    };
+
+    render(<WorkCard item={item} />);
+
+    expect(screen.getByText("Crew booking")).toBeInTheDocument();
+    expect(screen.getByText("Paid directly by customer")).toBeInTheDocument();
+    expect(screen.queryByText("Held until payout")).not.toBeInTheDocument();
+    expect(screen.getByText(/5,000/)).toBeInTheDocument();
+  });
+});

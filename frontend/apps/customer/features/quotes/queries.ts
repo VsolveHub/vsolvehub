@@ -167,15 +167,23 @@ export interface RequestRevisionInput {
   reasonCode: RevisionRequestReasonCode;
   excludedItems: readonly string[];
   note: string;
+  /**
+   * What the Customer hopes the vendor can move, in basis points -- 5% is 500.
+   * Non-null only with `reasonCode: "PRICE"`; the server refuses a figure on
+   * any other reason, and refuses a price ask without one.
+   */
+  requestedDiscountBps: number | null;
 }
 
 /**
  * Asks the professional for a different estimate, with the reason attached.
  *
- * **Carries no price and changes no price.** Only a vendor states a number;
- * they answer by superseding the estimate, which lands under the entitlement
- * already paid for. The server keeps one open request per estimate and
- * re-reads it on a second press, so this needs no override path.
+ * **A price ask states what the Customer hopes to pay, never what the work
+ * costs.** `requestedDiscountBps` changes no total and obliges nobody: the
+ * vendor answers by superseding the estimate, which lands under the
+ * entitlement already paid for, and the estimate as sent stays live and
+ * selectable the whole time. The server keeps one open request per estimate
+ * and re-reads it on a second press, so this needs no override path.
  */
 export function useRequestRevision() {
   const queryClient = useQueryClient();
@@ -190,7 +198,10 @@ export function useRequestRevision() {
               path: { requirement_id: input.requirementId, proposal_id: input.proposalId },
               header: {
                 "Idempotency-Key": getStableIdempotencyKey(
-                  `m2-quote-revision:${input.proposalId}:${input.reasonCode}`,
+                  // The figure is in the key: asking for 3% and asking for 5% are
+                  // different requests, and a shared key would replay the first
+                  // answer at the second ask.
+                  `m2-quote-revision:${input.proposalId}:${input.reasonCode}:${input.requestedDiscountBps ?? "none"}`,
                 ),
               },
             },
@@ -198,6 +209,7 @@ export function useRequestRevision() {
               reason_code: input.reasonCode,
               excluded_items: [...input.excludedItems],
               note: input.note,
+              requested_discount_bps: input.requestedDiscountBps,
             },
           },
         ),

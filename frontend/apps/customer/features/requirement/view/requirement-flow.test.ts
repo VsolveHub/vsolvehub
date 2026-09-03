@@ -129,6 +129,7 @@ describe("requirement submission preparation", () => {
     const slotGrid: Schemas["VisitSlotGrid"] = {
       server_now: "2026-08-25T10:00:00Z",
       visit_duration_minutes: 120,
+  turnaround_minutes: 20,
       availability_is_preliminary: true,
       timezone: "Asia/Kolkata",
       days: [
@@ -173,6 +174,7 @@ describe("requirement submission preparation", () => {
     const slotGrid: Schemas["VisitSlotGrid"] = {
       server_now: "2026-08-25T10:00:00Z",
       visit_duration_minutes: 120,
+  turnaround_minutes: 20,
       availability_is_preliminary: true,
       timezone: "Asia/Kolkata",
       days: [],

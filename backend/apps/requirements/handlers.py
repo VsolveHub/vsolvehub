@@ -140,3 +140,61 @@ def _register_notification_consumers() -> None:
 
 
 _register_notification_consumers()
+
+
+#: Events that are written down and consumed by nobody, on purpose.
+#:
+#: `dispatch_outbox_event` treats an unregistered event type as a code defect, and rightly:
+#: it spends the delivery attempt, marks the event `FAILED` and raises, so an undeployed
+#: consumer is loud instead of silent. The cost of that correctness is that an event emitted
+#: purely as a record — because the fact belongs in the outbox for replay, audit and future
+#: consumers — dead-letters on every single emission, burning nine Celery attempts and filling
+#: the worker log with tracebacks that describe no fault. Every entry below was doing exactly
+#: that.
+#:
+#: Registering them here is the difference between "nobody consumes this" and "nobody has
+#: written the consumer yet", which is the distinction the raise exists to make and could not
+#: make while both looked identical. A new event type still fails loudly until it appears in
+#: this set or gets a real handler.
+_RECORDED_ONLY = frozenset(
+    {
+        # Operations approved a pricing policy. The decision is already on the policy row with
+        # its approver and timestamp; the event exists so a future consumer can replay it.
+        "m2.commercial_policy.activated",
+        # An operator corrected or withdrew a crew member's paperwork or recorded gender. The
+        # roster screens read the record directly, and the audit trail is the transition log.
+        "m2.crew.documents_verified",
+        "m2.crew.verification_removed",
+        "m2.crew.gender_corrected",
+        # A fixed-visit slot reached its terminal matching state. All three are already visible
+        # where they matter: `held`/`booked` are the answer the accepting Partner just gave, and
+        # `exhausted` sets `NO_PROFESSIONAL_FOUND`, which the Customer's request page renders
+        # alongside the button that picks another time.
+        "m2.fixed_visit_offer.held",
+        "m2.fixed_visit_offer.booked",
+        "m2.fixed_visit_offer.exhausted",
+        # ---- Recorded only for now, but the emitting code means these to reach a person ----
+        #
+        # `sweep_unproven_day_settlements` says it is "paging" Operations about a one-sided
+        # settlement claim, and `request_proposal_revision`'s own comment says a second tap
+        # avoids "sending the vendor a duplicate" — of a notice that is not sent at all,
+        # because neither event has a route in `notifications.NOTIFICATION_ROUTES`. Both want a
+        # recipient and a template, which is a product decision rather than a defect fix; they
+        # are named apart here so that decision is not lost among the ones that never needed one.
+        "m2.shift.settlement_unproven",
+        "m2.proposal.revision_requested",
+    }
+)
+
+
+def _record_only(_event: OutboxEvent) -> None:
+    """Settle an event whose only job was to exist. See `_RECORDED_ONLY`."""
+    return None
+
+
+def _register_recorded_only_events() -> None:
+    for event_type in _RECORDED_ONLY:
+        register_outbox_handler(event_type=event_type)(_record_only)
+
+
+_register_recorded_only_events()

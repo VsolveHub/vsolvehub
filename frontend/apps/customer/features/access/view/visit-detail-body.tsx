@@ -230,6 +230,11 @@ const STATE_BADGE: Record<
   { label: string; tone: "neutral" | "info" | "success" | "warning" | "danger" }
 > = {
   awaiting: { label: "Waiting for a professional", tone: "neutral" },
+  // Distinct from `awaiting` on purpose. "Waiting" says the search is running;
+  // these two say it finished, and collapsing them is what left a settled dead
+  // end wearing a live spinner.
+  unmatched: { label: "No professional found", tone: "warning" },
+  dropped: { label: "Dropped", tone: "neutral" },
   held: { label: "Holding a time for you", tone: "warning" },
   scheduled: { label: "Confirmed", tone: "success" },
   in_progress: { label: "On site", tone: "info" },

@@ -16,6 +16,7 @@ from rest_framework import serializers
 from apps.partners.gates import GateNextAction, ProgressiveGate
 from apps.partners.models import (
     CrewAvailabilityException,
+    CrewDocument,
     CrewMember,
     PartnerBusinessProfile,
     PartnerInsuranceDeclaration,
@@ -284,6 +285,53 @@ class ProgressiveGateListSerializer(serializers.Serializer[dict[str, object]]):
     server_now = serializers.DateTimeField(read_only=True)
 
 
+class CrewDocumentStateSerializer(serializers.Serializer[dict[str, object]]):
+    """Where one kind of identity document stands, as the Partner is allowed to see it.
+
+    No reviewer name and no link to the file. A Partner is entitled to know whether their worker
+    is cleared and, on a rejection, why; who inside Operations decided is not theirs, and the
+    stored object is reachable only through a reviewer's short-lived signed link.
+    """
+
+    kind = serializers.ChoiceField(choices=CrewDocument.Kind.choices, read_only=True)
+    status = serializers.ChoiceField(choices=CrewDocument.Status.choices, read_only=True)
+    #: Populated on a rejection only. An approval needs no reason and inventing one would be noise
+    #: on a screen whose whole job is to show what still needs doing.
+    reason = serializers.CharField(read_only=True, allow_blank=True)
+    updated_at = serializers.DateTimeField(read_only=True)
+
+
+class CrewDocumentUploadRequestSerializer(serializers.Serializer[dict[str, object]]):
+    """What the Partner declares before a byte is sent.
+
+    Declared up front so the stored object can be checked against it afterwards. A client that
+    says "a 2 MB PDF with this digest" and uploads something else fails at `submit`, not at a
+    reviewer's desk.
+    """
+
+    kind = serializers.ChoiceField(choices=CrewDocument.Kind.choices)
+    content_type = serializers.CharField(max_length=120)
+    size_bytes = serializers.IntegerField(min_value=1)
+    sha256 = serializers.RegexField(r"^[0-9a-f]{64}$", max_length=64)
+
+
+class CrewDocumentUploadGrantSerializer(serializers.Serializer[dict[str, object]]):
+    """Where to PUT the file, and the row that is waiting for it."""
+
+    document_id = serializers.UUIDField(read_only=True)
+    kind = serializers.ChoiceField(choices=CrewDocument.Kind.choices, read_only=True)
+    upload_url = serializers.CharField(read_only=True)
+    upload_token = serializers.CharField(read_only=True)
+    expires_at = serializers.DateTimeField(read_only=True)
+    #: The bucket refuses anything larger, so the app should refuse it first -- a Partner on a
+    #: metered connection should not upload ten megabytes to be told no at the end.
+    max_bytes = serializers.IntegerField(read_only=True)
+
+
+class CrewDocumentSubmitSerializer(serializers.Serializer[dict[str, object]]):
+    document_id = serializers.UUIDField()
+
+
 class CrewMemberSerializer(serializers.Serializer[dict[str, object]]):
     """One worker on this Partner's roster.
 
@@ -310,6 +358,7 @@ class CrewMemberSerializer(serializers.Serializer[dict[str, object]]):
     gender = serializers.ChoiceField(
         choices=CrewMember.Gender.choices, read_only=True, allow_blank=True
     )
+    documents = CrewDocumentStateSerializer(many=True, read_only=True)
 
 
 class CrewListSerializer(serializers.Serializer[dict[str, object]]):
@@ -331,13 +380,16 @@ class CrewMemberCreateSerializer(serializers.Serializer[dict[str, object]]):
 
 
 class CrewMemberUpdateSerializer(serializers.Serializer[dict[str, object]]):
-    """Skills and the supervisor flag only.
+    """The name this agency uses, their skills, the supervisor flag, and gender.
 
-    `display_name` is **not** editable here. It belongs to the global `CrewMember`, which several
-    agencies may share, so one agency renaming a person would rename them on every other roster.
-    Read-only with the reason stated beats editable-and-scoped, which a later caller can forget.
+    `display_name` writes `PartnerCrewMembership.display_name` -- a per-roster label -- and never
+    the global `CrewMember`. That is what makes it safe to edit: the shared row keeps whatever the
+    first agency registered, and one agency correcting a typo cannot rename the person on another
+    agency's screen. Blank is allowed and means "use the global name", which is where every row
+    starts.
     """
 
+    display_name = serializers.CharField(max_length=120, required=False, allow_blank=True)
     skill_codes = serializers.ListField(
         child=serializers.SlugField(max_length=100),
         required=False,

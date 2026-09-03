@@ -18,6 +18,7 @@ import { TimeSheet } from "@/features/booking/view/parts/time-sheet";
 import type { RequirementQuestionView } from "@/features/requirement/adapters";
 import { formatReportingTime, reportingTimeOptions } from "../../model/reporting-time";
 import { NUMBER_FLOOR } from "../../model/size";
+import { MultiChoiceChips } from "../multi-choice-chips";
 
 /**
  * A3 · 2 — Plan the crew.
@@ -95,6 +96,8 @@ export interface JobFormScreenProps {
   onChangeWork?: () => void;
   /** What's included / what's not, rendered when this screen is the flow's first. */
   aboutPanel?: ReactNode;
+  /** Product guidance that belongs after the catalogue questions and before scheduling. */
+  afterQuestions?: ReactNode;
 }
 
 /** The day, in the customer's own locale. Built from parts, never from `new Date(iso)`. */
@@ -142,6 +145,7 @@ export function JobFormScreen({
   selectedWorkEyebrow = "Work selected",
   onChangeWork,
   aboutPanel,
+  afterQuestions,
 }: JobFormScreenProps) {
   const [dateOpen, setDateOpen] = useState(false);
   const [timeOpen, setTimeOpen] = useState(false);
@@ -249,6 +253,12 @@ export function JobFormScreen({
               }
               onChange={(value) => onAnswer(question.code, value === "yes")}
             />
+          ) : question.kind === "multi" ? (
+            <MultiChoiceChips
+              question={question}
+              value={answers[question.code]}
+              onAnswer={(value) => onAnswer(question.code, value)}
+            />
           ) : (
             <Field label={question.label} description={question.help}>
               <Input
@@ -293,6 +303,8 @@ export function JobFormScreen({
             .join(" ")}
         </p>
       ) : null}
+
+      {afterQuestions}
 
       <div className="flex flex-col gap-2.5">
         {onReportingTime === undefined ? (

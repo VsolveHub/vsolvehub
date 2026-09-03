@@ -22,6 +22,8 @@ import {
 } from "@/features/workspace/registry";
 import { usePartnerWorkspaceGrants } from "@/features/workspace/queries";
 
+import { PartnerHeaderTitleProvider } from "./partner-header-title";
+
 export const PARTNER_ROLE = "partner";
 
 export type PartnerChromeMode = "full" | "focused" | "onboarding";
@@ -121,7 +123,13 @@ function NoPartnerAccess({ onSignOut }: { onSignOut: () => void }) {
   );
 }
 
-function FocusedHeader({ pathname }: { pathname: string }) {
+function FocusedHeader({
+  pathname,
+  titleOverride,
+}: {
+  pathname: string;
+  titleOverride: string | null;
+}) {
   const router = useRouter();
 
   let title = "Details";
@@ -138,6 +146,7 @@ function FocusedHeader({ pathname }: { pathname: string }) {
   } else if (pathname.startsWith("/account") || pathname.startsWith("/me")) {
     title = "Account";
   }
+  if (titleOverride !== null) title = titleOverride;
 
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-surface">
@@ -353,7 +362,9 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
   const isDarkHero = pathname === "/home" || pathname === "/work";
 
   return (
-    <div className="flex min-h-screen flex-col items-center bg-background">
+    <PartnerHeaderTitleProvider>
+      {(headerTitle) => (
+        <div className="flex min-h-screen flex-col items-center bg-background">
       {/*
         DESKTOP (`lg:` and up) ONLY — every class below `lg:` is the phone
         layout and is deliberately untouched.
@@ -421,7 +432,7 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
             </header>
           </div>
         ) : chromeMode === "focused" ? (
-          <FocusedHeader pathname={pathname} />
+          <FocusedHeader pathname={pathname} titleOverride={headerTitle} />
         ) : null}
 
         {/*
@@ -461,7 +472,9 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
         */}
         {isApprovedPartner ? <LiveOfferSheet /> : null}
       </div>
-    </div>
+        </div>
+      )}
+    </PartnerHeaderTitleProvider>
   );
 }
 

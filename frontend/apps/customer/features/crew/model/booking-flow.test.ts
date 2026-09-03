@@ -4,8 +4,10 @@ import type { RequirementQuestionView } from "@/features/requirement/adapters";
 import {
   crewDetailQuestions,
   crewFlowShape,
+  fixedTeamGuestLimit,
   hiddenCrewQuestionCodes,
   initialCrewBookingStep,
+  isFixedTeamCrewFlow,
   resumeCrewBookingStep,
   selectedWorkLabel,
   workTypeQuestion,
@@ -54,6 +56,29 @@ const eventQuestions: readonly RequirementQuestionView[] = [
   },
   { code: "waiter_count", label: "Waiters", kind: "number", required: false, minimum: 0 },
   { code: "worker_count", label: "Staff", kind: "number", required: true, minimum: 1 },
+  { code: "duration_days", label: "Days", kind: "number", required: true, minimum: 1 },
+];
+
+const fixedTeamQuestions: readonly RequirementQuestionView[] = [
+  {
+    code: "event_type",
+    label: "What's the occasion?",
+    kind: "choice",
+    required: true,
+    options: [{ value: "housewarming", label: "Housewarming" }],
+  },
+  {
+    code: "guest_band",
+    label: "How many guests?",
+    kind: "choice",
+    required: true,
+    options: [
+      { value: "under-25", label: "Under 25" },
+      { value: "25-50", label: "25 to 50" },
+      { value: "50-75", label: "50 to 75" },
+    ],
+  },
+  { code: "worker_count", label: "Cook teams", kind: "number", required: true, minimum: 1 },
   { code: "duration_days", label: "Days", kind: "number", required: true, minimum: 1 },
 ];
 
@@ -108,5 +133,15 @@ describe("crew booking flow", () => {
       "work_description",
     ]);
     expect(hiddenCrewQuestionCodes({ work_type: "other" })).toEqual([]);
+  });
+
+  it("keeps a guest-sized team service plain while hiding its internal team count", () => {
+    expect(crewFlowShape(fixedTeamQuestions)).toBe("plain");
+    expect(isFixedTeamCrewFlow(fixedTeamQuestions)).toBe(true);
+    expect(hiddenCrewQuestionCodes({}, fixedTeamQuestions)).toEqual([
+      "work_description",
+      "worker_count",
+    ]);
+    expect(fixedTeamGuestLimit(fixedTeamQuestions)).toBe(75);
   });
 });

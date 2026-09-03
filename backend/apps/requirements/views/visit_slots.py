@@ -190,6 +190,78 @@ class CustomerRequirementVisitSlotReplaceView(ThrottledWriteMixin, APIView):
         return Response(result.body, status=result.status_code)
 
 
+class CustomerRequirementVisitSlotDropView(ThrottledWriteMixin, APIView):
+    """Do without one visit nobody could be found for, and stop paying for it.
+
+    The other exit from an exhausted slot. `.../replace/` says "try another time"; this says "one
+    visit is enough" — and until both existed, a Customer whose second visit had no professional
+    within reach was left on a spinner with no way out and a checkout still quoting two.
+    """
+
+    permission_classes = (IsAuthenticated,)
+    throttle_scope = "m2_quote_action"
+
+    @extend_schema(
+        tags=["M2 - Visit slots"],
+        operation_id="m2_customer_visit_slot_drop",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=None,
+        description=(
+            "Drop one visit slot the matching engine settled as `no_professional_found`, so the "
+            "plan stops charging for it. The share is refunded through the ordinary settlement "
+            "path: money already taken comes back in full, including the platform's part, and an "
+            "uncharged plan simply quotes less at checkout rather than taking money in order to "
+            "return it. Idempotent — dropping twice re-reads the dropped slot. Refused on a slot "
+            "that is still searching, already held or booked, and on the last remaining slot of a "
+            "plan (cancel the request instead)."
+        ),
+        responses={
+            200: CustomerRequestedVisitSlotsSerializer,
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`slot_unavailable` when the slot is not an exhausted one, or is the "
+                "only one left on the plan.",
+            ),
+        },
+    )
+    def post(
+        self,
+        request: Request,
+        requirement_id: uuid.UUID,
+        share_id: uuid.UUID,
+    ) -> Response:
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                share = visit_slots.drop_unmatched_visit_slot(
+                    requirement_id=requirement_id,
+                    share_id=share_id,
+                    actor=actor,
+                )
+                slots = share.plan.shares.order_by("position")
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            body = CustomerRequestedVisitSlotsSerializer(
+                {"slots": slots, "server_now": timezone.now()}
+            ).data
+            return status.HTTP_200_OK, cast(dict[str, object], body)
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.customer_visit_slots.drop",
+            key=key,
+            request_payload={
+                "requirement_id": str(requirement_id),
+                "share_id": str(share_id),
+            },
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
 class PartnerEnquiryVisitSlotView(ThrottledWriteMixin, APIView):
     """Candidate visit starts for this vendor, and the command that books one.
 

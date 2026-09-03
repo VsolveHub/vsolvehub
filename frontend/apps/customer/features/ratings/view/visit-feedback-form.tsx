@@ -1,15 +1,20 @@
 "use client";
 
-import { describeError } from "@vsolve/query";
-import { Button, cn, Dialog, Textarea } from "@vsolve/ui";
-import { Shield } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import type { FulfilmentUnit } from "@/features/bookings/queries";
 
-import { useRatings, useSubmitRating } from "../queries";
+import { ServiceFeedbackDialog } from "./service-feedback-dialog";
 
-const MAX_COMMENT = 280;
+/**
+ * Feedback for a catalog visit.
+ *
+ * The form itself now lives in `service-feedback-dialog.tsx` and serves bookings and requests
+ * alike — the two used to diverge, with catalogue visits getting a considered dialog and requests
+ * getting a bare rating box, for no reason anybody had decided on. This module keeps the
+ * booking-shaped entry points: when a visit may still be asked about, and which of several visits
+ * to ask about next.
+ */
 
 const COMPLETED_VISIT_STATUSES = new Set(["COMPLETED", "PARTIALLY_COMPLETED"]);
 
@@ -22,21 +27,17 @@ export function isVisitWorkComplete(status: string | null | undefined): boolean 
  *
  * ## Why this is not a type predicate
  *
- * It was declared `): bookingId is string`, which TypeScript refuses outright
- * when the parameter is a binding pattern (TS1230) -- and the refusal was doing
- * everyone a favour, because the predicate could not have worked either. A
- * predicate narrows *the argument*, and every caller builds a throwaway object
- * literal to pass in. Narrowing that literal tells you nothing about
+ * It was declared `): bookingId is string`, which TypeScript refuses outright when the parameter
+ * is a binding pattern (TS1230) -- and the refusal was doing everyone a favour, because the
+ * predicate could not have worked either. A predicate narrows *the argument*, and every caller
+ * builds a throwaway object literal to pass in. Narrowing that literal tells you nothing about
  * `unit.booking_id`, which is the value that actually reaches the form.
  *
- * Worse, it failed quietly: an invalid predicate is still a callable function,
- * so the guard compiled at every call site and simply narrowed nothing. The one
- * caller that needed a non-null id got `string | null` anyway
- * (`group-detail.tsx`), and the other had already given up and narrowed by hand.
+ * Worse, it failed quietly: an invalid predicate is still a callable function, so the guard
+ * compiled at every call site and simply narrowed nothing.
  *
- * So this returns a plain boolean, and callers narrow the id themselves -- on
- * the value they are going to use, which is the only place narrowing is worth
- * anything.
+ * So this returns a plain boolean, and callers narrow the id themselves -- on the value they are
+ * going to use, which is the only place narrowing is worth anything.
  */
 export function canShowVisitFeedback({
   bookingId,
@@ -59,11 +60,11 @@ export function canShowVisitFeedback({
 }
 
 /**
- * Feedback for a catalog visit.
+ * The two-step feedback sequence for one completed visit.
  *
- * Nothing is shown in the visit layout. When the visit is complete and the
- * server still accepts a rating, the form opens as a dialog. Closing it or
- * submitting it removes it; a completed visit that is already rated stays quiet.
+ * Nothing renders in the visit layout. When the visit is complete and the server still has a
+ * question to ask, the dialog opens; closing or finishing it removes it, and a visit with nothing
+ * left to ask stays quiet.
  */
 export function VisitFeedbackForm({
   bookingId,
@@ -74,163 +75,22 @@ export function VisitFeedbackForm({
   readonly isComplete: boolean;
   readonly onFinished?: () => void;
 }) {
-  const ratings = useRatings("booking", bookingId, isComplete);
-  const submit = useSubmitRating("booking", bookingId);
-  const [score, setScore] = useState(0);
-  const [hovered, setHovered] = useState(0);
-  const [comment, setComment] = useState("");
-  const [dismissed, setDismissed] = useState(false);
-  const [justSubmitted, setJustSubmitted] = useState(false);
-
-  const summary = ratings.data;
-  const visibleScore = hovered || score;
-  const errorMessage = submit.isError ? describeError(submit.error, "mutation").message : null;
-  const canSubmit = summary?.can_rate ?? false;
-  const myRating = summary?.my_rating;
-
-  useEffect(() => {
-    if (!isComplete || dismissed || justSubmitted) return;
-    if (ratings.isPending || ratings.isLoading) return;
-    if (summary != null && !summary.can_rate) onFinished?.();
-  }, [
-    isComplete,
-    dismissed,
-    justSubmitted,
-    ratings.isPending,
-    ratings.isLoading,
-    summary,
-    onFinished,
-  ]);
-
-  function finish() {
-    setDismissed(true);
-    onFinished?.();
-  }
-
-  if (!isComplete || dismissed) return null;
-  if (ratings.isPending || ratings.isLoading || summary === undefined) return null;
-
-  if (justSubmitted && myRating) {
-    return (
-      <Dialog
-        open
-        onOpenChange={(open) => {
-          if (!open) finish();
-        }}
-        title="We value your feedback"
-        description="Thank you for sharing your experience."
-        footer={
-          <Button onClick={finish} className="w-full justify-center sm:w-auto">
-            Done
-          </Button>
-        }
-      >
-        <div className="rounded-card border border-line bg-surface-sunken p-4">
-          <div className="flex items-center gap-2">
-            <span className="flex items-center gap-1" aria-label={`${myRating.score} out of 5 stars`}>
-              {[1, 2, 3, 4, 5].map((value) => (
-                <Star key={value} filled={value <= myRating.score} className="size-5" />
-              ))}
-            </span>
-            <span className="text-sm font-semibold text-text">{ratingLabel(myRating.score)}</span>
-          </div>
-          {myRating.comment ? (
-            <p className="mt-2 text-sm leading-6 text-text-secondary">{myRating.comment}</p>
-          ) : null}
-        </div>
-      </Dialog>
-    );
-  }
-
-  if (!canSubmit) return null;
-
   return (
-    <Dialog
-      open
-      onOpenChange={(open) => {
-        if (!open && !submit.isPending) finish();
-      }}
-      dismissable={!submit.isPending}
-      title="We value your feedback"
-      description="Help us improve your experience by sharing your feedback."
-      footer={
-        <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="flex items-start gap-1.5 text-xs leading-5 text-text-muted">
-            <Shield className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-            <span>Your feedback is private and helps us improve our services.</span>
-          </p>
-          <Button
-            disabled={score === 0}
-            loading={submit.isPending}
-            loadingLabel="Submitting feedback"
-            onClick={() =>
-              submit.mutate(
-                { score, comment },
-                { onSuccess: () => setJustSubmitted(true) },
-              )
-            }
-          >
-            Submit feedback
-          </Button>
-        </div>
-      }
-    >
-      <div className="space-y-5">
-        <fieldset>
-          <legend className="text-sm font-semibold text-text">How was your experience?</legend>
-          <div className="mt-2 flex gap-1" onMouseLeave={() => setHovered(0)}>
-            {[1, 2, 3, 4, 5].map((value) => (
-              <button
-                key={value}
-                type="button"
-                aria-label={`${value} ${value === 1 ? "star" : "stars"}`}
-                aria-pressed={score === value}
-                disabled={submit.isPending}
-                className="flex size-10 items-center justify-center rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action disabled:opacity-60"
-                onMouseEnter={() => setHovered(value)}
-                onFocus={() => setHovered(value)}
-                onBlur={() => setHovered(0)}
-                onClick={() => setScore(value)}
-              >
-                <Star filled={value <= visibleScore} />
-              </button>
-            ))}
-          </div>
-          <p className="mt-1 text-xs text-text-muted" aria-live="polite">
-            {score === 0 ? "(Select rating)" : ratingLabel(score)}
-          </p>
-        </fieldset>
-
-        <div>
-          <label className="text-sm font-semibold text-text" htmlFor={`visit-feedback-${bookingId}`}>
-            Tell us more <span className="font-normal text-text-muted">(optional)</span>
-          </label>
-          <Textarea
-            id={`visit-feedback-${bookingId}`}
-            className="mt-2"
-            rows={4}
-            maxLength={MAX_COMMENT}
-            value={comment}
-            disabled={submit.isPending}
-            placeholder="Share your experience, suggestions or any feedback..."
-            onChange={(event) => setComment(event.currentTarget.value)}
-          />
-          <p className="mt-1 text-right text-xs text-text-muted">
-            {comment.length}/{MAX_COMMENT}
-          </p>
-        </div>
-
-        {errorMessage ? (
-          <p role="alert" className="text-sm text-critical">
-            {errorMessage}
-          </p>
-        ) : null}
-      </div>
-    </Dialog>
+    <ServiceFeedbackDialog
+      subject="booking"
+      id={bookingId}
+      isComplete={isComplete}
+      onFinished={onFinished}
+    />
   );
 }
 
-/** Prompts for the next completed visit that still needs a rating. */
+/**
+ * Prompts for the next completed visit that still needs feedback.
+ *
+ * One at a time, on purpose: a group of four finished visits is four dialogs stacked on arrival,
+ * and the honest response to that is to close all of them.
+ */
 export function CompletedVisitsFeedback({
   units,
   isPaid,
@@ -261,29 +121,4 @@ export function CompletedVisitsFeedback({
       }
     />
   );
-}
-
-function Star({ filled, className }: { readonly filled: boolean; readonly className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-      className={cn(
-        "size-7 transition-colors",
-        filled ? "fill-amber-400 text-amber-500" : "fill-transparent text-warm-400",
-        className,
-      )}
-    >
-      <path
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-        d="m12 2.8 2.75 5.58 6.16.9-4.46 4.34 1.05 6.13L12 16.86l-5.5 2.89 1.05-6.13-4.46-4.34 6.16-.9L12 2.8Z"
-      />
-    </svg>
-  );
-}
-
-function ratingLabel(score: number): string {
-  return ["", "Needs improvement", "Fair", "Good", "Very good", "Excellent"][score] ?? "";
 }

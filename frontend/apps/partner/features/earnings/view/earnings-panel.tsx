@@ -2,7 +2,7 @@
 
 import { Badge, Button, Card, ErrorState, Spinner, formatMoney } from "@vsolve/ui";
 
-import { Pictogram } from "@/components/pictogram";
+import { Pictogram, type PictogramName } from "@/components/pictogram";
 
 import {
   usePartnerBalance,
@@ -50,6 +50,36 @@ const STATUS_LABEL: Record<string, string> = {
   RELEASED: "RELEASED",
 };
 
+const BALANCE_TONE = {
+  info: "border-info-line bg-info-surface text-info-text",
+  warning: "border-warning-line bg-warning-surface text-warning-text",
+  success: "border-success-line bg-success-surface text-success-text",
+} as const;
+
+function BalanceTile({
+  label,
+  amountPaise,
+  tone,
+  icon,
+}: {
+  label: string;
+  amountPaise: number;
+  tone: keyof typeof BALANCE_TONE;
+  icon: PictogramName;
+}) {
+  return (
+    <div className={`rounded-plate border p-2.5 sm:p-3 ${BALANCE_TONE[tone]}`}>
+      <p className="flex items-center gap-1 truncate text-[0.625rem] font-semibold uppercase tracking-wide sm:text-[0.6875rem]">
+        <Pictogram name={icon} size="xs" />
+        {label}
+      </p>
+      <p data-numeric className="mt-1 truncate text-base font-bold sm:text-lg">
+        {formatMoney(amountPaise)}
+      </p>
+    </div>
+  );
+}
+
 export function EarningsPanel() {
   const balance = usePartnerBalance();
   const ledger = usePartnerLedger();
@@ -78,6 +108,8 @@ export function EarningsPanel() {
 
   const data = balance.data;
   const entries = ledger.data?.pages.flatMap((page) => page.results) ?? [];
+  const vsolveOutstanding = data.available_paise + data.reserved_paise + data.pending_paise;
+  const monthDirect = performance.data?.month_direct_paise ?? 0;
 
   return (
     <div className="space-y-5">
@@ -96,52 +128,57 @@ export function EarningsPanel() {
         </div>
       ) : null}
 
-      {/* The one number that answers "what is actually coming to me". Four equal
-          tiles made the reader compare before they could read; a hero and three
-          supports say which is the answer and which are context. */}
+      {/* Earnings lead. A direct-paid crew job is real income even though it is
+          not money Vsolve can pay a second time. */}
       <Card className="p-5">
-        <p className="text-sm font-semibold text-text-secondary">Coming to you</p>
-        <p data-numeric className="mt-1 text-4xl font-bold leading-tight text-text">
-          {formatMoney(data.available_paise)}
-        </p>
-        <p className="mt-2 text-sm text-text-secondary">
-          We pay this out in the next payment run.
-        </p>
+        <p className="text-sm font-semibold text-text-secondary">Total earned this month</p>
+        {performance.isPending ? (
+          <p className="mt-3 flex items-center gap-2 text-sm text-text-secondary">
+            <Spinner size="sm" />
+            Loading this month…
+          </p>
+        ) : performance.isError || !performance.data ? (
+          <p className="mt-2 text-sm text-text-secondary">This total is temporarily unavailable.</p>
+        ) : (
+          <>
+            <p data-numeric className="mt-1 text-4xl font-bold leading-tight text-text">
+              {formatMoney(performance.data.month_net_paise)}
+            </p>
+            <p className="mt-2 text-sm text-text-secondary">
+              {monthDirect > 0
+                ? `${formatMoney(monthDirect)} was paid directly by customers.`
+                : "Includes direct customer payments and work paid through Vsolve."}
+            </p>
+          </>
+        )}
       </Card>
 
-      {/* Three colour-coded plates, one per balance status — the same info/
-          warning/success tones `STATUS_TONE` already assigns to RESERVED/
-          PENDING/PAID in the ledger below, just carried up to this
-          breakdown so the two agree at a glance. */}
-      <div className="grid grid-cols-3 gap-2 sm:gap-3">
-        <div className="rounded-plate border border-info-line bg-info-surface p-2.5 sm:p-3">
-          <p className="flex items-center gap-1 text-[0.625rem] sm:text-[0.6875rem] font-semibold uppercase tracking-wide text-info-text truncate">
-            <Pictogram name="held" size="xs" />
-            Waiting
-          </p>
-          <p data-numeric className="mt-1 text-base sm:text-lg font-bold text-info-text truncate">
-            {formatMoney(data.reserved_paise)}
+      <Card className="p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-sm font-semibold text-text-secondary">Vsolve payout balance</h2>
+            <p className="mt-1 text-xs leading-5 text-text-secondary">
+              Money Vsolve collected and still has to pay you.
+            </p>
+          </div>
+          <p data-numeric className="shrink-0 text-2xl font-bold text-text">
+            {formatMoney(vsolveOutstanding)}
           </p>
         </div>
-        <div className="rounded-plate border border-warning-line bg-warning-surface p-2.5 sm:p-3">
-          <p className="flex items-center gap-1 text-[0.625rem] sm:text-[0.6875rem] font-semibold uppercase tracking-wide text-warning-text truncate">
-            <Pictogram name="later" size="xs" />
-            On hold
+        {vsolveOutstanding === 0 && monthDirect > 0 ? (
+          <p className="mt-3 rounded-plate bg-info-surface px-3 py-2 text-xs leading-5 text-info-text">
+            Nothing is due from Vsolve because this month’s {formatMoney(monthDirect)} was paid
+            directly by customers.
           </p>
-          <p data-numeric className="mt-1 text-base sm:text-lg font-bold text-warning-text truncate">
-            {formatMoney(data.pending_paise)}
-          </p>
+        ) : null}
+
+        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
+          <BalanceTile label="Ready" amountPaise={data.available_paise} tone="info" icon="money" />
+          <BalanceTile label="Next run" amountPaise={data.reserved_paise} tone="info" icon="held" />
+          <BalanceTile label="On hold" amountPaise={data.pending_paise} tone="warning" icon="later" />
+          <BalanceTile label="Paid" amountPaise={data.paid_paise} tone="success" icon="done" />
         </div>
-        <div className="rounded-plate border border-success-line bg-success-surface p-2.5 sm:p-3">
-          <p className="flex items-center gap-1 text-[0.625rem] sm:text-[0.6875rem] font-semibold uppercase tracking-wide text-success-text truncate">
-            <Pictogram name="done" size="xs" />
-            Paid
-          </p>
-          <p data-numeric className="mt-1 text-base sm:text-lg font-bold text-success-text truncate">
-            {formatMoney(data.paid_paise)}
-          </p>
-        </div>
-      </div>
+      </Card>
 
       <Card className="p-5">
         <h2 className="text-base font-bold text-text">How you are doing</h2>
@@ -160,7 +197,25 @@ export function EarningsPanel() {
               Loading your last 7 days…
             </p>
           ) : (
-            <EarningsChart days={toDailyEarnings(performance.data?.daily ?? [])} />
+            <>
+              <div className="mb-4 grid grid-cols-2 gap-3">
+                <div className="rounded-plate border border-line bg-surface-sunken p-3">
+                  <p className="text-xs font-semibold text-text-secondary">Earned today</p>
+                  <p data-numeric className="mt-1 text-xl font-bold text-text">
+                    {formatMoney(performance.data?.today_net_paise ?? 0)}
+                  </p>
+                </div>
+                <div className="rounded-plate border border-line bg-surface-sunken p-3">
+                  <p className="text-xs font-semibold text-text-secondary">
+                    Jobs done this month
+                  </p>
+                  <p data-numeric className="mt-1 text-xl font-bold text-text">
+                    {performance.data?.month_jobs ?? 0}
+                  </p>
+                </div>
+              </div>
+              <EarningsChart days={toDailyEarnings(performance.data?.daily ?? [])} />
+            </>
           )}
         </div>
       </Card>
@@ -210,7 +265,8 @@ export function EarningsPanel() {
 
         {!ledger.isPending && entries.length === 0 ? (
           <p className="mt-3 text-sm text-text-secondary">
-            Nothing yet. Completed jobs appear here once the customer confirms them.
+            No Vsolve payout activity yet. Direct customer payments are included in the earnings
+            totals above.
           </p>
         ) : null}
 

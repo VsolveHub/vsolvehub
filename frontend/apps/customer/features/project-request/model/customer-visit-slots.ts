@@ -27,6 +27,15 @@ export interface CustomerVisitSlotGridView {
   readonly timezoneUnsupported: boolean;
   readonly serverNow: string;
   readonly visitDurationMinutes: number;
+  /**
+   * Minutes a professional needs to travel between two jobs.
+   *
+   * Load-bearing, not decorative. The server refuses a slot that falls inside another
+   * visit's duration **plus** this gap, so a picker that ignores it offers times the write
+   * rejects: with a 60-minute visit and a 20-minute turnaround, 5pm and 6pm look an hour
+   * apart and clash. Published since 1.64.0 for exactly this reason.
+   */
+  readonly turnaroundMinutes: number;
   readonly openCount: number;
 }
 
@@ -109,6 +118,7 @@ export function readCustomerVisitSlotGrid(
     timezoneUnsupported,
     serverNow: grid.server_now,
     visitDurationMinutes: grid.visit_duration_minutes,
+    turnaroundMinutes: grid.turnaround_minutes,
     openCount,
   };
 }
@@ -125,8 +135,28 @@ export function findCustomerVisitSlot(
   return null;
 }
 
-function overlaps(left: CustomerVisitSlotOption, right: CustomerVisitSlotOption): boolean {
-  return left.startsAt < right.endsAt && right.startsAt < left.endsAt;
+/**
+ * Do two slots clash, counting the travel time between them?
+ *
+ * Mirrors the server's `occupied_range_bounds`: a visit occupies its own window *plus* the
+ * turnaround, so two adjacent hours are a clash rather than a tidy back-to-back pair. The
+ * naive version of this compared the raw windows and called 5pm and 6pm compatible — which
+ * is how the picker came to offer a time the write then refused.
+ *
+ * The gap is applied to both sides, because neither visit may start before the other has
+ * been travelled away from.
+ */
+function overlaps(
+  left: CustomerVisitSlotOption,
+  right: CustomerVisitSlotOption,
+  turnaroundMinutes = 0,
+): boolean {
+  const gap = turnaroundMinutes * 60_000;
+  const leftEnd = new Date(left.endsAt).getTime() + gap;
+  const rightEnd = new Date(right.endsAt).getTime() + gap;
+  const leftStart = new Date(left.startsAt).getTime();
+  const rightStart = new Date(right.startsAt).getTime();
+  return leftStart < rightEnd && rightStart < leftEnd;
 }
 
 /** A slot cannot collide with a sibling visit already chosen by the Customer. */
@@ -135,17 +165,31 @@ export function slotOverlapsAnotherSelection({
   selectedStarts,
   visitIndex,
   grid,
+  blockedStarts = [],
 }: {
   slot: CustomerVisitSlotOption;
   selectedStarts: readonly (string | null)[];
   visitIndex: number;
   grid: CustomerVisitSlotGridView;
+  /**
+   * Times held by visits this picker is *not* editing.
+   *
+   * The request wizard edits every visit at once, so `selectedStarts` is the whole
+   * picture and this stays empty. Re-timing one exhausted slot on a live plan does not:
+   * the picker shows one row and the visit that already matched is nowhere in it, so
+   * without this the only clash that can actually happen is the one clash not checked.
+   */
+  blockedStarts?: readonly string[];
 }): boolean {
-  return selectedStarts.some((startsAt, index) => {
-    if (index === visitIndex || startsAt === null) return false;
+  const clashes = (startsAt: string | null): boolean => {
+    if (startsAt === null) return false;
     const selected = findCustomerVisitSlot(grid, startsAt);
-    return selected !== null && overlaps(slot, selected);
-  });
+    return selected !== null && overlaps(slot, selected, grid.turnaroundMinutes);
+  };
+  return (
+    selectedStarts.some((startsAt, index) => index !== visitIndex && clashes(startsAt)) ||
+    blockedStarts.some(clashes)
+  );
 }
 
 /** Resolve current signed tokens only when every visible visit has a valid time. */
@@ -159,7 +203,7 @@ export function tokensForCustomerVisitSelection(
   for (const startsAt of selectedStarts) {
     const slot = findCustomerVisitSlot(grid, startsAt);
     if (slot === null || !slot.isAvailable) return null;
-    if (selected.some((sibling) => overlaps(slot, sibling))) return null;
+    if (selected.some((sibling) => overlaps(slot, sibling, grid.turnaroundMinutes))) return null;
     selected.push(slot);
   }
   return selected.map((slot) => slot.token);

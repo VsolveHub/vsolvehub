@@ -318,6 +318,41 @@ export function useStartBookingFeeCheckout() {
   });
 }
 
+export interface SimulateBookingFeeCaptureInput {
+  requirementId: string;
+  paymentAttemptId: string;
+}
+
+/**
+ * Development-only capture for an A3 booking fee.
+ *
+ * The backend returns 404 when simulation is disabled and refuses attempts that
+ * do not belong to the fake provider. Both reads are invalidated because a
+ * successful capture confirms the booking and engages the requirement in one
+ * transaction.
+ */
+export function useSimulateBookingFeeCapture() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: SimulateBookingFeeCaptureInput) =>
+      request(() =>
+        getApiClient().POST("/api/v1/payment-attempts/{attempt_id}/simulate-capture/", {
+          params: { path: { attempt_id: input.paymentAttemptId } },
+        }),
+      ),
+    onSettled: (_data, _error, input) => {
+      void queryClient.invalidateQueries({
+        queryKey: m2RateCardKeys.state(input.requirementId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: m2QueryKeys.requirements.detail(input.requirementId),
+      });
+    },
+    retry: false,
+  });
+}
+
 export interface CancelBookingInput {
   requirementId: string;
 }

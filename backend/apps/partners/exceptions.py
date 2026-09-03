@@ -200,6 +200,23 @@ class CrewGenderConflictError(PartnerDomainError):
         )
 
 
+class CrewDocumentError(PartnerDomainError):
+    """A crew identity document could not be accepted, reviewed, or replaced.
+
+    `400` rather than `409`: every case here is something the Partner or reviewer can fix by
+    sending a different request — a wrong media type, an expired signed upload, a file that did
+    not match what was declared, a rejection with no reason. Nothing in it is a race with another
+    actor, which is what a `409` would claim.
+    """
+
+    def __init__(self, message: str) -> None:
+        super().__init__(
+            code="m2_crew_document_rejected",
+            message=message,
+            status_code=400,
+        )
+
+
 class LifecycleNotSupportedError(PartnerDomainError):
     def __init__(self, message: str) -> None:
         super().__init__(

@@ -34,6 +34,8 @@ export interface RateScreenProps {
   unavailable?: ReactNode;
   /** What is being priced — the event card — between the rate and the money. */
   summary?: ReactNode;
+  /** Product wording for the single day-rate line. */
+  crewLabel?: string;
 }
 
 export function RateScreen({
@@ -45,6 +47,7 @@ export function RateScreen({
   notice,
   unavailable,
   summary,
+  crewLabel,
 }: RateScreenProps) {
   return (
     <MobileScreen
@@ -76,7 +79,7 @@ export function RateScreen({
 
             <div className="rounded-2xl border border-line bg-surface p-4">
               <p className="text-sm font-semibold text-text">
-                {rate.dayRateLabel} a day to the crew
+                {rate.dayRateLabel} {crewLabel ?? "a day to the crew"}
               </p>
               <p className="mt-1 text-sm text-text-secondary">
                 {rate.bookingFeeLabel} booking fee when a supervisor accepts

@@ -47,6 +47,8 @@ import {
   useChooseQuotesInstead,
   useRateCardState,
   useRetryCrewSearch,
+  useSimulateBookingFeeCapture,
+  useStartBookingFeeCheckout,
 } from "../queries";
 import { CascadeStrip } from "./cascade-strip";
 import { MatchingScreen } from "./mobile/matching-screen";
@@ -123,6 +125,8 @@ export function CrewDispatchPanel({
   const retrySearch = useRetryCrewSearch();
   const chooseQuotes = useChooseQuotesInstead();
   const cancelUnmatched = useCancelUnmatchedRequest();
+  const feeCheckout = useStartBookingFeeCheckout();
+  const simulateFeeCapture = useSimulateBookingFeeCapture();
 
   const [confirming, setConfirming] = useState<"cancel" | null>(null);
 
@@ -154,6 +158,33 @@ export function CrewDispatchPanel({
   const booking = state.booking === null ? null : toBookingView(state.booking);
   const fee = state.booking_fee === null ? null : toFeeMoneyView(state.booking_fee);
   const crewName = confirmedCrewName(state);
+  const feeAttemptId = state.booking_fee?.payment_attempt_id ?? null;
+  const canSimulatePendingFee =
+    state.booking_fee?.simulated_capture_available === true && feeAttemptId !== null;
+  const feePaymentPending = feeCheckout.isPending || simulateFeeCapture.isPending;
+
+  const simulateCapture = (paymentAttemptId: string) => {
+    simulateFeeCapture.mutate({ requirementId, paymentAttemptId });
+  };
+
+  const startFeePayment = () => {
+    feeCheckout.mutate(
+      {
+        requirementId,
+        bookingId: state.booking!.id,
+        isRetryAfterFailure: feePhase === "failed",
+      },
+      {
+        onSuccess: (checkout) => {
+          if (checkout.provider === "fake") {
+            simulateCapture(checkout.payment_attempt_id);
+            return;
+          }
+          router.push(bookCrewFeeHref);
+        },
+      },
+    );
+  };
 
   // No instant booking was ever made on this request. The quote surface owns the
   // screen; rendering an empty crew panel above it would imply a crew is coming.
@@ -259,8 +290,13 @@ export function CrewDispatchPanel({
           booking={booking}
           holdExpiresAt={booking.holdExpiresAt}
           canCheckOut={canCheckOutBookingFee(state)}
-          bookCrewFeeHref={bookCrewFeeHref}
           feePhase={feePhase}
+          canSimulatePendingFee={canSimulatePendingFee}
+          isPaymentPending={feePaymentPending}
+          onPay={startFeePayment}
+          onSimulatePending={() => {
+            if (feeAttemptId !== null) simulateCapture(feeAttemptId);
+          }}
         />
       ) : null}
 
@@ -316,8 +352,12 @@ export function CrewDispatchPanel({
       ) : null}
 
       <AccessRefusal
-        error={cancel.error}
-        attempting="update this booking"
+        error={feeCheckout.error ?? simulateFeeCapture.error ?? cancel.error}
+        attempting={
+          feeCheckout.error !== null || simulateFeeCapture.error !== null
+            ? "confirm this payment"
+            : "update this booking"
+        }
         supportAction={supportAction}
       />
 
@@ -550,14 +590,20 @@ function OfferHeld({
   booking,
   holdExpiresAt,
   canCheckOut,
-  bookCrewFeeHref,
   feePhase,
+  canSimulatePendingFee,
+  isPaymentPending,
+  onPay,
+  onSimulatePending,
 }: {
   booking: BookingView;
   holdExpiresAt: string | null;
   canCheckOut: boolean;
-  bookCrewFeeHref: string;
   feePhase: BookingFeePhase;
+  canSimulatePendingFee: boolean;
+  isPaymentPending: boolean;
+  onPay: () => void;
+  onSimulatePending: () => void;
 }) {
   const countdown = useServerCountdown(holdExpiresAt);
   const terms = toRateTermsView(booking);
@@ -587,15 +633,34 @@ function OfferHeld({
         by you each evening.
       </p>
 
-      {feePhase === "pending" ? (
+      {feePhase === "pending" && canSimulatePendingFee ? (
+        <div className="mt-3">
+          <Button
+            onClick={onSimulatePending}
+            loading={isPaymentPending}
+            loadingLabel="Marking payment as paid"
+          >
+            Mark as paid
+          </Button>
+          <p className="mt-2 text-xs leading-5 text-text-secondary">
+            Development payment simulator
+          </p>
+        </div>
+      ) : feePhase === "pending" ? (
         <p className="mt-3 text-sm leading-6 text-text" role="status">
           Confirming your payment… don&rsquo;t pay again.
         </p>
       ) : canCheckOut ? (
         <div className="mt-3">
-          <Link href={bookCrewFeeHref} className={buttonStyles({ variant: "primary" })}>
-            Pay {booking.bookingFeeLabel} & confirm
-          </Link>
+          <Button
+            onClick={onPay}
+            loading={isPaymentPending}
+            loadingLabel="Confirming payment"
+          >
+            {feePhase === "failed"
+              ? "Pay again"
+              : `Pay ${booking.bookingFeeLabel} & confirm`}
+          </Button>
           <p className="mt-2 text-xs leading-5 text-text-secondary">
             Not now — hold lapses, ₹0 charged
           </p>

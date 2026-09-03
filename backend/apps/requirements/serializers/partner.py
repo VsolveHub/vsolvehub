@@ -57,6 +57,10 @@ class VisitSlotGridSerializer(serializers.Serializer[dict[str, Any]]):
 
     server_now = serializers.DateTimeField(read_only=True)
     visit_duration_minutes = serializers.IntegerField(read_only=True)
+    #: Minutes a professional needs between two jobs. A slot is refused when it falls inside
+    #: another visit's duration *plus* this gap, so a picker that does not know the figure
+    #: offers times the write will reject — 5pm and 6pm look an hour apart and are not.
+    turnaround_minutes = serializers.IntegerField(read_only=True)
     availability_is_preliminary = serializers.BooleanField(read_only=True)
     timezone = serializers.CharField(read_only=True)
     days = VisitSlotDaySerializer(many=True, read_only=True)

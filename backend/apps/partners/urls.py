@@ -23,6 +23,7 @@ from apps.partners.views import (
     PartnerCrewAvailabilityView,
     PartnerCrewCollectionView,
     PartnerCrewDetailView,
+    PartnerCrewDocumentView,
     PartnerDocumentCreateView,
     PartnerDocumentUploadView,
     PartnerGateListView,
@@ -112,6 +113,11 @@ urlpatterns = [
         "partner/crew/<uuid:membership_id>/",
         PartnerCrewDetailView.as_view(),
         name="m2-partner-crew-detail",
+    ),
+    path(
+        "partner/crew/<uuid:membership_id>/documents/",
+        PartnerCrewDocumentView.as_view(),
+        name="m2-partner-crew-documents",
     ),
     path(
         "partner/crew/<uuid:membership_id>/archive/",

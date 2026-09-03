@@ -60,6 +60,13 @@ def _render_select(definition: dict[str, Any], value: object) -> str | None:
     return _option_label(definition, value)
 
 
+def _render_multi_select(definition: dict[str, Any], value: object) -> str | None:
+    """Selected option labels in the Customer's order, or no line for no selection."""
+    if not isinstance(value, list) or not value:
+        return None
+    return ", ".join(_option_label(definition, selected) for selected in value)
+
+
 def _render_text(_definition: dict[str, Any], value: object) -> str | None:
     if not isinstance(value, str):
         return None
@@ -70,6 +77,7 @@ _RENDERERS = {
     "INTEGER": _render_integer,
     "BOOLEAN": _render_boolean,
     "SELECT": _render_select,
+    "MULTI_SELECT": _render_multi_select,
     "TEXT": _render_text,
 }
 

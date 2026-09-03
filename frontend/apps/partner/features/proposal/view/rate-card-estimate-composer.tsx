@@ -91,6 +91,7 @@ import {
 } from "../queries";
 import { EstimatePreviewSheet } from "./estimate-preview-sheet";
 import { MoneyPad } from "./money-pad";
+import { InlineQuantityControl } from "./parts/inline-quantity-control";
 
 /**
  * The on-site estimate in five taps (contract 1.48.0).
@@ -133,6 +134,8 @@ export interface RateCardEstimateComposerProps {
   readonly pricingSkillCode: string;
   readonly materialFulfilmentMode: "CUSTOMER_PROCURES" | "PARTNER_TURNKEY";
   readonly visitCompleted: boolean;
+  /** Current submitted revision, used only when no autosaved revision draft exists. */
+  readonly initialDraft: CommercialEstimateDraft | null;
   readonly isSubmitting: boolean;
   /** The last refusal from Send, for the line-level codes. */
   readonly submitError: unknown;
@@ -176,6 +179,7 @@ export function RateCardEstimateComposer({
   pricingSkillCode,
   materialFulfilmentMode,
   visitCompleted,
+  initialDraft,
   isSubmitting,
   submitError,
   onSend,
@@ -183,7 +187,9 @@ export function RateCardEstimateComposer({
 }: RateCardEstimateComposerProps) {
   const partnerTurnkey = materialFulfilmentMode === "PARTNER_TURNKEY";
   const [draft, setDraft] = useState<CommercialEstimateDraft>(() =>
-    withTemplateInstallments(loadCommercialEstimate(invitationId) ?? EMPTY_COMMERCIAL_ESTIMATE),
+    withTemplateInstallments(
+      loadCommercialEstimate(invitationId) ?? initialDraft ?? EMPTY_COMMERCIAL_ESTIMATE,
+    ),
   );
   const [step, setStep] = useState<Step>(() => (draft.mode === null ? 1 : 2));
   const [sheet, setSheet] = useState<SheetState | null>(null);
@@ -265,8 +271,18 @@ export function RateCardEstimateComposer({
     });
   }
 
-  const canContinue =
-    step === 1 ? draft.mode !== null : step === 2 ? linesReady : true;
+  // What is still missing on this step, in the vendor's words.
+  //
+  // Steps 3 and 4 used to return `true` unconditionally, so an estimate could be sent with
+  // no timeline, no guarantee and no validity — every one of which the Customer's screen
+  // then rendered as "Not stated". The composer was not asking; it was offering.
+  const blockers = stepBlockers({
+    step,
+    draft,
+    linesReady,
+    materialList,
+  });
+  const canContinue = blockers.length === 0;
 
   return (
     <div className="flex flex-col gap-4 pb-24">
@@ -402,6 +418,7 @@ export function RateCardEstimateComposer({
       <StepDock
         step={step}
         canContinue={canContinue}
+        blockers={blockers}
         draft={draft}
         previewIsCurrent={previewIsCurrent}
         blocked={hasCommercialEstimateErrors(errors)}
@@ -666,6 +683,7 @@ function StepHeader({
 function StepDock({
   step,
   canContinue,
+  blockers,
   draft,
   previewIsCurrent,
   blocked,
@@ -676,6 +694,8 @@ function StepDock({
 }: {
   step: Step;
   canContinue: boolean;
+  /** Why `Continue` is refused, if it is. Rendered — a dead button explains nothing. */
+  blockers: readonly string[];
   draft: CommercialEstimateDraft;
   previewIsCurrent: boolean;
   blocked: boolean;
@@ -706,17 +726,29 @@ function StepDock({
             </Button>
           </div>
         ) : (
-          <div className="flex items-center gap-3">
-            {step === 2 || step === 3 || step === 4 ? (
-              <span className="min-w-0 flex-1 text-sm font-semibold tabular-nums text-text-secondary">
-                {lineCount} {lineCount === 1 ? "item" : "items"} · Labour {labour === null ? "—" : formatMoney(labour)}
-              </span>
-            ) : (
-              <span className="flex-1" />
-            )}
-            <Button size="lg" disabled={!canContinue} onClick={onContinue}>
-              Continue
-            </Button>
+          <div className="flex flex-col gap-2">
+            {blockers.length > 0 ? (
+              // A disabled button with no reason is worse than one that lets you through:
+              // the vendor knows something is wrong and not what. Naming it is the whole
+              // point of refusing.
+              <p className="text-[13px] font-semibold leading-5 text-warning-text" role="status">
+                {blockers.length === 1
+                  ? blockers[0]
+                  : `Still needed: ${blockers.join(" · ")}`}
+              </p>
+            ) : null}
+            <div className="flex items-center gap-3">
+              {step === 2 || step === 3 || step === 4 ? (
+                <span className="min-w-0 flex-1 text-sm font-semibold tabular-nums text-text-secondary">
+                  {lineCount} {lineCount === 1 ? "item" : "items"} · Labour {labour === null ? "—" : formatMoney(labour)}
+                </span>
+              ) : (
+                <span className="flex-1" />
+              )}
+              <Button size="lg" disabled={!canContinue} onClick={onContinue}>
+                Continue
+              </Button>
+            </div>
           </div>
         )}
       </div>
@@ -1098,28 +1130,13 @@ function ItemRow({
             <span className="sr-only"> — change the rate for {name}</span>
           </button>
         </span>
-        <div role="group" aria-label={`How many ${name}`} className="flex items-center gap-1">
-          <button
-            type="button"
-            aria-label={`One fewer ${name}`}
-            disabled={quantity <= 0}
-            onClick={() => onQuantity(quantity - 1)}
-            className="grid h-11 w-11 place-items-center rounded-control border border-line-strong bg-surface text-lg text-text disabled:border-line disabled:text-warm-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-          >
-            <span aria-hidden>−</span>
-          </button>
-          <output aria-live="polite" className="min-w-8 text-center text-base font-bold tabular-nums text-text">
-            {quantity}
-          </output>
-          <button
-            type="button"
-            aria-label={`One more ${name}`}
-            onClick={() => onQuantity(quantity + 1)}
-            className="grid h-11 w-11 place-items-center rounded-control border border-line-strong bg-surface text-lg text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-          >
-            <span aria-hidden>+</span>
-          </button>
-        </div>
+        <InlineQuantityControl
+          label={`Quantity for ${name}`}
+          value={quantity}
+          onChange={onQuantity}
+          decrementLabel={`One fewer ${name}`}
+          incrementLabel={`One more ${name}`}
+        />
       </div>
       {bundleHint || amount !== null ? (
         <div className="flex items-baseline justify-between gap-2 text-xs text-text-muted">
@@ -1462,7 +1479,33 @@ function MaterialsStep({
   );
 }
 
-/** ± 1 on a decimal string, floored at one. The unit sits beside the number. */
+/**
+ * A material quantity: typed, or nudged with ±.
+ *
+ * ## Why the value had to become an input
+ *
+ * This was `±1` around an `<output>`, which is fine for the People and Days
+ * steppers next door where the answer is between one and ten. Materials are not
+ * that shape: sixty strings of fairy lights, forty metres of drape, five
+ * thousand square feet of wall. Reaching sixty from one meant fifty-nine taps,
+ * so the control made the common case the expensive one and left a vendor
+ * doing arithmetic with their thumb.
+ *
+ * The ± buttons stay — they are still the right tool for "one more" — but the
+ * number is now something you can type over. Same shape as
+ * `InlineQuantityControl`, which solved this for whole-number catalogue rows;
+ * this one is separate because a material quantity is a **decimal string** on
+ * the wire (2.5 kg is a real answer) and must survive the round trip without
+ * being forced through a float.
+ *
+ * ## Editing state
+ *
+ * A local draft holds what is being typed, so clearing the field to retype it
+ * does not momentarily write a zero into the estimate. `editing` stops an
+ * incoming value from overwriting a half-typed number. On blur the draft is
+ * resolved: a valid positive number is kept, anything else falls back to the
+ * last good value rather than silently becoming one.
+ */
 function DecimalStepper({
   name,
   value,
@@ -1474,9 +1517,38 @@ function DecimalStepper({
   unit: string;
   onChange: (value: string) => void;
 }) {
+  const [draft, setDraft] = useState(value);
+  const editing = useRef(false);
+
+  useEffect(() => {
+    if (!editing.current) setDraft(value);
+  }, [value]);
+
   const current = Number(value);
   const numeric = Number.isFinite(current) ? current : 1;
-  const step = (delta: number) => onChange(String(Math.max(1, Math.round((numeric + delta) * 1000) / 1000)));
+  const step = (delta: number) => {
+    const next = String(Math.max(1, Math.round((numeric + delta) * 1000) / 1000));
+    setDraft(next);
+    onChange(next);
+  };
+
+  /** Digits with at most one decimal point — and the partial states of typing one. */
+  const isTypeable = (text: string) => /^\d*\.?\d*$/.test(text);
+
+  function commit() {
+    editing.current = false;
+    const parsed = Number(draft);
+    if (draft.trim() === "" || !Number.isFinite(parsed) || parsed <= 0) {
+      // Never turn a fumbled edit into a quantity. Zero means "remove", which is
+      // what the bin button beside this is for.
+      setDraft(value);
+      return;
+    }
+    const settled = String(Math.round(parsed * 1000) / 1000);
+    setDraft(settled);
+    if (settled !== value) onChange(settled);
+  }
+
   return (
     <div role="group" aria-label={`How many ${name}`} className="flex items-center gap-1">
       <button
@@ -1484,19 +1556,60 @@ function DecimalStepper({
         aria-label={`One fewer ${name}`}
         disabled={numeric <= 1}
         onClick={() => step(-1)}
-        className="grid h-11 w-11 place-items-center rounded-control border border-line-strong bg-surface text-lg text-text disabled:border-line disabled:text-warm-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+        className="grid h-11 w-11 shrink-0 place-items-center rounded-control border border-line-strong bg-surface text-lg text-text disabled:border-line disabled:text-warm-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
       >
         <span aria-hidden>−</span>
       </button>
-      <output aria-live="polite" className="flex min-w-12 flex-col items-center text-center leading-tight">
-        <span className="text-base font-bold tabular-nums text-text">{value}</span>
-        {unit ? <span className="text-[10px] font-semibold text-text-muted">{unit}</span> : null}
-      </output>
+
+      <span className="flex flex-col items-center leading-tight">
+        <input
+          type="text"
+          inputMode="decimal"
+          enterKeyHint="done"
+          autoComplete="off"
+          aria-label={`How many ${name}${unit ? ` in ${unit}` : ""} — type a number`}
+          value={draft}
+          onFocus={(event) => {
+            editing.current = true;
+            event.currentTarget.select();
+          }}
+          onChange={(event) => {
+            const next = event.currentTarget.value;
+            if (!isTypeable(next)) return;
+            setDraft(next);
+            // Written through as it is typed so the running total below stays
+            // honest; a blank or partial "2." waits for blur.
+            const parsed = Number(next);
+            if (next !== "" && Number.isFinite(parsed) && parsed > 0) onChange(next);
+          }}
+          onBlur={commit}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              event.currentTarget.blur();
+            } else if (event.key === "Escape") {
+              event.preventDefault();
+              setDraft(value);
+              editing.current = false;
+              event.currentTarget.blur();
+            } else if (event.key === "ArrowUp") {
+              event.preventDefault();
+              step(1);
+            } else if (event.key === "ArrowDown") {
+              event.preventDefault();
+              step(-1);
+            }
+          }}
+          className="h-8 w-16 rounded-control border border-line-strong bg-surface px-1 text-center text-base font-bold tabular-nums text-text caret-action transition-colors duration-fast hover:bg-surface-hover focus:border-action focus:bg-action-surface focus:outline-none focus:ring-2 focus:ring-focus-ring"
+        />
+        {unit ? <span className="mt-0.5 text-[10px] font-semibold text-text-muted">{unit}</span> : null}
+      </span>
+
       <button
         type="button"
         aria-label={`One more ${name}`}
         onClick={() => step(1)}
-        className="grid h-11 w-11 place-items-center rounded-control border border-line-strong bg-surface text-lg text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+        className="grid h-11 w-11 shrink-0 place-items-center rounded-control border border-line-strong bg-surface text-lg text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
       >
         <span aria-hidden>+</span>
       </button>
@@ -1508,7 +1621,101 @@ function DecimalStepper({
    Step 4 — terms
    -------------------------------------------------------------------------- */
 
+/**
+ * What is still missing before this step can be left.
+ *
+ * ## Why this exists
+ *
+ * `canContinue` was `step === 1 ? mode !== null : step === 2 ? linesReady : true` — steps
+ * three and four were unconditionally passable. An estimate could therefore be sent with
+ * no timeline, no guarantee and no validity date, and the Customer's screen rendered each
+ * of those as "Not stated". The composer looked like it was asking questions; it was
+ * offering optional decoration.
+ *
+ * ## Why sentences rather than a boolean
+ *
+ * Every blocker is the sentence shown beside the disabled button. A `Continue` that
+ * refuses without saying why is worse than one that lets a bad estimate through: the
+ * vendor knows something is wrong, cannot see what, and taps it again. Returning the
+ * reasons is what makes refusing defensible.
+ *
+ * ## What is deliberately not required
+ *
+ * "Not included" stays optional — an estimate with nothing excluded is a real estimate,
+ * and forcing an exclusion would produce invented ones. Payment always has a template.
+ */
+function stepBlockers({
+  step,
+  draft,
+  linesReady,
+  materialList,
+}: {
+  step: Step;
+  draft: CommercialEstimateDraft;
+  linesReady: boolean;
+  materialList: readonly MaterialListLineDraft[];
+}): readonly string[] {
+  if (step === 1) {
+    return draft.mode === null ? ["Choose how you are pricing this."] : [];
+  }
+
+  if (step === 2) {
+    return linesReady ? [] : ["Add at least one line of work, with a rate."];
+  }
+
+  if (step === 3) {
+    // A row the vendor left at nothing is a row they meant to delete. Sending it publishes
+    // a material with no quantity on the Customer's own shopping list.
+    const blank = materialList.filter((row) => !(Number(row.quantity) > 0));
+    if (blank.length === 0) return [];
+    const named = blank
+      .slice(0, 2)
+      .map((row) => row.title)
+      .join(", ");
+    return [
+      blank.length === 1
+        ? `Give ${named} a quantity, or remove it.`
+        : `Give ${named}${blank.length > 2 ? " and others" : ""} a quantity, or remove them.`,
+    ];
+  }
+
+  if (step === 4) {
+    const missing: string[] = [];
+    if ((draft.completionDays ?? null) === null) missing.push("how long the work takes");
+    if (draft.warrantyTerms.trim() === "") missing.push("a guarantee");
+    if (draft.validUntil === null) missing.push("how long this price holds");
+    return missing.length === 0 ? [] : missing;
+  }
+
+  // Step 5 is Review & send, which has its own gate: `send()` refuses on
+  // `hasCommercialEstimateErrors` and a stale preview.
+  return [];
+}
+
 const VALIDITY_DAYS = [7, 15, 30] as const;
+
+/**
+ * The three answers that cover most jobs, plus a way to say anything else.
+ *
+ * "1 day" was dropped: an estimate written after a site visit is a project, and a
+ * one-day project is an A1 booking wearing the wrong shape. The typed field is behind
+ * `Custom` rather than always on screen — a permanently visible "or exactly ___" makes
+ * the presets look like suggestions to be overridden rather than the answer.
+ */
+const COMPLETION_DAY_CHOICES = [
+  { days: 3, label: "2-3 days" },
+  { days: 7, label: "1 week" },
+  { days: 14, label: "2 weeks" },
+] as const;
+
+/** True when the figure is real but not one of the presets — the Custom tile's state. */
+function isCustomCompletion(days: number | null | undefined): boolean {
+  return (
+    days !== null &&
+    days !== undefined &&
+    !COMPLETION_DAY_CHOICES.some((choice) => choice.days === days)
+  );
+}
 
 function validUntilFor(days: number): string {
   const end = new Date();
@@ -1549,6 +1756,12 @@ function TermsStep({
 }) {
   const validity = validityDaysOf(draft.validUntil);
   const composed = composeScopeSummary(draft);
+  // `?? null` because a draft restored from `localStorage` — or held across a hot reload —
+  // predates this field and carries no key for it. Without this the input renders the
+  // string "undefined", which is what a missing default looks like on screen.
+  const completionDays = draft.completionDays ?? null;
+  const [customOpen, setCustomOpen] = useState(isCustomCompletion(draft.completionDays));
+  const custom = customOpen || isCustomCompletion(completionDays);
 
   return (
     <div className="flex flex-col gap-5">
@@ -1574,6 +1787,77 @@ function TermsStep({
             );
           })}
         </div>
+      </TermGroup>
+
+      {/* First, because it is the question a Customer asks before any other and the one
+          an estimate could not answer: every quote read "Not dated", because nothing in
+          this composer ever collected a date. Days rather than a date — a vendor does not
+          know when they will start, since that waits on the Customer choosing and paying. */}
+      <TermGroup title="How long the work takes">
+        <div role="radiogroup" aria-label="How long the work takes" className="grid grid-cols-4 gap-2">
+          {COMPLETION_DAY_CHOICES.map((choice) => (
+            <Tile
+              key={choice.days}
+              on={!custom && completionDays === choice.days}
+              onClick={() => {
+                setCustomOpen(false);
+                onChange((current) => ({ ...current, completionDays: choice.days }));
+              }}
+            >
+              {choice.label}
+            </Tile>
+          ))}
+          <Tile
+            on={custom}
+            onClick={() => {
+              setCustomOpen(true);
+              // Opens on a blank field rather than pre-filling a preset the vendor did not
+              // type: an estimate that quietly agrees to a duration nobody chose is worse
+              // than one that has not answered yet.
+              onChange((current) => ({
+                ...current,
+                completionDays: isCustomCompletion(current.completionDays)
+                  ? current.completionDays
+                  : null,
+              }));
+            }}
+          >
+            Custom
+          </Tile>
+        </div>
+        {custom ? (
+          <label className="mt-2 flex items-center gap-2 text-sm text-text-secondary">
+            <input
+              type="text"
+              inputMode="numeric"
+              autoFocus
+              aria-label="Working days to complete"
+              value={completionDays === null ? "" : String(completionDays)}
+              onChange={(event) => {
+                const next = event.currentTarget.value;
+                if (!/^\d*$/.test(next)) return;
+                const parsed = Number(next);
+                onChange((current) => ({
+                  ...current,
+                  completionDays:
+                    next === "" ? null : Number.isSafeInteger(parsed) && parsed > 0 ? parsed : current.completionDays,
+                }));
+              }}
+              className="h-10 w-16 rounded-control border border-line-strong bg-surface px-2 text-center text-base font-bold tabular-nums text-text focus:border-action focus:bg-action-surface focus:outline-none focus:ring-2 focus:ring-focus-ring"
+            />
+            <span>working days</span>
+          </label>
+        ) : null}
+        {completionDays !== null ? (
+          // The promise this figure carries, said to the vendor before they send it. It is
+          // not new policy — `submit_proposal` already refuses once the Customer has chosen,
+          // so the total has never been movable after acceptance. It has just never been said.
+          <p className="mt-2 rounded-control bg-surface-sunken px-3 py-2 text-[13px] leading-5 text-text-secondary">
+            The customer sees “about {completionDays} working{" "}
+            {completionDays === 1 ? "day" : "days"}”. Your price is fixed once they
+            accept — if it runs over, that is yours to absorb, not theirs to pay.
+          </p>
+        ) : null}
       </TermGroup>
 
       <TermGroup title="Guarantee">

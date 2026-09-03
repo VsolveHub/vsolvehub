@@ -163,7 +163,8 @@ describe("customer visit arrival", () => {
           revalidation_requested_at: null,
       revision_request: null,
       questions: [],
-      scope_summary: "",
+      completion_days: null,
+    scope_summary: "",
           vendor: {
             partner_id: "partner-1",
             vendor_type: "AGENCY",

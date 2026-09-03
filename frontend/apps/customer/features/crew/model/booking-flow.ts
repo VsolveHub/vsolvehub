@@ -1,11 +1,14 @@
 import type { RequirementQuestionView } from "@/features/requirement/adapters";
 
 import {
+  EVENT_TYPE_CODE,
+  GUEST_BAND_CODE,
   isEventCrewFlow,
   occasionQuestions,
   roleQuestions,
   roleTotal,
 } from "./event-flow";
+import { HEADCOUNT_CODE } from "./size";
 
 /**
  * The two catalogue codes that shape the work-first crew flow.
@@ -43,6 +46,35 @@ export function workTypeQuestion(
 export function crewFlowShape(questions: readonly RequirementQuestionView[]): CrewFlowShape {
   if (isEventCrewFlow(questions)) return "event";
   return workTypeQuestion(questions) === null ? "plain" : "work";
+}
+
+/**
+ * A published team product: the Customer sizes it by guests, while one hidden
+ * `worker_count` keeps the rate-card, matching and shift engines on their
+ * existing contract. The shape is structural so another team-based service can
+ * use it without adding a service-slug branch.
+ */
+export function isFixedTeamCrewFlow(
+  questions: readonly RequirementQuestionView[],
+): boolean {
+  return (
+    questions.some((question) => question.code === EVENT_TYPE_CODE) &&
+    questions.some((question) => question.code === GUEST_BAND_CODE) &&
+    questions.some((question) => question.code === HEADCOUNT_CODE) &&
+    roleQuestions(questions).length === 0
+  );
+}
+
+/** Highest guest count published by a fixed-team service, used by its quote hand-off copy. */
+export function fixedTeamGuestLimit(
+  questions: readonly RequirementQuestionView[],
+): number | null {
+  if (!isFixedTeamCrewFlow(questions)) return null;
+  const guestQuestion = questions.find((question) => question.code === GUEST_BAND_CODE);
+  const limits = (guestQuestion?.options ?? []).flatMap((option) =>
+    [...`${option.value} ${option.label}`.matchAll(/\d+/g)].map((match) => Number(match[0])),
+  );
+  return limits.length === 0 ? null : Math.max(...limits);
 }
 
 /** All server-published questions except the work picker that owns step one. */
@@ -128,6 +160,8 @@ export function resumeCrewBookingStep(
 /** The free-text follow-up is visible only for the server's `other` option. */
 export function hiddenCrewQuestionCodes(
   answers: Readonly<Record<string, unknown>>,
+  questions: readonly RequirementQuestionView[] = [],
 ): readonly string[] {
-  return answers[WORK_TYPE_CODE] === OTHER_WORK_TYPE ? [] : [WORK_DESCRIPTION_CODE];
+  const hidden = answers[WORK_TYPE_CODE] === OTHER_WORK_TYPE ? [] : [WORK_DESCRIPTION_CODE];
+  return isFixedTeamCrewFlow(questions) ? [...hidden, HEADCOUNT_CODE] : hidden;
 }

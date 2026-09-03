@@ -36,6 +36,7 @@ from apps.carts.availability import load_snapshot
 from apps.carts.services import BookingWindows, build_arrival_window_grid
 from apps.identity.models import User
 from apps.locations.models import ServiceArea
+from apps.requirements.access import settlement
 from apps.requirements.exceptions import (
     PolicyUnavailableError,
     RequirementNotFoundError,
@@ -49,6 +50,11 @@ from apps.requirements.models import (
     VisitPlan,
     VisitPlanShare,
 )
+from apps.requirements.services import record_transition
+
+#: Why a share was settled without a visit. Shared by the sweep that finds nobody and by the
+#: Customer's own "do without this one", so both read the same in the ledger and on a receipt.
+REASON_NO_PROFESSIONAL_FOUND = "no_professional_found"
 
 #: Signed-token salt and version, mirroring `carts.services.WINDOW_SIGNING_SALT`. The version is
 #: checked on redemption so a token issued before a change in what it carries is refused rather
@@ -362,7 +368,13 @@ def replace_customer_visit_slot(
         if row.requested_start is not None and row.duration_minutes is not None
     ]
     if not _choices_do_not_overlap([*sibling_choices, choice]):
-        raise VisitSlotUnavailableError("That time overlaps another visit in this plan.")
+        # Says *why*. `occupied_range_bounds` adds the turnaround gap, so two visits an hour
+        # apart can clash even though neither runs into the other — and "that time overlaps
+        # another visit" reads like a bug to somebody looking at 5pm and 6pm on their screen.
+        raise VisitSlotUnavailableError(
+            "That is too close to your other visit. A professional needs travel time between "
+            "them, so pick a time further apart."
+        )
     if choice.starts_at <= timezone.now() or not _customer_choice_is_still_available(
         requirement=requirement,
         choice=choice,
@@ -375,6 +387,72 @@ def replace_customer_visit_slot(
         update_fields=("requested_start", "duration_minutes", "matching_status", "updated_at")
     )
     return share
+
+
+@transaction.atomic
+def drop_unmatched_visit_slot(
+    *, requirement_id: UUID, share_id: UUID, actor: User
+) -> VisitPlanShare:
+    """Give up on one slot nobody could be found for, and stop charging for it.
+
+    The other half of `replace_customer_visit_slot`. When matching is exhausted the Customer has
+    exactly two honest choices — try another time, or do without that visit — and until now only
+    the first existed. A Customer who did not want a different time had no way to say so, and the
+    plan went on quoting the full tier price for a visit the server had already settled as
+    undeliverable.
+
+    Dropping routes through the ordinary `refund_share` so there is one settlement path, not two:
+    it is idempotent, it returns the whole share including the platform's part, and it issues a
+    real refund when the plan was already charged. On an uncharged plan there is nothing to send
+    back and the share is simply marked — which is what makes `chargeable_paise` quote the smaller
+    number at checkout instead of taking money in order to return it.
+
+    Refused on anything but an exhausted slot. A share still searching may yet be filled, and a
+    held or booked one belongs to a professional who has already committed their day.
+    """
+
+    requirement = (
+        CustomerRequirement.objects.select_for_update(of=("self",))
+        .filter(pk=requirement_id, customer=actor)
+        .first()
+    )
+    if requirement is None:
+        raise RequirementNotFoundError()
+    share = (
+        VisitPlanShare.objects.select_for_update()
+        .select_related("plan")
+        .get(pk=share_id, plan__requirement=requirement)
+    )
+    if share.status == VisitPlanShare.Status.REFUNDED:
+        # Idempotent by state: a second tap re-reads the dropped slot.
+        return share
+    if share.matching_status != VisitPlanShare.MatchingStatus.NO_PROFESSIONAL_FOUND:
+        raise VisitSlotUnavailableError("Only a visit nobody could be found for can be dropped.")
+    if (
+        share.plan.shares.exclude(pk=share.pk)
+        .exclude(status=VisitPlanShare.Status.REFUNDED)
+        .count()
+        == 0
+    ):
+        # Dropping the last live slot would leave a plan that buys nothing while still
+        # existing. Cancelling the request is a different door, with its own rules.
+        raise VisitSlotUnavailableError(
+            "This is the only visit left on the plan. Cancel the request instead."
+        )
+    dropped = settlement.refund_share(
+        share_id=share.id, reason_code=REASON_NO_PROFESSIONAL_FOUND
+    )
+    dropped.matching_status = VisitPlanShare.MatchingStatus.CANCELLED
+    dropped.save(update_fields=("matching_status", "updated_at"))
+    record_transition(
+        requirement=requirement,
+        from_status=requirement.status,
+        to_status=requirement.status,
+        actor=actor,
+        reason_code=REASON_NO_PROFESSIONAL_FOUND,
+        reason=f"visit_share:{dropped.id} dropped by the customer",
+    )
+    return dropped
 
 
 def candidate_visit_starts(*, invitation: VendorInvitation) -> BookingWindows:
@@ -604,6 +682,11 @@ def as_wire(windows: BookingWindows) -> dict[str, Any]:
     return {
         "server_now": windows.server_now,
         "visit_duration_minutes": windows.estimated_duration_minutes,
+        # Published so a picker can grey out a slot that sits too close to a visit the
+        # Customer already has, instead of offering it and having the write refuse it.
+        # The server still decides — `occupied_range_bounds` is the rule and this is only
+        # the same number, said out loud, so the two agree before a Customer taps.
+        "turnaround_minutes": int(getattr(settings, "M1_TURNAROUND_MINUTES", 0)),
         "availability_is_preliminary": windows.availability_is_preliminary,
         "timezone": windows.timezone,
         "days": [

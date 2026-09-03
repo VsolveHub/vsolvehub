@@ -2,7 +2,7 @@ import type { Schemas } from "@vsolve/api-client";
 
 export type EstimateMode = Schemas["EstimateTypeEnum"];
 export type EstimateUnit = Schemas["UnitEnum"];
-export type ChargeCode = Schemas["CodeEnum"];
+export type ChargeCode = Schemas["ProposalOtherChargeCodeEnum"];
 export type ProposalRequest = Schemas["ProposalCreateRequest"];
 export type ProposalPreviewRequest = Schemas["ProposalPreviewRequest"];
 export type MaterialBrandTier = Schemas["MaterialBrandTierEnum"] | "";
@@ -116,6 +116,14 @@ export interface CommercialEstimateDraft {
   readonly inclusions: readonly string[];
   readonly exclusions: readonly string[];
   readonly warrantyTerms: string;
+  /**
+   * Working days the vendor expects the job to take, or null while unstated.
+   *
+   * Days rather than a date: the start waits on the Customer choosing and paying, so a
+   * date picked on site is stale before it is read. The figure is also a commitment —
+   * the total is locked at acceptance, so an overrun is the vendor's to absorb.
+   */
+  readonly completionDays: number | null;
   readonly validUntil: string | null;
   /** Quantity edits to suggested material rows, keyed by `title|unit`. */
   readonly materialQuantityEdits: Readonly<Record<string, string>>;
@@ -160,12 +168,107 @@ export const EMPTY_COMMERCIAL_ESTIMATE: CommercialEstimateDraft = {
   inclusions: [],
   exclusions: [],
   warrantyTerms: "",
+  completionDays: null,
   validUntil: null,
   materialQuantityEdits: {},
   materialRemovedKeys: [],
   materialAdded: [],
   materialBrandTier: "",
 };
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string")
+    : [];
+}
+
+/**
+ * Reopens the exact server-held estimate as an editable draft.
+ *
+ * A revision is append-only, but it should begin as a copy of the current
+ * revision rather than an empty estimate. Every editable field published by
+ * `ProposalSerializer` is mapped back here; server-derived totals are omitted
+ * because preview recalculates them under the current policy before resubmit.
+ */
+export function commercialEstimateFromProposal(
+  proposal: Schemas["Proposal"],
+): CommercialEstimateDraft {
+  const suppliedMaterials =
+    proposal.material_fulfilment_mode === "PARTNER_TURNKEY"
+      ? proposal.included_supply_list
+      : proposal.material_list;
+  const materialBrandTier: MaterialBrandTier =
+    proposal.material_brand_tier === "STANDARD" || proposal.material_brand_tier === "PREMIUM"
+      ? proposal.material_brand_tier
+      : "";
+
+  return {
+    mode: proposal.estimate_type,
+    itemLines: proposal.item_lines.map((line, index) => {
+      const workItemId = line.work_item_id ?? null;
+      return {
+        id: workItemId === null ? `revision-item-${index + 1}` : catalogueLineId(workItemId),
+        category: line.category ?? "",
+        title: line.title,
+        unit: line.unit,
+        quantity: line.quantity,
+        ratePaise: line.rate_paise,
+        workItemId,
+        isCustom: line.is_custom ?? workItemId === null,
+      };
+    }),
+    labourLines: proposal.labour_lines.map((line, index) => ({
+      id: `revision-labour-${index + 1}`,
+      role: line.role,
+      team: line.team,
+      memberCount: line.member_count,
+      dayCount: line.day_count,
+      ratePaisePerDay: line.rate_paise_per_day,
+      workItemId: null,
+    })),
+    materialLines: proposal.material_lines.map((line, index) => ({
+      id: `revision-material-${index + 1}`,
+      title: line.title,
+      quantity: line.quantity,
+      unit: line.unit,
+      ratePaise: line.rate_paise ?? null,
+    })),
+    otherCharges: proposal.other_charges.map((charge, index) => ({
+      id: `revision-charge-${index + 1}`,
+      code: charge.code,
+      label: charge.label,
+      amountPaise: charge.amount_paise,
+    })),
+    installments: proposal.stages.map((stage, index) => ({
+      id: `revision-stage-${index + 1}`,
+      title: stage.title,
+      deliverable: stage.deliverable,
+      amountPaise: stage.amount_paise,
+      // `ends_on` is optional on the wire — a stage with a name and an amount is
+      // a complete stage — while the draft models "no end date" as null.
+      endsOn: stage.ends_on ?? null,
+    })),
+    // Submitted stages are exact customer-facing terms, not a template that
+    // should be silently reallocated when this draft mounts.
+    paymentTemplate: "CUSTOM",
+    scopeSummary: proposal.scope_summary,
+    inclusions: stringList(proposal.inclusions),
+    exclusions: stringList(proposal.exclusions),
+    warrantyTerms: proposal.warranty_terms,
+    completionDays: proposal.completion_days ?? null,
+    validUntil: proposal.valid_until,
+    materialQuantityEdits: {},
+    materialRemovedKeys: [],
+    materialAdded: suppliedMaterials.map((line) => ({
+      title: line.title,
+      spec: line.spec ?? "",
+      unit: line.unit ?? "",
+      quantity: line.quantity,
+      note: line.note ?? "",
+    })),
+    materialBrandTier,
+  };
+}
 
 /** A typed row. Custom by definition: nothing the vendor names has a catalogue id. */
 export function newItemLine(id: string, title = "", category = ""): ItemLineDraft {
@@ -802,6 +905,7 @@ function requestBody(input: {
     inclusions: draft.inclusions.map((line) => line.trim()).filter(Boolean),
     exclusions: draft.exclusions.map((line) => line.trim()).filter(Boolean),
     warranty_terms: draft.warrantyTerms.trim(),
+    completion_days: draft.completionDays,
     valid_until: draft.validUntil,
     material_brand_tier: draft.materialBrandTier,
   };

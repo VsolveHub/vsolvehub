@@ -21,6 +21,16 @@ EVENT_SCHEMA = {
             ],
         },
         {"code": "event_description", "label": "Tell us about the event", "kind": "TEXT"},
+        {
+            "code": "meals",
+            "label": "Which meals?",
+            "kind": "MULTI_SELECT",
+            "options": [
+                {"code": "breakfast", "label": "Breakfast", "description": ""},
+                {"code": "lunch", "label": "Lunch", "description": ""},
+                {"code": "dinner", "label": "Dinner", "description": ""},
+            ],
+        },
         {"code": "waiter_count", "label": "Waiters and serving staff", "kind": "INTEGER"},
         {"code": "bar_staff_count", "label": "Bar and beverage staff", "kind": "INTEGER"},
         {"code": "worker_count", "label": "Staff", "kind": "INTEGER", "required": True},
@@ -83,6 +93,19 @@ def test_an_unknown_option_code_is_shown_rather_than_hidden(world: M2World) -> N
     requirement = _with_answers(world, {"event_type": "retired-option"})
 
     assert crew_brief.brief_lines(requirement)[0].value == "retired-option"
+
+
+def test_multi_select_labels_are_rendered_and_empty_or_invalid_values_are_dropped(
+    world: M2World,
+) -> None:
+    requirement = _with_answers(world, {"meals": ["lunch", "retired-meal"]})
+
+    assert crew_brief.brief_lines(requirement)[0].value == "Lunch, retired-meal"
+
+    for value in ([], "lunch"):
+        requirement.answers = {"meals": value}
+        requirement.save(update_fields=("answers",))
+        assert crew_brief.brief_lines(requirement) == []
 
 
 def test_a_requirement_without_a_configuration_has_an_empty_brief(world: M2World) -> None:

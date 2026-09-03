@@ -1,5 +1,174 @@
 # API Contract Changelog
 
+## 1.61.0 - A project estimate is revisable until the customer chooses it
+
+A vendor could correct an A5 estimate for five minutes after sending it, and not one second
+longer. That made projects the odd one out — an A3 quote has always been revisable for as long as
+it is live — and it left a Partner looking at a price they could no longer fix while the Customer
+was still deciding.
+
+`POST /api/v1/proposals/` now accepts a revision for as long as the vendor's latest estimate is
+`SUBMITTED` or `WITHDRAWN`. The line is the Customer's decision rather than a clock: submission
+still refuses once the requirement is `SELECTED` or `ENGAGED`, taking the requirement's row lock
+first, so a revision racing an acceptance cannot both win. `WITHDRAWN` is included because the
+withdraw dialog has always told vendors "your enquiry stays open, so you can send a new one" — a
+promise this endpoint refused to keep for projects.
+
+An `EXPIRED` estimate is unchanged: it is superseded only after the Customer asks whether the
+price still stands.
+
+Nothing about the record changes. Supersession stays append-only, so the Customer keeps seeing
+every version they were offered, and `m2.proposal.submitted` still fires per proposal id, so each
+revision announces itself.
+
+- Removed: `Proposal.revision_expires_at`. It published the end of the five-minute window and had
+  no other meaning; a field that could only ever return null now would be a worse answer than no
+  field. Clients that gated a "revise" control on it should read `status` instead.
+
+## 1.60.0 - Partner earnings separate direct payments from Vsolve payouts
+
+`PartnerPerformance` now includes `today_direct_paise`, `month_direct_paise` and
+`lifetime_direct_paise`. These are mutually confirmed A3 crew-day amounts paid by the Customer
+straight to the Partner. They contribute to the existing total earnings fields and trend, while
+`PartnerBalance` remains the amount Vsolve collected and can actually pay out.
+
+Completed A3/A5 engagements are counted once from their durable completion timestamp. A5 stage
+earnings and retention releases still move money, but no longer inflate the number of jobs done.
+
+- Removed: none.
+
+## 1.59.0 - Two questions after a job, and both read per service
+
+A customer is now asked two separate things when work finishes, and they are kept apart on purpose.
+A five-star crew booked through a confusing checkout is `partner 5 / platform 2`, and one blended
+score hides exactly the finding worth having.
+
+**"How was your partner"** is unchanged: `ServiceRating`, one per participant per job.
+
+**"How was Vsolve"** is new. `POST /api/v1/engagements/{id}/platform-feedback/` and the matching
+`/bookings/{id}/` route record a score, a set of chips and an optional note. `GET` on either
+returns `can_submit`, the caller's own submission, and **`available_tags`** — the chip vocabulary,
+server-authored, so no client hardcodes it and two apps cannot drift into two sets of counts that
+look like one.
+
+- Everything is individually optional; only the wholly empty submission is refused
+  (`feedback_empty`). Someone who taps one chip and closes has told us the useful thing, and
+  demanding a star first would lose it.
+- `ALL_GOOD` is exclusive. Sending it with a complaint is refused (`feedback_tags_invalid`) rather
+  than silently resolved — either half might be the one they meant.
+- Only the customer is asked. The same question put to a Partner would collect a different thing
+  under the same label.
+
+**Both records carry the service they were about.** `ServiceRating` and `PlatformFeedback` each
+store a `ServiceVariant` resolved **by the server**, never sent by a client — feedback whose
+subject the rater picks is feedback you cannot aggregate. An engagement always resolves, from its
+requirement. A catalogue booking may not: its visit can cover several cart items, and one that
+covered a deep clean and a tap repair is not evidence about either service alone. Unresolvable is
+recorded as null and counted separately, never assigned to whichever line came first.
+
+**Operations reads both per service.** `GET /api/v1/operations/service-feedback/` returns one row
+per service with the partner score and the platform score **side by side and never blended**, plus
+a chip histogram, worst platform score first. A service nobody has rated sorts last — silence is
+not a bad score. `GET /api/v1/operations/service-feedback/{variant_id}/notes/` returns the written
+notes, each carrying the same customer's partner rating for that job, because `platform 2 /
+partner 5` is invisible when the two are read apart.
+`.../service-feedback/unattributed/notes/` serves the multi-service bucket.
+
+**`RatingSummary.my_rating` is published again, to its author only.** 1.57.0 pinned it to null
+along with `ratings`, which went a step too far: it left a rated job indistinguishable from an
+unrated one on the customer's own screen, so somebody who had already rated saw no dialog, no
+confirmation and no record. `ratings` stays empty — the **counterparty's** score and comment remain
+private, which is what that release was actually protecting.
+
+- Removed: none.
+
+## 1.58.0 - A crew name that can be corrected, and a document behind the verification
+
+Three gaps in the crew surface, all of which had a rule with no exit.
+
+**A crew member's name is now a per-roster label.** `CrewMemberUpdateRequest` gains
+**`display_name`**, which writes `PartnerCrewMembership.display_name` and never the shared
+`CrewMember`. The name was previously read-only because the global row is shared by every agency
+that resolved to the same number — correct as far as it went, and it left a typo permanently
+unfixable: the screen's advice to archive and re-add cannot work, because `add_crew_to_roster`
+resolves by `identity_hash` and `get_or_create` ignores `defaults` on a hit. Blank clears the
+override and falls back to the global record. Every partner-, customer- and Operations-facing
+projection of a crew name now reads the membership label first, including the shift-day crew rows
+and the refusal messages that name a worker.
+
+**A crew member's gender is editable by the only agency that has them.** `CrewMember.gender` stays
+on the shared crew record — a Customer's men/women split is checked against it at accept and again
+at assignment, so it cannot become per-roster without two agencies staffing one wedding from two
+answers. But first-write-wins was applied unconditionally, including to a worker **nobody else
+held**, where the refusal protected no one and left the record permanently wrong. It now applies
+only when a second agency has the worker on an active roster; that case still answers
+`m2_crew_gender_conflict`. Whether a worker is shared is deliberately **not published** — that is
+the fact `crew_roster` suppresses `crew_member_id` to hide — so clients offer the field
+unconditionally and surface the refusal. Clearing a recorded gender remains unavailable.
+
+**Operations can settle a disputed gender.** New
+`POST /api/v1/operations/crew-memberships/{membership_id}/gender/`
+(`m2_operations_crew_gender_correct`). `CrewMember.gender` is one row per person, so the
+Partner-facing rule stays first-write-wins and a contradiction is still refused with
+`m2_crew_gender_conflict` — but that refusal told the Partner to *contact support*, and support had
+no endpoint, so a worker recorded wrongly by whichever agency typed first lost gendered work
+permanently. A reason is required and the previous value is written to the audit event. Clearing is
+not offered; `UNDISCLOSED` is the value for a worker who declined to say.
+
+**Crew identity documents exist.** Until now `documents_verified_at` recorded that a reviewer had
+checked something, with nothing anywhere in the system to check.
+
+- `POST /api/v1/partner/crew/{membership_id}/documents/` (`m2_partner_crew_document_upload`)
+  issues a short-lived signed upload against declared kind, media type, size and SHA-256.
+- `PUT` on the same path (`m2_partner_crew_document_submit`) confirms the upload; the stored object
+  is streamed back and compared against what was declared before any reviewer sees it.
+- `GET /api/v1/operations/crew-memberships/{membership_id}/documents/`
+  (`m2_operations_crew_documents`) publishes each live document with a short-lived signed
+  `review_url`. It is **nullable**: a storage outage degrades the screen to one missing preview
+  rather than an error page hiding everyone else in the queue.
+- `POST /api/v1/operations/crew-documents/{document_id}/review/`
+  (`m2_operations_crew_document_review`) approves or rejects one document. Approving the last
+  required kind verifies the membership through the existing `verify_crew_documents` command;
+  rejecting a required kind withdraws verification, carrying the rejection's reason. A rejection
+  requires a reason.
+- `CrewMember` gains **`documents`**: per-kind status and, on a rejection, the reason — so a
+  Partner's roster can tell "waiting on Operations" apart from "waiting on you". No reviewer
+  identity and no file link is published to a Partner.
+
+**The verification queue can show verified crew.** `m2_operations_crew_verification_queue` gains a
+**`state`** parameter (`PENDING`, the default, / `VERIFIED` / `ALL`). `verify_crew_documents` has
+always been able to *un*-verify, and no screen could reach a verified membership to do it.
+`CrewMembershipVerificationRow` gains **`gender`**, **`documents_pending`** and
+**`documents_approved`**, so a queue row distinguishes "nobody has uploaded anything" from "there
+is a file to open".
+
+- Removed: none. `display_name` stays read-only on `CrewMember` responses and still resolves to
+  the same string for any roster that has not set an override.
+
+## 1.57.0 - Booking-level ratings stay private
+
+- Rating submission is unchanged: a Customer and Partner may each rate a completed booking or
+  engagement once, and the immutable stored score continues to feed aggregate marketplace trust.
+- `RatingSummary.my_rating` is now always `null` and `RatingSummary.ratings` is always empty.
+  They remain temporarily as compatibility fields for generated clients, but booking screens can
+  no longer display “Customer rating”, “Partner rating” or “Your rating” with an individual score
+  or comment.
+- Overall Partner rating and rating count are unchanged; those aggregates remain the only rating
+  values intended for display.
+- Removed: no contract fields in this compatibility release.
+
+## 1.56.0 - Crew booking fee development capture
+
+- `BookingFee` gains **`simulated_capture_available`**. It is true only when the server's
+  fail-closed development simulator setting is enabled and the fee's own payment attempt uses the
+  fake provider. The Customer can therefore offer the same one-click **Mark as paid** recovery as
+  visit plans after either a fresh checkout or a page reload, without inferring environment or
+  provider policy in the browser.
+- The existing `payment_attempt_simulate_capture` operation already accepts `M2_BOOKING_FEE` and
+  routes it through the real capture completion: the fee becomes active, the crew booking becomes
+  confirmed and the engagement is created in the same transaction.
+- Removed: none.
+
 ## 1.55.0 - Which role a worker was named into, recorded before it is enforced
 
 - `StageCrewAssignment` gains **`role_code`**, published on every shift-day crew row, and the crew

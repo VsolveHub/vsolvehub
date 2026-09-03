@@ -3,6 +3,7 @@
 import { ChoiceChips, Field, QuantityStepper, Textarea, cn } from "@vsolve/ui";
 
 import type { RequirementQuestionView } from "@/features/requirement/adapters";
+import { MultiChoiceChips } from "./multi-choice-chips";
 
 /**
  * The preset's questions — `M2-FE-425`.
@@ -198,6 +199,13 @@ export function PresetQuestions({
                   );
                 })}
               </div>
+            ) : question.kind === "multi" ? (
+              <MultiChoiceChips
+                question={question}
+                value={value}
+                onAnswer={(next) => onAnswer(question.code, next)}
+                disabled={disabled}
+              />
             ) : question.kind === "boolean" ? (
               // Two radios rather than a checkbox: an unanswered boolean and a
               // "no" must not render identically, because only one of them
@@ -257,6 +265,7 @@ export function requiredAnswersPresent(
     const value = answers[question.code];
     if (value === undefined || value === null) return false;
     if (typeof value === "string") return value.trim() !== "";
+    if (Array.isArray(value)) return value.length > 0;
     return true;
   });
 }

@@ -278,8 +278,25 @@ class VisitPlan(models.Model):
 
     @property
     def chargeable_paise(self) -> int:
-        """What the Customer still owes: the tier price less any carried-over unlock credit."""
-        return max(self.price_paise - self.credit_paise, 0)
+        """What the Customer still owes: the tier price, less credit, less what cannot be delivered.
+
+        The third term is the one that was missing. A share nobody could be found for is
+        ``REFUNDED`` — the money machinery already gives it back *after* a charge — but before the
+        charge this property still quoted the full tier price, so a Customer whose second visit had
+        no professional within reach was asked to pay for two and then refunded for one. Taking
+        money for a visit we already know cannot happen, in order to hand it back later, is not a
+        refund policy; it is a worse version of not charging for it.
+
+        Only shares already settled as undeliverable are subtracted. A share still `SEARCHING` — or
+        one the Customer re-timed after an exhausted match — is chargeable, because it may still be
+        filled and a price that flickered with the matching state would be worse than either answer.
+        """
+        undeliverable = sum(
+            share.amount_paise
+            for share in self.shares.all()
+            if share.status == VisitPlanShare.Status.REFUNDED
+        )
+        return max(self.price_paise - self.credit_paise - undeliverable, 0)
 
     @property
     def charge_required(self) -> bool:

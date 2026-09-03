@@ -15,6 +15,8 @@ import {
   Calendar,
   ToggleLeft,
   Users,
+  FileCheck2,
+  MessageSquareHeart,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -32,6 +34,8 @@ const WORK_LINKS = [
 
 const PEOPLE_LINKS = [
   { href: "/operations/partners", label: "Partners", icon: Users },
+  { href: "/operations/crew-documents", label: "Crew documents", icon: FileCheck2 },
+  { href: "/operations/feedback", label: "Service feedback", icon: MessageSquareHeart },
   { href: "/reviews", label: "Partner reviews", icon: ClipboardCheck },
   { href: "/operations/partner-availability", label: "Availability", icon: Calendar },
 ];

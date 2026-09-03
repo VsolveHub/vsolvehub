@@ -30,15 +30,21 @@ export function EstimatePreviewSheet({
   vendorName,
   materialList = [],
   partnerTurnkey = false,
+  title = "As the customer sees it",
+  description = "This is the page they compare against the other estimates.",
+  closeLabel = "Back to editing",
 }: {
   open: boolean;
   onClose: () => void;
   draft: CommercialEstimateDraft;
-  preview: ProposalFinancialSummary | undefined;
+  preview: Pick<ProposalFinancialSummary, "customer_total_paise"> | undefined;
   vendorName: string;
   /** What the customer buys — quantities and a spec, never a price (1.48.0). */
   materialList?: readonly MaterialListLineDraft[];
   partnerTurnkey?: boolean;
+  title?: string;
+  description?: string;
+  closeLabel?: string;
 }) {
   const lines =
     draft.mode === "ITEM_WISE"
@@ -50,9 +56,9 @@ export function EstimatePreviewSheet({
     <Sheet
       open={open}
       onOpenChange={(next) => { if (!next) onClose(); }}
-      title="As the customer sees it"
-      description="This is the page they compare against the other estimates."
-      footer={<Button onClick={onClose}>Back to editing</Button>}
+      title={title}
+      description={description}
+      footer={<Button onClick={onClose}>{closeLabel}</Button>}
     >
       <div className="flex flex-col gap-3 text-text">
         <div className="rounded-[14px] bg-navy-900 p-4 text-surface">

@@ -25,6 +25,7 @@ function member(overrides: Partial<CrewMemberRecord> = {}): CrewMemberRecord {
     skill_codes: [],
     documents_verified_at: null,
     gender: "",
+    documents: [],
     added_at: "2026-08-01T06:00:00Z",
     ...overrides,
   };

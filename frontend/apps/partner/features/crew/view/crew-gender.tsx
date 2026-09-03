@@ -1,6 +1,6 @@
 "use client";
 
-import { Field } from "@vsolve/ui";
+import { Field, Select } from "@vsolve/ui";
 
 import type { CrewMemberRecord } from "@/features/capability/adapters/wire";
 
@@ -53,39 +53,31 @@ export function fillsNoGenderedSlot(gender: CrewGender): boolean {
 export interface CrewGenderFieldProps {
   readonly value: CrewGender;
   readonly onChange: (gender: CrewGender) => void;
-  /** True once a gender is on file: it may be filled in, never changed or cleared. */
-  readonly locked?: boolean;
   readonly disabled?: boolean;
 }
 
-export function CrewGenderField({
-  value,
-  onChange,
-  locked = false,
-  disabled = false,
-}: CrewGenderFieldProps) {
+export function CrewGenderField({ value, onChange, disabled = false }: CrewGenderFieldProps) {
   return (
     <Field
       label="Man or woman"
       showOptional={false}
-      description={
-        locked
-          ? "Recorded. This is shared with every agency this worker is on, so it cannot be changed here — contact support if it is wrong."
-          : "Customers booking event staff ask for a number of men and a number of women. Vsolve can only count someone toward that once this is recorded."
-      }
+      description="Customers booking event staff ask for a number of men and a number of women. Vsolve can only count someone toward that once this is recorded."
     >
-      <select
+      {/* The kit's `Select`, not a bare `<select>`. `Field` hands its control id down through
+          context and only a kit control reads it, so a raw element leaves the visible label
+          associated with nothing — a screen reader announces an unlabelled dropdown, on the one
+          field in this app whose whole justification is that the question is asked plainly. */}
+      <Select
         value={value}
-        disabled={disabled || locked}
+        disabled={disabled}
         onChange={(event) => onChange(event.target.value as CrewGender)}
-        className="min-h-12 w-full rounded-control border border-line bg-surface px-3 text-base text-text disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
       >
         {OPTIONS.map((option) => (
           <option key={option.value || "blank"} value={option.value}>
             {option.label}
           </option>
         ))}
-      </select>
+      </Select>
     </Field>
   );
 }

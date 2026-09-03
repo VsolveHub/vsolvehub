@@ -13,7 +13,7 @@ Two guards here exist because the platform, not only the vendor, carries the con
 import re
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 
 from django.db import transaction
@@ -54,23 +54,43 @@ _CONTACT_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
-#: A project estimate is editable only while the vendor is still correcting the
-#: submission they just made. After this window it remains an offer the Customer
-#: can act on, so any change belongs to a later engagement amendment rather than
-#: a quietly replaced estimate.
-ESTIMATE_REVISION_WINDOW = timedelta(minutes=5)
-
-
-def estimate_revision_expires_at(proposal: Proposal) -> datetime:
-    """The immutable end of an A5 estimate's correction window."""
-
-    return proposal.submitted_at + ESTIMATE_REVISION_WINDOW
+#: The A5 estimate states a vendor may still replace with a new one.
+#:
+#: `SUBMITTED` is the live offer, revisable until the Customer chooses it — exactly what an A3
+#: quote has always been. `WITHDRAWN` is the vendor's own retraction, and the withdraw dialog
+#: promises in as many words that "your enquiry stays open, so you can send a new one"; this
+#: command refused to keep that promise for projects until now.
+#:
+#: `EXPIRED` is deliberately absent and handled on its own below: an estimate that ran out of
+#: validity comes back only when the Customer asks for a fresh price, which is a different door.
+REPLACEABLE_ESTIMATE_STATUSES = frozenset(
+    {
+        Proposal.Status.SUBMITTED,
+        Proposal.Status.WITHDRAWN,
+    }
+)
 
 
 def _assert_project_revision_allowed(
     *, previous: Proposal | None, requirement: CustomerRequirement
 ) -> None:
-    """Keep a rejected or settled A5 estimate immutable, and close editing after five minutes."""
+    """Keep a settled A5 estimate immutable; a live one stays the vendor's to replace.
+
+    Until the owner decision of 2 September 2026 this also closed editing five minutes after
+    submission, reasoning that a later change "belongs to a later engagement amendment rather than
+    a quietly replaced estimate". Two things were wrong with that. It made projects the odd one
+    out — an A3 quote has always been revisable for as long as it is live — and it left a Partner
+    looking at a price they could no longer correct while the Customer was still deciding, which
+    is precisely when a correction is worth something to both of them.
+
+    Nothing is quiet about the replacement. Supersession is append-only, so every version the
+    Customer was offered survives and a dispute is argued from the chain; `m2.proposal.submitted`
+    fires per proposal id, so each revision tells the Customer it arrived.
+
+    The line is now the Customer's decision rather than a clock, and `submit_proposal` already
+    draws it: it refuses once the requirement is `SELECTED` or `ENGAGED`, under the requirement's
+    row lock, so a revision racing an acceptance cannot both win.
+    """
 
     if (
         previous is None
@@ -85,19 +105,9 @@ def _assert_project_revision_allowed(
         # expired row is superseded, and refusing it here would make `request_revalidation` a
         # button that promises a revision nobody can send.
         return
-    if previous.status != Proposal.Status.SUBMITTED:
+    if previous.status not in REPLACEABLE_ESTIMATE_STATUSES:
         raise RequirementTransitionError(
-            "This estimate can no longer be revised. You may only withdraw a live estimate "
-            "until the Customer chooses it."
-        )
-    if open_revision_request_for(previous) is not None:
-        # The Customer asked for a change. A request with a reason behind it reopens the window;
-        # the answer is still an ordinary supersession the Customer reads in full.
-        return
-    if timezone.now() >= estimate_revision_expires_at(previous):
-        raise RequirementTransitionError(
-            "An estimate can only be revised during the first 5 minutes after it is sent, "
-            "or when the Customer has asked for a revision."
+            "This estimate can no longer be revised. The customer has already acted on it."
         )
 
 
@@ -347,6 +357,7 @@ def submit_proposal(  # noqa: PLR0912, PLR0915 - one transaction owns the append
     inclusions: list[str] | None = None,
     exclusions: list[str] | None = None,
     warranty_terms: str = "",
+    completion_days: int | None = None,
     valid_until: Any = None,
     commission_treatment: str = "",
     site_visit_id: uuid.UUID | None = None,
@@ -540,6 +551,7 @@ def submit_proposal(  # noqa: PLR0912, PLR0915 - one transaction owns the append
         material_fulfilment_mode=fulfilment_mode,
         included_supply_list=included_supply_list or [],
         warranty_terms=warranty_terms,
+        completion_days=completion_days,
         scope_summary=scope_summary.strip(),
         valid_until=valid_until,
         captured_by=captured_by,
@@ -548,13 +560,36 @@ def submit_proposal(  # noqa: PLR0912, PLR0915 - one transaction owns the append
 
     if previous is not None:
         # A revision is the answer to whatever the Customer asked for on the row it replaces.
-        RevisionRequest.objects.filter(
+        #
+        # When what they asked for was a price, the movement is *read back off the vendor's own
+        # revision* rather than taken from the ask. The vendor may have agreed in full, moved
+        # part of the way, or moved on something else entirely; whichever it was, the new
+        # `total_paise` is the only number that ever set a price, and `countered_discount_bps`
+        # merely describes it so the Customer reads "they came back at 2%, not 5%". A revision
+        # that raised the price records no discount rather than a negative one.
+        answered = RevisionRequest.objects.filter(
             proposal=previous, status=RevisionRequest.Status.OPEN
-        ).update(
-            status=RevisionRequest.Status.ANSWERED,
-            answered_by_proposal=proposal,
-            resolved_at=timezone.now(),
-        )
+        ).first()
+        if answered is not None:
+            granted_bps: int | None = None
+            if (
+                answered.reason_code == RevisionRequest.ReasonCode.PRICE
+                and previous.total_paise > 0
+            ):
+                moved = previous.total_paise - int(total_paise or 0)
+                granted_bps = max(0, round(moved * 10_000 / previous.total_paise))
+            answered.status = RevisionRequest.Status.ANSWERED
+            answered.answered_by_proposal = proposal
+            answered.countered_discount_bps = granted_bps
+            answered.resolved_at = timezone.now()
+            answered.save(
+                update_fields=(
+                    "status",
+                    "answered_by_proposal",
+                    "countered_discount_bps",
+                    "resolved_at",
+                )
+            )
 
     if invitation.status != VendorInvitation.Status.QUOTED:
         invitation.status = VendorInvitation.Status.QUOTED
@@ -947,15 +982,24 @@ def request_revision(
     reason_code: str,
     excluded_items: list[str],
     note: str,
+    requested_discount_bps: int | None = None,
 ) -> RevisionRequest:
     """Ask a vendor for a different estimate, with the reason attached.
 
-    The rule that only a vendor states a price is untouched: nothing here carries a number, and the
-    answer is an ordinary superseding proposal. What changes is that a Customer can say *what* they
-    want different — leave the false ceiling out, cheaper tiles, two phases — instead of turning
-    the estimate down and hoping the replacement guesses. Gated on the same entitlement that lets
-    them read the estimate, refused once somebody has been chosen, and one open request at a time
-    per estimate so a vendor is never answering two asks with one revision.
+    A Customer can say *what* they want different — leave the false ceiling out, cheaper tiles,
+    two phases, or a smaller number — instead of turning the estimate down and hoping the
+    replacement guesses.
+
+    **The price rule holds.** ``requested_discount_bps`` is what the Customer hopes to pay, not
+    what the work costs. Nothing here writes it to a proposal, applies it to a total, or obliges
+    the vendor to honour it; the answer is an ordinary superseding proposal the vendor authors and
+    the Customer reads in full. The estimate as sent stays live and selectable throughout — asking
+    about a price costs nothing and gives nothing up.
+
+    Gated on the same entitlement that lets them read the estimate, refused once somebody has been
+    chosen, and one open request at a time per estimate so a vendor is never answering two asks
+    with one revision. A price may be asked about **once per estimate**: a second ask on the same
+    proposal is refused rather than becoming a haggle.
     """
     requirement = (
         CustomerRequirement.objects.select_for_update(of=("self",))
@@ -985,6 +1029,36 @@ def request_revision(
     if reason_code not in RevisionRequest.ReasonCode.values:
         raise RequirementTransitionError("Say what you would like changed.")
 
+    if reason_code == RevisionRequest.ReasonCode.PRICE:
+        if requested_discount_bps is None or not (
+            1 <= requested_discount_bps <= RevisionRequest.MAX_DISCOUNT_BPS
+        ):
+            raise RequirementTransitionError(
+                "Say how much you are hoping they can move, up to "
+                f"{RevisionRequest.MAX_DISCOUNT_BPS // 100}%."
+            )
+        if proposal.rate_paise_per_worker_day is not None:
+            # A3 day-hire. The figure is the ops-published city day rate, not the vendor's, so
+            # there is nothing here for them to give away and asking would be asking the wrong
+            # person. The client hides the control too; this is the gate that means it.
+            raise ProposalNotSelectableError(
+                "This price comes from the published rate card, so the professional "
+                "cannot change it."
+            )
+        already_asked = RevisionRequest.objects.filter(
+            proposal=proposal, reason_code=RevisionRequest.ReasonCode.PRICE
+        ).exists()
+        if already_asked:
+            # One ask per estimate, resolved or not. A second one is a haggle, and a haggle is a
+            # different product. If the vendor sends a revision, that is a new proposal row and
+            # the Customer may ask again against it.
+            raise ProposalNotSelectableError(
+                "You have already asked about this price. If they send a revised "
+                "estimate you can ask again."
+            )
+    elif requested_discount_bps is not None:
+        raise RequirementTransitionError("Only a price ask carries a figure.")
+
     request = RevisionRequest.objects.create(
         requirement=requirement,
         proposal=proposal,
@@ -992,6 +1066,11 @@ def request_revision(
         reason_code=reason_code,
         excluded_items=[item.strip() for item in excluded_items if item.strip()][:20],
         note=note.strip(),
+        requested_discount_bps=(
+            requested_discount_bps
+            if reason_code == RevisionRequest.ReasonCode.PRICE
+            else None
+        ),
     )
     record_transition(
         requirement=requirement,
@@ -1013,6 +1092,11 @@ def request_revision(
             "invitation_id": str(proposal.invitation_id),
             "revision_request_id": str(request.id),
             "reason_code": reason_code,
+            # Rides the existing envelope rather than a new topic: a price ask is a revision
+            # request with a figure on it, and notification routing already knows this event.
+            "requested_discount_bps": requested_discount_bps
+            if reason_code == RevisionRequest.ReasonCode.PRICE
+            else None,
         },
     )
     return request

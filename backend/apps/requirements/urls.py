@@ -11,6 +11,7 @@ from apps.requirements.views import (
     CancellationDecisionView,
     CaseAppealView,
     CaseEvidenceView,
+    CustomerRequirementVisitSlotDropView,
     CustomerRequirementVisitSlotReplaceView,
     CustomerRequirementVisitSlotView,
     EngagementAmendmentCollectionView,
@@ -52,6 +53,9 @@ from apps.requirements.views import (
     OperationsAssistedProposalView,
     OperationsChargebackView,
     OperationsCommercialPolicyActivateView,
+    OperationsCrewDocumentDecisionView,
+    OperationsCrewDocumentListView,
+    OperationsCrewGenderCorrectionView,
     OperationsCrewVerificationQueueView,
     OperationsCrewVerificationView,
     OperationsCustomWorkItemReviewQueueView,
@@ -201,6 +205,11 @@ urlpatterns = [
         "requirements/<uuid:requirement_id>/visit-slots/<uuid:share_id>/replace/",
         CustomerRequirementVisitSlotReplaceView.as_view(),
         name="m2-customer-visit-slot-replace",
+    ),
+    path(
+        "requirements/<uuid:requirement_id>/visit-slots/<uuid:share_id>/drop/",
+        CustomerRequirementVisitSlotDropView.as_view(),
+        name="m2-customer-visit-slot-drop",
     ),
     path(
         "requirements/<uuid:requirement_id>/quotes/",
@@ -756,6 +765,21 @@ urlpatterns = [
         "operations/crew-memberships/<uuid:membership_id>/verification/",
         OperationsCrewVerificationView.as_view(),
         name="m2-operations-crew-verification",
+    ),
+    path(
+        "operations/crew-memberships/<uuid:membership_id>/gender/",
+        OperationsCrewGenderCorrectionView.as_view(),
+        name="m2-operations-crew-gender-correction",
+    ),
+    path(
+        "operations/crew-memberships/<uuid:membership_id>/documents/",
+        OperationsCrewDocumentListView.as_view(),
+        name="m2-operations-crew-documents",
+    ),
+    path(
+        "operations/crew-documents/<uuid:document_id>/review/",
+        OperationsCrewDocumentDecisionView.as_view(),
+        name="m2-operations-crew-document-review",
     ),
     path(
         "operations/queues/",

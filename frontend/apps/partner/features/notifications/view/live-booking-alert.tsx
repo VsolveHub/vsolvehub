@@ -362,10 +362,39 @@ function InvitationBookingPopup({
       ? describeError(accept.error ?? decline.error, "mutation").message
       : null;
 
-  const handleDismiss = () => {
+  /* Closing advances the whole deck by one, so it has to happen exactly once per
+     popup. Answering and auto-dismissing can otherwise both fire — an accept
+     invalidates the enquiry, the refetched record says ACCEPTED, and the effect
+     below would close a second time, silently skipping the next offer waiting
+     behind this one. The component is keyed by booking, so the ref resets with it. */
+  const dismissed = useRef(false);
+  const handleDismiss = useCallback(() => {
+    if (dismissed.current) return;
+    dismissed.current = true;
     onUserAction();
     onClose();
-  };
+  }, [onClose, onUserAction]);
+
+  /*
+    An interrupt exists to be answered. Once the record loads and says this
+    invitation is no longer open — already taken by this Partner, passed on, or
+    lost to somebody faster — there is nothing left to interrupt about, and
+    holding the dialog up runs a countdown over a disabled Accept button: the
+    app telling a Partner they are racing for work they already hold.
+
+    This is the client half of the same rule the stream enforces server-side in
+    `_unanswerable_offer_intent_ids`. Both halves are needed: the stream fix
+    stops a dead offer being *pushed*, and this stops one that reached the deck
+    by any other route — the ten-second unread poll, a stale cache, a queued
+    interrupt whose offer was taken while an earlier one was on screen.
+
+    `isPending` matters: absent it, the popup would dismiss itself in the moment
+    before the record arrives.
+  */
+  const unanswerable = !detailQuery.isPending && enquiry !== null && !canAccept;
+  useEffect(() => {
+    if (unanswerable && !inFlight) handleDismiss();
+  }, [handleDismiss, inFlight, unanswerable]);
 
   return (
     <>
@@ -397,7 +426,7 @@ function InvitationBookingPopup({
             <Button
               onClick={() => {
                 onUserAction();
-                accept.mutate(undefined, { onSuccess: () => onClose() });
+                accept.mutate(undefined, { onSuccess: handleDismiss });
               }}
               loading={accept.isPending}
               loadingLabel={isFixedVisit ? "Taking it" : "Accepting"}
@@ -483,7 +512,7 @@ function InvitationBookingPopup({
         onActionPointerDown={onUserAction}
         onDecline={(reasonCode) => {
           onUserAction();
-          decline.mutate({ reasonCode }, { onSuccess: () => onClose() });
+          decline.mutate({ reasonCode }, { onSuccess: handleDismiss });
         }}
       />
     </>

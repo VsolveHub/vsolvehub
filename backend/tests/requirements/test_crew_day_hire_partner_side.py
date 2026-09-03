@@ -9,12 +9,14 @@ per-day summary on each stage, and the partner routes for money moving on the da
 
 import uuid
 from datetime import timedelta
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from django.utils import timezone
 
 from apps.foundation.models import OutboxEvent
+from apps.payouts.performance import partner_performance
+from apps.payouts.services import partner_balance_paise
 from apps.requirements.models import (
     DaySettlement,
     Engagement,
@@ -169,6 +171,54 @@ def test_each_day_carries_its_own_summary(world: M2World) -> None:
     assert untouched["expected_count"] == 3, "the booked headcount, before anybody records"
     assert untouched["settlement_status"] == ""
     assert untouched["crew_named"] == 0
+
+
+def test_directly_settled_crew_work_counts_as_earnings_and_one_completed_job(
+    world: M2World,
+) -> None:
+    """A3 wages are performance income without becoming a fake Vsolve payout."""
+    engagement = _crew_engagement(world=world)
+    now = timezone.now()
+    for stage in engagement.stages.order_by("position"):
+        DaySettlement.objects.create(
+            stage=stage,
+            engagement=engagement,
+            status=DaySettlement.Status.SETTLED,
+            per_worker_paise=85_000,
+            workers_present=3,
+            workers_expected=3,
+            extras_paise=0,
+            amount_paise=255_000,
+            supervisor_confirmed_at=now,
+            supervisor_confirmed_by=world.vendor.user,
+            customer_confirmed_at=now,
+            customer_confirmed_by=world.customer,
+            settled_at=now,
+        )
+    engagement.status = Engagement.Status.COMPLETED
+    engagement.completed_at = now
+    engagement.save(update_fields=("status", "completed_at", "updated_at"))
+
+    performance = partner_performance(world.vendor)
+    daily = cast(list[dict[str, object]], performance["daily"])
+
+    assert performance["today_net_paise"] == 510_000
+    assert performance["today_direct_paise"] == 510_000
+    assert performance["month_net_paise"] == 510_000
+    assert performance["month_direct_paise"] == 510_000
+    assert performance["lifetime_net_paise"] == 510_000
+    assert performance["lifetime_direct_paise"] == 510_000
+    assert performance["today_jobs"] == 1
+    assert performance["month_jobs"] == 1
+    assert performance["lifetime_jobs"] == 1
+    assert daily[-1]["net_paise"] == 510_000
+    assert daily[-1]["jobs"] == 1
+    assert partner_balance_paise(world.vendor) == {
+        "pending_paise": 0,
+        "available_paise": 0,
+        "reserved_paise": 0,
+        "paid_paise": 0,
+    }
 
 
 # --------------------------------------------------------------------------------------------

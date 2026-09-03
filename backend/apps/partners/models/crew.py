@@ -10,7 +10,9 @@ all is in `capabilities`; the record of how a crew day went is in `standing`.
 """
 
 import uuid
+from datetime import date
 
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
@@ -89,6 +91,20 @@ class PartnerCrewMembership(models.Model):
         related_name="partner_memberships",
     )
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.ACTIVE)
+    #: What *this* agency calls the worker. Blank means "whatever the global record says".
+    #:
+    #: The name is the one thing on a crew row that is a label rather than a fact.
+    #: `CrewMember.display_name` is shared by every agency that resolved to the same number, so
+    #: publishing it as editable meant one agency's correction silently renaming a person on
+    #: another agency's roster — and publishing it as read-only meant a typo nobody could ever
+    #: fix. Re-adding does not help: `add_crew_to_roster` resolves by `identity_hash` and
+    #: `get_or_create` ignores `defaults` on a hit, so "archive and add the correct person"
+    #: returned the same wrong name.
+    #:
+    #: A per-membership override is what the Add form already promised — *"what your team calls
+    #: them"*. Blank rather than a copy of the global name on every row, so a membership that
+    #: never had an opinion keeps tracking the global record instead of freezing a snapshot of it.
+    display_name = models.CharField(max_length=120, blank=True)
     is_supervisor = models.BooleanField(default=False)
     documents_verified_at = models.DateTimeField(null=True, blank=True)
     added_at = models.DateTimeField(default=timezone.now)
@@ -113,6 +129,133 @@ class PartnerCrewMembership(models.Model):
 
     def __str__(self) -> str:
         return f"{self.partner_id}:{self.crew_member_id}"
+
+    @property
+    def roster_name(self) -> str:
+        """What to call this worker on this roster, and in anything this agency's work produces.
+
+        Every partner-facing, customer-facing and Operations-facing read goes through here rather
+        than at `crew_member.display_name`, so a corrected name reaches the shift-day screen and
+        the refusal messages too — a name that is right on the roster and wrong in
+        "Ramesh is booked on the 14th" is a name the supervisor cannot act on.
+        """
+        return self.display_name or self.crew_member.display_name
+
+
+class CrewDocument(models.Model):
+    """One piece of identity evidence for one worker on one roster.
+
+    ## Why this exists at all
+
+    `PartnerCrewMembership.documents_verified_at` had a writer — an Operations command with an
+    actor, a reason on the negative path and an audit event — and nothing to look at. The reviewer
+    was attesting to a check that happened in a chat app, or had not happened. This is the
+    document behind the timestamp.
+
+    ## Why it hangs off the membership and not off the global `CrewMember`
+
+    An identity document describes the *person*, so the tempting shape is one per `CrewMember`,
+    uploaded once and reused by every agency. That shape leaks the thing this whole slice is built
+    to hide. `crew_roster` publishes no `crew_member_id` precisely so two agencies cannot discover
+    they share a worker; a document pool visible to both would announce it. The cost is real and
+    accepted: a worker on two rosters is checked twice.
+
+    ## Why the row is created before the bytes arrive
+
+    `AWAITING_UPLOAD` **is** the upload intent — the same two-phase shape as
+    `PartnerDocumentUpload` → `PartnerDocument`, in one table because a crew document has no
+    application version to guard and no separate lifecycle worth a second row. The client declares
+    size, media type and SHA-256 first; `submit_crew_document` streams the stored object back
+    through the storage boundary and compares. A client that declares a clean PDF and uploads
+    something else fails there rather than reaching a reviewer.
+    """
+
+    class Kind(models.TextChoices):
+        GOVERNMENT_ID = "GOVERNMENT_ID", "Government identity"
+        ADDRESS_PROOF = "ADDRESS_PROOF", "Address proof"
+        POLICE_VERIFICATION = "POLICE_VERIFICATION", "Police verification"
+
+    class Status(models.TextChoices):
+        AWAITING_UPLOAD = "AWAITING_UPLOAD", "Awaiting upload"
+        PENDING = "PENDING", "Pending review"
+        APPROVED = "APPROVED", "Approved"
+        REJECTED = "REJECTED", "Rejected"
+        SUPERSEDED = "SUPERSEDED", "Superseded"
+        FAILED = "FAILED", "Failed"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    membership = models.ForeignKey(
+        PartnerCrewMembership,
+        on_delete=models.PROTECT,
+        related_name="documents",
+    )
+    kind = models.CharField(max_length=32, choices=Kind.choices)
+    version = models.PositiveIntegerField()
+    #: Never reused across versions, so a replacement cannot be served from a signed link issued
+    #: against the one it replaced — which is how a rejected document comes back after it was
+    #: supposedly gone. Mirrors `photo_object_key`'s reasoning.
+    object_key = models.CharField(max_length=500, unique=True)
+    content_type = models.CharField(max_length=120)
+    size_bytes = models.PositiveBigIntegerField()
+    sha256 = models.CharField(max_length=64)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.AWAITING_UPLOAD)
+    #: The day this document stops being valid, or nothing. Nullable for the same reason
+    #: `PartnerDocument.expires_on` is: a photograph of a government ID has no expiry the platform
+    #: tracks, a police verification does, and a non-null default would be a policy guess.
+    expires_on = models.DateField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="crew_documents_reviewed",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_reason = models.TextField(blank=True)
+    failure_code = models.CharField(max_length=64, blank=True)
+    #: When the signed upload stops being usable. A row still `AWAITING_UPLOAD` past this is an
+    #: abandoned intent and `cleanup_stale_crew_documents` removes it and its object.
+    upload_expires_at = models.DateTimeField()
+    object_deleted_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("kind", "-version")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("membership", "kind", "version"),
+                name="partners_unique_crew_document_version",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(size_bytes__gt=0),
+                name="partners_crew_document_size_positive",
+            ),
+            # A reviewed row carries who reviewed it, and a rejection carries why. Enforced here
+            # rather than in the service so a second writer cannot produce a decision with no
+            # author, which is the one thing an audit trail may not contain.
+            models.CheckConstraint(
+                condition=~models.Q(status__in=("APPROVED", "REJECTED"))
+                | models.Q(reviewed_by__isnull=False, reviewed_at__isnull=False),
+                name="partners_crew_document_decision_has_reviewer",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(status="REJECTED") | ~models.Q(review_reason=""),
+                name="partners_crew_document_rejection_has_reason",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=("membership", "kind", "status")),
+            models.Index(fields=("status", "upload_expires_at")),
+            models.Index(fields=("kind", "expires_on")),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.membership_id}:{self.kind}:v{self.version}"
+
+    def is_expired_on(self, day: date) -> bool:
+        """A document with no recorded expiry never expires. Absence is not staleness."""
+        return self.expires_on is not None and self.expires_on < day
 
 
 class CrewAvailabilityException(models.Model):

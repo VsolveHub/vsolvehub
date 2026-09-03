@@ -11,6 +11,7 @@ import {
   M2_FRESHNESS,
   invalidateForM2Command,
   m2QueryKeys,
+  queryKeys,
   type ShiftSafetyCategory,
   type ShiftSafetySeverity,
 } from "@vsolve/query";
@@ -589,6 +590,10 @@ export function useConfirmDaySettled(scope: ShiftCommandScope) {
     onSuccess: async () => {
       clearIdempotencyKey(operation);
       await invalidateForM2Command(queryClient, "confirm_day_settled", scope);
+      // If this was the second party's tap, the day has just become earned
+      // direct income. Refresh the Home/Money aggregate immediately instead of
+      // waiting for the Partner to leave and refocus the app.
+      await queryClient.invalidateQueries({ queryKey: queryKeys.partnerMoney.performance() });
     },
     onError: reread,
     retry: false,

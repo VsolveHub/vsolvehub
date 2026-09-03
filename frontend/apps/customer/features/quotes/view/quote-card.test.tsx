@@ -36,14 +36,15 @@ function estimate(overrides: Partial<QuoteCardView> = {}): QuoteCardView {
     labourLines: [],
     otherCharges: [],
     stages: [
-      { title: "Start", deliverable: "Demolition done", amountLabel: "₹46,000", endsOn: null },
-      { title: "Handover", deliverable: null, amountLabel: "₹1,38,000", endsOn: "2026-10-14" },
+      { title: "Start", deliverable: "Demolition done", amountLabel: "₹46,000", totalDuePaise: 4_600_000, endsOn: null },
+      { title: "Handover", deliverable: null, amountLabel: "₹1,38,000", totalDuePaise: 13_800_000, endsOn: "2026-10-14" },
     ],
     materials: [],
     materialList: [],
     includedSupplyList: [],
     materialFulfilmentMode: "CUSTOMER_PROCURES",
     brandTierLabel: null,
+    completionDays: null,
     inclusions: ["Demolition & debris", "Waterproofing", "Plumbing rework"],
     exclusions: ["Sanitaryware"],
     scopeSummary: "Full strip-out and retile.",
@@ -66,7 +67,9 @@ describe("the estimate card", () => {
     render(<QuoteCard card={estimate()} index={0} isPicked={false} isRevalidating={false} {...hrefs} />);
 
     expect(screen.getByRole("heading", { name: "Ravi Interiors" })).toBeInTheDocument();
-    expect(screen.getByText("★ 4.8 (120) · 120 jobs · 9 yrs · since 2017")).toBeInTheDocument();
+    // "since 2017" is dropped when a tenure figure is present: "9 yrs · since 2017"
+    // says two different things about the same professional.
+    expect(screen.getByText("★ 4.8 (120) · 120 jobs · 9 yrs in trade")).toBeInTheDocument();
     expect(screen.getByText("₹1,84,000")).toBeInTheDocument();
     // The first stage's own amount — `stages[0].amount_paise`, never a share computed here.
     expect(screen.getByText("₹46,000")).toBeInTheDocument();
@@ -105,7 +108,7 @@ describe("the estimate card", () => {
   it("withholds the revision control while a request is already open", () => {
     render(
       <QuoteCard
-        card={estimate({ revisionRequest: { id: "r1", status: "OPEN", reasonLabel: "Leave something out", excludedItems: [], note: null, declineNote: null, createdAt: "2026-08-22T08:00:00Z" } })}
+        card={estimate({ revisionRequest: { id: "r1", status: "OPEN", isPriceAsk: false, reasonLabel: "Leave something out", excludedItems: [], note: null, declineNote: null, requestedDiscountPercent: null, counteredDiscountPercent: null, createdAt: "2026-08-22T08:00:00Z" } })}
         index={0}
         isPicked={false}
         isRevalidating={false}

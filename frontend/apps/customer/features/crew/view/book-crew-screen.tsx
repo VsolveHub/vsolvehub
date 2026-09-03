@@ -52,8 +52,10 @@ import {
   WORK_DESCRIPTION_CODE,
   crewDetailQuestions,
   crewFlowShape,
+  fixedTeamGuestLimit,
   hiddenCrewQuestionCodes,
   initialCrewBookingStep,
+  isFixedTeamCrewFlow,
   resumeCrewBookingStep,
   selectedWorkLabel,
   selectedWorkValue,
@@ -228,6 +230,9 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
   const questions = questionSet.questions;
   const shape = useMemo(() => crewFlowShape(questions), [questions]);
   const isEvent = shape === "event";
+  const isFixedTeam = useMemo(() => isFixedTeamCrewFlow(questions), [questions]);
+  const guestLimit = useMemo(() => fixedTeamGuestLimit(questions), [questions]);
+  const asksReportingTime = isEvent || isFixedTeam;
   const roles = useMemo(() => roleQuestions(questions), [questions]);
 
   const [answers, setAnswers] = useState<Record<string, unknown>>(() => {
@@ -303,7 +308,7 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
     requiredAnswersPresent(questions, answers) &&
     effectiveAddressId !== null &&
     requestedStart !== "" &&
-    (!isEvent || reportingTime !== null) &&
+    (!asksReportingTime || reportingTime !== null) &&
     size !== null;
 
   /**
@@ -432,7 +437,7 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
 
   /** The instant to save: the chosen day, at the reporting time for a shift crew. */
   function startInstant(): string {
-    return combineStart(requestedStart, isEvent ? reportingTime : null);
+    return combineStart(requestedStart, asksReportingTime ? reportingTime : null);
   }
 
   /**
@@ -551,11 +556,13 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
     />
   );
 
-  const hiddenCodes = isEvent ? hiddenEventQuestionCodes(answers) : hiddenCrewQuestionCodes(answers);
+  const hiddenCodes = isEvent
+    ? hiddenEventQuestionCodes(answers)
+    : hiddenCrewQuestionCodes(answers, questions);
   const siteLine = address === null ? null : addressSummaryLine(address);
   const whenLine = joinPresent([
     requestedStart === "" ? null : formatShortDate(requestedStart),
-    isEvent && reportingTime !== null ? formatReportingTime(reportingTime) : null,
+    asksReportingTime && reportingTime !== null ? formatReportingTime(reportingTime) : null,
   ]);
 
   const eventSummary: readonly SummaryLine[] = isEvent
@@ -699,12 +706,18 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
       ) : (
         <JobFormScreen
           serviceName={service.name}
+          title={isFixedTeam ? "Book a cook" : undefined}
+          heading={isFixedTeam ? "Plan your house function" : undefined}
           questions={detailQuestions}
           answers={answers}
           hiddenCodes={hiddenCodes}
           onAnswer={handleAnswer}
           requestedStart={requestedStart === "" ? null : requestedStart}
           onRequestedStart={setRequestedStart}
+          dateLabel={isFixedTeam ? "Event date" : undefined}
+          dateHorizonDays={isFixedTeam ? EVENT_DATE_HORIZON_DAYS : undefined}
+          reportingTime={isFixedTeam ? reportingTime : undefined}
+          onReportingTime={isFixedTeam ? setReportingTime : undefined}
           addressLine={siteLine}
           onOpenAddress={() => setAddressSignal((signal) => signal + 1)}
           addressPicker={addressPicker}
@@ -719,7 +732,19 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
           stepLabel={workQuestion === null ? "Step 1 of 2" : "Step 2 of 3"}
           selectedWorkLabel={workQuestion === null ? null : (workLabel ?? "Selected work")}
           onChangeWork={workQuestion === null ? undefined : () => setBookingStep("work")}
-          aboutPanel={workQuestion === null ? <CrewAboutPanel service={service} /> : null}
+          aboutPanel={
+            workQuestion === null ? (
+              <div className="flex flex-col gap-3">
+                <CrewAboutPanel service={service} />
+                {isFixedTeam ? <FixedTeamAssurance /> : null}
+              </div>
+            ) : null
+          }
+          afterQuestions={
+            isFixedTeam && guestLimit !== null ? (
+              <LargeFunctionHandoff guestLimit={guestLimit} />
+            ) : undefined
+          }
           onBack={workQuestion === null ? handleExitFlow : () => setBookingStep("work")}
         />
       );
@@ -728,7 +753,6 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
     return (
       <RateScreen
         rate={rate}
-        city={address?.city ?? null}
         isStale={previewQuery.isFetching}
         onBack={() => setBookingStep("details")}
         onBook={() => void handleBook()}
@@ -737,9 +761,17 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
         summary={
           isEvent ? (
             <EventSummaryCard lines={eventSummary} onChange={() => setBookingStep("details")} />
+          ) : isFixedTeam && guestLimit !== null ? (
+            <FixedTeamRateSummary days={size?.days ?? 1} guestLimit={guestLimit} />
           ) : undefined
         }
-        crewLabel={isEvent && mixLabel !== null ? "Whole event at this rate" : undefined}
+        crewLabel={
+          isEvent && mixLabel !== null
+            ? "for the whole event"
+            : isFixedTeam
+              ? "for the cook team, full day"
+              : undefined
+        }
         unavailable={
           rate === null && state !== null && !previewQuery.isFetching ? (
             <RateUnavailable
@@ -1111,12 +1143,18 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
                   title="How much help do you need?"
                   caption="Set the crew and duration"
                 />
-                <PresetQuestions
-                  questions={detailQuestions}
-                  answers={answers}
-                  hiddenCodes={hiddenCodes}
-                  onAnswer={handleAnswer}
-                />
+                <div className="flex flex-col gap-5">
+                  {isFixedTeam ? <FixedTeamAssurance /> : null}
+                  <PresetQuestions
+                    questions={detailQuestions}
+                    answers={answers}
+                    hiddenCodes={hiddenCodes}
+                    onAnswer={handleAnswer}
+                  />
+                  {isFixedTeam && guestLimit !== null ? (
+                    <LargeFunctionHandoff guestLimit={guestLimit} />
+                  ) : null}
+                </div>
               </section>
 
               <section className="rounded-[20px] border border-line bg-surface p-5 shadow-sm sm:p-6">
@@ -1126,18 +1164,42 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
                   caption="Date and saved address"
                 />
                 <div className="flex flex-col gap-5">
-                  <Field
-                    label="Start from"
-                    description="The first day you need the crew. If no supervisor has taken it by then we close the request — nothing is charged."
-                    required
-                  >
-                    <Input
-                      type="date"
-                      min={today}
-                      value={requestedStart}
-                      onChange={(event) => setRequestedStart(event.target.value)}
-                    />
-                  </Field>
+                  <div className={cn("grid gap-4", isFixedTeam && "sm:grid-cols-2")}>
+                    <Field
+                      label={isFixedTeam ? "Event date" : "Start from"}
+                      description="The first day you need the crew. If no supervisor has taken it by then we close the request — nothing is charged."
+                      required
+                    >
+                      <Input
+                        type="date"
+                        min={today}
+                        value={requestedStart}
+                        onChange={(event) => setRequestedStart(event.target.value)}
+                      />
+                    </Field>
+
+                    {isFixedTeam ? (
+                      <Field
+                        label="Reporting time"
+                        description="When the cook team should report."
+                        required
+                      >
+                        <Select
+                          value={reportingTime ?? ""}
+                          onChange={(event) =>
+                            setReportingTime(event.target.value === "" ? null : event.target.value)
+                          }
+                        >
+                          <option value="">Choose a time</option>
+                          {reportingTimeOptions().map((value) => (
+                            <option key={value} value={value}>
+                              {formatReportingTime(value)}
+                            </option>
+                          ))}
+                        </Select>
+                      </Field>
+                    ) : null}
+                  </div>
 
                   <div>
                     <p className="mb-2.5 text-sm font-bold text-text">Where</p>
@@ -1175,7 +1237,11 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
               <section className="rounded-[22px] border border-line bg-surface p-6 shadow-card">
                 <p className="text-xs font-bold uppercase tracking-[0.14em] text-signal-700">Ready to review</p>
                 <h2 className="mt-2 text-2xl font-bold tracking-tight text-text">
-                  {isEvent ? "Your event, at a glance" : "Your crew, at a glance"}
+                  {isEvent
+                    ? "Your event, at a glance"
+                    : isFixedTeam
+                      ? "Your cook team, at a glance"
+                      : "Your crew, at a glance"}
                 </h2>
                 <p className="mt-1 text-sm leading-6 text-text-secondary">
                   {isEvent
@@ -1201,10 +1267,12 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
                       <SummaryLine
                         label="Crew"
                         value={
-                          joinPresent([
-                            size === null ? null : `${size.headcount} ${size.headcount === 1 ? "person" : "people"}`,
-                            size === null ? null : `${size.days} ${size.days === 1 ? "day" : "days"}`,
-                          ]) ?? "Set size"
+                          isFixedTeam && guestLimit !== null && size !== null
+                            ? `One cook team · ${size.days} ${size.days === 1 ? "day" : "days"} · up to ${guestLimit} guests`
+                            : joinPresent([
+                                size === null ? null : `${size.headcount} ${size.headcount === 1 ? "person" : "people"}`,
+                                size === null ? null : `${size.days} ${size.days === 1 ? "day" : "days"}`,
+                              ]) ?? "Set size"
                         }
                       />
                       <SummaryLine label="Start" value={whenLine ?? "Choose start date"} />
@@ -1480,6 +1548,56 @@ function SummaryLine({ label, value }: { label: string; value: string }) {
     <div className="flex items-center justify-between py-3 text-sm">
       <dt className="text-text-secondary">{label}</dt>
       <dd className="font-semibold text-text">{value}</dd>
+    </div>
+  );
+}
+
+function FixedTeamAssurance() {
+  return (
+    <aside className="rounded-[18px] border border-selected-line bg-selected-surface p-4">
+      <p className="text-sm font-bold text-text">Your cook brings their own helpers.</p>
+      <p className="mt-1 text-sm leading-6 text-text-secondary">
+        For 25–50 guests that&apos;s usually a master cook and 2 helpers. You don&apos;t pay
+        them separately — it&apos;s one price.
+      </p>
+    </aside>
+  );
+}
+
+function LargeFunctionHandoff({ guestLimit }: { guestLimit: number }) {
+  return (
+    <aside className="rounded-[18px] border border-line-strong bg-surface-sunken p-4">
+      <p className="text-sm font-bold text-text">Planning something bigger?</p>
+      <p className="mt-1 text-sm leading-6 text-text-secondary">
+        Above {guestLimit} guests, cooks price the menu rather than the day — dish count and
+        veg/non-veg change the work a lot.
+      </p>
+      <Link
+        href="/requests/new/event-cook"
+        className="mt-3 flex min-h-12 items-center justify-between gap-3 rounded-[14px] bg-navy-900 px-4 py-3 text-left text-white transition-transform duration-fast hover:-translate-y-0.5 focus-visible:outline-white motion-reduce:transform-none"
+      >
+        <span>
+          <span className="block text-sm font-bold">Get quotes from event cooks</span>
+          <span className="mt-0.5 block text-xs leading-5 text-white/70">
+            Up to 3 written quotes, priced per plate. You still buy the groceries — they&apos;ll
+            send you the shopping list.
+          </span>
+        </span>
+        <span aria-hidden className="shrink-0 text-lg">&rarr;</span>
+      </Link>
+    </aside>
+  );
+}
+
+function FixedTeamRateSummary({ days, guestLimit }: { days: number; guestLimit: number }) {
+  return (
+    <div className="rounded-2xl border border-selected-line bg-selected-surface p-4">
+      <p className="text-sm font-bold text-text">
+        One cook team · {days} {days === 1 ? "day" : "days"} · up to {guestLimit} guests
+      </p>
+      <p className="mt-1 text-sm leading-6 text-text-secondary">
+        Includes the master cook and their helpers. You provide groceries, gas and vessels.
+      </p>
     </div>
   );
 }

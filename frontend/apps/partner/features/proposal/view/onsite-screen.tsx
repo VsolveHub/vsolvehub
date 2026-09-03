@@ -8,6 +8,7 @@ import { useState } from "react";
 
 import { planVisitOf, readEnquiryRecord } from "@/features/enquiry/model/wire";
 import { isEnquiryForbidden, usePartnerEnquiry } from "@/features/enquiry/queries";
+import { PartnerHeaderTitle } from "@/features/session/partner-header-title";
 import { WorkspaceRoute } from "@/features/workspace/view/workspace-route";
 import { PROJECT_WORKSPACE } from "@/features/workspace/registry";
 
@@ -118,17 +119,20 @@ function OnsiteEstimate({
   const record = readEnquiryRecord(query.data);
 
   return (
-    <div className="flex flex-col gap-4">
-      {sent ? (
-        <SentConfirmation proposal={sent} enquiryHref={enquiryHref} />
-      ) : (
-        <OnsiteComposerWithRevision
-          enquiry={record}
-          enquiryHref={enquiryHref}
-          onSubmitted={setSent}
-        />
-      )}
-    </div>
+    <>
+      <PartnerHeaderTitle title={record.serviceName} />
+      <div className="flex flex-col gap-4">
+        {sent ? (
+          <SentConfirmation proposal={sent} enquiryHref={enquiryHref} />
+        ) : (
+          <OnsiteComposerWithRevision
+            enquiry={record}
+            enquiryHref={enquiryHref}
+            onSubmitted={setSent}
+          />
+        )}
+      </div>
+    </>
   );
 }
 
@@ -198,6 +202,7 @@ function OnsiteComposerWithRevision({
         visit={visit}
         enquiryHref={enquiryHref}
         supersedesRevision={supersedesRevision}
+        currentProposal={trace.current}
         onSubmitted={onSubmitted}
       />
     </div>

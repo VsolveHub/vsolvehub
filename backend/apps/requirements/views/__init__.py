@@ -105,6 +105,9 @@ from .operations_requests import (
 )
 from .operations_workspace import (
     OperationsChargebackView,
+    OperationsCrewDocumentDecisionView,
+    OperationsCrewDocumentListView,
+    OperationsCrewGenderCorrectionView,
     OperationsCrewVerificationQueueView,
     OperationsCrewVerificationView,
     OperationsQueueView,
@@ -214,6 +217,7 @@ from .stages import (
     _customer_stage_command,
 )
 from .visit_slots import (
+    CustomerRequirementVisitSlotDropView,
     CustomerRequirementVisitSlotReplaceView,
     CustomerRequirementVisitSlotView,
     PartnerDemandPreviewView,
@@ -228,6 +232,7 @@ __all__ = [
     "CancellationDecisionView",
     "CaseAppealView",
     "CaseEvidenceView",
+    "CustomerRequirementVisitSlotDropView",
     "CustomerRequirementVisitSlotReplaceView",
     "CustomerRequirementVisitSlotView",
     "DomainError",
@@ -273,6 +278,9 @@ __all__ = [
     "OperationsAssistedProposalView",
     "OperationsChargebackView",
     "OperationsCommercialPolicyActivateView",
+    "OperationsCrewDocumentDecisionView",
+    "OperationsCrewDocumentListView",
+    "OperationsCrewGenderCorrectionView",
     "OperationsCrewVerificationQueueView",
     "OperationsCrewVerificationView",
     # The vendor price book.

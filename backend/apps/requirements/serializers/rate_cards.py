@@ -8,8 +8,11 @@ neither shape may carry the other side's number.
 
 from typing import Any
 
+from django.conf import settings
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
+from apps.commerce.providers import FakePaymentProvider
 from apps.requirements.models import BookingFee, RateCard, RateCardBooking, VendorInvitation
 
 from .base import VISIT_NO_SHOW_PARTIES
@@ -237,6 +240,22 @@ class BookingFeeSerializer(serializers.ModelSerializer[BookingFee]):
     — it is the true amount so far.
     """
 
+    simulated_capture_available = serializers.SerializerMethodField()
+
+    @staticmethod
+    @extend_schema_field(serializers.BooleanField())
+    def get_simulated_capture_available(fee: BookingFee) -> bool:
+        """Whether this fee's pending attempt can be captured by hand.
+
+        Published rather than inferred so the Customer app can recover a fake checkout after a
+        reload without rendering a development control against Razorpay or in production. This is
+        the A3 booking-fee equivalent of ``VisitPlan.simulated_capture_available``.
+        """
+        attempt = fee.payment_attempt
+        return bool(settings.PAYMENTS_ALLOW_SIMULATED_CAPTURE) and (
+            attempt is not None and attempt.provider == FakePaymentProvider.code
+        )
+
     class Meta:
         model = BookingFee
         fields = (
@@ -253,6 +272,9 @@ class BookingFeeSerializer(serializers.ModelSerializer[BookingFee]):
             #: charge it started — and hand it to the provider, or to the development simulator —
             #: instead of sitting on "confirming your payment" with nothing to confirm.
             "payment_attempt_id",
+            #: Server-owned development affordance. False for real providers and whenever the
+            #: fail-closed simulator setting is off.
+            "simulated_capture_available",
             "activated_at",
             "earned_at",
             "settled_at",

@@ -7,7 +7,7 @@ submits. What the Customer is shown of that quote once they have paid for it liv
 `engagements`.
 """
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -85,8 +85,13 @@ class RequirementQuestionListSerializer(serializers.Serializer[dict[str, Any]]):
 class RevisionRequestSerializer(serializers.ModelSerializer[RevisionRequest]):
     """A Customer's ask for a different estimate, as both sides read it.
 
-    No money on it, by design: it names what to change, and the vendor's answer is a superseding
-    proposal read through the ordinary quote surfaces.
+    It names what to change, and the vendor's answer is a superseding proposal read through the
+    ordinary quote surfaces.
+
+    ``requested_discount_bps`` is what the Customer *hoped* to pay, in basis points, and is present
+    only on a ``PRICE`` ask. It is not a price and nothing computes money from it — the vendor's
+    revision sets the figure. ``countered_discount_bps`` describes what their revision actually
+    moved, so a Customer reads "they came back at 2%, not 5%" rather than being left to subtract.
     """
 
     class Meta:
@@ -98,6 +103,8 @@ class RevisionRequestSerializer(serializers.ModelSerializer[RevisionRequest]):
             "reason_code",
             "excluded_items",
             "note",
+            "requested_discount_bps",
+            "countered_discount_bps",
             "decline_note",
             "answered_by_proposal",
             "created_at",
@@ -113,6 +120,16 @@ class RevisionRequestCreateSerializer(serializers.Serializer[dict[str, Any]]):
         child=serializers.CharField(max_length=200), required=False, default=list, max_length=20
     )
     note = serializers.CharField(required=False, allow_blank=True, default="", max_length=2000)
+    #: What the Customer hopes the vendor can move, in basis points -- 5% is 500. Required with
+    #: `PRICE` and refused on every other reason. The domain re-checks the range; this bound is
+    #: here so a nonsense figure never reaches it.
+    requested_discount_bps = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        default=None,
+        min_value=1,
+        max_value=RevisionRequest.MAX_DISCOUNT_BPS,
+    )
 
 
 class RevisionRequestDeclineSerializer(serializers.Serializer[dict[str, Any]]):
@@ -894,9 +911,9 @@ class ProposalSerializer(serializers.ModelSerializer[Proposal]):
     item_lines = ProposalItemLineSerializer(many=True, read_only=True)
     labour_lines = ProposalLabourLineSerializer(many=True, read_only=True)
     other_charges = ProposalOtherChargeSerializer(many=True, read_only=True)
-    revision_expires_at = serializers.SerializerMethodField()
-    #: The Customer's most recent ask for a change on this estimate, or null. An `OPEN` one keeps
-    #: the revision window open past its five minutes.
+    #: The Customer's most recent ask for a change on this estimate, or null. It no longer gates
+    #: anything — a live estimate is revisable until the Customer chooses it either way — and is
+    #: published so the vendor can read what was asked for before answering it.
     revision_request = serializers.SerializerMethodField()
 
     class Meta:
@@ -906,7 +923,6 @@ class ProposalSerializer(serializers.ModelSerializer[Proposal]):
             "requirement",
             "invitation",
             "revision",
-            "revision_expires_at",
             "revision_request",
             "status",
             "usability",
@@ -948,17 +964,12 @@ class ProposalSerializer(serializers.ModelSerializer[Proposal]):
             "material_fulfilment_mode",
             "included_supply_list",
             "warranty_terms",
+            "completion_days",
             "valid_until",
             "vendor_confirmed_at",
             "submitted_at",
         )
         read_only_fields = fields
-
-    @extend_schema_field(serializers.DateTimeField(allow_null=True))
-    def get_revision_expires_at(self, obj: Proposal) -> datetime | None:
-        if obj.requirement.archetype != "A5_CUSTOM_PROJECT":
-            return None
-        return proposals.estimate_revision_expires_at(obj)
 
     @extend_schema_field(RevisionRequestSerializer(allow_null=True))
     def get_revision_request(self, obj: Proposal) -> dict[str, Any] | None:
@@ -1010,6 +1021,11 @@ class ProposalCreateSerializer(serializers.Serializer[dict[str, Any]]):
     #: what the job is, and it is the first thing a Customer reads on the estimate.
     scope_summary = serializers.CharField(required=False, allow_blank=True, max_length=2000)
     warranty_terms = serializers.CharField(required=False, allow_blank=True, max_length=4000)
+    #: Working days the vendor expects the work to take. Days rather than a date: they do not
+    #: know when they will start, and the total is locked at acceptance so an overrun is theirs.
+    completion_days = serializers.IntegerField(
+        required=False, allow_null=True, default=None, min_value=1, max_value=365
+    )
     valid_until = serializers.DateTimeField(required=False, allow_null=True)
     #: **Required for an A5 estimate**, and the field that was missing: `submit_proposal` has always
     #: taken a `site_visit_id` and no serializer published one, so an on-site estimate could not be

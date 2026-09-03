@@ -29,3 +29,17 @@ class RatingAlreadySubmittedError(RatingDomainError):
             "Your rating for this work has already been submitted.",
             409,
         )
+
+
+class FeedbackEmptyError(RatingDomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            "feedback_empty",
+            "Add a rating, pick what we could improve, or write a note.",
+            400,
+        )
+
+
+class TagCombinationError(RatingDomainError):
+    def __init__(self, message: str) -> None:
+        super().__init__("feedback_tags_invalid", message, 400)

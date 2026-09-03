@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.55.0
+  version: 1.65.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -1156,6 +1156,95 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: ''
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/bookings/{booking_id}/platform-feedback/:
+    get:
+      operationId: booking_platform_feedback_read
+      description: |-
+        Reuses the rating routes' subject resolution and nothing else.
+
+        The same 404-not-403 rule therefore applies without restating it: a job the caller is not part
+        of does not exist. What differs is the question asked and who may answer it — the two
+        subclasses below serve the two subject kinds, and `can_submit_platform_feedback` refuses a
+        Partner outright.
+      parameters:
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Ratings
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformFeedbackSummary'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+    post:
+      operationId: booking_platform_feedback_submit
+      description: |-
+        Record the customer's verdict on Vsolve for one job.
+
+        Everything is individually optional and the command refuses only the wholly empty submission — a customer who taps one chip and closes has told us the useful thing, and demanding a star first would lose it. Selecting **All good** alongside a complaint is refused rather than silently resolved: either half might be the one they meant.
+
+        Only the customer is asked. A Partner has their own relationship with Vsolve, and the same question put to them would collect a different thing under the same label.
+      parameters:
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Ratings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformFeedbackCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PlatformFeedbackCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PlatformFeedbackCreateRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformFeedbackSummary'
+          description: ''
+        '400':
           content:
             application/json:
               schema:
@@ -3786,6 +3875,95 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: '`m2_stage_transition_not_allowed` when nothing has been handed
             over yet, or when completion is blocked by an open stage.'
+  /api/v1/engagements/{engagement_id}/platform-feedback/:
+    get:
+      operationId: engagement_platform_feedback_read
+      description: |-
+        Reuses the rating routes' subject resolution and nothing else.
+
+        The same 404-not-403 rule therefore applies without restating it: a job the caller is not part
+        of does not exist. What differs is the question asked and who may answer it — the two
+        subclasses below serve the two subject kinds, and `can_submit_platform_feedback` refuses a
+        Partner outright.
+      parameters:
+      - in: path
+        name: engagement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Ratings
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformFeedbackSummary'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+    post:
+      operationId: engagement_platform_feedback_submit
+      description: |-
+        Record the customer's verdict on Vsolve for one job.
+
+        Everything is individually optional and the command refuses only the wholly empty submission — a customer who taps one chip and closes has told us the useful thing, and demanding a star first would lose it. Selecting **All good** alongside a complaint is refused rather than silently resolved: either half might be the one they meant.
+
+        Only the customer is asked. A Partner has their own relationship with Vsolve, and the same question put to them would collect a different thing under the same label.
+      parameters:
+      - in: path
+        name: engagement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Ratings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformFeedbackCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PlatformFeedbackCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PlatformFeedbackCreateRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformFeedbackSummary'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/engagements/{engagement_id}/project/:
     get:
       operationId: m2_project_read
@@ -5848,13 +6026,80 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/operations/crew-documents/{document_id}/review/:
+    post:
+      operationId: m2_operations_crew_document_review
+      description: |-
+        Record a decision on one crew identity document.
+
+        **Approving the last required kind verifies the membership**, through the same `verify_crew_documents` command with the same actor and audit event. The alternative — approve every document, then separately remember to press *verified* — has a failure mode where a fully-approved worker is still excluded from every crew offer, which is exactly the silent state this whole surface exists to end.
+
+        **Rejecting a required kind withdraws verification**, carrying the rejection's own reason, because the Partner is about to lose a worker off jobs they may already be assigned to. A rejection therefore requires a reason and the model enforces it too.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: document_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrewDocumentDecisionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CrewDocumentDecisionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CrewDocumentDecisionRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CrewDocumentReviewRow'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/operations/crew-memberships/:
     get:
       operationId: m2_operations_crew_verification_queue
       description: |-
-        Active crew memberships whose documents have never been verified, oldest first.
+        Active crew memberships and where their document check stands, oldest first.
 
         This queue is why the A3 cascade can find anybody: `documents_verified_at` is what `verified_roster_size` counts when it sizes a lead's roster against the requested headcount, and a vendor with no verified crew is excluded from every crew offer.
+
+        `documents_pending` and `documents_approved` are on each row so the queue can tell the two waiting states apart: a row with nothing uploaded is the Partner's move, and a row with a file on it is the reviewer's.
       parameters:
       - in: query
         name: partner
@@ -5862,6 +6107,18 @@ paths:
           type: string
           format: uuid
         description: Narrow to one vendor's roster.
+      - in: query
+        name: state
+        schema:
+          type: string
+          enum:
+          - ALL
+          - PENDING
+          - VERIFIED
+        description: '`PENDING` (default) is the worklist. `VERIFIED` is how a reviewer
+          reaches somebody already cleared, which is the only way to un-verify a worker
+          whose document turned out to be expired — the command supported it and no
+          screen could get to it.'
       tags:
       - M2 - Operations
       security:
@@ -5874,6 +6131,114 @@ paths:
                 $ref: '#/components/schemas/CrewVerificationQueue'
           description: ''
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/crew-memberships/{membership_id}/documents/:
+    get:
+      operationId: m2_operations_crew_documents
+      description: |-
+        Every live identity document on one crew membership, newest version of each kind, each with a short-lived signed link to the stored file.
+
+        `review_url` is **nullable** and null is not an error: a storage outage degrades this to a queue with one missing preview rather than to an error page that hides the other nine people waiting. Nothing stores the URL — a stored URL is a stored expiry.
+      parameters:
+      - in: path
+        name: membership_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CrewDocumentReviewList'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/crew-memberships/{membership_id}/gender/:
+    post:
+      operationId: m2_operations_crew_gender_correct
+      description: |-
+        Correct what one worker is recorded as, across every agency that has them.
+
+        `CrewMember.gender` is one row per person, so the Partner-facing rule is first-write-wins: a second agency writing a contradiction is refused with `m2_crew_gender_conflict` rather than silently flipping which gendered slots the first agency can fill. That rule is right and it had **no exit** — the refusal said "contact support if that is wrong" and support had no endpoint, so a worker recorded wrongly by whichever agency typed first lost gendered work permanently.
+
+        **A reason is required.** Unlike a first recording, this overwrites a value another agency is already being dispatched against, and the previous value is written to the audit event so a reopened dispute can see what was overwritten. Clearing is not offered: it would re-open every gendered slot the worker had been filling. `UNDISCLOSED` is the value for a worker who declined to say.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: membership_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrewGenderCorrectionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CrewGenderCorrectionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CrewGenderCorrectionRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CrewMembershipVerificationRow'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
           content:
             application/json:
               schema:
@@ -8071,6 +8436,106 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/operations/service-feedback/:
+    get:
+      operationId: operations_service_feedback
+      description: |-
+        Every service anybody has left feedback on, worst platform score first.
+
+        **The partner score and the platform score are published separately and never blended.** A service rated 4.6 for its partners and 3.1 for the experience of booking it is the finding: the people are fine and the product is not. One combined number averages exactly that away.
+
+        A service nobody has rated sorts **last**, not first — silence is not a bad score. One row may carry a null `variant_id`: feedback on a visit that covered more than one service, counted honestly rather than attributed to whichever line came first.
+      parameters:
+      - in: query
+        name: days
+        schema:
+          type: integer
+        description: Window in days. Omitted means everything ever recorded.
+      tags:
+      - Ratings
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceFeedbackList'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/service-feedback/{variant_id}/notes/:
+    get:
+      operationId: operations_service_feedback_notes
+      description: |-
+        Written platform-feedback notes for one service, newest first.
+
+        Each note carries the same customer's rating of the **partner** on that job, because `platform 2 / partner 5` is the pattern worth acting on and it is invisible when the two are read on separate screens.
+
+        The route without a `variant_id` returns the notes attached to feedback that could not be attributed to a single service.
+      parameters:
+      - in: query
+        name: days
+        schema:
+          type: integer
+        description: Window in days. Omitted means everything ever recorded.
+      - in: path
+        name: variant_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Ratings
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceFeedbackNoteList'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/service-feedback/unattributed/notes/:
+    get:
+      operationId: operations_unattributed_feedback_notes
+      description: |-
+        Written notes left on jobs whose visit covered more than one service.
+
+        Kept reachable rather than hidden: an operator reading per-service averages needs to know what those averages left out.
+      parameters:
+      - in: query
+        name: days
+        schema:
+          type: integer
+        description: Window in days. Omitted means everything ever recorded.
+      tags:
+      - Ratings
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceFeedbackNoteList'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/operations/unpayable-partners/:
     get:
       operationId: operations_unpayable_partners
@@ -9943,14 +10408,14 @@ paths:
   /api/v1/partner/crew/{membership_id}/:
     patch:
       operationId: m2_partner_crew_update
-      description: 'Skills, the supervisor flag and `gender`. `display_name` is **not**
-        editable: it belongs to the global crew member, and one agency renaming a
-        person would rename them on every other roster. `gender` is on that same global
-        row and is editable anyway, because it is a fact about the person rather than
-        something an agency typed. It fills a blank; a value contradicting one another
-        agency already recorded is **refused**, never overwritten -- silently flipping
-        it would change which jobs that other agency is dispatched for. There is no
-        way to clear one.'
+      description: |-
+        The name this agency uses, their skills, the supervisor flag and `gender`.
+
+        `display_name` writes a **per-roster label** (`PartnerCrewMembership.display_name`) and never the shared `CrewMember`, so correcting a typo cannot rename the person on another agency's roster. Blank clears the override and falls back to the global record. It used to be read-only for that cross-agency reason, which left a typo unfixable: re-adding resolves by `identity_hash` and returns the same wrong name.
+
+        `gender` is on the shared crew record on purpose -- a Customer's men/women split is checked against it at accept and again at assignment, so it cannot be per-roster without two agencies staffing one wedding from two answers.
+
+        **It is editable whenever this Partner is the only agency holding the worker**, which is the ordinary case. The refusal exists to stop one agency flipping another's roster, so it applies only when there *is* another agency: a contradicting write is then answered `m2_crew_gender_conflict` and settled by Operations (`m2_operations_crew_gender_correct`). Clients should offer the field unconditionally and surface the refusal -- the server does not publish whether a worker is on another roster, because that is the fact `crew_roster` suppresses `crew_member_id` to hide. There is no way to clear a recorded gender; `UNDISCLOSED` is what a worker who declined to say is.
       parameters:
       - in: path
         name: membership_id
@@ -10087,6 +10552,115 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CrewAvailability'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/crew/{membership_id}/documents/:
+    post:
+      operationId: m2_partner_crew_document_upload
+      description: |-
+        Ask for somewhere to put one identity document. Returns a short-lived signed URL to `PUT` the file to, and the `document_id` to send back afterwards.
+
+        Nothing is visible to a reviewer yet. Declaring metadata first is what lets `m2_partner_crew_document_submit` compare the stored object against it — a client that declares a clean PDF and uploads something else fails there, not at a reviewer's desk.
+      parameters:
+      - in: path
+        name: membership_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Partner crew
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrewDocumentUploadRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CrewDocumentUploadRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CrewDocumentUploadRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CrewDocumentUploadGrant'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+    put:
+      operationId: m2_partner_crew_document_submit
+      description: |-
+        The upload finished. The stored object is streamed back through the storage boundary and its real size, media type and SHA-256 compared against what was declared; on a match the document joins the Operations review queue.
+
+        **Verified rather than trusted**, because the party claiming the upload succeeded is the party that benefits from the claim. An approved earlier version is left approved until this replacement is itself approved, so re-uploading does not silently un-verify a worker who is already on next Tuesday's shift.
+      parameters:
+      - in: path
+        name: membership_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Partner crew
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrewDocumentSubmitRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CrewDocumentSubmitRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CrewDocumentSubmitRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CrewMember'
           description: ''
         '400':
           content:
@@ -10928,9 +11502,9 @@ paths:
 
         Separate from `earnings/`, which answers "what am I owed" — a balance by
         state. This answers "how am I doing" — throughput and revenue over time.
-        Both are aggregates over the same ledger, and folding them into one payload
-        would make a screen that only wants today's total pull a full balance
-        breakdown it does not render.
+        Performance includes direct customer payments recorded by mutually confirmed
+        A3 day settlements. The balance remains ledger-only because direct-paid money
+        is not a debt Vsolve can reserve or pay out.
 
         No `partner_id`: the Partner is resolved from the session, which is the one
         filter a caller cannot get wrong.
@@ -12845,10 +13419,13 @@ paths:
       operationId: m2_quote_revision_request
       description: 'Ask the professional behind one live estimate for a different
         one, with the reason attached: leave named lines out, change materials, split
-        the work into phases, or something else in a sentence. **Carries no price
-        and changes no price** — only a vendor states a number, and they answer by
-        superseding the estimate, which lands under the same entitlement. One open
-        request per estimate; a second call re-reads the first.'
+        the work into phases, ask whether they can move on price, or something else
+        in a sentence. **`requested_discount_bps` is what the Customer hopes to pay,
+        never what the work costs** — it changes no total, obliges nobody, and the
+        estimate stays live and selectable at the price as sent. The vendor answers
+        by superseding the estimate, which lands under the same entitlement. One open
+        request per estimate; a second call re-reads the first. A price may be asked
+        about once per estimate.'
       parameters:
       - in: header
         name: Idempotency-Key
@@ -13813,6 +14390,61 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: '`slot_expired` for an expired signed token; otherwise the
             slot is unavailable or the plan shape no longer permits the selection.'
+  /api/v1/requirements/{requirement_id}/visit-slots/{share_id}/drop/:
+    post:
+      operationId: m2_customer_visit_slot_drop
+      description: 'Drop one visit slot the matching engine settled as `no_professional_found`,
+        so the plan stops charging for it. The share is refunded through the ordinary
+        settlement path: money already taken comes back in full, including the platform''s
+        part, and an uncharged plan simply quotes less at checkout rather than taking
+        money in order to return it. Idempotent — dropping twice re-reads the dropped
+        slot. Refused on a slot that is still searching, already held or booked, and
+        on the last remaining slot of a plan (cancel the request instead).'
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: requirement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: share_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Visit slots
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerRequestedVisitSlots'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`slot_unavailable` when the slot is not an exhausted one,
+            or is the only one left on the plan.'
   /api/v1/requirements/{requirement_id}/visit-slots/{share_id}/replace/:
     post:
       operationId: m2_customer_visit_slot_replace
@@ -15146,6 +15778,11 @@ components:
         warranty_terms:
           type: string
           maxLength: 4000
+        completion_days:
+          type: integer
+          maximum: 365
+          minimum: 1
+          nullable: true
         valid_until:
           type: string
           format: date-time
@@ -15306,6 +15943,9 @@ components:
           format: uuid
           nullable: true
           readOnly: true
+        simulated_capture_available:
+          type: boolean
+          readOnly: true
         activated_at:
           type: string
           format: date-time
@@ -15333,6 +15973,7 @@ components:
       - receipt_series
       - settled_at
       - settlement_reason_code
+      - simulated_capture_available
       - status
       - travel_compensation_paise
     BookingFeeStatusEnum:
@@ -16503,22 +17144,6 @@ components:
         * `REPLAN_REQUIRED` - Replan required
         * `CANCELLED` - Cancelled
         * `EXPIRED` - Expired
-    CodeEnum:
-      enum:
-      - CUSTOM
-      - DISPOSAL
-      - EQUIPMENT_DELIVERY
-      - LOADING_UNLOADING
-      - PERMIT
-      - TRANSPORT
-      type: string
-      description: |-
-        * `CUSTOM` - CUSTOM
-        * `DISPOSAL` - DISPOSAL
-        * `EQUIPMENT_DELIVERY` - EQUIPMENT_DELIVERY
-        * `LOADING_UNLOADING` - LOADING_UNLOADING
-        * `PERMIT` - PERMIT
-        * `TRANSPORT` - TRANSPORT
     CommercialAmountBasisEnum:
       enum:
       - PARTNER_QUOTE
@@ -17168,6 +17793,245 @@ components:
       - code
       - question
       - value
+    CrewDocumentDecisionRequest:
+      type: object
+      description: Approve or reject one document. A rejection's reason reaches the
+        Partner verbatim.
+      properties:
+        approved:
+          type: boolean
+        reason:
+          type: string
+          default: ''
+          maxLength: 480
+      required:
+      - approved
+    CrewDocumentKindEnum:
+      enum:
+      - GOVERNMENT_ID
+      - ADDRESS_PROOF
+      - POLICE_VERIFICATION
+      type: string
+      description: |-
+        * `GOVERNMENT_ID` - Government identity
+        * `ADDRESS_PROOF` - Address proof
+        * `POLICE_VERIFICATION` - Police verification
+    CrewDocumentReviewList:
+      type: object
+      properties:
+        membership_id:
+          type: string
+          format: uuid
+        crew_member_name:
+          type: string
+        partner_name:
+          type: string
+        documents_verified_at:
+          type: string
+          format: date-time
+          nullable: true
+        missing_required_kinds:
+          type: array
+          items:
+            type: string
+        documents:
+          type: array
+          items:
+            $ref: '#/components/schemas/CrewDocumentReviewRow'
+        server_now:
+          type: string
+          format: date-time
+      required:
+      - crew_member_name
+      - documents
+      - documents_verified_at
+      - membership_id
+      - missing_required_kinds
+      - partner_name
+      - server_now
+    CrewDocumentReviewRow:
+      type: object
+      description: |-
+        One identity document as a reviewer sees it, including the link to the file itself.
+
+        `review_url` is signed, short-lived and **nullable**: a storage outage degrades this screen to
+        a queue with one missing preview rather than to an error page that hides the other nine people
+        waiting. Nothing stores the URL, because a stored URL is a stored expiry.
+      properties:
+        document_id:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/CrewDocumentKindEnum'
+        kind_label:
+          type: string
+        status:
+          $ref: '#/components/schemas/CrewDocumentStatusEnum'
+        version:
+          type: integer
+        content_type:
+          type: string
+        size_bytes:
+          type: integer
+        uploaded_at:
+          type: string
+          format: date-time
+        reviewed_at:
+          type: string
+          format: date-time
+          nullable: true
+        review_reason:
+          type: string
+        expires_on:
+          type: string
+          format: date
+          nullable: true
+        review_url:
+          type: string
+          nullable: true
+      required:
+      - content_type
+      - document_id
+      - expires_on
+      - kind
+      - kind_label
+      - review_reason
+      - review_url
+      - reviewed_at
+      - size_bytes
+      - status
+      - uploaded_at
+      - version
+    CrewDocumentState:
+      type: object
+      description: |-
+        Where one kind of identity document stands, as the Partner is allowed to see it.
+
+        No reviewer name and no link to the file. A Partner is entitled to know whether their worker
+        is cleared and, on a rejection, why; who inside Operations decided is not theirs, and the
+        stored object is reachable only through a reviewer's short-lived signed link.
+      properties:
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/CrewDocumentKindEnum'
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/CrewDocumentStatusEnum'
+          readOnly: true
+        reason:
+          type: string
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - kind
+      - reason
+      - status
+      - updated_at
+    CrewDocumentStatusEnum:
+      enum:
+      - AWAITING_UPLOAD
+      - PENDING
+      - APPROVED
+      - REJECTED
+      - SUPERSEDED
+      - FAILED
+      type: string
+      description: |-
+        * `AWAITING_UPLOAD` - Awaiting upload
+        * `PENDING` - Pending review
+        * `APPROVED` - Approved
+        * `REJECTED` - Rejected
+        * `SUPERSEDED` - Superseded
+        * `FAILED` - Failed
+    CrewDocumentSubmitRequest:
+      type: object
+      properties:
+        document_id:
+          type: string
+          format: uuid
+      required:
+      - document_id
+    CrewDocumentUploadGrant:
+      type: object
+      description: Where to PUT the file, and the row that is waiting for it.
+      properties:
+        document_id:
+          type: string
+          format: uuid
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/CrewDocumentKindEnum'
+          readOnly: true
+        upload_url:
+          type: string
+          readOnly: true
+        upload_token:
+          type: string
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+        max_bytes:
+          type: integer
+          readOnly: true
+      required:
+      - document_id
+      - expires_at
+      - kind
+      - max_bytes
+      - upload_token
+      - upload_url
+    CrewDocumentUploadRequestRequest:
+      type: object
+      description: |-
+        What the Partner declares before a byte is sent.
+
+        Declared up front so the stored object can be checked against it afterwards. A client that
+        says "a 2 MB PDF with this digest" and uploads something else fails at `submit`, not at a
+        reviewer's desk.
+      properties:
+        kind:
+          $ref: '#/components/schemas/CrewDocumentKindEnum'
+        content_type:
+          type: string
+          minLength: 1
+          maxLength: 120
+        size_bytes:
+          type: integer
+          minimum: 1
+        sha256:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[0-9a-f]{64}$
+      required:
+      - content_type
+      - kind
+      - sha256
+      - size_bytes
+    CrewGenderCorrectionRequest:
+      type: object
+      description: |-
+        Settle a disputed crew gender. `reason` is required, and blank is not a gender.
+
+        The domain refuses both a blank value and a blank reason, so this only has to accept the
+        shape; the rule lives in `operations.correct_crew_gender` where a second caller reaches it too.
+      properties:
+        gender:
+          $ref: '#/components/schemas/GenderEnum'
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 480
+      required:
+      - gender
+      - reason
     CrewList:
       type: object
       properties:
@@ -17226,9 +18090,15 @@ components:
           oneOf:
           - $ref: '#/components/schemas/GenderEnum'
           - $ref: '#/components/schemas/BlankEnum'
+        documents:
+          type: array
+          items:
+            $ref: '#/components/schemas/CrewDocumentState'
+          readOnly: true
       required:
       - added_at
       - display_name
+      - documents
       - documents_verified_at
       - gender
       - is_supervisor
@@ -17288,10 +18158,21 @@ components:
           type: string
           format: date-time
           nullable: true
+        gender:
+          oneOf:
+          - $ref: '#/components/schemas/GenderEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        documents_pending:
+          type: integer
+        documents_approved:
+          type: integer
       required:
       - added_at
       - crew_member_name
+      - documents_approved
+      - documents_pending
       - documents_verified_at
+      - gender
       - is_supervisor
       - membership_id
       - partner_id
@@ -18054,6 +18935,10 @@ components:
         warranty_terms:
           type: string
           readOnly: true
+        completion_days:
+          type: integer
+          readOnly: true
+          nullable: true
         valid_until:
           type: string
           format: date-time
@@ -18066,6 +18951,7 @@ components:
       required:
       - authorized_charges_paise
       - calculation_snapshot
+      - completion_days
       - customer_total_paise
       - estimate_type
       - exclusions
@@ -23409,22 +24295,28 @@ components:
       description: |-
         How a Partner is doing, in the periods they think in.
 
-        Counts come from `EARNING` ledger entries — one per completed booking, written
-        at settlement — so "jobs done" is never inferred from a mutable booking
-        timestamp. Revenue sums every entry kind, so an adjustment or reversal shows
-        up the day it lands rather than drifting from the balance beside it.
+        Platform-paid earnings come from the immutable payout ledger; direct-paid A3
+        crew earnings come from mutually confirmed day settlements. Job counts use
+        durable booking/visit earning records and engagement ``completed_at`` values,
+        never mutable update timestamps or one row per project stage.
       properties:
         today_net_paise:
+          type: integer
+        today_direct_paise:
           type: integer
         today_jobs:
           type: integer
         month_net_paise:
+          type: integer
+        month_direct_paise:
           type: integer
         month_jobs:
           type: integer
         average_monthly_net_paise:
           type: integer
         lifetime_net_paise:
+          type: integer
+        lifetime_direct_paise:
           type: integer
         lifetime_jobs:
           type: integer
@@ -23441,11 +24333,14 @@ components:
       - average_monthly_net_paise
       - currency
       - daily
+      - lifetime_direct_paise
       - lifetime_jobs
       - lifetime_net_paise
+      - month_direct_paise
       - month_jobs
       - month_net_paise
       - server_now
+      - today_direct_paise
       - today_jobs
       - today_net_paise
     PartnerPresence:
@@ -23881,12 +24776,17 @@ components:
     PatchedCrewMemberUpdateRequest:
       type: object
       description: |-
-        Skills and the supervisor flag only.
+        The name this agency uses, their skills, the supervisor flag, and gender.
 
-        `display_name` is **not** editable here. It belongs to the global `CrewMember`, which several
-        agencies may share, so one agency renaming a person would rename them on every other roster.
-        Read-only with the reason stated beats editable-and-scoped, which a later caller can forget.
+        `display_name` writes `PartnerCrewMembership.display_name` -- a per-roster label -- and never
+        the global `CrewMember`. That is what makes it safe to edit: the shared row keeps whatever the
+        first agency registered, and one agency correcting a typo cannot rename the person on another
+        agency's screen. Blank is allowed and means "use the global name", which is where every row
+        starts.
       properties:
+        display_name:
+          type: string
+          maxLength: 120
         skill_codes:
           type: array
           items:
@@ -24597,6 +25497,120 @@ components:
         * `NONE` - Not applicable
         * `CUSTOMER` - Charged separately to Customer
         * `PARTNER` - Deducted from Partner proceeds
+    PlatformFeedback:
+      type: object
+      description: One customer's submission, returned only to the customer who wrote
+        it.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        score:
+          type: integer
+          readOnly: true
+          nullable: true
+        comment:
+          type: string
+          readOnly: true
+        tags:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - comment
+      - created_at
+      - id
+      - score
+      - tags
+    PlatformFeedbackCreateRequest:
+      type: object
+      description: |-
+        Everything optional individually; the command refuses the wholly empty submission.
+
+        `score` is nullable because a customer who taps "Pricing wasn't clear" and closes has told us
+        the useful thing, and demanding a star first would lose it.
+      properties:
+        score:
+          type: integer
+          maximum: 5
+          minimum: 1
+          nullable: true
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlatformFeedbackTagEnum'
+        comment:
+          type: string
+          default: ''
+          maxLength: 280
+    PlatformFeedbackSummary:
+      type: object
+      properties:
+        subject_kind:
+          $ref: '#/components/schemas/SubjectKindEnum'
+        subject_id:
+          type: string
+          format: uuid
+        can_submit:
+          type: boolean
+        my_feedback:
+          allOf:
+          - $ref: '#/components/schemas/PlatformFeedback'
+          nullable: true
+        available_tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlatformFeedbackTagOption'
+      required:
+      - available_tags
+      - can_submit
+      - my_feedback
+      - subject_id
+      - subject_kind
+    PlatformFeedbackTagEnum:
+      enum:
+      - ALL_GOOD
+      - HARD_TO_BOOK
+      - PRICE_UNCLEAR
+      - SLOW_MATCH
+      - POOR_UPDATES
+      - PAYMENT_TROUBLE
+      - APP_PROBLEM
+      - WRONG_SERVICE
+      type: string
+      description: |-
+        * `ALL_GOOD` - All good
+        * `HARD_TO_BOOK` - Booking was confusing
+        * `PRICE_UNCLEAR` - Pricing wasn't clear
+        * `SLOW_MATCH` - Took too long to find someone
+        * `POOR_UPDATES` - I wasn't kept updated
+        * `PAYMENT_TROUBLE` - Payment was a problem
+        * `APP_PROBLEM` - The app was slow
+        * `WRONG_SERVICE` - What I picked wasn't what I needed
+    PlatformFeedbackTagOption:
+      type: object
+      description: |-
+        One chip, as the server defines it.
+
+        Published so neither app hardcodes the vocabulary. Two clients drifting from one taxonomy
+        produce two sets of counts that look like one.
+      properties:
+        code:
+          $ref: '#/components/schemas/PlatformFeedbackTagEnum'
+        label:
+          type: string
+        is_exclusive:
+          type: boolean
+      required:
+      - code
+      - is_exclusive
+      - label
     PreferredStartRequest:
       type: object
       description: One visit's chosen start, keyed by the scheduling group it belongs
@@ -25397,11 +26411,6 @@ components:
           type: integer
           readOnly: true
           default: 1
-        revision_expires_at:
-          type: string
-          format: date-time
-          nullable: true
-          readOnly: true
         revision_request:
           allOf:
           - $ref: '#/components/schemas/RevisionRequest'
@@ -25542,6 +26551,10 @@ components:
         warranty_terms:
           type: string
           readOnly: true
+        completion_days:
+          type: integer
+          readOnly: true
+          nullable: true
         valid_until:
           type: string
           format: date-time
@@ -25561,6 +26574,7 @@ components:
       - calculation_snapshot
       - commission_paise
       - commission_treatment
+      - completion_days
       - customer_total_paise
       - estimate_type
       - exclusions
@@ -25586,7 +26600,6 @@ components:
       - requirement
       - revalidation_requested_at
       - revision
-      - revision_expires_at
       - revision_request
       - scope_summary
       - site_visit
@@ -25680,6 +26693,11 @@ components:
         warranty_terms:
           type: string
           maxLength: 4000
+        completion_days:
+          type: integer
+          maximum: 365
+          minimum: 1
+          nullable: true
         valid_until:
           type: string
           format: date-time
@@ -26131,7 +27149,7 @@ components:
       type: object
       properties:
         code:
-          $ref: '#/components/schemas/CodeEnum'
+          $ref: '#/components/schemas/ProposalOtherChargeCodeEnum'
         label:
           type: string
           maxLength: 120
@@ -26142,11 +27160,27 @@ components:
       - amount_paise
       - code
       - label
+    ProposalOtherChargeCodeEnum:
+      enum:
+      - CUSTOM
+      - DISPOSAL
+      - EQUIPMENT_DELIVERY
+      - LOADING_UNLOADING
+      - PERMIT
+      - TRANSPORT
+      type: string
+      description: |-
+        * `CUSTOM` - CUSTOM
+        * `DISPOSAL` - DISPOSAL
+        * `EQUIPMENT_DELIVERY` - EQUIPMENT_DELIVERY
+        * `LOADING_UNLOADING` - LOADING_UNLOADING
+        * `PERMIT` - PERMIT
+        * `TRANSPORT` - TRANSPORT
     ProposalOtherChargeRequest:
       type: object
       properties:
         code:
-          $ref: '#/components/schemas/CodeEnum'
+          $ref: '#/components/schemas/ProposalOtherChargeCodeEnum'
         label:
           type: string
           minLength: 1
@@ -26254,6 +27288,11 @@ components:
         warranty_terms:
           type: string
           maxLength: 4000
+        completion_days:
+          type: integer
+          maximum: 365
+          minimum: 1
+          nullable: true
         valid_until:
           type: string
           format: date-time
@@ -27516,6 +28555,17 @@ components:
       - score
     RatingSummary:
       type: object
+      description: |-
+        Whether this participant may rate, and what they themselves said.
+
+        ``ratings`` is always empty: the **counterparty's** score and comment are private, and the
+        marketplace surfaces read aggregates rather than individual rows.
+
+        ``my_rating`` is the author's own submission, returned to its author and nobody else. Pinning
+        it to null as well went one step too far -- it left a rated job indistinguishable from an
+        unrated one on the customer's own screen, so somebody who had already rated saw no dialog, no
+        confirmation and no record, and reasonably concluded the feature was broken. Withholding a
+        person's own words from them protects nobody.
       properties:
         subject_kind:
           $ref: '#/components/schemas/SubjectKindEnum'
@@ -27530,10 +28580,13 @@ components:
           allOf:
           - $ref: '#/components/schemas/ServiceRating'
           nullable: true
+          description: The caller's own rating, or null. Never the counterparty's.
         ratings:
           type: array
           items:
             $ref: '#/components/schemas/ServiceRating'
+          description: Deprecated compatibility field. Always empty; only aggregate
+            ratings display.
       required:
       - can_rate
       - counterparty_label
@@ -28519,8 +29572,13 @@ components:
       description: |-
         A Customer's ask for a different estimate, as both sides read it.
 
-        No money on it, by design: it names what to change, and the vendor's answer is a superseding
-        proposal read through the ordinary quote surfaces.
+        It names what to change, and the vendor's answer is a superseding proposal read through the
+        ordinary quote surfaces.
+
+        ``requested_discount_bps`` is what the Customer *hoped* to pay, in basis points, and is present
+        only on a ``PRICE`` ask. It is not a price and nothing computes money from it — the vendor's
+        revision sets the figure. ``countered_discount_bps`` describes what their revision actually
+        moved, so a Customer reads "they came back at 2%, not 5%" rather than being left to subtract.
       properties:
         id:
           type: string
@@ -28543,6 +29601,14 @@ components:
         note:
           type: string
           readOnly: true
+        requested_discount_bps:
+          type: integer
+          readOnly: true
+          nullable: true
+        countered_discount_bps:
+          type: integer
+          readOnly: true
+          nullable: true
         decline_note:
           type: string
           readOnly: true
@@ -28562,6 +29628,7 @@ components:
           nullable: true
       required:
       - answered_by_proposal
+      - countered_discount_bps
       - created_at
       - decline_note
       - excluded_items
@@ -28569,6 +29636,7 @@ components:
       - note
       - proposal
       - reason_code
+      - requested_discount_bps
       - resolved_at
       - status
     RevisionRequestCreateRequest:
@@ -28587,6 +29655,11 @@ components:
           type: string
           default: ''
           maxLength: 2000
+        requested_discount_bps:
+          type: integer
+          maximum: 1500
+          minimum: 1
+          nullable: true
       required:
       - reason_code
     RevisionRequestDeclineRequest:
@@ -28601,12 +29674,14 @@ components:
       - LEAVE_OUT
       - CHANGE_MATERIALS
       - PHASE_WORK
+      - PRICE
       - OTHER
       type: string
       description: |-
         * `LEAVE_OUT` - Leave something out
         * `CHANGE_MATERIALS` - Change materials or finish
         * `PHASE_WORK` - Split the work into phases
+        * `PRICE` - Asked about the price
         * `OTHER` - Something else
     RevisionRequestStatusEnum:
       enum:
@@ -29210,6 +30285,141 @@ components:
       - starting_price
       - subcategory_slug
       - variants
+    ServiceFeedbackList:
+      type: object
+      properties:
+        services:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceFeedbackRow'
+        server_now:
+          type: string
+          format: date-time
+      required:
+      - server_now
+      - services
+    ServiceFeedbackNote:
+      type: object
+      description: One written note, with the partner rating from the same job beside
+        it.
+      properties:
+        feedback_id:
+          type: string
+          format: uuid
+        score:
+          type: integer
+          nullable: true
+        comment:
+          type: string
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceFeedbackTagCount'
+        partner_name:
+          type: string
+        partner_score:
+          type: integer
+          nullable: true
+        subject_kind:
+          type: string
+        subject_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - comment
+      - created_at
+      - feedback_id
+      - partner_name
+      - partner_score
+      - score
+      - subject_id
+      - subject_kind
+      - tags
+    ServiceFeedbackNoteList:
+      type: object
+      properties:
+        variant_id:
+          type: string
+          format: uuid
+          nullable: true
+        variant_name:
+          type: string
+        notes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceFeedbackNote'
+        server_now:
+          type: string
+          format: date-time
+      required:
+      - notes
+      - server_now
+      - variant_id
+      - variant_name
+    ServiceFeedbackRow:
+      type: object
+      description: |-
+        One service, with both verdicts side by side.
+
+        `variant_id` is null on exactly one row: the bucket for feedback whose booking covered more
+        than one service. Published rather than dropped, because an operator reading these averages
+        needs to know how much was left out of them.
+      properties:
+        variant_id:
+          type: string
+          format: uuid
+          nullable: true
+        variant_name:
+          type: string
+        service_name:
+          type: string
+        category_name:
+          type: string
+        partner_score:
+          type: number
+          format: double
+          nullable: true
+        partner_count:
+          type: integer
+        platform_score:
+          type: number
+          format: double
+          nullable: true
+        platform_count:
+          type: integer
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceFeedbackTagCount'
+        note_count:
+          type: integer
+      required:
+      - category_name
+      - note_count
+      - partner_count
+      - partner_score
+      - platform_count
+      - platform_score
+      - service_name
+      - tags
+      - variant_id
+      - variant_name
+    ServiceFeedbackTagCount:
+      type: object
+      properties:
+        code:
+          type: string
+        label:
+          type: string
+        count:
+          type: integer
+      required:
+      - code
+      - count
+      - label
     ServiceIndexItem:
       type: object
       description: The complete icon catalogue's intentionally small row contract.
@@ -31161,8 +32371,19 @@ components:
           readOnly: true
         chargeable_paise:
           type: integer
-          description: 'What the Customer still owes: the tier price less any carried-over
-            unlock credit.'
+          description: |-
+            What the Customer still owes: the tier price, less credit, less what cannot be delivered.
+
+            The third term is the one that was missing. A share nobody could be found for is
+            ``REFUNDED`` — the money machinery already gives it back *after* a charge — but before the
+            charge this property still quoted the full tier price, so a Customer whose second visit had
+            no professional within reach was asked to pay for two and then refunded for one. Taking
+            money for a visit we already know cannot happen, in order to hand it back later, is not a
+            refund policy; it is a worse version of not charging for it.
+
+            Only shares already settled as undeliverable are subtracted. A share still `SEARCHING` — or
+            one the Customer re-timed after an exhausted match — is chargeable, because it may still be
+            filled and a price that flickered with the matching state would be worse than either answer.
           readOnly: true
         payment_attempt_id:
           type: string
@@ -31459,6 +32680,9 @@ components:
         visit_duration_minutes:
           type: integer
           readOnly: true
+        turnaround_minutes:
+          type: integer
+          readOnly: true
         availability_is_preliminary:
           type: boolean
           readOnly: true
@@ -31475,6 +32699,7 @@ components:
       - days
       - server_now
       - timezone
+      - turnaround_minutes
       - visit_duration_minutes
     VisitVendor:
       type: object

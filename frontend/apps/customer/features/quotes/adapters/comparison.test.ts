@@ -57,6 +57,7 @@ function card(overrides: Partial<QuoteCardView> = {}): QuoteCardView {
     includedSupplyList: [],
     materialFulfilmentMode: "CUSTOMER_PROCURES",
     brandTierLabel: null,
+    completionDays: null,
     inclusions: [],
     exclusions: [],
     warrantyTerms: null,
@@ -116,8 +117,8 @@ describe("firstStageOf", () => {
     const view = firstStageOf(
       card({
         stages: [
-          { title: "Design and demolition", deliverable: null, amountLabel: "₹1,40,000", endsOn: "2026-09-30" },
-          { title: "Civil", deliverable: null, amountLabel: "₹2,00,000", endsOn: "2026-10-30" },
+          { title: "Design and demolition", deliverable: null, amountLabel: "₹1,40,000", totalDuePaise: 14_000_000, endsOn: "2026-09-30" },
+          { title: "Civil", deliverable: null, amountLabel: "₹2,00,000", totalDuePaise: 20_000_000, endsOn: "2026-10-30" },
         ],
       }),
     );
@@ -225,8 +226,8 @@ describe("toComparisonRows", () => {
     const rows = toComparisonRows([
       card({
         stages: [
-          { title: "One", deliverable: null, amountLabel: "₹1", endsOn: "2026-09-30" },
-          { title: "Two", deliverable: null, amountLabel: "₹2", endsOn: "2026-11-12" },
+          { title: "One", deliverable: null, amountLabel: "₹1", totalDuePaise: 100, endsOn: "2026-09-30" },
+          { title: "Two", deliverable: null, amountLabel: "₹2", totalDuePaise: 200, endsOn: "2026-11-12" },
         ],
       }),
     ]);
@@ -244,12 +245,12 @@ describe("toComparisonRows", () => {
     const rows = toComparisonRows([
       card({
         itemLines: [
-          { category: "Work", title: "Wall tiling", quantityLabel: "40 Sq ft × ₹80", amountLabel: "₹3,200" },
+          { category: "Work", title: "Wall tiling", quantityLabel: "40 Sq ft × ₹80", amountLabel: "₹3,200", amountPaise: 320_000 },
         ],
       }),
       card({
         labourLines: [
-          { role: "Mason", team: null, crewLabel: "2 people × 3 days × ₹900/day", amountLabel: "₹5,400" },
+          { role: "Mason", team: null, crewLabel: "2 people × 3 days × ₹900/day", amountLabel: "₹5,400", amountPaise: 540_000 },
         ],
       }),
       card({ estimateType: "LABOUR_WISE" }),

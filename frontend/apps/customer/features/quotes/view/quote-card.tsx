@@ -1,10 +1,16 @@
 "use client";
 
 import { Badge, Button, Disclosure, cn } from "@vsolve/ui";
-import { PackageCheck } from "lucide-react";
+import { MoreHorizontal, PackageCheck } from "lucide-react";
 import Link from "next/link";
 
-import { firstStageOf, materialCountLabel, type QuoteCardView } from "../adapters";
+import {
+  canAskAboutPrice,
+  firstStageOf,
+  materialCountLabel,
+  superlativeFor,
+  type QuoteCardView,
+} from "../adapters";
 import { MaterialListRows } from "./material-list-rows";
 import { VendorMark, VendorTrustLine } from "./vendor-trust-line";
 
@@ -41,6 +47,13 @@ export interface QuoteCardProps {
   questionsHref: string;
   /** Lines the other estimates include and this one does not. */
   scopeGaps?: readonly string[];
+  /**
+   * Every estimate on the request, so the card can say what this one wins at.
+   * Passed rather than derived because a superlative is a statement about the
+   * set, and a card that only knows itself would have to claim "cheapest" on
+   * the strength of nothing.
+   */
+  siblings?: readonly QuoteCardView[];
 
   /**
    * Marks this card as the one the Customer is leaning towards.
@@ -56,18 +69,36 @@ export interface QuoteCardProps {
 
   onReject?: (proposalId: string) => void;
   onRequestRevision?: (proposalId: string) => void;
+  /**
+   * Opens the price ask. Withheld on a rate-card quote, where the figure is
+   * the ops-published day rate and the vendor has nothing to give away.
+   */
+  onAskAboutPrice?: (proposalId: string) => void;
   /** `M2-FE-413` — offered only on an expired quote, and it charges nothing. */
   onRevalidate?: (proposalId: string) => void;
   isRevalidating: boolean;
 }
 
-/** "Ends 14 Oct", from the last dated stage — the vendor's own date, never a computed duration. */
+/**
+ * How long the job takes — "5 working days", or "Ends 14 Oct" when a stage is dated.
+ *
+ * A dated stage wins because it is the more specific promise. In practice there almost
+ * never is one: the partner composer had no date input of any kind, so `ends_on` was
+ * always null and this returned null, and every estimate on the platform rendered
+ * "Not dated" in the slot where the answer belongs. `completionDays` (1.65.0) is what
+ * vendors can actually state, and it is what a Customer is asking for anyway.
+ */
 export function timelineLabel(card: QuoteCardView): string | null {
   const last = [...card.stages].reverse().find((stage) => stage.endsOn !== null);
-  if (last === undefined || last.endsOn === null) return null;
-  const date = new Date(last.endsOn);
-  if (Number.isNaN(date.getTime())) return `Ends ${last.endsOn}`;
-  return `Ends ${new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short" }).format(date)}`;
+  if (last?.endsOn != null) {
+    const date = new Date(last.endsOn);
+    if (Number.isNaN(date.getTime())) return `Ends ${last.endsOn}`;
+    return `Ends ${new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short" }).format(date)}`;
+  }
+  if (card.completionDays !== null) {
+    return `${card.completionDays} working ${card.completionDays === 1 ? "day" : "days"}`;
+  }
+  return null;
 }
 
 /** "Valid 6 more days" / "Runs out today". Null when the vendor set no validity. */
@@ -89,11 +120,13 @@ export function QuoteCard({
   detailHref,
   questionsHref,
   scopeGaps = [],
+  siblings = [],
   onPick,
   isPicked,
   isChosen = false,
   onReject,
   onRequestRevision,
+  onAskAboutPrice,
   onRevalidate,
   isRevalidating,
 }: QuoteCardProps) {
@@ -102,6 +135,7 @@ export function QuoteCard({
   const firstStage = firstStageOf(card);
   const timeline = timelineLabel(card);
   const validity = validityLabel(card);
+  const superlative = superlativeFor(card, siblings);
   const openQuestions = card.questions.filter(
     (question) => question.askedByRole === "VENDOR" && question.answer === null,
   ).length;
@@ -166,19 +200,46 @@ export function QuoteCard({
           ) : null}
         </header>
 
-        <div className="mt-4 flex items-baseline justify-between gap-3">
-          <p className="text-[26px] font-extrabold leading-none tracking-[-0.02em] text-text">
-            {card.payableLabel}
-          </p>
-          <p className="text-right text-xs font-medium text-text-secondary">
-            {card.taxBasis === "INCLUSIVE"
-              ? `incl. ${card.taxLabel} tax`
-              : `${card.totalLabel} + ${card.taxLabel} tax`}
-          </p>
-        </div>
+        {/* The Four Facts.
+            Fixed slots, same four questions, same order, on every card —
+            including the cards where three of them are "Not stated". A grid
+            that reflows to what a vendor happened to fill in cannot be
+            compared by eye, and comparing by eye is the whole job of this
+            screen. Emptiness is information too: an estimate with no date is
+            visibly an estimate with no date, in the slot where the date goes. */}
+        <dl className="mt-4 grid grid-cols-2 gap-x-3 gap-y-3">
+          <Fact
+            label="Total"
+            value={card.payableLabel}
+            hint={
+              card.taxBasis === "INCLUSIVE"
+                ? `incl. ${card.taxLabel} tax`
+                : `+ ${card.taxLabel} tax`
+            }
+            emphasis
+          />
+          <Fact
+            label="To start"
+            value={firstStage?.amountLabel ?? "Not stated"}
+            // Vendors commonly name their first stage "To start", which is
+            // also this slot's label — printing both stutters.
+            hint={
+              firstStage !== null && firstStage.title.toLowerCase() !== "to start"
+                ? firstStage.title
+                : undefined
+            }
+            emphasis
+          />
+          <Fact label="Takes" value={timeline ?? "Not stated"} />
+          <Fact
+            label="Holds for"
+            value={validity?.text ?? "No end date"}
+            urgent={validity?.urgent ?? false}
+          />
+        </dl>
 
         {card.rateLabel !== null ? (
-          <p className="mt-2 text-sm text-text-secondary">
+          <p className="mt-3 text-sm text-text-secondary">
             {card.rateLabel} per worker per day
             {card.workerCount !== null ? ` · ${card.workerCount} workers` : ""}
             {card.minimumDays !== null
@@ -187,15 +248,12 @@ export function QuoteCard({
           </p>
         ) : null}
 
-        {firstStage !== null || timeline !== null ? (
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <Tile
-              label="Pay to start"
-              value={firstStage?.amountLabel ?? "Not stated"}
-              hint={firstStage?.title ?? undefined}
-            />
-            <Tile label="Timeline" value={timeline ?? "Not dated"} />
-          </div>
+        {/* One superlative, or none. `superlativeFor` refuses to award on a
+            tie, so a badge here means an outright win on that axis. */}
+        {superlative !== null ? (
+          <p className="mt-3 inline-flex items-center rounded-full bg-success-surface px-2.5 py-1 text-xs font-extrabold text-success-text">
+            {superlative.label}
+          </p>
         ) : null}
 
         {card.materialFulfilmentMode === "PARTNER_TURNKEY" ? (
@@ -240,12 +298,10 @@ export function QuoteCard({
           </p>
         ) : null}
 
+        {/* Validity is not repeated here — it has a fixed slot in the Four
+            Facts above, and saying it twice is how a card grows back into a
+            paragraph. */}
         <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold">
-          {validity !== null ? (
-            <span className={validity.urgent ? "text-warning-text" : "text-text-muted"}>
-              {validity.text}
-            </span>
-          ) : null}
           {card.revision > 1 ? <span className="text-text-muted">Revision {card.revision}</span> : null}
           {card.revisionRequest?.status === "OPEN" ? (
             <span className="text-info-text">Revision asked for</span>
@@ -271,60 +327,152 @@ export function QuoteCard({
         </div>
       ) : null}
 
-      <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-3">
+      {/* One way forward and a menu for the rest.
+          This row carried four competing buttons — "See full estimate", "Ask
+          them", "Ask for a revision", "Not this one" — none of which was the
+          thing to do next. Reading the estimate is; everything else is a
+          detour, and detours belong behind a menu. */}
+      <div className="flex items-center gap-2 border-t border-line px-4 py-3">
         <Link
           href={detailHref}
           className="inline-flex min-h-10 items-center rounded-control border border-line-strong bg-surface px-3.5 text-sm font-bold text-text hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >
-          See full estimate
+          Read in full <span aria-hidden className="ml-1.5 text-base leading-none">›</span>
         </Link>
-        <Link
-          href={questionsHref}
-          className="inline-flex min-h-10 items-center rounded-control px-3 text-sm font-bold text-text-link hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-        >
-          Ask them
-        </Link>
-        {card.isExpired ? (
-          card.hasAskedForRevalidation ? (
-            <span className="text-sm text-text-secondary" role="status">
-              Fresh price asked for
-            </span>
-          ) : onRevalidate !== undefined ? (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => onRevalidate(card.proposalId)}
-              loading={isRevalidating}
-              loadingLabel="Asking them"
-            >
-              Ask for a fresh price — free
-            </Button>
-          ) : null
-        ) : (
-          <>
-            {onRequestRevision !== undefined && card.isSelectable && card.revisionRequest?.status !== "OPEN" ? (
-              <Button size="sm" variant="ghost" onClick={() => onRequestRevision(card.proposalId)}>
-                Ask for a revision
-              </Button>
-            ) : null}
-            {onReject !== undefined && card.isSelectable ? (
-              <Button size="sm" variant="ghost" className="ml-auto" onClick={() => onReject(card.proposalId)}>
-                Not this one
-              </Button>
-            ) : null}
-          </>
-        )}
+
+        {card.isExpired && !card.hasAskedForRevalidation && onRevalidate !== undefined ? (
+          // An expired price is the one case where the detour *is* the next
+          // step, so it stays a button rather than hiding in the menu.
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onRevalidate(card.proposalId)}
+            loading={isRevalidating}
+            loadingLabel="Asking them"
+          >
+            Ask for a fresh price — free
+          </Button>
+        ) : null}
+        {card.isExpired && card.hasAskedForRevalidation ? (
+          <span className="text-sm text-text-secondary" role="status">
+            Fresh price asked for
+          </span>
+        ) : null}
+
+        <CardOverflow
+          card={card}
+          questionsHref={questionsHref}
+          onReject={onReject}
+          onRequestRevision={onRequestRevision}
+          onAskAboutPrice={onAskAboutPrice}
+        />
       </div>
     </article>
   );
 }
 
-function Tile({ label, value, hint }: { label: string; value: string; hint?: string }) {
+/**
+ * The card's secondary actions, in a native disclosure.
+ *
+ * `<details>` rather than a popover on purpose: it is a disclosure, the
+ * platform already makes it keyboard- and screen-reader-complete, and it works
+ * before hydration on a screen a Customer may open on a slow connection while
+ * standing in the room being painted.
+ */
+function CardOverflow({
+  card,
+  questionsHref,
+  onReject,
+  onRequestRevision,
+  onAskAboutPrice,
+}: {
+  card: QuoteCardView;
+  questionsHref: string;
+  onReject?: (proposalId: string) => void;
+  onRequestRevision?: (proposalId: string) => void;
+  onAskAboutPrice?: (proposalId: string) => void;
+}) {
+  const priceAskable = onAskAboutPrice !== undefined && canAskAboutPrice(card);
+  const revisable =
+    onRequestRevision !== undefined &&
+    card.isSelectable &&
+    !card.isExpired &&
+    card.revisionRequest?.status !== "OPEN";
+  const rejectable = onReject !== undefined && card.isSelectable;
+
   return (
-    <div className="rounded-[12px] bg-surface-sunken px-3 py-2">
-      <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-text-muted">{label}</p>
-      <p className="mt-0.5 text-[15px] font-extrabold tabular-nums text-text">{value}</p>
-      {hint ? <p className="truncate text-xs text-text-secondary">{hint}</p> : null}
+    <details className="group relative ml-auto">
+      <summary
+        aria-label={`More actions for ${card.vendorName ?? "this estimate"}`}
+        className="inline-flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-control text-text-secondary marker:content-none hover:bg-surface-hover hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring [&::-webkit-details-marker]:hidden"
+      >
+        <MoreHorizontal className="size-5" aria-hidden />
+      </summary>
+      <div className="absolute right-0 bottom-full z-20 mb-1 flex w-60 flex-col overflow-hidden rounded-[12px] border border-line bg-surface py-1 shadow-raised">
+        <Link href={questionsHref} className={overflowItem}>
+          Ask a question
+        </Link>
+        {priceAskable ? (
+          <button type="button" className={overflowItem} onClick={() => onAskAboutPrice(card.proposalId)}>
+            Ask about the price
+          </button>
+        ) : null}
+        {revisable ? (
+          <button type="button" className={overflowItem} onClick={() => onRequestRevision(card.proposalId)}>
+            Ask for a change
+          </button>
+        ) : null}
+        {rejectable ? (
+          <button
+            type="button"
+            className={cn(overflowItem, "text-warning-text")}
+            onClick={() => onReject(card.proposalId)}
+          >
+            Not this one
+          </button>
+        ) : null}
+      </div>
+    </details>
+  );
+}
+
+const overflowItem =
+  "px-3.5 py-2.5 text-left text-sm font-semibold text-text hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring";
+
+/**
+ * One of the Four Facts.
+ *
+ * Always renders, even with nothing to say, because the comparison is
+ * positional: the eye learns that "to start" is the top-right of every card
+ * and stops reading labels. A slot that disappears when empty breaks that on
+ * exactly the cards where it matters most.
+ */
+function Fact({
+  label,
+  value,
+  hint,
+  emphasis = false,
+  urgent = false,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  emphasis?: boolean;
+  urgent?: boolean;
+}) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-[11px] font-bold uppercase tracking-[0.07em] text-text-muted">{label}</dt>
+      <dd
+        className={cn(
+          "mt-0.5 font-extrabold tabular-nums leading-tight",
+          emphasis ? "text-[22px] tracking-[-0.02em]" : "text-[15px]",
+          urgent ? "text-warning-text" : "text-text",
+        )}
+      >
+        {value}
+      </dd>
+      {hint ? <p className="truncate text-xs font-medium text-text-secondary">{hint}</p> : null}
     </div>
   );
 }

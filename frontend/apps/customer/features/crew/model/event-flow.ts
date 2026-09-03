@@ -1,6 +1,6 @@
 import type { RequirementQuestionView } from "@/features/requirement/adapters";
 
-import { HEADCOUNT_CODE } from "./size";
+import { DURATION_CODE, HEADCOUNT_CODE } from "./size";
 
 /**
  * The event-staff shape of the crew flow, and the handful of codes it turns on.
@@ -35,8 +35,6 @@ const OCCASION_CODES: readonly string[] = [
   SERVICE_STYLE_CODE,
 ];
 
-const PRESENTATION_CODES: readonly string[] = [DRESS_CODE_CODE, STAFF_MEAL_CODE];
-
 /** A counted role: a number question other than the headcount, named `*_count`. */
 export function isRoleQuestion(question: RequirementQuestionView): boolean {
   return (
@@ -61,7 +59,21 @@ export function occasionQuestions(
 export function presentationQuestions(
   questions: readonly RequirementQuestionView[],
 ): readonly RequirementQuestionView[] {
-  return questions.filter((question) => PRESENTATION_CODES.includes(question.code));
+  const roles = roleQuestions(questions);
+  const roleCodes = new Set(
+    roles.flatMap((role) => [
+      role.code,
+      roleGenderKey(role.code, "men"),
+      roleGenderKey(role.code, "women"),
+    ]),
+  );
+  return questions.filter(
+    (question) =>
+      !OCCASION_CODES.includes(question.code) &&
+      !roleCodes.has(question.code) &&
+      question.code !== HEADCOUNT_CODE &&
+      question.code !== DURATION_CODE,
+  );
 }
 
 /**

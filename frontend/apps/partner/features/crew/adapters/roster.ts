@@ -180,6 +180,32 @@ export interface CrewRow {
    * roster of blanks passes dispatch and then fails at the gate. The roster screen says so.
    */
   readonly gender: CrewMemberRecord["gender"];
+  /**
+   * Where each identity document stands, one entry per kind that has reached Operations.
+   *
+   * Empty and `documentsVerified: false` is the state that needs the Partner to act; a pending
+   * entry is the state that needs Operations to. The roster could not tell those apart before,
+   * so every unverified worker read as "waiting on Vsolve" and nobody uploaded anything.
+   */
+  readonly documents: readonly CrewDocumentState[];
+}
+
+export type CrewDocumentState = NonNullable<CrewMemberRecord["documents"]>[number];
+
+/** Required of every crew member before Operations verification can be earned. */
+export const REQUIRED_CREW_DOCUMENT_KINDS = ["GOVERNMENT_ID"] as const;
+
+/**
+ * What this worker still needs from the Partner, as document kinds.
+ *
+ * A rejected document counts as outstanding: the Partner has to send a replacement, and a screen
+ * that showed it as "done, rejected" would leave them waiting on Operations forever.
+ */
+export function outstandingDocumentKinds(row: CrewRow): readonly string[] {
+  return REQUIRED_CREW_DOCUMENT_KINDS.filter((kind) => {
+    const state = row.documents.find((document) => document.kind === kind);
+    return state === undefined || state.status === "REJECTED";
+  });
 }
 
 export interface RosterView {
@@ -211,6 +237,7 @@ function toRow(member: CrewMemberRecord): CrewRow {
     documentsVerified: member.documents_verified_at !== null,
     isArchived: readCrewStatus(member.status) === "ARCHIVED",
     gender: member.gender,
+    documents: member.documents ?? [],
   };
 }
 

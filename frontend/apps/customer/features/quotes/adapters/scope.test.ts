@@ -39,6 +39,7 @@ function card(overrides: Partial<QuoteCardView> = {}): QuoteCardView {
     includedSupplyList: [],
     materialFulfilmentMode: "CUSTOMER_PROCURES",
     brandTierLabel: null,
+    completionDays: null,
     inclusions: [],
     exclusions: [],
     scopeSummary: null,

@@ -18,6 +18,21 @@ export interface CustomerVisitSlotChooserProps {
   isLoading: boolean;
   error: unknown;
   onRetry: () => void;
+  /**
+   * What to call each row, when the rows are not visits 1..N of a new request.
+   *
+   * Re-timing a single visit that nobody could be found for reuses this whole
+   * component with `planSize` of 1 — and without this it would label the
+   * second visit of a plan "Visit 1", which is the sort of small lie that makes
+   * somebody think they are about to overwrite the visit that did match.
+   * Defaults to the wizard's own numbering, so that caller is unchanged.
+   */
+  visitNumbers?: readonly number[];
+  /** Times held by visits this picker is not editing — greyed out rather than refused later. */
+  blockedStarts?: readonly string[];
+  /** Overrides the wizard's heading when this is a re-pick rather than a first pick. */
+  title?: string;
+  description?: string;
 }
 
 export function CustomerVisitSlotChooser({
@@ -28,6 +43,10 @@ export function CustomerVisitSlotChooser({
   isLoading,
   error,
   onRetry,
+  visitNumbers,
+  blockedStarts,
+  title = "Choose each visit time",
+  description = "The professional accepts your time or passes. They cannot move it.",
 }: CustomerVisitSlotChooserProps) {
   const headingId = useId();
   const [openVisitIndex, setOpenVisitIndex] = useState<number | null>(null);
@@ -37,6 +56,7 @@ export function CustomerVisitSlotChooser({
   if (planSize === null) return null;
 
   const visits = Array.from({ length: planSize }, (_, index) => index);
+  const visitNumber = (index: number): number => visitNumbers?.[index] ?? index + 1;
   const chosenCount = visits.filter((index) => {
     const slot = findCustomerVisitSlot(grid, selectedStarts[index] ?? null);
     return slot?.isAvailable === true;
@@ -75,11 +95,9 @@ export function CustomerVisitSlotChooser({
         </span>
         <div className="min-w-0 flex-1">
           <h2 id={headingId} className="text-base font-extrabold text-text">
-            Choose each visit time
+            {title}
           </h2>
-          <p className="mt-0.5 text-sm leading-5 text-text-secondary">
-            The professional accepts your time or passes. They cannot move it.
-          </p>
+          <p className="mt-0.5 text-sm leading-5 text-text-secondary">{description}</p>
         </div>
       </div>
 
@@ -128,8 +146,8 @@ export function CustomerVisitSlotChooser({
                   onClick={() => openPicker(visitIndex)}
                   aria-label={
                     complete
-                      ? `Visit ${visitIndex + 1}. ${day?.label ?? ""}, ${selected.label}. Change time.`
-                      : `Visit ${visitIndex + 1}. Choose a time.`
+                      ? `Visit ${visitNumber(visitIndex)}. ${day?.label ?? ""}, ${selected.label}. Change time.`
+                      : `Visit ${visitNumber(visitIndex)}. Choose a time.`
                   }
                   className={cn(
                     "flex min-h-14 w-full cursor-pointer items-center gap-3 rounded-card px-3 py-2 text-left",
@@ -149,11 +167,11 @@ export function CustomerVisitSlotChooser({
                         : "bg-signal-100 text-signal-700",
                     )}
                   >
-                    {complete ? <CheckCircle2 className="size-4" /> : visitIndex + 1}
+                    {complete ? <CheckCircle2 className="size-4" /> : visitNumber(visitIndex)}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block text-[11px] font-semibold text-text-muted">
-                      {`Visit ${visitIndex + 1}`}
+                      {`Visit ${visitNumber(visitIndex)}`}
                     </span>
                     <span
                       className={cn(
@@ -200,6 +218,8 @@ export function CustomerVisitSlotChooser({
       {currentVisitIndex !== null && grid !== null ? (
         <VisitTimeSheet
           visitIndex={currentVisitIndex}
+          visitNumber={visitNumber(currentVisitIndex)}
+          blockedStarts={blockedStarts}
           grid={grid}
           selectedStarts={selectedStarts}
           activeDay={activeDay}
@@ -226,6 +246,8 @@ export function CustomerVisitSlotChooser({
 
 function VisitTimeSheet({
   visitIndex,
+  visitNumber,
+  blockedStarts,
   grid,
   selectedStarts,
   activeDay,
@@ -236,6 +258,9 @@ function VisitTimeSheet({
   onConfirm,
 }: {
   visitIndex: number;
+  /** The number a person reads, which is not always `visitIndex + 1`. */
+  visitNumber: number;
+  blockedStarts?: readonly string[];
   grid: CustomerVisitSlotGridView;
   selectedStarts: readonly (string | null)[];
   activeDay: string | null;
@@ -255,7 +280,7 @@ function VisitTimeSheet({
       onOpenChange={(next) => {
         if (!next) onCancel();
       }}
-      title={`Choose Visit ${visitIndex + 1}`}
+      title={`Choose Visit ${visitNumber}`}
       description="Pick a time you can be at the site. The professional accepts it or passes."
       footer={
         <>
@@ -329,10 +354,14 @@ function VisitTimeSheet({
                       selectedStarts,
                       visitIndex,
                       grid,
+                      blockedStarts,
                     });
                     const disabled = overlapping;
                     const checked = slot.startsAt === draftStart;
-                    const helper = overlapping ? "Used by another visit" : "Available";
+                    // "Used by" was only ever true of an exact clash. With the turnaround
+                    // counted, most blocked slots are merely adjacent — and a Customer told
+                    // 6pm is "used" while their only visit is at 5pm reads it as a bug.
+                    const helper = overlapping ? "Too close to another visit" : "Available";
                     return (
                       <label
                         key={slot.token}

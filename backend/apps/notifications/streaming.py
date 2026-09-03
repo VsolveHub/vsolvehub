@@ -123,6 +123,78 @@ def _stream_filter(*, recipient_id: UUID, since: datetime) -> Q:
     )
 
 
+#: Purposes whose notice is an *offer to answer*, addressed by an invitation id in `target_id`.
+#:
+#: The Partner app raises one of these as a first-accept-wins interrupt — a full-screen dialog,
+#: an alarm and a countdown — rather than as an inbox line. Everything else on this stream is a
+#: report, and a report is true forever; an offer is only true while it can still be taken.
+OFFER_PURPOSES = frozenset(
+    {
+        "m2.invitation.received",
+        "m2.fixed_visit_offer.received",
+        "m2.crew_offer.invited",
+    }
+)
+
+
+def _unanswerable_offer_intent_ids(rows: list[NotificationIntent]) -> set[UUID]:
+    """Of `rows`, the offer intents whose invitation nobody can answer any more.
+
+    **Why the server has to be the one to withhold these.** Every connection opens at
+    `now - M1_OFFER_STREAM_REPLAY_SECONDS` and the server closes it at
+    `M1_OFFER_STREAM_MAX_SECONDS`, so each reconnect — and each app reload, and each remount —
+    replays that window. Nothing downstream re-reads the invitation: `_stream_filter` selects on
+    `(recipient, purpose, channel, status, created_at)` and never on whether the offer is live.
+    A Partner who accepted a fixed-visit offer and then reloaded inside the window was therefore
+    shown their own acceptance again as a fresh race, alarm and all, over an Accept button the
+    server correctly refuses to honour twice.
+
+    Client-side de-duplication cannot close this. Its memory is a `useRef` that dies with the
+    mount and a five-minute TTL besides, so the first reload after an acceptance has nothing left
+    to de-duplicate against — and it must keep showing genuinely new offers, so it cannot simply
+    fall silent. Liveness is a fact only the database holds.
+
+    An `INVITED` invitation past its own `responds_by` counts as unanswerable too: acceptance
+    expires it rather than taking it, so streaming it would start a countdown that has already
+    finished.
+
+    One query for the whole batch, and none at all when the batch carries no offer.
+    """
+    by_invitation: dict[UUID, list[UUID]] = {}
+    for intent in rows:
+        if intent.purpose not in OFFER_PURPOSES:
+            continue
+        target_id = cast(dict[str, Any], intent.context).get("target_id")
+        if not isinstance(target_id, str):
+            continue
+        try:
+            key = UUID(target_id)
+        except ValueError:
+            continue
+        by_invitation.setdefault(key, []).append(intent.id)
+    if not by_invitation:
+        return set()
+
+    # Deferred so `apps.notifications` keeps no module-level dependency on `apps.requirements`,
+    # which imports this package.
+    from apps.requirements.models import VendorInvitation  # noqa: PLC0415
+
+    now = timezone.now()
+    answerable = set(
+        VendorInvitation.objects.filter(
+            Q(responds_by__isnull=True) | Q(responds_by__gt=now),
+            pk__in=by_invitation,
+            status=VendorInvitation.Status.INVITED,
+        ).values_list("id", flat=True)
+    )
+    return {
+        intent_id
+        for invitation_id, intent_ids in by_invitation.items()
+        if invitation_id not in answerable
+        for intent_id in intent_ids
+    }
+
+
 def _payload_for_intent(intent: NotificationIntent) -> tuple[str, dict[str, object]] | None:
     if intent.purpose == OFFER_CREATED_PURPOSE:
         return OFFER_CREATED_EVENT, cast(dict[str, object], intent.context)
@@ -164,7 +236,9 @@ def offer_event_frames(
     One query per poll, filtered on `(recipient, purpose, channel, created_at)`.
     `SUPPRESSED` intents are excluded: a suppressed intent is a recorded decision
     *not* to notify — usually an engaged kill switch — and streaming it anyway would
-    route around the switch.
+    route around the switch. Offer intents whose invitation has since been answered or
+    lost are excluded too — see `_unanswerable_offer_intent_ids`, which is what stops the
+    replay window from re-raising a Partner's own acceptance as a fresh race.
 
     Scoped to `recipient_id` in the query itself, so there is no path by which one
     partner's connection can carry another partner's offer.
@@ -192,8 +266,13 @@ def offer_event_frames(
             .exclude(status=NotificationIntent.Status.SUPPRESSED)
             .order_by("created_at", "id")
         )
+        withheld = _unanswerable_offer_intent_ids(rows)
         for intent in rows:
+            # Advanced before the two skips below, so an intent this connection declined to send
+            # is not re-read on every remaining poll of its life.
             last_seen = intent.created_at
+            if intent.id in withheld:
+                continue
             framed = _payload_for_intent(intent)
             if framed is None:
                 continue

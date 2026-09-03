@@ -296,6 +296,86 @@ export function useChooseCustomerVisitSlots() {
   });
 }
 
+export interface UnmatchedVisitSlotInput {
+  requirementId: string;
+  shareId: string;
+}
+
+/**
+ * Try another time for a visit nobody could be found for.
+ *
+ * The server already refused this on anything but an exhausted slot; what was
+ * missing was any caller. The endpoint has existed since the fixed-visit
+ * broadcast landed and the customer app never once called it, so a slot the
+ * matching engine had given up on showed a spinner with no way off it.
+ */
+export function useReplaceVisitSlot() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: UnmatchedVisitSlotInput & { slotId: string }) =>
+      request(() =>
+        getApiClient().POST(
+          "/api/v1/requirements/{requirement_id}/visit-slots/{share_id}/replace/",
+          {
+            params: {
+              path: { requirement_id: input.requirementId, share_id: input.shareId },
+              header: {
+                "Idempotency-Key": getStableIdempotencyKey(
+                  `m2-visit-slot-replace:${input.shareId}:${input.slotId}`,
+                ),
+              },
+            },
+            body: { slot_id: input.slotId },
+          },
+        ),
+      ),
+    onSuccess: (_slots, input) => {
+      void queryClient.invalidateQueries({ queryKey: m2AccessKeys.visitPlan(input.requirementId) });
+      void queryClient.invalidateQueries({
+        queryKey: m2QueryKeys.visits.customerSlots(input.requirementId),
+      });
+    },
+    retry: false,
+  });
+}
+
+/**
+ * Do without a visit nobody could be found for, and stop paying for it.
+ *
+ * The money moves on the server: the share is refunded in full through the
+ * ordinary settlement path, and an uncharged plan simply quotes less at
+ * checkout. The plan read is invalidated rather than patched because
+ * `chargeable_paise` changes with it, and a stale price on a checkout button is
+ * the one thing this whole change exists to prevent.
+ */
+export function useDropVisitSlot() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: UnmatchedVisitSlotInput) =>
+      request(() =>
+        getApiClient().POST(
+          "/api/v1/requirements/{requirement_id}/visit-slots/{share_id}/drop/",
+          {
+            params: {
+              path: { requirement_id: input.requirementId, share_id: input.shareId },
+              header: {
+                "Idempotency-Key": getStableIdempotencyKey(
+                  `m2-visit-slot-drop:${input.shareId}`,
+                ),
+              },
+            },
+          },
+        ),
+      ),
+    onSuccess: (_slots, input) => {
+      void queryClient.invalidateQueries({ queryKey: m2AccessKeys.visitPlan(input.requirementId) });
+    },
+    retry: false,
+  });
+}
+
 export interface ChooseVisitPlanInput {
   requirementId: string;
   planSize: number;

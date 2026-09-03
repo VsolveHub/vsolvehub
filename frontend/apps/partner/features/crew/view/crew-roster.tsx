@@ -1,13 +1,13 @@
 "use client";
 
-import { Badge, Button, Card, ConfirmAction, EmptyState, Sheet, cn } from "@vsolve/ui";
+import { Badge, Button, Card, ConfirmAction, EmptyState, cn } from "@vsolve/ui";
 import { useState } from "react";
 
 import { AsyncSection, type AsyncState } from "@/components/async-section";
 import { Pictogram, type PictogramName } from "@/components/pictogram";
 
-import type { CrewRow, RosterView } from "../adapters/roster";
-import { CrewGenderField, crewGenderLabel, type CrewGender } from "./crew-gender";
+import { outstandingDocumentKinds, type CrewRow, type RosterView } from "../adapters/roster";
+import { crewGenderLabel } from "./crew-gender";
 
 /**
  * The crew roster: who you can send, and who can report attendance.
@@ -69,18 +69,10 @@ export interface CrewRosterProps {
   readonly state: AsyncState<RosterView>;
   readonly onAdd: () => void;
   readonly onArchive: (membershipId: string) => void;
+  readonly onEdit: (row: CrewRow) => void;
   readonly archivingId?: string | null;
   /** Set when archiving was refused — a future assignment, most often. */
   readonly archiveError?: { readonly membershipId: string; readonly message: string } | null;
-  /**
-   * Record what a worker is. Offered per person because that is the only unit it exists in —
-   * there is no bulk edit, and a screen that let one be applied to several at once would be
-   * inviting exactly the guess this field must never contain.
-   */
-  readonly onSetGender: (membershipId: string, gender: CrewGender) => void;
-  readonly settingGenderId?: string | null;
-  /** `m2_crew_gender_conflict`, most often: another agency recorded this person differently. */
-  readonly genderError?: { readonly membershipId: string; readonly message: string } | null;
   readonly onRetry?: () => void;
   readonly className?: string;
 }
@@ -89,11 +81,9 @@ export function CrewRoster({
   state,
   onAdd,
   onArchive,
+  onEdit,
   archivingId = null,
   archiveError = null,
-  onSetGender,
-  settingGenderId = null,
-  genderError = null,
   onRetry,
   className,
 }: CrewRosterProps) {
@@ -153,11 +143,7 @@ export function CrewRoster({
                     archiveError?.membershipId === row.membershipId ? archiveError.message : null
                   }
                   onArchive={() => onArchive(row.membershipId)}
-                  onSetGender={(gender) => onSetGender(row.membershipId, gender)}
-                  settingGender={settingGenderId === row.membershipId}
-                  genderError={
-                    genderError?.membershipId === row.membershipId ? genderError.message : null
-                  }
+                  onEdit={() => onEdit(row)}
                 />
               </li>
             ))}
@@ -289,21 +275,15 @@ function CrewCard({
   pending,
   error,
   onArchive,
-  onSetGender,
-  settingGender = false,
-  genderError = null,
+  onEdit,
 }: {
   row: CrewRow;
-  onSetGender: (gender: CrewGender) => void;
-  settingGender?: boolean;
-  genderError?: string | null;
   pending: boolean;
   error: string | null;
   onArchive: () => void;
+  onEdit: () => void;
 }) {
   const [confirming, setConfirming] = useState(false);
-  const [editingGender, setEditingGender] = useState(false);
-  const [draftGender, setDraftGender] = useState<CrewGender>(row.gender);
 
   return (
     <Card className="flex flex-col items-center gap-2.5 p-4 text-center">
@@ -329,23 +309,20 @@ function CrewCard({
         )}
       </div>
 
-      {/* Offered only while it is missing. Once recorded it is shared with every agency this
-          worker is on, so this screen cannot change it — the badge above states it instead. */}
-      {row.gender === "" ? (
-        <button
-          type="button"
-          onClick={() => {
-            setDraftGender("");
-            setEditingGender(true);
-          }}
-          className="min-h-11 rounded-control border border-dashed border-warning-line px-3 text-xs font-bold text-warning-text hover:bg-warning-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-        >
-          Set man or woman
-        </button>
-      ) : null}
-
       {row.skillCodes.length > 0 ? (
         <p className="text-xs text-text-secondary">{row.skillCodes.join(" · ")}</p>
+      ) : null}
+
+      {/* Two unverified states that look identical on a badge and mean opposite things. A row
+          with nothing uploaded is the Partner's move; a row with a file on it is Operations'.
+          Collapsing them is why every worker read as "waiting on Vsolve" and nobody sent
+          anything. */}
+      {!row.documentsVerified ? (
+        <p className="text-xs leading-5 text-text-muted">
+          {outstandingDocumentKinds(row).length > 0
+            ? "Send their ID so Operations can check it."
+            : "Their documents are with Operations."}
+        </p>
       ) : null}
 
       {error ? (
@@ -354,14 +331,19 @@ function CrewCard({
         </p>
       ) : null}
 
-      <Button
-        variant="ghost"
-        loading={pending}
-        loadingLabel="Archiving"
-        onClick={() => setConfirming(true)}
-      >
-        Archive
-      </Button>
+      <div className="mt-auto flex flex-wrap justify-center gap-2 pt-1">
+        <Button variant="outline" onClick={onEdit}>
+          {row.gender === "" ? "Edit details" : "Edit"}
+        </Button>
+        <Button
+          variant="ghost"
+          loading={pending}
+          loadingLabel="Archiving"
+          onClick={() => setConfirming(true)}
+        >
+          Archive
+        </Button>
+      </div>
 
       <ConfirmAction
         open={confirming}
@@ -376,34 +358,6 @@ function CrewCard({
         }}
       />
 
-      <Sheet
-        open={editingGender}
-        onOpenChange={setEditingGender}
-        title={row.name}
-        description="Recorded once, shared with every agency"
-      >
-        <div className="flex flex-col gap-4 px-4 py-4">
-          <CrewGenderField value={draftGender} onChange={setDraftGender} disabled={settingGender} />
-
-          {genderError === null ? null : (
-            <p className="rounded-card border border-danger-line bg-danger-surface px-3 py-2.5 text-sm leading-5 text-danger-text">
-              {genderError}
-            </p>
-          )}
-
-          <Button
-            loading={settingGender}
-            loadingLabel="Saving"
-            disabled={draftGender === ""}
-            onClick={() => {
-              onSetGender(draftGender);
-              setEditingGender(false);
-            }}
-          >
-            Save
-          </Button>
-        </div>
-      </Sheet>
     </Card>
   );
 }

@@ -815,16 +815,16 @@ function DoingCard({ item }: { item: WorkItem }) {
   );
 }
 
-/**
- * Settled — green surface, and the padlock that says the money is held.
- *
- * Only a completed A1 visit reaches this state. An engagement is never mapped
- * to `settled` by the adapter, which is what keeps the "you got paid" treatment
- * off the one figure that is not a payout.
- */
+/** Settled work — with payment copy that reflects how this kind was paid. */
 function SettledCard({ item }: { item: WorkItem }) {
   const date = dateLabel(item);
   const starts = startTimeLabel(item);
+  const settlementCopy =
+    item.kind === "engagement"
+      ? item.amountLabel === "Collected directly"
+        ? "Paid directly by customer"
+        : "Work completed"
+      : "Held until payout";
 
   return (
     <Link
@@ -851,7 +851,7 @@ function SettledCard({ item }: { item: WorkItem }) {
         )}
         <span className="flex items-center gap-1 text-xs font-semibold opacity-75">
           <Pictogram name="held" size="xs" className="shrink-0" />
-          Held until payout
+          {settlementCopy}
         </span>
       </span>
       {item.amountPaise === null ? null : (

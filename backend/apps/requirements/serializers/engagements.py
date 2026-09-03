@@ -326,6 +326,7 @@ class CustomerProposalSerializer(serializers.ModelSerializer[Proposal]):
             "material_fulfilment_mode",
             "included_supply_list",
             "warranty_terms",
+            "completion_days",
             "valid_until",
             "submitted_at",
         )

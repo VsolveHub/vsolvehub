@@ -73,7 +73,8 @@ class RateCard(models.Model):
         related_name="m2_rate_cards",
     )
 
-    #: The three configured parts, per worker per standard day, in integer paise.
+    #: The three configured parts, per worker per standard day, in integer paise. The margin may
+    #: be zero when the working lead is already paid inside the wage component.
     worker_day_wage_paise = models.PositiveBigIntegerField()
     supervision_margin_paise = models.PositiveBigIntegerField()
     #: Vsolve's revenue in A3 and the **only** money this platform collects on the rate-card path.
@@ -120,7 +121,7 @@ class RateCard(models.Model):
             ),
             models.CheckConstraint(
                 condition=models.Q(worker_day_wage_paise__gt=0)
-                & models.Q(supervision_margin_paise__gt=0)
+                & models.Q(supervision_margin_paise__gte=0)
                 & models.Q(booking_fee_paise__gt=0),
                 name="requirements_rate_card_components_positive",
             ),

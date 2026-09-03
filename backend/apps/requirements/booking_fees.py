@@ -87,7 +87,12 @@ def live_booking_fee(requirement: CustomerRequirement) -> BookingFee | None:
 
 def latest_booking_fee(requirement: CustomerRequirement) -> BookingFee | None:
     """The most recent fee in any state, for the read that has to explain a failed one."""
-    return BookingFee.objects.filter(requirement=requirement).order_by("-created_at").first()
+    return (
+        BookingFee.objects.select_related("payment_attempt")
+        .filter(requirement=requirement)
+        .order_by("-created_at")
+        .first()
+    )
 
 
 def booking_fee_checkout_availability(requirement: CustomerRequirement) -> bool:

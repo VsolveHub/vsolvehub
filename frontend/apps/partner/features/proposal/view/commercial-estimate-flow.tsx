@@ -8,7 +8,10 @@ import type { EnquiryRecord } from "@/features/enquiry/model/wire";
 import { isVisitNotCompleted } from "@/features/visit/queries";
 import type { SiteVisit } from "@/features/visit/model/visit-state";
 
-import type { ProposalRequest } from "../model/commercial-estimate-draft";
+import {
+  commercialEstimateFromProposal,
+  type ProposalRequest,
+} from "../model/commercial-estimate-draft";
 import {
   isCustomTitleScreened,
   isProposalWindowClosed,
@@ -39,6 +42,7 @@ export interface CommercialEstimateFlowProps {
   readonly visit: SiteVisit | null;
   readonly enquiryHref: string;
   readonly supersedesRevision: number;
+  readonly currentProposal: Proposal | null;
   readonly onSubmitted: (proposal: Proposal) => void;
 }
 
@@ -47,6 +51,7 @@ export function CommercialEstimateFlow({
   visit,
   enquiryHref,
   supersedesRevision,
+  currentProposal,
   onSubmitted,
 }: CommercialEstimateFlowProps) {
   const submit = useSubmitProposal();
@@ -107,7 +112,7 @@ export function CommercialEstimateFlow({
     );
   }
 
-  const notice =
+  const blockingNotice =
     visitIsOpen || refusedForVisit ? (
       <ErrorState
         inline
@@ -130,6 +135,19 @@ export function CommercialEstimateFlow({
         reference={presentation.reference}
       />
     ) : null;
+  const notice = (
+    <>
+      {currentProposal !== null ? (
+        <ErrorState
+          inline
+          severity="info"
+          title={`Revising estimate revision ${currentProposal.revision}`}
+          message={`Your current estimate is loaded below. Change only what is needed; sending creates revision ${currentProposal.revision + 1} and keeps the earlier version in the history.`}
+        />
+      ) : null}
+      {blockingNotice}
+    </>
+  );
 
   return (
     <>
@@ -141,6 +159,9 @@ export function CommercialEstimateFlow({
         pricingSkillCode={enquiry.pricingSkillCode}
         materialFulfilmentMode={materialMode}
         visitCompleted={visit.status === "COMPLETED"}
+        initialDraft={
+          currentProposal === null ? null : commercialEstimateFromProposal(currentProposal)
+        }
         isSubmitting={submit.isPending}
         submitError={submit.error}
         onSend={handleSend}

@@ -480,11 +480,13 @@ class RequirementQuoteRevisionRequestView(ThrottledWriteMixin, APIView):
         request=RevisionRequestCreateSerializer,
         description=(
             "Ask the professional behind one live estimate for a different one, with the reason "
-            "attached: leave named lines out, change materials, split the work into phases, or "
-            "something else in a sentence. **Carries no price and changes no price** — only a "
-            "vendor states a number, and they answer by superseding the estimate, which lands "
-            "under the same entitlement. One open request per estimate; a second call re-reads "
-            "the first."
+            "attached: leave named lines out, change materials, split the work into phases, ask "
+            "whether they can move on price, or something else in a sentence. "
+            "**`requested_discount_bps` is what the Customer hopes to pay, never what the work "
+            "costs** — it changes no total, obliges nobody, and the estimate stays live and "
+            "selectable at the price as sent. The vendor answers by superseding the estimate, "
+            "which lands under the same entitlement. One open request per estimate; a second call "
+            "re-reads the first. A price may be asked about once per estimate."
         ),
         responses={
             201: RevisionRequestSerializer,
@@ -520,6 +522,7 @@ class RequirementQuoteRevisionRequestView(ThrottledWriteMixin, APIView):
                     reason_code=str(data["reason_code"]),
                     excluded_items=list(data["excluded_items"]),
                     note=str(data["note"]),
+                    requested_discount_bps=data["requested_discount_bps"],
                 )
             except RequirementDomainError as exc:
                 _raise_api_error(exc)
@@ -537,6 +540,9 @@ class RequirementQuoteRevisionRequestView(ThrottledWriteMixin, APIView):
                 "reason_code": str(data["reason_code"]),
                 "excluded_items": "|".join(data["excluded_items"]),
                 "note": str(data["note"]),
+                # In the replay fingerprint: asking for 3% and asking for 5% are different
+                # requests, and a shared key would serve the first answer to the second ask.
+                "requested_discount_bps": str(data["requested_discount_bps"]),
             },
             command=command,
         )

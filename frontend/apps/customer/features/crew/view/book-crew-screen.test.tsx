@@ -608,3 +608,93 @@ describe("BookCrewScreen for event staff", () => {
     expect(saved.getDate()).toBe(14);
   });
 });
+
+const cookVariant = {
+  id: "variant-cook",
+  questions: [
+    {
+      id: "cook-event",
+      code: "event_type",
+      prompt: "What's the occasion?",
+      help_text: "",
+      kind: "SINGLE_CHOICE",
+      is_required: true,
+      validation_rules: {},
+      options: [{ id: "housewarming", code: "housewarming", label: "Housewarming", description: "" }],
+    },
+    {
+      id: "cook-guests",
+      code: "guest_band",
+      prompt: "How many guests?",
+      help_text: "",
+      kind: "SINGLE_CHOICE",
+      is_required: true,
+      validation_rules: {},
+      options: [
+        { id: "under-25", code: "under-25", label: "Under 25", description: "" },
+        { id: "25-50", code: "25-50", label: "25 to 50", description: "" },
+        { id: "50-75", code: "50-75", label: "50 to 75", description: "" },
+      ],
+    },
+    {
+      id: "cook-meals",
+      code: "meals",
+      prompt: "Which meals?",
+      help_text: "",
+      kind: "MULTIPLE_CHOICE",
+      is_required: true,
+      validation_rules: {},
+      options: [
+        { id: "lunch", code: "lunch", label: "Lunch", description: "" },
+        { id: "dinner", code: "dinner", label: "Dinner", description: "" },
+      ],
+    },
+    ...["cuisine", "food_preference", "kitchen_setup"].map((code) => ({
+      id: `cook-${code}`,
+      code,
+      prompt: code === "cuisine" ? "What kind of food?" : code === "food_preference" ? "Veg or non-veg?" : "What's the kitchen like?",
+      help_text: "",
+      kind: "SINGLE_CHOICE",
+      is_required: true,
+      validation_rules: {},
+      options: [{ id: `${code}-option`, code: "option", label: "Option", description: "" }],
+    })),
+    { id: "cook-meal", code: "staff_meal_provided", prompt: "Will you provide a meal for the cook and helpers?", help_text: "", kind: "BOOLEAN", is_required: true, validation_rules: {}, options: [] },
+    { id: "cook-teams", code: "worker_count", prompt: "Cook teams", help_text: "", kind: "NUMBER", is_required: true, validation_rules: { minimum: 1 }, options: [] },
+    { id: "cook-days", code: "duration_days", prompt: "Days", help_text: "", kind: "NUMBER", is_required: true, validation_rules: { minimum: 1 }, options: [] },
+  ],
+} as unknown as Parameters<typeof BookCrewScreen>[0]["variant"];
+
+const cookService = {
+  slug: "house-function-cook",
+  name: "Cook for a house function",
+  short_description: "A cook and his own helpers at your home for the day.",
+  policies: [],
+} as unknown as Parameters<typeof BookCrewScreen>[0]["service"];
+
+describe("BookCrewScreen for a fixed cook team", () => {
+  it("asks for guests and meals, never a cook count, and offers the larger-event hand-off", async () => {
+    respondToReads();
+    respondToWrites();
+
+    render(<BookCrewScreen service={cookService} variant={cookVariant} />, { wrapper });
+
+    expect(await screen.findByText("Your cook brings their own helpers.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "More cook teams" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "More days" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Reporting time")).toBeInTheDocument();
+
+    const lunch = screen.getByRole("checkbox", { name: "Lunch" });
+    const dinner = screen.getByRole("checkbox", { name: "Dinner" });
+    fireEvent.click(lunch);
+    fireEvent.click(dinner);
+    expect(lunch).toBeChecked();
+    expect(dinner).toBeChecked();
+
+    expect(screen.getByText(/Above 75 guests/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Get quotes from event cooks/ })).toHaveAttribute(
+      "href",
+      "/requests/new/event-cook",
+    );
+  });
+});

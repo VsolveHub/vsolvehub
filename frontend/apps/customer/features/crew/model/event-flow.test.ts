@@ -33,11 +33,14 @@ const questions: readonly RequirementQuestionView[] = [
   { code: "guest_band", label: "How many guests?", kind: "choice", required: true, options: [] },
   { code: "service_style", label: "How is food served?", kind: "choice", required: true, options: [] },
   { code: "waiter_count", label: "Waiters and serving staff", kind: "number", required: false, minimum: 0 },
+  { code: "waiter_men", label: "Waiters - men", kind: "number", required: false, minimum: 0 },
+  { code: "waiter_women", label: "Waiters - women", kind: "number", required: false, minimum: 0 },
   { code: "bar_staff_count", label: "Bar and beverage staff", kind: "number", required: false, minimum: 0 },
   { code: "worker_count", label: "Staff", kind: "number", required: true, minimum: 1 },
   { code: "duration_days", label: "Days", kind: "number", required: true, minimum: 1 },
   { code: "dress_code", label: "Dress code", kind: "choice", required: true, options: [] },
   { code: "staff_meal_provided", label: "Meal?", kind: "boolean", required: true },
+  { code: "arrival_notes", label: "Arrival notes", kind: "text", required: false },
 ];
 
 describe("event crew flow", () => {
@@ -59,6 +62,7 @@ describe("event crew flow", () => {
     expect(presentationQuestions(questions).map((q) => q.code)).toEqual([
       "dress_code",
       "staff_meal_provided",
+      "arrival_notes",
     ]);
   });
 

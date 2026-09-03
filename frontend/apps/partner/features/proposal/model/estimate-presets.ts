@@ -156,7 +156,16 @@ export interface WarrantyChoice {
 }
 
 export const WARRANTY_CHOICES: readonly WarrantyChoice[] = [
-  { code: "none", icon: "no", label: "None", terms: "" },
+  // A real sentence, not a blank. An empty string made "the vendor chose no guarantee"
+  // and "the vendor never answered" the same value — which made the question impossible to
+  // validate, and made the Customer's estimate read "Warranty: Not stated" for both. Saying
+  // it plainly is the honest version of both halves.
+  {
+    code: "none",
+    icon: "no",
+    label: "None",
+    terms: "No guarantee on this work.",
+  },
   {
     code: "3m",
     icon: "date",

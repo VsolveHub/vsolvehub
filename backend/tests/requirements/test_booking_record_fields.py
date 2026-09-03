@@ -13,9 +13,13 @@ unit-test gap rather than papered over.
 """
 
 import pytest
+from django.test import override_settings
 from django.utils import timezone
 
-from apps.requirements.serializers import RateCardStateSerializer
+from apps.commerce.models import PaymentAttempt
+from apps.commerce.providers import FakePaymentProvider
+from apps.requirements.models import BookingFee
+from apps.requirements.serializers import BookingFeeSerializer, RateCardStateSerializer
 
 pytestmark = pytest.mark.django_db
 
@@ -60,3 +64,57 @@ def test_the_engagement_id_is_published_once_one_exists() -> None:
     data = RateCardStateSerializer(_state(engagement_id=engagement_id)).data
 
     assert str(data["engagement_id"]) == engagement_id
+
+
+@override_settings(PAYMENTS_ALLOW_SIMULATED_CAPTURE=True)
+def test_a_fake_booking_fee_attempt_publishes_the_development_capture_door() -> None:
+    attempt = PaymentAttempt(
+        purpose=PaymentAttempt.Purpose.M2_BOOKING_FEE,
+        provider=FakePaymentProvider.code,
+        amount_paise=5_000,
+        currency="INR",
+    )
+    fee = BookingFee(
+        payment_attempt=attempt,
+        amount_paise=5_000,
+        status=BookingFee.Status.PENDING,
+    )
+
+    data = BookingFeeSerializer(fee).data
+
+    assert data["payment_attempt_id"] == attempt.id
+    assert data["simulated_capture_available"] is True
+
+
+@override_settings(PAYMENTS_ALLOW_SIMULATED_CAPTURE=False)
+def test_a_booking_fee_hides_the_capture_door_when_simulation_is_disabled() -> None:
+    attempt = PaymentAttempt(
+        purpose=PaymentAttempt.Purpose.M2_BOOKING_FEE,
+        provider=FakePaymentProvider.code,
+        amount_paise=5_000,
+        currency="INR",
+    )
+    fee = BookingFee(
+        payment_attempt=attempt,
+        amount_paise=5_000,
+        status=BookingFee.Status.PENDING,
+    )
+
+    assert BookingFeeSerializer(fee).data["simulated_capture_available"] is False
+
+
+@override_settings(PAYMENTS_ALLOW_SIMULATED_CAPTURE=True)
+def test_a_booking_fee_hides_the_capture_door_for_razorpay() -> None:
+    attempt = PaymentAttempt(
+        purpose=PaymentAttempt.Purpose.M2_BOOKING_FEE,
+        provider="razorpay",
+        amount_paise=5_000,
+        currency="INR",
+    )
+    fee = BookingFee(
+        payment_attempt=attempt,
+        amount_paise=5_000,
+        status=BookingFee.Status.PENDING,
+    )
+
+    assert BookingFeeSerializer(fee).data["simulated_capture_available"] is False

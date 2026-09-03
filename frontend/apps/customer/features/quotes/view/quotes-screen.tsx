@@ -9,19 +9,11 @@ import {
   useServerCountdown,
   type RejectionReason,
 } from "@vsolve/query";
-import {
-  Button,
-  EmptyState,
-  ErrorState,
-  SegmentedTrack,
-  Skeleton,
-  buttonStyles,
-  segmentStyles,
-} from "@vsolve/ui";
+import { Button, EmptyState, ErrorState, Skeleton, buttonStyles } from "@vsolve/ui";
 import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { AccessRefusal } from "@/features/access/view/access-refusal";
 import { useVisitPlan } from "@/features/access/queries";
@@ -29,7 +21,15 @@ import { useRequirement } from "@/features/requirement/queries";
 import { titleForSlug } from "@/features/requirement/view/my-requests-screen";
 import { estimateConfirmHref, estimateQuestionsHref, requestEstimateHref } from "@/lib/routes";
 
-import { scopeGaps, toSelectionView, unansweredVendorQuestions, type QuoteListView } from "../adapters";
+import {
+  canAskAboutPrice,
+  priceSpread,
+  scopeGaps,
+  stageTotalMismatchPaise,
+  toSelectionView,
+  unansweredVendorQuestions,
+  type QuoteListView,
+} from "../adapters";
 import {
   useEntitledQuoteList,
   useRejectQuote,
@@ -37,30 +37,38 @@ import {
   useRevalidateQuote,
   useSelection,
 } from "../queries";
-import { EstimateDetailScreen } from "./estimate-detail-screen";
+import { PriceAskSheet } from "./price-ask-sheet";
 import { QuoteCard } from "./quote-card";
 import { ShoppingListCard } from "./shopping-list-card";
 import { QuoteComparison } from "./quote-comparison";
 import { QuestionInbox } from "./question-inbox";
 import { RejectQuoteDialog } from "./reject-quote-dialog";
-import { RevisionRequestDialog } from "./revision-request-dialog";
 import { SelectionStatus } from "./selection-status";
+import { StageMismatchNotice } from "./stage-mismatch-notice";
 
 /**
  * The estimates on one request — `M2-FE-407`..`M2-FE-414`, `M2-FE-423`.
  *
- * One route for both archetypes: full proposals, a comparison, a choice. What
- * differs is which door was paid for, and that is read from the server rather
- * than branched on here.
+ * ## This page decides; it does not read
  *
- * ## What changed in the revamp
+ * The split that shapes everything here: **the list is where you decide, the
+ * detail page is what you decided on.** They used to be the same screen —
+ * with one estimate this route rendered the entire `EstimateDetailScreen`
+ * inline, so two URLs showed one experience, the back button landed you where
+ * you already were, and every line of copy was maintained twice in two
+ * layouts. The document now lives only at `/quotes/{proposalId}`.
  *
- * The card is a summary and the document has its own page. The comparison
- * shows where the estimates *differ* rather than a column of everything. A
- * professional's unanswered question is surfaced with a way to answer it. The
- * Customer can ask for a revision with a reason — no price on it, ever — and
- * "Choose" leads to a confirm step rather than opening the agreement from a
- * docked bar.
+ * What a decision needs is the Four Facts in fixed positions, what separates
+ * the estimates from one another, and one way forward. That is this page.
+ *
+ * ## Desktop is a different layout, not a wider one
+ *
+ * Below `lg` the estimates are cards with a sticky action bar. At `lg` they
+ * become the **columns of one comparison matrix** with a sticky vendor header
+ * carrying `Choose`, which is why there is no docked bar on a wide screen. The
+ * old wide layout rendered the same estimates twice — a card grid and then a
+ * comparison table underneath it — plus a mobile-only segmented control to
+ * switch between two views that were both already on screen.
  *
  * ## Entitlement is asked for, not assumed
  *
@@ -103,6 +111,34 @@ function countWord(count: number): string {
   return count === 1 ? "One" : count === 2 ? "Two" : count === 3 ? "Three" : String(count);
 }
 
+/**
+ * How many visits have produced an estimate, as filled and hollow dots.
+ *
+ * This was a clause buried mid-paragraph — "2 more are due after the remaining
+ * visits" — which is a fact about whether the decision can even be made yet,
+ * hidden in reassurance prose. Rendered when the plan says more are coming.
+ */
+function VisitProgress({ arrived, expected }: { arrived: number; expected: number }) {
+  const total = Math.max(expected, arrived);
+  return (
+    <p className="mt-2 flex items-center gap-2 text-sm font-semibold text-text-secondary">
+      <span aria-hidden className="flex gap-1">
+        {Array.from({ length: total }, (_, index) => (
+          <span
+            key={index}
+            className={index < arrived ? "text-signal-600" : "text-warm-300"}
+          >
+            ●
+          </span>
+        ))}
+      </span>
+      {arrived >= total
+        ? `all ${total} ${total === 1 ? "visit" : "visits"} done`
+        : `${arrived} of ${total} visits done`}
+    </p>
+  );
+}
+
 export function QuotesScreen({ requirementId, requestHref }: QuotesScreenProps) {
   const router = useRouter();
   const access = useEntitledQuoteList(requirementId);
@@ -115,9 +151,8 @@ export function QuotesScreen({ requirementId, requestHref }: QuotesScreenProps) 
   const revision = useRequestRevision();
 
   const [rejecting, setRejecting] = useState<string | null>(null);
-  const [revising, setRevising] = useState<string | null>(null);
+  const [asking, setAsking] = useState<string | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
-  const [view, setView] = useState<"quotes" | "compare">("quotes");
   const [chatOpen, setChatOpen] = useState(false);
 
   const list = access.list;
@@ -130,13 +165,6 @@ export function QuotesScreen({ requirementId, requestHref }: QuotesScreenProps) 
   const selectedCard =
     selection === null ? null : (list?.cards.find((card) => card.proposalId === selection.proposalId) ?? null);
 
-  useEffect(() => {
-    if (access.list === null || !window.location.hash.startsWith("#estimate-")) return;
-    const target = document.getElementById(window.location.hash.slice(1));
-    if (target === null) return;
-    window.requestAnimationFrame(() => target.scrollIntoView({ block: "start" }));
-  }, [access.list]);
-
   const canChoose = !blocksNewSelection(selectionQuery.data ?? null);
   const defaultPicked =
     canChoose && list !== null
@@ -144,6 +172,7 @@ export function QuotesScreen({ requirementId, requestHref }: QuotesScreenProps) 
       : null;
   const pickedId = picked ?? defaultPicked;
   const pickedCard = list?.cards.find((card) => card.proposalId === pickedId) ?? null;
+  const askingCard = list?.cards.find((card) => card.proposalId === asking) ?? null;
 
   const supportAction = (
     <Link href="/account/messages" className={buttonStyles({ variant: "outline" })}>
@@ -154,24 +183,32 @@ export function QuotesScreen({ requirementId, requestHref }: QuotesScreenProps) 
     requirementQuery.data === undefined ? "This request" : titleForSlug(requirementQuery.data.category_slug);
   const expected = planQuery.data?.plan?.plan_size ?? null;
   const arrived = list?.cards.length ?? 0;
-  const stillDue = expected !== null && expected > arrived ? expected - arrived : 0;
   const waiting = list === null ? [] : unansweredVendorQuestions(list.cards);
+  const spread = list === null ? null : priceSpread(list.cards, list.isComparableOnOneBasis);
+  const noun = isA5 ? "estimate" : "quote";
 
   return (
-    <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-4 px-4 pt-5 pb-28 sm:px-6 sm:pb-12 lg:px-0">
+    <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-4 px-4 pt-5 pb-28 sm:px-6 lg:px-0 lg:pb-12">
       <QuoteBreadcrumb requestLabel={requestLabel} requestHref={requestHref} />
+
+      {/* The header answers "how far apart are these?" before anything else.
+          It used to open with three lines of reassurance and put the price
+          range nowhere at all. */}
       <header>
         <h1 className="text-[1.75rem] font-extrabold leading-tight tracking-tight text-text sm:text-[1.875rem]">
           {arrived === 0
-            ? isA5 ? "Your estimates" : "Your quotes"
-            : `${countWord(arrived)} ${isA5 ? (arrived === 1 ? "estimate" : "estimates") : arrived === 1 ? "quote" : "quotes"}${arrived > 1 ? ", side by side" : ""}.`}
+            ? `No ${noun}s yet.`
+            : `${countWord(arrived)} ${arrived === 1 ? noun : `${noun}s`} in.`}
         </h1>
-        <p className="mt-1 max-w-3xl text-sm font-medium leading-6 text-text-secondary">
-          {stillDue > 0
-            ? `${stillDue} more ${stillDue === 1 ? "is" : "are"} due after the remaining ${stillDue === 1 ? "visit" : "visits"}. `
-            : ""}
-          Full scope, price and terms — nothing here is hidden. Choose any time; nothing is charged until you do.
-        </p>
+        {spread !== null ? (
+          <p className="mt-1 text-[15px] font-bold tabular-nums text-text-secondary">
+            {spread.lowLabel} — {spread.highLabel}
+            <span className="font-semibold text-text-muted"> · spread {spread.spreadPercent}%</span>
+          </p>
+        ) : null}
+        {expected !== null && expected > 0 ? (
+          <VisitProgress arrived={arrived} expected={expected} />
+        ) : null}
       </header>
 
       {selection !== null ? (
@@ -194,14 +231,14 @@ export function QuotesScreen({ requirementId, requestHref }: QuotesScreenProps) 
             onClick={() => setChatOpen(true)}
             className={buttonStyles({ variant: "primary", size: "sm", className: "mt-2 cursor-pointer" })}
           >
-            Chat now
+            Answer
           </button>
         </div>
       ) : null}
 
       <AccessRefusal error={reject.error} attempting="turn this estimate down" supportAction={supportAction} />
       <AccessRefusal error={revalidate.error} attempting="ask for a fresh price" supportAction={supportAction} />
-      <AccessRefusal error={revision.error} attempting="ask for a revision" supportAction={supportAction} />
+      <AccessRefusal error={revision.error} attempting="ask about this estimate" supportAction={supportAction} />
 
       <QuoteBody
         requirementId={requirementId}
@@ -213,21 +250,22 @@ export function QuotesScreen({ requirementId, requestHref }: QuotesScreenProps) 
         onRetryQuotes={access.refetch}
         list={list}
         canChoose={canChoose}
-        view={view}
-        onViewChange={setView}
         picked={pickedId}
         chosenId={selection?.proposalId ?? null}
         onPick={setPicked}
         isRevalidating={revalidate.isPending}
         onReject={setRejecting}
-        onRequestRevision={setRevising}
+        onAskAboutPrice={setAsking}
         onRevalidate={(proposalId) => revalidate.mutate({ requirementId, proposalId })}
         requestHref={requestHref}
       />
 
-      {/* The lean, made visible; the commitment lives on the confirm page. */}
+      {/* The lean, made visible; the commitment lives on the confirm page.
+          Hidden at `lg`, where every column of the matrix carries its own
+          Choose in a sticky header and a docked bar would be a second answer
+          to a question already on screen. */}
       {pickedCard !== null && canChoose ? (
-        <div className="sticky bottom-[calc(4rem+env(safe-area-inset-bottom))] z-10 -mx-4 mt-2 grid gap-3 border-t border-line bg-surface px-4 py-3 shadow-raised sm:-mx-6 sm:px-6 md:bottom-0 md:grid-cols-[minmax(0,1fr)_auto] md:items-center lg:-mx-[calc((100vw-1180px)/2)] lg:px-[calc((100vw-1180px)/2)]">
+        <div className="sticky bottom-[calc(4rem+env(safe-area-inset-bottom))] z-10 -mx-4 mt-2 grid gap-3 border-t border-line bg-surface px-4 py-3 shadow-raised sm:-mx-6 sm:px-6 md:bottom-0 md:grid-cols-[minmax(0,1fr)_auto] md:items-center lg:hidden">
           <div>
             <p className="text-sm font-extrabold tracking-tight text-text">
               {pickedCard.vendorName ?? "This professional"} · {pickedCard.payableLabel}
@@ -236,18 +274,13 @@ export function QuotesScreen({ requirementId, requestHref }: QuotesScreenProps) 
               You confirm what you are agreeing to on the next screen. Nothing is charged now.
             </p>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <Button variant="outline" onClick={() => setRejecting(pickedCard.proposalId)}>
-              Not this one
-            </Button>
-            <Button
-              className="min-w-[198px] justify-between gap-4 px-7"
-              onClick={() => router.push(estimateConfirmHref(requirementId, pickedCard.proposalId))}
-            >
-              Choose {pickedCard.vendorName ?? "this professional"}
-              <span aria-hidden className="text-xl leading-none">›</span>
-            </Button>
-          </div>
+          <Button
+            className="min-w-[198px] justify-between gap-4 px-7"
+            onClick={() => router.push(estimateConfirmHref(requirementId, pickedCard.proposalId))}
+          >
+            Choose {pickedCard.vendorName ?? "this professional"}
+            <span aria-hidden className="text-xl leading-none">›</span>
+          </Button>
         </div>
       ) : null}
 
@@ -268,17 +301,21 @@ export function QuotesScreen({ requirementId, requestHref }: QuotesScreenProps) 
           if (proposalId !== null) reject.mutate({ requirementId, proposalId, reason, note });
         }}
       />
-      <RevisionRequestDialog
-        open={revising !== null}
-        onOpenChange={(open) => setRevising(open ? revising : null)}
-        card={list?.cards.find((card) => card.proposalId === revising) ?? null}
+      <PriceAskSheet
+        open={asking !== null}
+        onOpenChange={(open) => setAsking(open ? asking : null)}
+        card={askingCard}
         isPending={revision.isPending}
-        onSend={(reasonCode, excludedItems, note) => {
-          const proposalId = revising;
+        onAccept={(proposalId) => {
+          setAsking(null);
+          router.push(estimateConfirmHref(requirementId, proposalId));
+        }}
+        onSend={(input) => {
+          const proposalId = asking;
           if (proposalId === null) return;
           revision.mutate(
-            { requirementId, proposalId, reasonCode, excludedItems, note },
-            { onSuccess: () => setRevising(null) },
+            { requirementId, proposalId, ...input },
+            { onSuccess: () => setAsking(null) },
           );
         }}
       />
@@ -303,14 +340,12 @@ function QuoteBody({
   onRetryQuotes,
   list,
   canChoose,
-  view,
-  onViewChange,
   picked,
   chosenId,
   onPick,
   isRevalidating,
   onReject,
-  onRequestRevision,
+  onAskAboutPrice,
   onRevalidate,
   requestHref,
 }: {
@@ -324,14 +359,12 @@ function QuoteBody({
   onRetryQuotes: () => void;
   list: QuoteListView | null;
   canChoose: boolean;
-  view: "quotes" | "compare";
-  onViewChange: (view: "quotes" | "compare") => void;
   picked: string | null;
   chosenId: string | null;
   onPick: (proposalId: string) => void;
   isRevalidating: boolean;
   onReject: (proposalId: string) => void;
-  onRequestRevision: (proposalId: string) => void;
+  onAskAboutPrice: (proposalId: string) => void;
   onRevalidate: (proposalId: string) => void;
   requestHref: string;
 }) {
@@ -383,22 +416,25 @@ function QuoteBody({
     );
   }
 
-  const canCompare = list.cards.length > 1;
-  const cards = (
+  const cards = list.cards;
+
+  const cardList = (
     <div className="flex flex-col gap-4">
-      {list.cards.map((card, index) => (
+      {cards.map((card, index) => (
         <QuoteCard
           key={card.proposalId}
           card={card}
           index={index}
           detailHref={requestEstimateHref(requirementId, card.proposalId)}
           questionsHref={estimateQuestionsHref(requirementId, card.proposalId)}
-          scopeGaps={scopeGaps(card, list.cards)}
+          scopeGaps={scopeGaps(card, cards)}
+          siblings={cards}
           onPick={canChoose ? onPick : undefined}
           isPicked={picked === card.proposalId}
           isChosen={chosenId === card.proposalId}
           onReject={canChoose ? onReject : undefined}
-          onRequestRevision={canChoose ? onRequestRevision : undefined}
+          onRequestRevision={canChoose ? onAskAboutPrice : undefined}
+          onAskAboutPrice={canChoose ? onAskAboutPrice : undefined}
           onRevalidate={onRevalidate}
           isRevalidating={isRevalidating}
         />
@@ -406,45 +442,66 @@ function QuoteBody({
     </div>
   );
 
-  if (!canCompare) {
-    // One estimate: show the whole document here rather than a card that
-    // links to it. Nothing to compare, nothing to summarise.
-    const only = list.cards[0]!;
+  if (cards.length === 1) {
+    // One estimate is still a decision, but a different one: not "which of
+    // these?" but "is this fair, and should I get another?". So it gets a
+    // decision surface too — not the whole document inlined, which is what
+    // this branch used to render.
+    const only = cards[0]!;
+    const mismatch = stageTotalMismatchPaise(only);
     return (
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
-        <div className="min-w-0">
-          <EstimateDetailScreen
-            requirementId={requirementId}
-            proposalId={only.proposalId}
-            embedded
-            hideShoppingList
-          />
+        <div className="flex min-w-0 flex-col gap-4">
+          {mismatch !== null ? (
+            <StageMismatchNotice card={only} driftPaise={mismatch} />
+          ) : null}
+          {cardList}
         </div>
         <div className="flex flex-col gap-4">
-        {only.materialFulfilmentMode === "CUSTOMER_PROCURES" ? (
-          <ShoppingListCard
-            requirementId={requirementId}
-            proposalId={only.proposalId}
-            rows={only.materialList}
-            brandTierLabel={only.brandTierLabel}
-            vendorName={only.vendorName}
-            serviceName={serviceName}
-          />
-        ) : null}
-        <aside className="rounded-[14px] border border-line bg-surface p-5 shadow-card">
-          <p className="text-[0.6875rem] font-extrabold uppercase tracking-[0.14em] text-text-muted">More choice</p>
-          <h2 className="mt-2 text-xl font-extrabold leading-tight tracking-tight text-text">
-            Want another {isA5 ? "estimate" : "quote"} before choosing?
-          </h2>
-          <p className="mt-2 text-sm font-medium leading-6 text-text-secondary">
-            Turn this one down and we send another professional, free — or ask this one for a revision with what you want changed.
-          </p>
-          {canChoose ? (
-            <Button variant="outline" className="mt-4 w-full" onClick={() => onReject(list.cards[0]!.proposalId)}>
-              Ask for another option
-            </Button>
+          {only.materialFulfilmentMode === "CUSTOMER_PROCURES" ? (
+            <ShoppingListCard
+              requirementId={requirementId}
+              proposalId={only.proposalId}
+              rows={only.materialList}
+              brandTierLabel={only.brandTierLabel}
+              vendorName={only.vendorName}
+              serviceName={serviceName}
+            />
           ) : null}
-        </aside>
+          <aside className="rounded-[14px] border border-line bg-surface p-5 shadow-card">
+            <p className="text-[0.6875rem] font-extrabold uppercase tracking-[0.14em] text-text-muted">
+              Before you decide
+            </p>
+            <h2 className="mt-2 text-lg font-extrabold leading-tight tracking-tight text-text">
+              Nothing to compare it against yet.
+            </h2>
+            <p className="mt-2 text-sm font-medium leading-6 text-text-secondary">
+              One {isA5 ? "estimate" : "quote"} tells you a price. Two tell you whether it is a
+              good one.
+            </p>
+            {/* Both actions act *on this estimate*, so both need it to still be
+                live. `canChoose` alone was the wrong gate: it asks whether the
+                request has a chosen vendor, which is true of an estimate the
+                Customer already turned down — and offering "get another" on a
+                rejected estimate is a button that rejects it a second time. */}
+            {canChoose && only.isSelectable ? (
+              <div className="mt-4 flex flex-col gap-2">
+                <Button variant="outline" onClick={() => onReject(only.proposalId)}>
+                  Get another {isA5 ? "estimate" : "quote"} — free
+                </Button>
+                {canAskAboutPrice(only) ? (
+                  <Button variant="outline" onClick={() => onAskAboutPrice(only.proposalId)}>
+                    Ask about the price
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
+            {canChoose && only.isSelectable ? (
+              <p className="mt-3 text-xs leading-5 text-text-muted">
+                Both keep this {isA5 ? "estimate" : "quote"} live. Nothing is charged either way.
+              </p>
+            ) : null}
+          </aside>
         </div>
       </div>
     );
@@ -452,56 +509,21 @@ function QuoteBody({
 
   return (
     <>
-      <SegmentedTrack label="How to read these" className="sm:max-w-sm lg:hidden">
-        {([
-          { value: "quotes", label: isA5 ? "Estimates" : "Quotes" },
-          { value: "compare", label: "Compare" },
-        ] as const).map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            aria-pressed={view === option.value}
-            onClick={() => onViewChange(option.value)}
-            className={segmentStyles({ selected: view === option.value })}
-          >
-            {option.label}
-          </button>
-        ))}
-      </SegmentedTrack>
-
-      <div className={view === "compare" ? "hidden" : "lg:hidden"}>{cards}</div>
-
-      <div className={view === "compare" ? "" : "hidden lg:block"}>
-        <div className="hidden gap-4 lg:grid lg:grid-cols-2 xl:grid-cols-3">
-          {list.cards.map((card, index) => (
-            <QuoteCard
-              key={`wide-${card.proposalId}`}
-              card={card}
-              index={index}
-              detailHref={requestEstimateHref(requirementId, card.proposalId)}
-              questionsHref={estimateQuestionsHref(requirementId, card.proposalId)}
-              scopeGaps={scopeGaps(card, list.cards)}
-              onPick={canChoose ? onPick : undefined}
-              isPicked={picked === card.proposalId}
-              isChosen={chosenId === card.proposalId}
-              onReject={canChoose ? onReject : undefined}
-              onRequestRevision={canChoose ? onRequestRevision : undefined}
-              onRevalidate={onRevalidate}
-              isRevalidating={isRevalidating}
-            />
-          ))}
-        </div>
-        <div className="lg:mt-5">
-          <h2 className="mb-2 text-[11px] font-extrabold uppercase tracking-[0.12em] text-text-muted">Compared</h2>
-          <QuoteComparison
-            cards={list.cards}
-            isComparableOnOneBasis={list.isComparableOnOneBasis}
-            detailHrefFor={(proposalId) => requestEstimateHref(requirementId, proposalId)}
-            pickedId={picked}
-            chosenId={chosenId}
-            onPick={canChoose ? onPick : undefined}
-          />
-        </div>
+      {/* Below `lg`: cards, then the differences underneath them.
+          At `lg`: the matrix alone, which is the cards *as* columns. Rendering
+          both at once was the old wide layout's mistake. */}
+      <div className="lg:hidden">{cardList}</div>
+      <div className="mt-2 lg:mt-0">
+        <QuoteComparison
+          cards={cards}
+          isComparableOnOneBasis={list.isComparableOnOneBasis}
+          detailHrefFor={(proposalId) => requestEstimateHref(requirementId, proposalId)}
+          confirmHrefFor={(proposalId) => estimateConfirmHref(requirementId, proposalId)}
+          pickedId={picked}
+          chosenId={chosenId}
+          onPick={canChoose ? onPick : undefined}
+          canChoose={canChoose}
+        />
       </div>
 
       {!canChoose ? (

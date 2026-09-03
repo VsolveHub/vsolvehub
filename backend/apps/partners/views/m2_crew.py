@@ -11,6 +11,7 @@ from dataclasses import asdict
 from http import HTTPStatus
 from typing import cast
 
+from django.conf import settings
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework.exceptions import NotFound
 from rest_framework.permissions import IsAuthenticated
@@ -28,6 +29,7 @@ from apps.partners.capabilities import (
     set_crew_availability,
     update_crew_member,
 )
+from apps.partners.crew_documents import start_crew_document_upload, submit_crew_document
 from apps.partners.exceptions import CapabilityNotApprovedError, PartnerDomainError
 from apps.partners.models import (
     PartnerCapability,
@@ -39,6 +41,9 @@ from apps.partners.permissions import IsPartnerUser
 from apps.partners.serializers import (
     CrewAvailabilitySerializer,
     CrewAvailabilityWriteSerializer,
+    CrewDocumentSubmitSerializer,
+    CrewDocumentUploadGrantSerializer,
+    CrewDocumentUploadRequestSerializer,
     CrewListSerializer,
     CrewMemberCreateSerializer,
     CrewMemberSerializer,
@@ -158,14 +163,24 @@ class PartnerCrewDetailView(APIView):
         operation_id="m2_partner_crew_update",
         request=CrewMemberUpdateSerializer,
         description=(
-            "Skills, the supervisor flag and `gender`. `display_name` is **not** editable: it "
-            "belongs to the global crew member, and one agency renaming a person would rename "
-            "them on every other roster. "
-            "`gender` is on that same global row and is editable anyway, because it is a fact "
-            "about the person rather than something an agency typed. It fills a blank; a value "
-            "contradicting one another agency already recorded is **refused**, never overwritten "
-            "-- silently flipping it would change which jobs that other agency is dispatched for. "
-            "There is no way to clear one."
+            "The name this agency uses, their skills, the supervisor flag and `gender`.\n\n"
+            "`display_name` writes a **per-roster label** (`PartnerCrewMembership.display_name`) "
+            "and never the shared `CrewMember`, so correcting a typo cannot rename the person on "
+            "another agency's roster. Blank clears the override and falls back to the global "
+            "record. It used to be read-only for that cross-agency reason, which left a typo "
+            "unfixable: re-adding resolves by `identity_hash` and returns the same wrong name.\n\n"
+            "`gender` is on the shared crew record on purpose -- a Customer's men/women split is "
+            "checked against it at accept and again at assignment, so it cannot be per-roster "
+            "without two agencies staffing one wedding from two answers.\n\n"
+            "**It is editable whenever this Partner is the only agency holding the worker**, which "
+            "is the ordinary case. The refusal exists to stop one agency flipping another's "
+            "roster, so it applies only when there *is* another agency: a contradicting write is "
+            "then answered `m2_crew_gender_conflict` and settled by Operations "
+            "(`m2_operations_crew_gender_correct`). Clients should offer the field unconditionally "
+            "and surface the refusal -- the server does not publish whether a worker is on another "
+            "roster, because that is the fact `crew_roster` suppresses `crew_member_id` to hide. "
+            "There is no way to clear a recorded gender; `UNDISCLOSED` is what a worker who "
+            "declined to say is."
         ),
         responses={
             200: CrewMemberSerializer,
@@ -197,6 +212,7 @@ class PartnerCrewDetailView(APIView):
                 skills=skills,
                 is_supervisor=values.get("is_supervisor"),
                 gender=values.get("gender", ""),
+                display_name=values.get("display_name"),
             )
         except PartnerDomainError as exc:
             _raise_api_error(exc)
@@ -230,6 +246,102 @@ class PartnerCrewArchiveView(APIView):
         membership = _crew_membership_or_404(profile=profile, membership_id=membership_id)
         try:
             archive_crew_member(membership=membership)
+        except PartnerDomainError as exc:
+            _raise_api_error(exc)
+        return Response(_crew_entry(profile=profile, membership_id=membership_id))
+
+
+class PartnerCrewDocumentView(ThrottledWriteMixin, APIView):
+    """Identity evidence for one worker: declare a file, then say the bytes landed.
+
+    The upload is a signed PUT straight to private storage — the file never passes through
+    Django. Two calls rather than one because the object has to be checked *after* it exists:
+    `POST` issues the grant against declared size, media type and digest, and `PUT` verifies the
+    stored object matches before a reviewer can ever see it.
+    """
+
+    permission_classes = (IsAuthenticated, IsPartnerUser)
+    throttle_scope = "m2_partner_registration"
+
+    @extend_schema(
+        tags=["M2 - Partner crew"],
+        operation_id="m2_partner_crew_document_upload",
+        request=CrewDocumentUploadRequestSerializer,
+        description=(
+            "Ask for somewhere to put one identity document. Returns a short-lived signed URL to "
+            "`PUT` the file to, and the `document_id` to send back afterwards.\n\n"
+            "Nothing is visible to a reviewer yet. Declaring metadata first is what lets "
+            "`m2_partner_crew_document_submit` compare the stored object against it — a client "
+            "that declares a clean PDF and uploads something else fails there, not at a "
+            "reviewer's desk."
+        ),
+        responses={
+            201: CrewDocumentUploadGrantSerializer,
+            400: ApiErrorSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request, membership_id: uuid.UUID) -> Response:
+        serializer = CrewDocumentUploadRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        values = serializer.validated_data
+        profile = _partner_profile_or_404(request)
+        membership = _crew_membership_or_404(profile=profile, membership_id=membership_id)
+        try:
+            grant = start_crew_document_upload(
+                membership=membership,
+                kind=values["kind"],
+                content_type=values["content_type"],
+                size_bytes=values["size_bytes"],
+                sha256=values["sha256"],
+            )
+        except PartnerDomainError as exc:
+            _raise_api_error(exc)
+        return Response(
+            CrewDocumentUploadGrantSerializer(
+                {
+                    "document_id": grant.document.id,
+                    "kind": grant.document.kind,
+                    "upload_url": grant.signed.upload_url,
+                    "upload_token": grant.signed.upload_token,
+                    "expires_at": grant.document.upload_expires_at,
+                    "max_bytes": settings.MAX_CREW_DOCUMENT_SIZE_BYTES,
+                }
+            ).data,
+            status=HTTPStatus.CREATED,
+        )
+
+    @extend_schema(
+        tags=["M2 - Partner crew"],
+        operation_id="m2_partner_crew_document_submit",
+        request=CrewDocumentSubmitSerializer,
+        description=(
+            "The upload finished. The stored object is streamed back through the storage boundary "
+            "and its real size, media type and SHA-256 compared against what was declared; on a "
+            "match the document joins the Operations review queue.\n\n"
+            "**Verified rather than trusted**, because the party claiming the upload succeeded is "
+            "the party that benefits from the claim. An approved earlier version is left approved "
+            "until this replacement is itself approved, so re-uploading does not silently "
+            "un-verify a worker who is already on next Tuesday's shift."
+        ),
+        responses={
+            200: CrewMemberSerializer,
+            400: ApiErrorSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+        },
+    )
+    def put(self, request: Request, membership_id: uuid.UUID) -> Response:
+        serializer = CrewDocumentSubmitSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        profile = _partner_profile_or_404(request)
+        membership = _crew_membership_or_404(profile=profile, membership_id=membership_id)
+        try:
+            submit_crew_document(
+                membership=membership,
+                document_id=serializer.validated_data["document_id"],
+            )
         except PartnerDomainError as exc:
             _raise_api_error(exc)
         return Response(_crew_entry(profile=profile, membership_id=membership_id))

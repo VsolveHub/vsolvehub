@@ -54,6 +54,15 @@ export interface QuoteStageView {
   title: string;
   deliverable: string | null;
   amountLabel: string;
+  /**
+   * What the Customer actually owes for this stage — `total_due_paise`, not `amount_paise`.
+   *
+   * The two differ by the platform fee and the GST on it, and the estimate's own total is
+   * built from this one. Reading `amount_paise` here made the schedule appear short by the
+   * fee on **every estimate ever written**, which the mismatch strip then reported as the
+   * vendor's arithmetic error.
+   */
+  totalDuePaise: number;
   endsOn: string | null;
 }
 
@@ -65,7 +74,12 @@ function toStageViews(stages: readonly ProposalStage[]): readonly QuoteStageView
     // empty row.
     title: stage.title.trim(),
     deliverable: stage.deliverable.trim() === "" ? null : stage.deliverable,
-    amountLabel: formatMoney(stage.amount_paise),
+    // The figure the Customer pays at this stage, fee included — the same basis as the
+    // estimate total beside it. `amount_paise` is the vendor's work amount and does not
+    // sum to what is owed, so showing it made two stages of "₹60,025" sit under a
+    // "₹1,22,883.18" total that they could not possibly add up to.
+    amountLabel: formatMoney(stage.total_due_paise),
+    totalDuePaise: stage.total_due_paise,
     endsOn: stage.ends_on ?? null,
   }));
 }
@@ -214,6 +228,8 @@ export interface QuoteItemLineView {
   /** "5 Sq ft × ₹80" — null for a single whole-job line, whose rate IS its amount. */
   quantityLabel: string | null;
   amountLabel: string;
+  /** The figure behind the label, so lines can be ranked by what they cost. */
+  amountPaise: number;
 }
 
 function toItemLineViews(lines: readonly ProposalItemLine[]): readonly QuoteItemLineView[] {
@@ -229,6 +245,7 @@ function toItemLineViews(lines: readonly ProposalItemLine[]): readonly QuoteItem
           ? null
           : `${quantity} ${unit} × ${formatMoney(line.rate_paise)}`,
       amountLabel: formatMoney(line.amount_paise),
+      amountPaise: line.amount_paise,
     };
   });
 }
@@ -239,6 +256,8 @@ export interface QuoteLabourLineView {
   /** "2 people × 3 days × ₹900/day" — the arithmetic behind the amount, spelt out. */
   crewLabel: string;
   amountLabel: string;
+  /** The figure behind the label, so lines can be ranked by what they cost. */
+  amountPaise: number;
 }
 
 function toLabourLineViews(lines: readonly ProposalLabourLine[]): readonly QuoteLabourLineView[] {
@@ -251,18 +270,22 @@ function toLabourLineViews(lines: readonly ProposalLabourLine[]): readonly Quote
       `${formatMoney(line.rate_paise_per_day)}/day`,
     ].join(" × "),
     amountLabel: formatMoney(line.amount_paise),
+    amountPaise: line.amount_paise,
   }));
 }
 
 export interface QuoteChargeView {
   label: string;
   amountLabel: string;
+  /** The figure behind the label, so lines can be ranked by what they cost. */
+  amountPaise: number;
 }
 
 function toChargeViews(charges: readonly ProposalOtherCharge[]): readonly QuoteChargeView[] {
   return charges.map((charge) => ({
     label: charge.label.trim(),
     amountLabel: formatMoney(charge.amount_paise),
+    amountPaise: charge.amount_paise,
   }));
 }
 
@@ -297,10 +320,16 @@ export function toQuestionView(question: RequirementQuestion): QuestionView {
 export interface RevisionRequestView {
   id: string;
   status: "OPEN" | "ANSWERED" | "DECLINED";
+  /** True when this ask was about the price rather than the scope. */
+  isPriceAsk: boolean;
   reasonLabel: string;
   excludedItems: readonly string[];
   note: string | null;
   declineNote: string | null;
+  /** What the Customer hoped for, as a whole percent. Null on a scope ask. */
+  requestedDiscountPercent: number | null;
+  /** What the vendor's revision actually moved, as a whole percent. Null until they answer. */
+  counteredDiscountPercent: number | null;
   createdAt: string;
 }
 
@@ -308,17 +337,33 @@ const REVISION_REASON_LABEL: Record<string, string> = {
   LEAVE_OUT: "Leave something out",
   CHANGE_MATERIALS: "Change materials or finish",
   PHASE_WORK: "Split the work into phases",
+  PRICE: "Asked about the price",
   OTHER: "Something else",
 };
+
+/**
+ * Basis points as a percent a person would say out loud.
+ *
+ * Whole numbers only: the sheet never offers a fraction of a percent, and a
+ * vendor's counter is derived from two integer paise totals, so "2%" here is a
+ * rounding of their real movement rather than a promise about it. The rupee
+ * figure beside it always comes from the estimate's own total.
+ */
+function toPercent(bps: number | null | undefined): number | null {
+  return bps === null || bps === undefined ? null : Math.round(bps / 100);
+}
 
 export function toRevisionRequestView(request: RevisionRequest): RevisionRequestView {
   return {
     id: request.id,
     status: request.status,
+    isPriceAsk: request.reason_code === "PRICE",
     reasonLabel: REVISION_REASON_LABEL[request.reason_code] ?? request.reason_code,
     excludedItems: readLines(request.excluded_items),
     note: request.note.trim() === "" ? null : request.note,
     declineNote: request.decline_note.trim() === "" ? null : request.decline_note,
+    requestedDiscountPercent: toPercent(request.requested_discount_bps),
+    counteredDiscountPercent: toPercent(request.countered_discount_bps),
     createdAt: request.created_at,
   };
 }
@@ -402,6 +447,15 @@ export interface QuoteCardView {
   /** "Standard tier (Finolex / Anchor class)", or null when the pro set none. */
   brandTierLabel: string | null;
 
+  /**
+   * Working days the vendor expects the job to take, or null when they did not say.
+   *
+   * The answer to "how long?" — which every estimate used to give as "Not dated",
+   * because the only timeline available was a stage end date and the partner composer
+   * had no date input at all. Days is also the honest unit: the start waits on the
+   * Customer choosing and paying.
+   */
+  completionDays: number | null;
   inclusions: readonly string[];
   exclusions: readonly string[];
   /** What the vendor will do, in their own words. Null on an estimate written before 1.47.0. */
@@ -515,6 +569,7 @@ export function toQuoteCard(proposal: CustomerProposal, serverNow: string): Quot
     materialFulfilmentMode: proposal.material_fulfilment_mode,
     brandTierLabel: brandTierLabel(proposal.material_brand_tier),
 
+    completionDays: proposal.completion_days ?? null,
     inclusions: readLines(proposal.inclusions),
     exclusions: readLines(proposal.exclusions),
     scopeSummary: proposal.scope_summary.trim() === "" ? null : proposal.scope_summary.trim(),
@@ -597,6 +652,33 @@ export interface ScopeDifferenceRow {
  * not — a line everybody includes is not a difference, and a row of ticks is
  * noise on the table whose whole point is the differences.
  */
+/**
+ * The scope lines *every* estimate includes — the other half of the comparison.
+ *
+ * Hidden by default and revealed behind "Show all", because a row of ticks is
+ * noise on a table whose job is the disagreements. But it is not deleted:
+ * "all three include the ceiling" is a real answer to a real worry, and a
+ * Customer who wants completeness should be able to have it in one press
+ * rather than by opening three documents.
+ */
+export function sharedScopeLines(cards: readonly QuoteCardView[]): readonly string[] {
+  if (cards.length < 2) return [];
+  const first = cards[0];
+  if (first === undefined) return [];
+  const shared: string[] = [];
+  const seen = new Set<string>();
+  for (const line of first.inclusions) {
+    const key = normaliseLine(line);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const everyone = cards.every((card) =>
+      card.inclusions.some((own) => normaliseLine(own) === key),
+    );
+    if (everyone) shared.push(line);
+  }
+  return shared;
+}
+
 export function scopeDifferenceRows(
   cards: readonly QuoteCardView[],
 ): readonly ScopeDifferenceRow[] {
@@ -901,4 +983,175 @@ export function toSelectionView(selection: ProposalSelection): SelectionView {
     declineReasonCode:
       selection.decline_reason_code.trim() === "" ? null : selection.decline_reason_code,
   };
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Decision derivations
+ *
+ * What the estimate screens need in order to be a *decision surface* rather
+ * than a document: is the schedule self-consistent, which estimate wins on
+ * which axis, how far apart are they, and what a discount would come to.
+ *
+ * Everything here is pure and derives from `QuoteCardView` alone. None of it
+ * invents a figure the vendor did not state — `stageTotalMismatchPaise`
+ * reports a contradiction, it never resolves one, and `discountPreview` is a
+ * display arithmetic that binds nobody.
+ * ───────────────────────────────────────────────────────────────────────── */
+
+/** Rounding slack, in paise. A rupee of drift across a schedule is not a defect. */
+const STAGE_TOTAL_TOLERANCE_PAISE = 100;
+
+/**
+ * How far the payment schedule is from the estimate's own total, or null when
+ * it adds up (or when the estimate has no schedule to check).
+ *
+ * Positive means the stages ask for **more** than the total, negative for less.
+ * Seen in the wild: a ₹2,20,651.31 estimate whose two stages come to
+ * ₹2,15,564 — ₹5,087.31 the Customer was shown without comment. This is the
+ * derivation that lets a screen say so. It must never be used to adjust a
+ * displayed number: if it fires, the estimate is wrong and the fix belongs in
+ * the composer, not in a subtraction on the way to the screen.
+ */
+export function stageTotalMismatchPaise(card: QuoteCardView): number | null {
+  if (card.stages.length === 0) return null;
+  const scheduled = card.stages.reduce((sum, stage) => sum + stage.totalDuePaise, 0);
+  const drift = scheduled - card.payablePaise;
+  return Math.abs(drift) <= STAGE_TOTAL_TOLERANCE_PAISE ? null : drift;
+}
+
+export type SuperlativeKind = "CHEAPEST" | "LONGEST_WARRANTY" | "SOONEST";
+
+export interface Superlative {
+  kind: SuperlativeKind;
+  label: string;
+}
+
+/** Months of cover read out of free-text warranty terms — "24 months", "2 years", "12 mo". */
+function warrantyMonths(terms: string | null): number | null {
+  if (terms === null) return null;
+  const text = terms.toLowerCase();
+  const months = /(\d+)\s*(?:months?|mos?\b)/.exec(text);
+  if (months?.[1] !== undefined) return Number(months[1]);
+  const years = /(\d+)\s*(?:years?|yrs?\b)/.exec(text);
+  if (years?.[1] !== undefined) return Number(years[1]) * 12;
+  return null;
+}
+
+/** The last dated stage, as a sortable timestamp. Null when the vendor dated nothing. */
+function completionTime(card: QuoteCardView): number | null {
+  const dated = [...card.stages].reverse().find((stage) => stage.endsOn !== null);
+  if (dated?.endsOn == null) return null;
+  const time = new Date(dated.endsOn).getTime();
+  return Number.isNaN(time) ? null : time;
+}
+
+/**
+ * The one thing this estimate wins at outright, or null.
+ *
+ * **At most one per card, and only on an outright win.** Two estimates tied on
+ * price both get nothing: a badge that half the list carries has stopped being
+ * information. The order is the order a Customer weighs them — price first,
+ * then how long they stand behind it, then how soon it is done.
+ */
+export function superlativeFor(
+  card: QuoteCardView,
+  cards: readonly QuoteCardView[],
+): Superlative | null {
+  if (cards.length < 2) return null;
+  const others = cards.filter((entry) => entry.proposalId !== card.proposalId);
+
+  if (others.every((other) => card.payablePaise < other.payablePaise)) {
+    return { kind: "CHEAPEST", label: "Cheapest" };
+  }
+
+  const own = warrantyMonths(card.warrantyTerms);
+  if (own !== null) {
+    const rivals = others.map((other) => warrantyMonths(other.warrantyTerms));
+    if (rivals.every((other) => other === null || own > other)) {
+      return { kind: "LONGEST_WARRANTY", label: `Longest warranty — ${own} months` };
+    }
+  }
+
+  const finish = completionTime(card);
+  if (finish !== null) {
+    const rivals = others.map((other) => completionTime(other));
+    if (rivals.every((other) => other === null || finish < other)) {
+      return { kind: "SOONEST", label: "Done soonest" };
+    }
+  }
+
+  return null;
+}
+
+export interface PriceSpread {
+  lowLabel: string;
+  highLabel: string;
+  spreadLabel: string;
+  /** Whole percent of the cheapest estimate. */
+  spreadPercent: number;
+}
+
+/**
+ * "₹1,98,400 — ₹2,61,000 · spread 32%" — the first number anybody wants.
+ *
+ * Null on a single estimate, and null when the estimates state tax on
+ * different bases, because a range across incomparable totals is a lie.
+ */
+export function priceSpread(
+  cards: readonly QuoteCardView[],
+  isComparableOnOneBasis: boolean,
+): PriceSpread | null {
+  if (cards.length < 2 || !isComparableOnOneBasis) return null;
+  const amounts = cards.map((card) => card.payablePaise);
+  const low = Math.min(...amounts);
+  const high = Math.max(...amounts);
+  if (low === high || low <= 0) return null;
+  return {
+    lowLabel: formatMoney(low),
+    highLabel: formatMoney(high),
+    spreadLabel: formatMoney(high - low),
+    spreadPercent: Math.round(((high - low) / low) * 100),
+  };
+}
+
+export interface DiscountPreview {
+  /** What the estimate would come to, if the vendor agreed. */
+  newTotalLabel: string;
+  /** What the Customer would keep. */
+  savingLabel: string;
+  savingPaise: number;
+}
+
+/**
+ * What "5% off" is worth in rupees, for the chip that offers it.
+ *
+ * **A display figure and nothing else.** It is never sent as a price, never
+ * stored, and never binds either side — the vendor answers a price ask with
+ * their own superseding estimate. Integer paise throughout; basis points in,
+ * so 5% is 500 and no float touches money.
+ */
+export function discountPreview(payablePaise: number, bps: number): DiscountPreview {
+  const saving = Math.round((payablePaise * bps) / 10_000);
+  return {
+    newTotalLabel: formatMoney(payablePaise - saving),
+    savingLabel: formatMoney(saving),
+    savingPaise: saving,
+  };
+}
+
+/**
+ * Whether the price on this estimate is the vendor's to move.
+ *
+ * False on a rate-card quote (`rateLabel`): those figures come from the
+ * ops-published day rate, not from the vendor, so offering a discount control
+ * there would be asking somebody to give away something that was never theirs.
+ * False too while an ask is already open, and on anything not selectable.
+ */
+export function canAskAboutPrice(card: QuoteCardView): boolean {
+  return (
+    card.isSelectable &&
+    !card.isExpired &&
+    card.rateLabel === null &&
+    card.revisionRequest?.status !== "OPEN"
+  );
 }

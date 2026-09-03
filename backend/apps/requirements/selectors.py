@@ -995,7 +995,7 @@ def stage_crew_rows(
     return [
         {
             "membership_id": assignment.membership_id if include_membership_id else None,
-            "display_name": assignment.crew_member.display_name,
+            "display_name": assignment.membership.roster_name,
             "phone_masked": masked_crew_phone(assignment.crew_member.phone_suffix),
             "is_supervisor": assignment.is_supervisor,
             "is_verified": assignment.membership.documents_verified_at is not None,

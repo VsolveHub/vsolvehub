@@ -1120,6 +1120,108 @@ CATERING_ITEMS: tuple[ItemSeed, ...] = (
     ItemSeed("Cleanup staff", "day", "One cleanup hand for the event day.", 800_00, group="Labour"),
 )
 
+# Event cook placeholders: Hyderabad demonstration figures only; replace this one block after the
+# owner confirms labour rates. Unlike CATERING_ITEMS, every rupee below buys cooking labour only —
+# the Customer procures every ingredient produced by these recipes.
+EVENT_COOK_VEG_PLATE_PAISE = 45_00
+EVENT_COOK_NONVEG_PLATE_PAISE = 65_00
+EVENT_COOK_BREAKFAST_PLATE_PAISE = 25_00
+EVENT_COOK_BIRYANI_DEGH_PAISE = 1_200_00
+EVENT_COOK_LIVE_COUNTER_PAISE = 2_500_00
+EVENT_COOK_EXTRA_HELPER_DAY_PAISE = 700_00
+
+RICE_PACK = {"pack_size": "5", "pack_unit": "bag (5 kg)"}
+ATTA_PACK = {"pack_size": "5", "pack_unit": "bag (5 kg)"}
+OIL_PACK = {"pack_size": "1", "pack_unit": "bottle (1 litre)"}
+SPICE_PACK = {"pack_size": "0.1", "pack_unit": "pack (100 g)"}
+
+EVENT_COOK_ITEMS: tuple[ItemSeed, ...] = (
+    ItemSeed(
+        "Veg plate — cooking labour",
+        "each",
+        "Cooking labour for one vegetarian plate; the Customer buys all ingredients.",
+        EVENT_COOK_VEG_PLATE_PAISE,
+        group="Plates",
+        recipe=(
+            _material("Basmati rice", "raw", "kg", "0.10", **RICE_PACK),
+            _material("Wheat flour", "atta", "kg", "0.08", **ATTA_PACK),
+            _material("Cooking oil", "neutral refined oil", "litre", "0.025", **OIL_PACK),
+            _material("Onion", "fresh", "kg", "0.06"),
+            _material("Tomato", "fresh", "kg", "0.05"),
+            _material("Mixed vegetables", "seasonal", "kg", "0.18"),
+            _material("Masalas and whole spices", "menu mix", "kg", "0.012", **SPICE_PACK),
+        ),
+        bundles={"small": 75, "medium": 150, "large": 300},
+    ),
+    ItemSeed(
+        "Non-veg plate — cooking labour",
+        "each",
+        "Cooking labour for one mixed chicken-and-mutton plate; groceries are separate.",
+        EVENT_COOK_NONVEG_PLATE_PAISE,
+        group="Plates",
+        recipe=(
+            _material("Basmati rice", "raw", "kg", "0.12", **RICE_PACK),
+            _material("Wheat flour", "atta", "kg", "0.06", **ATTA_PACK),
+            _material("Cooking oil", "neutral refined oil", "litre", "0.03", **OIL_PACK),
+            _material("Onion", "fresh", "kg", "0.08"),
+            _material("Tomato", "fresh", "kg", "0.06"),
+            _material("Chicken", "curry cut", "kg", "0.16"),
+            _material("Mutton", "curry cut", "kg", "0.08"),
+            _material("Masalas and whole spices", "non-veg menu mix", "kg", "0.015", **SPICE_PACK),
+        ),
+    ),
+    ItemSeed(
+        "Breakfast plate — cooking labour",
+        "each",
+        "Cooking labour for one breakfast plate; the Customer buys all ingredients.",
+        EVENT_COOK_BREAKFAST_PLATE_PAISE,
+        group="Plates",
+        recipe=(
+            _material("Rice", "raw rice or idli rava", "kg", "0.10", **RICE_PACK),
+            _material("Wheat flour", "atta", "kg", "0.05", **ATTA_PACK),
+            _material("Cooking oil", "neutral refined oil", "litre", "0.015", **OIL_PACK),
+            _material("Onion", "fresh", "kg", "0.03"),
+            _material("Tomato", "fresh", "kg", "0.02"),
+            _material("Urad dal", "whole or split", "kg", "0.03"),
+            _material("Masalas and seasoning", "breakfast mix", "kg", "0.005", **SPICE_PACK),
+        ),
+    ),
+    ItemSeed(
+        "Biryani in degh (~40 plates)",
+        "each",
+        "Cooking labour for one degh yielding roughly 40 plates; ingredients are separate.",
+        EVENT_COOK_BIRYANI_DEGH_PAISE,
+        group="Specials",
+        recipe=(
+            _material("Basmati rice", "long-grain", "kg", "6", **RICE_PACK),
+            _material("Chicken", "biryani cut", "kg", "8"),
+            _material("Cooking oil", "neutral refined oil", "litre", "0.8", **OIL_PACK),
+            _material("Onion", "fresh", "kg", "3"),
+            _material("Tomato", "fresh", "kg", "1.5"),
+            _material("Biryani masala and whole spices", "degh mix", "kg", "0.6", **SPICE_PACK),
+        ),
+    ),
+    ItemSeed(
+        "Tandoor or live counter cook",
+        "each",
+        "One cook operating one tandoor or live counter; fuel and ingredients are separate.",
+        EVENT_COOK_LIVE_COUNTER_PAISE,
+        group="Specials",
+        recipe=(
+            _material("Charcoal", "food-grade hardwood", "kg", "20"),
+            _material("Cooking oil", "neutral refined oil", "litre", "2", **OIL_PACK),
+            _material("Counter spices and marinades", "menu mix", "kg", "1", **SPICE_PACK),
+        ),
+    ),
+    ItemSeed(
+        "Extra helper, per day",
+        "day",
+        "One additional kitchen helper for one working day; labour only.",
+        EVENT_COOK_EXTRA_HELPER_DAY_PAISE,
+        group="Team",
+    ),
+)
+
 # Bridal and event makeup: per person and per session. No recipes - the artist's kit is theirs.
 MAKEUP_ITEMS: tuple[ItemSeed, ...] = (
     ItemSeed(
@@ -1836,6 +1938,7 @@ CATALOG: tuple[tuple[str, tuple[ItemSeed, ...]], ...] = (
     ("construction-helper", HELPER_ITEMS),
     ("ac-technician", AC_ITEMS),
     ("event-catering", CATERING_ITEMS),
+    ("event-cook", EVENT_COOK_ITEMS),
     ("bridal-event-makeup", MAKEUP_ITEMS),
 )
 

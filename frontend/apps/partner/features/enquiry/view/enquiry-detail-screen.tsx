@@ -506,9 +506,14 @@ function Screen({ children }: { children: ReactNode }) {
  * It is the one sentence that distinguishes "you turned this down" from "this
  * ran out of time", which is exactly what a vendor looking at a closed enquiry
  * has come to find out.
+ *
+ * `declineReasonCode` goes with it. On a withdrawal that sentence is the
+ * difference between "another professional was quicker" and "the customer
+ * changed their request" — and until it was passed here, every withdrawal
+ * claimed the second even though the first is what actually happens.
  */
 function ClosedNotice({ enquiry }: { readonly enquiry: EnquiryRecord }) {
-  const status = describeStatus(enquiry.status);
+  const status = describeStatus(enquiry.status, enquiry.declineReasonCode);
   return (
     <div className="flex flex-col items-center gap-3 rounded-card border border-line bg-surface px-6 py-10 text-center">
       <span

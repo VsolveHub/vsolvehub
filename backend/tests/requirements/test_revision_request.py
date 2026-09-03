@@ -31,19 +31,78 @@ def _open_request(world: M2World, proposal: Proposal) -> RevisionRequest:
     )
 
 
-def test_an_open_request_reopens_the_project_revision_window(world: M2World) -> None:
-    """Five minutes have passed, but the Customer asked — so the vendor may still revise."""
+def test_a_live_estimate_stays_revisable_however_long_ago_it_was_sent(world: M2World) -> None:
+    """There is no clock in this policy any more.
+
+    Until 1.61.0 an A5 estimate closed to revision five minutes after submission, and only a
+    Customer's request reopened it. That left a Partner looking at a price they could no longer
+    correct while the Customer was still deciding. `submitted_at` is deliberately ancient here: if
+    a window ever creeps back in, this is the test that fails.
+    """
     proposal = _live_proposal(world)
-    proposal.submitted_at = timezone.now() - timedelta(minutes=30)
+    proposal.submitted_at = timezone.now() - timedelta(days=30)
     proposal.save(update_fields=("submitted_at",))
     requirement = proposal.requirement
     requirement.archetype = "A5_CUSTOM_PROJECT"
 
-    with pytest.raises(RequirementTransitionError):
-        proposals._assert_project_revision_allowed(previous=proposal, requirement=requirement)
-
-    _open_request(world, proposal)
     proposals._assert_project_revision_allowed(previous=proposal, requirement=requirement)
+
+
+def test_a_withdrawn_estimate_can_be_replaced(world: M2World) -> None:
+    """The withdraw dialog's promise, kept.
+
+    "Your enquiry stays open, so you can send a new one" is what the Partner is told before they
+    confirm a withdrawal. For projects this command used to refuse the new one.
+    """
+    proposal = _live_proposal(world)
+    proposal.status = Proposal.Status.WITHDRAWN
+    proposal.save(update_fields=("status",))
+    requirement = proposal.requirement
+    requirement.archetype = "A5_CUSTOM_PROJECT"
+
+    proposals._assert_project_revision_allowed(previous=proposal, requirement=requirement)
+
+
+def test_an_estimate_the_customer_settled_stays_immutable(world: M2World) -> None:
+    """The line is the Customer's decision, which is the whole point of moving off the clock.
+
+    One proposal walked through the settled statuses rather than one requirement each: a second
+    accepted invitation for the same vendor over the same dates is refused for capacity, which
+    would fail this test for a reason that has nothing to do with what it is asserting.
+    """
+    proposal = _live_proposal(world)
+    requirement = proposal.requirement
+    requirement.archetype = "A5_CUSTOM_PROJECT"
+
+    for status in (
+        Proposal.Status.SELECTED,
+        Proposal.Status.ACCEPTED,
+        Proposal.Status.LAPSED,
+        Proposal.Status.REJECTED,
+    ):
+        proposal.status = status
+        # `requirements_rejection_needs_reason` — a rejection without one is not a row.
+        proposal.rejection_reason = (
+            Proposal.RejectionReason.NOT_CHOSEN if status == Proposal.Status.REJECTED else ""
+        )
+        proposal.save(update_fields=("status", "rejection_reason"))
+
+        with pytest.raises(RequirementTransitionError, match="can no longer be revised"):
+            proposals._assert_project_revision_allowed(previous=proposal, requirement=requirement)
+
+
+def test_an_expired_estimate_needs_the_customer_to_ask_before_it_is_revisable(
+    world: M2World,
+) -> None:
+    """The one state that is still gated, and by an ask rather than a clock."""
+    proposal = _live_proposal(world)
+    proposal.status = Proposal.Status.EXPIRED
+    proposal.save(update_fields=("status",))
+    requirement = proposal.requirement
+    requirement.archetype = "A5_CUSTOM_PROJECT"
+
+    with pytest.raises(RequirementTransitionError, match="can no longer be revised"):
+        proposals._assert_project_revision_allowed(previous=proposal, requirement=requirement)
 
 
 def test_a_revalidation_ask_on_an_expired_estimate_is_revisable(world: M2World) -> None:

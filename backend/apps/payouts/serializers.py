@@ -261,19 +261,22 @@ class PartnerDailyPerformanceSerializer(serializers.Serializer[dict[str, object]
 class PartnerPerformanceSerializer(serializers.Serializer[dict[str, object]]):
     """How a Partner is doing, in the periods they think in.
 
-    Counts come from `EARNING` ledger entries — one per completed booking, written
-    at settlement — so "jobs done" is never inferred from a mutable booking
-    timestamp. Revenue sums every entry kind, so an adjustment or reversal shows
-    up the day it lands rather than drifting from the balance beside it.
+    Platform-paid earnings come from the immutable payout ledger; direct-paid A3
+    crew earnings come from mutually confirmed day settlements. Job counts use
+    durable booking/visit earning records and engagement ``completed_at`` values,
+    never mutable update timestamps or one row per project stage.
     """
 
     today_net_paise = serializers.IntegerField()
+    today_direct_paise = serializers.IntegerField()
     today_jobs = serializers.IntegerField()
     month_net_paise = serializers.IntegerField()
+    month_direct_paise = serializers.IntegerField()
     month_jobs = serializers.IntegerField()
     #: Averaged over months actually worked, never over the calendar.
     average_monthly_net_paise = serializers.IntegerField()
     lifetime_net_paise = serializers.IntegerField()
+    lifetime_direct_paise = serializers.IntegerField()
     lifetime_jobs = serializers.IntegerField()
     daily = PartnerDailyPerformanceSerializer(many=True)
     currency = serializers.CharField()

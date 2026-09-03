@@ -452,6 +452,22 @@ class ProjectSeed:
 #: **No `TEXT` questions here**: the Customer brief is facts-only (task.md, "The Customer never
 #: describes anything"), and a text question seeded on an A5 variant would put a keyboard back
 #: into a flow that removed every one.
+#:
+#: Cook-on-hire product boundary. This one value authors the upper A3 band and the first A5 band;
+#: the Customer app reads the published A3 options for its hand-off copy, so changing the owner
+#: decision here moves the boundary everywhere without a second frontend number.
+HOUSE_FUNCTION_GUEST_LIMIT = 75
+
+#: Price-book-only trade rows that have no A3 wage classification to create them. Demo vendors
+#: receive these skills as well, so their estimate composer can load and save the matching book.
+PROJECT_ONLY_PRICING_SKILLS: tuple[tuple[str, str, str], ...] = (
+    (
+        "event-cook",
+        "Event cook",
+        "Cooking labour for customer-procured event groceries, priced per plate.",
+    ),
+)
+
 A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
     ProjectSeed(
         slug=A5_SERVICE_SLUG,
@@ -577,6 +593,54 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
         short_description=(
             "Menus priced per plate for your guest count — caterers visit, taste-plan "
             "with you and quote in writing."
+        ),
+    ),
+    ProjectSeed(
+        slug="event-cook",
+        pricing_skill="event-cook",
+        name="Event cook (you supply the groceries)",
+        variant_name="Cooking, priced per plate",
+        icon_key=ServiceIconKey.SERVICE,
+        category_slug="events",
+        subcategory_slug="event-cooks",
+        subcategory_name="Event cooks",
+        subcategory_display_order=45,
+        questions=(
+            (
+                "food_preference",
+                "Veg or non-veg?",
+                ServiceQuestion.Kind.SINGLE_CHOICE,
+                True,
+                None,
+                (
+                    ("veg", "Pure veg", ""),
+                    ("veg-nonveg", "Veg + non-veg", ""),
+                    ("nonveg", "Non-veg only", ""),
+                    ("jain-satvik", "Jain or satvik", ""),
+                ),
+            ),
+            (
+                "guest_band",
+                "How many guests?",
+                ServiceQuestion.Kind.SINGLE_CHOICE,
+                True,
+                None,
+                (
+                    (
+                        f"{HOUSE_FUNCTION_GUEST_LIMIT}-150",
+                        f"{HOUSE_FUNCTION_GUEST_LIMIT} to 150",
+                        "",
+                    ),
+                    ("150-300", "150 to 300", ""),
+                    ("300-plus", "300 or more", ""),
+                ),
+            ),
+        ),
+        image_subject="catering",
+        material_fulfilment_mode=(M2VariantConfiguration.MaterialFulfilmentMode.CUSTOMER_PROCURES),
+        short_description=(
+            "You buy the groceries, they do the cooking. Verified cooks quote per plate for "
+            "your guest count and send you the shopping list."
         ),
     ),
     # ------------------------------------------------------------------
@@ -1388,6 +1452,107 @@ EVENT_STAFF_QUESTIONS: tuple[QuestionSeed, ...] = (
 )
 
 
+# ---------------------------------------------------------------------------
+# Cook-on-hire Product 1 placeholders. Hyderabad demonstration figures only; replace here after
+# the owner confirms the commercial rates. Paise throughout.
+# ---------------------------------------------------------------------------
+HOUSE_FUNCTION_COOK_WAGE_FLOOR_PAISE = 90_000
+HOUSE_FUNCTION_COOK_TEAM_DAY_PAISE = 500_000
+HOUSE_FUNCTION_COOK_OVERTIME_HOURLY_PAISE = 50_000
+
+HOUSE_FUNCTION_COOK_QUESTIONS: tuple[QuestionSeed, ...] = (
+    (
+        "event_type",
+        "What's the occasion?",
+        ServiceQuestion.Kind.SINGLE_CHOICE,
+        True,
+        None,
+        (
+            ("housewarming", "Housewarming", ""),
+            ("birthday", "Birthday", ""),
+            ("pooja-function", "Pooja or religious function", ""),
+            ("get-together", "Get-together", ""),
+            ("other", "Something else", ""),
+        ),
+    ),
+    (
+        "guest_band",
+        "How many guests?",
+        ServiceQuestion.Kind.SINGLE_CHOICE,
+        True,
+        None,
+        (
+            ("under-25", "Under 25", ""),
+            ("25-50", "25 to 50", ""),
+            (f"50-{HOUSE_FUNCTION_GUEST_LIMIT}", f"50 to {HOUSE_FUNCTION_GUEST_LIMIT}", ""),
+        ),
+    ),
+    (
+        "meals",
+        "Which meals?",
+        ServiceQuestion.Kind.MULTIPLE_CHOICE,
+        True,
+        None,
+        (
+            ("breakfast", "Breakfast", ""),
+            ("lunch", "Lunch", ""),
+            ("snacks", "Snacks", ""),
+            ("dinner", "Dinner", ""),
+        ),
+    ),
+    (
+        "cuisine",
+        "What kind of food?",
+        ServiceQuestion.Kind.SINGLE_CHOICE,
+        True,
+        None,
+        (
+            ("south-indian", "South Indian", ""),
+            ("north-indian", "North Indian", ""),
+            ("andhra-telangana", "Andhra–Telangana", ""),  # noqa: RUF001
+            ("chinese-continental", "Chinese and continental", ""),
+            ("mixed", "Mixed", ""),
+        ),
+    ),
+    (
+        "food_preference",
+        "Veg or non-veg?",
+        ServiceQuestion.Kind.SINGLE_CHOICE,
+        True,
+        None,
+        (
+            ("veg", "Pure veg", ""),
+            ("veg-nonveg", "Veg + non-veg", ""),
+            ("nonveg", "Non-veg only", ""),
+        ),
+    ),
+    (
+        "kitchen_setup",
+        "What's the kitchen like?",
+        ServiceQuestion.Kind.SINGLE_CHOICE,
+        True,
+        None,
+        (
+            ("home-gas-ready", "Home kitchen, gas ready", ""),
+            ("outdoor-arranged", "Outdoor, vessels and gas arranged", ""),
+            ("outdoor-nothing-yet", "Outdoor, nothing set up yet", ""),
+        ),
+    ),
+    (
+        "staff_meal_provided",
+        "Will you provide a meal for the cook and helpers?",
+        ServiceQuestion.Kind.BOOLEAN,
+        True,
+        None,
+        None,
+    ),
+    # Published for the shared rate, matching and shift engines, defaulted to one by the client,
+    # and structurally hidden whenever a guest-sized fixed-team schema is detected.
+    ("worker_count", "Cook teams", ServiceQuestion.Kind.NUMBER, True, 1, None),
+    ("duration_days", "Days", ServiceQuestion.Kind.NUMBER, True, 1, None),
+)
+
+
 A3_DAY_SEEDS: tuple[DaySeed, ...] = (
     DaySeed(
         slug=A3_SERVICE_SLUG,
@@ -1563,6 +1728,52 @@ A3_DAY_SEEDS: tuple[DaySeed, ...] = (
         ),
     ),
     DaySeed(
+        slug="house-function-cook",
+        name="Cook for a house function",
+        variant_name="Cook team, full day",
+        icon_key=ServiceIconKey.SERVICE,
+        category_slug="events",
+        subcategory_slug="event-cooks",
+        subcategory_name="Event cooks",
+        subcategory_display_order=45,
+        image_subject="catering",
+        skill_code="house-function-cook",
+        skill_name="House function cook",
+        skill_description="A master cook and his own helpers, hired as one team for a day.",
+        # This is a team price checked against a per-person statutory floor. It clears the guard,
+        # but the comparison is necessarily vacuous; changing that model is outside this seed.
+        wage_floor_paise=HOUSE_FUNCTION_COOK_WAGE_FLOOR_PAISE,
+        worker_day_wage_paise=HOUSE_FUNCTION_COOK_TEAM_DAY_PAISE,
+        # The master cook is the supervisor and their margin is already inside the team rate.
+        supervision_margin_paise=0,
+        overtime_hourly_paise=HOUSE_FUNCTION_COOK_OVERTIME_HOURLY_PAISE,
+        questions=HOUSE_FUNCTION_COOK_QUESTIONS,
+        preset_questions=(),
+        rate_inclusions=(
+            "One full day for the master cook and his helpers.",
+            "The team size is the cook's decision, based on your guest count.",
+            "Overtime is charged only after you approve it in the app.",
+        ),
+        add_on_rates={},
+        short_description=(
+            "A cook and his own helpers at your home for the day — they cook your menu on your "
+            "groceries, clean the kitchen, and leave."
+        ),
+        included=(
+            "One full day for the cook and his helpers — the team is one price.",
+            "Cooking your menu on ingredients you provide.",
+            "Own knives and basic kitchen hand tools.",
+            "Kitchen and vessels left clean.",
+            "Overtime charged only after you approve it in the app.",
+        ),
+        excluded=(
+            "Groceries, masalas, oil, and gas or firewood — all yours.",
+            "Deghs, kadais, stoves and serving vessels.",
+            "Serving, plating and clearing — that is Event staff.",
+            "Menu planning and quantity estimation.",
+        ),
+    ),
+    DaySeed(
         slug="event-staff-by-the-day",
         name="Event staff by the day",
         variant_name="Full-day event staff",
@@ -1702,6 +1913,15 @@ class Command(BaseCommand):
             )
             wage_floors_written += int(self._seed_wage_floor(skill=skill, seed=day))
             rate_cards_published += int(self._seed_rate_card(area=area, skill=skill, seed=day))
+
+        for code, name, description in PROJECT_ONLY_PRICING_SKILLS:
+            pricing_skill = self._seed_project_pricing_skill(
+                code=code,
+                name=name,
+                description=description,
+            )
+            if all(skill.id != pricing_skill.id for skill in skills):
+                skills.append(pricing_skill)
 
         # Every A5 project in the catalogue, not just the fit-out. One variant, one area
         # activation and one ACTIVE configuration each — a project seeded without any one of the
@@ -1853,6 +2073,15 @@ class Command(BaseCommand):
                 "description": day.skill_description,
                 "is_active": True,
             },
+        )
+        return skill
+
+    @staticmethod
+    def _seed_project_pricing_skill(*, code: str, name: str, description: str) -> Skill:
+        """A price-book trade that is not also an A3 statutory wage classification."""
+        skill, _ = Skill.objects.update_or_create(
+            code=code,
+            defaults={"name": name, "description": description, "is_active": True},
         )
         return skill
 
@@ -2719,12 +2948,16 @@ class Command(BaseCommand):
         membership, and the A3 rate-card walkthrough this whole revision exists for could not
         reach its third step.
 
-        The honest writer is an Operations "verify crew documents" command with an actor, an audit
-        trail and a permission behind it. That is a real reviewed surface and it belongs in Wave
-        C6 with the rest of the Operations APIs; it is logged in `frontend-execution-plan.md` §7
-        and is deliberately **not** built here. What is legitimate in the meantime is this: a
-        dev-only seed, already behind three guards, writing a dev-only fixture and saying so. The
-        alternative was a walkthrough with a shell workaround in its first paragraph.
+        The honest writer now exists: Wave C6's Operations "verify crew documents" command, with
+        an actor, an audit trail and a permission behind it, plus the crew identity documents a
+        reviewer actually looks at (`apps.partners.crew_documents`). Approving a worker's required
+        government ID verifies them through that command.
+
+        This seed still writes the column directly, and that is still deliberate. Going through
+        the real path would mean seeding a signed upload against object storage that no
+        development machine is required to have configured, so a demo would depend on a bucket.
+        A dev-only seed, behind three guards, writing a dev-only fixture and saying so, beats a
+        walkthrough with a storage setup in its first paragraph.
         """
         verified_at = timezone.now()
         for worker in range(1, 7):

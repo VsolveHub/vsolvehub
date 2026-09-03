@@ -373,6 +373,21 @@ class Proposal(models.Model):
     #: output too, and the next field added to a material line will be the one that is a date.
     material_lines = models.JSONField(default=list, blank=True, encoder=DjangoJSONEncoder)
     warranty_terms = models.TextField(blank=True)
+    #: How many working days the vendor expects the work to take, from the day they start.
+    #:
+    #: **Days, not a date.** A vendor writing an estimate does not know when they will start —
+    #: that depends on when the Customer chooses and pays — so a date entered on site is stale
+    #: before it is read. "About five working days" is the thing they actually know and the thing
+    #: the Customer actually asks.
+    #:
+    #: The figure is an estimate the *vendor* carries the risk of. `submit_proposal` refuses once
+    #: the requirement is `SELECTED` or `ENGAGED`, so the total cannot move after the Customer
+    #: chooses: an overrun costs them nothing. That was already true and never said; publishing
+    #: this field is what lets a screen say it.
+    #:
+    #: Null on an estimate written before 1.65.0, and on A3 day-hire where `minimum_days` is the
+    #: shape instead — a day rate is priced by the day, so an overrun is billed, not absorbed.
+    completion_days = models.PositiveSmallIntegerField(null=True, blank=True)
     #: What the vendor will actually do, in their own words. The lines say what each rupee buys;
     #: this says what the job is. Blank on every quote written before it existed.
     scope_summary = models.TextField(blank=True)
@@ -541,16 +556,32 @@ class RequirementQuestion(models.Model):
         return f"{self.requirement_id}:{self.id}"
 
 
+#: The most a Customer may ask a vendor to move, in basis points (1500 = 15%).
+#:
+#: Module scope because ``Meta.constraints`` is evaluated in the class body, where a class
+#: attribute of the model is not yet in scope. Beyond this figure the honest request is a smaller
+#: scope, not a smaller number, and the sheet steers there rather than sending it.
+MAX_DISCOUNT_BPS = 1500
+
+
 class RevisionRequest(models.Model):
     """A Customer asking a vendor to send a different estimate.
 
-    Not a counter-offer and not a negotiation: nothing here carries a price, and the vendor's
-    answer is an ordinary superseding proposal. What this records is the *reason* — leave the
-    false ceiling out, use a cheaper tile, split it into phases — so the vendor knows what to
-    change, and so a revision that arrives after the five-minute correction window has a Customer's
+    **The invariant, stated exactly.** A Customer may say what they *hope to pay*. Only a vendor
+    says what the work *costs*. Those are different sentences and this model holds the first one:
+    ``requested_discount_bps`` is an ask, not a price. It is not applied to anything, it does not
+    change ``Proposal.total_paise``, and a vendor who ignores it has an estimate that still stands
+    exactly as sent. The answer to any request here — priced or not — is an ordinary superseding
+    proposal the Customer reads in full.
+
+    What this records is the *reason*: leave the false ceiling out, use a cheaper tile, split it
+    into phases, or "this is more than I can spend — can you move 5%". The vendor knows what to
+    change, and a revision arriving after the five-minute correction window has a Customer's
     request behind it rather than a quietly replaced price.
 
-    One open request per proposal. Answering it (a new revision) or declining it closes it.
+    One open request per proposal. Answering it (a new revision) or declining it closes it. The
+    Customer's ability to *choose the estimate as it stands* is untouched throughout: asking about
+    a price costs nothing and forfeits nothing.
     """
 
     class Status(models.TextChoices):
@@ -562,7 +593,11 @@ class RevisionRequest(models.Model):
         LEAVE_OUT = "LEAVE_OUT", "Leave something out"
         CHANGE_MATERIALS = "CHANGE_MATERIALS", "Change materials or finish"
         PHASE_WORK = "PHASE_WORK", "Split the work into phases"
+        PRICE = "PRICE", "Asked about the price"
         OTHER = "OTHER", "Something else"
+
+    #: Re-exposed on the model so callers read it as ``RevisionRequest.MAX_DISCOUNT_BPS``.
+    MAX_DISCOUNT_BPS = MAX_DISCOUNT_BPS
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     requirement = models.ForeignKey(
@@ -586,6 +621,18 @@ class RevisionRequest(models.Model):
     #: rather than indexes because a vendor reads "false ceiling", not "line 4".
     excluded_items = models.JSONField(default=list, blank=True)
     note = models.TextField(blank=True)
+    #: What the Customer hoped for, in basis points — 5% is 500. Set only on a ``PRICE`` ask and
+    #: null on every other reason. Basis points rather than a percentage or an amount because
+    #: money is integer paise everywhere and a float discount would eventually round somebody's
+    #: estimate to a figure neither side agreed to.
+    #:
+    #: **This is never a price.** Nothing reads it to compute what is owed.
+    requested_discount_bps = models.PositiveIntegerField(null=True, blank=True)
+    #: What the vendor actually granted, when they answered a ``PRICE`` ask by moving. Equal to
+    #: ``requested_discount_bps`` when they agreed outright, lower when they countered. Still the
+    #: vendor's own number: the superseding proposal is what sets the price, and this records what
+    #: they said they were doing so the Customer reads "they came back at 2%, not 5%".
+    countered_discount_bps = models.PositiveIntegerField(null=True, blank=True)
     #: The vendor's reason for declining, when they did.
     decline_note = models.TextField(blank=True)
     #: The revision that answered this, once one has.
@@ -611,6 +658,26 @@ class RevisionRequest(models.Model):
                 condition=models.Q(status="OPEN", resolved_at__isnull=True)
                 | ~models.Q(status="OPEN") & models.Q(resolved_at__isnull=False),
                 name="requirements_revision_request_resolved_when_closed",
+            ),
+            # A discount figure exists on a price ask and nowhere else. Without this a
+            # "leave the ceiling out" request could carry a number, and a number on a
+            # request nobody reads as priced is how an ask silently becomes an offer.
+            models.CheckConstraint(
+                condition=models.Q(
+                    reason_code="PRICE",
+                    requested_discount_bps__gte=1,
+                    requested_discount_bps__lte=MAX_DISCOUNT_BPS,
+                )
+                | ~models.Q(reason_code="PRICE") & models.Q(requested_discount_bps__isnull=True),
+                name="requirements_revision_request_discount_only_on_price_ask",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(countered_discount_bps__isnull=True)
+                | models.Q(
+                    countered_discount_bps__gte=0,
+                    countered_discount_bps__lte=MAX_DISCOUNT_BPS,
+                ),
+                name="requirements_revision_request_counter_within_cap",
             ),
         ]
         indexes = [models.Index(fields=("requirement", "status"))]

@@ -30,6 +30,7 @@ from .m2_crew import (
     PartnerCrewAvailabilityView,
     PartnerCrewCollectionView,
     PartnerCrewDetailView,
+    PartnerCrewDocumentView,
     _crew_entry,
     _crew_membership_or_404,
 )
@@ -98,6 +99,7 @@ __all__ = [
     "PartnerCrewAvailabilityView",
     "PartnerCrewCollectionView",
     "PartnerCrewDetailView",
+    "PartnerCrewDocumentView",
     "PartnerDocumentCreateView",
     "PartnerDocumentUploadView",
     "PartnerGateListView",

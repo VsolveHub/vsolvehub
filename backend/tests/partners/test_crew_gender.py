@@ -69,3 +69,27 @@ def test_omitting_a_gender_leaves_a_recorded_one_alone() -> None:
 
     person.refresh_from_db()
     assert person.gender == CrewMember.Gender.WOMAN
+
+
+def test_a_sole_agency_may_correct_what_it_recorded() -> None:
+    """The refusal protects other agencies. With none, it protected nobody and trapped a mistake.
+
+    `allow_overwrite` is `update_crew_member` reporting that this Partner is the only one holding
+    the worker -- established by counting active memberships, never by asking the client.
+    """
+    person = _person(CrewMember.Gender.MAN)
+
+    set_crew_gender(crew_member=person, gender=CrewMember.Gender.WOMAN, allow_overwrite=True)
+
+    person.refresh_from_db()
+    assert person.gender == CrewMember.Gender.WOMAN
+
+
+def test_a_sole_agency_still_cannot_clear_a_recorded_gender() -> None:
+    """Clearing would re-open every gendered slot the worker had been filling, silently."""
+    person = _person(CrewMember.Gender.WOMAN)
+
+    set_crew_gender(crew_member=person, gender="", allow_overwrite=True)
+
+    person.refresh_from_db()
+    assert person.gender == CrewMember.Gender.WOMAN

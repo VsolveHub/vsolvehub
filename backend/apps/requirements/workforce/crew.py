@@ -46,7 +46,7 @@ def assigned_crew(stage: EngagementStage) -> list[StageCrewAssignment]:
             stage=stage,
             status=StageCrewAssignment.Status.ASSIGNED,
         )
-        .select_related("crew_member", "membership")
+        .select_related("crew_member", "membership__crew_member")
         .order_by("-is_supervisor", "assigned_at")
     )
 
@@ -145,8 +145,7 @@ def assign_crew(
     for membership in memberships:
         if membership.documents_verified_at is None:
             raise CrewConflictError(
-                f"{membership.crew_member.display_name} is not verified yet, so they cannot be "
-                "put on a shift.",
+                f"{membership.roster_name} is not verified yet, so they cannot be put on a shift.",
             )
     assert_crew_available(
         partner=partner,
@@ -161,7 +160,7 @@ def assign_crew(
         assignment.membership_id: assignment
         for assignment in StageCrewAssignment.objects.select_for_update()
         .filter(stage=stage, status=StageCrewAssignment.Status.ASSIGNED)
-        .select_related("crew_member")
+        .select_related("crew_member", "membership__crew_member")
     }
     now = timezone.now()
     for membership_id, assignment in current.items():
@@ -180,7 +179,7 @@ def assign_crew(
             to_status=stage.status,
             actor=actor,
             reason_code="crew_released",
-            reason=f"{assignment.crew_member.display_name} off {shift_date.isoformat()}",
+            reason=f"{assignment.membership.roster_name} off {shift_date.isoformat()}",
         )
 
     for membership in memberships:
@@ -211,7 +210,7 @@ def assign_crew(
             to_status=stage.status,
             actor=actor,
             reason_code="crew_assigned",
-            reason=f"{membership.crew_member.display_name} on {shift_date.isoformat()}",
+            reason=f"{membership.roster_name} on {shift_date.isoformat()}",
         )
 
     enqueue_outbox_event(
@@ -267,7 +266,7 @@ def _assert_mix_met(
         women=sum(1 for m in memberships if m.crew_member.gender == CrewMember.Gender.WOMAN),
         unknown=0,
     )
-    unrecorded = [m.crew_member.display_name for m in memberships if not m.crew_member.gender]
+    unrecorded = [m.roster_name for m in memberships if not m.crew_member.gender]
     shortfall = crew_mix.shortfall_against(
         named, men=men_wanted, women=women_wanted, count_unknown=False
     )

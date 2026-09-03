@@ -9,6 +9,7 @@ import { CustomerVisitSlotChooser } from "./customer-visit-slot-chooser";
 const RAW_GRID: Schemas["VisitSlotGrid"] = {
   server_now: "2026-08-25T10:00:00Z",
   visit_duration_minutes: 120,
+  turnaround_minutes: 20,
   availability_is_preliminary: true,
   timezone: "Asia/Kolkata",
   days: [
@@ -24,9 +25,11 @@ const RAW_GRID: Schemas["VisitSlotGrid"] = {
           unavailable_reason: null,
         },
         {
+          // A real gap. Adjacent slots clash once the turnaround is counted, which is
+          // the server's own rule — a fixture without the gap tests an impossible pair.
           id: "signed-11",
-          starts_at: "2026-09-02T05:30:00Z",
-          ends_at: "2026-09-02T07:30:00Z",
+          starts_at: "2026-09-02T06:00:00Z",
+          ends_at: "2026-09-02T08:00:00Z",
           is_available: true,
           unavailable_reason: null,
         },
@@ -68,7 +71,10 @@ describe("CustomerVisitSlotChooser", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Visit 2. Choose a time." }));
     expect(screen.getByRole("radio", { name: /9:00 am – 11:00 am/i })).toBeDisabled();
-    expect(screen.getByText("Used by another visit")).toBeInTheDocument();
+    // "Too close to", not "used by". With the turnaround counted most blocked slots are
+    // merely adjacent to another visit rather than the same one, and telling somebody 6pm
+    // is "used" while their only visit is at 5pm reads as a bug.
+    expect(screen.getByText("Too close to another visit")).toBeInTheDocument();
   });
 
   it("only displays available slots, hiding passed and unavailable slots", () => {

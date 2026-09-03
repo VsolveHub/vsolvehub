@@ -539,28 +539,26 @@ function fromQuotedEnquiries(enquiries: readonly EnquirySummary[]): WorkItem[] {
    Engagements — the agreements being performed
    -------------------------------------------------------------------------- */
 
-/**
- * Engagement statuses that read as "doing it now" rather than settled.
- *
- * The published members are `PENDING_START | ACTIVE | COMPLETING | COMPLETED |
- * WARRANTY | CLOSED | DISPUTED | CANCELLED`. `ACTIVE` is "work is under way" and
- * `COMPLETING` is "every stage is settled, the customer is signing off" — both
- * are still the vendor's open business — while `PENDING_START` is agreed but not
- * begun. The other four are over, and an engagement is never mapped to `settled`
- * here: this stack shows a vendor what they are on the hook for, and a closed
- * agreement is not that.
- *
- * `DISPUTED` is left out on purpose. It is a state that needs a screen with the
- * dispute on it, not a row in a merged stack that would render it as ordinary
- * work in progress.
- */
+/** The server's complete engagement lifecycle, mapped exhaustively below. */
 type EngagementStatus = Engagement["status"];
 
-const DOING_ENGAGEMENT_STATUS: ReadonlySet<EngagementStatus> = new Set<EngagementStatus>([
-  "PENDING_START",
-  "ACTIVE",
-  "COMPLETING",
-]);
+/** Every published engagement status has a visible home in All Work. */
+function engagementUrgency(status: EngagementStatus): WorkUrgency {
+  switch (status) {
+    case "PENDING_START":
+    case "ACTIVE":
+    case "DISPUTED":
+      return "doing";
+    case "COMPLETING":
+      return "answered";
+    case "COMPLETED":
+    case "WARRANTY":
+    case "CLOSED":
+      return "settled";
+    case "CANCELLED":
+      return "closed";
+  }
+}
 
 /**
  * What an engagement card is worth, and what to call it.
@@ -582,12 +580,20 @@ const DOING_ENGAGEMENT_STATUS: ReadonlySet<EngagementStatus> = new Set<Engagemen
  */
 function engagementMoney(engagement: Engagement): {
   amountPaise: number | null;
-  amountLabel: string;
+  amountLabel: string | null;
 } {
+  if (engagement.status === "CANCELLED") {
+    return { amountPaise: null, amountLabel: null };
+  }
   if (engagement.commercial_mode !== "LEAD_ONLY") {
     return { amountPaise: engagement.staged_total_paise, amountLabel: "Agreed total" };
   }
-  if (engagement.status === "COMPLETING") {
+  if (
+    engagement.status === "COMPLETING" ||
+    engagement.status === "COMPLETED" ||
+    engagement.status === "WARRANTY" ||
+    engagement.status === "CLOSED"
+  ) {
     const collected = collectedDirectlyPaise(engagement.stages);
     if (collected !== null) return { amountPaise: collected, amountLabel: "Collected directly" };
   }
@@ -613,44 +619,54 @@ function engagementMoney(engagement: Engagement): {
  * "Day 0 of 0".
  */
 function engagementStatusLabel(engagement: Engagement): string {
-  if (engagement.status === "PENDING_START") return "Confirmed";
-  if (engagement.status === "COMPLETING") return "Waiting for the customer";
-  if (
-    engagement.status === "ACTIVE" &&
-    engagement.commercial_mode === "LEAD_ONLY" &&
-    engagement.stages.length > 0
-  ) {
-    const { settled, total } = settledDayCount(engagement.stages);
-    if (total > 0) return `Day ${Math.min(settled + 1, total)} of ${total}`;
+  switch (engagement.status) {
+    case "PENDING_START":
+      return "Confirmed";
+    case "ACTIVE": {
+      if (engagement.commercial_mode === "LEAD_ONLY" && engagement.stages.length > 0) {
+        const { settled, total } = settledDayCount(engagement.stages);
+        if (total > 0) return `Day ${Math.min(settled + 1, total)} of ${total}`;
+      }
+      return "In progress";
+    }
+    case "COMPLETING":
+      return "Waiting for the customer";
+    case "COMPLETED":
+      return "Completed";
+    case "WARRANTY":
+      return "Warranty period";
+    case "CLOSED":
+      return "Closed";
+    case "DISPUTED":
+      return "In dispute";
+    case "CANCELLED":
+      return "Cancelled";
   }
-  if (engagement.status === "ACTIVE") return "In progress";
-  // `DOING_ENGAGEMENT_STATUS` never lets these two reach this function today,
-  // but the label stays total over every published status rather than a
-  // partial one three cases wide — a future caller outside that filter (or a
-  // status this build has not been asked to hide yet) still gets a true word
-  // instead of falling through to `undefined`.
-  return "Done";
 }
 
 function fromEngagements(engagements: readonly Engagement[]): WorkItem[] {
-  return engagements
-    .filter((engagement) => DOING_ENGAGEMENT_STATUS.has(engagement.status))
-    .map((engagement) => ({
-      kind: "engagement" as const,
-      key: `engagement:${engagement.id}`,
-      href: ENGAGEMENT_HREF(engagement.id),
-      ...engagementMoney(engagement),
-      urgency: "doing" as const,
-      // An engagement publishes no schedule of its own — its stages carry
-      // `scheduled_on`, the agreement does not — so there is nothing honest to
-      // sort it by. It falls to the end of its own bucket rather than being
-      // given a date this module made up.
-      respondsBy: null,
-      whenIso: null,
-      whenIsDay: false,
-      durationMinutes: null,
-      areaLabel: null,
-      /*
+  return engagements.map((engagement) => ({
+    kind: "engagement" as const,
+    key: `engagement:${engagement.id}`,
+    href: ENGAGEMENT_HREF(engagement.id),
+    ...engagementMoney(engagement),
+    urgency: engagementUrgency(engagement.status),
+    respondsBy: null,
+    // Only terminal engagements publish an honest completion instant. Active
+    // agreements remain unscheduled here because their dates belong to stages.
+    whenIso:
+      engagement.status === "COMPLETED" ||
+      engagement.status === "WARRANTY" ||
+      engagement.status === "CLOSED"
+        ? engagement.completed_at
+        : null,
+    whenIsDay:
+      engagement.status === "COMPLETED" ||
+      engagement.status === "WARRANTY" ||
+      engagement.status === "CLOSED",
+    durationMinutes: null,
+    areaLabel: null,
+    /*
         `Engagement` publishes no service name — only `archetype`, a
         `requirement` uuid and money (`schema.d.ts:6544`). So the title is what
         kind of record this is in the vendor's own vocabulary, which is what
@@ -658,9 +674,9 @@ function fromEngagements(engagements: readonly Engagement[]): WorkItem[] {
         "Project" beats the status: a card reading "Engagement, active" told a
         vendor the one thing they could already see from its colour, and none
         of the thing they opened the app to find out.
-      */
-      ...named(engagementTitle(engagement), engagementStatusLabel(engagement)),
-    }));
+    */
+    ...named(engagementTitle(engagement), engagementStatusLabel(engagement)),
+  }));
 }
 
 /* --------------------------------------------------------------------------
@@ -669,84 +685,32 @@ function fromEngagements(engagements: readonly Engagement[]): WorkItem[] {
 
 type VisitStatus = PartnerVisit["status"];
 
-/**
- * A visit that is still this Partner's to finish.
- *
- * `ABORTED` and `COMPLETION_SUBMITTED` are in here for a reason worth writing
- * down, because both look at first glance like states that are over:
- *
- * - **`ABORTED`** is not finished — `canReportCompletion` returns true for it
- *   (`features/work/queries.ts:68-70`), so a Partner who abandoned a job on site
- *   still owes the completion report that settles the money. Leaving it out made
- *   the job vanish from the only screen that lists work, at exactly the moment
- *   the Partner needed to act on it.
- * - **`COMPLETION_SUBMITTED`** is the ordinary transient state immediately after
- *   filing that report. Dropping it made the card blink out of existence in the
- *   second the Partner would look for confirmation that it landed.
- *
- * Neither gets its own urgency. They render as ordinary "doing" cards — the fix
- * is that they are visible, not that they are special.
- */
-const DOING_VISIT_STATUS: ReadonlySet<VisitStatus> = new Set<VisitStatus>([
-  "CONFIRMED",
-  "EN_ROUTE",
-  "ARRIVED",
-  "IN_PROGRESS",
-  "ABORTED",
-  "COMPLETION_SUBMITTED",
-]);
-
 const SETTLED_VISIT_STATUS: ReadonlySet<VisitStatus> = new Set<VisitStatus>([
   "COMPLETED",
   "PARTIALLY_COMPLETED",
 ]);
 
-const SETTLED_WINDOW_MS = 24 * 60 * 60 * 1000;
-
-/**
- * A settled job stays on the stack for 24h, then drops off — otherwise every
- * job a Partner has ever finished becomes a permanent green tail and
- * `EmptyWork` ("Nothing today") is unreachable for anyone with history.
- *
- * `scheduled_start` is the closest instant `PartnerVisit` publishes for a
- * finished job — there is no separate completed-at timestamp on the wire
- * today, so this is measured from when the job was due to start, not from
- * when it was actually marked done. `server_now` (not the browser's clock)
- * is the reference instant, the same clock-skew guard `offersServerNow` gives
- * the crew-offer countdown.
- */
-function isRecentlySettled(job: PartnerVisit): boolean {
-  const scheduled = new Date(job.scheduled_start).getTime();
-  const now = new Date(job.server_now).getTime();
-  if (Number.isNaN(scheduled) || Number.isNaN(now)) return true;
-  return now - scheduled < SETTLED_WINDOW_MS;
+function visitUrgency(status: VisitStatus): WorkUrgency {
+  if (SETTLED_VISIT_STATUS.has(status)) return "settled";
+  if (status === "CANCELLED") return "closed";
+  return "doing";
 }
 
-/*
- * `DISPUTED`, `RECOVERY_REQUIRED` and `CANCELLED` are still dropped, and
- * deliberately so rather than by oversight. What a disputed or clawed-back job
- * should say — and what the Partner is even allowed to do from the card — is a
- * product question with money and an Operations case behind it. Rendering one as
- * an ordinary work card would be this module inventing that answer.
- */
-
 function fromJobs(jobs: readonly PartnerVisit[]): WorkItem[] {
-  return jobs
-    .filter(
-      (job) =>
-        DOING_VISIT_STATUS.has(job.status) ||
-        (SETTLED_VISIT_STATUS.has(job.status) && isRecentlySettled(job)),
-    )
-    .map((job) => ({
+  return jobs.map((job) => ({
       kind: "job" as const,
       key: `job:${job.id}`,
       href: JOB_HREF(job.id),
       // Both figures are server-calculated after commission and scoped to this
       // Partner. The ledger earning wins once settlement makes it authoritative;
       // before then, the immutable booked-scope estimate keeps the fare visible.
-      amountPaise: job.earning?.net_paise ?? job.estimated_earning?.net_paise ?? null,
-      amountLabel: job.earning === null ? "Est. payout" : "You earned",
-      urgency: (SETTLED_VISIT_STATUS.has(job.status) ? "settled" : "doing") as WorkUrgency,
+      amountPaise:
+        job.status === "CANCELLED"
+          ? null
+          : (job.earning?.net_paise ?? job.estimated_earning?.net_paise ?? null),
+      amountLabel:
+        job.status === "CANCELLED" ? null : job.earning === null ? "Est. payout" : "You earned",
+      urgency: visitUrgency(job.status),
       respondsBy: null,
       whenIso: job.scheduled_start,
       // A real slot on the availability grid, unlike an enquiry's requested day.

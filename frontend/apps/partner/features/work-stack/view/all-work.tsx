@@ -42,7 +42,7 @@ const SECTIONS: readonly { readonly title: string; readonly urgencies: readonly 
     // everywhere. They read as "done" to a vendor exactly as a settled job
     // does: nothing more to do, and it belongs beside the filter chip below
     // that groups all three the same way.
-    { title: "Settled", urgencies: ["settled", "not_chosen", "closed"] },
+    { title: "Done", urgencies: ["settled", "not_chosen", "closed"] },
   ];
 
 /**

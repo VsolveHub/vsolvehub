@@ -217,9 +217,6 @@ function job(overrides: Partial<PartnerVisit> = {}): PartnerVisit {
     requirements: [],
     status: "COMPLETED",
     version: 3,
-    // Within the 24h settled window (`NOW` minus one hour) so a bare `job()`
-    // stays visible by default — tests exercising the window itself override
-    // this explicitly.
     scheduled_start: "2026-08-19T09:00:00Z",
     estimated_duration_minutes: 120,
     en_route_at: null,
@@ -746,10 +743,10 @@ describe("toWorkItems — engagements", () => {
       "engagement:active",
       "engagement:completing",
     ]);
-    expect(items.every((item) => item.urgency === "doing")).toBe(true);
+    expect(items.map((item) => item.urgency)).toEqual(["doing", "doing", "answered"]);
   });
 
-  it("drops an engagement that is over or in dispute", () => {
+  it("keeps every terminal and exception status in the correct work bucket", () => {
     const items = toWorkItems({
       ...EMPTY,
       engagements: [
@@ -761,7 +758,24 @@ describe("toWorkItems — engagements", () => {
       ],
     });
 
-    expect(items).toHaveLength(0);
+    expect(Object.fromEntries(items.map((item) => [item.key, item.urgency]))).toEqual({
+      "engagement:disputed": "doing",
+      "engagement:cancelled": "closed",
+      "engagement:done": "settled",
+      "engagement:warranty": "settled",
+      "engagement:closed": "settled",
+    });
+    expect(Object.fromEntries(items.map((item) => [item.key, item.stateLabel]))).toEqual({
+      "engagement:disputed": "In dispute",
+      "engagement:cancelled": "Cancelled",
+      "engagement:done": "Completed",
+      "engagement:warranty": "Warranty period",
+      "engagement:closed": "Closed",
+    });
+    expect(items.find((item) => item.key === "engagement:cancelled")).toMatchObject({
+      amountPaise: null,
+      amountLabel: null,
+    });
   });
 
   it("shows what the work is against today, never the platform's commission", () => {
@@ -838,12 +852,13 @@ describe("toWorkItems — A3 day-hire engagements", () => {
     expect(item?.title).toBe("Full home rewiring");
   });
 
-  it("says what was collected directly once every day is closed", () => {
+  it("says what was collected directly after the customer completes the job", () => {
     const [item] = toWorkItems({
       ...EMPTY,
       engagements: [
         dayHire({
-          status: "COMPLETING",
+          status: "COMPLETED",
+          completed_at: NOW,
           stages: [
             shiftDay({ id: "s1", position: 1, summary: { settlement_amount_paise: 320_000 } }),
             shiftDay({ id: "s2", position: 2, summary: { settlement_amount_paise: 300_000 } }),
@@ -855,6 +870,8 @@ describe("toWorkItems — A3 day-hire engagements", () => {
 
     expect(item?.amountPaise).toBe(920_000);
     expect(item?.amountLabel).toBe("Collected directly");
+    expect(item?.urgency).toBe("settled");
+    expect(item?.whenIso).toBe(NOW);
   });
 
   it("does not print a zero when a closing job has no settled day on it", () => {
@@ -1006,9 +1023,6 @@ describe("toWorkItems — A1 visits", () => {
   });
 
   it("sorts the next job soonest-first and finished ones newest-first", () => {
-    // Both settled jobs stay inside the 24h window (see `isRecentlySettled`) —
-    // this test is about relative order among visible jobs, not the window
-    // itself, which has its own describe block below.
     const items = toWorkItems({
       ...EMPTY,
       jobs: [
@@ -1027,7 +1041,7 @@ describe("toWorkItems — A1 visits", () => {
     ]);
   });
 
-  it("drops a settled job older than 24h", () => {
+  it("keeps completed job history regardless of age", () => {
     const items = toWorkItems({
       ...EMPTY,
       jobs: [
@@ -1038,7 +1052,7 @@ describe("toWorkItems — A1 visits", () => {
       ],
     });
 
-    expect(items.map((item) => item.key)).toEqual(["job:recent"]);
+    expect(items.map((item) => item.key)).toEqual(["job:recent", "job:old"]);
   });
 
   it("keeps a job in progress regardless of how old its scheduled start is", () => {
@@ -1050,13 +1064,10 @@ describe("toWorkItems — A1 visits", () => {
       ],
     });
 
-    expect(items.map((item) => item.key)).toEqual(["job:old-doing"]);
+    expect(items.map((item) => item.key)).toEqual(["job:old-doing", "job:old-done"]);
   });
 
-  it("drops a job in a state this stack has no card for", () => {
-    // The complete excluded set. All three need a card that says something about
-    // money moving backwards or an Operations case, which is a product decision
-    // this adapter must not invent.
+  it("keeps dispute, recovery, and cancellation states visible", () => {
     const items = toWorkItems({
       ...EMPTY,
       jobs: [
@@ -1066,7 +1077,20 @@ describe("toWorkItems — A1 visits", () => {
       ],
     });
 
-    expect(items).toHaveLength(0);
+    expect(Object.fromEntries(items.map((item) => [item.key, item.urgency]))).toEqual({
+      "job:disputed": "doing",
+      "job:recovery": "doing",
+      "job:cancelled": "closed",
+    });
+    expect(Object.fromEntries(items.map((item) => [item.key, item.stateLabel]))).toEqual({
+      "job:disputed": "Customer raised a problem",
+      "job:recovery": "Needs help",
+      "job:cancelled": "Cancelled",
+    });
+    expect(items.find((item) => item.key === "job:cancelled")).toMatchObject({
+      amountPaise: null,
+      amountLabel: null,
+    });
   });
 
   it("uses the final net earning after settlement and the estimate before it settles", () => {

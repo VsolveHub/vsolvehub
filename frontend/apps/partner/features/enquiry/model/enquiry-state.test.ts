@@ -95,11 +95,56 @@ describe("status copy", () => {
   });
 
   it("does not tell a vendor they were too slow when they were not", () => {
-    // EXPIRED is the vendor running out of time. WITHDRAWN is Vsolve pulling
-    // the enquiry back because the requirement changed, which carries no
-    // penalty. Collapsing them is a false accusation.
+    // EXPIRED is the vendor running out of time. WITHDRAWN is the platform
+    // releasing the enquiry, which carries no penalty. Collapsing them is a
+    // false accusation.
     expect(describeStatus("EXPIRED").meaning).toMatch(/closed before you answered/i);
     expect(describeStatus("WITHDRAWN").meaning).toMatch(/does not count against you/i);
+  });
+
+  describe("why a withdrawal happened", () => {
+    // Every withdrawal on this platform so far has been a lost race: 18
+    // `slot_taken`, 6 `offer_taken`, 1 `non_responsive_quote`, and zero
+    // `requirement_changed`. The generic sentence named the one case that has
+    // never occurred and omitted the only ones that have, so a vendor who
+    // simply came second was told the customer had changed their request.
+
+    it("says another professional was first when the slot was taken", () => {
+      const copy = describeStatus("WITHDRAWN", "slot_taken");
+      expect(copy.meaning).toMatch(/another professional/i);
+      expect(copy.meaning).not.toMatch(/request changed/i);
+    });
+
+    it("says the same for a crew offer taken by somebody else", () => {
+      expect(describeStatus("WITHDRAWN", "offer_taken").meaning).toMatch(/another professional/i);
+    });
+
+    it("is honest that the vendor did not answer in time on a stale accept", () => {
+      const copy = describeStatus("WITHDRAWN", "non_responsive_quote");
+      expect(copy.meaning).toMatch(/quote/i);
+      expect(copy.meaning).not.toMatch(/another professional/i);
+    });
+
+    it("keeps the request-changed sentence for the reason it describes", () => {
+      expect(describeStatus("WITHDRAWN", "requirement_changed").meaning).toMatch(/request changed/i);
+    });
+
+    it("never blames the vendor, whatever the reason", () => {
+      for (const reason of ["slot_taken", "offer_taken", "requirement_changed", ""]) {
+        expect(describeStatus("WITHDRAWN", reason).meaning).toMatch(/does not count against you/i);
+      }
+    });
+
+    it("falls back to the generic sentence for an unknown reason code", () => {
+      expect(describeStatus("WITHDRAWN", "something_new").meaning).toBe(
+        describeStatus("WITHDRAWN").meaning,
+      );
+    });
+
+    it("ignores a reason code on any other status", () => {
+      expect(describeStatus("ACCEPTED", "slot_taken")).toEqual(describeStatus("ACCEPTED"));
+      expect(describeStatus("EXPIRED", "slot_taken")).toEqual(describeStatus("EXPIRED"));
+    });
   });
 
   it("never renders an archetype or a database value", () => {

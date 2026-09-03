@@ -125,9 +125,9 @@ class PartnerPerformanceView(APIView):
 
     Separate from `earnings/`, which answers "what am I owed" — a balance by
     state. This answers "how am I doing" — throughput and revenue over time.
-    Both are aggregates over the same ledger, and folding them into one payload
-    would make a screen that only wants today's total pull a full balance
-    breakdown it does not render.
+    Performance includes direct customer payments recorded by mutually confirmed
+    A3 day settlements. The balance remains ledger-only because direct-paid money
+    is not a debt Vsolve can reserve or pay out.
 
     No `partner_id`: the Partner is resolved from the session, which is the one
     filter a caller cannot get wrong.

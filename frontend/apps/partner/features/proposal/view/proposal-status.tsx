@@ -2,7 +2,6 @@
 
 import { Badge, Button, Card, ConfirmAction, Dialog, ErrorState, FactList, Textarea, formatMoney } from "@vsolve/ui";
 import { describeError } from "@vsolve/query";
-import { useServerCountdown } from "@vsolve/query";
 import { useState } from "react";
 
 import { timeAgo } from "@/lib/format";
@@ -17,7 +16,9 @@ import {
   traceForInvitation,
   type Proposal,
 } from "../model/proposal-state";
+import { commercialEstimateFromProposal } from "../model/commercial-estimate-draft";
 import { useDeclineRevisionRequest, useMyProposals, useWithdrawProposal } from "../queries";
+import { EstimatePreviewSheet } from "./estimate-preview-sheet";
 
 /**
  * The quote a vendor already sent, its state, and what they may still do.
@@ -77,6 +78,7 @@ export function ProposalStatus({
   documentKind = "quote",
 }: ProposalStatusProps) {
   const [confirmingWithdraw, setConfirmingWithdraw] = useState(false);
+  const [viewingEstimate, setViewingEstimate] = useState(false);
   const withdraw = useWithdrawProposal();
 
   // Only asked for once the enquiry says a quote exists, or this session sent
@@ -90,7 +92,6 @@ export function ProposalStatus({
     invitationId,
   });
   const record = submitted ?? trace.current;
-  const revisionCountdown = useServerCountdown(record?.revision_expires_at ?? null, 1_000);
   const view = resolveProposalView({ enquiryStatus, proposal: record });
   const documentLabel = documentKind === "estimate" ? "estimate" : "quote";
   const documentCopy = (copy: string) =>
@@ -138,12 +139,9 @@ export function ProposalStatus({
   const status = describeProposalStatus(current.status);
   const usability = describeUsability(current.usability);
   const revalidation = revalidationNoticeFor(current);
-  const permissions = permissionsFor({
-    proposal: current,
-    enquiryStatus,
-    revisionWindowOpen: revisionCountdown?.isExpired !== true,
-  });
+  const permissions = permissionsFor({ proposal: current, enquiryStatus, documentKind });
   const presentation = withdraw.error ? describeError(withdraw.error, "mutation") : null;
+  const submittedDraft = commercialEstimateFromProposal(current);
 
   return (
     <Card className="flex flex-col gap-4 p-4">
@@ -257,23 +255,32 @@ export function ProposalStatus({
         />
       ) : null}
 
-      <div className="flex flex-wrap gap-2">
-        {permissions.canSupersede ? (
-          <Button variant="outline" onClick={onRevise} disabled={withdraw.isPending}>
-            Revise {documentLabel}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-2 min-[390px]:flex-row">
+          <Button onClick={() => setViewingEstimate(true)} disabled={withdraw.isPending}>
+            View {documentLabel} details
           </Button>
-        ) : null}
+
+          {permissions.canSupersede ? (
+            <Button variant="outline" onClick={onRevise} disabled={withdraw.isPending}>
+              Revise {documentLabel}
+            </Button>
+          ) : null}
+        </div>
 
         {permissions.canWithdraw ? (
-          <Button
-            variant="ghost"
-            onClick={() => setConfirmingWithdraw(true)}
-            disabled={withdraw.isPending}
-            loading={withdraw.isPending}
-            loadingLabel="Withdrawing"
-          >
-            Withdraw it
-          </Button>
+          <div className="border-t border-line pt-2 sm:border-t-0 sm:pt-0">
+            <Button
+              variant="ghost"
+              onClick={() => setConfirmingWithdraw(true)}
+              disabled={withdraw.isPending}
+              loading={withdraw.isPending}
+              loadingLabel="Withdrawing"
+              className="text-danger-text"
+            >
+              Withdraw {documentLabel}
+            </Button>
+          </div>
         ) : null}
       </div>
 
@@ -296,6 +303,19 @@ export function ProposalStatus({
           )
         }
       />
+
+      <EstimatePreviewSheet
+        open={viewingEstimate}
+        onClose={() => setViewingEstimate(false)}
+        draft={submittedDraft}
+        preview={current}
+        vendorName={`${documentKind === "estimate" ? "Estimate" : "Quote"} revision ${current.revision}`}
+        materialList={submittedDraft.materialAdded}
+        partnerTurnkey={current.material_fulfilment_mode === "PARTNER_TURNKEY"}
+        title={`Your submitted ${documentLabel}`}
+        description={`Revision ${current.revision} · this is the detail currently with the customer.`}
+        closeLabel="Close"
+      />
     </Card>
   );
 }
@@ -304,6 +324,7 @@ const REVISION_REASON: Record<string, string> = {
   LEAVE_OUT: "Leave something out",
   CHANGE_MATERIALS: "Change materials or finish",
   PHASE_WORK: "Split the work into phases",
+  PRICE: "Asked about the price",
   OTHER: "Something else",
 };
 
@@ -338,6 +359,12 @@ function RevisionRequestPanel({
   if (request === null) return null;
   const isOpen = request.status === "OPEN";
   const presentation = decline.error ? describeError(decline.error, "mutation") : null;
+  // Basis points, and only ever on a price ask. Nothing here has moved the
+  // estimate: the quote stands at `total_paise` until this vendor sends a new
+  // one, and the customer can accept it at that price the whole time.
+  const askedBps = request.requested_discount_bps ?? null;
+  const askedSavingPaise =
+    askedBps === null ? 0 : Math.round((proposal.total_paise * askedBps) / 10_000);
 
   return (
     <div
@@ -349,11 +376,35 @@ function RevisionRequestPanel({
     >
       <p className="text-sm font-semibold text-text">
         {isOpen
-          ? `The customer asked for a revised ${documentLabel}`
+          ? askedBps === null
+            ? `The customer asked for a revised ${documentLabel}`
+            : "A customer asked about your price"
           : request.status === "ANSWERED"
             ? "You answered their revision request"
             : "You declined their revision request"}
       </p>
+      {askedBps !== null ? (
+        // The ask in rupees, not percent. "5%" is a number to think about;
+        // "you would lose Rs 11,033" is the decision actually being made, and a
+        // vendor deserves it stated rather than left to work out.
+        <dl className="mt-2 grid gap-1 rounded-control bg-surface px-3 py-2 text-sm tabular-nums">
+          <div className="flex items-baseline justify-between gap-3">
+            <dt className="text-text-secondary">You quoted</dt>
+            <dd className="font-bold text-text">{formatMoney(proposal.total_paise)}</dd>
+          </div>
+          <div className="flex items-baseline justify-between gap-3">
+            <dt className="text-text-secondary">They asked for</dt>
+            <dd className="font-extrabold text-text">
+              {formatMoney(proposal.total_paise - askedSavingPaise)}
+              <span className="ml-1.5 font-semibold text-text-muted">({askedBps / 100}% off)</span>
+            </dd>
+          </div>
+          <div className="flex items-baseline justify-between gap-3 border-t border-line pt-1">
+            <dt className="text-text-secondary">You would lose</dt>
+            <dd className="font-bold text-warning-text">{formatMoney(askedSavingPaise)}</dd>
+          </div>
+        </dl>
+      ) : null}
       <p className="mt-1 text-sm leading-6 text-text-secondary">
         {REVISION_REASON[request.reason_code] ?? request.reason_code}
         {excludedItems.length > 0 ? `: ${excludedItems.join(", ")}` : ""}
@@ -367,14 +418,27 @@ function RevisionRequestPanel({
         <ErrorState inline className="mt-2" title={presentation.title} message={presentation.message} severity={presentation.severity} />
       ) : null}
       {isOpen ? (
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Button size="sm" onClick={onRevise}>
-            Send a revised {documentLabel}
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => setDeclining(true)}>
-            Decline with a note
-          </Button>
-        </div>
+        <>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button size="sm" onClick={onRevise}>
+              {askedBps === null
+                ? `Send a revised ${documentLabel}`
+                : `Agree — re-issue at ${formatMoney(proposal.total_paise - askedSavingPaise)}`}
+            </Button>
+            {askedBps === null ? null : (
+              <Button size="sm" variant="outline" onClick={onRevise}>
+                Offer a different figure
+              </Button>
+            )}
+            <Button size="sm" variant="ghost" onClick={() => setDeclining(true)}>
+              {askedBps === null ? "Decline with a note" : "Cannot move — say why"}
+            </Button>
+          </div>
+          <p className="mt-2 text-xs leading-5 text-text-muted">
+            Your {documentLabel} stays live either way. They can still accept it at{" "}
+            {formatMoney(proposal.total_paise)} while you decide.
+          </p>
+        </>
       ) : null}
 
       <Dialog
