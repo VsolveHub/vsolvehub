@@ -309,7 +309,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.39.0",
+    "VERSION": "1.66.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -324,7 +324,14 @@ SPECTACULAR_SETTINGS = {
     # TypeScript client, where they mean nothing to a reader and change whenever an
     # unrelated model adds a choice.
     "ENUM_NAME_OVERRIDES": {
+        "CommercialAmountBasisEnum": "apps.requirements.models.CommercialPolicy.AmountBasis",
+        "CommercialPolicyTaxBasisEnum": "apps.requirements.models.CommercialPolicy.TaxBasis",
+        "CommercialSupplierOfRecordEnum": (
+            "apps.requirements.models.CommercialPolicy.SupplierOfRecord"
+        ),
         "PartnerApplicationStatusEnum": "apps.partners.models.PartnerApplication.Status",
+        "RevisionRequestStatusEnum": "apps.requirements.models.RevisionRequest.Status",
+        "RevisionRequestReasonCodeEnum": "apps.requirements.models.RevisionRequest.ReasonCode",
         "PartnerDocumentKindEnum": "apps.partners.models.PartnerDocument.Kind",
         # Named when the Partner directory added a second serializer over `PartnerDocument`.
         # Two `status` fields on one model made the generator disambiguate both, renaming
@@ -332,6 +339,16 @@ SPECTACULAR_SETTINGS = {
         # app's documents step — the same silent-rename trap as `CompletionResponseDecisionEnum`
         # below.
         "PartnerDocumentStatusEnum": "apps.partners.models.PartnerDocument.Status",
+        # Crew identity documents, added with the crew-verification surface. `kind` and `status`
+        # each already existed on several models, so without these the generator emits positional
+        # `Kind461Enum` / `StatusD62Enum` — names that shift the next time any unrelated model
+        # gains a `kind`, silently renaming a component both frontends import.
+        "CrewDocumentKindEnum": "apps.partners.models.CrewDocument.Kind",
+        "CrewDocumentStatusEnum": "apps.partners.models.CrewDocument.Status",
+        # The platform-feedback chip vocabulary. `code` is a common field name, so without this
+        # the generator emits a positional `CodeF25Enum` that shifts whenever any unrelated model
+        # gains a `code` choice set — silently renaming a component both frontends import.
+        "PlatformFeedbackTagEnum": "apps.ratings.models.PlatformFeedback.Tag",
         "QuoteLineKindEnum": "apps.carts.models.QuoteLine.Kind",
         "PrivacyRequestKindEnum": "apps.identity.models.PrivacyRequest.Kind",
         "ScopeAmendmentStatusEnum": "apps.fulfilment.models.ScopeAmendment.Status",
@@ -616,6 +633,20 @@ PARTNER_DOCUMENT_ORPHAN_RETENTION_HOURS = env.int(
     "PARTNER_DOCUMENT_ORPHAN_RETENTION_HOURS",
     default=24,
 )
+# A crew member's identity evidence. Its own bucket, not `partner-kyc`: these are documents about
+# a *worker*, retained on a different basis from the agency's own KYC, and a shared bucket makes
+# "delete everything we hold about this person" a prefix scan across two subjects.
+CREW_DOCUMENT_BUCKET = env("CREW_DOCUMENT_BUCKET", default="crew-identity")
+# What a crew member must have approved before Operations verification stamps itself. Government
+# identity only, by default and deliberately: address proof and police verification are real
+# document kinds a Partner may upload and a reviewer may approve, but requiring them would empty
+# every roster the day this ships. Widening this is an owner decision with a migration plan, not a
+# default.
+CREW_REQUIRED_DOCUMENT_KINDS = ("GOVERNMENT_ID",)
+# Generous for a phone camera photographing an ID card, small enough that a review queue is not a
+# gallery of twenty-megabyte originals. Half the partner-KYC ceiling, which admits multi-page PDFs
+# this never needs.
+MAX_CREW_DOCUMENT_SIZE_BYTES = 10 * 1024 * 1024
 FULFILMENT_EVIDENCE_BUCKET = env("FULFILMENT_EVIDENCE_BUCKET", default="fulfilment-evidence")
 # M2 adds a bucket, not a storage adapter. `apps.foundation.storage` is one signed-upload boundary
 # shared by every app that needs one; a second implementation here is the duplication
@@ -827,6 +858,20 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.requirements.tasks.sweep_expired_invitations",
         # 2 minutes. Expiring an invitation releases a quote slot and invites a replacement, so
         # this is the sweep the delivery SLA actually depends on.
+        "schedule": 60.0 * 2,
+    },
+    "sweep-underfilled-quote-waves": {
+        "task": "apps.requirements.tasks.sweep_underfilled_quote_waves",
+        # 2 minutes, like the expiry sweep it complements. This is the safety net under the
+        # inline refills: it catches slots freed by paths with no refill of their own, and it
+        # re-reaches vendors who became eligible only after the opening wave went out.
+        "schedule": 60.0 * 2,
+    },
+    "sweep-searching-visit-shares": {
+        "task": "apps.requirements.tasks.sweep_searching_visit_shares",
+        # 2 minutes. A SEARCHING share with no live offer is a Customer watching a spinner; each
+        # tick re-dispatches to newly free Partners or settles honestly once the visit is too
+        # close to staff.
         "schedule": 60.0 * 2,
     },
     "sweep-expired-proposals": {

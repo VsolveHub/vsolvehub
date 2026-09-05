@@ -9,6 +9,7 @@ import uuid
 from dataclasses import asdict
 from typing import cast
 
+from django.db.models import Count
 from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
@@ -22,13 +23,19 @@ from rest_framework.views import APIView
 from apps.commerce.models import PaymentAttempt
 from apps.foundation.services import execute_idempotent
 from apps.identity.models import User
+from apps.partners import crew_documents
 from apps.partners.exceptions import PartnerDomainError
+from apps.partners.models import CrewDocument, PartnerCrewMembership
 from apps.partners.permissions import IsOperationsUser
 from apps.requirements import disputes, operations, reconciliation
 from apps.requirements.exceptions import RequirementDomainError
 from apps.requirements.models import OperationsTouch
 from apps.requirements.serializers import (
     ChargebackSerializer,
+    CrewDocumentDecisionSerializer,
+    CrewDocumentReviewListSerializer,
+    CrewDocumentReviewRowSerializer,
+    CrewGenderCorrectionSerializer,
     CrewMembershipVerificationRowSerializer,
     CrewVerificationQueueSerializer,
     CrewVerificationSerializer,
@@ -58,13 +65,29 @@ class OperationsCrewVerificationQueueView(APIView):
                 location=OpenApiParameter.QUERY,
                 required=False,
                 description="Narrow to one vendor's roster.",
-            )
+            ),
+            OpenApiParameter(
+                name="state",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                enum=["PENDING", "VERIFIED", "ALL"],
+                description=(
+                    "`PENDING` (default) is the worklist. `VERIFIED` is how a reviewer reaches "
+                    "somebody already cleared, which is the only way to un-verify a worker whose "
+                    "document turned out to be expired — the command supported it and no screen "
+                    "could get to it."
+                ),
+            ),
         ],
         description=(
-            "Active crew memberships whose documents have never been verified, oldest first.\n\n"
+            "Active crew memberships and where their document check stands, oldest first.\n\n"
             "This queue is why the A3 cascade can find anybody: `documents_verified_at` is what "
             "`verified_roster_size` counts when it sizes a lead's roster against the requested "
-            "headcount, and a vendor with no verified crew is excluded from every crew offer."
+            "headcount, and a vendor with no verified crew is excluded from every crew offer.\n\n"
+            "`documents_pending` and `documents_approved` are on each row so the queue can tell "
+            "the two waiting states apart: a row with nothing uploaded is the Partner's move, and "
+            "a row with a file on it is the reviewer's."
         ),
         responses={200: CrewVerificationQueueSerializer, 403: ApiErrorSerializer},
     )
@@ -78,25 +101,82 @@ class OperationsCrewVerificationQueueView(APIView):
                 raise ValidationError(
                     {"partner": "Must be a UUID."}, code="invalid_partner"
                 ) from exc
+        state = (request.query_params.get("state") or "PENDING").upper()
+        if state not in {"PENDING", "VERIFIED", "ALL"}:
+            raise ValidationError(
+                {"state": "Must be PENDING, VERIFIED or ALL."}, code="invalid_state"
+            )
+        memberships = operations.crew_memberships_awaiting_verification(
+            partner_id=partner_id, state=state
+        )
+        counts = _document_counts([membership.id for membership in memberships])
         rows = [
             {
                 "membership_id": membership.id,
                 "partner_id": membership.partner_id,
                 "partner_name": membership.partner.display_name,
-                "crew_member_name": membership.crew_member.display_name,
+                "crew_member_name": membership.roster_name,
                 "is_supervisor": membership.is_supervisor,
                 "added_at": membership.added_at,
                 "documents_verified_at": membership.documents_verified_at,
+                "gender": membership.crew_member.gender,
+                "documents_pending": counts.get((membership.id, CrewDocument.Status.PENDING), 0),
+                "documents_approved": counts.get((membership.id, CrewDocument.Status.APPROVED), 0),
             }
-            for membership in operations.crew_memberships_awaiting_verification(
-                partner_id=partner_id
-            )
+            for membership in memberships
         ]
         return Response(
             CrewVerificationQueueSerializer(
                 {"memberships": rows, "server_now": timezone.now()}
             ).data
         )
+
+
+def _verification_row(membership: PartnerCrewMembership) -> dict[str, object]:
+    """One queue row, shared by the queue and by every command that returns one.
+
+    Shared rather than repeated: the queue and the two writers all publish this shape, and three
+    inline copies is how a field added to one of them goes missing from the other two.
+    """
+    counts = _document_counts([membership.id])
+    return cast(
+        dict[str, object],
+        CrewMembershipVerificationRowSerializer(
+            {
+                "membership_id": membership.id,
+                "partner_id": membership.partner_id,
+                "partner_name": membership.partner.display_name,
+                "crew_member_name": membership.roster_name,
+                "is_supervisor": membership.is_supervisor,
+                "added_at": membership.added_at,
+                "documents_verified_at": membership.documents_verified_at,
+                "gender": membership.crew_member.gender,
+                "documents_pending": counts.get((membership.id, CrewDocument.Status.PENDING), 0),
+                "documents_approved": counts.get((membership.id, CrewDocument.Status.APPROVED), 0),
+            }
+        ).data,
+    )
+
+
+def _document_counts(
+    membership_ids: list[uuid.UUID],
+) -> dict[tuple[uuid.UUID, str], int]:
+    """Pending and approved document counts for a whole page of the queue, in one query.
+
+    Aggregated rather than counted per row: this queue is read on a polling screen and two hundred
+    memberships would otherwise be four hundred round trips to render two badges.
+    """
+    if not membership_ids:
+        return {}
+    return {
+        (row["membership_id"], row["status"]): row["total"]
+        for row in CrewDocument.objects.filter(
+            membership_id__in=membership_ids,
+            status__in=(CrewDocument.Status.PENDING, CrewDocument.Status.APPROVED),
+        )
+        .values("membership_id", "status")
+        .annotate(total=Count("id"))
+    }
 
 
 class OperationsCrewVerificationView(APIView):
@@ -150,20 +230,7 @@ class OperationsCrewVerificationView(APIView):
                 )
             except RequirementDomainError as exc:
                 _raise_api_error(exc)
-            return status.HTTP_200_OK, cast(
-                dict[str, object],
-                CrewMembershipVerificationRowSerializer(
-                    {
-                        "membership_id": membership.id,
-                        "partner_id": membership.partner_id,
-                        "partner_name": membership.partner.display_name,
-                        "crew_member_name": membership.crew_member.display_name,
-                        "is_supervisor": membership.is_supervisor,
-                        "added_at": membership.added_at,
-                        "documents_verified_at": membership.documents_verified_at,
-                    }
-                ).data,
-            )
+            return status.HTTP_200_OK, _verification_row(membership)
 
         result = execute_idempotent(
             actor=actor,
@@ -173,6 +240,210 @@ class OperationsCrewVerificationView(APIView):
                 "membership_id": str(membership_id),
                 "verified": data["verified"],
             },
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class OperationsCrewGenderCorrectionView(APIView):
+    """The arbiter `set_crew_gender`'s refusal message promised and nobody had built."""
+
+    permission_classes = (IsAuthenticated, IsOperationsUser)
+
+    @extend_schema(
+        tags=["M2 - Operations"],
+        operation_id="m2_operations_crew_gender_correct",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=CrewGenderCorrectionSerializer,
+        description=(
+            "Correct what one worker is recorded as, across every agency that has them.\n\n"
+            "`CrewMember.gender` is one row per person, so the Partner-facing rule is "
+            "first-write-wins: a second agency writing a contradiction is refused with "
+            "`m2_crew_gender_conflict` rather than silently flipping which gendered slots the "
+            "first agency can fill. That rule is right and it had **no exit** — the refusal said "
+            '"contact support if that is wrong" and support had no endpoint, so a worker recorded '
+            "wrongly by whichever agency typed first lost gendered work permanently.\n\n"
+            "**A reason is required.** Unlike a first recording, this overwrites a value another "
+            "agency is already being dispatched against, and the previous value is written to the "
+            "audit event so a reopened dispute can see what was overwritten. Clearing is not "
+            "offered: it would re-open every gendered slot the worker had been filling. "
+            "`UNDISCLOSED` is the value for a worker who declined to say."
+        ),
+        responses={
+            200: CrewMembershipVerificationRowSerializer,
+            400: ApiErrorSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request, membership_id: uuid.UUID) -> Response:
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+        payload = CrewGenderCorrectionSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        data = payload.validated_data
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                membership = operations.correct_crew_gender(
+                    membership_id=membership_id,
+                    actor=actor,
+                    gender=data["gender"],
+                    reason=data["reason"],
+                )
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            return status.HTTP_200_OK, _verification_row(membership)
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.operations.crew_gender_correct",
+            key=key,
+            request_payload={"membership_id": str(membership_id), "gender": data["gender"]},
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class OperationsCrewDocumentListView(APIView):
+    """The documents behind one worker's verification, with signed links to the files."""
+
+    permission_classes = (IsAuthenticated, IsOperationsUser)
+
+    @extend_schema(
+        tags=["M2 - Operations"],
+        operation_id="m2_operations_crew_documents",
+        description=(
+            "Every live identity document on one crew membership, newest version of each kind, "
+            "each with a short-lived signed link to the stored file.\n\n"
+            "`review_url` is **nullable** and null is not an error: a storage outage degrades this "
+            "to a queue with one missing preview rather than to an error page that hides the "
+            "other nine people waiting. Nothing stores the URL — a stored URL is a stored expiry."
+        ),
+        responses={
+            200: CrewDocumentReviewListSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+        },
+    )
+    def get(self, _request: Request, membership_id: uuid.UUID) -> Response:
+        membership = (
+            PartnerCrewMembership.objects.select_related("partner", "crew_member")
+            .filter(pk=membership_id)
+            .first()
+        )
+        if membership is None:
+            raise NotFound("Crew member was not found.")
+        documents = crew_documents.current_crew_documents(membership=membership)
+        return Response(
+            CrewDocumentReviewListSerializer(
+                {
+                    "membership_id": membership.id,
+                    "crew_member_name": membership.roster_name,
+                    "partner_name": membership.partner.display_name,
+                    "documents_verified_at": membership.documents_verified_at,
+                    "missing_required_kinds": (
+                        crew_documents.missing_required_crew_document_kinds(membership=membership)
+                    ),
+                    "documents": [
+                        {
+                            "document_id": document.id,
+                            "kind": document.kind,
+                            "kind_label": CrewDocument.Kind(document.kind).label,
+                            "status": document.status,
+                            "version": document.version,
+                            "content_type": document.content_type,
+                            "size_bytes": document.size_bytes,
+                            "uploaded_at": document.created_at,
+                            "reviewed_at": document.reviewed_at,
+                            "review_reason": document.review_reason,
+                            "expires_on": document.expires_on,
+                            "review_url": crew_documents.crew_document_review_url(
+                                document=document
+                            ),
+                        }
+                        for document in documents
+                    ],
+                    "server_now": timezone.now(),
+                }
+            ).data
+        )
+
+
+class OperationsCrewDocumentDecisionView(APIView):
+    """Approve or reject one document — and, through that, the membership's verification."""
+
+    permission_classes = (IsAuthenticated, IsOperationsUser)
+
+    @extend_schema(
+        tags=["M2 - Operations"],
+        operation_id="m2_operations_crew_document_review",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=CrewDocumentDecisionSerializer,
+        description=(
+            "Record a decision on one crew identity document.\n\n"
+            "**Approving the last required kind verifies the membership**, through the same "
+            "`verify_crew_documents` command with the same actor and audit event. The alternative "
+            "— approve every document, then separately remember to press *verified* — has a "
+            "failure mode where a fully-approved worker is still excluded from every crew offer, "
+            "which is exactly the silent state this whole surface exists to end.\n\n"
+            "**Rejecting a required kind withdraws verification**, carrying the rejection's own "
+            "reason, because the Partner is about to lose a worker off jobs they may already be "
+            "assigned to. A rejection therefore requires a reason and the model enforces it too."
+        ),
+        responses={
+            200: CrewDocumentReviewRowSerializer,
+            400: ApiErrorSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request, document_id: uuid.UUID) -> Response:
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+        payload = CrewDocumentDecisionSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        data = payload.validated_data
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                document = crew_documents.review_crew_document(
+                    document_id=document_id,
+                    actor=actor,
+                    approved=data["approved"],
+                    reason=data["reason"],
+                )
+            except PartnerDomainError as exc:
+                _raise_api_error(exc)
+            return status.HTTP_200_OK, cast(
+                dict[str, object],
+                CrewDocumentReviewRowSerializer(
+                    {
+                        "document_id": document.id,
+                        "kind": document.kind,
+                        "kind_label": CrewDocument.Kind(document.kind).label,
+                        "status": document.status,
+                        "version": document.version,
+                        "content_type": document.content_type,
+                        "size_bytes": document.size_bytes,
+                        "uploaded_at": document.created_at,
+                        "reviewed_at": document.reviewed_at,
+                        "review_reason": document.review_reason,
+                        "expires_on": document.expires_on,
+                        # Deliberately absent from a decision response. The reviewer has just
+                        # finished looking at the file; re-signing it here would mint a link
+                        # nobody asked for and put it in a mutation's audit payload.
+                        "review_url": None,
+                    }
+                ).data,
+            )
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.operations.crew_document_review",
+            key=key,
+            request_payload={"document_id": str(document_id), "approved": data["approved"]},
             command=command,
         )
         return Response(result.body, status=result.status_code)

@@ -25,6 +25,9 @@ const FAN: ServiceCard = {
   request_archetypes: [],
   bookable_variant_id: "variant-fan-1",
   starting_price: { amount_paise: 29900, currency: "INR" },
+  // Required since 1.43.0: the backend owns the icon vocabulary and refuses to
+  // publish a service without one.
+  icon_key: "electrical",
   cover: null,
 };
 

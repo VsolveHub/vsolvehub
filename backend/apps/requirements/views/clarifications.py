@@ -30,6 +30,7 @@ from apps.requirements.serializers import (
     QuestionAnswerSerializer,
     QuestionCreateSerializer,
     RequirementAttachmentSerializer,
+    RequirementQuestionListSerializer,
     RequirementQuestionSerializer,
 )
 from apps.requirements.views.base import (
@@ -289,6 +290,42 @@ class RequirementAttachmentDetailView(ThrottledWriteMixin, APIView):
         except RequirementDomainError as exc:
             _raise_api_error(exc)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class RequirementQuestionListView(APIView):
+    """Every question on one request, so the Customer can answer the ones waiting on them."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Requirements"],
+        operation_id="m2_requirement_question_list",
+        description=(
+            "Every clarification question on this request, both directions, oldest first. A "
+            "professional's question arrives before any estimate — often before the visit — so "
+            "this is readable at every status and is not gated on the paywall. The vendor's "
+            "identity is not on a question; `invitation` links it to the estimate it belongs to "
+            "once one exists."
+        ),
+        responses={200: RequirementQuestionListSerializer, 404: ApiErrorSerializer},
+    )
+    def get(self, request: Request, requirement_id: uuid.UUID) -> Response:
+        try:
+            requirement = requirement_for_customer(
+                customer=cast(User, request.user), requirement_id=requirement_id
+            )
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        questions = (
+            RequirementQuestion.objects.filter(requirement=requirement)
+            .select_related("requirement", "invitation__partner")
+            .order_by("asked_at", "id")
+        )
+        return Response(
+            RequirementQuestionListSerializer(
+                {"questions": list(questions), "server_now": timezone.now()}
+            ).data
+        )
 
 
 class RequirementQuestionAnswerView(ThrottledWriteMixin, APIView):

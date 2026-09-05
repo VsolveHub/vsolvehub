@@ -281,13 +281,17 @@ export function toA3Request(input: {
 
   return {
     invitation_id: input.invitationId,
-    total_paise: total,
-    tax_basis: draft.taxBasis,
-    tax_paise: draft.taxBasis === "EXCLUSIVE" ? draft.taxPaise : 0,
+    // Money left this request at contract 1.44.0 — see `onsite-draft.ts`. The
+    // guard above still runs: a draft with no total and no tax basis is
+    // incomplete on screen, and the vendor should be stopped here rather than
+    // by a 422.
     rate_paise_per_worker_day: draft.ratePaisePerWorkerDay,
     minimum_days: draft.minimumDays,
     worker_count: draft.workerCount,
     inclusions: cleanLines(draft.inclusions),
+    // Required on the wire since 1.48.0 and meaningless on a workforce quote,
+    // which carries no shopping list. Blank is the serializer's own default.
+    material_brand_tier: "",
   };
 }
 
@@ -340,14 +344,17 @@ export function toA5Request(input: {
 
   return {
     invitation_id: input.invitationId,
-    total_paise: total,
-    tax_basis: draft.taxBasis,
-    tax_paise: draft.taxBasis === "EXCLUSIVE" ? draft.taxPaise : 0,
+    // Money left this request at contract 1.44.0 — see `onsite-draft.ts`. The
+    // guard above still runs: a draft with no total and no tax basis is
+    // incomplete on screen, and the vendor should be stopped here rather than
+    // by a 422.
     stages: toStageRequests(draft.stages),
     inclusions: cleanLines(draft.inclusions),
     exclusions: cleanLines(draft.exclusions),
     warranty_terms: draft.warrantyTerms.trim(),
     valid_until: draft.validUntil,
+    // The remote A5 composer collects no shopping list; blank is the default.
+    material_brand_tier: "",
     ...(input.siteVisitId ? { site_visit_id: input.siteVisitId } : {}),
   };
 }

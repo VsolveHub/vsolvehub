@@ -79,8 +79,8 @@ export interface RequirementQuestionView {
   label: string;
   /** Plain-language help, shown under the control. */
   help?: string;
-  kind: "text" | "number" | "choice" | "boolean";
-  /** Present for `choice` only. */
+  kind: "text" | "number" | "choice" | "multi" | "boolean";
+  /** Present for `choice` and `multi` only. */
   options?: readonly { value: string; label: string; description?: string }[];
   required: boolean;
   /**
@@ -93,6 +93,14 @@ export interface RequirementQuestionView {
    * then choose its own floor rather than assume one.
    */
   minimum?: number;
+  /**
+   * What this question starts on when the Customer has not answered it.
+   *
+   * Published by the catalogue, applied once by the flow. Absent for every question
+   * where no answer is the honest starting state — a default is only defensible where one
+   * answer is the norm and the other is a deliberate choice.
+   */
+  defaultValue?: string | number | boolean;
 }
 
 /**
@@ -111,20 +119,35 @@ function readMinimum(rules: unknown): number | undefined {
 }
 
 /**
- * The question kinds screen 1 has a control for, and the one it does not.
+ * The answer a question starts on, out of the same untyped `validation_rules`.
  *
- * `MULTIPLE_CHOICE` is absent on purpose rather than by omission. The M2
- * validator (`carts.item_inputs.validate_scope`, shared with A1) accepts
- * `INTEGER`, `TEXT`, `BOOLEAN` and `SELECT` — there is no list-valued answer it
- * would take — so a multiple-choice question on an A3/A5 variant is a
- * configuration that cannot be submitted, whatever this screen renders for it.
- * Guessing a control would produce an answer the submit command refuses, with
- * the refusal landing on the Customer.
+ * Catalogue data rather than a screen's memory: "everyone in closed shoes" starts on yes
+ * because that is the norm for catering and setup work, and Operations can change that
+ * without a deploy. Narrowed to the primitives an answer can actually be — a rule shape
+ * this build does not recognise yields `undefined` and the question simply starts
+ * unanswered, which is the safe direction.
+ */
+function readDefault(rules: unknown): string | number | boolean | undefined {
+  if (rules === null || typeof rules !== "object" || Array.isArray(rules)) return undefined;
+  const value = (rules as Record<string, unknown>).default;
+  if (typeof value === "boolean" || typeof value === "string") return value;
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+/**
+ * The question kinds screen 1 has a control for.
+ *
+ * `MULTIPLE_CHOICE` joined with the event-decor redesign (2026-08-29): the M2
+ * validator (`carts.item_inputs.validate_scope`, shared with A1) now accepts a
+ * `MULTI_SELECT` list of option codes, so a multi-select question renders as
+ * multi-select tiles and submits as a string array. A kind neither side knows
+ * still lands in `unsupported` rather than guessing a control.
  */
 const QUESTION_KIND: Record<string, RequirementQuestionView["kind"]> = {
   TEXT: "text",
   NUMBER: "number",
   SINGLE_CHOICE: "choice",
+  MULTIPLE_CHOICE: "multi",
   BOOLEAN: "boolean",
 };
 
@@ -177,8 +200,9 @@ export function toQuestionSet(
       kind,
       required: question.is_required,
       minimum: kind === "number" ? readMinimum(question.validation_rules) : undefined,
+      defaultValue: readDefault(question.validation_rules),
       options:
-        kind === "choice"
+        kind === "choice" || kind === "multi"
           ? question.options.map((option) => ({
               value: option.code,
               label: option.label,
@@ -207,14 +231,6 @@ const FIT_OUT_OPTIONS: RequirementQuestionView["options"] = FIT_OUT_SERVICE_OPTI
  */
 export function selectionOnlyQuestionSet(serviceSlug: string, set: QuestionSet): QuestionSet {
   if (serviceSlug !== "interior-fit-out-project") return set;
-
-  // A catalogue that publishes more than the style question is answering the
-  // brief properly — the space, the size, the budget — and collapsing it would
-  // throw those away and send a vendor the same one-line enquiry this narrowing
-  // was a workaround for. The collapse stays for a variant that still has only
-  // the one question, so an environment that has not been reseeded keeps
-  // working.
-  if (set.questions.length > 1) return set;
 
   const source =
     set.questions.find((question) => question.code === "fit_out_style") ??
@@ -271,6 +287,8 @@ export interface RequestRowView {
   lastActivityAt: string | null;
   /** The server's plain-language reading of the requirement. Never an archetype. */
   lifecycleExplanation: string | null;
+  /** Catalogue category, so the bookings row can resolve the service cover. */
+  categorySlug: string | null;
 }
 
 /* --------------------------------------------------------------------------
@@ -416,6 +434,11 @@ export interface DraftIntent {
   addressId: string | null;
   /** The Customer's local calendar day, recovered from the stored date-time. */
   requestedStart: string | null;
+  /**
+   * The time of day on the same instant, as `HH:MM` local — or null at midnight,
+   * which is how a crew booked by the day rather than the shift is stored.
+   */
+  requestedStartTime: string | null;
   serviceBy: string | null;
   /** Days either side the Customer can move the start. Zero means exact. */
   flexibilityDays: number;
@@ -428,6 +451,7 @@ export function toDraftIntent(draft: RequirementDraft): DraftIntent {
     answers: readAnswers(draft.answers),
     addressId: draft.address_id,
     requestedStart: toLocalInputDate(draft.requested_start),
+    requestedStartTime: toLocalInputTime(draft.requested_start),
     serviceBy: draft.service_by,
     // The integer, which is the source of truth. `is_date_flexible` is the
     // server's own derivation of it (`flexibility_days > 0`) and carries less:
@@ -447,6 +471,17 @@ function toLocalInputDate(value: string | null): string | null {
   const month = `${instant.getMonth() + 1}`.padStart(2, "0");
   const day = `${instant.getDate()}`.padStart(2, "0");
   return `${instant.getFullYear()}-${month}-${day}`;
+}
+
+/** The same instant's time of day, or null at midnight — see `DraftIntent.requestedStartTime`. */
+function toLocalInputTime(value: string | null): string | null {
+  if (value === null) return null;
+  const instant = new Date(value);
+  if (Number.isNaN(instant.getTime())) return null;
+  const hour = instant.getHours();
+  const minute = instant.getMinutes();
+  if (hour === 0 && minute === 0) return null;
+  return `${`${hour}`.padStart(2, "0")}:${`${minute}`.padStart(2, "0")}`;
 }
 
 
@@ -484,6 +519,7 @@ export function toRequestRow(summary: RequirementSummary, title: string): Reques
     closure: toClosureReason(summary.closure_reason),
     lastActivityAt: summary.last_activity_at ?? null,
     lifecycleExplanation: summary.lifecycle_explanation,
+    categorySlug: summary.category_slug?.trim() ? summary.category_slug.trim() : null,
   };
 }
 
@@ -529,6 +565,7 @@ export function toRequestHeader(draft: RequirementDraft, title: string): Request
     closure: null,
     lastActivityAt: null,
     lifecycleExplanation: draft.lifecycle_explanation,
+    categorySlug: draft.category_slug?.trim() ? draft.category_slug.trim() : null,
   };
 }
 

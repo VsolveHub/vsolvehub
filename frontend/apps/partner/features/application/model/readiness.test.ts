@@ -58,6 +58,7 @@ function application(overrides: Partial<Application> = {}): Application {
 function completeApplication(overrides: Partial<Application> = {}): Application {
   return application({
     display_name: "Ramesh K.",
+    experience_years: 5,
     skill_codes: ["electrical"],
     service_variant_ids: ["variant-1"],
     service_area_ids: ["area-1"],
@@ -75,6 +76,7 @@ describe("requirements", () => {
     const outstanding = outstandingRequirements(application());
     expect(outstanding.map((item) => item.code)).toEqual([
       "DISPLAY_NAME",
+      "EXPERIENCE_YEARS",
       "SKILLS",
       "SERVICES",
       "SERVICE_AREAS",

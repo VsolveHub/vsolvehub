@@ -2,8 +2,21 @@
 
 import { describeError } from "@vsolve/query";
 import { Button, EmptyState, ErrorState, Skeleton, buttonStyles } from "@vsolve/ui";
+import { Search } from "lucide-react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { useState } from "react";
 
+import { filterBookingsBySearch } from "@/features/activity/model/booking-search";
+import {
+  BOOKING_STATUS_COPY,
+  countByStatus,
+  engagementSection,
+  groupSection,
+  requestSection,
+  toBookingStatusTab,
+  type BookingStatusTab,
+} from "@/features/activity/model/booking-status";
 import { BookingGroupRow } from "@/features/bookings/view/group-list";
 import { useBookingGroups, type BookingGroup } from "@/features/bookings/queries";
 import { toEngagementLists, type EngagementRowView } from "@/features/engagement/adapters";
@@ -14,62 +27,24 @@ import { useMyRequests, type RequirementSummary } from "@/features/requirement/q
 import { RequestRow } from "@/features/requirement/view/requests-list";
 import { requestHref } from "@/lib/routes";
 
-export type BookingSection = "needs_you" | "active" | "past";
+import { BookingStatusTabs } from "./booking-status-tabs";
+import { BookingsSearchField } from "./bookings-search-field";
 
-const CLOSED_REQUESTS: ReadonlySet<RequirementSummary["status"]> = new Set([
-  "CLOSED_NO_SUPPLY",
-  "CLOSED_SLA_BREACH",
-  "CLOSED_EXPIRED",
-  "CLOSED_ABANDONED",
-  "CLOSED_COMPLETE",
-  "CLOSED_CANCELLED",
-]);
-
-export function requestSection(status: RequirementSummary["status"]): BookingSection {
-  if (CLOSED_REQUESTS.has(status)) return "past";
-  if (status === "DRAFT" || status === "QUOTES_READY" || status === "UNLOCKED") {
-    return "needs_you";
-  }
-  return "active";
-}
-
-export function engagementSection(row: EngagementRowView): BookingSection {
-  if (
-    row.nextAction === "review_stage" ||
-    row.nextAction === "fund_stage" ||
-    row.nextAction === "accept_completion"
-  ) {
-    return "needs_you";
-  }
-  if (row.status === "COMPLETED" || row.status === "CLOSED" || row.status === "CANCELLED") {
-    return "past";
-  }
-  return "active";
-}
-
-export function groupSection(group: BookingGroup): BookingSection {
-  if (group.status === "PAYMENT_PENDING" || group.status === "REPLAN_REQUIRED") {
-    return "needs_you";
-  }
-  if (
-    group.status === "COMPLETED" ||
-    group.status === "CANCELLED" ||
-    group.status === "EXPIRED" ||
-    group.status === "FAILED"
-  ) {
-    return "past";
-  }
-  return "active";
-}
+export {
+  engagementSection,
+  groupSection,
+  requestSection,
+} from "@/features/activity/model/booking-status";
+export type { BookingStatusTab as BookingSection } from "@/features/activity/model/booking-status";
 
 export function requestBelongsInBookings(requirement: RequirementSummary): boolean {
   return requirement.engagement_id === null;
 }
 
 type BookingItem =
-  | { kind: "request"; key: string; section: BookingSection; sortAt: string; row: RequestRowView }
-  | { kind: "engagement"; key: string; section: BookingSection; sortAt: string; row: EngagementRowView }
-  | { kind: "group"; key: string; section: BookingSection; sortAt: string; group: BookingGroup };
+  | { kind: "request"; key: string; section: BookingStatusTab; sortAt: string; row: RequestRowView }
+  | { kind: "engagement"; key: string; section: BookingStatusTab; sortAt: string; row: EngagementRowView }
+  | { kind: "group"; key: string; section: BookingStatusTab; sortAt: string; group: BookingGroup };
 
 function byNewest(a: BookingItem, b: BookingItem): number {
   return Date.parse(b.sortAt) - Date.parse(a.sortAt);
@@ -123,21 +98,23 @@ function itemsFrom(
   };
 }
 
-const SECTION_COPY: Record<BookingSection, { title: string; description: string }> = {
-  needs_you: { title: "Needs you", description: "A decision or payment is waiting for you." },
-  active: { title: "Upcoming and active", description: "Visits, requests and work still moving." },
-  past: { title: "Past", description: "Finished, cancelled or closed work." },
-};
-
 export function ActivityScreen() {
   const requirementsQuery = useMyRequests();
   const engagementsQuery = useEngagements();
   const groupsQuery = useBookingGroups();
+  const searchParams = useSearchParams();
+  const selectedTab = toBookingStatusTab(searchParams.get("status"));
+  const [searchQuery, setSearchQuery] = useState("");
 
   const requirements = requirementsQuery.data ?? [];
   const engagements = (engagementsQuery.data?.pages ?? []).flatMap((page) => page.results);
   const groups = (groupsQuery.data?.pages ?? []).flatMap((page) => page.results);
   const { items, unknownEngagements } = itemsFrom(requirements, engagements, groups);
+  const counts = countByStatus(items);
+  const tabItems = items.filter((item) => item.section === selectedTab);
+  const visibleItems = filterBookingsBySearch(tabItems, searchQuery);
+  const isSearching = searchQuery.trim().length > 0;
+  const copy = BOOKING_STATUS_COPY[selectedTab];
   const isFirstLoad =
     items.length === 0 &&
     (requirementsQuery.isPending || engagementsQuery.isPending || groupsQuery.isPending);
@@ -149,23 +126,22 @@ export function ActivityScreen() {
   );
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col px-4 pb-16 pt-6 sm:px-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-text">Bookings</h1>
-          <p className="mt-1 max-w-xl text-sm leading-6 text-text-secondary">
-            Everything you have booked or asked us to arrange, in one place.
-          </p>
+    <div className="mx-auto flex w-full max-w-4xl flex-col px-4 pb-16 pt-6 sm:px-6 lg:px-8">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-6">
+        <h1 className="shrink-0 text-2xl font-extrabold tracking-tight text-navy-900 sm:text-3xl">
+          Your Bookings
+        </h1>
+        <div className="w-full min-w-0 md:max-w-md md:flex-1 lg:max-w-lg">
+          <BookingsSearchField value={searchQuery} onChange={setSearchQuery} />
         </div>
-        <Link href="/requests/new" className={buttonStyles()}>
-          Describe a job
-        </Link>
       </div>
 
       {hasDirectPay ? (
-        <details className="mt-4 rounded-control border border-line bg-surface px-4 py-3 text-sm text-text-secondary">
-          <summary className="cursor-pointer font-semibold text-text">How payments work</summary>
-          <p className="mt-2 leading-6">
+        <details className="mt-4 rounded-control border border-line bg-surface px-4 py-3 text-sm text-text-secondary shadow-card transition-all">
+          <summary className="cursor-pointer font-bold text-navy-900 flex items-center gap-2">
+            <span>ℹ️</span> How payments work
+          </summary>
+          <p className="mt-2 leading-relaxed text-xs sm:text-sm">
             Some crew bookings are paid directly to the professional. Vsolve does not hold those
             service payments; projects funded through Vsolve show their funded amount on the card.
           </p>
@@ -175,7 +151,7 @@ export function ActivityScreen() {
       {isFirstLoad ? (
         <div className="mt-6 flex flex-col gap-3" aria-label="Loading your bookings">
           {Array.from({ length: 4 }, (_, index) => (
-            <Skeleton key={index} className="h-32 w-full" />
+            <Skeleton key={index} className="h-36 w-full rounded-card" />
           ))}
         </div>
       ) : null}
@@ -196,40 +172,48 @@ export function ActivityScreen() {
         </div>
       ) : null}
 
-      {!isFirstLoad && items.length === 0 && errors.length === 0 ? (
+      {!isFirstLoad ? <BookingStatusTabs selected={selectedTab} counts={counts} /> : null}
+
+      {!isFirstLoad && !isSearching && tabItems.length === 0 && errors.length === 0 ? (
         <div className="mt-8">
           <EmptyState
-            title="No bookings yet"
-            description="Describe what you need and it will stay here from the first request to the finished work."
+            title={copy.emptyTitle}
+            description={copy.emptyDescription}
             action={
-              <Link href="/catalog" className={buttonStyles({ variant: "outline" })}>
-                Browse services
-              </Link>
+              selectedTab === "active" ? (
+                <Link href="/catalog" className={buttonStyles({ variant: "outline" })}>
+                  Browse services
+                </Link>
+              ) : undefined
             }
           />
         </div>
       ) : null}
 
-      {(["needs_you", "active", "past"] as const).map((section) => {
-        const sectionItems = items.filter((item) => item.section === section);
-        if (sectionItems.length === 0) return null;
-        const copy = SECTION_COPY[section];
-        return (
-          <section key={section} aria-labelledby={`bookings-${section}`} className="mt-8">
-            <div className="mb-3">
-              <h2 id={`bookings-${section}`} className="text-lg font-bold text-text">
-                {copy.title}
-              </h2>
-              <p className="mt-0.5 text-sm text-text-secondary">{copy.description}</p>
-            </div>
-            <ul className="flex list-none flex-col gap-3 p-0">
-              {sectionItems.map((item) => (
-                <BookingTimelineRow key={item.key} item={item} />
-              ))}
-            </ul>
-          </section>
-        );
-      })}
+      {!isFirstLoad && isSearching && visibleItems.length === 0 ? (
+        <div className="mt-8" role="status">
+          <EmptyState
+            title="No bookings found"
+            description="Try searching with a different service name, booking ID, or keyword."
+            icon={<Search className="size-8" strokeWidth={1.6} />}
+          />
+        </div>
+      ) : null}
+
+      {!isFirstLoad && visibleItems.length > 0 ? (
+        <section
+          id="booking-status-panel"
+          role="tabpanel"
+          aria-labelledby={`booking-tab-${selectedTab}`}
+          className="mt-5 sm:mt-6"
+        >
+          <ul className="flex list-none flex-col gap-3.5 p-0">
+            {visibleItems.map((item) => (
+              <BookingTimelineRow key={item.key} item={item} />
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {unknownEngagements > 0 ? (
         <p className="mt-6 rounded-control border border-line bg-surface-sunken p-4 text-sm leading-6 text-text-secondary">
@@ -273,7 +257,7 @@ function BookingTimelineRow({ item }: { item: BookingItem }) {
     <RequestRow
       request={item.row}
       href={requestHref(item.row.id)}
-      isClosed={item.section === "past"}
+      isClosed={item.section === "past" || item.section === "cancelled"}
     />
   );
 }

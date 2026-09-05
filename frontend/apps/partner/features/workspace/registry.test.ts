@@ -39,11 +39,12 @@ describe("TAP_FIRST_NAV", () => {
   // gating, notification routing, capability-request copy) still runs on —
   // see `TAP_FIRST_NAV`'s own doc comment in `registry.ts` for why that
   // stays rather than being deleted alongside the switcher.
-  it("has exactly the three tap-first destinations, in order", () => {
+  it("has exactly the tap-first destinations, in order", () => {
     expect(TAP_FIRST_NAV.map((item) => item.href)).toEqual([
       "/home",
       "/work/all",
       "/money",
+      "#notifications",
       "/me",
     ]);
   });

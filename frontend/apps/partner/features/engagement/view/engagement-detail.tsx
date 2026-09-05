@@ -74,8 +74,6 @@ const TONE = {
 export interface EngagementDetailProps {
   readonly engagementId: string;
   readonly wording: StageWording;
-  /** `/workforce/shifts` or `/projects/stages`. */
-  readonly basePath: string;
   /** Which archetype's Wave III tails to name. */
   readonly workspace: "workforce" | "project";
   /** When present, render one stage as a focused workspace rather than the whole job. */
@@ -85,15 +83,16 @@ export interface EngagementDetailProps {
 export function EngagementDetail({
   engagementId,
   wording,
-  basePath,
   workspace,
   focusStageId,
 }: EngagementDetailProps) {
   const query = usePartnerEngagement(engagementId);
 
+  // The merged WORK stack is where every engagement is listed now; the old
+  // per-workspace lists are 308 redirects to it.
   const back = (
     <Link
-      href={basePath}
+      href="/work"
       className="inline-flex min-h-11 w-fit items-center gap-2 rounded-control text-sm font-semibold text-action focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
     >
       <ArrowLeft size={16} aria-hidden />
@@ -166,9 +165,11 @@ export function EngagementDetail({
       <header className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-xl font-semibold text-text">
-            {focusedStage === null
-              ? wording.parent.charAt(0).toUpperCase() + wording.parent.slice(1)
-              : "Stage workspace"}
+            {focusedStage !== null
+              ? "Stage workspace"
+              : engagement.service_name?.trim()
+                ? engagement.service_name.trim()
+                : wording.parent.charAt(0).toUpperCase() + wording.parent.slice(1)}
           </h1>
           {status ? (
             <Badge tone={TONE[status.tone]} dot>
@@ -207,7 +208,7 @@ export function EngagementDetail({
             // this is the way in. An A5 milestone's whole surface is already on
             // the card above it.
             dayHref={
-              workspace === "workforce" ? `${basePath}/${engagement.id}/days/${stage.id}` : null
+              workspace === "workforce" ? `/work/jobs/${engagement.id}/days/${stage.id}` : null
             }
             compact={focusedStage !== null}
             workspace={workspace}

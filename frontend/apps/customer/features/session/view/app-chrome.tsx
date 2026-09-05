@@ -1,10 +1,19 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useEffect } from "react";
+import { usePathname } from "next/navigation";
 
 import { useIsViewportClaimed } from "@/lib/focus-mode";
 
 import { BottomNav, SiteHeader } from "./site-header";
+import { SiteFooter } from "./site-footer";
+import { FixedBackButton } from "./fixed-back-button";
+import {
+  appChromeLayout,
+  CUSTOMER_VIEWPORT_WIDTH_CLASS,
+  showFixedBackButton,
+} from "./app-chrome-layout";
 
 /**
  * The app's navigation, except where a screen has taken the viewport.
@@ -29,19 +38,77 @@ import { BottomNav, SiteHeader } from "./site-header";
  */
 export function AppChrome({ children }: { children: ReactNode }) {
   const claimed = useIsViewportClaimed();
+  const pathname = usePathname();
+  const chromeLayout = appChromeLayout(pathname);
+  const hideMobileChrome = chromeLayout.hideMobileChrome === true;
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0 });
+  }, [pathname]);
 
   // A focused screen supplies its own header, its own scroll region and its own
   // docked action. It gets the viewport untouched — no chrome, and no padding
   // reserved for chrome that is not there.
-  if (claimed) return <>{children}</>;
+  //
+  // The design gallery is the same case reached a different way: each page there
+  // renders a whole artboard, app bar and tab bar included, so the real chrome
+  // around it would draw a second header above the drawn one and a second tab
+  // bar below it. It is a path check rather than a `claimViewport()` call
+  // because those pages are server components with nothing to run the claim.
+  if (claimed || pathname.startsWith("/design/")) {
+    // Claimed screens (`MobileScreen`) already carry a back control in their
+    // own header. A second fixed circle stacks on the title — `/requests/book/*`
+    // used to hit that because the old exception only matched `/book/*`.
+    const showFixedBack = showFixedBackButton(pathname, claimed);
+
+    return (
+      <>
+        {showFixedBack ? (
+          <FixedBackButton
+            href={pathname.startsWith("/design/") ? "/" : undefined}
+            label={pathname.startsWith("/design/") ? "Back to home" : "Go back"}
+            className="md:hidden"
+          />
+        ) : null}
+        {children}
+      </>
+    );
+  }
 
   return (
     <>
-      <SiteHeader />
-      {/* Clears the fixed tab bar (56px) plus whatever the device reserves for
-          its home indicator. Above `md` the bar is gone and so is the padding. */}
-      <div className="pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0">{children}</div>
-      <BottomNav />
+      {hideMobileChrome ? (
+        <FixedBackButton
+          href={chromeLayout.mobileBackHref}
+          label={chromeLayout.mobileBackLabel}
+          className="md:hidden"
+        />
+      ) : null}
+      <div className={hideMobileChrome ? "hidden md:block" : undefined}>
+        <SiteHeader />
+      </div>
+      {/* Clears the fixed tab bar (64px) plus safe-area-inset-bottom on mobile across pages. Above `md` the bar is gone and so is the padding. */}
+      <div
+        className={`${CUSTOMER_VIEWPORT_WIDTH_CLASS} ${
+          hideMobileChrome
+            ? "pt-14 md:pt-0 pb-0 md:pb-0"
+            : "pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0"
+        }`}
+      >
+        <div className={chromeLayout.contentMinHeightClass}>
+          {children}
+        </div>
+        {chromeLayout.hideMobileFooter ? (
+          <div className="hidden md:block">
+            <SiteFooter />
+          </div>
+        ) : (
+          <SiteFooter />
+        )}
+      </div>
+      <div className={hideMobileChrome ? "hidden md:block" : undefined}>
+        <BottomNav />
+      </div>
     </>
   );
 }

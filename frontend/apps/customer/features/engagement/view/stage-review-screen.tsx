@@ -10,6 +10,7 @@ import {
   type StageDisputeReason,
 } from "@vsolve/query";
 import {
+  Badge,
   Button,
   ConfirmAction,
   ErrorState,
@@ -23,9 +24,10 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { AccessRefusal } from "@/features/access/view/access-refusal";
+import { toShiftDayView, type ShiftCrewMemberView, type ShiftDayView } from "@/features/shift-day/adapters";
 import { useShiftDay } from "@/features/shift-day/queries";
-import { ShiftDayPanel } from "@/features/shift-day/view/shift-day-panel";
-import { toEngagementView, toStandaloneStageView, type StageView } from "../adapters";
+import { NotRightSheet } from "@/features/shift-day/view/not-right-sheet";
+import { toAmendmentsView, toEngagementView, toStandaloneStageView, type StageView } from "../adapters";
 import {
   DISPUTE_REASONS,
   approvalMoneyEffect,
@@ -36,10 +38,12 @@ import {
   useApproveStage,
   useDisputeStage,
   useEngagement,
+  useEngagementAmendments,
   useRequestCorrection,
   useStage,
 } from "../queries";
 import { StageEvidenceList } from "./stage-evidence";
+import { TodayCard } from "./today-card";
 import {
   StageKindBadge,
   StageStatusBadge,
@@ -152,6 +156,10 @@ export function StageReviewScreen({
   const attendanceDecisionOpen =
     shiftDayQuery.data !== undefined && canRespondToAttendance(shiftDayQuery.data);
 
+  const amendmentsQuery = useEngagementAmendments(isShiftDay ? engagementId : null);
+  const amendments = amendmentsQuery.data === undefined ? null : toAmendmentsView(amendmentsQuery.data);
+  const [notRightOpen, setNotRightOpen] = useState(false);
+
   if (stageQuery.isPending) {
     return (
       <Wrapper engagementHref={engagementHref} nouns={nouns}>
@@ -175,6 +183,61 @@ export function StageReviewScreen({
           onAction={() => void stageQuery.refetch()}
           reference={presentation.reference}
         />
+      </Wrapper>
+    );
+  }
+
+  // Day detail, screen 10. On a workforce booking the stage **is** the day, so
+  // this route shows the same `TodayCard` the hub shows plus "who came" — none
+  // of the review-clock, money-panel or three-action machinery below, which is
+  // the A5 milestone's own vocabulary. The A5 branch is untouched past this.
+  if (isShiftDay && engagement !== null) {
+    const pendingAmendment =
+      amendments?.live !== null && amendments?.live !== undefined && amendments.live.stageId === stageId
+        ? amendments.live
+        : null;
+    const refresh = () => {
+      void stageQuery.refetch();
+      void engagementQuery.refetch();
+      void shiftDayQuery.refetch();
+    };
+    const shift = shiftDayQuery.data === undefined ? null : toShiftDayView(shiftDayQuery.data);
+
+    return (
+      <Wrapper engagementHref={engagementHref} nouns={nouns}>
+        <header>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <h1 className="text-xl font-semibold text-text">{stage.label}</h1>
+            <StageStatusBadge status={stage.status} />
+          </div>
+          {stage.scheduledOn !== null ? (
+            <p className="mt-1 text-sm text-text-secondary">{stage.scheduledOn}</p>
+          ) : null}
+        </header>
+
+        <div className="mt-4">
+          <TodayCard
+            engagementId={engagementId}
+            requirementId={engagement.requirementId}
+            day={stage}
+            pendingAmendment={pendingAmendment}
+            onDone={refresh}
+            onNotRight={() => setNotRightOpen(true)}
+          />
+        </div>
+
+        {shift !== null ? <WhoCameList shift={shift} /> : null}
+
+        {shift !== null ? (
+          <NotRightSheet
+            open={notRightOpen}
+            onOpenChange={setNotRightOpen}
+            engagementId={engagementId}
+            day={shift}
+            amendmentHref={`${engagementHref}#amendments-heading`}
+            onDone={refresh}
+          />
+        ) : null}
       </Wrapper>
     );
   }
@@ -244,17 +307,6 @@ export function StageReviewScreen({
           void stageQuery.refetch();
           void engagementQuery.refetch();
         }}
-      />
-
-      {/* `M2-FE-510`, `514`, `515` — the Customer's evening. On a workforce
-          booking the stage **is** the day, so this is the same screen rather
-          than a second address for one evening. It renders nothing on a
-          project milestone. */}
-      <ShiftDayPanel
-        engagementId={engagementId}
-        stageId={stageId}
-        enabled={isShiftDay}
-        amendmentHref={`${engagementHref}#amendments-heading`}
       />
     </Wrapper>
   );
@@ -457,6 +509,53 @@ function DisputedPanel({ stage, nouns }: { stage: StageView; nouns: ModeNouns })
         <p className="mt-2 text-sm text-text-secondary">Raised {stage.disputedAt}.</p>
       ) : null}
     </section>
+  );
+}
+
+/**
+ * "Who came" — the crew, at the disclosure a Customer is entitled to. Screen
+ * 10's day detail, below `TodayCard`. An empty crew is a real state: the
+ * supervisor names the crew before they arrive.
+ */
+function WhoCameList({ shift }: { shift: ShiftDayView }) {
+  return (
+    <section aria-labelledby="who-came-heading" className="mt-6">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <h2 id="who-came-heading" className="text-lg font-semibold text-text">
+          Who came
+        </h2>
+        {shift.expectedCount !== null ? <Badge tone="neutral">{shift.expectedCount} booked</Badge> : null}
+      </div>
+
+      {!shift.hasCrew ? (
+        <p className="mt-2 text-sm leading-6 text-text-secondary">
+          The supervisor names the crew before they arrive.
+        </p>
+      ) : (
+        <ul className="mt-3 flex list-none flex-col gap-2 p-0">
+          {shift.crew.map((member) => (
+            <WhoCameRow key={member.rowKey} member={member} />
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function WhoCameRow({ member }: { member: ShiftCrewMemberView }) {
+  return (
+    <li className="flex items-start justify-between gap-3 rounded-card border border-line p-3">
+      <div className="min-w-0">
+        <p className="font-medium text-text">{member.displayName}</p>
+        {member.phoneMasked !== null ? (
+          <p className="mt-0.5 text-sm text-text-secondary">{member.phoneMasked}</p>
+        ) : null}
+      </div>
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
+        {member.isSupervisor ? <Badge tone="info">Supervisor</Badge> : null}
+        {member.isVerified ? <Badge tone="success">Documents checked</Badge> : null}
+      </div>
+    </li>
   );
 }
 

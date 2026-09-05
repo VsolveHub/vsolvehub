@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@vsolve/ui";
+import { Button, type ButtonProps } from "@vsolve/ui";
 import type { ReactNode } from "react";
 
 /**
@@ -20,6 +20,8 @@ export interface DetailRowProps {
   children: ReactNode;
   actionLabel?: string;
   onAction?: () => void;
+  /** Defaults to outline. Primary is for the empty Address row's Add address CTA. */
+  actionVariant?: ButtonProps["variant"];
   isFirst?: boolean;
 }
 
@@ -29,6 +31,7 @@ export function DetailRow({
   children,
   actionLabel,
   onAction,
+  actionVariant = "outline",
   isFirst = false,
 }: DetailRowProps) {
   return (
@@ -49,7 +52,7 @@ export function DetailRow({
       </div>
 
       {actionLabel !== undefined && onAction !== undefined ? (
-        <Button size="sm" variant="outline" className="shrink-0" onClick={onAction}>
+        <Button size="sm" variant={actionVariant} className="shrink-0" onClick={onAction}>
           {actionLabel}
         </Button>
       ) : null}

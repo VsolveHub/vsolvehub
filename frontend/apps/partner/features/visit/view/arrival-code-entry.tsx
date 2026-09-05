@@ -38,6 +38,14 @@ export interface ArrivalCodeEntryProps {
   error?: string | null;
   /** Matches the server's `OTP_CODE_LENGTH`. */
   codeLength?: number;
+  /**
+   * Help text under the label.
+   *
+   * Overridable because the caller may already have named the customer in its
+   * own heading, and the default then says "ask the customer" directly beneath
+   * "Ask Anthapu" — one instruction, printed twice, in two registers.
+   */
+  description?: string;
 }
 
 export function ArrivalCodeEntry({
@@ -45,6 +53,7 @@ export function ArrivalCodeEntry({
   isSubmitting,
   error = null,
   codeLength = 6,
+  description,
 }: ArrivalCodeEntryProps) {
   const [code, setCode] = useState("");
   // Digits only, and trimmed to length as they type. A vendor reading a code
@@ -65,7 +74,10 @@ export function ArrivalCodeEntry({
       <Field
         label="Arrival code"
         showOptional={false}
-        description={`Ask the customer for the ${codeLength}-digit code on their screen. Entering it starts the visit.`}
+        description={
+          description ??
+          `Ask the customer for the ${codeLength}-digit code on their screen. Entering it starts the visit.`
+        }
         error={error ?? undefined}
       >
         <Input
@@ -83,13 +95,15 @@ export function ArrivalCodeEntry({
         />
       </Field>
 
+      {/* Not "I've arrived" any more: the vendor said that on the previous
+          screen, and this button does the thing that screen only claimed. */}
       <Button
         type="submit"
         disabled={!canSubmit}
         loading={isSubmitting}
         loadingLabel="Starting the visit"
       >
-        I&rsquo;ve arrived
+        Start the visit
       </Button>
     </form>
   );

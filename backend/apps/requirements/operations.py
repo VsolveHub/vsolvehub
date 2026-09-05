@@ -29,7 +29,7 @@ from django.utils import timezone
 from apps.cases.models import TERMINAL_CASE_STATUSES, OperationsCase
 from apps.foundation.services import enqueue_outbox_event
 from apps.identity.models import User
-from apps.partners.models import PartnerCrewMembership
+from apps.partners.models import CrewMember, PartnerCrewMembership
 from apps.requirements import disputes, matching, metrics, pricing, proposals, services
 from apps.requirements.exceptions import (
     PolicyUnavailableError,
@@ -720,16 +720,99 @@ def verify_crew_documents(
 
 
 def crew_memberships_awaiting_verification(
-    *, partner_id: uuid.UUID | None = None
+    *, partner_id: uuid.UUID | None = None, state: str = "PENDING"
 ) -> list[PartnerCrewMembership]:
-    """The queue the command above works from. Unverified, active, oldest first."""
+    """The queue the command above works from. Active memberships, oldest first.
+
+    `state` exists because `verify_crew_documents` can un-verify and nothing could reach a
+    verified membership to do it. A queue that shows only unverified people is the right *default*
+    — it is a worklist, and a reviewer opening it wants what is waiting — but it made the negative
+    half of the command unreachable from any screen, which is how a supported operation becomes an
+    orphan. `VERIFIED` is how a reviewer finds somebody whose ID turned out to be expired.
+    """
     queryset = PartnerCrewMembership.objects.filter(
         status=PartnerCrewMembership.Status.ACTIVE,
-        documents_verified_at__isnull=True,
     ).select_related("partner", "crew_member")
+    if state == "PENDING":
+        queryset = queryset.filter(documents_verified_at__isnull=True)
+    elif state == "VERIFIED":
+        queryset = queryset.filter(documents_verified_at__isnull=False)
     if partner_id is not None:
         queryset = queryset.filter(partner_id=partner_id)
-    return list(queryset.order_by("added_at")[:200])
+    # Verified rows are ordered by when they were verified, not when they were added: a reviewer
+    # looking for a mistake is looking for a recent decision, and `added_at` would bury it under
+    # everyone registered since the platform opened.
+    ordering = "added_at" if state == "PENDING" else "-documents_verified_at"
+    return list(queryset.order_by(ordering)[:200])
+
+
+@transaction.atomic
+def correct_crew_gender(
+    *,
+    membership_id: uuid.UUID,
+    actor: User,
+    gender: str,
+    reason: str,
+) -> PartnerCrewMembership:
+    """Settle a disputed crew gender. The arbiter `set_crew_gender` said only a person could be.
+
+    `CrewMember.gender` is one row per person across every agency, so the Partner-facing rule is
+    first-write-wins: a contradicting write is refused with `m2_crew_gender_conflict` rather than
+    silently flipping which gendered slots another agency can fill. That rule is right and it had
+    no exit. The refusal message says *"contact support if that is wrong"* and support had no
+    endpoint — so a worker recorded wrongly by whichever agency typed first lost gendered work
+    permanently, and the second agency's only recourse was to stop using the platform for them.
+
+    So the correction is here, on the Operations surface, and not on the Partner one:
+
+    * **A reason, always.** Unlike a first recording, this overwrites something another agency is
+      already being dispatched against. There is no version of this where "why" is optional.
+    * **No clearing.** Blank is refused for the same reason `set_crew_gender` refuses it: it would
+      silently re-open every gendered slot the worker had been filling, and there is no honest
+      screen for "I would like to un-know this". `UNDISCLOSED` is the value for a worker who
+      declined, and it is selectable here.
+    * **Addressed by membership.** Operations arrives from the roster row they are looking at, and
+      `crew_member_id` is deliberately absent from every published shape.
+    """
+    membership = (
+        PartnerCrewMembership.objects.select_for_update(of=("self",))
+        .select_related("partner", "crew_member")
+        .filter(pk=membership_id)
+        .first()
+    )
+    if membership is None:
+        raise RequirementNotFoundError()
+    if gender not in CrewMember.Gender.values:
+        raise RequirementTransitionError("Choose what this worker is recorded as.")
+    if not reason.strip():
+        raise RequirementTransitionError("Correcting a recorded gender needs a reason.")
+
+    crew_member = membership.crew_member
+    previous = crew_member.gender
+    if previous == gender:
+        return membership
+    crew_member.gender = gender
+    crew_member.save(update_fields=("gender", "updated_at"))
+
+    now = timezone.now()
+    enqueue_outbox_event(
+        aggregate_type="partner",
+        aggregate_id=membership.partner_id,
+        event_type="m2.crew.gender_corrected",
+        idempotency_key=f"crew-gender:{membership.id}:{now.isoformat()}",
+        payload={
+            "partner_id": str(membership.partner_id),
+            "membership_id": str(membership.id),
+            # The previous value is the whole point of the record: this write is only ever made
+            # because two agencies disagreed, and an event that omits what it overwrote cannot
+            # answer the question the dispute will be reopened with.
+            "previous_gender": previous,
+            "gender": gender,
+            "actor_id": str(actor.id),
+            "reason": reason.strip()[:240],
+        },
+    )
+    return membership
 
 
 # ---------------------------------------------------------------------------

@@ -6,6 +6,8 @@ from typing import Final
 from django.conf import settings
 from django.db import models
 
+from apps.catalog.icons import ServiceIconKey
+
 
 class Category(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -13,6 +15,9 @@ class Category(models.Model):
     name = models.CharField(max_length=120)
     description = models.TextField(blank=True)
     icon_key = models.CharField(max_length=80, blank=True)
+    #: Photographic tile for browse surfaces (2026-08-26 owner decision: images, not icons).
+    #: Blank is honest — the client falls back to the icon rather than a wrong picture.
+    image_url = models.URLField(max_length=500, blank=True, default="")
     display_order = models.PositiveSmallIntegerField(default=0)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -36,6 +41,12 @@ class Subcategory(models.Model):
     slug = models.SlugField(max_length=100)
     name = models.CharField(max_length=120)
     description = models.TextField(blank=True)
+    #: The "Select a service" tile. Subcategories are the tile level of the browse
+    #: hierarchy (category page -> tile grid -> that tile's services), so they carry
+    #: their own glyph and photo; a free CharField like `Category.icon_key`, not the
+    #: constrained `ServiceIconKey`, because tiles outnumber the curated glyph set.
+    icon_key = models.CharField(max_length=80, blank=True, default="")
+    image_url = models.URLField(max_length=500, blank=True, default="")
     display_order = models.PositiveSmallIntegerField(default=0)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -69,6 +80,11 @@ class Service(models.Model):
     )
     slug = models.SlugField(max_length=140, unique=True)
     name = models.CharField(max_length=160)
+    icon_key = models.CharField(
+        max_length=40,
+        choices=ServiceIconKey.choices,
+        default=ServiceIconKey.SERVICE,
+    )
     short_description = models.CharField(max_length=240)
     description = models.TextField(blank=True)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.DRAFT)
@@ -78,6 +94,12 @@ class Service(models.Model):
 
     class Meta:
         ordering = ("display_order", "name")
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(icon_key__in=ServiceIconKey.values),
+                name="catalog_service_icon_key_supported",
+            ),
+        ]
 
     def __str__(self) -> str:
         return self.name
@@ -112,6 +134,9 @@ class ServiceVariant(models.Model):
     maximum_duration_minutes = models.PositiveSmallIntegerField(default=480)
     required_skill_code = models.SlugField(max_length=100)
     tax_category_code = models.SlugField(max_length=100)
+    #: Variant-level photo (an AC tonnage, a hair length). Blank falls back to the
+    #: service's COVER media on the client, so only genuinely distinct variants need one.
+    image_url = models.URLField(max_length=500, blank=True, default="")
     display_order = models.PositiveSmallIntegerField(default=0)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -269,6 +294,13 @@ class M2VariantConfiguration(models.Model):
         ACTIVE = "ACTIVE", "Active"
         RETIRED = "RETIRED", "Retired"
 
+    class MaterialFulfilmentMode(models.TextChoices):
+        """Who owns procurement for an estimate, independently of its A3/A5 lifecycle."""
+
+        NOT_APPLICABLE = "NOT_APPLICABLE", "Not applicable"
+        CUSTOMER_PROCURES = "CUSTOMER_PROCURES", "Customer procures"
+        PARTNER_TURNKEY = "PARTNER_TURNKEY", "Partner supplies turnkey"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     variant = models.ForeignKey(
         ServiceVariant,
@@ -292,6 +324,19 @@ class M2VariantConfiguration(models.Model):
         on_delete=models.PROTECT,
         related_name="m2_variant_configurations",
     )
+    #: The **trade** this variant's estimates are priced from — the `Skill.code` whose work-item
+    #: catalogue (`requirements.WorkItem`) the composer opens: `electrician` for a rewiring, a
+    #: consultation and a day-hire alike. Distinct from `required_skill_code`, which is the
+    #: dispatch capability and is per service. Blank falls back to `required_skill_code`.
+    pricing_skill_code = models.SlugField(max_length=100, blank=True)
+    #: Procurement responsibility is a commercial product decision, not an inference from the
+    #: service slug or category. A3 day-hire explicitly uses `NOT_APPLICABLE`; every A5 variant is
+    #: configured as either customer-procured or Partner-turnkey. There is deliberately no model
+    #: default: silently choosing the wrong party changes who must spend money.
+    material_fulfilment_mode = models.CharField(
+        max_length=24,
+        choices=MaterialFulfilmentMode.choices,
+    )
     #: Hours from submission to the first usable quote, and to the full set. Owner decision 2.
     first_quote_sla_hours = models.PositiveSmallIntegerField(null=True, blank=True)
     quote_delivery_sla_hours = models.PositiveSmallIntegerField(null=True, blank=True)
@@ -312,6 +357,14 @@ class M2VariantConfiguration(models.Model):
     #: Business hours from submission to the first *confirmed visit slot* (A5's answer to
     #: `first_quote_sla_hours`). Owner decision 2.
     first_visit_sla_hours = models.PositiveSmallIntegerField(null=True, blank=True)
+    #: **Seconds**, not business hours — the fixed-visit offer's answer window (owner decision,
+    #: 2026-09-01). A fixed-visit offer is a yes/no on a Customer-chosen time, broadcast
+    #: first-accept-wins, and it borrowed `first_quote_sla_hours` — a clock sized for *writing a
+    #: quote* — which handed a 30-second decision a two-day countdown and held the Customer in
+    #: `SEARCHING` for days. Same reasoning as `crew_offer_timeout_seconds`: an instant product
+    #: cannot wait for a service area to open tomorrow morning. Null keeps the old ceiling —
+    #: honest, but slow — rather than inventing a number nobody approved.
+    fixed_visit_offer_timeout_seconds = models.PositiveIntegerField(null=True, blank=True)
     #: Business hours from submission by which every plan slot should be filled. An unfilled share
     #: auto-refunds once this passes. Owner decision 2.
     visit_plan_fill_sla_hours = models.PositiveSmallIntegerField(null=True, blank=True)

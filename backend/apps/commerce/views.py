@@ -33,6 +33,7 @@ from apps.commerce.serializers import (
     WebhookAcceptedSerializer,
 )
 from apps.commerce.services import (
+    attempt_belongs_to,
     initiate_payment_attempt,
     reconcile_payment_attempt,
     reconcile_refund,
@@ -75,6 +76,16 @@ def _payment_attempt_queryset() -> QuerySet[PaymentAttempt]:
         "allocations__fulfilment_unit",
         "allocations__fulfilment_line",
     )
+
+
+def _owned_attempt_or_404(*, attempt_id: UUID, customer_id: UUID) -> PaymentAttempt:
+    """The attempt, if this Customer owns it through its checkout or its M2 aggregate."""
+    attempt = get_object_or_404(
+        _payment_attempt_queryset().select_related("checkout"), id=attempt_id
+    )
+    if not attempt_belongs_to(attempt=attempt, customer_id=customer_id):
+        raise NotFound()
+    return attempt
 
 
 class PaymentAttemptCollectionView(APIView):
@@ -128,11 +139,7 @@ class PaymentAttemptDetailView(APIView):
     @extend_schema(tags=["Payments"], responses={200: PaymentAttemptSerializer})
     def get(self, request: Request, attempt_id: UUID) -> Response:
         user = cast(User, request.user)
-        attempt = get_object_or_404(
-            _payment_attempt_queryset(),
-            id=attempt_id,
-            checkout__customer=user,
-        )
+        attempt = _owned_attempt_or_404(attempt_id=attempt_id, customer_id=user.id)
         return Response(PaymentAttemptSerializer(attempt).data)
 
 
@@ -209,11 +216,7 @@ class PaymentAttemptReconcileView(APIView):
     )
     def post(self, request: Request, attempt_id: UUID) -> Response:
         user = cast(User, request.user)
-        attempt = get_object_or_404(
-            PaymentAttempt,
-            id=attempt_id,
-            checkout__customer=user,
-        )
+        attempt = _owned_attempt_or_404(attempt_id=attempt_id, customer_id=user.id)
         key = _required_idempotency_key(request)
 
         def command() -> tuple[int, dict[str, object]]:

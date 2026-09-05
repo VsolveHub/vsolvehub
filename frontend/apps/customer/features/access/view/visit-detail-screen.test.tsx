@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import type { Schemas } from "@vsolve/api-client";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -29,6 +29,12 @@ const baseState: Schemas["VisitPlanState"] = {
         id: "share-1",
         position: 1,
         status: "COMMITTED",
+    // New at 1.44.0: a share now carries its own matching state and the slot
+    // the customer picked, so a partially matched plan can be rendered one
+    // slot at a time instead of collapsing to a single plan-level status.
+    matching_status: "BOOKED",
+    requested_start: "2026-08-24T04:30:00Z",
+    duration_minutes: 120,
         amount_paise: 4950,
         vendor_payout_paise: 4000,
         platform_share_paise: 950,
@@ -126,10 +132,11 @@ describe("customer visit arrival", () => {
       { wrapper },
     );
 
-    expect(await screen.findByText("482916")).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: /arrived without using the code/i }),
-    ).not.toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Arrival code" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /arrived without using the code/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /show code/i }));
+    expect(screen.getByText("482916")).toBeInTheDocument();
     expect(client.POST).not.toHaveBeenCalled();
   });
 
@@ -154,6 +161,10 @@ describe("customer visit arrival", () => {
           rejection_reason: "NOT_CHOSEN",
           revision: 2,
           revalidation_requested_at: null,
+      revision_request: null,
+      questions: [],
+      completion_days: null,
+    scope_summary: "",
           vendor: {
             partner_id: "partner-1",
             vendor_type: "AGENCY",
@@ -164,14 +175,36 @@ describe("customer visit arrival", () => {
           rate_paise_per_worker_day: null,
           minimum_days: null,
           worker_count: null,
+          // New at 1.44.0: the estimate shape and the server-calculated money
+          // the client is no longer allowed to derive for itself.
+          estimate_type: "ITEM_WISE",
+          item_lines: [],
+          labour_lines: [],
+          other_charges: [],
+          calculation_snapshot: null,
+          line_subtotal_paise: 0,
+          authorized_charges_paise: 0,
+          taxable_value_paise: 0,
+          partner_quote_total_paise: 0,
+          platform_fee_paise: 0,
+          platform_fee_tax_paise: 0,
+          customer_total_paise: 0,
+          discount_kind: null,
+          discount_bps: null,
+          discount_base_paise: 1_000_000,
+          discount_paise: 0,
+          discount_source: null,
           total_paise: 1_000_000,
           tax_paise: 0,
           tax_basis: "INCLUSIVE",
-          commission_treatment: "Included",
           inclusions: [],
           exclusions: [],
           stages: [],
           material_lines: [],
+          material_list: [],
+          material_brand_tier: "",
+          material_fulfilment_mode: "CUSTOMER_PROCURES",
+          included_supply_list: [],
           warranty_terms: "",
           valid_until: null,
           submitted_at: "2026-08-21T09:30:00.000Z",
@@ -191,7 +224,7 @@ describe("customer visit arrival", () => {
     expect(screen.getByText("₹10,000")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Read this estimate in full" })).toHaveAttribute(
       "href",
-      "/requests/requirement-1/quotes#estimate-proposal-1",
+      "/requests/requirement-1/quotes/proposal-1",
     );
   });
 });

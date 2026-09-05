@@ -1,14 +1,14 @@
 """How a Partner is doing — the numbers their home screen is built from.
 
-Every figure here is an aggregate over `PartnerLedgerEntry`, and that choice is
-load-bearing. Exactly one `EARNING` entry is written per completed booking, at
-settlement, with its own `created_at` — so "jobs done today" is a count of those
-entries rather than a scan of `Booking.updated_at`, which moves for any reason at
-all and would report a job as re-completed every time somebody touched it.
+Performance is broader than the payout balance. Money collected by Vsolve is
+recorded in :class:`PartnerLedgerEntry`; A3 crew wages are paid directly by the
+Customer and are recorded in :class:`DaySettlement` instead. Both are real
+Partner earnings, but only the former is money Vsolve still owes.
 
-Revenue sums `net_paise` across **every** kind, so an adjustment or a reversal
-lands in the total the same day it is written. A "revenue" figure that quietly
-excluded reversals would drift away from the balance on the same screen.
+Job counts use durable completion records rather than mutable ``updated_at``
+timestamps. A1 bookings and A5 site visits are identified by their earning
+ledger rows, while an A3/A5 engagement is counted once from ``completed_at`` —
+never once per stage or once per worker-day.
 """
 
 from __future__ import annotations
@@ -23,23 +23,35 @@ from django.utils import timezone
 
 from apps.partners.models import PartnerProfile
 from apps.payouts.models import PartnerLedgerEntry
+from apps.requirements.models import DaySettlement, Engagement
 
-#: Days of history the home screen's trend shows.
 TREND_DAYS = 7
 
 
 def _zone() -> ZoneInfo:
-    """The Partner's working timezone.
-
-    Local days, not UTC days: a job finished at 11pm in Hyderabad belongs to that
-    Partner's today, and a UTC boundary would move it to tomorrow.
-    """
+    """The Partner's working timezone."""
     return ZoneInfo(settings.TIME_ZONE)
 
 
 def _day_bounds(local_day: date, zone: ZoneInfo) -> tuple[datetime, datetime]:
     start = datetime.combine(local_day, datetime.min.time(), tzinfo=zone)
     return start, start + timedelta(days=1)
+
+
+def _ledger_job_entries(
+    entries: models.QuerySet[PartnerLedgerEntry],
+) -> models.QuerySet[PartnerLedgerEntry]:
+    """Ledger rows that represent one completed job rather than one money event.
+
+    A booking earning is one A1 job. An earned visit-plan share is one A5 site
+    visit. Stage earnings, retention releases, travel compensation, adjustments
+    and reversals move money but must not inflate "jobs done".
+    """
+    return (
+        entries.filter(kind=PartnerLedgerEntry.Kind.EARNING)
+        .filter(models.Q(booking_id__isnull=False) | models.Q(m2_visit_plan_shares__isnull=False))
+        .distinct()
+    )
 
 
 def partner_performance(partner: PartnerProfile) -> dict[str, object]:
@@ -49,32 +61,70 @@ def partner_performance(partner: PartnerProfile) -> dict[str, object]:
     today = now.astimezone(zone).date()
 
     entries = PartnerLedgerEntry.objects.filter(partner=partner)
+    direct_settlements = DaySettlement.objects.filter(
+        engagement__partner=partner,
+        status=DaySettlement.Status.SETTLED,
+        settled_at__isnull=False,
+    )
+    completed_engagements = Engagement.objects.filter(
+        partner=partner,
+        completed_at__isnull=False,
+    )
 
-    def window(start: datetime, end: datetime) -> tuple[int, int]:
-        """Net earned and jobs done between two instants."""
-        scoped = entries.filter(created_at__gte=start, created_at__lt=end)
-        net = scoped.aggregate(total=models.Sum("net_paise"))["total"] or 0
-        jobs = scoped.filter(kind=PartnerLedgerEntry.Kind.EARNING).count()
-        return int(net), int(jobs)
+    def window(start: datetime, end: datetime) -> tuple[int, int, int]:
+        """Net earned and jobs completed between two instants."""
+        scoped_entries = entries.filter(created_at__gte=start, created_at__lt=end)
+        ledger_net = scoped_entries.aggregate(total=models.Sum("net_paise"))["total"] or 0
+        direct_net = (
+            direct_settlements.filter(
+                settled_at__gte=start,
+                settled_at__lt=end,
+            ).aggregate(total=models.Sum("amount_paise"))["total"]
+            or 0
+        )
+        jobs = _ledger_job_entries(scoped_entries).count()
+        jobs += completed_engagements.filter(
+            completed_at__gte=start,
+            completed_at__lt=end,
+        ).count()
+        return int(ledger_net) + int(direct_net), int(direct_net), int(jobs)
 
     today_start, today_end = _day_bounds(today, zone)
-    today_net, today_jobs = window(today_start, today_end)
+    today_net, today_direct, today_jobs = window(today_start, today_end)
 
     month_start = datetime.combine(today.replace(day=1), datetime.min.time(), tzinfo=zone)
-    month_net, month_jobs = window(month_start, today_end)
+    month_net, month_direct, month_jobs = window(month_start, today_end)
 
-    lifetime_net = int(entries.aggregate(total=models.Sum("net_paise"))["total"] or 0)
-    lifetime_jobs = int(entries.filter(kind=PartnerLedgerEntry.Kind.EARNING).count())
+    ledger_lifetime_net = entries.aggregate(total=models.Sum("net_paise"))["total"] or 0
+    direct_lifetime_net = (
+        direct_settlements.aggregate(total=models.Sum("amount_paise"))["total"] or 0
+    )
+    lifetime_net = int(ledger_lifetime_net) + int(direct_lifetime_net)
+    lifetime_jobs = _ledger_job_entries(entries).count() + completed_engagements.count()
 
     return {
         "today_net_paise": today_net,
+        "today_direct_paise": today_direct,
         "today_jobs": today_jobs,
         "month_net_paise": month_net,
+        "month_direct_paise": month_direct,
         "month_jobs": month_jobs,
-        "average_monthly_net_paise": _average_monthly_net_paise(entries, lifetime_net),
+        "average_monthly_net_paise": _average_monthly_net_paise(
+            entries,
+            direct_settlements,
+            lifetime_net,
+            zone,
+        ),
         "lifetime_net_paise": lifetime_net,
+        "lifetime_direct_paise": int(direct_lifetime_net),
         "lifetime_jobs": lifetime_jobs,
-        "daily": _daily_trend(entries, today=today, zone=zone),
+        "daily": _daily_trend(
+            entries,
+            direct_settlements,
+            completed_engagements,
+            today=today,
+            zone=zone,
+        ),
         "currency": "INR",
         "server_now": now,
     }
@@ -82,53 +132,73 @@ def partner_performance(partner: PartnerProfile) -> dict[str, object]:
 
 def _average_monthly_net_paise(
     entries: models.QuerySet[PartnerLedgerEntry],
+    direct_settlements: models.QuerySet[DaySettlement],
     lifetime_net: int,
+    zone: ZoneInfo,
 ) -> int:
-    """Average over the months a Partner actually worked, not over the calendar.
-
-    Dividing by elapsed months would punish someone for joining mid-year, and
-    dividing by 12 would invent eleven months of zero for a Partner who started
-    last week. Counting the months with at least one entry answers the question a
-    Partner is really asking — "in a normal working month, what do I make?"
-
-    Returns 0 rather than dividing by zero for a Partner who has earned nothing.
-    """
-    active_months = (
-        entries.annotate(month=TruncMonth("created_at")).values("month").distinct().count()
+    """Average over the union of months in which the Partner earned money."""
+    ledger_months = set(
+        entries.annotate(month=TruncMonth("created_at", tzinfo=zone)).values_list(
+            "month", flat=True
+        )
     )
+    direct_months = set(
+        direct_settlements.annotate(month=TruncMonth("settled_at", tzinfo=zone)).values_list(
+            "month", flat=True
+        )
+    )
+    active_months = len(ledger_months | direct_months)
     return 0 if active_months == 0 else lifetime_net // active_months
 
 
 def _daily_trend(
     entries: models.QuerySet[PartnerLedgerEntry],
+    direct_settlements: models.QuerySet[DaySettlement],
+    completed_engagements: models.QuerySet[Engagement],
     *,
     today: date,
     zone: ZoneInfo,
 ) -> list[dict[str, object]]:
-    """One row per local day, including the empty ones.
-
-    Days with nothing are kept at zero rather than omitted: a gap that closed up
-    would make a day off look like it never happened, and "I did not work Tuesday"
-    is exactly what the reader is checking for.
-
-    Computed here rather than in the browser because the client only ever holds
-    one page of the ledger — grouping there silently under-reports the moment a
-    Partner has more entries than fit in a page.
-    """
+    """One row per local day, combining platform and direct-paid earnings."""
     first_day = today - timedelta(days=TREND_DAYS - 1)
     window_start, _ = _day_bounds(first_day, zone)
     _, window_end = _day_bounds(today, zone)
 
-    buckets: dict[date, dict[str, int]] = {}
-    for entry in entries.filter(
+    scoped_entries = entries.filter(
         created_at__gte=window_start,
         created_at__lt=window_end,
-    ).only("created_at", "net_paise", "kind"):
+    )
+    ledger_job_ids = set(_ledger_job_entries(scoped_entries).values_list("id", flat=True))
+
+    buckets: dict[date, dict[str, int]] = {}
+    for entry in scoped_entries.only("id", "created_at", "net_paise"):
         day = entry.created_at.astimezone(zone).date()
         bucket = buckets.setdefault(day, {"net_paise": 0, "jobs": 0})
         bucket["net_paise"] += entry.net_paise
-        if entry.kind == PartnerLedgerEntry.Kind.EARNING:
+        if entry.id in ledger_job_ids:
             bucket["jobs"] += 1
+
+    for settlement in direct_settlements.filter(
+        settled_at__gte=window_start,
+        settled_at__lt=window_end,
+    ).only("settled_at", "amount_paise"):
+        settled_at = settlement.settled_at
+        if settled_at is None:  # Defensive against an inconsistent custom queryset.
+            continue
+        day = settled_at.astimezone(zone).date()
+        bucket = buckets.setdefault(day, {"net_paise": 0, "jobs": 0})
+        bucket["net_paise"] += settlement.amount_paise
+
+    for engagement in completed_engagements.filter(
+        completed_at__gte=window_start,
+        completed_at__lt=window_end,
+    ).only("completed_at"):
+        completed_at = engagement.completed_at
+        if completed_at is None:  # Defensive against an inconsistent custom queryset.
+            continue
+        day = completed_at.astimezone(zone).date()
+        bucket = buckets.setdefault(day, {"net_paise": 0, "jobs": 0})
+        bucket["jobs"] += 1
 
     return [
         {

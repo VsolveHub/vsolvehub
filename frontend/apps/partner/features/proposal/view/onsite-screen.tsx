@@ -8,12 +8,13 @@ import { useState } from "react";
 
 import { planVisitOf, readEnquiryRecord } from "@/features/enquiry/model/wire";
 import { isEnquiryForbidden, usePartnerEnquiry } from "@/features/enquiry/queries";
+import { PartnerHeaderTitle } from "@/features/session/partner-header-title";
 import { WorkspaceRoute } from "@/features/workspace/view/workspace-route";
 import { PROJECT_WORKSPACE } from "@/features/workspace/registry";
 
 import { traceForInvitation, type Proposal } from "../model/proposal-state";
 import { useMyProposals } from "../queries";
-import { TapEstimateComposer } from "./tap-estimate-composer";
+import { CommercialEstimateFlow } from "./commercial-estimate-flow";
 
 /**
  * The route half of the on-site estimate (`M2-FE-315`).
@@ -91,8 +92,10 @@ function OnsiteEstimate({
     );
   }
 
-  if (query.isError) {
-    const presentation = describeError(query.error, "read");
+  if (query.isError || query.data === undefined) {
+    const presentation = query.error
+      ? describeError(query.error, "read")
+      : describeError(new Error("This enquiry did not load."), "read");
     const forbidden = isEnquiryForbidden(query.error);
     return (
       <div className="flex flex-col gap-4">
@@ -113,29 +116,23 @@ function OnsiteEstimate({
     );
   }
 
-  const enquiry = readEnquiryRecord(query.data);
+  const record = readEnquiryRecord(query.data);
 
   return (
-    <div className="flex flex-col gap-4">
-      {back}
-
-      <header className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold text-text">{enquiry.serviceName}</h1>
-        <p className="text-sm leading-6 text-text-secondary">
-          Tap what the job needs and put a price on each one.
-        </p>
-      </header>
-
-      {sent ? (
-        <SentConfirmation proposal={sent} enquiryHref={enquiryHref} />
-      ) : (
-        <OnsiteComposerWithRevision
-          enquiry={enquiry}
-          enquiryHref={enquiryHref}
-          onSubmitted={setSent}
-        />
-      )}
-    </div>
+    <>
+      <PartnerHeaderTitle title={record.serviceName} />
+      <div className="flex flex-col gap-4">
+        {sent ? (
+          <SentConfirmation proposal={sent} enquiryHref={enquiryHref} />
+        ) : (
+          <OnsiteComposerWithRevision
+            enquiry={record}
+            enquiryHref={enquiryHref}
+            onSubmitted={setSent}
+          />
+        )}
+      </div>
+    </>
   );
 }
 
@@ -147,6 +144,16 @@ function OnsiteEstimate({
  * second estimate would replay the first one and the customer would never see
  * the new price — with nothing reporting an error. So the composer mounts once
  * the read has answered, and a failed read says so rather than defaulting.
+ *
+ * ## One composer, two pricing types
+ *
+ * `CommercialEstimateFlow` mounts the rate-card composer over the autosaved
+ * per-invitation draft. Its first step is the only choice a vendor makes about
+ * *form*: Item-wise (points and units from the rate card) or Labour-wise
+ * (people × days). There is no separate "detailed" composer any more — the
+ * typed-rows form was a second way to say the same thing, and the owner chose
+ * one (2026-08-30). Both types submit to `POST /proposals/` under the same
+ * server rules.
  */
 function OnsiteComposerWithRevision({
   enquiry,
@@ -185,15 +192,20 @@ function OnsiteComposerWithRevision({
     proposals: mine.data.results,
     invitationId: enquiry.id,
   });
+  const visit = planVisitOf(enquiry.siteVisits);
+  const supersedesRevision = trace.current?.revision ?? 0;
 
   return (
-    <TapEstimateComposer
-      enquiry={enquiry}
-      visit={planVisitOf(enquiry.siteVisits)}
-      enquiryHref={enquiryHref}
-      supersedesRevision={trace.current?.revision ?? 0}
-      onSubmitted={onSubmitted}
-    />
+    <div className="flex flex-col gap-4">
+      <CommercialEstimateFlow
+        enquiry={enquiry}
+        visit={visit}
+        enquiryHref={enquiryHref}
+        supersedesRevision={supersedesRevision}
+        currentProposal={trace.current}
+        onSubmitted={onSubmitted}
+      />
+    </div>
   );
 }
 
@@ -219,7 +231,7 @@ function SentConfirmation({
       <p className="text-sm leading-6 text-text-secondary">
         Revision {proposal.revision} · recorded {new Date(proposal.submitted_at).toLocaleString()}
       </p>
-      <Link href="/work" className={buttonStyles()}>
+      <Link href="/work/all" className={buttonStyles()}>
         Go to Work
       </Link>
       <Link href={enquiryHref} className={buttonStyles({ variant: "outline" })}>

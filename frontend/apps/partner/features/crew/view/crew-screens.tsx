@@ -14,9 +14,11 @@ import {
   useAddCrewMember,
   useArchiveCrewMember,
   usePartnerCrew,
+  useUpdateCrewMember,
   type CrewAddResult,
 } from "../queries";
 import { CrewMemberForm } from "./crew-member-form";
+import { CrewMemberEditForm } from "./crew-member-edit-form";
 import { CrewRoster } from "./crew-roster";
 
 /**
@@ -61,14 +63,17 @@ function CrewRosterPanel() {
   const reference = useApplicationReference();
   const add = useAddCrewMember();
   const archive = useArchiveCrewMember();
+  const update = useUpdateCrewMember();
   const toast = useToast();
 
   const [isAdding, setIsAdding] = useState(false);
   const [phone, setPhone] = useState("");
   const [archivingId, setArchivingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const members = roster.data?.members ?? [];
   const view = describeRoster(members);
+  const editingRow = view.active.find((row) => row.membershipId === editingId) ?? null;
 
   // Matched on the four digits the server publishes, so this is *probable* and
   // the form says so. Django's own check is on the full number and decides.
@@ -104,6 +109,10 @@ function CrewRosterPanel() {
       <CrewRoster
         state={asyncStateFrom(roster, () => view)}
         onAdd={() => setIsAdding(true)}
+        onEdit={(row) => {
+          update.reset();
+          setEditingId(row.membershipId);
+        }}
         onArchive={(membershipId) => {
           setArchivingId(membershipId);
           archive.mutate(membershipId, {
@@ -148,6 +157,7 @@ function CrewRosterPanel() {
           phone_e164: phone,
           skill_codes: [],
           is_supervisor: false,
+          gender: "",
         }).filter((problem) => problem.field === "phone_e164" && phone.trim() !== "")}
         probableDuplicate={duplicateRow}
         pending={add.isPending}
@@ -164,8 +174,40 @@ function CrewRosterPanel() {
               phone_e164: input.phoneE164,
               skill_codes: [...input.skillCodes],
               is_supervisor: input.isSupervisor,
+              gender: input.gender,
             },
             { onSuccess: announce },
+          );
+        }}
+      />
+
+      <CrewMemberEditForm
+        /* Keyed on the person: the form seeds its fields at mount, so opening somebody else must
+           be a remount rather than a sync, or a half-typed name follows the Partner across rows. */
+        key={editingId ?? "none"}
+        row={editingRow}
+        open={editingRow !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            update.reset();
+            setEditingId(null);
+          }
+        }}
+        pending={update.isPending}
+        submitError={update.isError ? describeError(update.error, "mutation").message : null}
+        skillOptions={reference.skills.map((skill) => ({
+          code: skill.code,
+          label: skill.name,
+        }))}
+        onSubmit={(membershipId, patch) => {
+          update.mutate(
+            { membershipId, patch },
+            {
+              onSuccess: (member) => {
+                toast.notify(`${member.display_name} updated.`);
+                setEditingId(null);
+              },
+            },
           );
         }}
       />

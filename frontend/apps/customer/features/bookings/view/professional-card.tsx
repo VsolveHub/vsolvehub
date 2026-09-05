@@ -26,13 +26,21 @@ import type { Schemas } from "@vsolve/api-client";
  */
 export function ProfessionalCard({
   professional,
+  embedded = false,
 }: {
   professional: Schemas["AssignedProfessional"];
+  embedded?: boolean;
 }) {
   const initial = professional.display_name.trim().charAt(0).toUpperCase() || "?";
 
   return (
-    <div className="flex items-center gap-4 rounded-card border border-line bg-surface p-4">
+    <div
+      className={
+        embedded
+          ? "flex items-center gap-4"
+          : "flex items-center gap-4 rounded-card border border-line bg-surface p-4"
+      }
+    >
       <span
         aria-hidden
         className="flex size-12 shrink-0 items-center justify-center rounded-full bg-selected-surface text-lg font-bold text-text-link"

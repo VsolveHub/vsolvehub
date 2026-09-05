@@ -277,7 +277,13 @@ export interface VisitSlotRow {
   position: number;
   /** `null` while no vendor has taken this slot. */
   visitId: string | null;
-  state: VisitSlotState | "awaiting";
+  /**
+   * `"awaiting"` is still searching; `"unmatched"` is the server's own
+   * `NO_PROFESSIONAL_FOUND`, and `"dropped"` is a slot the Customer chose to do
+   * without. The last two used to collapse into `"awaiting"`, which is how a
+   * settled dead end rendered as a spinner that never stopped.
+   */
+  state: VisitSlotState | "awaiting" | "unmatched" | "dropped";
   scheduledFor: string | null;
   /**
    * The service area's own zone, from `SiteVisit.timezone` (contract 1.26.0).
@@ -370,6 +376,12 @@ function toVendorView(visit: SiteVisit | null): VisitVendorView | null {
 
 export interface VisitTrackerView {
   rows: readonly VisitSlotRow[];
+  /** How many slots are waiting on the Customer to re-time or drop them. */
+  unmatchedSlots: number;
+  /** Slots the Customer chose to do without. Shown, never silently removed. */
+  droppedSlots: number;
+  /** What the plan still buys — `planSize` less the dropped slots. */
+  liveSlots: number;
   planSize: number;
   /** What the whole plan cost, from the plan record. Never summed here. */
   priceLabel: string;
@@ -423,7 +435,19 @@ export function toVisitTrackerView(
       id: share.id,
       position: share.position,
       visitId: visit?.id ?? null,
-      state: visit === null ? "awaiting" : visitSlotState(visit, isCharged),
+      // The share's own matching state decides an empty slot, not the absence
+      // of a visit. Reading only `visit === null` made every unfilled slot
+      // "searching" — including the ones the server had already settled as
+      // having nobody to find, which is exactly the slot a Customer most needs
+      // an answer about.
+      state:
+        visit !== null
+          ? visitSlotState(visit, isCharged)
+          : share.status === "REFUNDED"
+            ? "dropped"
+            : share.matching_status === "NO_PROFESSIONAL_FOUND"
+              ? "unmatched"
+              : "awaiting",
       scheduledFor: visit?.scheduled_for ?? null,
       timeZone: visit?.timezone ?? null,
       // The visit's own vendor first; the estimate map only as the fallback it
@@ -447,6 +471,10 @@ export function toVisitTrackerView(
     priceLabel: formatMoney(plan.price_paise),
     isCharged,
     openSlots: rows.filter((row) => row.state === "awaiting").length,
+    /** Slots the server has given up on and the Customer has not yet answered. */
+    unmatchedSlots: rows.filter((row) => row.state === "unmatched").length,
+    droppedSlots: rows.filter((row) => row.state === "dropped").length,
+    liveSlots: rows.filter((row) => row.state !== "dropped").length,
     fillDueAt: plan.fill_due_at,
   };
 }

@@ -14,8 +14,11 @@ import { CounterCard } from "@/features/booking/view/parts/counter-card";
 import { DateSheet } from "@/features/booking/view/parts/date-sheet";
 import { PickerRow } from "@/features/booking/view/parts/picker-row";
 import { Segmented } from "@/features/booking/view/parts/segmented";
+import { TimeSheet } from "@/features/booking/view/parts/time-sheet";
 import type { RequirementQuestionView } from "@/features/requirement/adapters";
+import { formatReportingTime, reportingTimeOptions } from "../../model/reporting-time";
 import { NUMBER_FLOOR } from "../../model/size";
+import { MultiChoiceChips } from "../multi-choice-chips";
 
 /**
  * A3 · 2 — Plan the crew.
@@ -53,6 +56,16 @@ export interface JobFormScreenProps {
   /** `YYYY-MM-DD`, or null. */
   requestedStart: string | null;
   onRequestedStart: (isoDate: string) => void;
+  /** The caption on the date row. "Start from" for a day crew, "Event date" for a shift. */
+  dateLabel?: string;
+  /** How far ahead the date sheet offers. Ten days for a crew; an event is booked further out. */
+  dateHorizonDays?: number;
+  /**
+   * `HH:MM`, or null. Rendered as a picker only when `onReportingTime` is
+   * given — a crew booked by the day is never asked what time.
+   */
+  reportingTime?: string | null;
+  onReportingTime?: (time: string) => void;
 
   /** The chosen address as one line, or null. */
   addressLine: string | null;
@@ -67,9 +80,24 @@ export interface JobFormScreenProps {
   onContinue: () => void;
   saveError?: ReactNode;
   onBack: () => void;
-  /** The work chosen on step one, shown as a compact editable summary. */
-  selectedWorkLabel: string;
-  onChangeWork: () => void;
+  /** "Step 1 of 2" for a service with no work picker, "Step 2 of 3" behind one. */
+  stepLabel?: string;
+  /** The header's place name and the heading's question. */
+  title?: string;
+  heading?: string;
+  /**
+   * The work chosen on step one, shown as a compact editable summary — or null
+   * for a service whose catalogue asks no work question, where the service name
+   * in the heading already says what the crew does.
+   */
+  selectedWorkLabel: string | null;
+  /** The caption over that summary. "Work selected" by default. */
+  selectedWorkEyebrow?: string;
+  onChangeWork?: () => void;
+  /** What's included / what's not, rendered when this screen is the flow's first. */
+  aboutPanel?: ReactNode;
+  /** Product guidance that belongs after the catalogue questions and before scheduling. */
+  afterQuestions?: ReactNode;
 }
 
 /** The day, in the customer's own locale. Built from parts, never from `new Date(iso)`. */
@@ -98,6 +126,10 @@ export function JobFormScreen({
   hiddenCodes = [],
   requestedStart,
   onRequestedStart,
+  dateLabel = "Start from",
+  dateHorizonDays,
+  reportingTime = null,
+  onReportingTime,
   addressLine,
   onOpenAddress,
   addressPicker,
@@ -106,10 +138,17 @@ export function JobFormScreen({
   onContinue,
   saveError,
   onBack,
+  stepLabel = "Step 2 of 3",
+  title = "Book a crew",
+  heading = "Plan the crew",
   selectedWorkLabel,
+  selectedWorkEyebrow = "Work selected",
   onChangeWork,
+  aboutPanel,
+  afterQuestions,
 }: JobFormScreenProps) {
   const [dateOpen, setDateOpen] = useState(false);
+  const [timeOpen, setTimeOpen] = useState(false);
 
   // Counters are paired into a two-up grid, which is what makes People and Days
   // read as one question about size rather than two unrelated fields.
@@ -122,9 +161,9 @@ export function JobFormScreen({
 
   return (
     <MobileScreen
-      title="Book a crew"
+      title={title}
       onBack={onBack}
-      step="Step 2 of 3"
+      step={stepLabel}
       reassurance="Free. Nothing is booked yet."
       action={
         <Button
@@ -140,23 +179,27 @@ export function JobFormScreen({
       }
     >
       <div className="crew-stage-enter flex flex-col gap-4">
-        <ScreenHeading eyebrow={serviceName} title="Plan the crew" />
+        <ScreenHeading eyebrow={serviceName} title={heading} />
 
-        <button
-          type="button"
-          onClick={onChangeWork}
-          className="flex min-h-14 items-center justify-between gap-3 rounded-[14px] border border-selected-line bg-selected-surface px-3.5 py-3 text-left transition-[border-color,transform] duration-base hover:-translate-y-0.5 hover:border-selected active:translate-y-0 active:scale-[0.99] focus-visible:outline-focus-ring motion-reduce:transform-none"
-        >
-          <span className="min-w-0">
-            <span className="block text-[11px] font-bold uppercase tracking-[0.1em] text-text-muted">
-              Work selected
+        {selectedWorkLabel !== null && onChangeWork !== undefined ? (
+          <button
+            type="button"
+            onClick={onChangeWork}
+            className="flex min-h-14 items-center justify-between gap-3 rounded-[14px] border border-selected-line bg-selected-surface px-3.5 py-3 text-left transition-[border-color,transform] duration-base hover:-translate-y-0.5 hover:border-selected active:translate-y-0 active:scale-[0.99] focus-visible:outline-focus-ring motion-reduce:transform-none"
+          >
+            <span className="min-w-0">
+              <span className="block text-[11px] font-bold uppercase tracking-[0.1em] text-text-muted">
+                {selectedWorkEyebrow}
+              </span>
+              <span className="mt-0.5 block text-sm font-bold leading-5 text-text">
+                {selectedWorkLabel}
+              </span>
             </span>
-            <span className="mt-0.5 block text-sm font-bold leading-5 text-text">
-              {selectedWorkLabel}
-            </span>
-          </span>
-          <span className="shrink-0 text-xs font-bold text-text-link">Change</span>
-        </button>
+            <span className="shrink-0 text-xs font-bold text-text-link">Change</span>
+          </button>
+        ) : (
+          aboutPanel
+        )}
 
       {others.map((question) => (
         <div key={question.code}>
@@ -210,6 +253,12 @@ export function JobFormScreen({
               }
               onChange={(value) => onAnswer(question.code, value === "yes")}
             />
+          ) : question.kind === "multi" ? (
+            <MultiChoiceChips
+              question={question}
+              value={answers[question.code]}
+              onAnswer={(value) => onAnswer(question.code, value)}
+            />
           ) : (
             <Field label={question.label} description={question.help}>
               <Input
@@ -255,13 +304,39 @@ export function JobFormScreen({
         </p>
       ) : null}
 
+      {afterQuestions}
+
       <div className="flex flex-col gap-2.5">
-        <PickerRow
-          label="Start from"
-          value={formatDay(requestedStart)}
-          placeholder="Choose a date"
-          onOpen={() => setDateOpen(true)}
-        />
+        {onReportingTime === undefined ? (
+          <PickerRow
+            label={dateLabel}
+            value={formatDay(requestedStart)}
+            placeholder="Choose a date"
+            onOpen={() => setDateOpen(true)}
+          />
+        ) : (
+          // Date and time side by side: one question — when — in two taps.
+          <div className="grid grid-cols-2 gap-2.5">
+            <PickerRow
+              label={dateLabel}
+              value={formatDay(requestedStart)}
+              placeholder="Choose a date"
+              onOpen={() => setDateOpen(true)}
+            />
+            <PickerRow
+              label="Reporting time"
+              value={reportingTime === null ? null : formatReportingTime(reportingTime)}
+              placeholder="Choose a time"
+              onOpen={() => setTimeOpen(true)}
+            />
+          </div>
+        )}
+        {onReportingTime !== undefined ? (
+          <p className="text-xs leading-5 text-text-muted">
+            Staff report ready to work. One 8-hour shift; after that, overtime runs only when
+            you approve it in the app.
+          </p>
+        ) : null}
         <PickerRow
           label="Where"
           value={addressLine}
@@ -279,7 +354,28 @@ export function JobFormScreen({
         onOpenChange={setDateOpen}
         value={requestedStart}
         onSelect={onRequestedStart}
+        title={dateLabel}
+        description={
+          onReportingTime === undefined ? undefined : "The day of the event."
+        }
+        horizonDays={dateHorizonDays}
+        // An event opens tomorrow, not today. A shift is staffed by rostering people,
+        // briefing them and telling them where to be — offering today would be offering
+        // something nobody can supply. `onReportingTime` is already how this screen knows
+        // it is looking at an event rather than a day crew.
+        earliestOffsetDays={onReportingTime === undefined ? 0 : 1}
       />
+
+      {onReportingTime !== undefined ? (
+        <TimeSheet
+          open={timeOpen}
+          onOpenChange={setTimeOpen}
+          value={reportingTime}
+          options={reportingTimeOptions()}
+          format={formatReportingTime}
+          onSelect={onReportingTime}
+        />
+      ) : null}
 
         {addressPicker}
       </div>

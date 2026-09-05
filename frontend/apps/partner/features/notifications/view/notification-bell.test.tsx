@@ -199,7 +199,7 @@ describe("where a notice leads", () => {
     await waitFor(() =>
       expect(screen.getByRole("link", { name: /open.*the job is open/i })).toHaveAttribute(
         "href",
-        "/workforce/shifts/eng-1",
+        "/work/jobs/eng-1",
       ),
     );
   });
@@ -222,22 +222,26 @@ describe("where a notice leads", () => {
     await waitFor(() =>
       expect(screen.getByRole("link", { name: /open.*new customer enquiry/i })).toHaveAttribute(
         "href",
-        "/projects/enquiries/invite-1",
+        // The live route, not the 308 redirect the old workspace paths became.
+        "/work/enquiries/invite-1",
       ),
     );
   });
 
-  it("offers no link at all when the workspace cannot be told from the payload", async () => {
-    // The headline negative. Both capabilities held, no archetype on the target —
-    // so there is nothing to decide on, and the wrong screen would describe a
-    // project in shift-days.
+  it("links an engagement notice even when the workspace cannot be told", async () => {
+    // The old headline negative, inverted on purpose: `/work/jobs/[id]` resolves
+    // both engagement kinds itself now, so the archetype ambiguity that used to
+    // force a null link no longer exists — the notice links to the job.
     serve({ unread: 1, results: [notice()] });
     renderBell([WORKFORCE_WORKSPACE, PROJECT_WORKSPACE]);
 
     fireEvent.click(screen.getByRole("button", { name: /notifications/i }));
 
     await waitFor(() => expect(screen.getByText("The job is open")).toBeInTheDocument());
-    expect(screen.queryByRole("link", { name: /open/i })).toBeNull();
+    expect(screen.getByRole("link", { name: /open/i })).toHaveAttribute(
+      "href",
+      "/work/jobs/eng-1",
+    );
   });
 
   it("offers no link for a notice the server said leads nowhere", async () => {

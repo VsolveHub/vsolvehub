@@ -3,6 +3,8 @@
 import { Button, Card, ErrorState, Field, Input, Sheet } from "@vsolve/ui";
 import { useState } from "react";
 
+import { CrewGenderField, type CrewGender } from "./crew-gender";
+
 import type { CrewProblem, CrewRow } from "../adapters/roster";
 
 /**
@@ -42,6 +44,7 @@ export interface CrewMemberFormProps {
     phoneE164: string;
     isSupervisor: boolean;
     skillCodes: readonly string[];
+    gender: CrewGender;
   }) => void;
   /** Client-side problems from `crewProblems`, computed by the container. */
   readonly problems?: readonly CrewProblem[];
@@ -70,6 +73,9 @@ export function CrewMemberForm({
   const [phone, setPhone] = useState("");
   const [isSupervisor, setIsSupervisor] = useState(false);
   const [skillCodes, setSkillCodes] = useState<readonly string[]>([]);
+  /* Blank by default and never guessed from the name. A worker with nothing on file fills the
+     headcount and no gendered slot, which the field's own helper text says. */
+  const [gender, setGender] = useState<CrewGender>("");
 
   const messageFor = (field: CrewProblem["field"]) =>
     serverProblems.find((problem) => problem.field === field)?.message ??
@@ -89,6 +95,7 @@ export function CrewMemberForm({
             phoneE164: phone.trim().startsWith("+") ? phone.trim() : `+91${phone.replace(/\D/g, "")}`,
             isSupervisor,
             skillCodes,
+            gender,
           });
         }}
       >
@@ -166,6 +173,8 @@ export function CrewMemberForm({
             </div>
           </fieldset>
         ) : null}
+
+        <CrewGenderField value={gender} onChange={setGender} disabled={pending} />
 
         <label className="flex items-start gap-3 text-sm text-text-secondary">
           <input

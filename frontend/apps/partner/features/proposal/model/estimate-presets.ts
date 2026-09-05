@@ -156,7 +156,16 @@ export interface WarrantyChoice {
 }
 
 export const WARRANTY_CHOICES: readonly WarrantyChoice[] = [
-  { code: "none", icon: "no", label: "None", terms: "" },
+  // A real sentence, not a blank. An empty string made "the vendor chose no guarantee"
+  // and "the vendor never answered" the same value — which made the question impossible to
+  // validate, and made the Customer's estimate read "Warranty: Not stated" for both. Saying
+  // it plainly is the honest version of both halves.
+  {
+    code: "none",
+    icon: "no",
+    label: "None",
+    terms: "No guarantee on this work.",
+  },
   {
     code: "3m",
     icon: "date",
@@ -224,6 +233,33 @@ export const EXCLUSION_CHOICES: readonly ExclusionChoice[] = [
     label: "Night work",
     sentence: "Work outside normal site hours is not included.",
   },
+];
+
+/**
+ * The things vendors most often promise, tappable.
+ *
+ * The customer's comparison is built on these words — "where they differ" is a
+ * row per inclusion — so two vendors tapping the same chip produce the same
+ * line, and the table can say so. A custom line is still allowed; it simply
+ * will not match anybody else's wording.
+ */
+export interface InclusionChoice {
+  readonly code: string;
+  readonly icon: PictogramName;
+  readonly label: string;
+}
+
+export const INCLUSION_CHOICES: readonly InclusionChoice[] = [
+  { code: "demolition", icon: "walls", label: "Demolition and debris" },
+  { code: "waterproofing", icon: "water", label: "Waterproofing" },
+  { code: "plumbing", icon: "water", label: "Plumbing rework" },
+  { code: "wiring", icon: "wiring", label: "Electrical points" },
+  { code: "tiling", icon: "floor", label: "Tiling labour" },
+  { code: "painting", icon: "paint", label: "Painting and finishing" },
+  { code: "false_ceiling", icon: "fit-out", label: "False ceiling" },
+  { code: "carpentry", icon: "wood", label: "Carpentry" },
+  { code: "cleanup", icon: "clean", label: "Site cleanup" },
+  { code: "supervision", icon: "crew", label: "Supervisor on site" },
 ];
 
 /**

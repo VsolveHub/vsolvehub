@@ -87,7 +87,12 @@ def live_booking_fee(requirement: CustomerRequirement) -> BookingFee | None:
 
 def latest_booking_fee(requirement: CustomerRequirement) -> BookingFee | None:
     """The most recent fee in any state, for the read that has to explain a failed one."""
-    return BookingFee.objects.filter(requirement=requirement).order_by("-created_at").first()
+    return (
+        BookingFee.objects.select_related("payment_attempt")
+        .filter(requirement=requirement)
+        .order_by("-created_at")
+        .first()
+    )
 
 
 def booking_fee_checkout_availability(requirement: CustomerRequirement) -> bool:
@@ -512,6 +517,18 @@ def forfeit_booking_fee(*, requirement_id: uuid.UUID, reason_code: str) -> Booki
             f"booking_fee:{fee.id} {fee.amount_paise} paise = {travel_paise} travel "
             f"+ {platform_paise} platform ({reason_code})"
         ),
+    )
+    enqueue_outbox_event(
+        aggregate_type="requirement",
+        aggregate_id=requirement.id,
+        event_type="m2.booking_fee.forfeited",
+        idempotency_key=f"m2-booking-fee-forfeited:{fee.id}",
+        payload={
+            "requirement_id": str(requirement.id),
+            "vendor_invitation_id": str(fee.invitation_id),
+            "amount_paise": travel_paise,
+            "reason_code": reason_code,
+        },
     )
     return fee
 

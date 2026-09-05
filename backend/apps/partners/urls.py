@@ -11,6 +11,7 @@ from apps.partners.views import (
     OperationsPartnerDocumentAccessView,
     OperationsPartnerDocumentReviewView,
     OperationsPartnerScheduleView,
+    OperationsPartnerTaxProfileVerificationView,
     PartnerApplicationSubmitView,
     PartnerApplicationView,
     PartnerBusinessProfileView,
@@ -22,6 +23,7 @@ from apps.partners.views import (
     PartnerCrewAvailabilityView,
     PartnerCrewCollectionView,
     PartnerCrewDetailView,
+    PartnerCrewDocumentView,
     PartnerDocumentCreateView,
     PartnerDocumentUploadView,
     PartnerGateListView,
@@ -113,6 +115,11 @@ urlpatterns = [
         name="m2-partner-crew-detail",
     ),
     path(
+        "partner/crew/<uuid:membership_id>/documents/",
+        PartnerCrewDocumentView.as_view(),
+        name="m2-partner-crew-documents",
+    ),
+    path(
         "partner/crew/<uuid:membership_id>/archive/",
         PartnerCrewArchiveView.as_view(),
         name="m2-partner-crew-archive",
@@ -166,5 +173,10 @@ urlpatterns = [
         "operations/partners/<uuid:partner_id>/availability/",
         OperationsPartnerScheduleView.as_view(),
         name="operations-partner-schedule",
+    ),
+    path(
+        "operations/partners/<uuid:partner_id>/tax-profile/verify/",
+        OperationsPartnerTaxProfileVerificationView.as_view(),
+        name="operations-partner-tax-profile-verify",
     ),
 ]

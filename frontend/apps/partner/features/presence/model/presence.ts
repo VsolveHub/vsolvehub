@@ -67,6 +67,11 @@ export function presenceStatus(input: PresenceInput): PresenceStatus {
   return input.msSinceHeartbeat > STALE_AFTER_MS ? "stale" : "online";
 }
 
+/** Live booking popups and sounds only when dispatch can reach this Partner. */
+export function canReceivePartnerLiveBookings(status: PresenceStatus): boolean {
+  return status === "online";
+}
+
 export interface PresenceCopy {
   label: string;
   detail: string;

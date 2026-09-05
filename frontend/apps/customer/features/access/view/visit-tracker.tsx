@@ -1,22 +1,70 @@
 "use client";
 
-import type { VisitPlanPhase } from "@vsolve/query";
+import { VendorTrustLine } from "@/features/quotes/view/vendor-trust-line";
+import type { VendorTrustView } from "@/features/quotes/adapters";
+import { describeError, type VisitPlanPhase } from "@vsolve/query";
 import {
   Badge,
   Button,
   Disclosure,
   EmptyState,
+  ErrorState,
   RailLayout,
   Skeleton,
   buttonStyles,
   cn,
 } from "@vsolve/ui";
+import dynamic from "next/dynamic";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
+import searchAnimationData from "@/features/bookings/view/search-lottie.json";
 import { calendarDay, formatVisitSlot, type VisitSlotRow, type VisitTrackerView } from "../adapters";
+import {
+  findCustomerVisitSlot,
+  readCustomerVisitSlotGrid,
+} from "@/features/project-request/model/customer-visit-slots";
+import { CustomerVisitSlotChooser } from "@/features/project-request/view/parts/customer-visit-slot-chooser";
+
+import { useCustomerVisitSlotGrid, useDropVisitSlot, useReplaceVisitSlot } from "../queries";
 import { AccessRefusal } from "./access-refusal";
+import { VisitDetailAside, VisitDetailPrimary } from "./visit-detail-body";
 import { VendorIdentity } from "./vendor-identity";
+
+const LottiePlayer = dynamic(
+  () => {
+    if (typeof window === "undefined") return Promise.resolve(() => null);
+    try {
+      const canvas = document.createElement("canvas");
+      if (!canvas?.getContext?.("2d")) {
+        return Promise.resolve(() => null);
+      }
+    } catch {
+      return Promise.resolve(() => null);
+    }
+    return import("lottie-react").then((mod) => mod.Lottie);
+  },
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex size-36 animate-pulse items-center justify-center">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2.2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="size-14 text-orange-600"
+          aria-hidden
+        >
+          <circle cx="11" cy="11" r="7" />
+          <path d="m21 21-4.35-4.35" />
+        </svg>
+      </div>
+    ),
+  },
+);
 
 /**
  * The A5 tracker — `M2-FE-421`, `M2-FE-422`, `M2-FE-424`.
@@ -45,6 +93,8 @@ import { VendorIdentity } from "./vendor-identity";
  */
 
 export interface VisitTrackerProps {
+  /** The request this plan belongs to. Needed to inline a lone visit's page. */
+  requirementId: string;
   phase: VisitPlanPhase;
   tracker: VisitTrackerView | null;
 
@@ -108,7 +158,17 @@ export interface VisitTrackerProps {
    * it — asking again from a list component would be a second place that could
    * get the gate wrong.
   */
-  estimates?: readonly { proposalId: string; vendorName: string | null; priceLabel: string }[];
+  estimates?: readonly {
+    proposalId: string;
+    vendorName: string | null;
+    priceLabel: string;
+    /** The estimate's own page. Falls back to `estimatesHref` when absent. */
+    href?: string;
+    trust?: VendorTrustView;
+    /** The first stage's amount, the number people decide on. */
+    startLabel?: string | null;
+    timelineLabel?: string | null;
+  }[];
 
   /**
    * The plan-size chooser, when re-choosing is still allowed.
@@ -125,6 +185,7 @@ export interface VisitTrackerProps {
 }
 
 export function VisitTracker({
+  requirementId,
   phase,
   tracker,
   isLoading,
@@ -179,7 +240,9 @@ export function VisitTracker({
     return <VendorSearchPanel tracker={tracker} />;
   }
 
-  const rail = (
+  const bookedAlone = bookedSingleVisit(tracker);
+
+  const planRail = (
         <VisitPlanRail
           phase={phase}
           tracker={tracker}
@@ -194,6 +257,82 @@ export function VisitTracker({
           brief={brief}
         />
   );
+
+  const visitCommands =
+    bookedAlone === null ? null : (
+      <VisitDetailAside
+        row={bookedAlone}
+        requirementId={requirementId}
+        supportAction={supportAction}
+      />
+    );
+
+  const rail =
+    bookedAlone === null ? (
+      planRail
+    ) : (
+      <div className="flex flex-col gap-4">
+        {planRail}
+        {visitCommands}
+      </div>
+    );
+
+  if (bookedAlone !== null && tracker !== null) {
+    const singleMain = (
+      <div className="flex flex-col gap-4">
+        <VisitDetailPrimary
+          row={bookedAlone}
+          planSize={tracker.planSize}
+          requirementId={requirementId}
+          supportAction={supportAction}
+          headingLevel="h2"
+          chargeSummary={
+            tracker.isCharged ? { amountLabel: bookedAlone.money.amountLabel } : null
+          }
+        />
+        <Disclosure summary="How these visits work">
+          <PlanStatement phase={phase} tracker={tracker} />
+          {tracker.rows.some((row) => row.vendor === null) ? (
+            <p className="mt-2 max-w-prose text-sm leading-6 text-text-secondary">
+              We do not show you who has been invited. Once somebody confirms a time
+              we tell you their name and show you their photograph, because they are
+              coming into your home — their phone number stays with us until you have
+              agreed the work.
+            </p>
+          ) : null}
+        </Disclosure>
+        {slot === "main" ? (
+          <div className="lg:hidden">
+            <VisitPlanRail
+              embedded
+              phase={phase}
+              tracker={tracker}
+              checkoutAvailable={checkoutAvailable}
+              checkoutPriceLabel={checkoutPriceLabel}
+              onStartCheckout={onStartCheckout}
+              isStartingCheckout={isStartingCheckout}
+              checkoutError={checkoutError}
+              canSimulatePendingCapture={canSimulatePendingCapture}
+              onSimulatePendingCapture={onSimulatePendingCapture}
+              planSwitcher={planSwitcher}
+              brief={brief}
+            />
+          </div>
+        ) : null}
+        {slot === "main" ? (
+          <div className="flex flex-col gap-4 lg:hidden">{visitCommands}</div>
+        ) : null}
+      </div>
+    );
+
+    if (slot === "rail") return rail;
+    if (slot === "main") return singleMain;
+    return (
+      <RailLayout railLabel="Your visit plan" rail={rail}>
+        {singleMain}
+      </RailLayout>
+    );
+  }
 
   const main = (
     <section
@@ -232,6 +371,10 @@ export function VisitTracker({
                 row={row}
                 planSize={tracker.planSize}
                 visitHref={visitHref}
+                requirementId={requirementId}
+                siblingStarts={tracker.rows
+                  .filter((other) => other.id !== row.id && other.scheduledFor !== null)
+                  .map((other) => other.scheduledFor as string)}
               />
             ))}
           </ul>
@@ -249,7 +392,7 @@ export function VisitTracker({
             {estimates.map((estimate, index) => (
               <li key={estimate.proposalId}>
                 <Link
-                  href={estimatesHref}
+                  href={estimate.href ?? estimatesHref}
                   className={cn(
                     "flex items-center gap-3 rounded-control px-3 py-2.5",
                     "bg-surface ring-1 ring-inset ring-line",
@@ -257,8 +400,23 @@ export function VisitTracker({
                     "focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring",
                   )}
                 >
-                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-text">
-                    {estimate.vendorName ?? `Estimate ${index + 1}`}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-text">
+                      {estimate.vendorName ?? `Estimate ${index + 1}`}
+                    </span>
+                    {estimate.trust !== undefined ? (
+                      <VendorTrustLine trust={estimate.trust} />
+                    ) : null}
+                    {estimate.startLabel || estimate.timelineLabel ? (
+                      <span className="block text-xs text-text-secondary">
+                        {[
+                          estimate.startLabel ? `Pay ${estimate.startLabel} to start` : null,
+                          estimate.timelineLabel ?? null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                    ) : null}
                   </span>
                   <span
                     data-numeric
@@ -354,6 +512,19 @@ export function VisitTracker({
   );
 }
 
+/**
+ * A plan of one booked visit — the only case the request page inlines.
+ *
+ * Two or more rows keep the glance list. A lone unfilled slot stays on the
+ * searching / awaiting surface, because there is no visit record to show.
+ */
+function bookedSingleVisit(tracker: VisitTrackerView | null): VisitSlotRow | null {
+  if (tracker === null || tracker.rows.length !== 1) return null;
+  const row = tracker.rows[0];
+  if (row === undefined || row.visitId === null) return null;
+  return row;
+}
+
 function VendorSearchPanel({ tracker }: { tracker: VisitTrackerView }) {
   const slots = tracker.planSize === 1 ? "one visit" : `${tracker.planSize} visits`;
 
@@ -382,23 +553,20 @@ function VendorSearchPanel({ tracker }: { tracker: VisitTrackerView }) {
         </div>
 
         <div className="order-1 mx-auto flex aspect-square w-full max-w-[17rem] items-center justify-center lg:order-2">
-          <div className="relative size-56 rounded-full bg-selected-surface">
-            <span className="absolute inset-4 rounded-full border border-navy-200" />
-            <span className="absolute inset-10 rounded-full border border-navy-200/80" />
-            <span className="absolute inset-16 rounded-full border border-navy-200/60" />
-            <span className="absolute left-1/2 top-1/2 h-px w-[45%] origin-left animate-spin bg-action motion-reduce:animate-none" />
-            <span className="absolute left-[58%] top-[24%] size-3 animate-ping rounded-full bg-action motion-reduce:animate-none" />
-            <span className="absolute left-[58%] top-[24%] size-3 rounded-full bg-action" />
-            <span className="absolute bottom-10 left-12 size-2 rounded-full bg-success-text" />
-            <span className="absolute right-12 top-16 size-2 rounded-full bg-success-text" />
-            <span className="absolute inset-0 flex items-center justify-center">
-              <span className="grid size-20 place-items-center rounded-full bg-surface text-action-active shadow-raised ring-1 ring-line">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="size-8">
-                  <circle cx="11" cy="11" r="6" />
-                  <path d="m16 16 4 4M11 8v6m-3-3h6" />
-                </svg>
-              </span>
-            </span>
+          <div className="relative flex size-56 sm:size-60 items-center justify-center">
+            <span className="absolute inset-0 rounded-full border border-orange-200/60 bg-orange-100/20 animate-ping [animation-duration:3.2s]" />
+            <span className="absolute inset-6 rounded-full border border-orange-200 bg-orange-50/60 animate-pulse [animation-duration:2.2s]" />
+
+            <div className="relative z-10 flex size-48 sm:size-52 items-center justify-center overflow-hidden rounded-full border-2 border-orange-200/90 bg-white shadow-xl">
+              <div className="relative z-20 flex size-full items-center justify-center p-2">
+                <LottiePlayer
+                  src={searchAnimationData}
+                  loop
+                  autoplay
+                  className="size-full max-h-[170px] max-w-[170px]"
+                />
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -502,12 +670,21 @@ function VisitPlanRail({
               <path d="M7 3v3m10-3v3M5 9h14M6 5h12a1 1 0 0 1 1 1v13H5V6a1 1 0 0 1 1-1Z" />
             </svg>
           </span>
+          {/* The plan as it now stands, not as it was bought. A dropped slot
+              changes both halves of this, and leaving the tier's own figures
+              here put "2 visits · ₹99" directly above "Pay ₹49.50" — two
+              different answers to "what am I getting for how much". */}
           <div>
             <p className="text-[0.6875rem] font-extrabold uppercase text-text-muted">
-              {tracker.planSize === 1 ? "1 visit" : `${tracker.planSize} visits`}
+              {tracker.liveSlots === 1 ? "1 visit" : `${tracker.liveSlots} visits`}
+              {tracker.droppedSlots > 0 ? (
+                <span className="font-bold text-text-muted">
+                  {" "}· {tracker.droppedSlots} dropped
+                </span>
+              ) : null}
             </p>
             <p data-numeric className="mt-0.5 text-2xl font-extrabold leading-none text-text">
-              {tracker.priceLabel}
+              {checkoutPriceLabel ?? tracker.priceLabel}
             </p>
           </div>
         </div>
@@ -723,6 +900,11 @@ function PlanStatement({
 
 const SLOT_BADGE: Record<VisitSlotRow["state"], { label: string; tone: "neutral" | "info" | "success" | "warning" | "danger" }> = {
   awaiting: { label: "Waiting for a professional", tone: "neutral" },
+  // Distinct from `awaiting` on purpose. "Waiting" says the search is running;
+  // these two say it finished, and collapsing them is what left a settled dead
+  // end wearing a live spinner.
+  unmatched: { label: "No professional found", tone: "warning" },
+  dropped: { label: "Dropped", tone: "neutral" },
   // Held, not scheduled. The vendor has committed to a time and the Customer has
   // not bought it yet — showing this as confirmed would promise both of them
   // something nobody has paid for.
@@ -873,16 +1055,41 @@ function VisitRow({
   row,
   planSize,
   visitHref,
+  requirementId,
+  siblingStarts,
 }: {
   row: VisitSlotRow;
   planSize: number;
   visitHref: (visitId: string) => string;
+  /** Needed by the unmatched row, whose two exits both post against the request. */
+  requirementId: string;
+  /** The other visits' start times, for the re-picker's clash guard. */
+  siblingStarts: readonly string[];
 }) {
   const badge = SLOT_BADGE[row.state] ?? SLOT_BADGE.awaiting;
   // The visit's own zone since 1.26.0, not the deprecated single-city constant.
   const when = formatVisitSlot(row.scheduledFor, row.timeZone);
   const day = calendarDay(row.scheduledFor, row.timeZone);
   const today = isToday(row.scheduledFor, row.timeZone);
+
+  // Order matters. An unmatched or dropped share also has no visit, so these
+  // must be answered before the generic "nothing here yet" row — which is the
+  // bug being fixed: every settled dead end fell through to a live spinner.
+  if (row.state === "unmatched") {
+    return (
+      <UnmatchedVisitRow
+        row={row}
+        planSize={planSize}
+        requirementId={requirementId}
+        shareAmountLabel={row.money.amountLabel}
+        siblingStarts={siblingStarts}
+      />
+    );
+  }
+
+  if (row.state === "dropped") {
+    return <DroppedVisitRow row={row} planSize={planSize} />;
+  }
 
   if (row.visitId === null) {
     return <AwaitingVisitRow row={row} planSize={planSize} />;
@@ -1035,21 +1242,217 @@ function AwaitingVisitRow({
   );
 }
 
+/**
+ * Matching gave up, said plainly, with both ways out.
+ *
+ * ## What this replaces
+ *
+ * `AwaitingVisitRow` — "Finding your next professional… the moment one accepts,
+ * their visit time appears here" — rendered on a share the server had already
+ * settled as `NO_PROFESSIONAL_FOUND`. Nobody was being checked and nobody was
+ * going to accept, so the animation was a promise the system had already
+ * broken. A spinner that cannot stop is worse than bad news: it costs the
+ * Customer the chance to do anything about it.
+ *
+ * ## Two exits, because there are exactly two honest answers
+ *
+ * Try a different time, or do without this visit. The second one is the money:
+ * dropping the slot takes it out of `chargeable_paise`, so the plan stops
+ * quoting for a visit that cannot happen. Both endpoints already existed on the
+ * server; neither had ever been called from here.
+ */
+function UnmatchedVisitRow({
+  row,
+  planSize,
+  requirementId,
+  shareAmountLabel,
+  siblingStarts,
+}: {
+  row: VisitSlotRow;
+  planSize: number;
+  requirementId: string;
+  /**
+   * When the other visits on this plan are. Greys out the times that would leave a
+   * professional no travel time, instead of offering them and letting the write refuse.
+   */
+  siblingStarts: readonly string[];
+  /** This slot's own share of the plan price — what dropping it saves. */
+  shareAmountLabel: string | null;
+}) {
+  const drop = useDropVisitSlot();
+  const replace = useReplaceVisitSlot();
+  const [confirming, setConfirming] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const [draftStart, setDraftStart] = useState<string | null>(null);
+
+  // The same grid the request wizard picks from, read only once the Customer
+  // asks for it — an exhausted slot is not a reason to fetch availability for
+  // everyone who merely looks at the page.
+  const gridQuery = useCustomerVisitSlotGrid(requirementId, picking);
+  const grid =
+    gridQuery.data === undefined ? null : readCustomerVisitSlotGrid(gridQuery.data);
+  // The signed token the replace endpoint redeems, resolved from the visible
+  // choice against the current grid. Null while nothing valid is chosen, which
+  // is what disables the confirm.
+  const chosen = findCustomerVisitSlot(grid, draftStart);
+  const chosenToken = chosen !== null && chosen.isAvailable ? chosen.token : null;
+
+  return (
+    <li className="rounded-[10px] border border-warning-line bg-warning-surface p-4 sm:p-5">
+      <div className="flex flex-col gap-4">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone="warning">No professional found</Badge>
+            <span className="text-xs font-bold uppercase text-text-secondary">
+              Visit {row.position} of {planSize}
+            </span>
+          </div>
+          <h3 className="mt-3 text-xl font-extrabold leading-tight text-text sm:text-lg">
+            Nobody could take this visit
+          </h3>
+          <p className="mt-1 max-w-[34rem] text-sm font-medium leading-6 text-text-secondary">
+            We asked every verified professional who covers your area, and none of them could
+            make this time. Your other {planSize === 2 ? "visit is" : "visits are"} unaffected.
+          </p>
+          {shareAmountLabel !== null ? (
+            <p className="mt-2 text-sm font-bold text-text">
+              You have not been charged for this visit.
+            </p>
+          ) : null}
+        </div>
+
+        {drop.error ? (
+          <ErrorState
+            inline
+            severity="warning"
+            title="We could not drop this visit"
+            message={describeError(drop.error, "mutation").message}
+          />
+        ) : null}
+
+        {picking ? (
+          <div className="flex flex-col gap-3">
+            <CustomerVisitSlotChooser
+              planSize={1}
+              visitNumbers={[row.position]}
+              blockedStarts={siblingStarts}
+              title="Pick a new time for this visit"
+              description="We will ask every professional who covers your area again, for the time you choose."
+              grid={grid}
+              selectedStarts={[draftStart]}
+              onChange={(_index, startsAt) => setDraftStart(startsAt)}
+              isLoading={gridQuery.isPending}
+              error={gridQuery.error}
+              onRetry={() => void gridQuery.refetch()}
+            />
+            {replace.error ? (
+              <ErrorState
+                inline
+                severity="warning"
+                title="We could not use that time"
+                message={describeError(replace.error, "mutation").message}
+              />
+            ) : null}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={chosenToken === null}
+                loading={replace.isPending}
+                loadingLabel="Asking again"
+                onClick={() => {
+                  if (chosenToken === null) return;
+                  replace.mutate(
+                    { requirementId, shareId: row.id, slotId: chosenToken },
+                    { onSuccess: () => setPicking(false) },
+                  );
+                }}
+              >
+                Ask again at this time
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setPicking(false);
+                  setDraftStart(null);
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : confirming ? (
+          <div className="rounded-[10px] border border-line bg-surface p-3">
+            <p className="text-sm font-bold text-text">
+              Drop this visit{shareAmountLabel === null ? "" : ` and take ${shareAmountLabel} off the plan`}?
+            </p>
+            <p className="mt-1 text-sm leading-6 text-text-secondary">
+              You keep your other {planSize === 2 ? "visit" : "visits"}. This cannot be undone —
+              you would need to start a new request for another visit.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                variant="primary"
+                size="sm"
+                loading={drop.isPending}
+                loadingLabel="Dropping"
+                onClick={() => drop.mutate({ requirementId, shareId: row.id })}
+              >
+                Yes, drop it
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setConfirming(false)}>
+                Keep looking
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            <Button variant="primary" size="sm" onClick={() => setPicking(true)}>
+              Try a different time
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setConfirming(true)}>
+              Do without this visit
+            </Button>
+          </div>
+        )}
+      </div>
+    </li>
+  );
+}
+
+/** A slot the Customer chose to do without. Stated, not hidden — they paid for a plan. */
+function DroppedVisitRow({ row, planSize }: { row: VisitSlotRow; planSize: number }) {
+  return (
+    <li className="rounded-[10px] border border-line bg-surface-sunken p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge tone="neutral">Dropped</Badge>
+        <span className="text-xs font-bold uppercase text-text-secondary">
+          Visit {row.position} of {planSize}
+        </span>
+      </div>
+      <p className="mt-2 text-sm leading-6 text-text-secondary">
+        You chose to do without this visit after nobody could take it.
+        {row.money.amountLabel === null
+          ? " You are not charged for it."
+          : ` ${row.money.amountLabel} is not part of what you pay.`}
+      </p>
+    </li>
+  );
+}
+
 function SearchBeacon() {
   return (
     <div
       aria-hidden
-      className="relative grid size-28 shrink-0 place-items-center sm:size-20"
+      className="relative flex size-28 shrink-0 items-center justify-center overflow-hidden rounded-full border border-orange-200 bg-white shadow-sm sm:size-20"
     >
-      <span className="absolute inset-0 rounded-full bg-surface shadow-card ring-1 ring-info-line" />
-      <span className="absolute inset-3 rounded-full border border-info-line" />
-      <span className="absolute inset-6 rounded-full border border-info-line/80" />
-      <span className="absolute left-1/2 top-1/2 h-px w-[42%] origin-left animate-spin bg-action motion-reduce:animate-none" />
-      <span className="absolute left-[62%] top-[26%] size-3 animate-ping rounded-full bg-action motion-reduce:animate-none" />
-      <span className="absolute left-[62%] top-[26%] size-3 rounded-full bg-action" />
-      <span className="absolute grid size-10 place-items-center rounded-full bg-surface ring-1 ring-line sm:size-8">
-        <span className="size-2.5 rounded-full bg-action" />
-      </span>
+      <LottiePlayer
+        src={searchAnimationData}
+        loop
+        autoplay
+        className="size-full max-h-[85px] max-w-[85px]"
+      />
     </div>
   );
 }

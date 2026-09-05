@@ -58,6 +58,30 @@ class StageCrewMemberSerializer(serializers.Serializer[dict[str, Any]]):
     verified_at = serializers.DateTimeField(read_only=True, allow_null=True)
     status = serializers.CharField(read_only=True)
     assigned_at = serializers.DateTimeField(read_only=True)
+    #: The catalogue's role code this worker was named into (`waiter_count`), blank on a job that
+    #: asks for no roles.
+    role_code = serializers.CharField(read_only=True, allow_blank=True)
+
+
+class RoleFulfilmentSerializer(serializers.Serializer[dict[str, Any]]):
+    """One role, as booked against as named.
+
+    **A warning, never a refusal.** `assign_crew` refuses on totals -- five men and two women,
+    roles collapsed -- which is a floor rather than the promise the offer screen makes. This is
+    what lets the assignment screen say "you have named two women, both on setup; the customer
+    asked for two on the serving line" without blocking a supervisor who has a good reason.
+    """
+
+    role_code = serializers.CharField(read_only=True)
+    role_label = serializers.CharField(read_only=True)
+    wanted_men = serializers.IntegerField(read_only=True)
+    wanted_women = serializers.IntegerField(read_only=True)
+    named_men = serializers.IntegerField(read_only=True)
+    named_women = serializers.IntegerField(read_only=True)
+    is_met = serializers.BooleanField(read_only=True)
+    #: "1 woman short", or blank when the role is covered. Composed server-side so two clients
+    #: cannot word the same shortfall differently.
+    gap = serializers.CharField(read_only=True, allow_blank=True)
 
 
 class CrewAssignSerializer(serializers.Serializer[dict[str, Any]]):
@@ -73,6 +97,14 @@ class CrewAssignSerializer(serializers.Serializer[dict[str, Any]]):
         min_length=1,
         max_length=40,
     )
+    #: Which role each worker is named into, keyed by membership id. Optional and partial: a job
+    #: with no roles sends nothing, and a code this requirement does not publish is dropped rather
+    #: than refused -- it describes how the crew is arranged, not who is turning up.
+    roles = serializers.DictField(
+        child=serializers.SlugField(max_length=80, allow_blank=True),
+        required=False,
+        default=dict,
+    )
     #: Why somebody came off the shift, when this call is a substitution. Carried into the
     #: Customer's notification, which is what tells a replacement from a cancellation.
     reason_code = serializers.SlugField(max_length=80, required=False, allow_blank=True, default="")
@@ -80,6 +112,7 @@ class CrewAssignSerializer(serializers.Serializer[dict[str, Any]]):
 
 class StageCrewListSerializer(serializers.Serializer[dict[str, Any]]):
     crew = StageCrewMemberSerializer(many=True, read_only=True)
+    role_fulfilment = RoleFulfilmentSerializer(many=True, read_only=True)
     #: How many workers this day was booked for. The assignment screen needs it to say "3 of 4
     #: named" without a second request, and the server refuses a longer list than this anyway.
     expected_count = serializers.IntegerField(read_only=True)
@@ -297,6 +330,8 @@ class ShiftDaySerializer(serializers.Serializer[dict[str, Any]]):
     scheduled_on = serializers.DateField(read_only=True, allow_null=True)
     stage_status = serializers.CharField(read_only=True)
     crew = StageCrewMemberSerializer(many=True, read_only=True)
+    #: Empty on every job that asks for no men/women split, which is most of them.
+    role_fulfilment = RoleFulfilmentSerializer(many=True, read_only=True)
     attendance = ShiftAttendanceSerializer(read_only=True, allow_null=True)
     settlement = DaySettlementSerializer(read_only=True, allow_null=True)
     #: What one worker costs for one day on this booking: the wage component plus the supervision

@@ -19,7 +19,7 @@ import { EngagementScreen } from "@/features/engagement/view/engagement-screen";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Your agreement",
+  title: "Your booking",
   robots: { index: false, follow: false },
 };
 

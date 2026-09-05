@@ -47,6 +47,23 @@ def category_for_trade(trade_slug: str, default: str) -> str:
     return CATEGORY_FOR_TRADE.get(trade_slug, default)
 
 
+#: Where each M1 service lives once its trade was split into browse tiles:
+#: service slug -> (category slug, tile subcategory slug, seed-image subject).
+#:
+#: Shared for the same reason `CATEGORY_FOR_TRADE` is: `seed_technician_catalog` owns the
+#: six M1 services and `seed_task_catalog` owns the tiles, and if the two disagreed about
+#: where "switch-socket-repair" lives, whichever ran last would quietly move it. One map,
+#: read by both. `cupboard-hinge-repair` is absent deliberately — the carpenter trade was
+#: never split, so its own subcategory is still the right home.
+TILE_FOR_M1_SERVICE: dict[str, tuple[str, str, str]] = {
+    "switch-socket-repair": ("electrician", "switch-socket", "switch-socket"),
+    "fan-installation": ("electrician", "fans", "ceiling-fan"),
+    "light-led-installation": ("electrician", "lighting", "decorative-light"),
+    "tap-repair": ("plumber", "taps-showers", "faucet"),
+    "wc-flush-repair": ("plumber", "bathroom-fittings", "bathroom-fittings"),
+}
+
+
 @dataclass(frozen=True, slots=True)
 class ProcessStep:
     title: str

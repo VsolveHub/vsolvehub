@@ -46,7 +46,8 @@ price loaded later has a later `effective_from` and wins on the same ordering
 `pricing._effective_price` already uses, with no need to delete anything first.
 """
 
-from datetime import date, time, timedelta
+from dataclasses import dataclass
+from datetime import date, datetime, time, timedelta
 from typing import Any
 
 from django.conf import settings
@@ -57,15 +58,19 @@ from django.utils import timezone
 
 from apps.cases.models import OperationsCase
 from apps.cases.services import open_case
+from apps.catalog.icons import ServiceIconKey
 from apps.catalog.models import (
     Category,
     M2VariantConfiguration,
     Service,
+    ServiceMedia,
+    ServicePolicy,
     ServiceQuestion,
     ServiceQuestionOption,
     ServiceVariant,
     Subcategory,
 )
+from apps.catalog.seed_images import fill_blank_image, image_for
 from apps.identity.models import Role, User, UserRole
 from apps.locations.models import (
     PostalCode,
@@ -93,7 +98,8 @@ from apps.partners.models import (
     Skill,
 )
 from apps.payouts.models import PartnerPayoutAccount
-from apps.requirements.models import M2AccessPrice, RateCard
+from apps.requirements import financials
+from apps.requirements.models import CommercialPolicy, M2AccessPrice, RateCard
 from apps.requirements.rate_cards import publish_rate_card
 
 #: The words that make an invented value identifiable forever. Written into `source_reference` on
@@ -103,6 +109,8 @@ DEV_SEED_MARKER = "DEV SEED — not an owner decision"
 #: One fixed date for every effective-dated row, so a rerun updates rather than stacks, and so a
 #: real price loaded on any later date supersedes these without anybody deleting them first.
 DEV_SEED_EFFECTIVE_FROM = date(2026, 1, 1)
+#: The one placeholder `CommercialPolicy` version this command activates (BE-5A gate).
+COMMERCIAL_POLICY_VERSION = 1
 
 #: Its own phone block, like every other seed command. `+9170100` is `seed_trade_partners`,
 #: `+9170200` is `seed_replacement_partner`, `+9195…` is the console demo and `+9199…` is density.
@@ -114,7 +122,77 @@ POSTAL_CODE = "500032"
 #: until they map it, and the wage-floor guard fails closed while it is blank.
 STATE_CODE = "TG"
 
-CATEGORY_SLUG = "workforce-and-projects"
+#: Retired 2026-08-26. The umbrella meant nothing to a customer — "Full bathroom renovation"
+#: belongs beside the plumber, not inside a noun only this codebase understood. The category row
+#: is deactivated by `catalog.0015_refile_workforce_projects_services`; this constant survives
+#: only so the migration and this command agree on what to retire.
+LEGACY_CATEGORY_SLUG = "workforce-and-projects"
+
+#: slug -> (name, description, icon_key, display_order, seed-image subject).
+#:
+#: The trade rows are byte-for-byte copies of `seed_task_catalog.CATALOG`, because
+#: `Category.objects.update_or_create` merges on slug: two commands that disagree about what
+#: "plumber" is called would fight over the row, last writer winning. The two new rows are
+#: customer-comprehensible nouns replacing the retired umbrella.
+M2_CATEGORY_SEEDS: dict[str, tuple[str, str, str, int, str]] = {
+    "technician": (
+        "Technician",
+        "Reviewed one-person Technician task visits.",
+        "wrench",
+        1,
+        "technician",
+    ),
+    "electrician": (
+        "Electrician",
+        "Wiring, fittings, fans and power faults, fixed in one visit.",
+        "zap",
+        2,
+        "electrician",
+    ),
+    "plumber": (
+        "Plumber",
+        "Taps, leaks, drains and fittings, fixed in one visit.",
+        "droplet",
+        3,
+        "plumber",
+    ),
+    "ac-services": (
+        "AC Services",
+        "Installation, servicing, gas and repair for split and window units.",
+        "wind",
+        4,
+        "air-conditioner",
+    ),
+    "beautician": (
+        "Beautician",
+        "Salon-grade beauty and grooming services delivered at home.",
+        "sparkles",
+        5,
+        "beautician",
+    ),
+    "home-services": (
+        "Home Services",
+        "Cleaning, pest control and upkeep delivered at your address.",
+        "home",
+        6,
+        "home-cleaning",
+    ),
+    "construction": (
+        "Construction",
+        "Site labour and construction projects, priced on site.",
+        "hard-hat",
+        8,
+        "construction",
+    ),
+    "events": (
+        "Events",
+        "Catering and event services, priced per plate or per event.",
+        "party-popper",
+        9,
+        "catering",
+    ),
+}
+
 A3_SERVICE_SLUG = "construction-helpers"
 A5_SERVICE_SLUG = "interior-fit-out-project"
 
@@ -141,6 +219,7 @@ _SCOPE_KIND_BY_QUESTION_KIND: dict[str, str] = {
     ServiceQuestion.Kind.TEXT: "TEXT",
     ServiceQuestion.Kind.BOOLEAN: "BOOLEAN",
     ServiceQuestion.Kind.SINGLE_CHOICE: "SELECT",
+    ServiceQuestion.Kind.MULTIPLE_CHOICE: "MULTI_SELECT",
 }
 
 #: One authored option: `(code, label, description)`.
@@ -148,6 +227,18 @@ QuestionOptionSeed = tuple[str, str, str]
 
 #: One authored question: `(code, prompt, catalogue kind, required, minimum, options)`.
 QuestionSeed = tuple[str, str, str, bool, int | None, tuple[QuestionOptionSeed, ...] | None]
+
+#: The answer a question starts on, keyed by code.
+#:
+#: Published in `validation_rules` so it is catalogue data rather than a rule some screen
+#: remembers: Operations can change what "everyone in closed shoes" starts as without a deploy,
+#: and every client that renders the question gets the same starting answer.
+#:
+#: A default is only honest where one answer is genuinely the norm and the other is a deliberate
+#: choice. It is not a way to pre-answer a question the Customer should be making.
+QUESTION_DEFAULT: dict[str, object] = {
+    "closed_shoes": True,
+}
 
 #: `help_text` for the questions that have one, keyed by code.
 #:
@@ -157,9 +248,35 @@ QuestionSeed = tuple[str, str, str, bool, int | None, tuple[QuestionOptionSeed, 
 #: person short. The catalogue is where that sentence belongs — the booking screen renders whatever
 #: help the server publishes and authors none of its own.
 QUESTION_HELP: dict[str, str] = {
-    "worker_count": "A supervisor is included with every crew.",
+    "worker_count": "They come with their own tools.",
     "duration_days": "Consecutive days, 8-hour shifts.",
     "floor_area_sqft": "A rough number is fine. Vendors measure on the visit.",
+    "fittings_count": "Taps, showers, WCs, basins.",
+    "counter_length_ft": "Along the counter walls. A rough number is fine.",
+    "point_count": "Switches, sockets and light points together.",
+    "guest_count": "Sets the quantity on every dish.",
+    # Event staff roles. The help is the one line a customer reads to tell two roles apart, so it
+    # names the work rather than repeating the label.
+    "waiter_count": "Serving, clearing, refills and buffet counters.",
+    "bar_staff_count": "Soft drinks, mocktails and counters. No licensed liquor service.",
+    "hostess_count": "Welcoming guests, seating and the gifts desk.",
+    "dress_code": (
+        "One standard for the whole crew. Men and women each wear what meets it — we brief "
+        "them before the day."
+    ),
+    "closed_shoes": (
+        "Standard for catering and setup work, and what most venues ask for. Turn it off if "
+        "open footwear is fine at yours."
+    ),
+    "kitchen_helper_count": "Plating, dish return and pantry support for your caterer.",
+    "cleanup_count": "Keeping the venue and washrooms presentable through the event.",
+    "setup_count": "Furniture, decor and equipment before and after.",
+    "staff_meal_provided": "Customary for shifts over six hours.",
+    # Event lighting & decor. The budget line matters most: decorators design *to*
+    # a budget, and without one the first quote is a guess the customer churns on.
+    "decor_areas": "Tap everything you want decorated.",
+    "budget_band": "A range helps decorators design to it. It is not a commitment.",
+    "setup_access": "Most decorators set up the evening before or early that morning.",
 }
 
 #: `(code, prompt, kind, required, minimum)`. The A3 set answers `services.infer_archetype`'s
@@ -316,6 +433,553 @@ A5_QUESTIONS: tuple[QuestionSeed, ...] = (
     ),
 )
 
+
+#: One authored A5 project service: everything `_seed_variant` needs beyond the questions.
+#:
+#: The icon key is a member of the controlled `ServiceIconKey` vocabulary, never a guess — where
+#: no trade glyph exists (painting, catering) the honest generic beats a wrong pictogram, which is
+#: the FE-9 rule. Subcategory display orders start above the trade subcategories seeded by
+#: `seed_task_catalog`, so a project section always lists after the priced task visits inside the
+#: same trade category.
+@dataclass(frozen=True)
+class ProjectSeed:
+    slug: str
+    name: str
+    variant_name: str
+    icon_key: str
+    #: A key of `M2_CATEGORY_SEEDS` — the trade category the customer browses, never a
+    #: booking-model noun. Placement is merchandising only; the archetype stays on the variant.
+    category_slug: str
+    subcategory_slug: str
+    subcategory_name: str
+    subcategory_display_order: int
+    questions: tuple[QuestionSeed, ...]
+    #: Key into `catalog.seed_images.SEED_IMAGE_POOLS` for the tile photo and this
+    #: service's cover. Blank seeds no photo and the client falls back to the icon.
+    image_subject: str = ""
+    #: The trade catalogue estimates are priced from (`M2VariantConfiguration.pricing_skill_code`).
+    #: Blank until that trade's price book is authored in `seed_price_book_demo`.
+    pricing_skill: str = ""
+    #: The sentence on the service card and at the top of the brief. Author it —
+    #: a customer never reads "(development fixture)".
+    short_description: str = ""
+    material_fulfilment_mode: str = M2VariantConfiguration.MaterialFulfilmentMode.CUSTOMER_PROCURES
+
+
+#: Every A5 project the demo catalogue publishes. The design walkthrough follows
+#: `full-bathroom-renovation`, whose three questions are the M2 artboard's "What needs doing?"
+#: screen verbatim — a choice rendered as icon tiles, a number on the keypad card, a Yes/No pair.
+#: **No `TEXT` questions here**: the Customer brief is facts-only (task.md, "The Customer never
+#: describes anything"), and a text question seeded on an A5 variant would put a keyboard back
+#: into a flow that removed every one.
+#:
+#: Cook-on-hire product boundary. This one value authors the upper A3 band and the first A5 band;
+#: the Customer app reads the published A3 options for its hand-off copy, so changing the owner
+#: decision here moves the boundary everywhere without a second frontend number.
+HOUSE_FUNCTION_GUEST_LIMIT = 75
+
+#: Price-book-only trade rows that have no A3 wage classification to create them. Demo vendors
+#: receive these skills as well, so their estimate composer can load and save the matching book.
+PROJECT_ONLY_PRICING_SKILLS: tuple[tuple[str, str, str], ...] = (
+    (
+        "event-cook",
+        "Event cook",
+        "Cooking labour for customer-procured event groceries, priced per plate.",
+    ),
+)
+
+A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
+    ProjectSeed(
+        slug=A5_SERVICE_SLUG,
+        pricing_skill="carpenter",
+        name="Interior fit-out project",
+        variant_name="Fit-out, priced on site",
+        icon_key=ServiceIconKey.CUSTOM_PROJECT,
+        category_slug="construction",
+        subcategory_slug="interior-fit-outs",
+        subcategory_name="Interior fit-outs",
+        subcategory_display_order=20,
+        # Visit-first: the fit-out kind only. Space, size and budget are the visit's.
+        questions=A5_QUESTIONS[:1],
+        image_subject="interior-fit-out",
+        short_description=(
+            "A full interior fit-out, measured on site and priced in writing by up to "
+            "three verified professionals."
+        ),
+    ),
+    ProjectSeed(
+        slug="full-bathroom-renovation",
+        pricing_skill="plumber",
+        name="Full bathroom renovation",
+        variant_name="Renovation, priced on site",
+        icon_key=ServiceIconKey.PLUMBING,
+        category_slug="plumber",
+        subcategory_slug="renovation-projects",
+        subcategory_name="Renovation projects",
+        subcategory_display_order=30,
+        # Visit-first: the tile is the requirement. Rooms, fittings and the state of the
+        # supply are what the plumber sees on the visit.
+        questions=(),
+        image_subject="bathroom-renovation",
+        short_description=(
+            "Strip-out to finish: your bathroom rebuilt, measured on site and priced in "
+            "writing before any work starts."
+        ),
+    ),
+    ProjectSeed(
+        slug="full-home-painting",
+        pricing_skill="painter",
+        name="Full home painting",
+        variant_name="Painting, priced on site",
+        icon_key=ServiceIconKey.CUSTOM_PROJECT,
+        category_slug="home-services",
+        subcategory_slug="renovation-projects",
+        subcategory_name="Renovation projects",
+        subcategory_display_order=30,
+        # Visit-first: the tile is the requirement; size and condition are measured on the visit.
+        questions=(),
+        image_subject="painting",
+        short_description=(
+            "Whole-home painting, measured on site — surface prep, paint and finish "
+            "priced in writing before a brush touches a wall."
+        ),
+    ),
+    ProjectSeed(
+        slug="modular-kitchen-fit-out",
+        pricing_skill="carpenter",
+        name="Modular kitchen fit-out",
+        variant_name="Kitchen, priced on site",
+        icon_key=ServiceIconKey.CARPENTRY,
+        category_slug="technician",
+        subcategory_slug="renovation-projects",
+        subcategory_name="Renovation projects",
+        subcategory_display_order=30,
+        # Visit-first: shape, counter length, finish and appliances are what the carpenter
+        # measures and discusses on the visit.
+        questions=(),
+        image_subject="modular-kitchen",
+        short_description=(
+            "A modular kitchen designed around your layout, measured on site and priced "
+            "in writing per unit and finish."
+        ),
+    ),
+    ProjectSeed(
+        slug="full-home-rewiring",
+        pricing_skill="electrician",
+        name="Full home rewiring",
+        variant_name="Rewiring, priced on site",
+        icon_key=ServiceIconKey.ELECTRICAL,
+        category_slug="electrician",
+        subcategory_slug="renovation-projects",
+        subcategory_name="Renovation projects",
+        subcategory_display_order=30,
+        # Visit-first (owner decision, 2026-08-29): the catalogue tile *is* the requirement.
+        # Nothing about size or points is asked — the electrician measures on the visit — so
+        # the brief goes straight to Where and when.
+        questions=(),
+        image_subject="house-wiring",
+        short_description=(
+            "Complete rewiring for a home or shop — points, boards and safety checks, "
+            "measured on site and priced in writing."
+        ),
+    ),
+    ProjectSeed(
+        slug="event-catering",
+        pricing_skill="event-catering",
+        name="Event catering",
+        variant_name="Menu, priced per plate",
+        icon_key=ServiceIconKey.SERVICE,
+        category_slug="events",
+        subcategory_slug="event-services",
+        subcategory_name="Event services",
+        subcategory_display_order=40,
+        # One tap - the one thing a caterer must know before the tasting visit. Guests, meal
+        # and menu are planned on it.
+        questions=(
+            (
+                "menu_preference",
+                "What kind of food?",
+                ServiceQuestion.Kind.SINGLE_CHOICE,
+                True,
+                None,
+                (
+                    ("veg", "Pure veg", ""),
+                    ("veg-nonveg", "Veg + non-veg", ""),
+                    ("jain", "Jain or satvik", ""),
+                ),
+            ),
+        ),
+        image_subject="catering",
+        short_description=(
+            "Menus priced per plate for your guest count — caterers visit, taste-plan "
+            "with you and quote in writing."
+        ),
+    ),
+    ProjectSeed(
+        slug="event-cook",
+        pricing_skill="event-cook",
+        name="Event cook (you supply the groceries)",
+        variant_name="Cooking, priced per plate",
+        icon_key=ServiceIconKey.SERVICE,
+        category_slug="events",
+        subcategory_slug="event-cooks",
+        subcategory_name="Event cooks",
+        subcategory_display_order=45,
+        questions=(
+            (
+                "food_preference",
+                "Veg or non-veg?",
+                ServiceQuestion.Kind.SINGLE_CHOICE,
+                True,
+                None,
+                (
+                    ("veg", "Pure veg", ""),
+                    ("veg-nonveg", "Veg + non-veg", ""),
+                    ("nonveg", "Non-veg only", ""),
+                    ("jain-satvik", "Jain or satvik", ""),
+                ),
+            ),
+            (
+                "guest_band",
+                "How many guests?",
+                ServiceQuestion.Kind.SINGLE_CHOICE,
+                True,
+                None,
+                (
+                    (
+                        f"{HOUSE_FUNCTION_GUEST_LIMIT}-150",
+                        f"{HOUSE_FUNCTION_GUEST_LIMIT} to 150",
+                        "",
+                    ),
+                    ("150-300", "150 to 300", ""),
+                    ("300-plus", "300 or more", ""),
+                ),
+            ),
+        ),
+        image_subject="catering",
+        material_fulfilment_mode=(M2VariantConfiguration.MaterialFulfilmentMode.CUSTOMER_PROCURES),
+        short_description=(
+            "You buy the groceries, they do the cooking. Verified cooks quote per plate for "
+            "your guest count and send you the shopping list."
+        ),
+    ),
+    # ------------------------------------------------------------------
+    # 2026-08-26: quote-priced work in EVERY category, so no trade is a
+    # fixed-price-only storefront. Same icon-tile question discipline: choices,
+    # numbers and yes/no only — the customer never types a description.
+    # ------------------------------------------------------------------
+    ProjectSeed(
+        slug="electrician-consultation",
+        pricing_skill="electrician",
+        name="Book an electrician consultation",
+        variant_name="On-site consultation and estimate",
+        icon_key=ServiceIconKey.ELECTRICAL,
+        category_slug="electrician",
+        subcategory_slug="consultation",
+        subcategory_name="Book a consultation",
+        subcategory_display_order=99,
+        # One tap: the thing that changes what the electrician brings. Everything else is the
+        # visit's job (visit-first, owner decision 2026-08-29).
+        questions=(
+            (
+                "work_type",
+                "What's going on?",
+                ServiceQuestion.Kind.SINGLE_CHOICE,
+                True,
+                None,
+                (
+                    ("tripping", "Power keeps tripping", "MCB trips, sparks or a burning smell."),
+                    ("new-points", "New points or fittings", "Sockets, lights, fans, AC points."),
+                    ("renovation", "Renovation work", "Rewiring a room, a home or a shop."),
+                    ("not-sure", "Not sure", "The electrician works it out on the visit."),
+                ),
+            ),
+        ),
+        image_subject="consultation",
+        short_description=(
+            "Not sure what the job needs? A verified electrician visits, inspects and "
+            "gives you a written estimate — the visit fee is all you pay."
+        ),
+    ),
+    ProjectSeed(
+        slug="plumber-consultation",
+        pricing_skill="plumber",
+        name="Book a plumber consultation",
+        variant_name="On-site consultation and estimate",
+        icon_key=ServiceIconKey.PLUMBING,
+        category_slug="plumber",
+        subcategory_slug="consultation",
+        subcategory_name="Book a consultation",
+        subcategory_display_order=99,
+        # One tap: what the plumber brings. Everything else is the visit's job (visit-first,
+        # owner decision 2026-08-29).
+        questions=(
+            (
+                "work_type",
+                "What's going on?",
+                ServiceQuestion.Kind.SINGLE_CHOICE,
+                True,
+                None,
+                (
+                    ("leak", "Leak or seepage", "Dripping tap, wet wall, ceiling patch."),
+                    ("new-fittings", "New taps or fittings", "WC, basin, shower, geyser line."),
+                    ("blockage", "Blocked drain", "Sink, floor trap or main line."),
+                    ("renovation", "Bathroom or kitchen redo", "New lines for a rebuild."),
+                    ("not-sure", "Not sure", "The plumber works it out on the visit."),
+                ),
+            ),
+        ),
+        image_subject="consultation",
+        short_description=(
+            "Not sure what the job needs? A verified plumber visits, inspects and gives "
+            "you a written estimate — the visit fee is all you pay."
+        ),
+    ),
+    ProjectSeed(
+        slug="custom-furniture-work",
+        pricing_skill="carpenter",
+        name="Custom furniture & woodwork",
+        variant_name="Furniture, priced on site",
+        icon_key=ServiceIconKey.CARPENTRY,
+        category_slug="technician",
+        subcategory_slug="renovation-projects",
+        subcategory_name="Renovation projects",
+        subcategory_display_order=30,
+        # One tap - what the carpenter comes prepared for. Material and size are the visit's.
+        questions=(
+            (
+                "furniture_type",
+                "What are we building?",
+                ServiceQuestion.Kind.SINGLE_CHOICE,
+                True,
+                None,
+                (
+                    ("wardrobe", "Wardrobe", "Sliding or hinged, loft on top."),
+                    ("tv-unit", "TV unit", "Wall panel, floor unit or both."),
+                    ("study-table", "Study table or desk", ""),
+                    ("bed", "Bed with storage", ""),
+                    ("full-set", "Several pieces", "The carpenter lists them on the visit."),
+                ),
+            ),
+        ),
+        image_subject="carpentry",
+        short_description=(
+            "Wardrobes, units and tables built to your measurements — a carpenter "
+            "measures on site and quotes in writing per piece."
+        ),
+    ),
+    ProjectSeed(
+        slug="central-ac-ducting",
+        pricing_skill="ac-technician",
+        name="Central AC & ducting work",
+        variant_name="Ducted cooling, priced on site",
+        icon_key=ServiceIconKey.AIR_CONDITIONING,
+        category_slug="ac-services",
+        subcategory_slug="ac-projects",
+        subcategory_name="AC projects",
+        subcategory_display_order=30,
+        # Visit-first: the tile is the requirement; size and condition are measured on the visit.
+        questions=(),
+        image_subject="hvac-duct",
+        short_description=(
+            "Ducted and multi-room cooling designed for your space — surveyed on site "
+            "and priced in writing per tonne and run."
+        ),
+    ),
+    ProjectSeed(
+        slug="bridal-event-makeup",
+        pricing_skill="bridal-event-makeup",
+        name="Bridal & event makeup",
+        variant_name="Package, priced after consultation",
+        icon_key=ServiceIconKey.MAKEUP,
+        category_slug="beautician",
+        subcategory_slug="bridal-events",
+        subcategory_name="Bridal & events",
+        subcategory_display_order=90,
+        # One tap - the occasion sets the look the artist prepares for. People, trial and call
+        # time are agreed at the consultation.
+        questions=(
+            (
+                "occasion",
+                "What's the occasion?",
+                ServiceQuestion.Kind.SINGLE_CHOICE,
+                True,
+                None,
+                (
+                    ("wedding", "Wedding", ""),
+                    ("reception", "Reception", ""),
+                    ("engagement", "Engagement", ""),
+                    ("party", "Party or shoot", ""),
+                ),
+            ),
+        ),
+        image_subject="bridal-makeup",
+        short_description=(
+            "Bridal and occasion makeup as a package — artists consult first, then quote "
+            "in writing for the day, trials included if you want them."
+        ),
+    ),
+    ProjectSeed(
+        slug="home-demolition",
+        pricing_skill="home-demolition",
+        name="Demolition & debris removal",
+        variant_name="Demolition, priced on site",
+        icon_key=ServiceIconKey.CUSTOM_PROJECT,
+        category_slug="construction",
+        subcategory_slug="demolition",
+        subcategory_name="Demolition",
+        subcategory_display_order=40,
+        # One tap - crew size follows from it. Debris, floor and access are agreed on the visit.
+        questions=(
+            (
+                "demolition_scope",
+                "What's coming down?",
+                ServiceQuestion.Kind.SINGLE_CHOICE,
+                True,
+                None,
+                (
+                    ("single-wall", "A wall or two", ""),
+                    ("one-room", "One room", ""),
+                    ("full-floor", "A full floor", ""),
+                    ("full-structure", "A full structure", ""),
+                ),
+            ),
+        ),
+        image_subject="demolition",
+        short_description=(
+            "Safe demolition with optional debris removal — assessed on site and priced "
+            "in writing before anything comes down."
+        ),
+    ),
+    ProjectSeed(
+        slug="tiling-flooring-work",
+        pricing_skill="tiling-flooring-work",
+        name="Tiling & flooring work",
+        variant_name="Tiling, priced on site",
+        icon_key=ServiceIconKey.CUSTOM_PROJECT,
+        category_slug="construction",
+        subcategory_slug="tiling-flooring",
+        subcategory_name="Tiling & flooring",
+        subcategory_display_order=50,
+        # One tap - it changes the tiles the tiler comes to measure for. Area is the visit's.
+        questions=(
+            (
+                "surface",
+                "What are we tiling?",
+                ServiceQuestion.Kind.SINGLE_CHOICE,
+                True,
+                None,
+                (
+                    ("floor", "Floors", ""),
+                    ("wall", "Walls", ""),
+                    ("both", "Floors and walls", ""),
+                ),
+            ),
+        ),
+        image_subject="tiling",
+        short_description=(
+            "Floor and wall tiling measured on site — laying, grouting and finishing "
+            "priced in writing per square foot."
+        ),
+    ),
+    ProjectSeed(
+        slug="terrace-waterproofing",
+        pricing_skill="terrace-waterproofing",
+        name="Terrace & bathroom waterproofing",
+        variant_name="Waterproofing, priced on site",
+        icon_key=ServiceIconKey.CUSTOM_PROJECT,
+        category_slug="construction",
+        subcategory_slug="waterproofing",
+        subcategory_name="Waterproofing",
+        subcategory_display_order=60,
+        # One tap - the surface decides the treatment the waterproofer brings. Size is the visit's.
+        questions=(
+            (
+                "surface",
+                "Where's the problem?",
+                ServiceQuestion.Kind.SINGLE_CHOICE,
+                True,
+                None,
+                (
+                    ("terrace", "Terrace or roof", ""),
+                    ("bathroom", "Bathroom", ""),
+                    ("water-tank", "Water tank", ""),
+                    ("basement", "Basement or wall", ""),
+                ),
+            ),
+        ),
+        image_subject="terrace",
+        short_description=(
+            "Leaks found and sealed for good — terrace, bathroom or tank waterproofing, "
+            "inspected on site and priced in writing."
+        ),
+    ),
+    ProjectSeed(
+        slug="event-lighting-decor",
+        pricing_skill="event-lighting-decor",
+        name="Event lighting & decor",
+        variant_name="Decor, priced per event",
+        icon_key=ServiceIconKey.SERVICE,
+        category_slug="events",
+        subcategory_slug="lighting-decor",
+        subcategory_name="Lighting & decor",
+        subcategory_display_order=50,
+        # The real-world brief a decorator quotes from — occasion, what to decorate,
+        # the look, the venue, scale and budget. Every question is a tap; the one
+        # TEXT line is optional and the client shows it only behind "Something
+        # else" (`docs/superpowers/plans/2026-08-29-event-decor-flow-audit-and-redesign.md`).
+        # Visit-first (owner decision 2026-08-30): the occasion is the one thing the decorator
+        # must know before coming. Areas, look, guests, budget and setup access moved to the
+        # visit; the multi-select and budget machinery stays in the platform for other briefs.
+        questions=(
+            (
+                "event_type",
+                "What's the occasion?",
+                ServiceQuestion.Kind.SINGLE_CHOICE,
+                True,
+                None,
+                (
+                    (
+                        "wedding",
+                        "Wedding function",
+                        "Haldi, mehendi, sangeet, reception or the wedding day.",
+                    ),
+                    ("birthday", "Birthday", "First birthday, kids' party or a milestone."),
+                    ("engagement", "Engagement or roka", "Ring ceremony and pre-wedding events."),
+                    (
+                        "house-function",
+                        "House or religious function",
+                        "Housewarming, pooja, naming or cradle ceremony.",
+                    ),
+                    (
+                        "baby",
+                        "Baby shower or seemantham",
+                        "Godh bharai and welcome-baby functions.",
+                    ),
+                    ("corporate", "Corporate event", "Launches, office parties, conferences."),
+                    ("festival", "Festival", "Ganesh Chaturthi, Diwali or a community event."),
+                    ("other", "Something else", "Tell us in a line and we pass it along."),
+                ),
+            ),
+            (
+                "event_description",
+                "Tell us about the event",
+                ServiceQuestion.Kind.TEXT,
+                False,
+                None,
+                None,
+            ),
+        ),
+        image_subject="event-decor",
+        short_description=(
+            "Lighting, stage and decor planned around your venue — decorators visit and "
+            "quote in writing for the whole event."
+        ),
+        material_fulfilment_mode=M2VariantConfiguration.MaterialFulfilmentMode.PARTNER_TURNKEY,
+    ),
+)
+
+
 #: The vendor's own registration questions for the A3 capability (`M2-BE-106`), on the same
 #: versioned schema and the same validator.
 A3_REGISTRATION_QUESTIONS: tuple[QuestionSeed, ...] = (
@@ -381,6 +1045,11 @@ FIRST_QUOTE_SLA_HOURS = 24
 QUOTE_DELIVERY_SLA_HOURS = 72
 FIRST_VISIT_SLA_HOURS = 24
 VISIT_PLAN_FILL_SLA_HOURS = 72
+#: Owner decision, 2026-09-01. **Seconds**, wall clock — the fixed-visit offer's answer window.
+#: Five minutes rather than the crew cascade's two: a visit offer can land while the professional
+#: is up a ladder on another job, and the re-dispatch sweep means a missed window costs minutes,
+#: not the job. The `starts_at - 15min` ceiling still applies on top.
+FIXED_VISIT_OFFER_TIMEOUT_SECONDS = 300
 POST_VISIT_ESTIMATE_WINDOW_HOURS = 48
 #: How long an A5 plan visit occupies the vendor on the shared availability grid. No owner decision
 #: names it; there is simply no defensible default for "how long does a site visit take".
@@ -617,14 +1286,587 @@ _C6_RECOVERY_POLICY: dict[str, Any] = {
 }
 
 
-def _matches_seeded_rate(card: RateCard) -> bool:
-    """Whether a published card already carries exactly the components this seed would write."""
+#: One A3 day-hire service: the catalog placement plus the money rows (skill, wage floor,
+#: rate card) the instant path fails closed without. **Every money figure is an invention**
+#: standing in for the ADR-0009 phone survey, exactly like the construction-helper constants
+#: above — the per-trade spreads (an electrician's day costs more than a helper's) are shaped
+#: plausibly so the demo reads sensibly, and nothing more.
+#:
+#: ## Everything the customer reads is per service, never shared
+#:
+#: The first cut of this table shared `A3_QUESTIONS`, `RATE_CARD_INCLUSIONS` and the shifting
+#: add-ons across all five services — so "Event staff by the day" opened on "What will they be
+#: doing?" with masonry and demolition cards, and its rate promised "loading, carrying and
+#: unloading". A customer who picked a specific trade already answered the work question by
+#: picking it: only the generic helpers service keeps a work chooser, and every service carries
+#: its own questions, its own rate inclusions, its own included/excluded policy copy and its own
+#: add-on rates. The booking flow renders whatever is published here, so wrong words in this
+#: table ARE the broken screen.
+@dataclass(frozen=True)
+class DaySeed:
+    slug: str
+    name: str
+    variant_name: str
+    icon_key: str
+    category_slug: str
+    subcategory_slug: str
+    subcategory_name: str
+    subcategory_display_order: int
+    image_subject: str
+    skill_code: str
+    skill_name: str
+    skill_description: str
+    wage_floor_paise: int
+    worker_day_wage_paise: int
+    supervision_margin_paise: int
+    overtime_hourly_paise: int
+    #: What the customer is asked. Must include `worker_count` and `duration_days` — the two
+    #: codes `rate_cards.preset_size`, matching and the shift-day engine all read.
+    questions: tuple[QuestionSeed, ...]
+    #: Price-moving facts for the instant path. Empty publishes `{"questions": []}` — a real,
+    #: present preset with nothing extra to ask — never `{}`, which the reader refuses.
+    preset_questions: tuple[QuestionSeed, ...]
+    #: Printed on the rate card and echoed on the customer's live-rate screen.
+    rate_inclusions: tuple[str, ...]
+    #: Published extras priced through the amendment engine. Empty means no billable extras.
+    add_on_rates: dict[str, int]
+    #: The catalogue's What's-included / What's-not page for this service.
+    short_description: str
+    included: tuple[str, ...]
+    excluded: tuple[str, ...]
+    #: The trade catalogue the day-hire's labour lines are priced from. Blank = none yet.
+    pricing_skill: str = ""
+
+
+#: The two sizing questions every day-hire form ends with, labelled per trade. The codes are
+#: load-bearing (`preset_size` reads exactly these); only the label varies.
+def _size_questions(people_label: str) -> tuple[QuestionSeed, ...]:
     return (
-        card.worker_day_wage_paise == RATE_CARD_WORKER_DAY_WAGE_PAISE
-        and card.supervision_margin_paise == RATE_CARD_SUPERVISION_MARGIN_PAISE
+        (
+            "worker_count",
+            people_label,
+            ServiceQuestion.Kind.NUMBER,
+            True,
+            1,
+            None,
+        ),
+        ("duration_days", "Days", ServiceQuestion.Kind.NUMBER, True, 1, None),
+    )
+
+
+#: Event staff is the one day-hire that "picking the service" does NOT answer: a waiter, a bar
+#: hand, a hostess and a cleanup crew are different people at different stations, and a lead
+#: staffing a wedding needs the occasion, the crowd and the dress code before they can say yes.
+#:
+#: The per-role counts are optional NUMBER questions with a floor of zero. `worker_count` stays
+#: required and is the sum of them — the booking screen keeps it in step — because `preset_size`,
+#: matching and the shift-day engine all read that one code and nothing else. Order here is the
+#: order the screens ask in: the occasion, the crew, then how they should turn up.
+def _role_questions(stem: str, label: str) -> tuple[QuestionSeed, ...]:
+    """One crew role, as the three questions the catalogue publishes for it.
+
+    `<stem>_count` is the role's total and the only one of the three that carries the human label
+    and the display order -- `crew_mix` reads the label from here, and the Customer's app groups
+    the two steppers under it.
+
+    The halves are `required=False` because a role nobody wants is a role nobody answers. Zero is
+    the honest default, and a required field would force a Customer to type six zeroes to book
+    two waiters.
+
+    This replaces `staff_preference` (`any` / `female` / `male`), which asked the same question
+    once for the whole crew and could not say "two women on the bar, four men on setup".
+    """
+    return (
+        (f"{stem}_count", label, ServiceQuestion.Kind.NUMBER, False, 0, None),
+        (f"{stem}_men", f"{label} - men", ServiceQuestion.Kind.NUMBER, False, 0, None),
+        (f"{stem}_women", f"{label} - women", ServiceQuestion.Kind.NUMBER, False, 0, None),
+    )
+
+
+EVENT_STAFF_QUESTIONS: tuple[QuestionSeed, ...] = (
+    (
+        "event_type",
+        "What's the occasion?",
+        ServiceQuestion.Kind.SINGLE_CHOICE,
+        True,
+        None,
+        (
+            ("wedding", "Wedding", "Reception, sangeet, haldi or the wedding day itself."),
+            (
+                "corporate",
+                "Corporate event",
+                "Conferences, launches, office parties and client dinners.",
+            ),
+            ("birthday", "Birthday party", "For kids or adults, at home or at a venue."),
+            (
+                "house-function",
+                "House or religious function",
+                "Housewarming, pooja, naming ceremony or a festival gathering.",
+            ),
+            (
+                "other",
+                "Something else",
+                "Tell us in a sentence and we will pass it to the supervisor.",
+            ),
+        ),
+    ),
+    ("event_description", "Tell us about the event", ServiceQuestion.Kind.TEXT, False, None, None),
+    (
+        "guest_band",
+        "How many guests?",
+        ServiceQuestion.Kind.SINGLE_CHOICE,
+        True,
+        None,
+        (
+            ("under-50", "Under 50", ""),
+            ("50-100", "50 to 100", ""),
+            ("100-200", "100 to 200", ""),
+            ("200-plus", "200 or more", ""),
+        ),
+    ),
+    (
+        "service_style",
+        "How is food served?",
+        ServiceQuestion.Kind.SINGLE_CHOICE,
+        True,
+        None,
+        (
+            ("buffet", "Buffet", "Guests walk up to the counters."),
+            ("sit-down", "Sit-down service", "Served at the table, course by course."),
+            ("passed", "Snacks and drinks passed around", "Trays circulating through the room."),
+            ("no-food", "No food service", "Setup, reception and support only."),
+        ),
+    ),
+    # Each role is three published questions: the total, which carries the label and the display
+    # order, and the two halves the Customer actually sets. `crew_mix.assert_mix_consistent`
+    # refuses a submission where they disagree, so the redundancy is enforced rather than trusted.
+    *_role_questions("waiter", "Waiters and serving staff"),
+    *_role_questions("bar_staff", "Bar and beverage staff"),
+    *_role_questions("hostess", "Guest reception"),
+    *_role_questions("kitchen_helper", "Kitchen and pantry helpers"),
+    *_role_questions("cleanup", "Cleanup and housekeeping"),
+    *_role_questions("setup", "Setup and teardown crew"),
+    ("worker_count", "Staff", ServiceQuestion.Kind.NUMBER, True, 1, None),
+    ("duration_days", "Days", ServiceQuestion.Kind.NUMBER, True, 1, None),
+    (
+        "dress_code",
+        "Dress code",
+        ServiceQuestion.Kind.SINGLE_CHOICE,
+        True,
+        None,
+        # Named by the *standard*, never by a garment. "Safari suit" is a man's outfit, so on a
+        # crew that is men and women it asked half the staff for something they do not own and
+        # left the Customer to guess what the other half should wear. A colour and a formality
+        # level is something anybody can meet in their own clothes, which is how event staffing
+        # has always briefed it off the platform.
+        (
+            ("black-white", "Formal — black and white", ""),
+            ("all-black", "All black", ""),
+            ("traditional", "Traditional or ethnic", ""),
+            ("client-uniform", "You provide the uniforms", ""),
+        ),
+    ),
+    (
+        "closed_shoes",
+        "Everyone in closed shoes?",
+        ServiceQuestion.Kind.BOOLEAN,
+        True,
+        None,
+        None,
+    ),
+    (
+        "staff_meal_provided",
+        "Will you provide a meal for the staff?",
+        ServiceQuestion.Kind.BOOLEAN,
+        True,
+        None,
+        None,
+    ),
+)
+
+
+# ---------------------------------------------------------------------------
+# Cook-on-hire Product 1 placeholders. Hyderabad demonstration figures only; replace here after
+# the owner confirms the commercial rates. Paise throughout.
+# ---------------------------------------------------------------------------
+HOUSE_FUNCTION_COOK_WAGE_FLOOR_PAISE = 90_000
+HOUSE_FUNCTION_COOK_TEAM_DAY_PAISE = 500_000
+HOUSE_FUNCTION_COOK_OVERTIME_HOURLY_PAISE = 50_000
+
+HOUSE_FUNCTION_COOK_QUESTIONS: tuple[QuestionSeed, ...] = (
+    (
+        "event_type",
+        "What's the occasion?",
+        ServiceQuestion.Kind.SINGLE_CHOICE,
+        True,
+        None,
+        (
+            ("housewarming", "Housewarming", ""),
+            ("birthday", "Birthday", ""),
+            ("pooja-function", "Pooja or religious function", ""),
+            ("get-together", "Get-together", ""),
+            ("other", "Something else", ""),
+        ),
+    ),
+    (
+        "guest_band",
+        "How many guests?",
+        ServiceQuestion.Kind.SINGLE_CHOICE,
+        True,
+        None,
+        (
+            ("under-25", "Under 25", ""),
+            ("25-50", "25 to 50", ""),
+            (f"50-{HOUSE_FUNCTION_GUEST_LIMIT}", f"50 to {HOUSE_FUNCTION_GUEST_LIMIT}", ""),
+        ),
+    ),
+    (
+        "meals",
+        "Which meals?",
+        ServiceQuestion.Kind.MULTIPLE_CHOICE,
+        True,
+        None,
+        (
+            ("breakfast", "Breakfast", ""),
+            ("lunch", "Lunch", ""),
+            ("snacks", "Snacks", ""),
+            ("dinner", "Dinner", ""),
+        ),
+    ),
+    (
+        "cuisine",
+        "What kind of food?",
+        ServiceQuestion.Kind.SINGLE_CHOICE,
+        True,
+        None,
+        (
+            ("south-indian", "South Indian", ""),
+            ("north-indian", "North Indian", ""),
+            ("andhra-telangana", "Andhra–Telangana", ""),  # noqa: RUF001
+            ("chinese-continental", "Chinese and continental", ""),
+            ("mixed", "Mixed", ""),
+        ),
+    ),
+    (
+        "food_preference",
+        "Veg or non-veg?",
+        ServiceQuestion.Kind.SINGLE_CHOICE,
+        True,
+        None,
+        (
+            ("veg", "Pure veg", ""),
+            ("veg-nonveg", "Veg + non-veg", ""),
+            ("nonveg", "Non-veg only", ""),
+        ),
+    ),
+    (
+        "kitchen_setup",
+        "What's the kitchen like?",
+        ServiceQuestion.Kind.SINGLE_CHOICE,
+        True,
+        None,
+        (
+            ("home-gas-ready", "Home kitchen, gas ready", ""),
+            ("outdoor-arranged", "Outdoor, vessels and gas arranged", ""),
+            ("outdoor-nothing-yet", "Outdoor, nothing set up yet", ""),
+        ),
+    ),
+    (
+        "staff_meal_provided",
+        "Will you provide a meal for the cook and helpers?",
+        ServiceQuestion.Kind.BOOLEAN,
+        True,
+        None,
+        None,
+    ),
+    # Published for the shared rate, matching and shift engines, defaulted to one by the client,
+    # and structurally hidden whenever a guest-sized fixed-team schema is detected.
+    ("worker_count", "Cook teams", ServiceQuestion.Kind.NUMBER, True, 1, None),
+    ("duration_days", "Days", ServiceQuestion.Kind.NUMBER, True, 1, None),
+)
+
+
+A3_DAY_SEEDS: tuple[DaySeed, ...] = (
+    DaySeed(
+        slug=A3_SERVICE_SLUG,
+        pricing_skill="construction-helper",
+        name="Construction helpers",
+        variant_name="Helpers by the day",
+        icon_key=ServiceIconKey.WORKFORCE,
+        category_slug="construction",
+        subcategory_slug="construction-labour",
+        subcategory_name="Construction labour",
+        subcategory_display_order=10,
+        image_subject="construction",
+        skill_code="construction-helper",
+        skill_name="Construction helper",
+        skill_description="Unskilled site labour. A wage classification, not a trade slug.",
+        wage_floor_paise=WAGE_FLOOR_PAISE_PER_DAY,
+        worker_day_wage_paise=RATE_CARD_WORKER_DAY_WAGE_PAISE,
+        supervision_margin_paise=RATE_CARD_SUPERVISION_MARGIN_PAISE,
+        overtime_hourly_paise=RATE_CARD_OVERTIME_HOURLY_PAISE,
+        # Generic labour is the ONE service where "what will they be doing?" is a real
+        # question — helpers shift, clear, mix and carry, and the lead needs to know which.
+        questions=A3_QUESTIONS,
+        preset_questions=A3_PRESET_QUESTIONS,
+        rate_inclusions=RATE_CARD_INCLUSIONS,
+        add_on_rates=dict(RATE_CARD_ADD_ON_RATES),
+        short_description=(
+            "General site labour by the day — loading, shifting, clearing and helper work, "
+            "with a supervisor on site for the whole shift."
+        ),
+        included=(
+            "One 8-hour shift per worker, including a 30-minute break.",
+            "A working supervisor on site for the whole shift.",
+            "Loading, carrying, clearing and helper work as directed by you.",
+            "Basic hand tools — crowbars, shovels, gamelas and ropes.",
+        ),
+        excluded=(
+            "Skilled trade work — masonry, electrical, plumbing and carpentry are their own "
+            "services.",
+            "Transport vehicles and debris haulage — the crew loads, you arrange the vehicle.",
+            "Materials and consumables of any kind.",
+        ),
+    ),
+    DaySeed(
+        slug="electrician-by-the-day",
+        pricing_skill="electrician",
+        name="Electrician by the day",
+        variant_name="Full-day electrician",
+        icon_key=ServiceIconKey.ELECTRICAL,
+        category_slug="electrician",
+        subcategory_slug="hire-by-the-day",
+        subcategory_name="Hire by the day",
+        subcategory_display_order=95,
+        image_subject="electrician",
+        skill_code="electrician",
+        skill_name="Electrician",
+        skill_description="Licensed electrical trade work, hired by the day.",
+        wage_floor_paise=90_000,
+        worker_day_wage_paise=110_000,
+        supervision_margin_paise=20_000,
+        overtime_hourly_paise=20_000,
+        # No work chooser: the customer picked "Electrician by the day", and that IS the work.
+        questions=_size_questions("Electricians"),
+        preset_questions=(),
+        rate_inclusions=(
+            "One 8-hour day per electrician, including a 30-minute break.",
+            "Own hand tools, tester and multimeter.",
+            "Minor consumables — insulation tape, wire connectors, screws.",
+            "Overtime is charged only after you approve it in the app.",
+        ),
+        add_on_rates={},
+        short_description=(
+            "A verified electrician at your site for a full working day — wiring, fittings, "
+            "repairs and finishing work under your direction."
+        ),
+        included=(
+            "One 8-hour day per electrician, including a 30-minute break.",
+            "Wiring, fitting, repair and finishing work as you direct it on site.",
+            "Own hand tools, tester and multimeter.",
+            "Minor consumables like insulation tape and connectors.",
+        ),
+        excluded=(
+            "Wires, switches, MCBs, lights and other materials — you buy them, or the "
+            "electrician buys them with your approval.",
+            "Civil work such as wall chasing beyond minor cutting.",
+            "Electricity-board liaison for new connections or load changes.",
+        ),
+    ),
+    DaySeed(
+        slug="plumber-by-the-day",
+        pricing_skill="plumber",
+        name="Plumber by the day",
+        variant_name="Full-day plumber",
+        icon_key=ServiceIconKey.PLUMBING,
+        category_slug="plumber",
+        subcategory_slug="hire-by-the-day",
+        subcategory_name="Hire by the day",
+        subcategory_display_order=95,
+        image_subject="plumber",
+        skill_code="plumber",
+        skill_name="Plumber",
+        skill_description="Plumbing trade work, hired by the day.",
+        wage_floor_paise=85_000,
+        worker_day_wage_paise=100_000,
+        supervision_margin_paise=20_000,
+        overtime_hourly_paise=18_000,
+        questions=_size_questions("Plumbers"),
+        preset_questions=(),
+        rate_inclusions=(
+            "One 8-hour day per plumber, including a 30-minute break.",
+            "Own hand tools — wrenches, cutters, sealing kit.",
+            "Minor consumables — thread tape, sealant.",
+            "Overtime is charged only after you approve it in the app.",
+        ),
+        add_on_rates={},
+        short_description=(
+            "A verified plumber at your site for a full working day — lines, fittings, "
+            "repairs and bathroom work under your direction."
+        ),
+        included=(
+            "One 8-hour day per plumber, including a 30-minute break.",
+            "Pipe, fitting, repair and installation work as you direct it on site.",
+            "Own hand tools and sealing kit.",
+            "Minor consumables like thread tape and sealant.",
+        ),
+        excluded=(
+            "Pipes, taps, sanitaryware and other materials — you buy them, or the plumber "
+            "buys them with your approval.",
+            "Civil work such as breaking tiles or walls beyond minor cutting.",
+            "Water-board liaison for new connections.",
+        ),
+    ),
+    DaySeed(
+        slug="painter-by-the-day",
+        pricing_skill="painter",
+        name="Painter by the day",
+        variant_name="Full-day painter",
+        icon_key=ServiceIconKey.CUSTOM_PROJECT,
+        category_slug="home-services",
+        subcategory_slug="hire-by-the-day",
+        subcategory_name="Hire by the day",
+        subcategory_display_order=95,
+        image_subject="painting",
+        skill_code="painter",
+        skill_name="Painter",
+        skill_description="Wall and surface painting work, hired by the day.",
+        wage_floor_paise=70_000,
+        worker_day_wage_paise=80_000,
+        supervision_margin_paise=15_000,
+        overtime_hourly_paise=14_000,
+        questions=_size_questions("Painters"),
+        preset_questions=(),
+        rate_inclusions=(
+            "One 8-hour day per painter, including a 30-minute break.",
+            "Brushes, rollers and trays.",
+            "Masking and floor protection with your materials.",
+            "Overtime is charged only after you approve it in the app.",
+        ),
+        add_on_rates={},
+        short_description=(
+            "A verified painter at your site for a full working day — preparation, "
+            "painting and finishing with the paint you choose."
+        ),
+        included=(
+            "One 8-hour day per painter, including a 30-minute break.",
+            "Surface preparation, masking, painting and finishing as you direct it.",
+            "Brushes, rollers and trays.",
+        ),
+        excluded=(
+            "Paint, putty, primer and masking materials — you buy them, or the painter "
+            "buys them with your approval.",
+            "Exterior work at height needing scaffolding.",
+            "Wall repairs beyond minor filling.",
+        ),
+    ),
+    DaySeed(
+        slug="house-function-cook",
+        name="Cook for a house function",
+        variant_name="Cook team, full day",
+        icon_key=ServiceIconKey.SERVICE,
+        category_slug="events",
+        subcategory_slug="event-cooks",
+        subcategory_name="Event cooks",
+        subcategory_display_order=45,
+        image_subject="catering",
+        skill_code="house-function-cook",
+        skill_name="House function cook",
+        skill_description="A master cook and his own helpers, hired as one team for a day.",
+        # This is a team price checked against a per-person statutory floor. It clears the guard,
+        # but the comparison is necessarily vacuous; changing that model is outside this seed.
+        wage_floor_paise=HOUSE_FUNCTION_COOK_WAGE_FLOOR_PAISE,
+        worker_day_wage_paise=HOUSE_FUNCTION_COOK_TEAM_DAY_PAISE,
+        # The master cook is the supervisor and their margin is already inside the team rate.
+        supervision_margin_paise=0,
+        overtime_hourly_paise=HOUSE_FUNCTION_COOK_OVERTIME_HOURLY_PAISE,
+        questions=HOUSE_FUNCTION_COOK_QUESTIONS,
+        preset_questions=(),
+        rate_inclusions=(
+            "One full day for the master cook and his helpers.",
+            "The team size is the cook's decision, based on your guest count.",
+            "Overtime is charged only after you approve it in the app.",
+        ),
+        add_on_rates={},
+        short_description=(
+            "A cook and his own helpers at your home for the day — they cook your menu on your "
+            "groceries, clean the kitchen, and leave."
+        ),
+        included=(
+            "One full day for the cook and his helpers — the team is one price.",
+            "Cooking your menu on ingredients you provide.",
+            "Own knives and basic kitchen hand tools.",
+            "Kitchen and vessels left clean.",
+            "Overtime charged only after you approve it in the app.",
+        ),
+        excluded=(
+            "Groceries, masalas, oil, and gas or firewood — all yours.",
+            "Deghs, kadais, stoves and serving vessels.",
+            "Serving, plating and clearing — that is Event staff.",
+            "Menu planning and quantity estimation.",
+        ),
+    ),
+    DaySeed(
+        slug="event-staff-by-the-day",
+        name="Event staff by the day",
+        variant_name="Full-day event staff",
+        icon_key=ServiceIconKey.SERVICE,
+        category_slug="events",
+        subcategory_slug="event-staff",
+        subcategory_name="Event staff",
+        subcategory_display_order=60,
+        image_subject="event-staff",
+        skill_code="event-staff",
+        skill_name="Event staff",
+        skill_description="Serving and support staff for events, hired by the day.",
+        wage_floor_paise=60_000,
+        worker_day_wage_paise=70_000,
+        supervision_margin_paise=15_000,
+        overtime_hourly_paise=12_000,
+        questions=EVENT_STAFF_QUESTIONS,
+        preset_questions=(),
+        rate_inclusions=(
+            "One 8-hour day per staff member, including a 30-minute break.",
+            "Clean, presentable dress code.",
+            "Serving, clearing, guest support and setup help through the event.",
+            "Overtime is charged only after you approve it in the app.",
+        ),
+        add_on_rates={},
+        short_description=(
+            "Trained serving and support staff for your event, by the day — serving, "
+            "clearing, setup and guest support, with a supervisor on duty."
+        ),
+        included=(
+            "One 8-hour day per staff member, including a 30-minute break.",
+            "Serving, clearing, guest support and setup or teardown help.",
+            "A supervisor on duty for the whole event.",
+            "Clean, presentable dress code.",
+        ),
+        excluded=(
+            "Food, beverages and catering — see Event catering for that.",
+            "Crockery, cutlery, furniture and decor.",
+            "Bartending with licensed liquor service.",
+        ),
+    ),
+)
+
+
+def _matches_seeded_rate(card: RateCard, seed: DaySeed) -> bool:
+    """Whether a published card already carries exactly what this seed would write.
+
+    The words are compared as well as the money: the printed inclusions render verbatim on
+    the customer's live-rate screen, so a card whose components match but whose inclusions
+    still describe another trade's day ("loading and unloading" on event staff) is a card
+    this seed exists to correct — skipping it would leave the wrong promise published.
+    """
+    return (
+        card.worker_day_wage_paise == seed.worker_day_wage_paise
+        and card.supervision_margin_paise == seed.supervision_margin_paise
         and card.booking_fee_paise == RATE_CARD_BOOKING_FEE_PAISE
         and card.standard_day_hours == RATE_CARD_STANDARD_DAY_HOURS
-        and card.overtime_hourly_paise == RATE_CARD_OVERTIME_HOURLY_PAISE
+        and card.overtime_hourly_paise == seed.overtime_hourly_paise
+        and list(card.inclusions) == list(seed.rate_inclusions)
+        and dict(card.add_on_rates) == dict(seed.add_on_rates)
     )
 
 
@@ -664,44 +1906,104 @@ class Command(BaseCommand):
         call_command("seed_partner_reference_data")
 
         area = self._seed_service_area()
-        skill = self._seed_wage_floor_skill()
-        a3_variant = self._seed_variant(
-            service_slug=A3_SERVICE_SLUG,
-            service_name="Construction helpers",
-            variant_name="Helpers by the day",
-            archetype=ServiceVariant.BookingArchetype.A3_TIME_BLOCK,
-            questions=A3_QUESTIONS,
+
+        # Day-hire (A3) in every category that can honestly sell a day of one trade. Each
+        # seed carries its own wage classification, floor and rate card, because the instant
+        # path fails closed per skill: a card for helpers says nothing about electricians.
+        a3_variants: list[ServiceVariant] = []
+        skills: list[Skill] = []
+        wage_floors_written = 0
+        rate_cards_published = 0
+        for day in A3_DAY_SEEDS:
+            skill = self._seed_skill(day)
+            skills.append(skill)
+            a3_variant = self._seed_variant(
+                service_slug=day.slug,
+                service_name=day.name,
+                variant_name=day.variant_name,
+                archetype=ServiceVariant.BookingArchetype.A3_TIME_BLOCK,
+                questions=day.questions,
+                icon_key=day.icon_key,
+                category_slug=day.category_slug,
+                subcategory_slug=day.subcategory_slug,
+                subcategory_name=day.subcategory_name,
+                subcategory_display_order=day.subcategory_display_order,
+                image_subject=day.image_subject,
+                short_description=day.short_description,
+            )
+            a3_variants.append(a3_variant)
+            self._seed_service_policies(
+                service=a3_variant.service,
+                included=day.included,
+                excluded=day.excluded,
+            )
+            self._seed_a3_configuration(
+                pricing_skill=day.pricing_skill,
+                variant=a3_variant,
+                skill=skill,
+                preset_questions=day.preset_questions,
+                questions=day.questions,
+            )
+            wage_floors_written += int(self._seed_wage_floor(skill=skill, seed=day))
+            rate_cards_published += int(self._seed_rate_card(area=area, skill=skill, seed=day))
+
+        for code, name, description in PROJECT_ONLY_PRICING_SKILLS:
+            pricing_skill = self._seed_project_pricing_skill(
+                code=code,
+                name=name,
+                description=description,
+            )
+            if all(skill.id != pricing_skill.id for skill in skills):
+                skills.append(pricing_skill)
+
+        # Every A5 project in the catalogue, not just the fit-out. One variant, one area
+        # activation and one ACTIVE configuration each — a project seeded without any one of the
+        # three renders in the catalogue and then refuses at the brief, which reads as a broken
+        # flow rather than missing data.
+        a5_variants = tuple(
+            self._seed_variant(
+                service_slug=project.slug,
+                service_name=project.name,
+                variant_name=project.variant_name,
+                archetype=ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT,
+                questions=project.questions,
+                icon_key=project.icon_key,
+                category_slug=project.category_slug,
+                subcategory_slug=project.subcategory_slug,
+                subcategory_name=project.subcategory_name,
+                subcategory_display_order=project.subcategory_display_order,
+                image_subject=project.image_subject,
+                short_description=project.short_description,
+            )
+            for project in A5_PROJECT_SEEDS
         )
-        a5_variant = self._seed_variant(
-            service_slug=A5_SERVICE_SLUG,
-            service_name="Interior fit-out project",
-            variant_name="Fit-out, priced on site",
-            archetype=ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT,
-            questions=A5_QUESTIONS,
-        )
-        for variant in (a3_variant, a5_variant):
+        for variant in (*a3_variants, *a5_variants):
             ServiceAreaService.objects.update_or_create(
                 service_area=area,
                 variant=variant,
                 defaults={"is_active": True},
             )
 
-        self._seed_a3_configuration(variant=a3_variant, skill=skill)
-        self._seed_a5_configuration(variant=a5_variant)
-        wage_floor_written = self._seed_wage_floor(skill=skill)
-        rate_card_published = self._seed_rate_card(area=area, skill=skill)
+        for a5_variant, project in zip(a5_variants, A5_PROJECT_SEEDS, strict=True):
+            self._seed_a5_configuration(
+                variant=a5_variant,
+                questions=project.questions,
+                pricing_skill=project.pricing_skill,
+                material_fulfilment_mode=project.material_fulfilment_mode,
+            )
         prices_written, prices_skipped = self._seed_access_prices()
 
         vendors = self._seed_vendors(
             area=area,
-            variants=(a3_variant, a5_variant),
-            skill=skill,
+            variants=(*a3_variants, *a5_variants),
+            skills=tuple(skills),
             count=max(1, int(options["vendors"])),
         )
+        self._seed_commercial_policy()
 
         self._report(
-            wage_floor_written=wage_floor_written,
-            rate_card_published=rate_card_published,
+            wage_floors_written=wage_floors_written,
+            rate_cards_published=rate_cards_published,
             prices_written=prices_written,
             prices_skipped=prices_skipped,
             vendors=vendors,
@@ -788,20 +2090,31 @@ class Command(BaseCommand):
         return area
 
     @staticmethod
-    def _seed_wage_floor_skill() -> Skill:
+    def _seed_skill(day: DaySeed) -> Skill:
         """The statutory wage classification, which is not the dispatch trade slug.
 
         `M2VariantConfiguration.wage_floor_skill` exists precisely so a legal floor is not tied to
-        `ServiceVariant.required_skill_code`, which is a merchandising decision. This is its own
-        skill row for the same reason.
+        `ServiceVariant.required_skill_code`, which is a merchandising decision. Codes like
+        `electrician` deliberately merge with the trade skill `seed_partner_reference_data`
+        authors — one row serves as both the trade a Partner holds and the classification a
+        floor is filed under, and two rows with one code would be a drift bug.
         """
         skill, _ = Skill.objects.update_or_create(
-            code="construction-helper",
+            code=day.skill_code,
             defaults={
-                "name": "Construction helper",
-                "description": "Unskilled site labour. A wage classification, not a trade slug.",
+                "name": day.skill_name,
+                "description": day.skill_description,
                 "is_active": True,
             },
+        )
+        return skill
+
+    @staticmethod
+    def _seed_project_pricing_skill(*, code: str, name: str, description: str) -> Skill:
+        """A price-book trade that is not also an A3 statutory wage classification."""
+        skill, _ = Skill.objects.update_or_create(
+            code=code,
+            defaults={"name": name, "description": description, "is_active": True},
         )
         return skill
 
@@ -813,30 +2126,73 @@ class Command(BaseCommand):
         variant_name: str,
         archetype: str,
         questions: tuple[QuestionSeed, ...],
+        icon_key: str,
+        category_slug: str,
+        subcategory_slug: str,
+        subcategory_name: str,
+        subcategory_display_order: int,
+        image_subject: str = "",
+        short_description: str = "",
     ) -> ServiceVariant:
+        # The trade category the customer actually browses. A slug outside the authored map is a
+        # typo, and a typo here would quietly invent a category — so it refuses instead.
+        if category_slug not in M2_CATEGORY_SEEDS:
+            raise CommandError(
+                f"Unknown category slug {category_slug!r} for service {service_slug!r}; "
+                "add it to M2_CATEGORY_SEEDS or fix the seed."
+            )
+        (
+            category_name,
+            category_description,
+            category_icon,
+            category_order,
+            category_subject,
+        ) = M2_CATEGORY_SEEDS[category_slug]
         category, _ = Category.objects.update_or_create(
-            slug=CATEGORY_SLUG,
+            slug=category_slug,
             defaults={
-                "name": "Workforce and projects",
-                "description": "Workforce hire and custom project work.",
+                "name": category_name,
+                "description": category_description,
+                "icon_key": category_icon,
                 "is_active": True,
-                "display_order": 90,
+                "display_order": category_order,
             },
         )
+        fill_blank_image(category, "image_url", image_for(category_subject))
         subcategory, _ = Subcategory.objects.update_or_create(
             category=category,
-            slug="construction-labour",
-            defaults={"name": "Construction labour", "is_active": True},
+            slug=subcategory_slug,
+            defaults={
+                "name": subcategory_name,
+                "icon_key": icon_key,
+                "display_order": subcategory_display_order,
+                "is_active": True,
+            },
         )
+        if image_subject:
+            fill_blank_image(subcategory, "image_url", image_for(image_subject))
         service, _ = Service.objects.update_or_create(
             slug=service_slug,
             defaults={
                 "subcategory": subcategory,
                 "name": service_name,
-                "short_description": f"{service_name} (development fixture).",
+                "icon_key": icon_key,
+                # Real customer-facing copy, never a "(development fixture)" stub — this
+                # sentence renders on every service card and at the top of the booking flow.
+                "short_description": short_description
+                or f"{service_name}, priced by the professionals who quote for it.",
+                "description": short_description,
                 "status": Service.Status.ACTIVE,
             },
         )
+        if image_subject:
+            # Position 1, so a one-service tile does not show the identical photo twice
+            # (the tile itself uses position 0); a single-photo pool wraps back to it.
+            self._seed_service_cover(
+                service=service,
+                url=image_for(image_subject, 1),
+                alt_text=service_name,
+            )
         variant, _ = ServiceVariant.objects.update_or_create(
             service=service,
             code="standard",
@@ -880,7 +2236,14 @@ class Command(BaseCommand):
                     "help_text": QUESTION_HELP.get(code, ""),
                     "kind": kind,
                     "is_required": required,
-                    "validation_rules": ({"minimum": minimum} if minimum is not None else {}),
+                    "validation_rules": {
+                        **({"minimum": minimum} if minimum is not None else {}),
+                        **(
+                            {"default": QUESTION_DEFAULT[code]}
+                            if code in QUESTION_DEFAULT
+                            else {}
+                        ),
+                    },
                     "display_order": order,
                     "is_active": True,
                 },
@@ -901,15 +2264,108 @@ class Command(BaseCommand):
                     )
         return variant
 
+    @staticmethod
+    def _seed_service_policies(
+        *,
+        service: Service,
+        included: tuple[str, ...],
+        excluded: tuple[str, ...],
+    ) -> None:
+        """The What's-included / What's-not page for a day-hire service.
+
+        Same rewrite-on-every-run contract as `seed_task_catalog._seed_service_content`: the
+        authored tuples above are the whole list, so a line removed there disappears from the
+        page, and rows are deactivated rather than deleted because a policy line is the wording
+        a customer was shown when they booked.
+        """
+
+        ServicePolicy.objects.filter(service=service).update(is_active=False)
+        rows: list[tuple[str, str, int]] = [
+            (ServicePolicy.Kind.INCLUDED, text, order)
+            for order, text in enumerate(included, start=1)
+        ]
+        rows += [
+            (ServicePolicy.Kind.EXCLUDED, text, order)
+            for order, text in enumerate(excluded, start=1)
+        ]
+        rows.append(
+            (
+                ServicePolicy.Kind.GOOD_TO_KNOW,
+                "You pay the crew directly after each day. Vsolve charges only the booking "
+                "fee shown before you confirm.",
+                1,
+            )
+        )
+        for kind, text, order in rows:
+            ServicePolicy.objects.update_or_create(
+                service=service,
+                kind=kind,
+                display_order=order,
+                defaults={"title": "", "text": text, "is_active": True},
+            )
+
+    @staticmethod
+    def _seed_service_cover(*, service: Service, url: str, alt_text: str) -> None:
+        """One verified COVER photo per service — same contract as `seed_task_catalog`'s.
+
+        `(service, kind)` carries no unique constraint, so the first COVER row is updated in
+        place rather than `update_or_create`, which would stack a twin on a rerun.
+        """
+
+        cover = (
+            ServiceMedia.objects.filter(service=service, kind=ServiceMedia.Kind.COVER)
+            .order_by("display_order", "id")
+            .first()
+        )
+        if cover is None:
+            ServiceMedia.objects.create(
+                service=service,
+                kind=ServiceMedia.Kind.COVER,
+                url=url,
+                alt_text=alt_text,
+                display_order=1,
+                is_active=True,
+            )
+            return
+        # Never replace a cover that already has artwork — see `fill_blank_image`.
+        fields: list[str] = []
+        if not cover.url:
+            cover.url = url
+            fields.append("url")
+        if cover.alt_text != alt_text:
+            cover.alt_text = alt_text
+            fields.append("alt_text")
+        if not cover.is_active:
+            cover.is_active = True
+            fields.append("is_active")
+        if fields:
+            cover.save(update_fields=tuple(fields))
+
     # -- the owner-blocked configuration -----------------------------------
 
-    def _seed_a3_configuration(self, *, variant: ServiceVariant, skill: Skill) -> None:
+    def _seed_a3_configuration(
+        self,
+        *,
+        variant: ServiceVariant,
+        skill: Skill,
+        preset_questions: tuple[QuestionSeed, ...],
+        questions: tuple[QuestionSeed, ...],
+        pricing_skill: str = "",
+    ) -> None:
         self._upsert_configuration(
             variant=variant,
-            questions=A3_QUESTIONS,
+            # The SAME tuple the catalogue publishes for this service, per the §7 rule:
+            # the validation schema and screen one must always be derived from one table.
+            # Hardcoding A3_QUESTIONS here would demand a `work_type` answer from services
+            # whose form never asks one, refusing every submission.
+            questions=questions,
             registration_questions=A3_REGISTRATION_QUESTIONS,
             extra={
                 "wage_floor_skill": skill,
+                "pricing_skill_code": pricing_skill,
+                "material_fulfilment_mode": (
+                    M2VariantConfiguration.MaterialFulfilmentMode.NOT_APPLICABLE
+                ),
                 # The quote-flow clocks stay set: revision 4 demoted that path to the thin-supply
                 # fallback rather than deleting it, and a fallback with no SLA never closes.
                 "first_quote_sla_hours": FIRST_QUOTE_SLA_HOURS,
@@ -920,7 +2376,12 @@ class Command(BaseCommand):
                 # `requirements.rate_cards`, so until they are written here the instant path
                 # refuses with `m2_policy_unavailable` on every request — the preset schema and
                 # the cascade policy are both consulted before the card itself is.
-                "a3_preset_question_schema": _question_schema(A3_PRESET_QUESTIONS),
+                #
+                # Per service since 2026-08-26: the floor/lift/carry facts are shifting facts,
+                # and publishing them on "Event staff by the day" asked about lifts at a
+                # wedding. An empty tuple publishes `{"questions": []}` — a real preset with
+                # nothing extra to ask — never `{}`, which `preset_question_schema` refuses.
+                "a3_preset_question_schema": _question_schema(preset_questions),
                 "crew_wave_size": CREW_WAVE_SIZE,
                 "crew_wave_widening_step": CREW_WAVE_WIDENING_STEP,
                 "crew_offer_timeout_seconds": CREW_OFFER_TIMEOUT_SECONDS,
@@ -945,12 +2406,24 @@ class Command(BaseCommand):
             },
         )
 
-    def _seed_a5_configuration(self, *, variant: ServiceVariant) -> None:
+    def _seed_a5_configuration(
+        self,
+        *,
+        variant: ServiceVariant,
+        questions: tuple[QuestionSeed, ...],
+        pricing_skill: str,
+        material_fulfilment_mode: str,
+    ) -> None:
         self._upsert_configuration(
             variant=variant,
-            questions=A5_QUESTIONS,
+            # Per project, per the §7 rule — the fit-out's questions hardcoded here would
+            # demand `fit_out_style` from a bathroom renovation whose brief never asks it,
+            # refusing the submission its own first screen collected.
+            questions=questions,
             registration_questions=(),
             extra={
+                "pricing_skill_code": pricing_skill,
+                "material_fulfilment_mode": material_fulfilment_mode,
                 # Reconfirmation reuses `first_quote_sla_hours`, so an A5 variant needs it too —
                 # without it a selected vendor has no deadline and `reconfirm_by` is null.
                 "first_quote_sla_hours": FIRST_QUOTE_SLA_HOURS,
@@ -959,6 +2432,7 @@ class Command(BaseCommand):
                 "non_responsive_rejection_cap": NON_RESPONSIVE_REJECTION_CAP,
                 "visit_duration_minutes": VISIT_DURATION_MINUTES,
                 "first_visit_sla_hours": FIRST_VISIT_SLA_HOURS,
+                "fixed_visit_offer_timeout_seconds": FIXED_VISIT_OFFER_TIMEOUT_SECONDS,
                 "visit_plan_fill_sla_hours": VISIT_PLAN_FILL_SLA_HOURS,
                 "post_visit_estimate_window_hours": POST_VISIT_ESTIMATE_WINDOW_HOURS,
                 "customer_no_show_refunds_platform_share": (
@@ -1017,7 +2491,71 @@ class Command(BaseCommand):
         )
         return configuration
 
-    def _seed_wage_floor(self, *, skill: Skill) -> bool:
+    def _seed_commercial_policy(self) -> None:
+        """Activate one placeholder `CommercialPolicy` so an A5 estimate can be priced at all.
+
+        `financials.active_policy` fails closed by design — BE-5A says Finance/legal approve the
+        supplier-of-record, tax, fee and commission model — and until this step nothing in
+        development ever activated one, so every estimate preview answered
+        `m2_financial_policy_unavailable`. Same three doors as every other placeholder here:
+        marked `DEV SEED`, idempotent by version, and a policy somebody activated on purpose (no
+        marker) is left exactly as it is with a warning.
+
+        Every figure below stands in for an owner decision: 18% on every service category, a
+        2% Customer-paid platform fee taxed at 18%, 5% commission on the Partner quote, no
+        statutory withholding.
+        """
+        active = CommercialPolicy.objects.filter(status=CommercialPolicy.Status.ACTIVE).first()
+        if active is not None and DEV_SEED_MARKER not in active.approval_reference:
+            self.stdout.write(
+                self.style.WARNING(
+                    f"Commercial policy version {active.version} is somebody's real decision "
+                    "(no DEV SEED marker); left untouched."
+                )
+            )
+            return
+        if active is not None:
+            return
+        actor = (
+            User.objects.filter(is_staff=True).order_by("date_joined").first()
+            or User.objects.order_by("date_joined").first()
+        )
+        if actor is None:
+            raise CommandError("No user exists to record as the policy approver.")
+        tax_categories = sorted(
+            {
+                "services-standard",
+                "labour",
+                *ServiceVariant.objects.exclude(tax_category_code="").values_list(
+                    "tax_category_code", flat=True
+                ),
+            }
+        )
+        financials.activate_policy(
+            actor=actor,
+            version=COMMERCIAL_POLICY_VERSION,
+            approval_reference=f"{DEV_SEED_MARKER}. BE-5A supplier/tax/fee policy",
+            effective_from=timezone.make_aware(datetime.combine(DEV_SEED_EFFECTIVE_FROM, time.min)),
+            effective_until=None,
+            supplier_of_record=CommercialPolicy.SupplierOfRecord.PARTNER,
+            material_supplier_of_record=CommercialPolicy.SupplierOfRecord.PARTNER,
+            visit_supplier_of_record=CommercialPolicy.SupplierOfRecord.VSOLVE,
+            tax_basis=CommercialPolicy.TaxBasis.EXCLUSIVE,
+            tax_rates_bps=dict.fromkeys(tax_categories, 1800),
+            material_tax_category="services-standard",
+            charge_tax_categories=dict.fromkeys(
+                sorted(financials.ALLOWED_CHARGE_CODES), "services-standard"
+            ),
+            platform_fee_treatment=CommercialPolicy.PlatformFeeTreatment.CUSTOMER,
+            platform_fee_bps=200,
+            platform_fee_tax_bps=1_800,
+            commission_bps=500,
+            commission_basis=CommercialPolicy.AmountBasis.PARTNER_QUOTE,
+            withholding_bps=0,
+            withholding_basis=CommercialPolicy.AmountBasis.NONE,
+        )
+
+    def _seed_wage_floor(self, *, skill: Skill, seed: DaySeed) -> bool:
         existing = MinimumWageFloor.objects.filter(
             state_code=STATE_CODE,
             skill=skill,
@@ -1034,7 +2572,7 @@ class Command(BaseCommand):
             skill=skill,
             effective_from=DEV_SEED_EFFECTIVE_FROM,
             defaults={
-                "floor_paise_per_day": WAGE_FLOOR_PAISE_PER_DAY,
+                "floor_paise_per_day": seed.wage_floor_paise,
                 "source_reference": (
                     f"{DEV_SEED_MARKER}. Owner decision 7: the statutory floor source and its "
                     "enforcement per state and skill are unresolved. No gazette was consulted."
@@ -1043,7 +2581,7 @@ class Command(BaseCommand):
         )
         return True
 
-    def _seed_rate_card(self, *, area: ServiceArea, skill: Skill) -> bool:
+    def _seed_rate_card(self, *, area: ServiceArea, skill: Skill, seed: DaySeed) -> bool:
         """The A3 published day rate — the row without which the instant path is shut.
 
         Published through `rate_cards.publish_rate_card` rather than written straight to the
@@ -1072,19 +2610,22 @@ class Command(BaseCommand):
         # the second run of an "idempotent" seed failed hard the moment anybody had booked at this
         # rate — which is every environment the seed is useful in. Skipping an unchanged card keeps
         # the guard doing its real job, which is catching a *changed* price landing under live work.
-        if existing is not None and _matches_seeded_rate(existing):
+        if existing is not None and _matches_seeded_rate(existing, seed):
             self.stdout.write(f"  {label}: already published, unchanged")
             return True
         publish_rate_card(
             service_area_id=area.id,
             skill_id=skill.id,
-            worker_day_wage_paise=RATE_CARD_WORKER_DAY_WAGE_PAISE,
-            supervision_margin_paise=RATE_CARD_SUPERVISION_MARGIN_PAISE,
+            worker_day_wage_paise=seed.worker_day_wage_paise,
+            supervision_margin_paise=seed.supervision_margin_paise,
             booking_fee_paise=RATE_CARD_BOOKING_FEE_PAISE,
             standard_day_hours=RATE_CARD_STANDARD_DAY_HOURS,
-            overtime_hourly_paise=RATE_CARD_OVERTIME_HOURLY_PAISE,
-            inclusions=list(RATE_CARD_INCLUSIONS),
-            add_on_rates=dict(RATE_CARD_ADD_ON_RATES),
+            overtime_hourly_paise=seed.overtime_hourly_paise,
+            # The card's own words, per trade: the printed inclusions surface verbatim on
+            # the customer's live-rate screen, and "loading and unloading" on an event-staff
+            # rate was this table's most visible lie.
+            inclusions=list(seed.rate_inclusions),
+            add_on_rates=dict(seed.add_on_rates),
             effective_from=DEV_SEED_EFFECTIVE_FROM,
             actor=None,
             source_reference=(
@@ -1158,7 +2699,7 @@ class Command(BaseCommand):
         *,
         area: ServiceArea,
         variants: tuple[ServiceVariant, ...],
-        skill: Skill,
+        skills: tuple[Skill, ...],
         count: int,
     ) -> list[str]:
         """Approved A3 and A5 vendors, with everything matching actually filters on.
@@ -1232,11 +2773,12 @@ class Command(BaseCommand):
                     "upi_vpa": f"m2demo{index}@{DEMO_UPI_VPA_DOMAIN}",
                 },
             )
-            PartnerSkill.objects.update_or_create(
-                partner=partner,
-                skill=skill,
-                defaults={"is_active": True},
-            )
+            for vendor_skill in skills:
+                PartnerSkill.objects.update_or_create(
+                    partner=partner,
+                    skill=vendor_skill,
+                    defaults={"is_active": True},
+                )
             PartnerLanguage.objects.update_or_create(
                 partner=partner,
                 language_tag="en",
@@ -1446,12 +2988,16 @@ class Command(BaseCommand):
         membership, and the A3 rate-card walkthrough this whole revision exists for could not
         reach its third step.
 
-        The honest writer is an Operations "verify crew documents" command with an actor, an audit
-        trail and a permission behind it. That is a real reviewed surface and it belongs in Wave
-        C6 with the rest of the Operations APIs; it is logged in `frontend-execution-plan.md` §7
-        and is deliberately **not** built here. What is legitimate in the meantime is this: a
-        dev-only seed, already behind three guards, writing a dev-only fixture and saying so. The
-        alternative was a walkthrough with a shell workaround in its first paragraph.
+        The honest writer now exists: Wave C6's Operations "verify crew documents" command, with
+        an actor, an audit trail and a permission behind it, plus the crew identity documents a
+        reviewer actually looks at (`apps.partners.crew_documents`). Approving a worker's required
+        government ID verifies them through that command.
+
+        This seed still writes the column directly, and that is still deliberate. Going through
+        the real path would mean seeding a signed upload against object storage that no
+        development machine is required to have configured, so a demo would depend on a bucket.
+        A dev-only seed, behind three guards, writing a dev-only fixture and saying so, beats a
+        walkthrough with a storage setup in its first paragraph.
         """
         verified_at = timezone.now()
         for worker in range(1, 7):
@@ -1520,44 +3066,40 @@ class Command(BaseCommand):
     def _report(
         self,
         *,
-        wage_floor_written: bool,
-        rate_card_published: bool,
+        wage_floors_written: int,
+        rate_cards_published: int,
         prices_written: int,
         prices_skipped: int,
         vendors: list[str],
     ) -> None:
-        day_rate_paise = (
-            RATE_CARD_WORKER_DAY_WAGE_PAISE
-            + RATE_CARD_SUPERVISION_MARGIN_PAISE
-            + RATE_CARD_BOOKING_FEE_PAISE
-        )
         self.stdout.write("")
         self.stdout.write(self.style.SUCCESS("M2 demo configuration loaded."))
-        self.stdout.write(
-            f"  A3 service : /{A3_SERVICE_SLUG}  (unlock INR {A3_UNLOCK_PAISE / 100:.0f} on the "
-            "thin-supply fallback)"
-        )
-        if rate_card_published:
-            self.stdout.write(
-                f"  A3 rate    : INR {day_rate_paise / 100:.0f} per worker per "
-                f"{RATE_CARD_STANDARD_DAY_HOURS}-hour day "
-                f"(wage {RATE_CARD_WORKER_DAY_WAGE_PAISE / 100:.0f} + margin "
-                f"{RATE_CARD_SUPERVISION_MARGIN_PAISE / 100:.0f} + fee "
-                f"{RATE_CARD_BOOKING_FEE_PAISE / 100:.0f})"
+        for day in A3_DAY_SEEDS:
+            day_rate_paise = (
+                day.worker_day_wage_paise
+                + day.supervision_margin_paise
+                + RATE_CARD_BOOKING_FEE_PAISE
             )
-        else:
-            self.stdout.write("  A3 rate    : left alone; a real card is already published")
+            self.stdout.write(
+                f"  A3 service : /{day.slug}  INR {day_rate_paise / 100:.0f} per worker per "
+                f"{RATE_CARD_STANDARD_DAY_HOURS}-hour day ({day.category_slug})"
+            )
+        self.stdout.write(
+            f"  A3 unlock  : INR {A3_UNLOCK_PAISE / 100:.0f} on the thin-supply fallback; "
+            f"{wage_floors_written} wage floors and {rate_cards_published} rate cards written "
+            "(the rest were real rows, left alone)"
+        )
         tiers = ", ".join(
             f"{size}x INR {A5_TIER_PAISE[size] / 100:.0f}" for size in sorted(A5_TIER_PAISE)
         )
-        self.stdout.write(f"  A5 service : /{A5_SERVICE_SLUG}  (visit plans {tiers})")
+        self.stdout.write(f"  A5 tiers   : visit plans {tiers}, on every project below")
+        for project in A5_PROJECT_SEEDS:
+            self.stdout.write(f"  A5 service : /{project.slug}  ({project.subcategory_name})")
         self.stdout.write(f"  Area       : {SERVICE_AREA_SLUG} / PIN {POSTAL_CODE} / {STATE_CODE}")
         self.stdout.write(f"  Vendors    : {', '.join(vendors)}")
         self.stdout.write(
             f"  Prices     : {prices_written} written, {prices_skipped} left alone as real values"
         )
-        if not wage_floor_written:
-            self.stdout.write("  Wage floor : left alone; a real value is already loaded")
         self.stdout.write("")
         self.stdout.write(
             self.style.WARNING(

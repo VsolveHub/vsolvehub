@@ -23,6 +23,7 @@ const intent: CrewBookingIntent = {
   answers: { work_type: "site-clearing", worker_count: 4, duration_days: 2 },
   addressId: "address-1",
   requestedStart: "2026-09-07",
+  reportingTime: null,
   step: "details",
 };
 

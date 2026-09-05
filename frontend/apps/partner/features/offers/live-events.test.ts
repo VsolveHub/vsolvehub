@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createOfferDeduper,
+  partnerStreamUrl,
   subscribeToOfferEvents,
+  subscribeToPartnerStream,
   type OfferCreatedPayload,
+  type NotificationCreatedPayload,
 } from "./live-events";
 
 class MockEventSource {
@@ -49,7 +52,7 @@ describe("subscribeToOfferEvents", () => {
 
     expect(MockEventSource.instances.length).toBe(1);
     const instance = MockEventSource.instances[0]!;
-    expect(instance.url).toBe("/api/v1/partner/offers/stream/");
+    expect(instance.url).toBe(partnerStreamUrl());
     expect(instance.options?.withCredentials).toBe(true);
 
     const payload: OfferCreatedPayload = {
@@ -76,6 +79,25 @@ describe("subscribeToOfferEvents", () => {
     const instance = MockEventSource.instances[MockEventSource.instances.length - 1]!;
     instance.emit("offer_created", "not-json");
     expect(onOfferCreated).not.toHaveBeenCalled();
+  });
+
+  it("receives notification_created events on the same stream", () => {
+    const onNotificationCreated = vi.fn();
+    subscribeToPartnerStream(
+      { onNotificationCreated },
+      { EventSourceClass: MockEventSource as unknown as typeof EventSource },
+    );
+
+    const instance = MockEventSource.instances[MockEventSource.instances.length - 1]!;
+    const payload: NotificationCreatedPayload = {
+      notification_id: "notice-123",
+      purpose: "m2.invitation.received",
+      title: "New customer enquiry",
+      body: "A customer has sent a new enquiry.",
+    };
+
+    instance.emit("notification_created", JSON.stringify(payload));
+    expect(onNotificationCreated).toHaveBeenCalledWith(payload);
   });
 });
 

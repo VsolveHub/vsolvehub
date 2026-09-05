@@ -17,12 +17,12 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
-from apps.carts.item_inputs import validate_scope
+from apps.carts.item_inputs import configured_scope, validate_scope
 from apps.catalog.models import M2VariantConfiguration, ServiceVariant
 from apps.foundation.services import enqueue_outbox_event
 from apps.identity.models import User
 from apps.locations.models import Address, ServiceArea
-from apps.requirements import metrics
+from apps.requirements import crew_mix, metrics
 from apps.requirements.exceptions import (
     LifecycleNotSupportedError,
     RequirementDuplicateError,
@@ -85,6 +85,37 @@ def infer_archetype(*, variant: ServiceVariant, answers: dict[str, Any]) -> str:
     return declared
 
 
+#: What each published `budget_band` option code means in paise.
+#:
+#: The one place a band answer becomes money. The codes are catalogue data
+#: (`seed_m2_demo.EVENT` decor questions and any later service that reuses the
+#: code); a band this map does not know — including the deliberate "unsure" —
+#: leaves the stored budget untouched rather than guessing a number. `None`
+#: means "no bound on this side".
+_BUDGET_BAND_PAISE: dict[str, tuple[int | None, int | None]] = {
+    "under-10k": (None, 1_000_000),
+    "10-25k": (1_000_000, 2_500_000),
+    "25-50k": (2_500_000, 5_000_000),
+    "50k-1l": (5_000_000, 10_000_000),
+    "1l-plus": (10_000_000, None),
+}
+
+
+def _budget_band_bounds(answers: dict[str, Any]) -> tuple[int | None, int | None]:
+    """A `budget_band` answer as the requirement's budget columns.
+
+    The detail screens already render "Budget you gave" from
+    `budget_min_paise`/`budget_max_paise`; before this, nothing in the capture
+    flow ever wrote them. Derived on every answer write so a changed band
+    changes the stored range. `(None, None)` for answer sets without the
+    question or with a band this build does not price — including "unsure".
+    """
+    band = answers.get("budget_band")
+    if not isinstance(band, str):
+        return (None, None)
+    return _BUDGET_BAND_PAISE.get(band, (None, None))
+
+
 def find_probable_duplicate(
     *,
     customer: User,
@@ -131,7 +162,8 @@ def create_draft(
     language: str = "en-IN",
 ) -> CustomerRequirement:
     configuration = active_configuration(variant)
-    answers = answers or {}
+    answers = configured_scope(schema=configuration.question_schema, scope=answers or {})
+    budget_min_paise, budget_max_paise = _budget_band_bounds(answers)
     requirement = CustomerRequirement.objects.create(
         customer=customer,
         variant=variant,
@@ -140,6 +172,8 @@ def create_draft(
         status=CustomerRequirement.Status.DRAFT,
         answers=answers,
         language=language,
+        budget_min_paise=budget_min_paise,
+        budget_max_paise=budget_max_paise,
     )
     record_transition(
         requirement=requirement,
@@ -217,8 +251,21 @@ def update_draft(
         )
 
     if answers is not None:
-        requirement.answers = answers
-        requirement.archetype = infer_archetype(variant=requirement.variant, answers=answers)
+        configuration = requirement.configuration or active_configuration(requirement.variant)
+        requirement.answers = configured_scope(
+            schema=configuration.question_schema,
+            scope=answers,
+        )
+        requirement.archetype = infer_archetype(
+            variant=requirement.variant,
+            answers=requirement.answers,
+        )
+        # Only when the variant actually asks for a band: an answer set without
+        # the question must not clear a budget something else wrote.
+        if "budget_band" in requirement.answers:
+            requirement.budget_min_paise, requirement.budget_max_paise = _budget_band_bounds(
+                requirement.answers,
+            )
     for field, value in (
         ("address", address),
         ("service_area", service_area),
@@ -286,6 +333,14 @@ def _assert_visit_plan_chosen(requirement: CustomerRequirement) -> None:
     plan = VisitPlan.objects.filter(requirement=requirement).first()
     if plan is None or plan.status == VisitPlan.Status.VOID:
         raise VisitPlanRequiredError()
+    selected_slots = plan.shares.filter(
+        requested_start__isnull=False,
+        duration_minutes__isnull=False,
+    ).count()
+    if selected_slots != plan.plan_size:
+        raise VisitPlanRequiredError(
+            "Choose one visit time for every requested estimate before sending this request."
+        )
 
 
 @transaction.atomic
@@ -327,6 +382,7 @@ def _closing_date(requirement: CustomerRequirement) -> date | None:
     return timezone.localtime(requirement.requested_start).date()
 
 
+@transaction.atomic
 def submit_requirement(
     *,
     requirement: CustomerRequirement,
@@ -351,6 +407,10 @@ def submit_requirement(
     configuration = requirement.configuration or active_configuration(requirement.variant)
     try:
         validate_scope(schema=configuration.question_schema, scope=requirement.answers)
+        # The role total and its two gendered halves are three numbers describing one crew, and a
+        # client that lets them drift apart sends a lead to a wedding for the wrong people. Checked
+        # here, at the last moment the Customer can still fix it.
+        crew_mix.assert_mix_consistent(requirement)
     except ValueError as exc:
         # The shared validator signals with ValueError. Left unwrapped it would leave the domain
         # as a 500; a Customer with an unanswered question deserves to be told which one.

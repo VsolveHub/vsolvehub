@@ -1,44 +1,35 @@
 "use client";
 
-import { Badge, Card, Readout, formatMoney } from "@vsolve/ui";
-
-import { timeAgo } from "@/lib/format";
+import { useServerCountdown } from "@vsolve/query";
+import { Badge, Card, formatMoney } from "@vsolve/ui";
 
 import { findCrewOfferDeclineReason } from "../model/decline-reasons";
 import {
-  WAGE_SETTLEMENT,
-  dayNoun,
+  DONT_TRAVEL_YET,
+  HOLD_LAPSED,
+  crewSizeLine,
   describeAccept,
-  describeHoldWindow,
-  helperNoun,
+  startDayLabel,
   type CrewOfferAnswer,
 } from "../model/offer-state";
 
 /**
  * What the lead just did, kept on screen after the server stops returning the row.
  *
- * The other half of the defect described on `CrewOfferAnswerHandlers`. This panel
- * is deliberately **not** rendered by the offer card: `GET /partner/crew-offers/`
- * filters to `INVITED`, so the answered row leaves the list on the invalidation
- * that follows either command, and anything rendered from inside that row unmounts
- * with it. The answer lives in the list's own state and is drawn here, above the
- * live offers, until the lead leaves the screen.
+ * `GET /partner/crew-offers/` filters to `INVITED`, so the answered row leaves
+ * the list on the invalidation that follows either command. The answer lives in
+ * the screen's own state and is drawn here until the lead leaves.
  *
  * ## The sentence this component exists for
  *
- * **"Do not travel yet."** A held win is not a confirmed job (07 §4c): the lead
+ * **"Don't travel yet."** A held win is not a confirmed job (07 §4c): the lead
  * won the cascade, the Customer is only now paying the booking fee, and only a
- * verified provider callback creates the engagement. ADR-0009 names the failure
- * being avoided — a crew sent to a site against an unpaid hold is worse than a
- * wait — and the A5 held visit slot already says it in exactly these words.
+ * verified provider callback creates the engagement.
  *
- * ## The Customer's numbers are not rendered, at any status
+ * ## The Customer's numbers are not rendered
  *
  * `lead_receipt_paise` is the only money drawn here, and since contract 1.30.0 it
- * is the only money the accept response carries: `CrewOfferAccepted` replaced
- * `RateCardBooking`, dropping `total_customer_paise`, `booking_fee_paise` and
- * `day_rate_paise`. A lead shown the all-inclusive figure would reasonably expect
- * to receive it, and the difference is this platform's fee.
+ * is the only money the accept response carries.
  */
 
 export interface CrewOfferOutcomeProps {
@@ -56,58 +47,57 @@ export function CrewOfferOutcome({ answer }: CrewOfferOutcomeProps) {
 function AcceptedOutcome({ answer }: { readonly answer: Extract<CrewOfferAnswer, { kind: "accepted" }> }) {
   const { booking, offer } = answer;
   const outcome = describeAccept(booking);
-  const tone = outcome.isHeld ? "warning" : outcome.tone === "action" ? "success" : "neutral";
+  // The hold clock. `hold_expires_at` is nullable and a null is a real answer —
+  // the window is server configuration — so no countdown is drawn from a guess.
+  const hold = useServerCountdown(outcome.isHeld ? booking.hold_expires_at : null, 1000);
+  const lapsed = outcome.isHeld && (hold?.isExpired ?? false);
+  const tone = lapsed ? "neutral" : outcome.isHeld ? "warning" : outcome.tone === "action" ? "success" : "neutral";
+
+  const where = [offer.area_label.trim() || null, startDayLabel(offer.requested_start)]
+    .filter((part): part is string => part !== null)
+    .join(" · ");
 
   return (
-    <Card className="flex flex-col gap-3 p-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge tone={tone} dot>
-          {outcome.title}
-        </Badge>
-        <span className="text-sm text-text-secondary">
-          {offer.headcount} {helperNoun(offer.headcount)} for {offer.days} {dayNoun(offer.days)}
-        </span>
-      </div>
+    <Card className="flex flex-col gap-2.5 p-4">
+      <Badge tone={tone} dot>
+        {lapsed ? "Hold lapsed" : `✓ ${outcome.title}`}
+      </Badge>
 
-      {outcome.isHeld ? (
-        <Readout
-          label="Before you do anything"
-          value="Do not travel yet"
-          tone="warning"
-          size="sm"
-          caption={
-            booking.hold_expires_at === null
-              ? undefined
-              : `Held until ${timeAgo(booking.hold_expires_at)}`
-          }
-        />
-      ) : null}
+      {lapsed ? (
+        <p className="text-base font-semibold leading-6 text-text">{HOLD_LAPSED}</p>
+      ) : (
+        <>
+          <p className="flex items-center justify-between gap-3 text-base font-semibold leading-6 text-text">
+            <span>{outcome.message}</span>
+            {hold ? (
+              <span className="shrink-0 tabular-nums text-text-secondary">
+                <span aria-hidden>⏱ {hold.display}</span>
+                <span className="sr-only">{hold.announce}</span>
+              </span>
+            ) : null}
+          </p>
+          {outcome.isHeld ? (
+            <p className="text-sm font-semibold leading-6 text-warning-text">{DONT_TRAVEL_YET}</p>
+          ) : null}
+        </>
+      )}
 
-      <p className="text-sm leading-6 text-text-secondary">{outcome.message}</p>
-
-      {outcome.isHeld ? (
-        <p className="text-sm leading-6 text-text-secondary">{describeHoldWindow(booking)}</p>
-      ) : null}
-
-      <Readout
-        label="Your money for this job"
-        value={formatMoney(booking.lead_receipt_paise)}
-        tone="neutral"
-        size="sm"
-        caption={`${booking.headcount} ${helperNoun(booking.headcount)} × ${booking.days} ${dayNoun(booking.days)}`}
-      />
-      <p className="text-sm leading-6 text-text-secondary">{WAGE_SETTLEMENT}</p>
+      <p className="text-sm leading-6 text-text-secondary">
+        {where === "" ? "" : `${where} · `}
+        {booking.headcount} × {booking.days} {booking.days === 1 ? "day" : "days"}
+      </p>
+      {lapsed ? null : (
+        <p className="text-sm leading-6 text-text-secondary">
+          {formatMoney(booking.lead_receipt_paise)} to you · paid daily by customer
+        </p>
+      )}
     </Card>
   );
 }
 
 /**
- * A pass, confirmed back to the lead.
- *
- * Says what the reason is *for* rather than thanking them for it. A lead who has
- * just told this platform its published rate is too low should be able to see
- * that the answer went somewhere, because that is the only claim that makes the
- * required field honest — ADR-0009 makes the decline rate an Operations alarm.
+ * A pass, confirmed back to the lead. Says what the reason is *for* in one
+ * line, because ADR-0009 makes the decline rate an Operations alarm.
  */
 function DeclinedOutcome({ answer }: { readonly answer: Extract<CrewOfferAnswer, { kind: "declined" }> }) {
   const reason = findCrewOfferDeclineReason(answer.reasonCode);
@@ -115,11 +105,11 @@ function DeclinedOutcome({ answer }: { readonly answer: Extract<CrewOfferAnswer,
   return (
     <Card className="flex flex-col gap-2 p-4">
       <Badge tone="neutral" dot>
-        You passed on this
+        Passed
       </Badge>
       <p className="text-sm leading-6 text-text-secondary">
-        {answer.offer.headcount} {helperNoun(answer.offer.headcount)} for {answer.offer.days}{" "}
-        {dayNoun(answer.offer.days)} — this has gone to the next lead. Nothing counts against you.
+        {crewSizeLine(answer.offer.headcount, answer.offer.days)} — gone to the next lead. Nothing
+        against you.
       </p>
       {reason ? <p className="text-sm leading-6 text-text-secondary">{reason.consequence}</p> : null}
     </Card>

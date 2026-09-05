@@ -83,7 +83,9 @@ describe("requirement wire-shape boundary", () => {
       .flatMap((layer) => sourceFilesUnder(join(FEATURE_ROOT, layer)))
       .filter((path) => !isTest(path))
       .filter((path) => API_CLIENT_IMPORT.test(readFileSync(path, "utf8")))
-      .map((path) => path.replace(FEATURE_ROOT, "features/requirement"));
+      .map((path) =>
+        path.replace(/\\/g, "/").replace(FEATURE_ROOT.replace(/\\/g, "/"), "features/requirement"),
+      );
 
     expect(
       offenders,
@@ -119,17 +121,14 @@ describe("requirement wire-shape boundary", () => {
     expect(importers.length).toBeGreaterThan(0);
   });
 
-  it("keeps the four-screen budget", () => {
-    // The flow-weight budget from `03-frontend-tasks.md`, which a Markdown table
-    // cannot enforce. A fifth screen has to be an argument somebody makes, not a
-    // file somebody adds. Carried over from the deleted quarantine test
-    // unchanged — it was never about the contract.
+  it("keeps the three-screen budget", () => {
+    // What needs doing, Where and when, Choose visits & send.
     const screens = readFileSync(join(FEATURE_ROOT, "model", "screens.ts"), "utf8");
     const sequence = /export const SCREENS = \[([\s\S]*?)\] as const;/.exec(screens);
 
     expect(sequence, "SCREENS must stay a literal array so this rule can read it").not.toBeNull();
 
     const count = (sequence?.[1] ?? "").split(",").filter((entry) => entry.trim().length > 0).length;
-    expect(count, "The requirement flow is budgeted at four screens.").toBe(4);
+    expect(count, "The requirement flow is budgeted at three screens.").toBe(3);
   });
 });

@@ -1,14 +1,10 @@
 "use client";
 
-import { Card, FactList, ScheduleSummary } from "@vsolve/ui";
-import { Lock } from "lucide-react";
+import { Card, Disclosure, FactList } from "@vsolve/ui";
+import type { ReactNode } from "react";
 
 import { shortDate } from "@/lib/format";
-import {
-  budgetLine,
-  requirementFacts,
-  unreadableAnswerCount,
-} from "../model/requirement-facts";
+import { budgetLine } from "../model/requirement-facts";
 import type { EnquiryRecord } from "../model/wire";
 
 /**
@@ -20,95 +16,102 @@ import type { EnquiryRecord } from "../model/wire";
  * invitation went out cannot move the goalposts under a quote in progress. What
  * is on this screen is what the quote answers.
  *
- * ## Two things `M2-FE-302` asks for that cannot be built
+ * ## The brief is labels now, not codes
  *
- * **The attachment viewer.** `RequirementSnapshot` does not copy attachments and
- * `EnquiryDetail` publishes none, so there is nothing to view. Attachment upload
- * itself is `M2-BE-202`, deferred to Wave C1. Rather than an empty viewer that
- * reads as "the customer attached nothing", the screen states the platform-level
- * truth and points at the channel that does work.
+ * `EnquiryDetail.brief` (1.48.0) publishes each question as asked and the
+ * answer as the label the customer tapped. Until then this screen de-slugged
+ * the raw `answers` map — `site_access` → "Site access" — which was this client
+ * guessing at what a catalogue question meant. Nothing here reads `answers`
+ * any more.
  *
- * **The capacity check.** `CapacityHold` is written on acceptance and never
- * published, and no read answers "am I already committed on these dates". So the
- * consequence of accepting is stated — it is knowable from the domain — and the
- * conflict warning that would need a read is not invented. Both requested in
- * `frontend-execution-plan.md` §7.
+ * The brief is small by design: the customer chose a service and a visit time,
+ * and the details are the vendor's to take on site. An empty brief says so in
+ * one line rather than apologising for missing prose.
+ *
+ * ## Both dates are labelled
+ *
+ * `ScheduleSummary` prints its date bare, which put two unlabelled dates at the
+ * top of the enquiry screen — one of them not the visit date — and left a
+ * vendor to guess which was which. Neither is a time they have to be anywhere,
+ * so both are rows in the brief now, each saying what it is.
+ *
+ * ## Collapsible on the visit screen only
+ *
+ * On `/work/enquiries/[id]` this is reference material a vendor reads once and
+ * then wants out of the way of the address and the arrival button, so it is a
+ * `Disclosure` there. In the live offer popup it is the entire basis of a
+ * decision being made in seconds, so it stays open — hence the prop rather than
+ * a house rule either way.
  */
 
 export interface RequirementSummaryProps {
   readonly enquiry: EnquiryRecord;
+  /** Fold the brief behind a summary row. Open on first render when `false`. */
+  readonly collapsible?: boolean;
 }
 
-export function RequirementSummary({ enquiry }: RequirementSummaryProps) {
-  const facts = requirementFacts(enquiry.answers);
-  const unreadable = unreadableAnswerCount(enquiry.answers);
+export function RequirementSummary({ enquiry, collapsible = false }: RequirementSummaryProps) {
   const budget = budgetLine(enquiry.budgetMinPaise, enquiry.budgetMaxPaise);
+  const brief = enquiry.brief.filter((line) => line.value.trim() !== "");
+
+  const dates = [
+    ...(enquiry.requestedStart
+      ? [{ label: "Wants work to start", value: shortDate(enquiry.requestedStart) }]
+      : []),
+    ...(enquiry.serviceBy
+      ? [{ label: "Enquiry closes", value: shortDate(enquiry.serviceBy) }]
+      : []),
+  ];
+
+  const body = (
+    <>
+      {dates.length > 0 ? <FactList items={dates} /> : null}
+
+      {brief.length > 0 ? (
+        <FactList items={brief.map((line) => ({ label: line.question, value: line.value }))} />
+      ) : (
+        <p className="text-sm leading-6 text-text-secondary">
+          The customer chose the service and a visit time — the details are yours to take on
+          site.
+        </p>
+      )}
+
+      {budget ? <FactList items={[{ label: "Customer's budget", value: budget }]} /> : null}
+
+      {/* Said once, here, rather than repeated under the address card: it is a
+          rule about the whole enquiry, not about the map link. */}
+      <p className="text-xs leading-5 text-text-muted">
+        Use this address only to complete this Vsolve visit. The customer&rsquo;s contact details
+        stay private.
+      </p>
+    </>
+  );
+
+  if (collapsible) {
+    return (
+      <Card className="p-0">
+        <Disclosure
+          className="px-4 py-3"
+          summary="What the customer asked for"
+          // Counts what is actually behind the chevron — the dates included.
+          // "No details" was wrong on a visit-first enquiry: the brief is empty
+          // by design there, but the two dates are still in the drawer.
+          hint={`${dates.length + brief.length} details`}
+        >
+          <Body>{body}</Body>
+        </Disclosure>
+      </Card>
+    );
+  }
 
   return (
     <Card className="flex flex-col gap-4 p-4">
       <h2 className="text-sm font-semibold text-text">What the customer asked for</h2>
-
-      <ScheduleSummary
-        dates={enquiry.requestedStart ? shortDate(enquiry.requestedStart) : "No start date given"}
-        serviceBy={enquiry.serviceBy ? shortDate(enquiry.serviceBy) : undefined}
-      />
-
-      {facts.length > 0 ? (
-        <FactList items={facts.map((fact) => ({ label: fact.label, value: fact.value }))} />
-      ) : (
-        <p className="text-sm leading-6 text-text-secondary">
-          The customer answered no structured questions on this request. Everything they said is in
-          their own words below.
-        </p>
-      )}
-
-      {unreadable > 0 ? (
-        <p className="text-sm leading-6 text-text-secondary">
-          {unreadable === 1
-            ? "One of the customer's answers is in a format this screen cannot show."
-            : `${unreadable} of the customer's answers are in a format this screen cannot show.`}{" "}
-          Ask a question below if it matters to your price.
-        </p>
-      ) : null}
-
-      {enquiry.additionalDetails.trim() !== "" ? (
-        <div>
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">
-            In the customer&rsquo;s words
-          </h3>
-          <p className="mt-1 whitespace-pre-line text-sm leading-6 text-text">
-            {enquiry.additionalDetails}
-          </p>
-        </div>
-      ) : null}
-
-      {budget ? (
-        <FactList
-          items={[
-            {
-              label: "Customer's budget",
-              value: budget,
-            },
-          ]}
-        />
-      ) : (
-        <p className="text-sm leading-6 text-text-secondary">
-          The customer did not state a budget.
-        </p>
-      )}
-
-      <p className="text-sm leading-6 text-text-secondary">
-        Vsolve does not share customer photos or voice notes with vendors yet. If the description
-        leaves something unclear, ask a question below rather than pricing around it.
-      </p>
-
-      <p className="flex items-start gap-2 text-xs leading-5 text-text-muted">
-        <Lock size={14} aria-hidden className="mt-0.5 shrink-0" />
-        <span>
-          The customer&rsquo;s name, address and phone number are not shared with vendors at any
-          point in this screen — not before you accept, and not after.
-        </span>
-      </p>
+      {body}
     </Card>
   );
+}
+
+function Body({ children }: { readonly children: ReactNode }) {
+  return <div className="flex flex-col gap-4">{children}</div>;
 }

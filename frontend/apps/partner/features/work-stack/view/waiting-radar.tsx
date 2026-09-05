@@ -49,8 +49,8 @@ import { Pictogram } from "@/components/pictogram";
  */
 export function WaitingRadar({ isOnline }: { readonly isOnline: boolean }) {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-6 py-10">
-      <div className="relative grid h-44 w-44 place-items-center">
+    <div className="flex flex-1 flex-col items-center justify-center gap-5 py-8">
+      <div className="relative grid h-36 w-36 place-items-center">
         {isOnline ? (
           <>
             <Ring delay="0s" />
@@ -58,33 +58,41 @@ export function WaitingRadar({ isOnline }: { readonly isOnline: boolean }) {
             <Ring delay="1.86s" />
           </>
         ) : (
-          <span className="absolute inset-4 rounded-full border-2 border-dashed border-[var(--color-warm-300)]" />
+          <span className="absolute inset-3 rounded-full border-2 border-dashed border-line" />
         )}
 
         <span
           className={cn(
-            "relative grid h-20 w-20 place-items-center rounded-full",
+            "relative grid h-16 w-16 place-items-center rounded-full",
             isOnline
-              ? "bg-[linear-gradient(150deg,var(--color-navy-500),var(--color-navy-800))] shadow-raised"
+              ? "bg-[linear-gradient(145deg,var(--color-success-text)_0%,#15803d_100%)] shadow-[0_4px_20px_color-mix(in_oklab,var(--color-success-text)_35%,transparent)]"
               : "bg-surface-sunken",
           )}
         >
+          {/*
+            `stopped`, not `power`, for the offline glyph. The go-online control
+            sits ~200px above this on a phone and *is* a power symbol — drawing
+            a second one here put two identical glyphs on one screen, the lower
+            one inert and ringed like a button. A Partner looking for the thing
+            to tap found the picture of it. `stopped` says the same thing about
+            the state without borrowing the control's affordance.
+          */}
           <Pictogram
-            name={isOnline ? "all-work" : "power"}
-            size="xl"
+            name={isOnline ? "all-work" : "stopped"}
+            size="lg"
             className={isOnline ? "text-surface" : "text-text-muted"}
           />
         </span>
       </div>
 
-      <div className="flex max-w-[26ch] flex-col items-center gap-1.5 text-center">
-        <p className="text-lg font-bold text-text">
-          {isOnline ? "Looking for work near you" : "You are not taking work"}
+      <div className="flex max-w-[28ch] flex-col items-center gap-1 text-center">
+        <p className="text-base font-bold text-text">
+          {isOnline ? "Searching for jobs nearby" : "You are offline"}
         </p>
         <p className="text-sm leading-relaxed text-text-secondary">
           {isOnline
-            ? "Keep this app installed and your phone on. We will alert you the moment a job comes in."
-            : "Go online above and jobs near you will start coming through."}
+            ? "We will notify you the moment a job comes in."
+            : "Go online above to start receiving offers."}
         </p>
       </div>
     </div>

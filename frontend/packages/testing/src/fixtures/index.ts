@@ -129,6 +129,12 @@ export function subcategory(
     slug: "electrical",
     name: "Electrical",
     description: "Switches, sockets, wiring and fixtures.",
+    // Required since contract 1.45.0: subcategories are the browse tiles and
+    // carry their own glyph, photo and tile count. Blank image is a real state
+    // (the client falls back to the icon), so the fixture defaults to it.
+    icon_key: "electrical",
+    image_url: "",
+    service_count: 1,
     ...overrides,
   };
 }
@@ -140,6 +146,8 @@ export function category(overrides: Partial<Schemas["Category"]> = {}): Schemas[
     name: "Technician",
     description: "Electrical, plumbing and appliance work by verified professionals.",
     icon_key: "technician",
+    // Required since contract 1.45.0; blank is the no-photo fallback state.
+    image_url: "",
     subcategories: [subcategory()],
     ...overrides,
   };
@@ -161,6 +169,10 @@ export function serviceCard(
     // service is the mirror image — `starting_price: null`, `bookable_variant_id: null` and an
     // archetype here — so a fixture that omitted this would only ever describe half the catalog.
     request_archetypes: [],
+    // Required since contract 1.43.0. The backend owns this vocabulary and the
+    // publication constraint rejects a service without one, so a fixture that
+    // omitted it described a service the API could never actually return.
+    icon_key: "electrical",
     cover: null,
     ...overrides,
   };
@@ -304,6 +316,8 @@ export function serviceVariantConfiguration(
     code: "standard",
     name: "Standard",
     description: "A verified electrician diagnoses and repairs the fault.",
+    // Required since contract 1.45.0; blank falls back to the service cover.
+    image_url: "",
     // A1 is task-priced (contract 1.6.0). The duration-picker fields are gone:
     // the customer buys task units and the server derives the estimate.
     fulfilment_archetype: "A1",
@@ -368,6 +382,7 @@ export function requirementServiceDetail(
         code: "standard",
         name: "Construction helpers",
         description: "",
+        image_url: "",
         fulfilment_archetype: "A3_TIME_BLOCK",
         questions: [fitOutQuestion()],
       },

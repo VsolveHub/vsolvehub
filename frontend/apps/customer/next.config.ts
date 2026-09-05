@@ -45,6 +45,10 @@ const devOrigins = [
 ];
 
 const nextConfig: NextConfig = {
+  // The indicator floats above the customer's fixed mobile tab bar. Build and
+  // runtime errors remain visible in the terminal and browser console without
+  // covering navigation during local demos.
+  devIndicators: false,
   // Workspace packages ship TypeScript source rather than a build step, so Next
   // has to compile them alongside the app.
   transpilePackages: ["@vsolve/ui", "@vsolve/api-client", "@vsolve/query"],
@@ -72,6 +76,16 @@ const nextConfig: NextConfig = {
    * no reason, and hide CORS and cookie misconfiguration until the day the proxy
    * is removed.
    */
+  async redirects() {
+    return [
+      // A customer never sees the word "engagement"; the booking lives at /jobs/{id} now.
+      { source: "/engagements/:path*", destination: "/jobs/:path*", permanent: true },
+      { source: "/requests", destination: "/activity?tab=requests", permanent: false },
+      { source: "/bookings", destination: "/activity?tab=booked", permanent: false },
+      { source: "/bookings/workforce", destination: "/activity?tab=booked", permanent: false },
+      { source: "/projects", destination: "/activity?tab=projects", permanent: false },
+    ];
+  },
   async rewrites() {
     if (!isDev) return [];
     return [

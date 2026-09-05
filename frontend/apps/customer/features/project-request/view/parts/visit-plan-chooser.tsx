@@ -6,13 +6,14 @@ import { useId } from "react";
 import type { PlanTierView } from "@/features/access/adapters";
 
 /**
- * How many professionals should visit — the one control on the review screen.
+ * How many professionals should visit — a control on the final send screen.
  *
- * ## Why it is a control and not a fifth step
+ * ## Why it is a control and not a step of its own
  *
- * The brief is budgeted at four screens. This is a decision the customer makes
- * while looking at what they are about to send, not a step they walk through —
- * and choosing **charges nothing**: it bounds the invitation wave and snapshots
+ * The brief is budgeted at three screens (`screens.ts`), and this renders on
+ * the last of them, `visits_send`. It is a decision the customer makes while
+ * looking at what they are about to send, not a step they walk through — and
+ * choosing **charges nothing**: it bounds the invitation wave and snapshots
  * the price, and the money is taken later, once, when the first professional
  * confirms a time.
  *

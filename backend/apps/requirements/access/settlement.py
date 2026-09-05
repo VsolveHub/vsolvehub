@@ -26,8 +26,10 @@ from apps.payouts.services import payable_account
 from apps.requirements import pricing
 from apps.requirements.exceptions import RequirementTransitionError
 from apps.requirements.models import (
+    CapacityHold,
     Proposal,
     SiteVisit,
+    VendorInvitation,
     VisitPlan,
     VisitPlanShare,
 )
@@ -70,6 +72,11 @@ def complete_plan_visit(*, site_visit_id: uuid.UUID, outcome_notes: str = "") ->
             "updated_at",
         )
     )
+    if visit.plan_share_id is not None:
+        VisitPlanShare.objects.filter(pk=visit.plan_share_id).update(
+            matching_status=VisitPlanShare.MatchingStatus.VISITED,
+            updated_at=now,
+        )
     return visit
 
 
@@ -417,14 +424,46 @@ def release_expired_visit_hold(*, site_visit_id: uuid.UUID) -> SiteVisit:
     visit.cancellation_reason_code = "visit_plan_hold_expired"
     visit.save(update_fields=("status", "cancellation_reason_code", "updated_at"))
     _release_grid_slot(visit)
+    invitation = VendorInvitation.objects.select_for_update().get(pk=visit.invitation_id)
+    if invitation.status == VendorInvitation.Status.ACCEPTED:
+        invitation.status = VendorInvitation.Status.WITHDRAWN
+        invitation.decline_reason_code = "customer_payment_timeout"
+        invitation.save(update_fields=("status", "decline_reason_code", "updated_at"))
+    CapacityHold.objects.filter(
+        invitation=invitation,
+        status=CapacityHold.Status.ACTIVE,
+    ).update(status=CapacityHold.Status.RELEASED, released_at=timezone.now())
     share = visit.plan_share
     if share is not None:
         locked = VisitPlanShare.objects.select_for_update().get(pk=share.pk)
         if locked.status == VisitPlanShare.Status.COMMITTED:
             locked.status = VisitPlanShare.Status.OPEN
+            locked.matching_status = VisitPlanShare.MatchingStatus.SEARCHING
             locked.partner = None
             locked.committed_at = None
-            locked.save(update_fields=("status", "partner", "committed_at", "updated_at"))
+            locked.save(
+                update_fields=(
+                    "status",
+                    "matching_status",
+                    "partner",
+                    "committed_at",
+                    "updated_at",
+                )
+            )
+            from apps.requirements import matching  # noqa: PLC0415 - avoids access package cycle
+
+            matching.dispatch_customer_visit_share(share_id=locked.id)
+            plan = VisitPlan.objects.select_for_update().get(pk=locked.plan_id)
+            if (
+                plan.status == VisitPlan.Status.PENDING
+                and not SiteVisit.objects.filter(
+                    plan_share__plan=plan,
+                    status=SiteVisit.Status.REQUESTED,
+                ).exists()
+            ):
+                plan.status = VisitPlan.Status.CHOSEN
+                plan.payment_attempt = None
+                plan.save(update_fields=("status", "payment_attempt", "updated_at"))
     return visit
 
 

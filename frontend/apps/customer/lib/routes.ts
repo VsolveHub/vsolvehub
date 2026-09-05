@@ -52,9 +52,22 @@ export function requestQuotesHref(requirementId: string): string {
   return `/requests/${requirementId}/quotes`;
 }
 
-/** One professional's estimate, focused inside the existing comparison page. */
+/** One professional's estimate, read in full on its own page. */
 export function requestEstimateHref(requirementId: string, proposalId: string): string {
-  return `${requestQuotesHref(requirementId)}#estimate-${proposalId}`;
+  return `${requestQuotesHref(requirementId)}/${proposalId}`;
+}
+
+/** The clarification thread with one professional, on that estimate. */
+export function estimateQuestionsHref(requirementId: string, proposalId: string): string {
+  return `${requestEstimateHref(requirementId, proposalId)}/questions`;
+}
+
+/**
+ * The one step between "Choose" and the agreement: what is being agreed to,
+ * read once, before the selection that opens the engagement.
+ */
+export function estimateConfirmHref(requirementId: string, proposalId: string): string {
+  return `${requestEstimateHref(requirementId, proposalId)}/confirm`;
 }
 
 /**
@@ -66,6 +79,23 @@ export function requestEstimateHref(requirementId: string, proposalId: string): 
  */
 export function visitHref(requirementId: string, siteVisitId: string): string {
   return `/requests/${requirementId}/visits/${siteVisitId}`;
+}
+
+/** One Booking Group — the customer's multi-visit checkout record. */
+export function bookingGroupHref(groupId: string): string {
+  return `/bookings/${groupId}`;
+}
+
+/**
+ * One visit inside a Booking Group.
+ *
+ * Nested under the group because that is the customer's mental model — "my
+ * booking, the second visit" — and because the back link has somewhere honest
+ * to go. The booking id alone is enough for Django; the group id is for
+ * navigation and for reading sibling-unit context on the detail screen.
+ */
+export function bookingVisitHref(groupId: string, bookingId: string): string {
+  return `${bookingGroupHref(groupId)}/visits/${bookingId}`;
 }
 
 /** The Customer's list of requests. Where a failed record read falls back to. */
@@ -101,7 +131,7 @@ export function bookCrewFeeHref(requirementId: string): string {
 
 /** One agreement, keyed by the engagement so a months-old notification resolves. */
 export function engagementHref(engagementId: string): string {
-  return `/engagements/${engagementId}`;
+  return `/jobs/${engagementId}`;
 }
 
 /**
@@ -112,12 +142,12 @@ export function engagementHref(engagementId: string): string {
  * a URL. A dialog cannot be any of those.
  */
 export function receiptHref(engagementId: string): string {
-  return `/engagements/${engagementId}/receipt`;
+  return `/jobs/${engagementId}/receipt`;
 }
 
 /** One stage's own review route — the money screen, reachable from a notification. */
 export function stageHref(engagementId: string, stageId: string): string {
-  return `/engagements/${engagementId}/stages/${stageId}`;
+  return `/jobs/${engagementId}/stages/${stageId}`;
 }
 
 /**

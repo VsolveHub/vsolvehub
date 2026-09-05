@@ -18,7 +18,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.identity.hashing import keyed_hash
-from apps.partners.exceptions import CrewConflictError
+from apps.partners.exceptions import CrewConflictError, CrewGenderConflictError
 from apps.partners.models import (
     CrewAvailabilityException,
     CrewMember,
@@ -56,13 +56,21 @@ def add_crew_to_roster(
     phone_e164: str,
     skills: Sequence[Skill] = (),
     is_supervisor: bool = False,
+    gender: str = "",
 ) -> CrewRosterChange:
     """Add a worker to one roster, resolving them to a single global person."""
     identity = crew_identity_hash(phone_e164=phone_e164)
     crew_member, _ = CrewMember.objects.get_or_create(
         identity_hash=identity,
-        defaults={"display_name": display_name, "phone_suffix": phone_e164[-4:]},
+        defaults={
+            "display_name": display_name,
+            "phone_suffix": phone_e164[-4:],
+            "gender": gender,
+        },
     )
+    # Not in `defaults`: a person another agency registered first already exists, and this is the
+    # branch where a Partner is telling us something we did not know about them.
+    set_crew_gender(crew_member=crew_member, gender=gender)
     if not crew_member.phone_suffix:
         # Backfill for a person first registered before the suffix existed. Derived from the number
         # the caller just supplied, which resolved to this same identity hash, so it cannot be
@@ -92,6 +100,67 @@ def add_crew_to_roster(
     )
 
 
+def set_crew_gender(
+    *, crew_member: CrewMember, gender: str, allow_overwrite: bool = False
+) -> CrewMember:
+    """Record what a worker is, across every agency that has them.
+
+    **The rule protects other agencies, and only bites when there are any.** `CrewMember` is one
+    row per person, so this field is shared: a second agency writing a different value would change
+    which jobs the *first* agency is eligible for without them touching anything. That is worth
+    refusing. What is not worth refusing is an agency correcting a value for a worker **nobody else
+    has** -- there, the row is theirs alone, the refusal protects no one, and it leaves a worker
+    mis-recorded with no way back.
+
+    So `allow_overwrite` is the caller saying "this agency is the only one holding this person",
+    which `update_crew_member` establishes by counting active memberships. Without it the rule is
+    unchanged: blank accepts, the same value is a no-op, and a contradiction is refused
+    (`m2_crew_gender_conflict`) because one of the two agencies is wrong and only a person can say
+    which. `operations.correct_crew_gender` is that person.
+
+    Blank is still not a value. Clearing a recorded gender is not offered even to a sole agency: it
+    would silently re-open every gendered slot the worker had been filling, and there is no honest
+    screen for "I would like to un-know this". `UNDISCLOSED` is what a worker who declined is.
+    """
+    if not gender:
+        return crew_member
+    if crew_member.gender == gender:
+        return crew_member
+    if crew_member.gender and not allow_overwrite:
+        raise CrewGenderConflictError(
+            crew_member.display_name,
+            CrewMember.Gender(crew_member.gender).label,
+        )
+    crew_member.gender = gender
+    crew_member.save(update_fields=("gender", "updated_at"))
+    return crew_member
+
+
+def is_sole_agency_for(membership: PartnerCrewMembership) -> bool:
+    """Whether this Partner is the only one with this worker on an active roster.
+
+    Archived memberships do not count. An agency that took somebody off its roster has stopped
+    being dispatched for them, so its copy of their gender decides nothing and cannot be broken by
+    a correction here.
+
+    **This answer is never published.** It changes what a write is allowed to do, and it is not put
+    on the roster payload: "somebody else has this worker" is precisely the fact `crew_roster`
+    suppresses `crew_member_id` to keep two agencies from learning about each other. The screen
+    therefore offers the field to everyone and lets the server refuse the one case that matters --
+    which discloses no more than today's refusal message already does, and only at the moment two
+    agencies actually disagree.
+    """
+    return (
+        PartnerCrewMembership.objects.filter(
+            crew_member_id=membership.crew_member_id,
+            status=PartnerCrewMembership.Status.ACTIVE,
+        )
+        .exclude(pk=membership.pk)
+        .count()
+        == 0
+    )
+
+
 def add_crew_member(
     *,
     partner: PartnerProfile,
@@ -116,16 +185,60 @@ def update_crew_member(
     membership: PartnerCrewMembership,
     skills: Sequence[Skill] | None = None,
     is_supervisor: bool | None = None,
+    gender: str = "",
+    display_name: str | None = None,
 ) -> PartnerCrewMembership:
-    """Skills and the supervisor flag, and deliberately not the display name.
+    """Skills, the supervisor flag, gender, and the name **this** agency uses.
 
-    The name belongs to the global `CrewMember`, which several agencies may share. One agency
-    renaming a person would rename them on every other roster, so it is published read-only rather
-    than published editable and then scoped in a way a later caller can forget.
+    ## The name is a label, and it is now per-roster
+
+    `CrewMember.display_name` is shared by every agency that resolved to the same number, so this
+    used to be read-only with the reason stated. That was half right and the other half was a
+    trap: a Partner who typed "Ramesh Kumr" had no way back. The escape hatch the screen offered
+    -- archive and re-add -- could not work either, because `add_crew_to_roster` resolves by
+    `identity_hash` and `get_or_create` ignores `defaults` on a hit, so the same wrong name came
+    straight back.
+
+    The fix is not to unlock the shared field. It is to notice that a name on a roster answers
+    "what does *your* team call them", which is a per-membership question, while the global row
+    keeps whatever the first agency registered. Writing here therefore cannot touch another
+    agency's screen, and blank still means "track the global record".
+
+    ## Gender is shared, and editable by whoever is the only one holding this worker
+
+    A name is something an agency typed; gender is a fact about the person, on the global row on
+    purpose, because a Customer's men/women split is checked against it at accept and again at
+    assignment. It cannot become per-membership without letting two agencies staff the same wedding
+    from two different answers.
+
+    But "shared" is not the same as "frozen". The refusal exists to stop one agency flipping
+    another's roster, so it is applied **only when there is another agency** --
+    `is_sole_agency_for` decides, by counting active memberships. A Partner correcting a worker
+    nobody else has is correcting their own record and is simply allowed to; a Partner
+    contradicting a second agency is refused, and `operations.correct_crew_gender` is the arbiter,
+    with a reason.
+
+    The screen does not ask which case it is in. It offers the field to everybody and surfaces the
+    refusal if it comes -- because publishing "somebody else has this worker" is exactly the fact
+    `crew_roster` withholds `crew_member_id` to protect.
     """
     if is_supervisor is not None and membership.is_supervisor != is_supervisor:
         membership.is_supervisor = is_supervisor
         membership.save(update_fields=("is_supervisor",))
+
+    if display_name is not None:
+        # Trimmed, and blank is meaningful rather than rejected: clearing the override is how a
+        # Partner says "just use whatever the record says", which is the state every row starts in.
+        cleaned = display_name.strip()[:120]
+        if cleaned != membership.display_name:
+            membership.display_name = cleaned
+            membership.save(update_fields=("display_name",))
+
+    set_crew_gender(
+        crew_member=membership.crew_member,
+        gender=gender,
+        allow_overwrite=is_sole_agency_for(membership),
+    )
 
     if skills is not None:
         wanted = {skill.id: skill for skill in skills}
@@ -156,13 +269,30 @@ def archive_crew_member(*, membership: PartnerCrewMembership) -> PartnerCrewMemb
     if booked:
         days = ", ".join(day.isoformat() for day in booked[:5])
         raise CrewConflictError(
-            f"{membership.crew_member.display_name} is booked on {days}. Replace them on those "
+            f"{membership.roster_name} is booked on {days}. Replace them on those "
             "shifts before taking them off the roster.",
         )
     membership.status = PartnerCrewMembership.Status.ARCHIVED
     membership.archived_at = timezone.now()
     membership.save(update_fields=("status", "archived_at"))
     return membership
+
+
+@dataclass(frozen=True, slots=True)
+class CrewDocumentState:
+    """Where one kind of identity document stands for one worker, as the Partner may see it.
+
+    The reviewer's name is **not** here and neither is the object key. A Partner is entitled to
+    know whether their worker is cleared and, on a rejection, why; who inside Operations pressed
+    the button is not theirs, and a signed link to the stored file is issued to reviewers only.
+    """
+
+    kind: str
+    status: str
+    #: Set only on a rejection. Approvals need no reason and inventing one would be noise on a
+    #: screen whose whole job is to show the Partner what still needs doing.
+    reason: str
+    updated_at: datetime
 
 
 @dataclass(frozen=True, slots=True)
@@ -177,6 +307,14 @@ class CrewRosterEntry:
     skill_codes: tuple[str, ...]
     documents_verified_at: datetime | None
     added_at: datetime
+    #: `MAN` / `WOMAN` / `OTHER` / `UNDISCLOSED`, or blank when nobody has asked. Blank is the
+    #: state that costs a Partner work: a Customer booking three women cannot be shown a roster
+    #: this worker might be on, so the screen that renders this says so rather than leaving a gap.
+    gender: str
+    #: One entry per document kind that has ever reached a reviewer. Empty means nothing has been
+    #: uploaded — which, until this shipped, was every membership in every environment, and is why
+    #: the roster screen has to distinguish "waiting on Operations" from "waiting on you".
+    documents: tuple[CrewDocumentState, ...] = ()
 
 
 def masked_crew_phone(suffix: str) -> str:
@@ -199,22 +337,58 @@ def crew_roster(partner: PartnerProfile) -> list[CrewRosterEntry]:
     memberships = (
         PartnerCrewMembership.objects.filter(partner=partner)
         .select_related("crew_member")
-        .prefetch_related("skills__skill")
+        .prefetch_related("skills__skill", "documents")
         .order_by("status", "-added_at")
     )
     return [
         CrewRosterEntry(
             membership_id=membership.id,
-            display_name=membership.crew_member.display_name,
+            display_name=membership.roster_name,
             phone_masked=masked_crew_phone(membership.crew_member.phone_suffix),
             status=membership.status,
             is_supervisor=membership.is_supervisor,
             skill_codes=tuple(sorted(link.skill.code for link in membership.skills.all())),
             documents_verified_at=membership.documents_verified_at,
             added_at=membership.added_at,
+            gender=membership.crew_member.gender,
+            documents=_document_states(membership),
         )
         for membership in memberships
     ]
+
+
+def _document_states(membership: PartnerCrewMembership) -> tuple[CrewDocumentState, ...]:
+    """The latest live version of each document kind, from an already-prefetched relation.
+
+    Filtered and sorted in Python rather than by a second query per row: `crew_roster` is read on
+    a roster screen that may hold thirty workers, and a queryset here would be thirty round trips
+    to publish a badge.
+    """
+    from apps.partners.models import CrewDocument  # noqa: PLC0415 — avoids a models import cycle
+
+    live = {
+        CrewDocument.Status.PENDING,
+        CrewDocument.Status.APPROVED,
+        CrewDocument.Status.REJECTED,
+    }
+    latest: dict[str, CrewDocument] = {}
+    for document in sorted(
+        (item for item in membership.documents.all() if item.status in live),
+        key=lambda item: item.version,
+        reverse=True,
+    ):
+        latest.setdefault(document.kind, document)
+    return tuple(
+        CrewDocumentState(
+            kind=document.kind,
+            status=document.status,
+            reason=(
+                document.review_reason if document.status == CrewDocument.Status.REJECTED else ""
+            ),
+            updated_at=document.updated_at,
+        )
+        for _kind, document in sorted(latest.items())
+    )
 
 
 @transaction.atomic
@@ -279,14 +453,13 @@ def assert_crew_available(
         if membership.partner_id != partner.id:
             raise CrewConflictError("That crew member is not on your roster.")
         if membership.status != PartnerCrewMembership.Status.ACTIVE:
-            raise CrewConflictError(f"{membership.crew_member.display_name} is archived.")
+            raise CrewConflictError(f"{membership.roster_name} is archived.")
         if membership.id in off_today:
             raise CrewConflictError(
-                f"{membership.crew_member.display_name} is marked unavailable on "
-                f"{on_day.isoformat()}.",
+                f"{membership.roster_name} is marked unavailable on {on_day.isoformat()}.",
             )
         if membership.crew_member_id in busy:
             raise CrewConflictError(
-                f"{membership.crew_member.display_name} is already booked on "
+                f"{membership.roster_name} is already booked on "
                 f"{on_day.isoformat()}, including through another agency.",
             )

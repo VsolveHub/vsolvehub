@@ -86,6 +86,10 @@ describe("my-requests rows", () => {
     );
   });
 
+  it("carries the category slug so the bookings row can resolve the catalogue cover", () => {
+    expect(toRequestRow(summary(), "Housekeeping staff")?.categorySlug).toBe("housekeeping-staff");
+  });
+
   it("refuses a status this build has no copy for", () => {
     // Cast because the schema's enum is a claim about a *document*, and this
     // test is about the *bytes*: the day Django grows a thirteenth status,
@@ -157,7 +161,10 @@ describe("the detail header", () => {
     // from the list cache would show a deadline read at some earlier moment as
     // though it had just been confirmed, on the one screen whose job is to be
     // truthful about a promise with a clock on it.
-    const header = toRequestHeader(draft(), "Housekeeping staff");
+    const header = toRequestHeader(
+      draft({ quote_delivery_deadline_at: undefined }),
+      "Housekeeping staff",
+    );
 
     expect(header?.deadlineAt).toBeNull();
     expect(header?.teaserCount).toBe(0);

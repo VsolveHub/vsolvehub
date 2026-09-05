@@ -5,14 +5,14 @@ import { describe, expect, it } from "vitest";
 /**
  * Two rules the enquiry surface turns on, enforced rather than documented.
  *
- * ## 1. No customer contact, ever
+ * ## 1. No customer identity or contact
  *
  * This is the enforceable half of `M2-FE-307`. The task asks for consent before
  * contact disclosure and for cached contact never to survive a revocation — and
- * the honest position at contract 1.21.0 is that **no contact is ever
- * disclosed**: `EnquirySummarySerializer` and `EnquiryDetailSerializer` read the
- * snapshot, which never held a name, an address or a number, and there is no
- * disclosure endpoint to consent to.
+ * The exact site destination now has one purpose-bound disclosure: a paid,
+ * scheduled project visit. Customer name, phone and email still never enter the
+ * enquiry or proposal surface, and the address projection contains none of
+ * them. The enquiry list continues to receive only a locality label.
  *
  * That makes the requirement a *negative* one, and a negative requirement is
  * exactly the kind that rots quietly. A component test proves today's render;
@@ -80,13 +80,27 @@ const CONTACT_FIELDS = [
   "masked_phone",
 ];
 
-describe("customer contact never enters the enquiry surface", () => {
+/**
+ * The deliberate exception this file's docblock promised would be decided
+ * deliberately: contract 1.52.0's visit-day contact rung (owner decision,
+ * 2026-09-01). `customer_name` discloses with the site address on a paid,
+ * scheduled visit; `customer_phone` only from two hours before the slot until
+ * completion. The transport module may name exactly those two fields; every
+ * other module, and every other field, stays banned.
+ */
+const VISIT_DAY_RUNG = {
+  module: /[/\\]enquiry[/\\]model[/\\]wire\.ts$/,
+  fields: new Set(["customer_name", "customer_phone"]),
+};
+
+describe("customer identity and contact never enter the enquiry surface", () => {
   it("names no contact field in any production module", () => {
     const offenders: string[] = [];
 
     for (const path of productionFiles()) {
       const source = readFileSync(path, "utf8");
       for (const field of CONTACT_FIELDS) {
+        if (VISIT_DAY_RUNG.module.test(path) && VISIT_DAY_RUNG.fields.has(field)) continue;
         if (source.includes(field)) {
           offenders.push(`${path.replace(/\\/g, "/")} references ${field}`);
         }
@@ -124,7 +138,8 @@ describe("unpublished endpoints are not named in source", () => {
    */
   const UNPUBLISHED_PATHS = [
     "/api/v1/partner/enquiries/{invitation_id}/site-visits/{site_visit_id}/",
-    "/api/v1/proposals/?",
+    // `/api/v1/proposals/?` left this list at 1.24.0: `m2_proposal_list` published the
+    // vendor's own quotes, which is exactly the read this guard was waiting on.
     "/api/v1/partner/wage-floor/",
   ];
 

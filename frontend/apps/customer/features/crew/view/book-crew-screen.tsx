@@ -14,6 +14,7 @@ import {
   Field,
   Input,
   RailLayout,
+  Select,
   Skeleton,
   buttonStyles,
   cn,
@@ -28,6 +29,7 @@ import { preferredAddressId, useAddresses } from "@/features/addresses/queries";
 import {
   toDraftIntent,
   toQuestionSet,
+  type RequirementQuestionView,
   type RequirementService,
   type RequirementVariant,
 } from "@/features/requirement/adapters";
@@ -39,7 +41,7 @@ import {
   useRequirement as useRequirementRecord,
   useSaveRequirement,
 } from "@/features/requirement/queries";
-import { toRateDisclosureView, toRateUnavailableView } from "../adapters";
+import { toRateDisclosureView, toRateTermsView, toRateUnavailableView } from "../adapters";
 import {
   clearCrewBookingIntent,
   readCrewBookingIntent,
@@ -49,50 +51,85 @@ import {
   OTHER_WORK_TYPE,
   WORK_DESCRIPTION_CODE,
   crewDetailQuestions,
+  crewFlowShape,
+  fixedTeamGuestLimit,
   hiddenCrewQuestionCodes,
+  initialCrewBookingStep,
+  isFixedTeamCrewFlow,
   resumeCrewBookingStep,
   selectedWorkLabel,
   selectedWorkValue,
   workTypeQuestion,
   type CrewBookingStep,
 } from "../model/booking-flow";
-import { initialAnswers, presetSize, type PresetSize } from "../model/size";
+import {
+  DRESS_CODE_CODE,
+  EVENT_TYPE_CODE,
+  GUEST_BAND_CODE,
+  isExactGuestCount,
+  SERVICE_STYLE_CODE,
+  STAFF_MEAL_CODE,
+  applyServingSuggestion,
+  crewGenderTotals,
+  crewMix,
+  crewMixLabel,
+  genderMixPhrase,
+  hiddenEventQuestionCodes,
+  occasionQuestions,
+  presentationQuestions,
+  roleQuestions,
+  roleTotal,
+  suggestedServers,
+  syncHeadcount,
+  withRoleCount,
+  withRoleGenderCount,
+} from "../model/event-flow";
+import {
+  combineStart,
+  formatReportingTime,
+  reportingTimeOptions,
+} from "../model/reporting-time";
+import { CrewAboutPanel } from "./crew-about-panel";
+import { DURATION_CODE, initialAnswers, presetSize, type PresetSize } from "../model/size";
 import { useBookAtPublishedRate, useRateCardPreview } from "../queries";
 import { CrewAddressPicker } from "./crew-address-picker";
+import { CrewComposer, CrewScreen } from "./crew-composer";
+import { EventTypeIcon, RoleIcon } from "./event-icons";
+import { EventSummaryCard, type SummaryLine } from "./event-summary";
 import { JobFormError, JobFormScreen } from "./mobile/job-form-screen";
 import { RateScreen } from "./mobile/rate-screen";
+import { OccasionFields, OccasionScreen } from "./occasion-screen";
 import { PresetQuestions, requiredAnswersPresent } from "./preset-questions";
-import { RateRail } from "./rate-rail";
+import { RateTermsLink } from "./rate-terms-sheet";
 import { WorkPickerScreen, WorkTypeIcon } from "./work-picker-screen";
 
 /**
  * The A3 preset — `M2-FE-425`, and the rate it shows — `M2-FE-426`.
  *
- * A three-stage flow, opened by the catalog's **Book a crew** action. ADR-0009: what
- * this market sells is a commodity priced per worker per day at a street rate
- * everybody already knows, so a Customer asking for four helpers for two days of
- * shifting does not need three competing essays inside a 72-hour SLA and a
- * paywall to compare numbers the street already agrees on.
+ * One screen, three shapes, read off the catalogue rather than the slug:
  *
- * ## This is deliberately not the four-screen flow
+ * - **plain** — a specific day-hire. Details, then the rate.
+ * - **work** — generic labour. Choose the work, plan the crew, see the rate.
+ * - **event** — event staff. The occasion, the crew by role, when and where
+ *   and how they should turn up, then the rate.
  *
- * The four screens remain the A5 shape and the A3 **fallback's**. A3 starts with
- * the human question — what the crew will do — before asking for people, days,
- * date and site. The final stage shows the published rate and nothing invents a
- * price in the browser.
+ * ADR-0009: what this market sells is a commodity priced per worker per day at
+ * a street rate everybody already knows. What changed for events is not the
+ * price but the *brief*: a lead staffing a wedding needs the occasion, the
+ * crowd, the roles and the dress code before they can say yes, and every one
+ * of those now travels with the offer.
  *
  * ## The rate follows an explicit confirmation
  *
- * Browsing work and shaping a crew remain local until the Customer presses
+ * Browsing, choosing and shaping a crew remain local until the Customer presses
  * **See my live rate**. Desktop uses a review-and-rate layout; a phone uses the
- * compact rate screen. Both are the same third stage and the same server price.
+ * compact rate screen. Both are the same last stage and the same server price.
  *
  * **Nothing on this screen calculates money.** The rail's figures come from
  * `GET .../rate-card/?headcount=&days=`, which prices a size without saving it;
- * see `useRateCardPreview`. The alternative — multiplying a day rate by a
- * headcount in the browser — is the one thing `features/crew/adapters` forbids,
- * because the day rate, the wage half and the fee component are three separately
- * published numbers whose relationship is the card's to define.
+ * see `useRateCardPreview`. The one arithmetic this screen does is a *count* —
+ * the headcount is the sum of the roles — and that is a fact about the crew,
+ * not a price.
  *
  * ## Where the writes are, now that pricing is not one
  *
@@ -116,20 +153,6 @@ export interface BookCrewScreenProps {
   variant: RequirementVariant;
 }
 
-/**
- * Midnight local as an ISO date-time.
- *
- * Copied in behaviour from the requirement flow, deliberately and not imported:
- * the Customer chose a *day*, `requested_start` is a `DateTimeField`, and the
- * start of their own day is the only moment that invents no intention. Built
- * from local date parts rather than `new Date(iso)` so a browser east of UTC
- * does not send the previous day.
- */
-function startOfLocalDay(isoDate: string): string {
-  const [year, month, day] = isoDate.split("-").map(Number);
-  return new Date(year ?? 0, (month ?? 1) - 1, day ?? 1, 0, 0, 0, 0).toISOString();
-}
-
 function todayIso(): string {
   const now = new Date();
   const month = `${now.getMonth() + 1}`.padStart(2, "0");
@@ -146,6 +169,9 @@ function crewIntentStorage(): Storage | null {
     return null;
   }
 }
+
+/** An event is booked weeks out; a helper crew, days. */
+const EVENT_DATE_HORIZON_DAYS = 60;
 
 /**
  * How long the rail waits after the last press before it re-prices.
@@ -164,10 +190,7 @@ const REPRICE_DELAY_MS = 400;
  * Clearing is **derived rather than timed**. When the form stops being
  * priceable there is nothing to wait for — a rail holding a total for another
  * 400ms is quoting a job that no longer exists — so `null` passes straight
- * through, and only a real size goes through the timer. That also keeps the
- * effect free of a synchronous `setState`, which is the shape the React
- * compiler rules reject: the only state write here happens in the timeout's
- * callback, which is the external event this effect exists to subscribe to.
+ * through, and only a real size goes through the timer.
  */
 function useDebouncedSize(size: PresetSize | null): PresetSize | null {
   const [settled, setSettled] = useState(size);
@@ -181,17 +204,65 @@ function useDebouncedSize(size: PresetSize | null): PresetSize | null {
   return size === null ? null : settled;
 }
 
+function optionLabel(
+  questions: readonly RequirementQuestionView[],
+  code: string,
+  answers: Readonly<Record<string, unknown>>,
+): string | null {
+  const question = questions.find((entry) => entry.code === code);
+  const value = answers[code];
+  if (question === undefined || typeof value !== "string") return null;
+  return question.options?.find((option) => option.value === value)?.label ?? null;
+}
+
+/**
+ * How the crowd reads back — "100 to 200", or "180" when the Customer typed it.
+ *
+ * `guest_band` holds a band code or an exact number, so an option lookup answers null for
+ * half the possible answers. Every caller composes prose from this ("a 180 guest event",
+ * "180 guests"), and a null there drops the crowd from the summary the Customer checks
+ * before sending.
+ */
+function guestCountLabel(
+  questions: readonly RequirementQuestionView[],
+  answers: Readonly<Record<string, unknown>>,
+): string | null {
+  const value = answers[GUEST_BAND_CODE];
+  if (isExactGuestCount(value)) return String(value).trim();
+  return optionLabel(questions, GUEST_BAND_CODE, answers);
+}
+
+function joinPresent(parts: readonly (string | null)[], separator = " · "): string | null {
+  const present = parts.filter((part): part is string => part !== null && part !== "");
+  return present.length === 0 ? null : present.join(separator);
+}
+
+export type EventWizardStep =
+  | "occasion"
+  | "crew"
+  | "schedule_venue";
+
 export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
   const router = useRouter();
   const questionSet = useMemo(() => toQuestionSet(variant), [variant]);
+  const questions = questionSet.questions;
+  const shape = useMemo(() => crewFlowShape(questions), [questions]);
+  const isEvent = shape === "event";
+  const isFixedTeam = useMemo(() => isFixedTeamCrewFlow(questions), [questions]);
+  const guestLimit = useMemo(() => fixedTeamGuestLimit(questions), [questions]);
+  const asksReportingTime = isEvent || isFixedTeam;
+  const roles = useMemo(() => roleQuestions(questions), [questions]);
 
-  const [answers, setAnswers] = useState<Record<string, unknown>>(() =>
+  const [answers, setAnswers] = useState<Record<string, unknown>>(() => {
     // Seeded so the steppers' displayed value and the stored answer agree from
-    // the first render — see `initialAnswers`.
-    initialAnswers(questionSet.questions),
-  );
+    // the first render — see `initialAnswers`. An event crew opens empty: the
+    // headcount is the sum of roles nobody has chosen yet.
+    const seeded = initialAnswers(questions);
+    return isEvent ? syncHeadcount(seeded, roles) : seeded;
+  });
   const [addressId, setAddressId] = useState<string | null>(null);
   const [requestedStart, setRequestedStart] = useState<string>("");
+  const [reportingTime, setReportingTime] = useState<string | null>(null);
   const [requirementId, setRequirementId] = useState<string | null>(null);
   /**
    * Which stage is showing on both phone and desktop.
@@ -199,14 +270,12 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
    * Held here rather than in a view so a resize does not reset the Customer's
    * progress or create a second source of truth for navigation.
    */
-  const [bookingStep, setBookingStep] = useState<CrewBookingStep>("work");
+  const [bookingStep, setBookingStep] = useState<CrewBookingStep>(() =>
+    initialCrewBookingStep(questions),
+  );
+  const [eventStep, setEventStep] = useState<EventWizardStep>("occasion");
   /** Incremented to ask the address dialog to open. See `AddressStage`. */
   const [addressSignal, setAddressSignal] = useState(0);
-  /**
-   * Which layout to render. See `useIsWideScreen` on why this is a hook rather
-   * than a CSS branch: the two views hold the same form controls, and rendering
-   * both would put two radio groups with the same `name` in one document.
-   */
   const isWide = useIsWideScreen();
 
   const createRequirement = useCreateRequirement();
@@ -221,10 +290,29 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
   const effectiveAddressId = preferredAddressId(addresses, addressId);
   const address =
     addresses.find((candidate) => candidate.id === effectiveAddressId) ?? null;
-  const workQuestion = workTypeQuestion(questionSet.questions);
-  const detailQuestions = crewDetailQuestions(questionSet.questions);
+
+  const workQuestion = workTypeQuestion(questions);
+  const detailQuestions = crewDetailQuestions(questions);
   const workValue = selectedWorkValue(answers);
   const workLabel = selectedWorkLabel(workQuestion, answers);
+
+  const occasion = useMemo(() => occasionQuestions(questions), [questions]);
+  const presentation = useMemo(() => presentationQuestions(questions), [questions]);
+  const daysQuestion = questions.find((question) => question.code === DURATION_CODE) ?? null;
+  const crewTotal = roleTotal(roles, answers);
+  const crewGenders = crewGenderTotals(roles, answers);
+  const suggestion = isEvent
+    ? suggestedServers(answers[GUEST_BAND_CODE], answers[SERVICE_STYLE_CODE])
+    : null;
+  const eventTypeLabel = optionLabel(occasion, EVENT_TYPE_CODE, answers);
+  // Not `optionLabel`: an exact count is not an option code, so the lookup returns null
+  // and every sentence built from it silently loses the crowd — the one fact the crew
+  // suggestion is derived from.
+  const guestBandLabel = guestCountLabel(occasion, answers);
+  const serviceStyleLabel = optionLabel(occasion, SERVICE_STYLE_CODE, answers);
+  const mixLabel = crewMixLabel(roles, answers);
+  const mix = crewMix(roles, answers);
+
   const localIntentRestored = useRef(false);
   const restoredServerDraftId = useRef<string | null>(null);
 
@@ -238,9 +326,10 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
 
   const today = todayIso();
   const formComplete =
-    requiredAnswersPresent(questionSet.questions, answers) &&
+    requiredAnswersPresent(questions, answers) &&
     effectiveAddressId !== null &&
     requestedStart !== "" &&
+    (!asksReportingTime || reportingTime !== null) &&
     size !== null;
 
   /**
@@ -248,24 +337,27 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
    * initializer, so the server and first client render stay identical.
    */
   useEffect(() => {
-    const restore = window.setTimeout(() => {
+    const restoreTimer = window.setTimeout(() => {
       const intent = readCrewBookingIntent(crewIntentStorage(), service.slug, variant.id);
       if (intent !== null) {
-        const resumableStep = resumeCrewBookingStep(workQuestion, intent.answers);
-        setAnswers((current) => ({ ...current, ...intent.answers }));
+        const restored = isEvent ? syncHeadcount(intent.answers, roles) : intent.answers;
+        setAnswers((current) => ({ ...current, ...restored }));
         setAddressId(intent.addressId);
         setRequestedStart(intent.requestedStart);
+        setReportingTime(intent.reportingTime);
         setRequirementId(intent.requirementId);
-        setBookingStep(
-          intent.step === "work" || resumableStep === "work"
-            ? "work"
-            : "details",
-        );
+        // The remembered screen, unless the answers no longer earn it — a
+        // stale work choice or an occasion the catalogue retired goes back to
+        // the stage that asks again. The rate is never resumed into: it needs
+        // the saved draft, which "See my live rate" is the deliberate way to get.
+        const earliest = resumeCrewBookingStep(questions, restored);
+        const remembered = intent.step === "rate" ? earliest : intent.step;
+        setBookingStep(stepIndex(remembered) <= stepIndex(earliest) ? remembered : earliest);
       }
       localIntentRestored.current = true;
     }, 0);
-    return () => window.clearTimeout(restore);
-  }, [service.slug, variant.id, workQuestion]);
+    return () => window.clearTimeout(restoreTimer);
+  }, [isEvent, questions, roles, service.slug, variant.id]);
 
   useEffect(() => {
     if (!localIntentRestored.current) return;
@@ -276,13 +368,30 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
       answers,
       addressId,
       requestedStart,
+      reportingTime,
       step: bookingStep,
     });
-  }, [addressId, answers, bookingStep, requirementId, requestedStart, service.slug, variant.id]);
+  }, [
+    addressId,
+    answers,
+    bookingStep,
+    reportingTime,
+    requirementId,
+    requestedStart,
+    service.slug,
+    variant.id,
+  ]);
+
+  /** Scrolls smoothly to top when advancing or navigating between wizard steps. */
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [eventStep, bookingStep]);
 
   useEffect(() => {
     const draft = requirementQuery.data;
-    if (draft === undefined) return;
+    if (draft === undefined || draft === null) return;
     if (draft.status !== "DRAFT") {
       clearCrewBookingIntent(crewIntentStorage(), service.slug);
       router.replace(requestHref(draft.id));
@@ -293,14 +402,16 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
     const intent = toDraftIntent(draft);
     const restore = window.setTimeout(() => {
       restoredServerDraftId.current = draft.id;
+      const restored = isEvent ? syncHeadcount(intent.answers, roles) : intent.answers;
       setRequirementId(draft.id);
-      setAnswers((current) => ({ ...current, ...intent.answers }));
+      setAnswers((current) => ({ ...current, ...restored }));
       setAddressId(intent.addressId);
       setRequestedStart(intent.requestedStart ?? "");
-      setBookingStep(resumeCrewBookingStep(workQuestion, intent.answers));
+      setReportingTime(intent.requestedStartTime);
+      setBookingStep(resumeCrewBookingStep(questions, restored));
     }, 0);
     return () => window.clearTimeout(restore);
-  }, [requirementQuery.data, router, service.slug, workQuestion]);
+  }, [isEvent, questions, requirementQuery.data, roles, router, service.slug]);
 
   /**
    * The draft's id, created at most once however many times this is called.
@@ -329,6 +440,7 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
         answers,
         language: "en-IN",
       });
+      restoredServerDraftId.current = draft.id;
       setRequirementId(draft.id);
       return draft.id;
     })().catch((error: unknown) => {
@@ -340,20 +452,13 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
     return creating.current;
   }
 
-  /**
-   * Persists the address, because the address is what resolves the rate card.
-   *
-   * `rate_card_for_requirement` reads `requirement.service_area`, so a draft
-   * without an address cannot be priced at all — this is the one form change
-   * that has to reach the server before the rail can say anything.
-   *
-   * Driven by the event rather than by an effect watching the state it sets.
-   * Choosing an address is a deliberate act with a dialog in front of it, so
-   * there is a real user action to hang the write on, and hanging it there
-   * keeps the write out of the render path entirely.
-   */
   async function handleAddressSelected(nextAddressId: string) {
     setAddressId(nextAddressId);
+  }
+
+  /** The instant to save: the chosen day, at the reporting time for a shift crew. */
+  function startInstant(): string {
+    return combineStart(requestedStart, asksReportingTime ? reportingTime : null);
   }
 
   /**
@@ -363,8 +468,7 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
    * sizes through query parameters, which write nothing, so the draft still
    * holds whatever size was last persisted — and `rate-card/book/` prices the
    * **draft**. Booking without this would charge for a job the Customer never
-   * saw priced, which is the exact failure the query-parameter preview was
-   * designed to make impossible.
+   * saw priced.
    */
   async function saveCrewDraft(): Promise<string | null> {
     if (!formComplete || effectiveAddressId === null) return null;
@@ -374,7 +478,7 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
         requirementId: targetId,
         answers,
         addressId: effectiveAddressId,
-        requestedStart: startOfLocalDay(requestedStart),
+        requestedStart: startInstant(),
       });
       return targetId;
     } catch {
@@ -386,8 +490,26 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
     if ((await saveCrewDraft()) !== null) setBookingStep("rate");
   }
 
+  function handleRoleGender(code: string, gender: "men" | "women", value: number) {
+    setAnswers((current) => withRoleGenderCount(current, roles, code, gender, value));
+  }
+
   function handleAnswer(code: string, value: unknown) {
     setAnswers((current) => {
+      if (isEvent && typeof value === "number" && roles.some((role) => role.code === code)) {
+        return withRoleCount(current, roles, code, value);
+      }
+      if (isEvent && (code === GUEST_BAND_CODE || code === SERVICE_STYLE_CODE)) {
+        // The crowd or the style changed, so the serving staff follow — unless
+        // the customer already set that count themselves.
+        const next = { ...current, [code]: value };
+        return applyServingSuggestion(
+          next,
+          roles,
+          suggestedServers(next[GUEST_BAND_CODE], next[SERVICE_STYLE_CODE]),
+          suggestedServers(current[GUEST_BAND_CODE], current[SERVICE_STYLE_CODE]),
+        );
+      }
       if (code !== workQuestion?.code || value === OTHER_WORK_TYPE) {
         return { ...current, [code]: value };
       }
@@ -415,7 +537,7 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
     effectiveAddressId !== null && requestedStart !== ""
       ? {
           addressId: effectiveAddressId,
-          requestedStart: startOfLocalDay(requestedStart),
+          requestedStart: startInstant(),
           variantId: variant.id,
         }
       : null,
@@ -455,7 +577,70 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
     />
   );
 
-  if (bookingStep === "work") {
+  const hiddenCodes = isEvent
+    ? hiddenEventQuestionCodes(answers)
+    : hiddenCrewQuestionCodes(answers, questions);
+  const siteLine = address === null ? null : addressSummaryLine(address);
+  const whenLine = joinPresent([
+    requestedStart === "" ? null : formatShortDate(requestedStart),
+    asksReportingTime && reportingTime !== null ? formatReportingTime(reportingTime) : null,
+  ]);
+
+  const eventSummary: readonly SummaryLine[] = isEvent
+    ? [
+        {
+          key: "occasion",
+          label: "Occasion",
+          value: joinPresent([eventTypeLabel, guestBandLabel === null ? null : `${guestBandLabel} guests`, serviceStyleLabel]),
+          icon: <EventTypeIcon code={typeof answers[EVENT_TYPE_CODE] === "string" ? (answers[EVENT_TYPE_CODE] as string) : ""} />,
+        },
+        {
+          key: "crew",
+          label: "Crew",
+          value:
+            mixLabel === null
+              ? null
+              : `${mixLabel} — ${crewTotal} ${crewTotal === 1 ? "person" : "people"} × ${size?.days ?? 1} ${(size?.days ?? 1) === 1 ? "day" : "days"}`,
+          icon: <CrewIcon />,
+        },
+        { key: "when", label: "Reports", value: whenLine, icon: <CalendarIcon /> },
+        { key: "site", label: "Venue", value: siteLine, icon: <PinIcon /> },
+        {
+          key: "presentation",
+          label: "Turnout",
+          value: joinPresent([
+            optionLabel(presentation, DRESS_CODE_CODE, answers),
+            answers[STAFF_MEAL_CODE] === true
+              ? "Meal provided"
+              : answers[STAFF_MEAL_CODE] === false
+                ? "No meal"
+                : null,
+            // `staff_preference` (any / female / male) is gone at contract 1.53.0. It asked
+            // once for the whole crew what the role steppers now ask per role, and a customer
+            // could answer it in contradiction of their own counts.
+          ]),
+          icon: <ShirtIcon />,
+        },
+      ]
+    : [];
+
+  const handleExitFlow = () => {
+    if (
+      typeof window !== "undefined" &&
+      typeof window.history.state?.idx === "number" &&
+      window.history.state.idx > 0
+    ) {
+      router.back();
+    } else {
+      router.push("/catalog");
+    }
+  };
+
+  /* ---------------------------------------------------------------------
+     Phone
+     --------------------------------------------------------------------- */
+
+  if (bookingStep === "work" && workQuestion !== null) {
     return (
       <WorkPickerScreen
         serviceName={service.name}
@@ -468,48 +653,145 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
         onContinue={() => {
           if (workLabel !== null) setBookingStep("details");
         }}
-        onBack={() => router.back()}
+        onBack={handleExitFlow}
+      />
+    );
+  }
+
+  if (!isWide && isEvent && bookingStep === "occasion") {
+    return (
+      <OccasionScreen
+        serviceName={service.name}
+        questions={occasion}
+        answers={answers}
+        onAnswer={handleAnswer}
+        hiddenCodes={hiddenCodes}
+        onContinue={() => setBookingStep("crew")}
+        onBack={handleExitFlow}
+      />
+    );
+  }
+
+  if (!isWide && isEvent && bookingStep === "crew") {
+    return (
+      <CrewScreen
+        serviceName={service.name}
+        roles={roles}
+        daysQuestion={daysQuestion}
+        answers={answers}
+        onRoleGender={handleRoleGender}
+        onDays={(value) => handleAnswer(DURATION_CODE, value)}
+        suggestion={suggestion}
+        suggestionBasis={joinPresent([guestBandLabel === null ? null : `a ${guestBandLabel.toLowerCase()} guest`, serviceStyleLabel?.toLowerCase() ?? null], " ")}
+        onContinue={() => {
+          setEventStep("schedule_venue");
+          setBookingStep("details");
+        }}
+        onBack={() => setBookingStep("occasion")}
       />
     );
   }
 
   if (!isWide) {
-    return bookingStep === "details" ? (
-      <JobFormScreen
-        serviceName={service.name}
-        questions={detailQuestions}
-        answers={answers}
-        hiddenCodes={hiddenCrewQuestionCodes(answers)}
-        onAnswer={handleAnswer}
-        requestedStart={requestedStart === "" ? null : requestedStart}
-        onRequestedStart={(isoDate) => {
-          setRequestedStart(isoDate);
-        }}
-        addressLine={address === null ? null : addressSummaryLine(address)}
-        onOpenAddress={() => setAddressSignal((signal) => signal + 1)}
-        addressPicker={addressPicker}
-        canContinue={formComplete}
-        isSaving={saveRequirement.isPending || createRequirement.isPending}
-        // This explicit action is the first write for a new crew. Merely opening
-        // the service and choosing an address stays local.
-        onContinue={() => void handleShowRate()}
-        saveError={
-          writeErrorMessage === null ? undefined : <JobFormError message={writeErrorMessage} />
-        }
-        selectedWorkLabel={workLabel ?? "Selected work"}
-        onChangeWork={() => setBookingStep("work")}
-        onBack={() => setBookingStep("work")}
-      />
-    ) : (
+    if (bookingStep !== "rate") {
+      return isEvent ? (
+        <JobFormScreen
+          serviceName={service.name}
+          title="Book event staff"
+          heading="When, where and how they turn up"
+          questions={presentation}
+          answers={answers}
+          hiddenCodes={hiddenCodes}
+          onAnswer={handleAnswer}
+          requestedStart={requestedStart === "" ? null : requestedStart}
+          onRequestedStart={setRequestedStart}
+          dateLabel="Event date"
+          dateHorizonDays={EVENT_DATE_HORIZON_DAYS}
+          reportingTime={reportingTime}
+          onReportingTime={setReportingTime}
+          addressLine={siteLine}
+          onOpenAddress={() => setAddressSignal((signal) => signal + 1)}
+          addressPicker={addressPicker}
+          canContinue={formComplete}
+          isSaving={saveRequirement.isPending || createRequirement.isPending}
+          onContinue={() => void handleShowRate()}
+          saveError={
+            writeErrorMessage === null ? undefined : <JobFormError message={writeErrorMessage} />
+          }
+          stepLabel="Step 3 of 3"
+          selectedWorkEyebrow="Your event"
+          selectedWorkLabel={joinPresent([eventTypeLabel, mixLabel]) ?? "Your crew"}
+          onChangeWork={() => setBookingStep("crew")}
+          onBack={() => setBookingStep("crew")}
+        />
+      ) : (
+        <JobFormScreen
+          serviceName={service.name}
+          title={isFixedTeam ? "Book a cook" : undefined}
+          heading={isFixedTeam ? "Plan your house function" : undefined}
+          questions={detailQuestions}
+          answers={answers}
+          hiddenCodes={hiddenCodes}
+          onAnswer={handleAnswer}
+          requestedStart={requestedStart === "" ? null : requestedStart}
+          onRequestedStart={setRequestedStart}
+          dateLabel={isFixedTeam ? "Event date" : undefined}
+          dateHorizonDays={isFixedTeam ? EVENT_DATE_HORIZON_DAYS : undefined}
+          reportingTime={isFixedTeam ? reportingTime : undefined}
+          onReportingTime={isFixedTeam ? setReportingTime : undefined}
+          addressLine={siteLine}
+          onOpenAddress={() => setAddressSignal((signal) => signal + 1)}
+          addressPicker={addressPicker}
+          canContinue={formComplete}
+          isSaving={saveRequirement.isPending || createRequirement.isPending}
+          // This explicit action is the first write for a new crew. Merely opening
+          // the service and choosing an address stays local.
+          onContinue={() => void handleShowRate()}
+          saveError={
+            writeErrorMessage === null ? undefined : <JobFormError message={writeErrorMessage} />
+          }
+          stepLabel={workQuestion === null ? "Step 1 of 2" : "Step 2 of 3"}
+          selectedWorkLabel={workQuestion === null ? null : (workLabel ?? "Selected work")}
+          onChangeWork={workQuestion === null ? undefined : () => setBookingStep("work")}
+          aboutPanel={
+            workQuestion === null ? (
+              <div className="flex flex-col gap-3">
+                <CrewAboutPanel service={service} />
+                {isFixedTeam ? <FixedTeamAssurance /> : null}
+              </div>
+            ) : null
+          }
+          afterQuestions={
+            isFixedTeam && guestLimit !== null ? (
+              <LargeFunctionHandoff guestLimit={guestLimit} />
+            ) : undefined
+          }
+          onBack={workQuestion === null ? handleExitFlow : () => setBookingStep("work")}
+        />
+      );
+    }
+
+    return (
       <RateScreen
         rate={rate}
-        city={address?.city ?? null}
         isStale={previewQuery.isFetching}
         onBack={() => setBookingStep("details")}
         onBook={() => void handleBook()}
         isBooking={isBooking}
-        notice={
-          <RailFooterNotices book={book} />
+        notice={<RailFooterNotices book={book} />}
+        summary={
+          isEvent ? (
+            <EventSummaryCard lines={eventSummary} onChange={() => setBookingStep("details")} />
+          ) : isFixedTeam && guestLimit !== null ? (
+            <FixedTeamRateSummary days={size?.days ?? 1} guestLimit={guestLimit} />
+          ) : undefined
+        }
+        crewLabel={
+          isEvent && mixLabel !== null
+            ? "for the whole event"
+            : isFixedTeam
+              ? "for the cook team, full day"
+              : undefined
         }
         unavailable={
           rate === null && state !== null && !previewQuery.isFetching ? (
@@ -523,17 +805,45 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
       />
     );
   }
+  /* ---------------------------------------------------------------------
+     Wide screen
+     --------------------------------------------------------------------- */
+
+  const planning = bookingStep !== "rate";
+
+  const isOccasionValid = requiredAnswersPresent(occasion, answers);
+
+  const isCrewValid = crewTotal >= 1;
+
+  const isScheduleVenueValid =
+    requestedStart !== "" && reportingTime !== null && effectiveAddressId !== null;
+
+  const isPreferencesValid = presentation.every(
+    (q) =>
+      !q.required ||
+      (answers[q.code] !== undefined && answers[q.code] !== null && answers[q.code] !== ""),
+  );
 
   return (
     <div
-      key={bookingStep}
+      key={planning ? `plan-${eventStep}` : "rate"}
       className="crew-stage-enter mx-auto w-full max-w-6xl px-4 pb-16 pt-6 sm:px-6"
     >
       <DesktopBookingHero
         serviceName={service.name}
         step={bookingStep}
-        count={size?.headcount ?? 1}
-        days={size?.days ?? 1}
+        eventStep={eventStep}
+        shape={shape}
+        _count={isEvent ? crewTotal : (size?.headcount ?? 1)}
+        _days={size?.days ?? 1}
+        onSelectEventStep={(step) => {
+          setBookingStep("details");
+          setEventStep(step);
+        }}
+        isOccasionValid={isOccasionValid}
+        isCrewValid={isCrewValid}
+        isScheduleVenueValid={isScheduleVenueValid}
+        isPreferencesValid={isPreferencesValid}
       />
 
       {questionSet.unsupported.length > 0 ? (
@@ -543,7 +853,7 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
         >
           <p className="font-semibold text-text">
             This service is not fully set up for instant booking yet
-          </p>
+</p>
           <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
             Part of the form is missing on our side, so a booking sent from here
             may be refused. Nothing you enter is charged for.
@@ -551,109 +861,256 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
         </div>
       ) : null}
 
-      {bookingStep === "details" ? (
-        <div className="grid items-start gap-7 lg:grid-cols-[minmax(0,1fr)_320px]">
+      {isEvent && planning ? (
+        <div className="grid items-start gap-7 lg:grid-cols-[minmax(0,1.85fr)_minmax(280px,1fr)]">
           <div className="flex flex-col gap-6">
-            <button
-              type="button"
-              onClick={() => setBookingStep("work")}
-              className="group flex min-h-20 items-center gap-4 rounded-[20px] border border-selected-line bg-selected-surface p-4 text-left transition-[border-color,box-shadow,transform] duration-base hover:-translate-y-0.5 hover:border-selected hover:shadow-raised active:translate-y-0 active:scale-[0.99] motion-reduce:transform-none"
-            >
-              <span className="grid size-12 shrink-0 place-items-center rounded-[14px] bg-navy-900 text-signal-300">
-                <WorkTypeIcon code={workValue ?? "other"} />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-xs font-bold uppercase tracking-[0.11em] text-text-muted">
-                  Work selected
-                </span>
-                <span className="mt-1 block text-lg font-bold text-text">{workLabel}</span>
-              </span>
-              <span className="text-sm font-bold text-text-link group-hover:underline">Change</span>
-            </button>
-
-          <section className="rounded-[20px] border border-line bg-surface p-5 shadow-sm sm:p-6">
-            <SectionLabel number="2" title="How much help do you need?" caption="Set the crew and duration" />
-            <PresetQuestions
-              questions={detailQuestions}
-              answers={answers}
-              hiddenCodes={hiddenCrewQuestionCodes(answers)}
-              onAnswer={handleAnswer}
-            />
-          </section>
-
-          <section className="rounded-[20px] border border-line bg-surface p-5 shadow-sm sm:p-6">
-            <SectionLabel number="3" title="Where and when?" caption="Date and saved address" />
-            <div className="flex flex-col gap-5">
-              <Field
-                label="Start from"
-                description="The first day you need the crew. If no supervisor has taken it by then we close the request — nothing is charged."
-                required
-              >
-                <Input
-                  type="date"
-                  min={today}
-                  value={requestedStart}
-                  onChange={(event) => {
-                    setRequestedStart(event.target.value);
-                  }}
+            {eventStep === "occasion" ? (
+              <section className="crew-stage-enter rounded-[24px] border border-line bg-surface p-6 shadow-sm sm:p-8">
+                <SectionLabel
+                  number="1"
+                  title="What's the occasion?"
+                  caption="Helps us suggest the right crew"
                 />
-              </Field>
+                <OccasionFields
+                  questions={occasion}
+                  answers={answers}
+                  onAnswer={handleAnswer}
+                  hiddenCodes={hiddenCodes}
+                  wide
+                />
 
-              <div>
-                <p className="mb-2.5 text-sm font-bold text-text">Where</p>
-                {/* The same instance the phone layout mounts. One picker means
-                    one address book, one dialog and one place a Customer can
-                    create an address. */}
-                {addressPicker}
-              </div>
-            </div>
-          </section>
+                <div className="mt-8 flex items-center justify-end border-t border-line pt-6">
+                  <Button
+                    size="lg"
+                    disabled={!isOccasionValid}
+                    onClick={() => setEventStep("crew")}
+                    className="min-w-44"
+                  >
+                    Continue to Crew
+                  </Button>
+                </div>
+              </section>
+            ) : eventStep === "crew" ? (
+              <section className="crew-stage-enter rounded-[24px] border border-line bg-surface p-6 shadow-sm sm:p-8">
+                <SectionLabel
+                  number="2"
+                  title="How much help do you need?"
+                  caption="Set the crew by role, and how many men and women"
+                />
+                <CrewComposer
+                  roles={roles}
+                  daysQuestion={daysQuestion}
+                  answers={answers}
+                  onRoleGender={handleRoleGender}
+                  onDays={(value) => handleAnswer(DURATION_CODE, value)}
+                  suggestion={suggestion}
+                  suggestionBasis={joinPresent(
+                    [
+                      guestBandLabel === null ? null : `a ${guestBandLabel.toLowerCase()} guest`,
+                      serviceStyleLabel?.toLowerCase() ?? null,
+                    ],
+                    " ",
+                  )}
+                  wide
+                />
 
-          <Button
-            block
-            size="lg"
-            disabled={!formComplete}
-            loading={createRequirement.isPending || saveRequirement.isPending}
-            loadingLabel="Preparing your live rate"
-            onClick={() => void handleShowRate()}
-          >
-            See my live rate
-          </Button>
+                <div className="mt-8 flex items-center justify-between border-t border-line pt-6">
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    onClick={() => setEventStep("occasion")}
+                  >
+                    Back
+                  </Button>
+                  <Button
+                    size="lg"
+                    onClick={() => setEventStep("schedule_venue")}
+                    className="min-w-44"
+                  >
+                    Continue to Date & Venue
+                  </Button>
+                </div>
+              </section>
+            ) : (
+              <section className="crew-stage-enter rounded-[24px] border border-line bg-surface p-6 shadow-sm sm:p-8">
+                <SectionLabel
+                  number="3"
+                  title="Where and when?"
+                  caption="Date, reporting time, saved address and preferences"
+                />
+                <div className="flex flex-col gap-6">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field
+                      label="Start from"
+                      description="The first day you need the crew. If no supervisor has taken it by then we close the request — nothing is charged."
+                      required
+                    >
+                      <Input
+                        type="date"
+                        min={today}
+                        value={requestedStart}
+                        onChange={(event) => setRequestedStart(event.target.value)}
+                      />
+                    </Field>
 
-          {writeError !== null ? (
-            <ErrorState
-              title="We could not save that"
-              message={
-                isLifecycleUnsupported(writeError)
-                  ? "We do not take crew bookings for this service yet. Nothing you entered has been sent."
-                  : describeError(writeError, "mutation").message
-              }
-              severity="error"
-              inline
-            />
-          ) : null}
+                    <Field
+                      label="Reporting time"
+                      description="When crew should report on site."
+                      required
+                    >
+                      <Select
+                        value={reportingTime ?? ""}
+                        onChange={(event) =>
+                          setReportingTime(
+                            event.target.value === "" ? null : event.target.value,
+                          )
+                        }
+                      >
+                        <option value="">Choose a time</option>
+                        {reportingTimeOptions().map((time) => (
+                          <option key={time} value={time}>
+                            {formatReportingTime(time)}
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+                  </div>
+                  <p className="-mt-2 text-xs leading-5 text-text-muted">
+                    One 8-hour shift from reporting time. After that, overtime runs only when you
+                    approve it in the app, at the published rate.
+                  </p>
+
+                  <div>
+                    <p className="mb-2.5 text-sm font-bold text-text">Venue address</p>
+                    {addressPicker}
+                  </div>
+
+                  <PresetQuestions
+                    questions={presentation}
+                    answers={answers}
+                    hiddenCodes={hiddenCodes}
+                    onAnswer={handleAnswer}
+                  />
+                </div>
+
+                <div className="mt-8 flex items-center justify-between border-t border-line pt-6">
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    onClick={() => setEventStep("crew")}
+                  >
+                    Back
+                  </Button>
+                  <Button
+                    size="lg"
+                    disabled={!formComplete}
+                    loading={createRequirement.isPending || saveRequirement.isPending}
+                    loadingLabel="Preparing your live rate"
+                    onClick={() => void handleShowRate()}
+                    className="min-w-44"
+                  >
+                    See my live rate
+                  </Button>
+                </div>
+              </section>
+            )}
+
+            {writeError !== null ? (
+              <ErrorState
+                title="We could not save that"
+                message={
+                  isLifecycleUnsupported(writeError)
+                    ? "We do not take crew bookings for this service yet. Nothing you entered has been sent."
+                    : describeError(writeError, "mutation").message
+                }
+                severity="error"
+                inline
+              />
+            ) : null}
           </div>
 
-          <aside className="sticky top-6 rounded-[22px] bg-navy-900 p-5 text-white shadow-raised">
-            <p className="text-xs font-bold uppercase tracking-[0.14em] text-signal-300">Crew plan</p>
-            <CrewConstellation count={size?.headcount ?? 1} days={size?.days ?? 1} compact />
+          <aside className="sticky top-24 rounded-[24px] bg-navy-900 p-6 text-white shadow-raised">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-signal-300">
+                Event plan
+              </p>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-[11px] font-semibold text-white/80">
+                <span className="size-1.5 rounded-full bg-signal-400 animate-pulse" />
+                Live brief
+              </span>
+            </div>
+
+            <CrewConstellation
+              count={crewTotal}
+              days={size?.days ?? 1}
+              men={crewGenders.men}
+              women={crewGenders.women}
+              compact
+            />
+
             <dl className="mt-5 divide-y divide-white/10 border-y border-white/10 text-sm">
-              <PlanLine label="Work" value={workLabel ?? "Choose work"} />
-              <PlanLine label="Start" value={requestedStart === "" ? "Choose date" : formatShortDate(requestedStart)} />
-              <PlanLine label="Site" value={address === null ? "Add an address" : addressSummaryLine(address)} />
+              <PlanLine
+                label="Occasion"
+                value={
+                  joinPresent([
+                    eventTypeLabel,
+                    guestBandLabel === null ? null : `${guestBandLabel} guests`,
+                  ]) ?? "Choose occasion"
+                }
+              />
+              <PlanLine
+                label="Style"
+                value={serviceStyleLabel ?? "Choose food style"}
+              />
+              {mix.length > 0 ? (
+                <div className="py-3">
+                  <p className="text-white/55">Crew breakdown</p>
+                  <ul className="mt-2 flex flex-col gap-1.5">
+                    {mix.map((line) => (
+                      <li key={line.code} className="flex items-start justify-between gap-3 text-sm">
+                        <span className="min-w-0 text-white/80">{line.label}</span>
+                        <span className="shrink-0 text-right font-semibold tabular-nums text-white">
+                          {genderMixPhrase(line.men, line.women)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <PlanLine label="Crew" value="Add people" />
+              )}
+              <PlanLine label="Reports" value={whenLine ?? "Choose date and time"} />
+              <PlanLine label="Venue" value={siteLine ?? "Add an address"} />
+              <PlanLine
+                label="Turnout"
+                value={
+                  joinPresent([
+                    optionLabel(presentation, DRESS_CODE_CODE, answers),
+                    answers[STAFF_MEAL_CODE] === true
+                      ? "Meal provided"
+                      : answers[STAFF_MEAL_CODE] === false
+                        ? "No meal"
+                        : null,
+                  ]) ?? "Set preferences"
+                }
+              />
             </dl>
-            <p className="mt-4 text-xs leading-5 text-white/60">
-              Nothing is sent until you ask for the live rate.
-            </p>
+
+            <div className="mt-4 flex items-start gap-2 text-xs leading-5 text-white/60">
+              <svg viewBox="0 0 16 16" fill="none" className="mt-0.5 size-4 shrink-0" stroke="currentColor" strokeWidth="1.8">
+                <rect x="3" y="6" width="10" height="8" rx="2" />
+                <path d="M5 6V4a3 3 0 1 1 6 0v2" />
+              </svg>
+              <span>Nothing is charged or sent until you review and confirm your live rate.</span>
+            </div>
           </aside>
         </div>
       ) : (
         <RailLayout
           railLabel="What this costs"
           rail={
-            <RateRail
+            <TrimmedRateRail
               rate={rate}
-              cityLabel={address?.city ?? null}
               isStale={
                 previewQuery.isFetching ||
                 (size !== null && settledSize !== null && !sameSize(size, settledSize))
@@ -678,82 +1135,327 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
             />
           }
         >
-          <div className="flex flex-col gap-5">
-            <section className="rounded-[22px] border border-line bg-surface p-6 shadow-card">
-              <p className="text-xs font-bold uppercase tracking-[0.14em] text-signal-700">Ready to review</p>
-              <h2 className="mt-2 text-2xl font-bold tracking-tight text-text">Your crew, at a glance</h2>
-              <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                <ReviewTile label="Work" value={workLabel ?? "Selected work"} icon={<WorkTypeIcon code={workValue ?? "other"} />} />
-                <ReviewTile label="Crew" value={`${size?.headcount ?? 1} ${(size?.headcount ?? 1) === 1 ? "person" : "people"} × ${size?.days ?? 1} ${(size?.days ?? 1) === 1 ? "day" : "days"}`} icon={<CrewIcon />} />
-                <ReviewTile label="Starts" value={requestedStart === "" ? "Not chosen" : formatShortDate(requestedStart)} icon={<CalendarIcon />} />
-                <ReviewTile label="Site" value={address === null ? "Not chosen" : addressSummaryLine(address)} icon={<PinIcon />} />
-              </div>
-              <Button variant="outline" className="mt-5" onClick={() => setBookingStep("details")}>
-                Change crew plan
+          {planning ? (
+            <div className="flex flex-col gap-6">
+              {workQuestion !== null ? (
+                <button
+                  type="button"
+                  onClick={() => setBookingStep("work")}
+                  className="group flex min-h-20 items-center gap-4 rounded-[20px] border border-selected-line bg-selected-surface p-4 text-left transition-[border-color,box-shadow,transform] duration-base hover:-translate-y-0.5 hover:border-selected hover:shadow-raised active:translate-y-0 active:scale-[0.99] motion-reduce:transform-none"
+                >
+                  <span className="grid size-12 shrink-0 place-items-center rounded-[14px] bg-navy-900 text-signal-300">
+                    <WorkTypeIcon code={workValue ?? "other"} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-xs font-bold uppercase tracking-[0.11em] text-text-muted">
+                      Work selected
+                    </span>
+                    <span className="mt-1 block text-lg font-bold text-text">{workLabel}</span>
+                  </span>
+                  <span className="text-sm font-bold text-text-link group-hover:underline">Change</span>
+                </button>
+              ) : (
+                <CrewAboutPanel service={service} />
+              )}
+
+              <section className="rounded-[20px] border border-line bg-surface p-5 shadow-sm sm:p-6">
+                <SectionLabel
+                  number={workQuestion === null ? "1" : "2"}
+                  title="How much help do you need?"
+                  caption="Set the crew and duration"
+                />
+                <div className="flex flex-col gap-5">
+                  {isFixedTeam ? <FixedTeamAssurance /> : null}
+                  <PresetQuestions
+                    questions={detailQuestions}
+                    answers={answers}
+                    hiddenCodes={hiddenCodes}
+                    onAnswer={handleAnswer}
+                  />
+                  {isFixedTeam && guestLimit !== null ? (
+                    <LargeFunctionHandoff guestLimit={guestLimit} />
+                  ) : null}
+                </div>
+              </section>
+
+              <section className="rounded-[20px] border border-line bg-surface p-5 shadow-sm sm:p-6">
+                <SectionLabel
+                  number={workQuestion === null ? "2" : "3"}
+                  title="Where and when?"
+                  caption="Date and saved address"
+                />
+                <div className="flex flex-col gap-5">
+                  <div className={cn("grid gap-4", isFixedTeam && "sm:grid-cols-2")}>
+                    <Field
+                      label={isFixedTeam ? "Event date" : "Start from"}
+                      description="The first day you need the crew. If no supervisor has taken it by then we close the request — nothing is charged."
+                      required
+                    >
+                      <Input
+                        type="date"
+                        min={today}
+                        value={requestedStart}
+                        onChange={(event) => setRequestedStart(event.target.value)}
+                      />
+                    </Field>
+
+                    {isFixedTeam ? (
+                      <Field
+                        label="Reporting time"
+                        description="When the cook team should report."
+                        required
+                      >
+                        <Select
+                          value={reportingTime ?? ""}
+                          onChange={(event) =>
+                            setReportingTime(event.target.value === "" ? null : event.target.value)
+                          }
+                        >
+                          <option value="">Choose a time</option>
+                          {reportingTimeOptions().map((value) => (
+                            <option key={value} value={value}>
+                              {formatReportingTime(value)}
+                            </option>
+                          ))}
+                        </Select>
+                      </Field>
+                    ) : null}
+                  </div>
+
+                  <div>
+                    <p className="mb-2.5 text-sm font-bold text-text">Where</p>
+                    {addressPicker}
+                  </div>
+                </div>
+              </section>
+
+              <Button
+                block
+                size="lg"
+                disabled={!formComplete}
+                loading={createRequirement.isPending || saveRequirement.isPending}
+                loadingLabel="Preparing your live rate"
+                onClick={() => void handleShowRate()}
+              >
+                See my live rate
               </Button>
-            </section>
-            <div className="rounded-[18px] border border-warning-line bg-warning-surface p-4">
-              <p className="text-sm font-bold text-text">Pay the crew directly after each day.</p>
-              <p className="mt-1 text-sm leading-6 text-text-secondary">
-                Vsolve charges only the booking fee shown in the rate panel, and only after a supervisor accepts.
-              </p>
+
+              {writeError !== null ? (
+                <ErrorState
+                  title="We could not save that"
+                  message={
+                    isLifecycleUnsupported(writeError)
+                      ? "We do not take crew bookings for this service yet. Nothing you entered has been sent."
+                      : describeError(writeError, "mutation").message
+                  }
+                  severity="error"
+                  inline
+                />
+              ) : null}
             </div>
-            <RailFooterNotices book={book} />
-          </div>
+          ) : (
+            <div className="flex flex-col gap-5">
+              <section className="rounded-[22px] border border-line bg-surface p-6 shadow-card">
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-signal-700">Ready to review</p>
+                <h2 className="mt-2 text-2xl font-bold tracking-tight text-text">
+                  {isEvent
+                    ? "Your event, at a glance"
+                    : isFixedTeam
+                      ? "Your cook team, at a glance"
+                      : "Your crew, at a glance"}
+                </h2>
+                <p className="mt-1 text-sm leading-6 text-text-secondary">
+                  {isEvent
+                    ? "Review the roster, reporting time and venue before you book."
+                    : "Review the size, duration and site before you book."}
+                </p>
+
+                <div className="mt-6 border-t border-line pt-6">
+                  {isEvent ? (
+                    <EventRosterSummary
+                      answers={answers}
+                      roles={roles}
+                      questions={presentation}
+                      when={whenLine}
+                      site={siteLine}
+                    />
+                  ) : (
+                    <dl className="divide-y divide-line text-sm">
+                      <SummaryLine
+                        label="Work"
+                        value={workQuestion === null ? service.name : (workLabel ?? "Choose work")}
+                      />
+                      <SummaryLine
+                        label="Crew"
+                        value={
+                          isFixedTeam && guestLimit !== null && size !== null
+                            ? `One cook team · ${size.days} ${size.days === 1 ? "day" : "days"} · up to ${guestLimit} guests`
+                            : joinPresent([
+                                size === null ? null : `${size.headcount} ${size.headcount === 1 ? "person" : "people"}`,
+                                size === null ? null : `${size.days} ${size.days === 1 ? "day" : "days"}`,
+                              ]) ?? "Set size"
+                        }
+                      />
+                      <SummaryLine label="Start" value={whenLine ?? "Choose start date"} />
+                      <SummaryLine label="Site" value={siteLine ?? "Add an address"} />
+                    </dl>
+                  )}
+                </div>
+
+                <Button
+                  variant="outline"
+                  className="mt-5"
+                  onClick={() => {
+                    setBookingStep("details");
+                    if (isEvent) setEventStep("occasion");
+                  }}
+                >
+                  {isEvent ? "Change event plan" : "Change crew plan"}
+                </Button>
+              </section>
+
+              <div className="rounded-[18px] border border-warning-line bg-warning-surface p-4">
+                <p className="text-sm font-bold text-text">Pay the crew directly after each day.</p>
+                <p className="mt-1 text-sm leading-6 text-text-secondary">
+                  Vsolve charges only the booking fee shown in the rate panel, and only after a supervisor accepts.
+                </p>
+              </div>
+              <RailFooterNotices book={book} />
+            </div>
+          )}
         </RailLayout>
       )}
     </div>
   );
 }
+/** The flow's stages in order, so a remembered step can be checked against the earliest earned one. */
+const STEP_ORDER: readonly CrewBookingStep[] = ["occasion", "work", "crew", "details", "rate"];
+
+function stepIndex(step: CrewBookingStep): number {
+  return STEP_ORDER.indexOf(step);
+}
+
+const EVENT_PILLS = [
+  { id: "occasion" as const, number: "1", label: "Occasion" },
+  { id: "crew" as const, number: "2", label: "Crew" },
+  { id: "schedule_venue" as const, number: "3", label: "Date & Venue" },
+  { id: "rate" as const, number: "4", label: "Review rate" },
+] as const;
 
 function DesktopBookingHero({
   serviceName,
   step,
-  count,
-  days,
+  eventStep,
+  shape,
+  _count,
+  _days,
+  onSelectEventStep,
+  isOccasionValid = false,
+  isCrewValid = false,
+  isScheduleVenueValid = false,
+  isPreferencesValid = false,
 }: {
   serviceName: string;
   step: CrewBookingStep;
-  count: number;
-  days: number;
+  eventStep?: EventWizardStep;
+  shape: "plain" | "work" | "event";
+  _count?: number;
+  _days?: number;
+  onSelectEventStep?: (step: EventWizardStep) => void;
+  isOccasionValid?: boolean;
+  isCrewValid?: boolean;
+  isScheduleVenueValid?: boolean;
+  isPreferencesValid?: boolean;
 }) {
-  const activeIndex = step === "work" ? 0 : step === "details" ? 1 : 2;
+  const isEvent = shape === "event";
+
+  const genericLabels =
+    shape === "work"
+      ? ["Choose work", "Plan crew", "Review rate"]
+      : ["Plan crew", "Review rate"];
+
+  const activeGenericIndex =
+    step === "rate"
+      ? genericLabels.length - 1
+      : shape === "work" && step !== "work"
+        ? 1
+        : shape === "work"
+          ? 0
+          : 0;
+
+  const activeEventIndex =
+    step === "rate"
+      ? 3
+      : eventStep === "occasion"
+        ? 0
+        : eventStep === "crew"
+          ? 1
+          : 2;
+
   return (
-    <header className="relative mb-7 overflow-hidden rounded-[28px] bg-navy-900 px-6 py-7 text-white sm:px-8 sm:py-9">
+    <header className="relative mb-7 overflow-hidden rounded-[28px] bg-navy-900 px-6 py-7 text-white sm:px-8 sm:py-8">
       <div aria-hidden className="absolute -right-16 -top-24 size-64 rounded-full bg-signal-500/20 blur-3xl" />
-      <div className="relative grid items-center gap-7 md:grid-cols-[1fr_300px]">
-        <div>
-          <Link
-            href="/catalog/workforce-and-projects"
-            className="inline-flex min-h-11 items-center text-sm font-semibold text-white/75 transition-colors duration-base hover:text-white focus-visible:outline-white"
-          >
-            <svg viewBox="0 0 20 20" fill="none" className="mr-1 size-4" aria-hidden>
-              <path d="m12 5-5 5 5 5M7 10h9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            Browse crews
-          </Link>
-          <p className="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-signal-300">
-            {step === "rate" ? "Your live rate" : "Plan your crew"}
-          </p>
-          <h1 className="mt-2 max-w-xl text-balance text-3xl font-bold tracking-tight sm:text-4xl">
-            {step === "rate"
-              ? "One last look before you book."
-              : `Build your ${serviceName.toLowerCase()} crew`}
-          </h1>
-          <div className="mt-5 flex flex-wrap items-center gap-2 text-sm text-white/80">
-            {["Choose work", "Plan crew", "Review rate"].map((label, index) => (
+      <div className="relative">
+        <Link
+          href="/catalog"
+          className="inline-flex min-h-10 items-center text-sm font-semibold text-white/75 transition-colors duration-base hover:text-white focus-visible:outline-white"
+        >
+          <svg viewBox="0 0 20 20" fill="none" className="mr-1 size-4" aria-hidden>
+            <path d="m12 5-5 5 5 5M7 10h9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Browse crews
+        </Link>
+
+        <p className="mt-3 text-xs font-bold uppercase tracking-[0.18em] text-signal-300">
+          {isEvent ? "Plan your event crew" : "Plan your crew"}
+        </p>
+
+        <h1 className="mt-1.5 max-w-2xl text-balance text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl">
+          {isEvent ? "Staff your event, role by role." : `Build your ${serviceName.toLowerCase()} crew`}
+        </h1>
+
+        <div className="mt-5 flex flex-wrap items-center gap-2 text-sm text-white/80">
+          {isEvent ? (
+            EVENT_PILLS.map((pill, index) => {
+              const active = index === activeEventIndex;
+              const isCompleted =
+                (pill.id === "occasion" && isOccasionValid) ||
+                (pill.id === "crew" && isCrewValid) ||
+                (pill.id === "schedule_venue" && isScheduleVenueValid && isPreferencesValid);
+
+              const status = active ? "active" : isCompleted ? "complete" : "upcoming";
+              const canClick = pill.id !== "rate" && (isCompleted || active) && onSelectEventStep;
+
+              return (
+                <span key={pill.id} className="contents">
+                  {index > 0 ? <span aria-hidden className="text-white/30">&rarr;</span> : null}
+                  {canClick ? (
+                    <button
+                      type="button"
+                      onClick={() => onSelectEventStep(pill.id as EventWizardStep)}
+                      className="transition-transform duration-fast hover:scale-105 active:scale-100 focus-visible:outline-white"
+                    >
+                      <FlowPill number={pill.number} label={pill.label} status={status} />
+                    </button>
+                  ) : (
+                    <FlowPill number={pill.number} label={pill.label} status={status} />
+                  )}
+                </span>
+              );
+            })
+          ) : (
+            genericLabels.map((label, index) => (
               <span key={label} className="contents">
                 {index > 0 ? <span aria-hidden className="text-white/30">&rarr;</span> : null}
                 <FlowPill
                   number={`${index + 1}`}
                   label={label}
-                  status={index === activeIndex ? "active" : index < activeIndex ? "complete" : "upcoming"}
+                  status={index === activeGenericIndex ? "active" : index < activeGenericIndex ? "complete" : "upcoming"}
                 />
               </span>
-            ))}
-          </div>
+            ))
+          )}
         </div>
-        <CrewConstellation count={count} days={days} />
       </div>
     </header>
   );
@@ -812,11 +1514,24 @@ function SectionLabel({
 }
 
 /** The signature roster: it grows as the Customer adds people. */
-function CrewConstellation({ count, days, compact = false }: { count: number; days: number; compact?: boolean }) {
-  const visible = Math.min(Math.max(count, 1), 6);
+function CrewConstellation({
+  count,
+  days: _days,
+  men = 0,
+  women = 0,
+  compact = false,
+}: {
+  count: number;
+  days: number;
+  men?: number;
+  women?: number;
+  compact?: boolean;
+}) {
+  const visible = Math.min(Math.max(count, 1), 3);
+  const empty = count < 1;
   return (
     <figure className={cn("group rounded-[22px] border border-white/10 bg-white/[0.07] backdrop-blur-sm", compact ? "mt-4 p-4" : "p-5")}>
-      <div className={cn("flex items-end justify-center gap-2", compact ? "min-h-20" : "min-h-28")} aria-hidden>
+      <div className={cn("flex items-end justify-center gap-3", compact ? "min-h-16" : "min-h-28", empty && "opacity-40")} aria-hidden>
         {Array.from({ length: visible }, (_, index) => (
           <span
             key={index}
@@ -828,10 +1543,12 @@ function CrewConstellation({ count, days, compact = false }: { count: number; da
           </span>
         ))}
       </div>
-      <figcaption className="mt-4 flex items-baseline justify-between border-t border-white/10 pt-4">
+      <figcaption className="mt-4 flex items-baseline justify-between gap-3 border-t border-white/10 pt-4">
         <span className="text-sm text-white/65">Crew plan</span>
-        <strong className="text-lg tabular-nums text-white">
-          {count} {count === 1 ? "person" : "people"} {"\u00d7"} {days} {days === 1 ? "day" : "days"}
+        <strong className="text-right text-lg tabular-nums text-white">
+          {empty
+            ? "Nobody yet"
+            : `${count} ${count === 1 ? "person" : "people"} · ${men} ${men === 1 ? "man" : "men"} · ${women} ${women === 1 ? "woman" : "women"}`}
         </strong>
       </figcaption>
     </figure>
@@ -847,12 +1564,141 @@ function PlanLine({ label, value }: { label: string; value: string }) {
   );
 }
 
-function ReviewTile({ label, value, icon }: { label: string; value: string; icon: ReactNode }) {
+function SummaryLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between py-3 text-sm">
+      <dt className="text-text-secondary">{label}</dt>
+      <dd className="font-semibold text-text">{value}</dd>
+    </div>
+  );
+}
+
+function FixedTeamAssurance() {
+  return (
+    <aside className="rounded-[18px] border border-selected-line bg-selected-surface p-4">
+      <p className="text-sm font-bold text-text">Your cook brings their own helpers.</p>
+      <p className="mt-1 text-sm leading-6 text-text-secondary">
+        For 25–50 guests that&apos;s usually a master cook and 2 helpers. You don&apos;t pay
+        them separately — it&apos;s one price.
+      </p>
+    </aside>
+  );
+}
+
+function LargeFunctionHandoff({ guestLimit }: { guestLimit: number }) {
+  return (
+    <aside className="rounded-[18px] border border-line-strong bg-surface-sunken p-4">
+      <p className="text-sm font-bold text-text">Planning something bigger?</p>
+      <p className="mt-1 text-sm leading-6 text-text-secondary">
+        Above {guestLimit} guests, cooks price the menu rather than the day — dish count and
+        veg/non-veg change the work a lot.
+      </p>
+      <Link
+        href="/requests/new/event-cook"
+        className="mt-3 flex min-h-12 items-center justify-between gap-3 rounded-[14px] bg-navy-900 px-4 py-3 text-left text-white transition-transform duration-fast hover:-translate-y-0.5 focus-visible:outline-white motion-reduce:transform-none"
+      >
+        <span>
+          <span className="block text-sm font-bold">Get quotes from event cooks</span>
+          <span className="mt-0.5 block text-xs leading-5 text-white/70">
+            Up to 3 written quotes, priced per plate. You still buy the groceries — they&apos;ll
+            send you the shopping list.
+          </span>
+        </span>
+        <span aria-hidden className="shrink-0 text-lg">&rarr;</span>
+      </Link>
+    </aside>
+  );
+}
+
+function FixedTeamRateSummary({ days, guestLimit }: { days: number; guestLimit: number }) {
+  return (
+    <div className="rounded-2xl border border-selected-line bg-selected-surface p-4">
+      <p className="text-sm font-bold text-text">
+        One cook team · {days} {days === 1 ? "day" : "days"} · up to {guestLimit} guests
+      </p>
+      <p className="mt-1 text-sm leading-6 text-text-secondary">
+        Includes the master cook and their helpers. You provide groceries, gas and vessels.
+      </p>
+    </div>
+  );
+}
+
+function EventRosterSummary({
+  answers,
+  roles,
+  questions: _questions,
+  when,
+  site,
+}: {
+  answers: Readonly<Record<string, unknown>>;
+  roles: readonly RequirementQuestionView[];
+  questions: readonly RequirementQuestionView[];
+  when: string | null;
+  site: string | null;
+}) {
+  const mix = crewMix(roles, answers);
+  const eventType = answers[EVENT_TYPE_CODE];
+  const guestBand = answers[GUEST_BAND_CODE];
+  const serviceStyle = answers[SERVICE_STYLE_CODE];
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <ReviewTile
+          label="Occasion"
+          value={typeof eventType === "string" ? eventType : "Not set"}
+          icon={<RoleIcon code="waiter_count" />}
+        />
+        <ReviewTile
+          label="Guests & Food"
+          value={
+            joinPresent(
+              [
+                typeof guestBand === "string" ? `${guestBand} guests` : null,
+                typeof serviceStyle === "string" ? serviceStyle : null,
+              ],
+              " · ",
+            ) ?? "Not set"
+          }
+          icon={<RoleIcon code="bar_staff_count" />}
+        />
+        <ReviewTile
+          label="Reporting & Date"
+          value={when ?? "Not set"}
+          icon={<CalendarIcon />}
+        />
+        <ReviewTile
+          label="Venue"
+          value={site ?? "Not set"}
+          icon={<PinIcon />}
+        />
+      </div>
+
+      <div>
+        <p className="mb-2 text-xs font-bold uppercase tracking-[0.11em] text-text-muted">
+          Crew Roster
+        </p>
+        <div className="divide-y divide-line rounded-[16px] border border-line bg-surface-hover px-4">
+          {mix.map((line) => (
+            <div key={line.code} className="flex items-center justify-between py-3 text-sm">
+              <span className="font-medium text-text">{line.label}</span>
+              <span className="font-bold tabular-nums text-text">{line.count}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReviewTile({ label, value, icon }: { label: string; value: string; icon?: ReactNode }) {
   return (
     <div className="flex min-h-24 items-center gap-3 rounded-[16px] border border-line bg-surface-hover p-4">
-      <span aria-hidden className="grid size-11 shrink-0 place-items-center rounded-[12px] bg-action-surface text-navy-700 [&>svg]:size-6">
-        {icon}
-      </span>
+      {icon ? (
+        <span aria-hidden className="grid size-11 shrink-0 place-items-center rounded-[12px] bg-action-surface text-navy-700 [&>svg]:size-6">
+          {icon}
+        </span>
+      ) : null}
       <span className="min-w-0">
         <span className="block text-xs font-semibold text-text-muted">{label}</span>
         <span className="mt-1 block text-sm font-bold leading-5 text-text">{value}</span>
@@ -871,6 +1717,10 @@ function CalendarIcon() {
 
 function PinIcon() {
   return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z" /><circle cx="12" cy="10" r="2.5" /></svg>;
+}
+
+function ShirtIcon() {
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="m9 4-5 2.5L6 11l2-.8V20h8v-9.8l2 .8 2-4.5L15 4a3 3 0 0 1-6 0Z" /></svg>;
 }
 
 function formatShortDate(isoDate: string): string {
@@ -933,6 +1783,51 @@ function RailFooterNotices({
     );
   }
   return null;
+}
+
+/**
+ * The desktop rail, trimmed to two money lines and a link to the rest.
+ * Replaces the deleted `RateRail` module on this branch.
+ */
+function TrimmedRateRail({
+  rate,
+  isStale,
+  placeholder,
+  footer,
+}: {
+  rate: ReturnType<typeof toRateDisclosureView>;
+  isStale: boolean;
+  placeholder: string;
+  footer: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div
+        aria-busy={isStale || undefined}
+        className={cn(
+          "rounded-card border border-line bg-surface p-4 transition-opacity duration-fast",
+          isStale && "opacity-60",
+        )}
+      >
+        {rate === null ? (
+          <p className="text-sm leading-6 text-text-secondary">{placeholder}</p>
+        ) : (
+          <>
+            <p className="text-sm font-semibold text-text">
+              {rate.dayRateLabel} a day to the crew
+            </p>
+            <p className="mt-1 text-sm text-text-secondary">
+              {rate.bookingFeeLabel} booking fee when a supervisor accepts
+            </p>
+          </>
+        )}
+      </div>
+
+      {footer}
+
+      {rate !== null ? <RateTermsLink terms={toRateTermsView(rate)} /> : null}
+    </div>
+  );
 }
 
 /**
@@ -1136,13 +2031,6 @@ function bookFailureCopy(error: unknown): string {
  * left blank — leaving a lead to read "3 people, 2 days" and guess what to bring.
  * The named options answer it in one tap, and `work_description` survives only to
  * carry the "Something else" case.
- *
- * Rendering both at once would put the abandoned box straight back on the screen,
- * under a list that has already answered it.
- *
- * Reads the server's own option code rather than a position in the list: the
- * catalogue owns this vocabulary, and a Customer whose variant does not publish
- * an `other` option simply never sees the box.
  */
 export function hiddenQuestionCodes(
   answers: Readonly<Record<string, unknown>>,

@@ -1,31 +1,24 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 
 import { ScheduleStep } from "@/features/application/view/schedule-step";
 
-export const metadata: Metadata = { title: "Your hours" };
+export const metadata: Metadata = { title: "Working Hours" };
 
 export default function SchedulePage() {
   return (
-    <section>
-      <h1 className="text-xl font-bold text-text sm:text-2xl">Your hours</h1>
-      <p className="mt-1.5 max-w-prose text-sm text-text-secondary">
-        You are only offered work in the hours you publish here. Nothing is
-        assumed — an empty week means no offers.
-      </p>
+    <section className="flex flex-col gap-5 pb-20">
+      <div className="rounded-2xl border border-line bg-surface p-5 sm:p-6 shadow-sm flex flex-col gap-5">
+        <header className="flex flex-col gap-1 border-b border-line pb-4">
+          <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-navy-900">
+            Working Hours & Availability
+          </h1>
+          <p className="text-xs sm:text-sm leading-relaxed text-text-secondary">
+            Set your weekly working hours. You will only receive customer bookings during your active shifts.
+          </p>
+        </header>
 
-      <div className="mt-6">
         <ScheduleStep />
       </div>
-
-      <p className="mt-8">
-        <Link
-          href="/apply"
-          className="min-h-11 font-semibold text-info-text underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
-        >
-          Back to your application
-        </Link>
-      </p>
     </section>
   );
 }

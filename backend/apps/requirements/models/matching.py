@@ -87,6 +87,13 @@ class VendorInvitation(models.Model):
         on_delete=models.PROTECT,
         related_name="invitations",
     )
+    requested_visit_share = models.ForeignKey(
+        "requirements.VisitPlanShare",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="invitations",
+    )
     #: Which beneficial owner this invitation belongs to. Two accounts sharing a cluster cannot
     #: both hold a slot on one requirement.
     cluster_key = models.CharField(max_length=64, blank=True)
@@ -106,7 +113,13 @@ class VendorInvitation(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=("requirement", "partner"),
-                name="requirements_one_invitation_per_partner",
+                condition=models.Q(requested_visit_share__isnull=True),
+                name="requirements_one_quote_invitation_per_partner",
+            ),
+            models.UniqueConstraint(
+                fields=("requested_visit_share", "partner", "wave"),
+                condition=models.Q(requested_visit_share__isnull=False),
+                name="requirements_one_visit_offer_per_partner_wave",
             ),
             # Scoped to slots actually *held*. Inviting two accounts of one owner is wasteful;
             # letting both occupy a quote slot is the harm. Covering INVITED here would also make
@@ -186,6 +199,12 @@ class CapacityHold(models.Model):
         return f"{self.partner_id}:{self.starts_on}..{self.ends_on}:{self.strength}"
 
 
+#: Maximum negotiated movement on one estimate (1500 = 15%). Shared by the immutable discount
+#: snapshot and the Customer's request below, so the ask and the amount a Partner may apply cannot
+#: drift into different limits.
+MAX_DISCOUNT_BPS = 1500
+
+
 class Proposal(models.Model):
     """A vendor's quote. Append-only: a revision supersedes rather than edits."""
 
@@ -216,6 +235,23 @@ class Proposal(models.Model):
     class TaxBasis(models.TextChoices):
         INCLUSIVE = "INCLUSIVE", "Tax included in the total"
         EXCLUSIVE = "EXCLUSIVE", "Tax added to the total"
+
+    class EstimateType(models.TextChoices):
+        ITEM_WISE = "ITEM_WISE", "Item-wise"
+        LABOUR_WISE = "LABOUR_WISE", "Labour-wise"
+
+    class MaterialFulfilmentMode(models.TextChoices):
+        NOT_APPLICABLE = "NOT_APPLICABLE", "Not applicable"
+        CUSTOMER_PROCURES = "CUSTOMER_PROCURES", "Customer procures"
+        PARTNER_TURNKEY = "PARTNER_TURNKEY", "Partner supplies turnkey"
+
+    class DiscountKind(models.TextChoices):
+        PERCENT = "PERCENT", "Percentage"
+        FIXED = "FIXED", "Final amount"
+
+    class DiscountSource(models.TextChoices):
+        CUSTOMER_REQUEST = "CUSTOMER_REQUEST", "Customer request"
+        PARTNER_OFFER = "PARTNER_OFFER", "Partner offer"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     requirement = models.ForeignKey(
@@ -278,6 +314,51 @@ class Proposal(models.Model):
     minimum_days = models.PositiveSmallIntegerField(null=True, blank=True)
     worker_count = models.PositiveSmallIntegerField(null=True, blank=True)
 
+    class MaterialBrandTier(models.TextChoices):
+        STANDARD = "STANDARD", "Standard"
+        PREMIUM = "PREMIUM", "Premium"
+
+    estimate_type = models.CharField(
+        max_length=16,
+        choices=EstimateType.choices,
+        default=EstimateType.LABOUR_WISE,
+    )
+    item_lines = models.JSONField(default=list, blank=True, encoder=DjangoJSONEncoder)
+    labour_lines = models.JSONField(default=list, blank=True, encoder=DjangoJSONEncoder)
+    other_charges = models.JSONField(default=list, blank=True, encoder=DjangoJSONEncoder)
+    commercial_policy = models.ForeignKey(
+        "requirements.CommercialPolicy",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="proposals",
+    )
+    calculation_snapshot = models.JSONField(default=dict, blank=True, encoder=DjangoJSONEncoder)
+    line_subtotal_paise = models.PositiveBigIntegerField(default=0)
+    authorized_charges_paise = models.PositiveBigIntegerField(default=0)
+    taxable_value_paise = models.PositiveBigIntegerField(default=0)
+    partner_quote_total_paise = models.PositiveBigIntegerField(default=0)
+    platform_fee_paise = models.PositiveBigIntegerField(default=0)
+    platform_fee_tax_paise = models.PositiveBigIntegerField(default=0)
+    customer_total_paise = models.PositiveBigIntegerField(default=0)
+    commission_paise = models.PositiveBigIntegerField(default=0)
+    withholding_paise = models.PositiveBigIntegerField(default=0)
+    partner_net_paise = models.PositiveBigIntegerField(default=0)
+
+    #: One visible, audited overall concession. It never masquerades as a negative charge: the
+    #: positive work/material/charge rows stay as authored, while this snapshot says which prior
+    #: customer total the Partner reduced and by exactly how much. Null kind/source plus zero
+    #: amount is the ordinary undiscounted estimate.
+    discount_kind = models.CharField(
+        max_length=12, choices=DiscountKind.choices, null=True, blank=True
+    )
+    discount_bps = models.PositiveSmallIntegerField(null=True, blank=True)
+    discount_base_paise = models.PositiveBigIntegerField(default=0)
+    discount_paise = models.PositiveBigIntegerField(default=0)
+    discount_source = models.CharField(
+        max_length=24, choices=DiscountSource.choices, null=True, blank=True
+    )
+
     total_paise = models.PositiveBigIntegerField()
     tax_paise = models.PositiveBigIntegerField(default=0)
     #: Fixed per requirement so a GST-registered vendor and an unregistered one compare honestly.
@@ -320,6 +401,43 @@ class Proposal(models.Model):
     #: output too, and the next field added to a material line will be the one that is a date.
     material_lines = models.JSONField(default=list, blank=True, encoder=DjangoJSONEncoder)
     warranty_terms = models.TextField(blank=True)
+    #: How many working days the vendor expects the work to take, from the day they start.
+    #:
+    #: **Days, not a date.** A vendor writing an estimate does not know when they will start —
+    #: that depends on when the Customer chooses and pays — so a date entered on site is stale
+    #: before it is read. "About five working days" is the thing they actually know and the thing
+    #: the Customer actually asks.
+    #:
+    #: The figure is an estimate the *vendor* carries the risk of. `submit_proposal` refuses once
+    #: the requirement is `SELECTED` or `ENGAGED`, so the total cannot move after the Customer
+    #: chooses: an overrun costs them nothing. That was already true and never said; publishing
+    #: this field is what lets a screen say it.
+    #:
+    #: Null on an estimate written before 1.65.0, and on A3 day-hire where `minimum_days` is the
+    #: shape instead — a day rate is priced by the day, so an overrun is billed, not absorbed.
+    completion_days = models.PositiveSmallIntegerField(null=True, blank=True)
+    #: What the vendor will actually do, in their own words. The lines say what each rupee buys;
+    #: this says what the job is. Blank on every quote written before it existed.
+    scope_summary = models.TextField(blank=True)
+    #: What the Customer should buy before work starts — **never money**. Materials are the
+    #: Customer's to purchase on every project; this is the list the vendor's tapped items
+    #: produced (`price_book.shopping_list_for_lines`) and then corrected after the visit. Each
+    #: entry: `{title, spec, unit, quantity, note}`. Distinct from `material_lines`, which are
+    #: priced advances and reconcile into `total_paise`.
+    material_list = models.JSONField(default=list, blank=True, encoder=DjangoJSONEncoder)
+    #: A label for the shopping list, so "1.5 sq mm wire" reads as one brand tier or the other.
+    material_brand_tier = models.CharField(max_length=16, blank=True)
+    #: The configuration decision this estimate was submitted under. Snapshotted rather than read
+    #: from the live service so an accepted quotation never changes meaning after Operations edits
+    #: the catalogue.
+    material_fulfilment_mode = models.CharField(
+        max_length=24,
+        choices=MaterialFulfilmentMode.choices,
+    )
+    #: Materials/specifications the Partner includes in a turnkey rate. Quantities and notes are
+    #: disclosure only: their cost is already inside `item_lines`/`labour_lines`, so this list must
+    #: never be added to a total or funded as a second money rail.
+    included_supply_list = models.JSONField(default=list, blank=True, encoder=DjangoJSONEncoder)
     valid_until = models.DateTimeField(null=True, blank=True)
 
     #: Set when Operations captured this by phone. The vendor still confirms before the Customer
@@ -355,6 +473,47 @@ class Proposal(models.Model):
             models.CheckConstraint(
                 condition=models.Q(tax_paise__lte=models.F("total_paise")),
                 name="requirements_proposal_tax_within_total",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(customer_total_paise=models.F("total_paise")),
+                name="requirements_proposal_customer_total_is_total",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(discount_base_paise=0, discount_paise=0)
+                | models.Q(
+                    discount_base_paise=models.F("total_paise") + models.F("discount_paise")
+                ),
+                name="requirements_proposal_discount_reconciles",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    discount_kind__isnull=True,
+                    discount_bps__isnull=True,
+                    discount_paise=0,
+                    discount_source__isnull=True,
+                )
+                | models.Q(
+                    discount_kind="PERCENT",
+                    discount_bps__gte=1,
+                    discount_bps__lte=MAX_DISCOUNT_BPS,
+                    discount_paise__gt=0,
+                    discount_source__in=("CUSTOMER_REQUEST", "PARTNER_OFFER"),
+                )
+                | models.Q(
+                    discount_kind="FIXED",
+                    discount_bps__isnull=True,
+                    discount_paise__gt=0,
+                    discount_source__in=("CUSTOMER_REQUEST", "PARTNER_OFFER"),
+                ),
+                name="requirements_proposal_discount_shape",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    partner_quote_total_paise=models.F("partner_net_paise")
+                    + models.F("commission_paise")
+                    + models.F("withholding_paise")
+                ),
+                name="requirements_proposal_partner_settlement_reconciles",
             ),
             models.CheckConstraint(
                 condition=~models.Q(status="REJECTED") | ~models.Q(rejection_reason=""),
@@ -452,3 +611,125 @@ class RequirementQuestion(models.Model):
 
     def __str__(self) -> str:
         return f"{self.requirement_id}:{self.id}"
+
+
+class RevisionRequest(models.Model):
+    """A Customer asking a vendor to send a different estimate.
+
+    **The invariant, stated exactly.** A Customer may say what they *hope to pay*. Only a vendor
+    says what the work *costs*. Those are different sentences and this model holds the first one:
+    ``requested_discount_bps`` is an ask, not a price. It is not applied to anything, it does not
+    change ``Proposal.total_paise``, and a vendor who ignores it has an estimate that still stands
+    exactly as sent. The answer to any request here — priced or not — is an ordinary superseding
+    proposal the Customer reads in full.
+
+    What this records is the *reason*: leave the false ceiling out, use a cheaper tile, split it
+    into phases, or "this is more than I can spend — can you move 5%". The vendor knows what to
+    change, and a revision arriving after the five-minute correction window has a Customer's
+    request behind it rather than a quietly replaced price.
+
+    One open request per proposal. Answering it (a new revision) or declining it closes it. The
+    Customer's ability to *choose the estimate as it stands* is untouched throughout: asking about
+    a price costs nothing and forfeits nothing.
+    """
+
+    class Status(models.TextChoices):
+        OPEN = "OPEN", "Waiting for the vendor"
+        ANSWERED = "ANSWERED", "Answered with a revised estimate"
+        DECLINED = "DECLINED", "Declined by the vendor"
+
+    class ReasonCode(models.TextChoices):
+        LEAVE_OUT = "LEAVE_OUT", "Leave something out"
+        CHANGE_MATERIALS = "CHANGE_MATERIALS", "Change materials or finish"
+        PHASE_WORK = "PHASE_WORK", "Split the work into phases"
+        PRICE = "PRICE", "Asked about the price"
+        OTHER = "OTHER", "Something else"
+
+    #: Re-exposed on the model so callers read it as ``RevisionRequest.MAX_DISCOUNT_BPS``.
+    MAX_DISCOUNT_BPS = MAX_DISCOUNT_BPS
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    requirement = models.ForeignKey(
+        "requirements.CustomerRequirement",
+        on_delete=models.PROTECT,
+        related_name="revision_requests",
+    )
+    proposal = models.ForeignKey(
+        Proposal,
+        on_delete=models.PROTECT,
+        related_name="revision_requests",
+    )
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="revision_requests_made",
+    )
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.OPEN)
+    reason_code = models.CharField(max_length=20, choices=ReasonCode.choices)
+    #: The priced lines the Customer wants left out, by the title the vendor gave them. Titles
+    #: rather than indexes because a vendor reads "false ceiling", not "line 4".
+    excluded_items = models.JSONField(default=list, blank=True)
+    note = models.TextField(blank=True)
+    #: What the Customer hoped for, in basis points — 5% is 500. Set only on a ``PRICE`` ask and
+    #: null on every other reason. Basis points rather than a percentage or an amount because
+    #: money is integer paise everywhere and a float discount would eventually round somebody's
+    #: estimate to a figure neither side agreed to.
+    #:
+    #: **This is never a price.** Nothing reads it to compute what is owed.
+    requested_discount_bps = models.PositiveIntegerField(null=True, blank=True)
+    #: What the vendor actually granted, when they answered a ``PRICE`` ask by moving. Equal to
+    #: ``requested_discount_bps`` when they agreed outright, lower when they countered. Still the
+    #: vendor's own number: the superseding proposal is what sets the price, and this records what
+    #: they said they were doing so the Customer reads "they came back at 2%, not 5%".
+    countered_discount_bps = models.PositiveIntegerField(null=True, blank=True)
+    #: The vendor's reason for declining, when they did.
+    decline_note = models.TextField(blank=True)
+    #: The revision that answered this, once one has.
+    answered_by_proposal = models.ForeignKey(
+        Proposal,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="answers_revision_requests",
+    )
+    created_at = models.DateTimeField(default=timezone.now)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("-created_at", "id")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("proposal",),
+                condition=models.Q(status="OPEN"),
+                name="requirements_one_open_revision_request_per_proposal",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(status="OPEN", resolved_at__isnull=True)
+                | ~models.Q(status="OPEN") & models.Q(resolved_at__isnull=False),
+                name="requirements_revision_request_resolved_when_closed",
+            ),
+            # A discount figure exists on a price ask and nowhere else. Without this a
+            # "leave the ceiling out" request could carry a number, and a number on a
+            # request nobody reads as priced is how an ask silently becomes an offer.
+            models.CheckConstraint(
+                condition=models.Q(
+                    reason_code="PRICE",
+                    requested_discount_bps__gte=1,
+                    requested_discount_bps__lte=MAX_DISCOUNT_BPS,
+                )
+                | ~models.Q(reason_code="PRICE") & models.Q(requested_discount_bps__isnull=True),
+                name="requirements_revision_request_discount_only_on_price_ask",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(countered_discount_bps__isnull=True)
+                | models.Q(
+                    countered_discount_bps__gte=0,
+                    countered_discount_bps__lte=MAX_DISCOUNT_BPS,
+                ),
+                name="requirements_revision_request_counter_within_cap",
+            ),
+        ]
+        indexes = [models.Index(fields=("requirement", "status"))]
+
+    def __str__(self) -> str:
+        return f"{self.proposal_id}:{self.status}"

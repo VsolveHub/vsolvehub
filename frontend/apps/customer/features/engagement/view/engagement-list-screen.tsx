@@ -4,13 +4,14 @@ import { describeError } from "@vsolve/query";
 import { Badge, Button, EmptyState, ErrorState, Skeleton, buttonStyles } from "@vsolve/ui";
 import Link from "next/link";
 
-import { engagementHref, stageHref } from "@/lib/routes";
+import { BookingListBody, CatalogServiceThumbRow } from "@/features/catalog/components/catalog-service-thumb";
+import { engagementHref } from "@/lib/routes";
 import { toEngagementLists, type EngagementRowView } from "../adapters";
 import { useEngagements } from "../queries";
 import {
   EngagementStatusBadge,
-  nextActionCopy,
   nounsFor,
+  stageKindCopy,
   type ModeNouns,
 } from "./engagement-status";
 
@@ -249,95 +250,71 @@ function Wrapper({
 
 export function EngagementListRow({ row }: { row: EngagementRowView }) {
   const nouns = nounsFor(row.mode);
-  const href = engagementHref(row.engagementId);
-  const actionHref =
-    row.actionStageId === null ? null : stageHref(row.engagementId, row.actionStageId);
+  return <EngagementRow row={row} nouns={nouns} engagementHref={engagementHref(row.engagementId)} />;
+}
 
-  return (
-    <EngagementRow
-      row={row}
-      nouns={nouns}
-      engagementHref={href}
-      actionHref={actionHref}
-    />
-  );
+function engagementListLine(
+  row: EngagementRowView,
+  nouns: ModeNouns,
+): { text: string; action: boolean } | null {
+  switch (row.nextAction) {
+    case "review_stage":
+      return {
+        text: row.actionStageKind === "material_advance" ? "Check the materials" : "Check the work",
+        action: true,
+      };
+    case "accept_completion":
+      return { text: "Confirm the work is finished", action: true };
+    case "fund_stage":
+      return {
+        text: stageKindCopy(row.actionStageKind ?? "unknown", nouns).fundNextAction,
+        action: true,
+      };
+    default:
+      return row.activeStageOn !== null ? { text: row.activeStageOn, action: false } : null;
+  }
 }
 
 function EngagementRow({
   row,
   nouns,
   engagementHref,
-  actionHref,
 }: {
   row: EngagementRowView;
   nouns: ModeNouns;
   engagementHref: string;
-  actionHref: string | null;
 }) {
-  const { done, total } = row.progress;
+  const title = row.serviceName ?? row.activeStageLabel ?? nouns.engagementTitle;
+  const line = engagementListLine(row, nouns);
+  const showPrice = row.stagedTotalPaise > 0;
 
   return (
-    <li className="rounded-card border border-line bg-surface p-4">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
-          <h2 className="font-semibold text-text">
-            <Link href={engagementHref} className="hover:underline">
-              {row.activeStageLabel ?? nouns.engagementTitle}
-            </Link>
-          </h2>
-          {row.activeStageOn !== null ? (
-            <p className="mt-0.5 text-sm text-text-secondary">{row.activeStageOn}</p>
-          ) : null}
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          {row.isDisputed ? <Badge tone="danger">Problem raised</Badge> : null}
-          <EngagementStatusBadge status={row.status} />
-        </div>
-      </div>
-
-      <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-1">
-        <div className="flex items-baseline gap-2">
-          <dt className="text-sm text-text-secondary">
-            {nouns.stages.charAt(0).toUpperCase() + nouns.stages.slice(1)} done
-          </dt>
-          <dd className="text-sm font-medium text-text">
-            {done} of {total}
-          </dd>
-        </div>
-        <div className="flex items-baseline gap-2">
-          <dt className="text-sm text-text-secondary">Agreed</dt>
-          <dd className="text-sm font-medium text-text">{row.stagedTotalLabel}</dd>
-        </div>
-        {/* `M2-FE-608` asks for the funded amount and it is a published running
-            total. It is absent from an A3 row because on `LEAD_ONLY` the answer
-            is always zero and a "Funded ₹0" beside a job in progress reads as a
-            failure rather than as a design. */}
-        {row.mode === "managed" ? (
-          <div className="flex items-baseline gap-2">
-            <dt className="text-sm text-text-secondary">Funded</dt>
-            <dd className="text-sm font-medium text-text">{row.fundedTotalLabel}</dd>
-          </div>
-        ) : null}
-      </dl>
-
-      {/* The kind of the row this action is about, so a materials line is never
-          announced as a stage that "starts" when it is funded. */}
-      <p className="mt-3 text-sm leading-6 text-text">
-        {nextActionCopy(row.nextAction, nouns, row.actionStageKind)}
-      </p>
-
-      <div className="mt-3 flex flex-wrap gap-2">
-        {/* The stage link is offered only for the actions that are genuinely
-            about one stage. A review is; waiting for the vendor is not. */}
-        {actionHref !== null && row.nextAction === "review_stage" ? (
-          <Link href={actionHref} className={buttonStyles({ variant: "primary" })}>
-            {row.actionStageKind === "material_advance" ? "Check the materials" : "Check the work"}
-          </Link>
-        ) : null}
-        <Link href={engagementHref} className={buttonStyles({ variant: "outline" })}>
-          Open {nouns.engagement}
-        </Link>
-      </div>
+    <li>
+      <Link
+        href={engagementHref}
+        className="block rounded-card border border-line bg-surface p-4 hover:border-warm-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+      >
+        <CatalogServiceThumbRow hint={{ slug: row.serviceSlug, name: row.serviceName }}>
+          <BookingListBody
+            title={title}
+            badge={
+              <span className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                {row.isDisputed ? <Badge tone="danger">Problem raised</Badge> : null}
+                <EngagementStatusBadge status={row.status} />
+              </span>
+            }
+            detail={line?.text}
+            detailAction={line?.action === true}
+            price={
+              showPrice ? (
+                <span className="shrink-0 font-semibold tabular-nums text-navy-900">
+                  {row.stagedTotalLabel}
+                </span>
+              ) : undefined
+            }
+          />
+        </CatalogServiceThumbRow>
+      </Link>
     </li>
   );
 }

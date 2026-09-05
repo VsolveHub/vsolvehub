@@ -24,6 +24,6 @@ import { permanentRedirect } from "next/navigation";
  * information-architecture decision, not a maintenance window, and it lets
  * browsers stop asking.
  */
-export default function RedirectToHome(): never {
-  permanentRedirect("/home");
+export default function RedirectToAllWork(): never {
+  permanentRedirect("/work/all");
 }

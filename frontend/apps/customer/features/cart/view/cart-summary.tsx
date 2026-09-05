@@ -47,34 +47,28 @@ export function CartSummary({
   return (
     <aside
       aria-labelledby="cart-summary-heading"
-      className="rounded-card border border-line bg-surface p-5 lg:sticky lg:top-6"
+      className="rounded-card border border-line bg-surface p-6 shadow-card lg:sticky lg:top-24"
     >
-      <h2 id="cart-summary-heading" className="text-base font-bold text-text">
+      <h2 id="cart-summary-heading" className="text-lg font-extrabold text-navy-900">
         Payment summary
       </h2>
 
       {estimate === null || estimate === undefined ? (
-        // Said plainly rather than shown as zero. A cart we cannot price has no price, and ₹0
-        // would read as free.
-        <p className="mt-3 text-sm text-text-secondary">
+        <p className="mt-3 text-sm text-text-secondary leading-relaxed">
           We could not work out a price for this cart just now. You can still continue — the
           exact amount is confirmed at checkout before you pay.
         </p>
       ) : (
-        <dl className="mt-4 space-y-2.5 text-sm">
-          {/* One row per service, named. A single "Services" line hides which of them cost what,
-              which is the first question anybody has when a total surprises them. */}
+        <dl className="mt-5 space-y-3 text-sm">
           {cart.items.map((item) => (
             <div key={item.id} className="flex items-baseline justify-between gap-3">
               <dt className="min-w-0 text-text-secondary">
                 {item.service_name}
                 {item.quantity > 1 ? (
-                  <span className="text-text-muted"> × {item.quantity}</span>
+                  <span className="font-semibold text-navy-700"> × {item.quantity}</span>
                 ) : null}
               </dt>
-              <dd data-numeric className="shrink-0 font-medium text-text">
-                {/* Null when the line has no live rate. A dash rather than ₹0, which would say
-                    the work is free. */}
+              <dd data-numeric className="shrink-0 font-semibold text-navy-900">
                 {item.amount === null || item.amount === undefined
                   ? "—"
                   : formatMoney(item.amount.amount_paise)}
@@ -82,9 +76,9 @@ export function CartSummary({
             </div>
           ))}
 
-          <div className="flex items-baseline justify-between gap-3 border-t border-line pt-2.5">
-            <dt className="font-semibold text-text">Total amount</dt>
-            <dd data-numeric className="font-semibold text-text">
+          <div className="flex items-baseline justify-between gap-3 border-t border-line/80 pt-3">
+            <dt className="font-bold text-navy-900">Subtotal</dt>
+            <dd data-numeric className="font-bold text-navy-900">
               {formatMoney(estimate.subtotal.amount_paise)}
             </dd>
           </div>
@@ -97,55 +91,51 @@ export function CartSummary({
                   Applied because the work is under the minimum
                 </span>
               </dt>
-              <dd data-numeric className="font-medium text-text">
+              <dd data-numeric className="font-semibold text-navy-900">
                 {formatMoney(estimate.minimum_visit_topup.amount_paise)}
               </dd>
             </div>
           ) : null}
 
-          {/* Named, never folded into the total. The gap between what the services cost and
-              what is payable is exactly the thing a customer asks about. */}
           <div className="flex items-baseline justify-between gap-3">
             <dt className="text-text-secondary">Platform fee</dt>
-            <dd data-numeric className="font-medium text-text">
+            <dd data-numeric className="font-semibold text-navy-900">
               {formatMoney(estimate.platform_fee.amount_paise)}
             </dd>
           </div>
 
-          <div className="flex items-baseline justify-between gap-3 border-t border-line pt-3">
-            <dt className="font-bold text-text">Amount to pay</dt>
-            <dd data-numeric className="text-lg font-bold text-text">
+          <div className="flex items-baseline justify-between gap-3 border-t border-line/80 pt-3">
+            <dt className="font-extrabold text-navy-900 text-base">Amount to pay</dt>
+            <dd data-numeric className="text-xl font-extrabold text-navy-900">
               {formatMoney(estimate.total.amount_paise)}
             </dd>
           </div>
 
-          {/* Under the total, because GST is inside it rather than added to it. Above it, the
-              same sentence reads as another charge. */}
           <div className="flex items-baseline justify-between gap-3">
-            <dt className="text-xs text-text-muted">Includes GST</dt>
-            <dd data-numeric className="text-xs text-text-muted">
+            <dt className="text-xs font-medium text-text-muted">Includes GST</dt>
+            <dd data-numeric className="text-xs font-medium text-text-muted">
               {formatMoney(estimate.tax.amount_paise)}
             </dd>
           </div>
         </dl>
       )}
 
-      <div className="mt-5">
+      <div className="mt-6">
         {isAuthenticated ? (
-          <Link href="/checkout" className={buttonStyles({ className: "w-full" })}>
+          <Link href="/checkout" className={buttonStyles({ size: "lg", className: "w-full" })}>
             Proceed to checkout
           </Link>
         ) : (
           <Link
             href={`/login?next=${encodeURIComponent("/checkout")}`}
-            className={buttonStyles({ className: "w-full" })}
+            className={buttonStyles({ size: "lg", className: "w-full" })}
           >
             Log in to continue
           </Link>
         )}
       </div>
 
-      <p className="mt-3 text-xs text-text-secondary">
+      <p className="mt-3.5 text-center text-xs text-text-secondary">
         {isAuthenticated
           ? "You pick a time and address next. Nothing is charged until you confirm."
           : "Your cart is saved and will still be here after you log in."}

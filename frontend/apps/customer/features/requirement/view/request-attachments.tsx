@@ -47,10 +47,16 @@ export interface RequestAttachmentsProps {
    * rejected file once it is not — which is exactly what the server permits.
    */
   isDraft: boolean;
-  onRemove: (attachmentId: string) => void;
-  isRemoving: boolean;
+  /**
+   * Omitted since contract 1.44.0 retired the requirement media-upload and
+   * removal operations. Historical attachments stay readable — there is simply
+   * no longer an endpoint to delete one, so the affordance is absent rather
+   * than present and broken.
+   */
+  onRemove?: (attachmentId: string) => void;
+  isRemoving?: boolean;
   /** A removal that failed for a reason the Customer should see. Null otherwise. */
-  removeError: unknown;
+  removeError?: unknown;
 }
 
 export function RequestAttachments({
@@ -98,7 +104,11 @@ export function RequestAttachments({
         {rows.map((row) => {
           const rejected = row.status === "failed";
           const attachmentId = row.attachmentId;
-          const removable = (isDraft || rejected) && attachmentId !== null;
+          // `onRemove` is optional from 1.44.0: with the delete endpoint gone,
+          // a caller that supplies no handler must render no button, rather than
+          // one that fails on press.
+          const removable =
+            onRemove !== undefined && (isDraft || rejected) && attachmentId !== null;
 
           return (
             <li
@@ -121,7 +131,7 @@ export function RequestAttachments({
                 <button
                   type="button"
                   disabled={isRemoving}
-                  onClick={() => onRemove(attachmentId)}
+                  onClick={() => onRemove?.(attachmentId)}
                   className="absolute right-1 top-1 inline-flex min-h-7 items-center rounded-control bg-surface px-2 text-[0.6875rem] font-semibold text-text-secondary shadow-card hover:bg-surface-hover hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action disabled:opacity-50"
                 >
                   Remove

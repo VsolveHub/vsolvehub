@@ -22,6 +22,7 @@ export default function AccountAddressesPage() {
     <AccountSection
       title="Saved addresses"
       description="Where we send someone when you book. Pick one at checkout instead of typing it again."
+      collapseHeaderOnMobile
     >
       <AddressBook />
     </AccountSection>

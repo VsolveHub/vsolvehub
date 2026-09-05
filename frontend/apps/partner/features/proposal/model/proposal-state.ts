@@ -59,7 +59,7 @@ const STATUS_COPY: Record<ProposalStatus, ProposalStatusCopy> = {
     label: "With the customer",
     tone: "progress",
     meaning:
-      "This is the quote the customer sees. You can withdraw it until they choose it; a revision is available only while its correction window is open.",
+      "This is the quote the customer sees. You can revise it or withdraw it any time until they choose it.",
   },
   SUPERSEDED: {
     label: "Replaced",
@@ -70,7 +70,8 @@ const STATUS_COPY: Record<ProposalStatus, ProposalStatusCopy> = {
   WITHDRAWN: {
     label: "Withdrawn",
     tone: "gone",
-    meaning: "You took this quote off the table. The customer can no longer choose it.",
+    meaning:
+      "You took this quote off the table. The customer can no longer choose it, and your enquiry is still open — send a new one whenever you are ready.",
   },
   EXPIRED: {
     label: "Expired",
@@ -155,18 +156,51 @@ export interface ProposalPermissions {
 /** States where the commercial conversation is over and a new row changes nothing. */
 const SETTLED: readonly ProposalStatus[] = ["SELECTED", "ACCEPTED", "LAPSED"];
 
+/**
+ * A5 estimate states the vendor may still replace — the mirror of
+ * `proposals.REPLACEABLE_ESTIMATE_STATUSES`.
+ *
+ * `SUBMITTED` is the live offer. `WITHDRAWN` is there because the withdraw
+ * dialog promises "your enquiry stays open, so you can send a new one", and a
+ * promise the next screen does not keep is worse than no promise.
+ */
+const REPLACEABLE_ESTIMATE: readonly ProposalStatus[] = ["SUBMITTED", "WITHDRAWN"];
+
+/**
+ * What the vendor may still do to the quote they sent.
+ *
+ * **This mirrors the server's own rule rather than approximating it.** Every
+ * branch below has a named counterpart in `requirements.proposals`, because the
+ * failure mode of a near-miss is a button whose only outcome is a refusal — and
+ * this screen has shipped that bug twice: a Withdraw dialog inviting a new
+ * estimate the server would not take, and a revalidation notice telling the
+ * vendor to "send a revised quote" with no control to send it from.
+ *
+ * The five-minute correction window is gone (owner decision, 2 September 2026).
+ * A project estimate is now revisable for exactly as long as an A3 quote always
+ * was: until the customer chooses it.
+ */
 export function permissionsFor(input: {
   readonly proposal: Proposal;
   readonly enquiryStatus: EnquiryStatus;
-  /** Kept separate from the clock so this policy remains deterministic in tests. */
-  readonly revisionWindowOpen?: boolean;
+  /**
+   * A5 records are estimates and A3 records are quotes; they settle differently.
+   * Passed in rather than sniffed from a nullable field, so the caller that
+   * already knows which document this is says so.
+   */
+  readonly documentKind?: "quote" | "estimate";
 }): ProposalPermissions {
   const slotHeld = input.enquiryStatus === "ACCEPTED" || input.enquiryStatus === "QUOTED";
-  const isEstimate = input.proposal.revision_expires_at !== null;
-  const revisionWindowOpen = input.revisionWindowOpen ?? true;
+  const status = input.proposal.status;
+  // `_assert_project_revision_allowed` lets an expired estimate be answered when
+  // the customer asked whether the price still stands. That ask is the only way
+  // an expired row is superseded, and `revalidationNoticeFor` already tells the
+  // vendor to answer it with a revision.
+  const answeringRevalidation =
+    status === "EXPIRED" && input.proposal.revalidation_requested_at !== null;
 
   return {
-    canWithdraw: input.proposal.status === "SUBMITTED",
+    canWithdraw: status === "SUBMITTED",
     // Not from SELECTED or ACCEPTED: the customer has committed, and a
     // "revision" at that point is a scope amendment on an engagement, which is
     // Wave B3's spine. Not from LAPSED either — the selection has already moved
@@ -174,9 +208,9 @@ export function permissionsFor(input: {
     // in front of a customer who is no longer choosing.
     canSupersede:
       slotHeld &&
-      (isEstimate
-        ? input.proposal.status === "SUBMITTED" && revisionWindowOpen
-        : !SETTLED.includes(input.proposal.status)),
+      (input.documentKind === "estimate"
+        ? REPLACEABLE_ESTIMATE.includes(status) || answeringRevalidation
+        : !SETTLED.includes(status)),
   };
 }
 

@@ -51,6 +51,10 @@ ignore = [
 # Seed commands drive real endpoints and assert the responses, and use `random` for spread.
 # Neither is a security property: every one of them refuses to run outside `DEBUG`.
 "**/management/commands/seed_*.py" = ["S101", "S311"]
+# `scripts/` is the developer CLI: one-off tools run by hand from a terminal, whose whole output
+# contract is stdout. T201 exists to stop `print` leaking into request paths, and there is no
+# request path here -- so the rule fires on every line that is doing its job correctly.
+"scripts/*.py" = ["T201"]
 
 [tool.ruff.format]
 quote-style = "double"

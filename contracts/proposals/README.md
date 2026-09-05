@@ -46,3 +46,5 @@ The generated OpenAPI document and generated TypeScript client are never manuall
 | 0011 | Publish the Booking Group's payment entry point | Proposed |
 | 0012 | M2 capability, requirement and quote surface | Partly implemented at 1.21.0 — unlock/selection half still proposed |
 | 0013 | M2 Partner capability, progressive-gate and crew surface | Proposed — nothing published; Wave C1 |
+| 0014 | Access receipt document fields | Proposed |
+| 0015 | M2 estimate lines, customer-supplied materials and one money truth | Proposed — blocks 22 of the 28 M2 screens |

@@ -1,6 +1,5 @@
 "use client";
 
-import { ApiRequestError } from "@vsolve/api-client";
 import { describeError } from "@vsolve/query";
 import { Button, Card, ErrorState, Field, Input, buttonStyles } from "@vsolve/ui";
 import Link from "next/link";
@@ -28,6 +27,7 @@ import {
   type RegistrationPlanView,
 } from "../adapters/registration-plan";
 import {
+  serverFieldProblems,
   toBusinessProfileInput,
   type BusinessProfileInput,
   type BusinessType,
@@ -80,20 +80,6 @@ import { RegistrationPlan } from "./registration-plan";
 function messageOf(error: unknown): string | null {
   if (error === null || error === undefined) return null;
   return describeError(error, "mutation").message;
-}
-
-/** Field errors Django returned, keyed to the control that caused them. */
-function serverFieldProblems<TField extends string>(
-  error: unknown,
-  fields: readonly TField[],
-): { field: TField; message: string }[] {
-  if (!(error instanceof ApiRequestError)) return [];
-  const byField = error.fieldErrors;
-
-  return fields.flatMap((field) => {
-    const [message] = byField[field] ?? [];
-    return message === undefined ? [] : [{ field, message }];
-  });
 }
 
 /* ---------------------------------------------------------------------------

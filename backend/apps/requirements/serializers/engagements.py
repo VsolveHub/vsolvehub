@@ -18,7 +18,9 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.commerce.providers import FakePaymentProvider
+from apps.requirements import proposals, vendor_trust
 from apps.requirements.models import (
+    DaySettlement,
     Engagement,
     EngagementAmendment,
     EngagementEvent,
@@ -26,13 +28,26 @@ from apps.requirements.models import (
     Proposal,
     ProposalSelection,
     QuoteUnlock,
+    ShiftAttendance,
+    StageCrewAssignment,
     StageEvidence,
     VisitPlan,
     VisitPlanShare,
 )
 from apps.requirements.selectors import access_receipt_for
 
-from .enquiries import ProposalMaterialLineSerializer, ProposalStageSerializer, SiteVisitSerializer
+from .enquiries import (
+    ProposalIncludedSupplyLineSerializer,
+    ProposalItemLineSerializer,
+    ProposalLabourLineSerializer,
+    ProposalMaterialLineSerializer,
+    ProposalMaterialListLineSerializer,
+    ProposalOtherChargeSerializer,
+    ProposalStageSerializer,
+    RequirementQuestionSerializer,
+    RevisionRequestSerializer,
+    SiteVisitSerializer,
+)
 
 # ---------------------------------------------------------------------------
 # Wave C2: the two front doors, selection and the engagement
@@ -115,6 +130,9 @@ class VisitPlanShareSerializer(serializers.ModelSerializer[VisitPlanShare]):
             "id",
             "position",
             "status",
+            "matching_status",
+            "requested_start",
+            "duration_minutes",
             "amount_paise",
             "vendor_payout_paise",
             "platform_share_paise",
@@ -252,7 +270,20 @@ class CustomerProposalSerializer(serializers.ModelSerializer[Proposal]):
     vendor = serializers.SerializerMethodField()
     stages = ProposalStageSerializer(many=True, read_only=True)
     material_lines = ProposalMaterialLineSerializer(many=True, read_only=True)
+    material_list = ProposalMaterialListLineSerializer(many=True, read_only=True)
+    included_supply_list = ProposalIncludedSupplyLineSerializer(many=True, read_only=True)
+    item_lines = ProposalItemLineSerializer(many=True, read_only=True)
+    labour_lines = ProposalLabourLineSerializer(many=True, read_only=True)
+    other_charges = ProposalOtherChargeSerializer(many=True, read_only=True)
     site_visit = SiteVisitSerializer(read_only=True, allow_null=True)
+    #: The clarification thread between this Customer and this vendor, both directions, oldest
+    #: first. Hung off the proposal because a question is addressed to the professional who wrote
+    #: it, and the invitation is what links the two.
+    questions = RequirementQuestionSerializer(
+        many=True, read_only=True, source="invitation.questions"
+    )
+    #: The Customer's most recent ask for a change, or null.
+    revision_request = serializers.SerializerMethodField()
 
     class Meta:
         model = Proposal
@@ -263,27 +294,63 @@ class CustomerProposalSerializer(serializers.ModelSerializer[Proposal]):
             "rejection_reason",
             "revision",
             "revalidation_requested_at",
+            "revision_request",
+            "questions",
             "vendor",
             "site_visit",
             "rate_paise_per_worker_day",
             "minimum_days",
             "worker_count",
+            "estimate_type",
+            "item_lines",
+            "labour_lines",
+            "other_charges",
+            "discount_kind",
+            "discount_bps",
+            "discount_base_paise",
+            "discount_paise",
+            "discount_source",
             "total_paise",
             "tax_paise",
             "tax_basis",
-            "commission_treatment",
+            "calculation_snapshot",
+            "line_subtotal_paise",
+            "authorized_charges_paise",
+            "taxable_value_paise",
+            "partner_quote_total_paise",
+            "platform_fee_paise",
+            "platform_fee_tax_paise",
+            "customer_total_paise",
             "inclusions",
             "exclusions",
+            "scope_summary",
             "stages",
             "material_lines",
+            "material_list",
+            "material_brand_tier",
+            "material_fulfilment_mode",
+            "included_supply_list",
             "warranty_terms",
+            "completion_days",
             "valid_until",
             "submitted_at",
         )
         read_only_fields = fields
 
+    @extend_schema_field(RevisionRequestSerializer(allow_null=True))
+    def get_revision_request(self, obj: Proposal) -> dict[str, Any] | None:
+        latest = proposals.latest_revision_request_for(obj)
+        return None if latest is None else dict(RevisionRequestSerializer(latest).data)
+
     def get_vendor(self, obj: Proposal) -> dict[str, Any]:
+        """Who wrote this, and what a Customer may weigh before choosing them.
+
+        The trust figures are read off completed engagements and Customer ratings at read time —
+        never stored, never an input to matching. A vendor with no rated work publishes `null`
+        rather than a number nobody gave.
+        """
         business = getattr(obj.partner, "business_profile", None)
+        trust = vendor_trust.trust_for(obj.partner)
         return {
             "partner_id": obj.partner_id,
             "vendor_type": business.business_type if business is not None else "INDIVIDUAL",
@@ -291,6 +358,11 @@ class CustomerProposalSerializer(serializers.ModelSerializer[Proposal]):
             "display_name": (
                 business.legal_name if business is not None else obj.partner.display_name
             ),
+            "rating_average": trust.rating_average,
+            "rating_count": trust.rating_count,
+            "jobs_completed": trust.jobs_completed,
+            "experience_years": trust.experience_years,
+            "active_since": trust.active_since.isoformat(),
         }
 
 
@@ -491,6 +563,29 @@ def _stage_schedule(stage: EngagementStage) -> tuple[date | None, int | None]:
     return None, None
 
 
+class ShiftDaySummarySerializer(serializers.Serializer[dict[str, Any]]):
+    """One crew day at a glance, for the day chips on both job pages.
+
+    The full shift-day read (`/engagement-stages/{id}/shift-day/`) is still where the day is
+    worked; this is the state of every day in one engagement read so a hub can draw "Name crew ·
+    Reached · 4 of 5 · Paid" without one request per day. Null on anything that is not a crew day.
+    """
+
+    #: How many people are named on the day so far, against the booked headcount.
+    crew_named = serializers.IntegerField(read_only=True)
+    expected_count = serializers.IntegerField(read_only=True)
+    arrived_at = serializers.DateTimeField(read_only=True, allow_null=True)
+    #: The supervisor's count. Null until they record the day.
+    present_count = serializers.IntegerField(read_only=True, allow_null=True)
+    #: `PENDING` | `SUPERVISOR_CONFIRMED` | `CUSTOMER_CONFIRMED` | `DISPUTED`.
+    attendance_status = serializers.CharField(read_only=True)
+    #: Blank until the day has an amount; then `AWAITING_BOTH` | `SUPERVISOR_CLAIMED` |
+    #: `CUSTOMER_CLAIMED` | `SETTLED`.
+    settlement_status = serializers.CharField(read_only=True, allow_blank=True)
+    settlement_amount_paise = serializers.IntegerField(read_only=True, allow_null=True)
+    shortfall_choice = serializers.CharField(read_only=True, allow_blank=True)
+
+
 class EngagementStageSerializer(serializers.ModelSerializer[EngagementStage]):
     """One shift-day or one milestone, with its money and its clocks.
 
@@ -507,6 +602,8 @@ class EngagementStageSerializer(serializers.ModelSerializer[EngagementStage]):
     evidence = StageEvidenceSerializer(many=True, read_only=True)
     starts_on = serializers.SerializerMethodField()
     duration_days = serializers.SerializerMethodField()
+    funding_breakdown = serializers.SerializerMethodField()
+    shift_summary = serializers.SerializerMethodField()
 
     class Meta:
         model = EngagementStage
@@ -515,6 +612,8 @@ class EngagementStageSerializer(serializers.ModelSerializer[EngagementStage]):
             "position",
             "label",
             "amount_paise",
+            "funding_breakdown",
+            "shift_summary",
             #: `WORK` or `MATERIAL_ADVANCE`. Read it before rendering a stage: a material advance
             #: is money spent on goods, not a milestone somebody performs, and it does not refund
             #: like unearned work.
@@ -550,6 +649,52 @@ class EngagementStageSerializer(serializers.ModelSerializer[EngagementStage]):
     def get_duration_days(self, obj: EngagementStage) -> int | None:
         return _stage_schedule(obj)[1]
 
+    @extend_schema_field(ShiftDaySummarySerializer(allow_null=True))
+    def get_shift_summary(self, obj: EngagementStage) -> dict[str, Any] | None:
+        engagement = obj.engagement
+        if (
+            engagement.commercial_mode != Engagement.CommercialMode.LEAD_ONLY
+            or obj.kind != EngagementStage.Kind.WORK
+        ):
+            return None
+        attendance = ShiftAttendance.objects.filter(stage=obj).first()
+        settlement = DaySettlement.objects.filter(stage=obj).first()
+        terms = engagement.terms_snapshot if isinstance(engagement.terms_snapshot, dict) else {}
+        expected = (
+            attendance.expected_count
+            if attendance is not None
+            else int(terms.get("headcount") or 0)
+        )
+        return {
+            "crew_named": StageCrewAssignment.objects.filter(
+                stage=obj, status=StageCrewAssignment.Status.ASSIGNED
+            ).count(),
+            "expected_count": expected,
+            "arrived_at": attendance.arrival_confirmed_at if attendance is not None else None,
+            "present_count": attendance.present_count if attendance is not None else None,
+            "attendance_status": (
+                attendance.status if attendance is not None else ShiftAttendance.Status.PENDING
+            ),
+            "settlement_status": settlement.status if settlement is not None else "",
+            "settlement_amount_paise": (
+                settlement.amount_paise if settlement is not None else None
+            ),
+            "shortfall_choice": settlement.shortfall_choice if settlement is not None else "",
+        }
+
+    @extend_schema_field(serializers.JSONField())
+    def get_funding_breakdown(self, obj: EngagementStage) -> dict[str, int]:
+        terms = obj.original_terms if isinstance(obj.original_terms, dict) else {}
+        return {
+            "partner_service_amount_paise": int(
+                terms.get("partner_service_amount_paise") or obj.amount_paise
+            ),
+            "tax_paise": int(terms.get("tax_paise") or 0),
+            "platform_fee_paise": int(terms.get("platform_fee_paise") or 0),
+            "platform_fee_tax_paise": int(terms.get("platform_fee_tax_paise") or 0),
+            "total_due_paise": obj.amount_paise,
+        }
+
 
 class AccessReceiptSerializer(serializers.Serializer[dict[str, Any]]):
     """The durable reference for the access fee Vsolve actually collected (`M2-BE-415`).
@@ -576,6 +721,51 @@ class AccessReceiptSerializer(serializers.Serializer[dict[str, Any]]):
     paid_at = serializers.DateTimeField(read_only=True, allow_null=True)
 
 
+class CrewTermsSerializer(serializers.Serializer[dict[str, Any]]):
+    """The frozen rate-card terms behind a crew booking, as both sides need to read them.
+
+    Every figure is the one snapshotted at booking (`terms_snapshot`), never the live card. The
+    Customer's all-in total and the lead's receipt are both here because the two apps show
+    different halves: the Customer sees what they pay the crew and the fee they paid Vsolve; the
+    lead sees what they receive per day and never the fee.
+    """
+
+    headcount = serializers.IntegerField(read_only=True)
+    days = serializers.IntegerField(read_only=True)
+    #: Wage plus supervision margin for one worker for one day — what one head costs at day end.
+    per_worker_day_paise = serializers.IntegerField(read_only=True)
+    #: The whole crew's receipt for one day (`per_worker_day x headcount`).
+    lead_day_receipt_paise = serializers.IntegerField(read_only=True)
+    #: The whole job's receipt to the lead, paid directly and daily.
+    lead_receipt_paise = serializers.IntegerField(read_only=True)
+    #: What Vsolve charged the Customer online. Owed to nobody at day end.
+    booking_fee_paise = serializers.IntegerField(read_only=True)
+    total_customer_paise = serializers.IntegerField(read_only=True)
+    standard_day_hours = serializers.IntegerField(read_only=True, allow_null=True)
+    overtime_hourly_paise = serializers.IntegerField(read_only=True, allow_null=True)
+    add_on_rates = serializers.DictField(child=serializers.IntegerField(), read_only=True)
+    inclusions = serializers.ListField(child=serializers.CharField(), read_only=True)
+
+
+class EngagementContactSerializer(serializers.Serializer[dict[str, Any]]):
+    """A name and a phone number, disclosed only once `contact_released_at` is stamped."""
+
+    name = serializers.CharField(read_only=True)
+    phone = serializers.CharField(read_only=True)
+
+
+class EngagementSiteAddressSerializer(serializers.Serializer[dict[str, Any]]):
+    """Where the work is. Same shape as the visit-side disclosure; no coordinates."""
+
+    line1 = serializers.CharField(read_only=True)
+    line2 = serializers.CharField(read_only=True, allow_blank=True)
+    landmark = serializers.CharField(read_only=True, allow_blank=True)
+    locality = serializers.CharField(read_only=True)
+    city = serializers.CharField(read_only=True)
+    state = serializers.CharField(read_only=True)
+    postal_code = serializers.CharField(read_only=True)
+
+
 class EngagementSerializer(serializers.ModelSerializer[Engagement]):
     """The agreement, frozen at reconfirmation.
 
@@ -596,12 +786,31 @@ class EngagementSerializer(serializers.ModelSerializer[Engagement]):
     #: a plan whose whole price was covered by a reclassification credit takes no payment.
     access_receipt = serializers.SerializerMethodField()
     server_now = serializers.SerializerMethodField()
+    #: The catalogue's own name for what was agreed — "Full home rewiring" — so neither app has
+    #: to title the agreement "Project". Read through the requirement, which is the one record
+    #: an engagement always has behind it.
+    service_name = serializers.CharField(source="requirement.variant.service.name", read_only=True)
+    service_slug = serializers.SlugField(source="requirement.variant.service.slug", read_only=True)
+    #: Null unless the agreement came out of a rate-card booking.
+    crew_terms = serializers.SerializerMethodField()
+    #: All three are null until `contact_released_at` is stamped. On A3 that is the moment the
+    #: booking fee verifies — "A3 is a connection" — and before this field existed a confirmed
+    #: lead had no endpoint that told them where to go.
+    site_address = serializers.SerializerMethodField()
+    customer_contact = serializers.SerializerMethodField()
+    partner_contact = serializers.SerializerMethodField()
 
     class Meta:
         model = Engagement
         fields = (
             "id",
             "requirement",
+            "service_name",
+            "service_slug",
+            "crew_terms",
+            "site_address",
+            "customer_contact",
+            "partner_contact",
             "proposal",
             "partner",
             "archetype",
@@ -632,6 +841,67 @@ class EngagementSerializer(serializers.ModelSerializer[Engagement]):
     @extend_schema_field(AccessReceiptSerializer(allow_null=True))
     def get_access_receipt(self, obj: Engagement) -> dict[str, Any] | None:
         return access_receipt_for(obj)
+
+    @extend_schema_field(CrewTermsSerializer(allow_null=True))
+    def get_crew_terms(self, obj: Engagement) -> dict[str, Any] | None:
+        terms = obj.terms_snapshot if isinstance(obj.terms_snapshot, dict) else {}
+        if terms.get("source") != "rate_card":
+            return None
+        per_worker = int(terms.get("worker_day_wage_paise") or 0) + int(
+            terms.get("supervision_margin_paise") or 0
+        )
+        add_ons = terms.get("add_on_rates")
+        inclusions = terms.get("inclusions")
+        return {
+            "headcount": int(terms.get("headcount") or 0),
+            "days": int(terms.get("days") or 0),
+            "per_worker_day_paise": per_worker,
+            "lead_day_receipt_paise": int(terms.get("lead_day_receipt_paise") or 0),
+            "lead_receipt_paise": int(terms.get("lead_receipt_paise") or 0),
+            "booking_fee_paise": int(terms.get("booking_fee_paise") or 0),
+            "total_customer_paise": int(terms.get("total_customer_paise") or 0),
+            "standard_day_hours": terms.get("standard_day_hours"),
+            "overtime_hourly_paise": terms.get("overtime_hourly_paise"),
+            "add_on_rates": add_ons if isinstance(add_ons, dict) else {},
+            "inclusions": [str(line) for line in inclusions]
+            if isinstance(inclusions, list)
+            else [],
+        }
+
+    @extend_schema_field(EngagementSiteAddressSerializer(allow_null=True))
+    def get_site_address(self, obj: Engagement) -> dict[str, str] | None:
+        if obj.contact_released_at is None:
+            return None
+        address = obj.requirement.address
+        if address is None:
+            return None
+        return {
+            "line1": address.line1,
+            "line2": address.line2,
+            "landmark": address.landmark,
+            "locality": address.locality,
+            "city": address.city,
+            "state": address.state,
+            "postal_code": address.postal_code,
+        }
+
+    @extend_schema_field(EngagementContactSerializer(allow_null=True))
+    def get_customer_contact(self, obj: Engagement) -> dict[str, str] | None:
+        if obj.contact_released_at is None:
+            return None
+        return {
+            "name": obj.customer.full_name or "Customer",
+            "phone": obj.customer.phone_number,
+        }
+
+    @extend_schema_field(EngagementContactSerializer(allow_null=True))
+    def get_partner_contact(self, obj: Engagement) -> dict[str, str] | None:
+        if obj.contact_released_at is None:
+            return None
+        return {
+            "name": obj.partner.display_name or "Your professional",
+            "phone": obj.partner.user.phone_number,
+        }
 
     @extend_schema_field(serializers.DateTimeField())
     def get_server_now(self, _obj: Engagement) -> Any:

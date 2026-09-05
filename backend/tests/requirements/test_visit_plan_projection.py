@@ -1,6 +1,7 @@
 """Visit-plan projections used by the Customer payment screen."""
 
 from datetime import timedelta
+from http import HTTPStatus
 
 import pytest
 from django.test import override_settings
@@ -10,17 +11,15 @@ from psycopg.types.range import Range
 from apps.assignments.models import Reservation
 from apps.catalog.models import ServiceVariant
 from apps.commerce.models import PaymentAttempt
-from apps.commerce.services import simulate_capture
 from apps.requirements.models import (
     M2AccessPrice,
     SiteVisit,
-    VendorInvitation,
     VisitPlan,
     VisitPlanShare,
 )
 from apps.requirements.serializers import VisitPlanSerializer
 
-from .conftest import M2World, draft_requirement
+from .conftest import M2World, draft_requirement, invitation_for
 
 pytestmark = pytest.mark.django_db
 
@@ -103,14 +102,7 @@ def test_simulated_visit_plan_capture_creates_missing_fake_provider_order(
         partner=world.vendor,
         committed_at=timezone.now(),
     )
-    invitation = VendorInvitation.objects.create(
-        requirement=requirement,
-        partner=world.vendor,
-        snapshot={},
-        cluster_key="",
-        wave=1,
-        responds_by=timezone.now() + timedelta(hours=8),
-    )
+    invitation = invitation_for(requirement=requirement, partner=world.vendor)
     scheduled_for = timezone.now() + timedelta(days=2)
     visit = SiteVisit.objects.create(
         requirement=requirement,
@@ -129,12 +121,17 @@ def test_simulated_visit_plan_capture_creates_missing_fake_provider_order(
         expires_at=timezone.now() + timedelta(minutes=10),
     )
 
-    simulate_capture(attempt_id=attempt.id, customer_id=world.customer.id)
+    response = world.customer_client.post(
+        f"/api/v1/payment-attempts/{attempt.id}/simulate-capture/"
+    )
 
     attempt.refresh_from_db()
     plan.refresh_from_db()
     visit.refresh_from_db()
     reservation.refresh_from_db()
+    assert response.status_code == HTTPStatus.OK
+    assert response.json()["id"] == str(attempt.id)
+    assert response.json()["status"] == PaymentAttempt.Status.CAPTURED
     assert attempt.provider_order_id
     assert attempt.status == PaymentAttempt.Status.CAPTURED
     assert plan.status == VisitPlan.Status.ACTIVE

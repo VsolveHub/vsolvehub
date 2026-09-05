@@ -67,6 +67,8 @@ import {
   ToggleLeft,
   User,
   Users,
+  FileCheck2,
+  MessageSquareHeart,
   Menu,
   X,
   type LucideIcon,
@@ -87,6 +89,8 @@ const WORKSPACES: { href: string; label: string; icon: LucideIcon }[] = [
   // application and is reachable from a partner's record; it is not a second nav entry, because
   // a reviewer arrives at it from the person they are reviewing.
   { href: "/operations/partners", label: "Partners", icon: Users },
+  { href: "/operations/crew-documents", label: "Crew documents", icon: FileCheck2 },
+  { href: "/operations/feedback", label: "Service feedback", icon: MessageSquareHeart },
   { href: "/reviews", label: "Partner reviews", icon: ClipboardCheck },
   // M2. "Requests" is the queue board and the way into one request's whole history; the request
   // detail and assisted capture hang off it and are reached from a queue or a case, not from a

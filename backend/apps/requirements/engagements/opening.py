@@ -36,6 +36,11 @@ def _proposal_terms(proposal: Proposal) -> dict[str, Any]:
         "proposal_id": str(proposal.id),
         "revision": proposal.revision,
         "total_paise": proposal.total_paise,
+        "discount_kind": proposal.discount_kind,
+        "discount_bps": proposal.discount_bps,
+        "discount_base_paise": proposal.discount_base_paise,
+        "discount_paise": proposal.discount_paise,
+        "discount_source": proposal.discount_source,
         "tax_paise": proposal.tax_paise,
         "tax_basis": proposal.tax_basis,
         "rate_paise_per_worker_day": proposal.rate_paise_per_worker_day,
@@ -47,6 +52,12 @@ def _proposal_terms(proposal: Proposal) -> dict[str, Any]:
         "warranty_terms": proposal.warranty_terms,
         "valid_until": proposal.valid_until.isoformat() if proposal.valid_until else None,
         "site_visit_id": str(proposal.site_visit_id) if proposal.site_visit_id else None,
+        "estimate_type": proposal.estimate_type,
+        "item_lines": proposal.item_lines,
+        "labour_lines": proposal.labour_lines,
+        "material_lines": proposal.material_lines,
+        "other_charges": proposal.other_charges,
+        "calculation": proposal.calculation_snapshot,
     }
 
 
@@ -102,7 +113,11 @@ def _a5_stages(proposal: Proposal) -> list[dict[str, Any]]:
                 # snagging". Copied rather than read back through the proposal, because a proposal
                 # is append-only and the vendor may supersede it after reconfirmation.
                 "deliverable": str(stage.get("deliverable") or ""),
-                "amount_paise": int(stage.get("amount_paise", 0)),
+                "amount_paise": int(stage.get("total_due_paise") or stage.get("amount_paise", 0)),
+                "partner_service_amount_paise": int(stage.get("amount_paise", 0)),
+                "tax_paise": int(stage.get("tax_paise", 0)),
+                "platform_fee_paise": int(stage.get("platform_fee_paise", 0)),
+                "platform_fee_tax_paise": int(stage.get("platform_fee_tax_paise", 0)),
                 "starts_on": stage.get("starts_on"),
                 "duration_days": stage.get("duration_days"),
                 "scheduled_on": stage.get("ends_on"),
@@ -121,7 +136,11 @@ def _a5_stages(proposal: Proposal) -> list[dict[str, Any]]:
                 "deliverable": (
                     f"{quantity} {unit}".strip() if quantity and unit else str(unit or "")
                 ),
-                "amount_paise": int(line.get("amount_paise", 0)),
+                "amount_paise": int(line.get("total_due_paise") or line.get("amount_paise", 0)),
+                "partner_service_amount_paise": int(line.get("amount_paise", 0)),
+                "tax_paise": int(line.get("tax_paise", 0)),
+                "platform_fee_paise": int(line.get("platform_fee_paise", 0)),
+                "platform_fee_tax_paise": int(line.get("platform_fee_tax_paise", 0)),
                 "scheduled_on": None,
                 "kind": EngagementStage.Kind.MATERIAL_ADVANCE,
             }
@@ -142,9 +161,8 @@ def _open_engagement(
     commission_treatment = ""
     retention_paise = 0
     if not is_lead_only:
-        commission_paise, commission_treatment = pricing.a5_commission(
-            requirement, total_paise=proposal.total_paise
-        )
+        commission_paise = proposal.commission_paise
+        commission_treatment = proposal.commission_treatment
         # `M2-BE-546`. Frozen here, from the configuration that was live when the agreement was
         # made, so a percentage Operations changes next month does not move a hold-back on a
         # project already under way. Zero when the estimate advertised no warranty — retention

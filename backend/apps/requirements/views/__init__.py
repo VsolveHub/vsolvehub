@@ -71,6 +71,7 @@ from .clarifications import (
     RequirementAttachmentDetailView,
     RequirementAttachmentFinalizeView,
     RequirementQuestionAnswerView,
+    RequirementQuestionListView,
     RequirementQuoteQuestionView,
 )
 from .crew_offers import (
@@ -92,6 +93,7 @@ from .enquiries import (
     SiteVisitCompleteView,
     SiteVisitScheduleView,
 )
+from .financial_policy import OperationsCommercialPolicyActivateView
 from .operations_requests import (
     OperationsAssistedClarificationView,
     OperationsAssistedProposalView,
@@ -103,12 +105,26 @@ from .operations_requests import (
 )
 from .operations_workspace import (
     OperationsChargebackView,
+    OperationsCrewDocumentDecisionView,
+    OperationsCrewDocumentListView,
+    OperationsCrewGenderCorrectionView,
     OperationsCrewVerificationQueueView,
     OperationsCrewVerificationView,
     OperationsQueueView,
     OperationsReconciliationView,
     OperationsTouchMetricView,
     OperationsTouchRollupView,
+)
+from .price_book import (
+    OperationsCustomWorkItemReviewQueueView,
+    OperationsCustomWorkItemReviewResolveView,
+    OperationsQuoteGuardrailPolicyActivateView,
+    OperationsQuoteGuardrailPolicyView,
+    OperationsWorkItemCollectionView,
+    OperationsWorkItemDetailView,
+    OperationsWorkItemRateView,
+    PartnerPriceBookItemView,
+    PartnerPriceBookView,
 )
 from .project_completion import PartnerProjectCompletionView, ProjectCompletionCodeView
 from .projects import (
@@ -126,12 +142,17 @@ from .projects import (
 from .proposals import (
     PartnerProposalCollectionView,
     PartnerProposalDetailView,
+    PartnerProposalDiscountApplyView,
+    PartnerProposalDiscountPreviewView,
+    PartnerProposalPreviewView,
+    PartnerProposalRevisionDeclineView,
     PartnerProposalWithdrawView,
 )
 from .quote_access import (
     RequirementQuoteListView,
     RequirementQuoteRejectView,
     RequirementQuoteRevalidateView,
+    RequirementQuoteRevisionRequestView,
     RequirementUnlockView,
     RequirementVisitPlanCheckoutView,
     RequirementVisitPlanView,
@@ -198,6 +219,9 @@ from .stages import (
     _customer_stage_command,
 )
 from .visit_slots import (
+    CustomerRequirementVisitSlotDropView,
+    CustomerRequirementVisitSlotReplaceView,
+    CustomerRequirementVisitSlotView,
     PartnerDemandPreviewView,
     PartnerEnquiryVisitSlotView,
     PartnerWorkspaceListView,
@@ -210,6 +234,9 @@ __all__ = [
     "CancellationDecisionView",
     "CaseAppealView",
     "CaseEvidenceView",
+    "CustomerRequirementVisitSlotDropView",
+    "CustomerRequirementVisitSlotReplaceView",
+    "CustomerRequirementVisitSlotView",
     "DomainError",
     "EngagementAmendmentCollectionView",
     "EngagementAmendmentDecisionView",
@@ -252,11 +279,20 @@ __all__ = [
     "OperationsAssistedClarificationView",
     "OperationsAssistedProposalView",
     "OperationsChargebackView",
+    "OperationsCommercialPolicyActivateView",
+    "OperationsCrewDocumentDecisionView",
+    "OperationsCrewDocumentListView",
+    "OperationsCrewGenderCorrectionView",
     "OperationsCrewVerificationQueueView",
     "OperationsCrewVerificationView",
+    # The vendor price book.
+    "OperationsCustomWorkItemReviewQueueView",
+    "OperationsCustomWorkItemReviewResolveView",
     "OperationsDeadlineView",
     "OperationsDeclineAlarmView",
     "OperationsQueueView",
+    "OperationsQuoteGuardrailPolicyActivateView",
+    "OperationsQuoteGuardrailPolicyView",
     "OperationsRateCardView",
     "OperationsReclassificationView",
     "OperationsReconciliationView",
@@ -266,6 +302,9 @@ __all__ = [
     "OperationsSafetyIncidentDecisionView",
     "OperationsTouchMetricView",
     "OperationsTouchRollupView",
+    "OperationsWorkItemCollectionView",
+    "OperationsWorkItemDetailView",
+    "OperationsWorkItemRateView",
     "PartnerCrewOfferAcceptView",
     "PartnerCrewOfferDeclineView",
     "PartnerCrewOfferListView",
@@ -278,9 +317,15 @@ __all__ = [
     "PartnerEnquiryQuestionView",
     "PartnerEnquirySiteVisitView",
     "PartnerEnquiryVisitSlotView",
+    "PartnerPriceBookItemView",
+    "PartnerPriceBookView",
     "PartnerProjectCompletionView",
     "PartnerProposalCollectionView",
     "PartnerProposalDetailView",
+    "PartnerProposalDiscountApplyView",
+    "PartnerProposalDiscountPreviewView",
+    "PartnerProposalPreviewView",
+    "PartnerProposalRevisionDeclineView",
     "PartnerProposalWithdrawView",
     "PartnerQuestionAnswerView",
     "PartnerWorkspaceListView",
@@ -301,10 +346,12 @@ __all__ = [
     "RequirementDetailView",
     "RequirementDuplicateCheckView",
     "RequirementQuestionAnswerView",
+    "RequirementQuestionListView",
     "RequirementQuoteListView",
     "RequirementQuoteQuestionView",
     "RequirementQuoteRejectView",
     "RequirementQuoteRevalidateView",
+    "RequirementQuoteRevisionRequestView",
     "RequirementRateCardBookView",
     "RequirementRateCardCancelView",
     "RequirementRateCardQuotesView",
@@ -345,4 +392,9 @@ __all__ = [
     "_requirement_for_party",
     "_shift_stage_for_participant",
 ]
-from .receipts import EngagementReceiptDownloadView
+from .receipts import (
+    EngagementReceiptDownloadView,
+    RequirementQuoteShoppingListPdfView,
+)
+
+__all__ += ["RequirementQuoteShoppingListPdfView"]

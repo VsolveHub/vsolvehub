@@ -138,7 +138,7 @@ export function visitPermissionsFor(visit: SiteVisit | null): VisitPermissions {
  * write the estimate there.
  */
 export const CONFIRM_COMMITMENT =
-  "Book only if you can reach the site at this time and complete the estimate during the visit.";
+  "This accepts the project enquiry and takes one visit slot. Book only if you can reach the site at this time and complete the estimate during the visit.";
 
 export interface ConfirmationOutcome {
   readonly title: string;
@@ -147,44 +147,6 @@ export interface ConfirmationOutcome {
   readonly isHeld: boolean;
 }
 
-/**
- * How a successful confirmation reads.
- *
- * `opens_plan_checkout` is the whole distinction. When it is true this vendor is
- * the **first** to confirm on the request, so their confirmation is what opens
- * the Customer's plan checkout — and their slot is held, not scheduled, until
- * that payment is verified by the provider callback. Every later vendor books
- * against a plan that is already paid for and is scheduled outright.
- */
-export function describeConfirmation(
-  confirmation: Schemas["VisitSlotConfirmation"],
-): ConfirmationOutcome {
-  if (confirmation.opens_plan_checkout) {
-    return {
-      isHeld: true,
-      title: "Your time is held",
-      message:
-        "You are the first vendor to answer, so the customer is now paying for their visit plan. Your slot is held for you while that clears and Vsolve confirms it the moment it does. Do not travel yet. If the customer never pays, the hold lapses on its own — nothing is charged to them and nothing is owed to you.",
-    };
-  }
-
-  return {
-    isHeld: false,
-    title: "Visit confirmed",
-    message:
-      "Your calendar is booked for this time and the customer has been told to expect you. Travel to the site at that slot and write your estimate there.",
-  };
-}
-
-/**
- * The post-visit estimate window, stated plainly.
- *
- * `estimate_due_at` is stamped when a plan visit completes. Missing it is not a
- * soft deadline: the share is refunded to the Customer or replaced with a free
- * visit for another vendor, this vendor is paid nothing for the journey, and it
- * hits their standing. Saying less than that would be the platform being vague
- * about the one rule that decides whether the trip was worth making.
- */
 export function describeEstimateWindow(estimateDueAt: string | null): string {
   if (estimateDueAt === null) {
     return "Send your estimate as soon as you can. A completed visit that never produces one is refunded to the customer and pays you nothing.";

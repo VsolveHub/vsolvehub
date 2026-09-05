@@ -14,6 +14,7 @@ from datetime import date
 from typing import Any
 
 from django.db.models import Count, Prefetch, Q, QuerySet
+from django.utils import timezone
 
 from apps.catalog.models import ServiceVariant
 from apps.identity.hashing import keyed_hash
@@ -37,6 +38,7 @@ from apps.requirements.models import (
     Proposal,
     ProposalSelection,
     QuoteUnlock,
+    RateCardBooking,
     RequirementQuestion,
     RequirementTransition,
     ShiftAttendance,
@@ -211,9 +213,38 @@ def confirmed_teaser_count(requirement: CustomerRequirement) -> int:
 
 
 def partner_invitations(partner: PartnerProfile) -> QuerySet[VendorInvitation]:
+    """The Partner's quote enquiries — never a crew offer, never a lapsed invitation.
+
+    A rate-card crew offer has its own inbox (`/partner/crew-offers/`) with a minutes-level clock
+    and one button; listing the same invitation here as an enquiry showed a lapsed offer as
+    "waiting for you" and let the lead tap into a refusal. Invitations for a requirement whose
+    booking is on the instant path are therefore not enquiries at all. Once the booking has
+    fallen back to the quote flow the *new* wave's invitations are ordinary enquiries and show.
+
+    An unanswered invitation past its deadline is excluded outright rather than shown as expired:
+    the sweep that expires it runs on its own schedule, and in the gap the inbox must not advertise
+    an answer the server will refuse.
+    """
+    now = timezone.now()
     return (
         VendorInvitation.objects.filter(partner=partner)
-        .select_related("requirement__variant__service", "snapshot")
+        .exclude(
+            requirement__rate_card_booking__status__in=(
+                RateCardBooking.Status.MATCHING,
+                RateCardBooking.Status.OFFER_HELD,
+                RateCardBooking.Status.CONFIRMED,
+                RateCardBooking.Status.EXHAUSTED,
+                RateCardBooking.Status.CANCELLED,
+            )
+        )
+        .exclude(status=VendorInvitation.Status.INVITED, responds_by__lt=now)
+        .select_related(
+            "requirement__address",
+            "requirement__service_area",
+            "requirement__variant__service",
+            "requested_visit_share",
+            "snapshot",
+        )
         .prefetch_related(
             Prefetch(
                 "proposals",
@@ -230,15 +261,19 @@ def invitation_for_partner(
 ) -> VendorInvitation:
     invitation = (
         VendorInvitation.objects.select_related(
+            "requirement__address",
+            "requirement__service_area",
             "requirement__variant__service",
+            "requested_visit_share",
             "snapshot",
         )
         .prefetch_related(
+            "site_visits",
             Prefetch(
                 "proposals",
                 queryset=Proposal.objects.order_by("-revision"),
                 to_attr="ordered_proposals",
-            )
+            ),
         )
         .filter(partner=partner, id=invitation_id)
         .first()
@@ -284,12 +319,17 @@ def demand_preview_id(requirement_id: uuid.UUID) -> str:
     return keyed_hash(f"m2-demand-preview:{requirement_id}")[:32]
 
 
-def _area_label(requirement: CustomerRequirement) -> str:
+def requirement_area_label(requirement: CustomerRequirement) -> str:
+    """A useful locality for Partner decisions, never the Customer's street address."""
+
     address = requirement.address
     if address is None:
         area = requirement.service_area
         return area.name if area is not None else ""
-    parts = [part for part in (address.locality, address.city) if part]
+    parts: list[str] = []
+    for part in (address.locality, address.city):
+        if part and part.casefold() not in {existing.casefold() for existing in parts}:
+            parts.append(part)
     return ", ".join(parts)
 
 
@@ -328,7 +368,7 @@ def demand_preview(partner: PartnerProfile) -> tuple[list[DemandSummary], int]:
         DemandSummary(
             id=demand_preview_id(requirement.id),
             headline=requirement_summary_text(requirement),
-            area_label=_area_label(requirement),
+            area_label=requirement_area_label(requirement),
             starts_on=(
                 requirement.requested_start.date()
                 if requirement.requested_start is not None
@@ -955,13 +995,17 @@ def stage_crew_rows(
     return [
         {
             "membership_id": assignment.membership_id if include_membership_id else None,
-            "display_name": assignment.crew_member.display_name,
+            "display_name": assignment.membership.roster_name,
             "phone_masked": masked_crew_phone(assignment.crew_member.phone_suffix),
             "is_supervisor": assignment.is_supervisor,
             "is_verified": assignment.membership.documents_verified_at is not None,
             "verified_at": assignment.membership.documents_verified_at,
             "status": assignment.status,
             "assigned_at": assignment.assigned_at,
+            #: Which role the Customer booked them into, blank on a job with no roles. Published
+            #: to both readers: the Partner's screen groups by it, and a Customer looking at who
+            #: is coming to their wedding is entitled to know who is serving and who is lifting.
+            "role_code": assignment.role_code,
         }
         for assignment in assignments
     ]
@@ -979,9 +1023,13 @@ def shift_day_payload(
     rows on a `GET` would make a read change the database, which is how a stage acquires an
     attendance row on the day somebody merely opened the screen.
     """
-    from apps.requirements import workforce  # noqa: PLC0415 — read layer calling the domain
+    from apps.requirements import (  # noqa: PLC0415 — read layer calling the domain
+        crew_mix,
+        workforce,
+    )
 
     terms = workforce.shift_terms(stage.engagement)
+    assigned = workforce.assigned_crew(stage)
     attendance = ShiftAttendance.objects.filter(stage=stage).first()
     settlement = DaySettlement.objects.filter(stage=stage).first()
     return {
@@ -992,9 +1040,28 @@ def shift_day_payload(
         "scheduled_on": stage.scheduled_on,
         "stage_status": stage.status,
         "crew": stage_crew_rows(
-            workforce.assigned_crew(stage),
+            assigned,
             include_membership_id=include_membership_id,
         ),
+        # The soft half of the mix rules: what each role was booked for against what has been
+        # named into it. A warning the screen can render, never a refusal -- `_assert_mix_met`
+        # does the refusing, and it does it on totals.
+        "role_fulfilment": [
+            {
+                "role_code": row.role_code,
+                "role_label": row.role_label,
+                "wanted_men": row.wanted_men,
+                "wanted_women": row.wanted_women,
+                "named_men": row.named_men,
+                "named_women": row.named_women,
+                "is_met": row.is_met,
+                "gap": row.describe_gap(),
+            }
+            for row in crew_mix.role_fulfilment(
+                stage.engagement.requirement,
+                [(a.role_code, a.crew_member.gender) for a in assigned],
+            )
+        ],
         "attendance": attendance,
         "settlement": settlement,
         "per_worker_paise": terms.per_worker_paise,

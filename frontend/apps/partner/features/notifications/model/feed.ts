@@ -1,7 +1,5 @@
 import type { Schemas } from "@vsolve/api-client";
 
-import { PROJECT_WORKSPACE, WORKFORCE_WORKSPACE } from "@/features/workspace/registry";
-
 /**
  * The two decisions the notification bell makes without a server round trip:
  * what the badge is *called*, and where a notice *leads*.
@@ -81,79 +79,65 @@ export function unreadBadgeLabel(count: number | null): string {
    --------------------------------------------------------------------------- */
 
 /**
- * The engagement detail route each workspace owns.
- *
- * Both route files say in their own docblocks that they are "keyed by the
- * engagement rather than by the enquiry it came from, so a notification opened
- * weeks later resolves without the request behind it" — these two paths were
- * written for exactly this link.
- */
-const ENGAGEMENT_ROUTES: ReadonlyArray<readonly [workspaceKey: string, basePath: string]> = [
-  [WORKFORCE_WORKSPACE, "/workforce/shifts"],
-  [PROJECT_WORKSPACE, "/projects/stages"],
-];
-
-/**
  * Where a Partner should be sent for one notice, or `null` for nowhere.
  *
- * ## Why the workspace keys are an argument rather than something inferred
+ * ## Every path here is a live route, not one that redirects
  *
- * `NotificationTarget` is `{kind, id}` and carries **no archetype**. An A3 shift
- * booking and an A5 project are both `ENGAGEMENT`, and the Partner app routes them
- * to different screens with deliberately different vocabulary — `/workforce/shifts`
- * speaks in shift-days, `/projects/stages` speaks in stages. `M2-FE-111` forbids
- * flattening those two into one noun, so picking the wrong one is not a cosmetic
- * miss: it is the erasure the registry exists to prevent, rendered over real work.
+ * This used to compose `/workforce/shifts/{id}`, `/projects/stages/{id}`,
+ * `/workforce/enquiries/{id}` and `/projects/enquiries/{id}`. All four are
+ * **308 redirects** in `next.config.ts` today, so every notification a Partner
+ * tapped cost an extra round trip before it landed anywhere — on the surface
+ * whose entire purpose is to be the shortest path to the work. The paths below
+ * are the destinations those redirects point at.
  *
- * The one thing that *does* narrow it is what Django authorized. A Partner holding
- * only the workforce capability has no project engagements to be notified about, so
- * their `ENGAGEMENT` targets are unambiguous — and the overwhelming majority of
- * Partners hold exactly one. The grants come from `usePartnerWorkspaceGrants`,
- * which is a server answer; this never guesses a capability from a route or a
- * category.
+ * ## The archetype ambiguity is gone, because the route table changed
  *
- * ## What happens when it is genuinely ambiguous, and why it is not a guess
+ * `NotificationTarget` is `{kind, id}` and carries no archetype. That used to
+ * matter enormously: an A3 shift booking and an A5 project were both
+ * `ENGAGEMENT` and went to two different screens with deliberately different
+ * vocabulary, so a Partner holding **both** capabilities got `null` and an
+ * unlinked row rather than a coin-flip that might describe their project in
+ * shift-days.
  *
- * A Partner holding **both** capabilities gets `null` and an unlinked row. That is
- * a real, named gap rather than an oversight: closing it needs the server to say
- * which lifecycle the engagement belongs to — an `archetype` on
- * `NotificationTarget`, or a `commercial_mode` — and until it does, the two
- * available answers are "unlinked row" and "coin-flip between two screens, one of
- * which describes the work in the wrong words". Reading the notice and opening the
- * right workspace tab is two taps. Being told your project has shift-days is a
- * support ticket.
+ * `/work/jobs/[id]` resolves both kinds itself. Its own docblock — "One route,
+ * two record kinds" — describes asking the engagement endpoint first precisely
+ * because that is the one of the two reads that can honestly answer "not mine".
+ * So the client no longer has to know which lifecycle an id belongs to, and the
+ * documented gap this function used to carry closes without the server
+ * publishing anything new.
+ *
+ * `workspaceKeys` is therefore no longer read. It stays in the signature
+ * because the surrounding contract still passes it and because the next
+ * target kind may well need it — but nothing routes on a capability any more,
+ * and no caller has to get it right for a link to work.
  *
  * ## `REQUIREMENT` leads nowhere on this side, and that is not a bug
  *
  * There is no Partner route keyed by a requirement id. A Partner's door into a
- * customer request is the **invitation** — `/workforce/enquiries/[invitationId]`
- * — and an invitation id is not a requirement id, so composing that path would
- * produce a URL that resolves to a 404 or, worse, to somebody else's enquiry.
- * The two requirement-scoped notices a Partner can receive
- * (`m2_proposal_selected`, `m2_proposal_rejected`) both carry their own answer in
- * the body, and the Enquiries tab is where the follow-up lives.
- *
- * Invitation notices are different: Django publishes an explicit
- * `PROJECT_INVITATION` or `WORKFORCE_INVITATION`, because that id is the
- * Partner's actual route into the customer's request.
+ * customer request is the **invitation**, and an invitation id is not a
+ * requirement id, so composing that path would produce a URL that resolves to a
+ * 404 or, worse, to somebody else's enquiry. The two requirement-scoped notices
+ * a Partner can receive (`m2_proposal_selected`, `m2_proposal_rejected`) both
+ * carry their own answer in the body, and the Work tab is where the follow-up
+ * lives.
  */
 export function targetHref(
   target: NotificationTarget | null,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   workspaceKeys: readonly string[] = [],
 ): string | null {
   if (target === null) return null;
-  if (target.kind === "PROJECT_INVITATION") return `/projects/enquiries/${target.id}`;
-  if (target.kind === "WORKFORCE_INVITATION") return `/workforce/enquiries/${target.id}`;
-  if (target.kind !== "ENGAGEMENT") return null;
-
-  const held = ENGAGEMENT_ROUTES.filter(([key]) => workspaceKeys.includes(key));
-  const only = held.length === 1 ? held[0] : undefined;
-  if (only === undefined) return null;
-
-  return `${only[1]}/${target.id}`;
+  if (target.kind === "PROJECT_INVITATION") return `/work/enquiries/${target.id}`;
+  if (target.kind === "WORKFORCE_INVITATION") return `/work/enquiries/${target.id}`;
+  if (target.kind === "ENGAGEMENT") return `/work/jobs/${target.id}`;
+  // An A3 crew offer. The id is the invitation id, which is what the offer
+  // detail route is keyed by — and the offer is on a two-minute clock, so this
+  // is the one notice where landing anywhere but the answer button is a loss.
+  if (target.kind === "CREW_OFFER") return `/work/offers/${target.id}`;
+  return null;
 }
 
 /** True once this notice has been read. `read_at` is the record; nothing local overrides it. */
-export function isUnread(notification: Schemas["Notification"]): boolean {
+export function isUnread(notification: Pick<Schemas["Notification"], "read_at">): boolean {
   return notification.read_at === null;
 }

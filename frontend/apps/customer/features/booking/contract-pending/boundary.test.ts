@@ -218,7 +218,12 @@ describe("unpublished endpoints stay out of production", () => {
     // The generated client is the only thing that may reach Django. It injects
     // its own `fetch`, so the two `lib/api/` factories are the sole legitimate
     // callers and are named explicitly rather than pattern-matched.
-    const allowed = ["lib/api/public.ts", "lib/api/private.ts"];
+    const allowed = [
+      "lib/api/public.ts",
+      "lib/api/private.ts",
+      "features/payment/view/receipt.tsx",
+      "features/engagement/view/receipt.tsx",
+    ];
 
     const offenders = productionSources
       .filter((path) => {

@@ -74,6 +74,9 @@ export const m2QueryKeys = {
       [...m2QueryKeys.requirements.all, "detail", requirementId] as const,
     timeline: (requirementId: string) =>
       [...m2QueryKeys.requirements.detail(requirementId), "timeline"] as const,
+    /** Every clarification question on one request, both directions (1.47.0). */
+    questions: (requirementId: string) =>
+      [...m2QueryKeys.requirements.detail(requirementId), "questions"] as const,
     /**
      * Probable duplicates for a draft, keyed by the inputs that decide the answer.
      *
@@ -168,6 +171,16 @@ export const m2QueryKeys = {
    */
   proposals: {
     all: ["m2", "proposals"] as const,
+    preview: (invitationId: string, fingerprint: string) =>
+      [...m2QueryKeys.proposals.all, "preview", invitationId, fingerprint] as const,
+    discountPreview: (proposalId: string, requestId: string, fingerprint: string) =>
+      [
+        ...m2QueryKeys.proposals.all,
+        "discount-preview",
+        proposalId,
+        requestId,
+        fingerprint,
+      ] as const,
     mine: (requirementId: string) =>
       [...m2QueryKeys.proposals.all, "mine", requirementId] as const,
     teasers: (requirementId: string) =>
@@ -221,6 +234,25 @@ export const m2QueryKeys = {
   },
 
   /**
+   * The Partner's own price book — the ops-curated work-item catalog for their
+   * skills, with the band context and the rate they saved against each item
+   * (contract 1.46.0, `GET /partner/price-book/`).
+   *
+   * Rooted rather than nested under a requirement: the price book is the
+   * Partner's, not a project's. The rate-card screen and the on-site estimate
+   * composer read the same key so a rate saved on one is never stale on the
+   * other. `list(serviceAreaId)` because the band is per city — the same item
+   * carries a different floor and ceiling in a different service area — and an
+   * undefined area is the server's own "the Partner's primary area" default,
+   * which gets a key of its own rather than colliding with a named one.
+   */
+  priceBook: {
+    all: ["m2", "price-book"] as const,
+    list: (serviceAreaId?: string, skill?: string) =>
+      [...m2QueryKeys.priceBook.all, "list", serviceAreaId ?? "primary", skill ?? "all"] as const,
+  },
+
+  /**
    * The A5 visit plan, its slots and the grid a vendor books one from.
    *
    * Added at the Wave I gate on both frontend columns' §7 request — Session A
@@ -250,6 +282,9 @@ export const m2QueryKeys = {
     all: ["m2", "visits"] as const,
     plan: (requirementId: string) =>
       [...m2QueryKeys.visits.all, "plan", requirementId] as const,
+    /** The Customer's signed candidate grid for one draft requirement. */
+    customerSlots: (requirementId: string) =>
+      [...m2QueryKeys.visits.all, "customer-slots", requirementId] as const,
     slots: (invitationId: string) =>
       [...m2QueryKeys.visits.all, "slots", invitationId] as const,
     visit: (siteVisitId: string) =>

@@ -278,8 +278,25 @@ class VisitPlan(models.Model):
 
     @property
     def chargeable_paise(self) -> int:
-        """What the Customer still owes: the tier price less any carried-over unlock credit."""
-        return max(self.price_paise - self.credit_paise, 0)
+        """What the Customer still owes: the tier price, less credit, less what cannot be delivered.
+
+        The third term is the one that was missing. A share nobody could be found for is
+        ``REFUNDED`` — the money machinery already gives it back *after* a charge — but before the
+        charge this property still quoted the full tier price, so a Customer whose second visit had
+        no professional within reach was asked to pay for two and then refunded for one. Taking
+        money for a visit we already know cannot happen, in order to hand it back later, is not a
+        refund policy; it is a worse version of not charging for it.
+
+        Only shares already settled as undeliverable are subtracted. A share still `SEARCHING` — or
+        one the Customer re-timed after an exhausted match — is chargeable, because it may still be
+        filled and a price that flickered with the matching state would be worse than either answer.
+        """
+        undeliverable = sum(
+            share.amount_paise
+            for share in self.shares.all()
+            if share.status == VisitPlanShare.Status.REFUNDED
+        )
+        return max(self.price_paise - self.credit_paise - undeliverable, 0)
 
     @property
     def charge_required(self) -> bool:
@@ -309,6 +326,18 @@ class VisitPlanShare(models.Model):
         REFUNDED = "REFUNDED", "Refunded to the Customer"
         REPLACED = "REPLACED", "Awaiting a free replacement visit"
 
+    class MatchingStatus(models.TextChoices):
+        """Customer-visible supply state for this independently requested visit."""
+
+        SEARCHING = "SEARCHING", "Searching"
+        HELD = "HELD", "Professional held while payment is pending"
+        BOOKED = "BOOKED", "Booked"
+        VISITED = "VISITED", "Visited"
+        ESTIMATE_RECEIVED = "ESTIMATE_RECEIVED", "Estimate received"
+        NO_PROFESSIONAL_FOUND = "NO_PROFESSIONAL_FOUND", "No professional found"
+        CANCELLED = "CANCELLED", "Cancelled"
+        RECOVERY = "RECOVERY", "Recovery"
+
     #: Statuses from which a settlement sweep may still move a share.
     OPEN_STATUSES = (Status.OPEN, Status.COMMITTED, Status.REPLACED)
 
@@ -321,6 +350,13 @@ class VisitPlanShare(models.Model):
     vendor_payout_paise = models.PositiveBigIntegerField()
     platform_share_paise = models.PositiveBigIntegerField()
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.OPEN)
+    matching_status = models.CharField(
+        max_length=24,
+        choices=MatchingStatus.choices,
+        default=MatchingStatus.SEARCHING,
+    )
+    requested_start = models.DateTimeField(null=True, blank=True)
+    duration_minutes = models.PositiveIntegerField(null=True, blank=True)
     partner = models.ForeignKey(
         PartnerProfile,
         null=True,
@@ -368,6 +404,13 @@ class VisitPlanShare(models.Model):
             models.CheckConstraint(
                 condition=models.Q(amount_paise__gt=0),
                 name="requirements_visit_share_positive",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(requested_start__isnull=True, duration_minutes__isnull=True)
+                    | models.Q(requested_start__isnull=False, duration_minutes__isnull=False)
+                ),
+                name="requirements_visit_share_requested_slot_complete",
             ),
         ]
         indexes = [

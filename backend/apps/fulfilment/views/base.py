@@ -81,8 +81,12 @@ def _replayable(result: CommandResult, projection: Callable[[], ResponseBody]) -
 
 def _booking_queryset() -> QuerySet[Booking]:
     return Booking.objects.select_related(
-        "partner", "fulfilment_unit", "fulfilment_unit__booking_group"
-    ).prefetch_related("work_tasks", "evidence")
+        "partner",
+        "fulfilment_unit",
+        "fulfilment_unit__booking_group",
+        "fulfilment_unit__service_area",
+        "fulfilment_unit__quote_unit__quote",
+    ).prefetch_related("fulfilment_unit__lines", "work_tasks", "evidence")
 
 
 def _customer_booking(booking_id: UUID, customer: User) -> Booking:

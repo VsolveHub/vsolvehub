@@ -61,33 +61,75 @@ describe("revising", () => {
   it("never offers a revision after the customer turns an estimate down", () => {
     expect(
       permissionsFor({
-        proposal: proposal({
-          status: "REJECTED",
-          revision_expires_at: "2026-08-12T08:05:00Z",
-        }),
+        proposal: proposal({ status: "REJECTED" }),
         enquiryStatus: "QUOTED",
-        revisionWindowOpen: true,
+        documentKind: "estimate",
       }).canSupersede,
     ).toBe(false);
   });
 
-  it("closes estimate revision when its five-minute window expires", () => {
-    const estimate = proposal({ revision_expires_at: "2026-08-12T08:05:00Z" });
-
+  it("leaves a live estimate revisable however long ago it was sent", () => {
+    // There is no clock left in this policy. Until 1.61.0 an estimate closed to
+    // revision five minutes after submission, which is how a vendor ended up
+    // staring at a price they could not correct while the customer was still
+    // deciding. `submitted_at` is deliberately ancient here: if a window ever
+    // creeps back in, this is the test that fails.
     expect(
       permissionsFor({
-        proposal: estimate,
+        proposal: proposal({ status: "SUBMITTED", submitted_at: "2020-01-01T00:00:00Z" }),
         enquiryStatus: "QUOTED",
-        revisionWindowOpen: true,
+        documentKind: "estimate",
       }).canSupersede,
     ).toBe(true);
+  });
+
+  it("lets a withdrawn estimate be replaced, because the withdraw dialog says so", () => {
+    // "Your enquiry stays open, so you can send a new one." That sentence is on
+    // the confirm step for both document kinds, and the server takes the
+    // submission — so the control has to be there for both too.
+    for (const documentKind of ["quote", "estimate"] as const) {
+      expect(
+        permissionsFor({
+          proposal: proposal({ status: "WITHDRAWN" }),
+          enquiryStatus: "QUOTED",
+          documentKind,
+        }).canSupersede,
+      ).toBe(true);
+    }
+  });
+
+  it("reopens an expired estimate only once the customer asks whether it still stands", () => {
+    // `_assert_project_revision_allowed` allows exactly this one expired case,
+    // and `revalidationNoticeFor` tells the vendor a revision is "the only way
+    // to say yes". Without the ask there is nothing to answer.
+    const expired = proposal({ status: "EXPIRED" });
+
+    expect(
+      permissionsFor({ proposal: expired, enquiryStatus: "QUOTED", documentKind: "estimate" })
+        .canSupersede,
+    ).toBe(false);
     expect(
       permissionsFor({
-        proposal: estimate,
+        proposal: proposal({
+          status: "EXPIRED",
+          revalidation_requested_at: "2026-08-12T08:05:00Z",
+        }),
         enquiryStatus: "QUOTED",
-        revisionWindowOpen: false,
+        documentKind: "estimate",
       }).canSupersede,
-    ).toBe(false);
+    ).toBe(true);
+  });
+
+  it("keeps an estimate the customer settled immutable", () => {
+    for (const status of ["SELECTED", "ACCEPTED", "LAPSED", "REJECTED"] as const) {
+      expect(
+        permissionsFor({
+          proposal: proposal({ status }),
+          enquiryStatus: "QUOTED",
+          documentKind: "estimate",
+        }).canSupersede,
+      ).toBe(false);
+    }
   });
 });
 
@@ -150,7 +192,7 @@ describe("finding the quote after a reload", () => {
   });
 
   it("tells the vendor plainly rather than showing an empty quote", () => {
-    expect(UNREADABLE_PROPOSAL_NOTICE).toMatch(/cannot show you the quote itself/i);
-    expect(UNREADABLE_PROPOSAL_NOTICE).toMatch(/replaces whatever is with the customer/i);
+    expect(UNREADABLE_PROPOSAL_NOTICE).toMatch(/could not load the quote itself/i);
+    expect(UNREADABLE_PROPOSAL_NOTICE).toMatch(/replaces whatever is with them/i);
   });
 });

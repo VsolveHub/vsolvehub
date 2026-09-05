@@ -1,8 +1,8 @@
 "use client";
 
 import { describeError } from "@vsolve/query";
-import { Badge, Button, Card, ErrorState, Select, Spinner } from "@vsolve/ui";
-import { Power } from "lucide-react";
+import { Badge, Button, Card, Dialog, ErrorState, Spinner, cn } from "@vsolve/ui";
+import { Check, ChevronDown, MapPin, Power } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { useApplicationReference } from "@/features/application/reference-queries";
@@ -13,11 +13,13 @@ import {
   presenceStatus,
   type PresenceStatus,
 } from "../model/presence";
+import { announceHeartbeat, claimRecurringHeartbeat } from "../model/heartbeat-lease";
 import {
   clearStoredSession,
   readStoredSession,
   writeStoredSession,
 } from "../model/stored-session";
+import { prepareBookingAlertsFromGesture } from "@/features/notifications/view/booking-alert-audio";
 import { useGoOffline, useGoOnline, useHeartbeat } from "../queries";
 
 /**
@@ -112,13 +114,20 @@ function GoOnlineFailure({ error }: { error: unknown }) {
   );
 }
 
-export function PresencePanel({ consentVersion }: { consentVersion: string | null }) {
+export function PresencePanel({
+  consentVersion,
+  variant = "default",
+}: {
+  consentVersion: string | null;
+  variant?: "default" | "driver";
+}) {
   const reference = useApplicationReference();
   const goOnline = useGoOnline();
   const goOffline = useGoOffline();
   const heartbeat = useHeartbeat();
 
   const [areaId, setAreaId] = useState("");
+  const [openAreaModal, setOpenAreaModal] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [lastBeatAt, setLastBeatAt] = useState<number | null>(null);
   const [locationDenied, setLocationDenied] = useState(false);
@@ -183,6 +192,7 @@ export function PresencePanel({ consentVersion }: { consentVersion: string | nul
             : {}),
         });
         setLastBeatAt(Date.now());
+        announceHeartbeat();
       } catch {
         // Left for the status to report as `stale`. Retrying immediately would
         // hammer a server that is already struggling, and pretending it
@@ -236,6 +246,7 @@ export function PresencePanel({ consentVersion }: { consentVersion: string | nul
         // the server answered just now, which is what freshness is measured
         // from, and it keeps the comparison on a single local clock.
         setLastBeatAt(Date.now());
+        announceHeartbeat();
       })
       .catch(() => {
         if (!cancelled) clearStoredSession();
@@ -252,12 +263,17 @@ export function PresencePanel({ consentVersion }: { consentVersion: string | nul
   useEffect(() => {
     if (sessionId === null) return;
 
+    // While this panel beats — with a location — the app-wide keep-alive in
+    // `usePartnerReceivingOffers` stands down, so the server hears exactly one
+    // cadence wherever the Partner is.
+    const releaseLease = claimRecurringHeartbeat();
     const beat = setInterval(() => void sendHeartbeatRef.current(sessionId), HEARTBEAT_INTERVAL_MS);
     // Advances the clock, so "connection lost" appears on its own rather than
     // waiting for the next successful beat to re-render the screen.
     const refresh = setInterval(() => setNow(Date.now()), 5_000);
 
     return () => {
+      releaseLease();
       clearInterval(beat);
       clearInterval(refresh);
     };
@@ -293,6 +309,7 @@ export function PresencePanel({ consentVersion }: { consentVersion: string | nul
       // timestamp into it reintroduces device-clock skew as apparent staleness.
       setLastBeatAt(Date.now());
       writeStoredSession(session.id);
+      announceHeartbeat();
     }
   }
 
@@ -309,31 +326,227 @@ export function PresencePanel({ consentVersion }: { consentVersion: string | nul
 
   const copy = PRESENCE_COPY[status];
   const canGoOnline = areaId !== "" && consentVersion !== null && !goOnline.isPending;
+  const isOnline = sessionId !== null && (status === "online" || status === "stale");
+  const selectedArea = reference.serviceAreas.find((area) => area.id === areaId);
+
+  if (variant === "driver") {
+    return (
+      <>
+        <DriverPresenceControls
+          status={status}
+          copy={copy}
+          tone={TONE[status]}
+          consentVersion={consentVersion}
+          reference={reference}
+          isRestoring={isRestoring}
+          sessionId={sessionId}
+          areaId={areaId}
+          setAreaId={setAreaId}
+          openAreaModal={openAreaModal}
+          setOpenAreaModal={setOpenAreaModal}
+          canGoOnline={canGoOnline}
+          goOnline={goOnline}
+          goOffline={goOffline}
+          isOnline={isOnline}
+          handleGoOnline={handleGoOnline}
+          handleGoOffline={handleGoOffline}
+        />
+        <AreaPickerModal
+          open={openAreaModal}
+          onOpenChange={setOpenAreaModal}
+          areas={reference.serviceAreas}
+          selectedId={areaId}
+          onSelect={setAreaId}
+        />
+      </>
+    );
+  }
 
   return (
-    <Card className="p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-base font-bold text-text">Your availability</h2>
-        <Badge tone={TONE[status]} dot>
+    <>
+      <Card className="p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-base font-bold text-text">Your availability</h2>
+          <Badge tone={TONE[status]} dot>
+            {copy.label}
+          </Badge>
+        </div>
+
+        <p role="status" className="mt-2 text-sm leading-6 text-text-secondary">
+          {copy.detail}
+        </p>
+
+        {consentVersion === null ? (
+          <p className="mt-4 rounded-card border border-line bg-surface-sunken p-3 text-sm text-text-secondary">
+            Accept the Partner agreements before going online — we record which
+            version you agreed to alongside your location.
+          </p>
+        ) : null}
+
+        {reference.isError ? (
+          <ErrorState
+            inline
+            className="mt-4"
+            title="We could not load your areas"
+            message="You are not online. Check your connection and try again."
+            actionLabel="Try again"
+            onAction={reference.refetch}
+          />
+        ) : null}
+
+        {/*
+          Why the refusal gets its own block rather than only the badge.
+
+          Django refuses `presence/online` with a specific, actionable sentence —
+          "Your required identity documents are not approved" is one a Partner can
+          act on. Folding that into the status turned it into "Not sure: we could
+          not confirm whether you are online", which is the copy for *doubt*. The
+          server was not doubtful; it had decided, and said why. The badge still
+          reports doubt, because a failed attempt genuinely leaves availability
+          unconfirmed — this says what went wrong underneath it.
+        */}
+        {goOnline.isError ? <GoOnlineFailure error={goOnline.error} /> : null}
+
+        {/* The controls wait for the same answer the badge does. Showing "Go
+            online" and swapping it for "Go offline" a moment later is the same
+            flicker, in the part of the card the Partner is reaching for. */}
+        {isRestoring ? (
+          <p className="mt-4 flex items-center gap-2 text-sm text-text-secondary">
+            <Spinner size="sm" />
+            Checking your last session…
+          </p>
+        ) : sessionId === null ? (
+          // DESKTOP ONLY: `lg:max-w-sm`. The area picker and the go-online
+          // button are stacked full-bleed, which is right in a 375px card and
+          // becomes a ~900px-wide button once the shell stops pretending to be a
+          // handset. Capping the stack keeps them a normal control size on a
+          // wide screen; below `lg:` nothing changes.
+          <div className="mt-4 flex flex-col gap-3 lg:max-w-sm">
+            <AreaPickerButton
+              areaName={selectedArea?.name}
+              disabled={reference.isPending || reference.serviceAreas.length === 0}
+              onClick={() => setOpenAreaModal(true)}
+            />
+
+            <Button
+              onPointerDown={() => prepareBookingAlertsFromGesture()}
+              onClick={() => void handleGoOnline()}
+              disabled={!canGoOnline}
+              loading={goOnline.isPending}
+              loadingLabel="Going online"
+            >
+              Go online
+            </Button>
+          </div>
+        ) : (
+          <div className="mt-4 lg:max-w-sm">
+            <Button
+              variant="outline"
+              block
+              icon={<Power size={16} />}
+              onClick={() => void handleGoOffline()}
+              loading={goOffline.isPending}
+              loadingLabel="Going offline"
+            >
+              Go offline
+            </Button>
+          </div>
+        )}
+
+        <p className="mt-3 text-xs leading-5 text-text-muted">
+          While you are online we keep a coarse location so we can offer you nearby
+          work. It stops the moment you go offline.
+        </p>
+      </Card>
+
+      <AreaPickerModal
+        open={openAreaModal}
+        onOpenChange={setOpenAreaModal}
+        areas={reference.serviceAreas}
+        selectedId={areaId}
+        onSelect={setAreaId}
+      />
+    </>
+  );
+}
+
+/**
+ * Uber-inspired driver controls — area picker + large GO toggle.
+ *
+ * Layout-only variant of `PresencePanel`. All session logic stays in the parent;
+ * this component only decides how the same state is drawn on the home screen.
+ */
+function DriverPresenceControls({
+  copy,
+  tone,
+  consentVersion,
+  reference,
+  isRestoring,
+  sessionId,
+  areaId,
+  setOpenAreaModal,
+  canGoOnline,
+  goOnline,
+  goOffline,
+  isOnline,
+  handleGoOnline,
+  handleGoOffline,
+}: {
+  status: PresenceStatus;
+  copy: (typeof PRESENCE_COPY)[PresenceStatus];
+  tone: (typeof TONE)[PresenceStatus];
+  consentVersion: string | null;
+  reference: ReturnType<typeof useApplicationReference>;
+  isRestoring: boolean;
+  sessionId: string | null;
+  areaId: string;
+  setAreaId: (value: string) => void;
+  openAreaModal: boolean;
+  setOpenAreaModal: (open: boolean) => void;
+  canGoOnline: boolean;
+  goOnline: ReturnType<typeof useGoOnline>;
+  goOffline: ReturnType<typeof useGoOffline>;
+  isOnline: boolean;
+  handleGoOnline: () => Promise<void>;
+  handleGoOffline: () => Promise<void>;
+}) {
+  const selectedArea = reference.serviceAreas.find((area) => area.id === areaId);
+
+  return (
+    // DESKTOP ONLY: capped. This is a phone panel whose header row is
+    // `justify-between` — at full desktop width the "Availability" label and the
+    // Offline badge end up ~1300px apart and stop reading as one control.
+    <div className="flex flex-col gap-4 lg:max-w-3xl">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[0.6875rem] font-bold uppercase tracking-[0.08em] text-text-muted">
+            Availability
+          </p>
+          {/*
+            Deliberately not `truncate`. This line is the whole instruction an
+            offline Partner needs — "You will not be offered any jobs until you
+            go online." clipped to "…until you go" at 375px, which reads as a
+            statement of fact rather than a thing to act on. It wraps instead;
+            the badge beside it keeps its width because the row is `items-start`.
+          */}
+          <p role="status" className="mt-0.5 text-sm font-medium text-text">
+            {copy.detail}
+          </p>
+        </div>
+        <Badge tone={tone} dot>
           {copy.label}
         </Badge>
       </div>
 
-      <p role="status" className="mt-2 text-sm leading-6 text-text-secondary">
-        {copy.detail}
-      </p>
-
       {consentVersion === null ? (
-        <p className="mt-4 rounded-card border border-line bg-surface-sunken p-3 text-sm text-text-secondary">
-          Accept the Partner agreements before going online — we record which
-          version you agreed to alongside your location.
+        <p className="rounded-2xl border border-line bg-surface-sunken px-3 py-2.5 text-sm text-text-secondary">
+          Accept the Partner agreements before going online.
         </p>
       ) : null}
 
       {reference.isError ? (
         <ErrorState
           inline
-          className="mt-4"
           title="We could not load your areas"
           message="You are not online. Check your connection and try again."
           actionLabel="Try again"
@@ -341,71 +554,168 @@ export function PresencePanel({ consentVersion }: { consentVersion: string | nul
         />
       ) : null}
 
-      {/*
-        Why the refusal gets its own block rather than only the badge.
-
-        Django refuses `presence/online` with a specific, actionable sentence —
-        "Your required identity documents are not approved" is one a Partner can
-        act on. Folding that into the status turned it into "Not sure: we could
-        not confirm whether you are online", which is the copy for *doubt*. The
-        server was not doubtful; it had decided, and said why. The badge still
-        reports doubt, because a failed attempt genuinely leaves availability
-        unconfirmed — this says what went wrong underneath it.
-      */}
       {goOnline.isError ? <GoOnlineFailure error={goOnline.error} /> : null}
 
-      {/* The controls wait for the same answer the badge does. Showing "Go
-          online" and swapping it for "Go offline" a moment later is the same
-          flicker, in the part of the card the Partner is reaching for. */}
       {isRestoring ? (
-        <p className="mt-4 flex items-center gap-2 text-sm text-text-secondary">
+        <p className="flex items-center justify-center gap-2 py-6 text-sm text-text-secondary">
           <Spinner size="sm" />
           Checking your last session…
         </p>
-      ) : sessionId === null ? (
-        <div className="mt-4 flex flex-col gap-3">
-          <Select
-            aria-label="Area you are working in"
-            value={areaId}
-            onChange={(event) => setAreaId(event.target.value)}
-            disabled={reference.isPending || reference.serviceAreas.length === 0}
-          >
-            <option value="">Choose your area…</option>
-            {reference.serviceAreas.map((area) => (
-              <option key={area.id} value={area.id}>
-                {area.name}
-              </option>
-            ))}
-          </Select>
-
-          <Button
-            onClick={() => void handleGoOnline()}
-            disabled={!canGoOnline}
-            loading={goOnline.isPending}
-            loadingLabel="Going online"
-          >
-            Go online
-          </Button>
-        </div>
       ) : (
-        <div className="mt-4">
-          <Button
-            variant="outline"
-            block
-            icon={<Power size={16} />}
-            onClick={() => void handleGoOffline()}
-            loading={goOffline.isPending}
-            loadingLabel="Going offline"
+        <div className="flex flex-col items-center gap-4">
+          {sessionId === null ? (
+            <AreaPickerButton
+              areaName={selectedArea?.name}
+              disabled={reference.isPending || reference.serviceAreas.length === 0}
+              onClick={() => setOpenAreaModal(true)}
+            />
+          ) : null}
+
+          <button
+            type="button"
+            aria-label={isOnline ? "Go offline" : "Go online"}
+            disabled={
+              isRestoring ||
+              (sessionId === null && !canGoOnline) ||
+              goOnline.isPending ||
+              goOffline.isPending
+            }
+            onPointerDown={() => prepareBookingAlertsFromGesture()}
+            onClick={() => void (sessionId === null ? handleGoOnline() : handleGoOffline())}
+            className={cn(
+              "relative grid size-[5.5rem] place-items-center rounded-full transition-all duration-300 ease-out",
+              "focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-4 focus-visible:outline-action",
+              "disabled:cursor-not-allowed disabled:opacity-50",
+              isOnline
+                ? "bg-[linear-gradient(145deg,#ef4444_0%,#dc2626_100%)] shadow-[0_8px_32px_color-mix(in_oklab,#dc2626_45%,transparent)]"
+                : "bg-[linear-gradient(145deg,var(--color-success-text)_0%,#15803d_100%)] shadow-[0_8px_32px_color-mix(in_oklab,var(--color-success-text)_45%,transparent)]",
+            )}
           >
-            Go offline
-          </Button>
+            {goOnline.isPending || goOffline.isPending ? (
+              <Spinner size="md" className="text-surface" />
+            ) : (
+              <Power
+                size={36}
+                strokeWidth={2.5}
+                className="text-surface"
+                aria-hidden
+              />
+            )}
+            {isOnline ? (
+              <span
+                aria-hidden
+                className="absolute inset-0 rounded-full border-2 border-red-500/30 animate-[vsh-ping_2.4s_ease-out_infinite] motion-reduce:animate-none"
+              />
+            ) : null}
+          </button>
+
+          <p className="text-center text-xs font-semibold uppercase tracking-[0.1em] text-text-muted">
+            {isOnline ? "Tap to go offline" : "Tap to go online"}
+          </p>
         </div>
       )}
+    </div>
+  );
+}
 
-      <p className="mt-3 text-xs leading-5 text-text-muted">
-        While you are online we keep a coarse location so we can offer you nearby
-        work. It stops the moment you go offline.
-      </p>
-    </Card>
+/**
+ * Clean button trigger for opening the area picker modal.
+ */
+function AreaPickerButton({
+  areaName,
+  disabled,
+  onClick,
+}: {
+  areaName?: string;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        "flex h-12 w-full max-w-xs items-center justify-between rounded-2xl border border-line bg-surface px-4 text-sm font-semibold text-text shadow-xs transition-all",
+        "hover:border-line-strong hover:bg-surface-sunken focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action",
+        "disabled:cursor-not-allowed disabled:opacity-50"
+      )}
+    >
+      <span className="flex items-center gap-2.5 min-w-0 truncate">
+        <MapPin className="h-4 w-4 text-signal-600 shrink-0" />
+        <span className={cn("truncate text-sm", areaName ? "font-bold text-navy-900" : "font-medium text-text-muted")}>
+          {areaName ?? "Choose your area…"}
+        </span>
+      </span>
+      <ChevronDown className="h-4 w-4 text-text-muted shrink-0" />
+    </button>
+  );
+}
+
+/**
+ * Interactive pop-up dialog modal for selecting operational service areas.
+ */
+function AreaPickerModal({
+  open,
+  onOpenChange,
+  areas,
+  selectedId,
+  onSelect,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  areas: readonly { id: string; name: string }[];
+  selectedId: string;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Choose Service Area"
+      description="Select the operational area where you want to receive on-duty job offers."
+    >
+      <div className="flex flex-col gap-2 py-2 max-h-[60vh] overflow-y-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {areas.length === 0 ? (
+          <p className="text-sm text-text-secondary py-6 text-center">No service areas available.</p>
+        ) : (
+          areas.map((area) => {
+            const isSelected = area.id === selectedId;
+            return (
+              <button
+                key={area.id}
+                type="button"
+                onClick={() => {
+                  onSelect(area.id);
+                  onOpenChange(false);
+                }}
+                className={cn(
+                  "flex items-center justify-between rounded-2xl p-3.5 text-left transition-all",
+                  isSelected
+                    ? "border-2 border-emerald-500 bg-emerald-50 text-navy-900 font-bold shadow-xs"
+                    : "border border-line bg-surface hover:bg-surface-sunken text-text font-semibold"
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className={cn(
+                      "grid h-8 w-8 place-items-center rounded-xl shrink-0",
+                      isSelected ? "bg-emerald-600 text-white" : "bg-surface-sunken text-text-muted"
+                    )}
+                  >
+                    <MapPin className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold leading-tight text-navy-900">{area.name}</p>
+                    <p className="text-xs text-text-secondary mt-0.5">High booking demand</p>
+                  </div>
+                </div>
+                {isSelected ? <Check className="h-5 w-5 text-emerald-600 shrink-0" /> : null}
+              </button>
+            );
+          })
+        )}
+      </div>
+    </Dialog>
   );
 }

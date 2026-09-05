@@ -7,8 +7,8 @@ import {
   request,
   type Schemas,
 } from "@vsolve/api-client";
-import { M2_FRESHNESS, invalidateForM2Command, m2QueryKeys } from "@vsolve/query";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { invalidateForM2Command, m2QueryKeys } from "@vsolve/query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { getApiClient } from "@/lib/api/browser";
 import type { EnquiryDetail } from "@/features/enquiry/queries";
@@ -46,102 +46,17 @@ import type { EnquiryDetail } from "@/features/enquiry/queries";
  * retry.
  */
 
-export type VisitSlotGrid = Schemas["VisitSlotGrid"];
-export type VisitSlotConfirmation = Schemas["VisitSlotConfirmation"];
 export type SiteVisit = Schemas["SiteVisit"];
 
-/**
- * The grid for one invitation.
- *
- * Re-exported as a named function rather than inlined at four call sites, which
- * is the rule `keys.ts` exists to enforce: a key built inline is how invalidation
- * silently stops working.
- */
-export function visitSlotsKey(invitationId: string) {
-  return m2QueryKeys.visits.slots(invitationId);
-}
+// Partner visit-slot selection was removed from the contract at 1.44.0.
+//
+// `visitSlotsKey`, `usePartnerVisitSlots`, `confirmSlotKey` and
+// `useConfirmVisitSlot` lived here, against
+// `/api/v1/partner/enquiries/{invitation_id}/visit-slots/`. That endpoint no
+// longer exists: BE-2 moved the choice of time to the customer, and a partner
+// now answers a fixed offer through `/enquiries/{id}/accept/`. See
+// `view/fixed-time-offer.tsx` for what replaced the picker.
 
-/**
- * Candidate visit starts for this vendor on this request.
- *
- * Only mounted where an A5 vendor can actually act — `enabled` is the caller's
- * to decide, because an invitation this vendor has already declined has no grid
- * worth drawing and asking for one spends a guaranteed refusal.
- */
-export function usePartnerVisitSlots(invitationId: string, enabled = true) {
-  return useQuery({
-    queryKey: visitSlotsKey(invitationId),
-    queryFn: () =>
-      request(() =>
-        getApiClient().GET("/api/v1/partner/enquiries/{invitation_id}/visit-slots/", {
-          params: { path: { invitation_id: invitationId } },
-        }),
-      ),
-    enabled: enabled && invitationId !== "",
-    // The strictest tier in the table, and the one this read needs: every slot
-    // `id` is a signed token with a TTL, so a cached grid does not merely look
-    // wrong — it offers times the server will refuse to book.
-    ...M2_FRESHNESS.visitSlots,
-    retry: (failureCount, error) =>
-      error instanceof ApiRequestError && [400, 401, 403, 404, 409].includes(error.status)
-        ? false
-        : failureCount < 2,
-  });
-}
-
-/** One stable key per invitation, for the life of that logical confirmation. */
-export function confirmSlotKey(invitationId: string): string {
-  return getStableIdempotencyKey(`m2-visit-slot-confirm:${invitationId}`);
-}
-
-/**
- * Confirm a slot. **This is A5 acceptance.**
- *
- * It takes the quote slot, the soft capacity hold and a hard reservation on the
- * shared availability grid in one command, so the whole enquiry inbox is
- * invalidated on success rather than this row: confirming here changes which
- * *other* enquiries and A1 offers this vendor can still take.
- *
- * `retry: false` for a reason stronger than the usual one. A retry would resend
- * a token that the ordinary failure mode — `m2_visit_slot_unavailable` — has
- * already told us is dead, so it would burn a round trip to earn the same
- * refusal. The recovery is a fresh grid.
- */
-export function useConfirmVisitSlot(invitationId: string) {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (input: { readonly slotToken: string }) =>
-      request(() =>
-        getApiClient().POST("/api/v1/partner/enquiries/{invitation_id}/visit-slots/", {
-          params: {
-            path: { invitation_id: invitationId },
-            header: { "Idempotency-Key": confirmSlotKey(invitationId) },
-          },
-          // The token, exactly as the grid published it. Never reconstructed.
-          body: { slot_id: input.slotToken },
-        }),
-      ),
-    onSuccess: async (confirmation) => {
-      applyVisitToEnquiry(queryClient, invitationId, confirmation.visit);
-      clearIdempotencyKey(`m2-visit-slot-confirm:${invitationId}`);
-      await invalidateForM2Command(queryClient, "confirm_visit_slot", { invitationId });
-      // Wider than the command's own rows on purpose: taking this slot takes a
-      // capacity hold, which changes which *other* enquiries and A1 offers this
-      // vendor can still accept.
-      await queryClient.invalidateQueries({ queryKey: m2QueryKeys.invitations.all });
-    },
-    onError: () => {
-      // The grid is what was wrong, whatever the refusal was. Re-reading it is
-      // the only recovery that can produce a token the server will take.
-      void queryClient.invalidateQueries({ queryKey: visitSlotsKey(invitationId) });
-      void queryClient.invalidateQueries({
-        queryKey: m2QueryKeys.invitations.detail(invitationId),
-      });
-    },
-    retry: false,
-  });
-}
 
 /**
  * Writes a visit straight into the enquiry that owns it.

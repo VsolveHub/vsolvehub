@@ -7,22 +7,19 @@ import { getServiceConfiguration } from "@/features/catalog/queries";
 import { RequirementFlow } from "@/features/requirement/view/requirement-flow";
 
 /**
- * The four-screen requirement — `M2-FE-201..212`.
+ * The three-screen requirement — `M2-FE-201..212`, as revised by the M2-revamp.
  *
- * ## One route for four screens
+ * ## One route for three screens
  *
- * The information architecture lists `/requests/new/what`, `/where-when`,
- * `/details` and `/review` as four routes. They are deliberately not mounted as
- * four, on the precedent of `/book/[service]` and `/checkout`: the flow is one
- * reducer, back is a *screen change* rather than a navigation, and nothing is
- * lost or refetched crossing a step. Four URLs would need the reducer's screen
- * to be readable from the address bar, and `canNavigateTo` exists precisely to
- * refuse a forward jump — a pasted `/requests/new/review` would either skip
- * every guard or bounce, and neither is a route worth having. The flow-weight
- * budget is about screens the Customer walks through, and it is enforced by
- * `SCREENS.length === 4` rather than by a folder count. Recorded in the
- * execution plan §7 so the IA table can be corrected rather than quietly
- * disagreed with.
+ * The screens are deliberately not mounted as separate routes, on the
+ * precedent of `/book/[service]` and `/checkout`: the flow is one reducer,
+ * back is a *screen change* rather than a navigation, and nothing is lost or
+ * refetched crossing a step. Separate URLs would need the reducer's screen to
+ * be readable from the address bar, and `canNavigateTo` exists precisely to
+ * refuse a forward jump — a pasted deep link to the last screen would either
+ * skip every guard or bounce, and neither is a route worth having. The
+ * flow-weight budget is about screens the Customer walks through, and it is
+ * enforced by `SCREENS.length === 3` rather than by a folder count.
  *
  * ## The variant is resolved on the server, before anything is offered
  *

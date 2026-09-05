@@ -80,6 +80,11 @@ def _configuration(
         version=1,
         status=M2VariantConfiguration.Status.ACTIVE,
         question_schema=QUESTION_SCHEMA,
+        material_fulfilment_mode=(
+            M2VariantConfiguration.MaterialFulfilmentMode.NOT_APPLICABLE
+            if variant.booking_archetype == ServiceVariant.BookingArchetype.A3_TIME_BLOCK
+            else M2VariantConfiguration.MaterialFulfilmentMode.CUSTOMER_PROCURES
+        ),
         first_quote_sla_hours=first_quote_sla_hours,
         quote_delivery_sla_hours=quote_delivery_sla_hours,
     )
@@ -205,6 +210,34 @@ def test_an_unknown_answer_is_rejected_as_incomplete_not_as_a_server_error() -> 
         services.submit_requirement(requirement=requirement, actor=requirement.customer)
 
 
+def test_a_draft_discards_an_answer_carried_over_from_another_service() -> None:
+    """A crew form route change must not poison the new service's saved answer set."""
+    variant = _variant(ServiceVariant.BookingArchetype.A3_TIME_BLOCK)
+    _configuration(variant)
+    customer = _customer()
+
+    requirement = services.create_draft(
+        customer=customer,
+        variant=variant,
+        answers={
+            "work_type": "masonry-helper",
+            "worker_count": 4,
+            "duration_days": 2,
+        },
+    )
+    services.update_draft(
+        requirement=requirement,
+        answers={
+            "work_type": "masonry-helper",
+            "worker_count": 5,
+            "duration_days": 3,
+        },
+    )
+
+    requirement.refresh_from_db()
+    assert requirement.answers == {"worker_count": 5, "duration_days": 3}
+
+
 def test_a_variant_without_an_active_configuration_cannot_take_requests() -> None:
     variant = _variant(ServiceVariant.BookingArchetype.A3_TIME_BLOCK)
 
@@ -219,6 +252,7 @@ def test_an_a1_variant_is_not_a_workforce_request() -> None:
         version=1,
         status=M2VariantConfiguration.Status.ACTIVE,
         question_schema=QUESTION_SCHEMA,
+        material_fulfilment_mode=M2VariantConfiguration.MaterialFulfilmentMode.NOT_APPLICABLE,
     )
 
     with pytest.raises(LifecycleNotSupportedError):

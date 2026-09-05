@@ -83,6 +83,7 @@ from apps.partners.models import (
     PartnerService,
     PartnerServiceArea,
 )
+from apps.partners.services import _ensure_partner_role
 from apps.payouts.services import (
     apply_payout_result,
     approve_payout_batch,
@@ -349,6 +350,10 @@ class Command(BaseCommand):
             phone_number=f"{PARTNER_PHONE_PREFIX}{suffix:04d}",
             defaults={"full_name": f"Demo Partner {suffix}"},
         )
+        # A profile and even an APPROVED application are not an authentication grant.
+        # Partner endpoints require an active `partner` UserRole, so a seed that skips the
+        # application command must preserve that command's role invariant explicitly.
+        _ensure_partner_role(user)
         partner, _ = PartnerProfile.objects.get_or_create(
             user=user, defaults={"display_name": f"Demo Partner {suffix}", "experience_years": 3}
         )
@@ -829,6 +834,7 @@ class Command(BaseCommand):
             user, _ = User.objects.get_or_create(
                 phone_number=f"{APPLICANT_PHONE_PREFIX}{idx:04d}", defaults={"full_name": name}
             )
+            _ensure_partner_role(user)
             partner, _ = PartnerProfile.objects.get_or_create(
                 user=user, defaults={"display_name": name, "experience_years": 2}
             )

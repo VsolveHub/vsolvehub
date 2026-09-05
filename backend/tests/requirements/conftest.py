@@ -49,9 +49,10 @@ from apps.partners.models import (
     PartnerServiceArea,
     Skill,
 )
-from apps.requirements import matching, proposals, services
+from apps.requirements import access, matching, proposals, services
 from apps.requirements.models import (
     CustomerRequirement,
+    M2AccessPrice,
     Proposal,
     RequirementAttachmentUpload,
     SiteVisit,
@@ -214,6 +215,11 @@ def _variant(
                 {"code": "deliverable", "kind": "TEXT"},
             ]
         },
+        material_fulfilment_mode=(
+            M2VariantConfiguration.MaterialFulfilmentMode.NOT_APPLICABLE
+            if archetype == ServiceVariant.BookingArchetype.A3_TIME_BLOCK
+            else M2VariantConfiguration.MaterialFulfilmentMode.CUSTOMER_PROCURES
+        ),
         first_quote_sla_hours=sla_hours,
         quote_delivery_sla_hours=None if sla_hours is None else sla_hours * 3,
         max_quotes=MAX_QUOTES,
@@ -429,6 +435,30 @@ def submitted_requirement(
     archetype: str = ServiceVariant.BookingArchetype.A3_TIME_BLOCK,
 ) -> CustomerRequirement:
     requirement = draft_requirement(world=world, customer=customer, archetype=archetype)
+    if archetype == ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT:
+        M2AccessPrice.objects.get_or_create(
+            kind=M2AccessPrice.Kind.A5_VISIT_PLAN,
+            plan_size=1,
+            effective_from=timezone.localdate() - timedelta(days=1),
+            defaults={
+                "amount_paise": 9_900,
+                "vendor_payout_basis_points": 8_000,
+            },
+        )
+        configuration = requirement.configuration
+        assert configuration is not None
+        if not configuration.visit_duration_minutes:
+            configuration.visit_duration_minutes = 60
+            configuration.save(update_fields=("visit_duration_minutes",))
+        plan = access.choose_visit_plan(
+            requirement_id=requirement.id,
+            plan_size=1,
+            actor=customer or world.customer,
+        )
+        plan.shares.update(
+            requested_start=timezone.now() + timedelta(days=2),
+            duration_minutes=60,
+        )
     return services.submit_requirement(
         requirement=requirement,
         actor=customer or world.customer,

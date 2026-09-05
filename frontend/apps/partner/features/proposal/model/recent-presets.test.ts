@@ -1,3 +1,6 @@
+// @vitest-environment jsdom
+// The module under test is a localStorage convenience; every case exercises the
+// store, and the node environment has no `window` for `afterEach` to clear.
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { byRecentFirst, rememberPreset } from "./recent-presets";

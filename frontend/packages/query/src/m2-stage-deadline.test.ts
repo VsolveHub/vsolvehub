@@ -8,6 +8,16 @@ const stage: Schemas["EngagementStage"] = {
   position: 1,
   label: "First fix",
   amount_paise: 100_000,
+  // Required since 1.44.0: an installment now publishes the immutable split it
+  // was funded on, so a receipt can be reproduced from the stage alone.
+  funding_breakdown: {
+    partner_service_paise: 100_000,
+    tax_paise: 18_000,
+    platform_fee_paise: 0,
+    total_due_paise: 118_000,
+  },
+  // Nullable since 1.49.0: a project milestone has no shift-day summary.
+  shift_summary: null,
   kind: "WORK",
   starts_on: "2026-08-21",
   duration_days: 5,

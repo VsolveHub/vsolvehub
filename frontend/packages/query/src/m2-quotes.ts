@@ -67,7 +67,18 @@ export type VisitNoShowParty = Schemas["VisitNoShowPartyEnum"];
 
 export type CustomerProposal = Schemas["CustomerProposal"];
 export type CustomerQuoteList = Schemas["CustomerQuoteList"];
+/** A Customer's ask for a different estimate (contract 1.47.0). Carries no price. */
+export type RevisionRequest = Schemas["RevisionRequest"];
+export type RevisionRequestReasonCode = Schemas["RevisionRequestReasonCodeEnum"];
+/** One clarification question and its single answer, in either direction. */
+export type RequirementQuestion = Schemas["RequirementQuestion"];
+export type RequirementQuestionList = Schemas["RequirementQuestionList"];
 export type ProposalStage = Schemas["ProposalStage"];
+export type ProposalMaterialLine = Schemas["ProposalMaterialLine"];
+export type ProposalItemLine = Schemas["ProposalItemLine"];
+export type ProposalLabourLine = Schemas["ProposalLabourLine"];
+export type ProposalOtherCharge = Schemas["ProposalOtherCharge"];
+export type EstimateType = Schemas["EstimateTypeEnum"];
 export type ProposalStatus = Schemas["ProposalStatusEnum"];
 export type ProposalTaxBasis = Schemas["ProposalTaxBasisEnum"];
 export type ProposalUsability = Schemas["ProposalUsabilityEnum"];
@@ -501,6 +512,18 @@ export interface VendorIdentity {
   vendorType: string | null;
   isVerified: boolean;
   displayName: string | null;
+  /**
+   * What a Customer may weigh before choosing (contract 1.47.0). Read at request
+   * time from completed engagements and Customer ratings; never an input to
+   * matching. `ratingAverage` is null until somebody has rated this vendor —
+   * a star count nobody gave is the one thing this must not invent.
+   */
+  ratingAverage: number | null;
+  ratingCount: number;
+  jobsCompleted: number;
+  experienceYears: number;
+  /** ISO date the vendor joined, or null on a payload that predates 1.47.0. */
+  activeSince: string | null;
 }
 
 export function readVendorIdentity(vendor: unknown): VendorIdentity {
@@ -512,6 +535,11 @@ export function readVendorIdentity(vendor: unknown): VendorIdentity {
     const value = source[key];
     return typeof value === "string" && value !== "" ? value : null;
   };
+  const count = (key: string): number => {
+    const value = source[key];
+    return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : 0;
+  };
+  const rating = source["rating_average"];
   return {
     partnerId: text("partner_id"),
     vendorType: text("vendor_type"),
@@ -519,6 +547,12 @@ export function readVendorIdentity(vendor: unknown): VendorIdentity {
     // verified is the one direction of this field that can hurt somebody.
     isVerified: source["is_verified"] === true,
     displayName: text("display_name"),
+    ratingAverage:
+      typeof rating === "number" && Number.isFinite(rating) && rating > 0 ? rating : null,
+    ratingCount: count("rating_count"),
+    jobsCompleted: count("jobs_completed"),
+    experienceYears: count("experience_years"),
+    activeSince: text("active_since"),
   };
 }
 
@@ -943,18 +977,15 @@ export function hasFallenBackToQuotes(state: RateCardState): boolean {
  * a Customer who closed the tab mid-UPI holds a requirement id and this answers
  * from that alone.
  *
- * ## `awaiting_payment` is mapped and currently unreachable
+ * ## `awaiting_payment` is reachable
  *
- * `OFFER_ACCEPTED` is the model default and no code path saves it:
- * `accept_crew_offer` creates no `BookingFee` row at all, and the one
- * construction site overwrites the status to `PENDING` first — Session C,
- * `frontend-execution-plan.md` §7, 14 August. While a lead holds the job the
- * read therefore carries **no fee**, and this answers `none`.
+ * `hold_booking_fee` (`backend/apps/requirements/booking_fees.py`) opens the
+ * fee in `OFFER_ACCEPTED` the moment a lead takes the job, so while a lead holds
+ * it the read carries a fee and this answers `awaiting_payment`. (Until that
+ * writer existed the row was absent and this answered `none` — the gap Session
+ * C logged in `frontend-execution-plan.md` §7 on 14 August, since closed.)
  *
- * The mapping stays, because a status published in the enum is part of the
- * contract and dropping it would leave a real value falling to the fail-closed
- * branch the day the server starts writing it. What must not happen is a
- * *screen* gated on it: "may I pay now" is answered by
+ * Even so, no *screen* is gated on this phase: "may I pay now" is answered by
  * `RateCardState.checkout_available`, which is the field that knows, and
  * {@link canCheckOutBookingFee} is the only predicate any control uses.
  */
@@ -1040,13 +1071,12 @@ export function isRateCardSettled(state: RateCardState): boolean {
  * guessing between a refund and a forfeit. So the control is offered and the
  * outcome is the server's to state.
  *
- * `active` is the only phase this reaches today — see {@link bookingFeePhase} on
- * why `awaiting_payment` never arrives. That matches the endpoint: with no fee
- * row, cancel answers `m2_booking_fee_not_chargeable`, so offering the control
- * earlier would offer a button that cannot work. The consequence is real and
- * logged in the execution plan §7: a Customer whose booking is still out to the
- * cascade has **no** published way to call it off, because no requirement-level
- * cancel exists for `MATCHING` either.
+ * Reached in `awaiting_payment` (a lead is holding the job and
+ * `hold_booking_fee` has opened the fee) and in `active`. With no fee row —
+ * the booking still out to the cascade — cancel answers
+ * `m2_booking_fee_not_chargeable`, so the control is not offered there; that
+ * Customer has **no** published way to call it off, because no
+ * requirement-level cancel exists for `MATCHING` either (execution plan §7).
  */
 export function canCancelBooking(state: RateCardState): boolean {
   const phase = bookingFeePhase(state);

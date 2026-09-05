@@ -4,51 +4,217 @@ import { describe, expect, it } from "vitest";
 import type { QuoteCardView } from "../adapters";
 import { QuoteCard } from "./quote-card";
 
-function estimate(): QuoteCardView {
+function estimate(overrides: Partial<QuoteCardView> = {}): QuoteCardView {
   return {
-    proposalId: "proposal-chosen",
-    vendorName: "M2 Demo Vendor",
+    proposalId: "proposal-1",
+    vendorName: "Ravi Interiors",
     vendorType: "Company",
     isVerified: true,
-    status: "ACCEPTED",
-    isSelectable: false,
+    trust: {
+      ratingAverage: 4.8,
+      ratingCount: 120,
+      jobsCompleted: 120,
+      experienceYears: 9,
+      activeSinceLabel: "since 2017",
+    },
+    status: "SUBMITTED",
+    isSelectable: true,
     isExpired: false,
     isOutOfBudget: false,
     hasAskedForRevalidation: false,
     revision: 1,
-    totalLabel: "₹10,000",
-    taxLabel: "₹0",
+    totalLabel: "₹1,84,000",
+    taxLabel: "₹28,000",
     taxBasis: "INCLUSIVE",
-    payableLabel: "₹10,000",
-    payablePaise: 1_000_000,
+    payableLabel: "₹1,84,000",
+    payablePaise: 18_400_000,
+    discountKind: null,
+    discountPercent: null,
+    discountBaseLabel: "â‚¹1,84,000",
+    discountBasePaise: 18_400_000,
+    discountLabel: "â‚¹0",
+    discountPaise: 0,
     rateLabel: null,
     minimumDays: null,
     workerCount: null,
-    stages: [],
-    inclusions: [],
-    exclusions: [],
-    warrantyTerms: null,
-    commissionTreatment: null,
-    validUntil: null,
+    estimateType: "ITEM_WISE",
+    itemLines: [],
+    labourLines: [],
+    otherCharges: [],
+    stages: [
+      { title: "Start", deliverable: "Demolition done", amountLabel: "₹46,000", totalDuePaise: 4_600_000, endsOn: null },
+      { title: "Handover", deliverable: null, amountLabel: "₹1,38,000", totalDuePaise: 13_800_000, endsOn: "2026-10-14" },
+    ],
+    materials: [],
+    materialList: [],
+    includedSupplyList: [],
+    materialFulfilmentMode: "CUSTOMER_PROCURES",
+    brandTierLabel: null,
+    completionDays: null,
+    inclusions: ["Demolition & debris", "Waterproofing", "Plumbing rework"],
+    exclusions: ["Sanitaryware"],
+    scopeSummary: "Full strip-out and retile.",
+    warrantyTerms: "1 year on workmanship",
+    validUntil: "2026-09-20T18:29:59.000Z",
+    validityDaysLeft: 6,
     submittedAt: "2026-08-21T08:00:00Z",
     siteVisitId: "visit-1",
     visitCompletedAt: "2026-08-21T07:30:00Z",
+    questions: [],
+    revisionRequest: null,
+    ...overrides,
   };
 }
 
-describe("chosen estimate", () => {
-  it("keeps the persisted choice highlighted when comparison is revisited", () => {
-    const { container } = render(
+const hrefs = { detailHref: "/estimate", questionsHref: "/estimate/questions" };
+
+describe("the estimate card", () => {
+  it("leads with who, how trusted, what it costs and what it costs to start", () => {
+    render(<QuoteCard card={estimate()} index={0} isPicked={false} isRevalidating={false} {...hrefs} />);
+
+    expect(screen.getByRole("heading", { name: "Ravi Interiors" })).toBeInTheDocument();
+    // "since 2017" is dropped when a tenure figure is present: "9 yrs · since 2017"
+    // says two different things about the same professional.
+    expect(screen.getByText("★ 4.8 (120) · 120 jobs · 9 yrs in trade")).toBeInTheDocument();
+    expect(screen.getByText("₹1,84,000")).toBeInTheDocument();
+    // The first stage's own amount — `stages[0].amount_paise`, never a share computed here.
+    expect(screen.getByText("₹46,000")).toBeInTheDocument();
+    expect(screen.getByText("Ends 14 Oct")).toBeInTheDocument();
+    expect(screen.getByText("Valid 6 more days")).toBeInTheDocument();
+  });
+
+  it("names what the other estimates include and this one does not, as a comparison", () => {
+    render(
       <QuoteCard
         card={estimate()}
         index={0}
         isPicked={false}
-        isChosen
         isRevalidating={false}
+        scopeGaps={["False ceiling", "Debris disposal"]}
+        {...hrefs}
       />,
     );
 
-    expect(screen.getByText("Chosen")).toBeInTheDocument();
-    expect(container.querySelector("article")).toHaveClass("ring-selected");
+    expect(screen.getByText(/Leaves out:/)).toBeInTheDocument();
+    expect(screen.getByText(/False ceiling, Debris disposal/)).toBeInTheDocument();
+  });
+
+  it("offers a free fresh price on an expired estimate, and says when it has been asked for", () => {
+    const { rerender } = render(
+      <QuoteCard card={estimate({ isExpired: true })} index={0} isPicked={false} isRevalidating={false} onRevalidate={() => undefined} {...hrefs} />,
+    );
+    expect(screen.getByRole("button", { name: "Ask for a fresh price — free" })).toBeInTheDocument();
+
+    rerender(
+      <QuoteCard card={estimate({ isExpired: true, hasAskedForRevalidation: true })} index={0} isPicked={false} isRevalidating={false} onRevalidate={() => undefined} {...hrefs} />,
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("Fresh price asked for");
+  });
+
+  it("withholds the revision control while a request is already open", () => {
+    render(
+      <QuoteCard
+        card={estimate({ revisionRequest: { id: "r1", status: "OPEN", isPriceAsk: false, reasonLabel: "Leave something out", excludedItems: [], note: null, declineNote: null, requestedDiscountPercent: null, counteredDiscountPercent: null, createdAt: "2026-08-22T08:00:00Z" } })}
+        index={0}
+        isPicked={false}
+        isRevalidating={false}
+        onRequestRevision={() => undefined}
+        {...hrefs}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: "Ask for a revision" })).not.toBeInTheDocument();
+    expect(screen.getByText("Revision asked for")).toBeInTheDocument();
+  });
+
+  it("says what to buy as one line that opens into the list, with no prices", () => {
+    render(
+      <QuoteCard
+        card={estimate({
+          materialList: [
+            { title: "Modular switch", spec: "16 A, white", quantityLabel: "5 Nos", note: null },
+            { title: "PVC conduit", spec: null, quantityLabel: "20 metre", note: "any brand" },
+          ],
+        })}
+        index={0}
+        isPicked={false}
+        isRevalidating={false}
+        {...hrefs}
+      />,
+    );
+
+    expect(screen.getByText("What you need to buy · 2 items")).toBeInTheDocument();
+    expect(screen.getByText("Modular switch")).toBeInTheDocument();
+    expect(screen.getByText("16 A, white")).toBeInTheDocument();
+    expect(screen.getByText("5 Nos")).toBeInTheDocument();
+    expect(screen.getByText("any brand")).toBeInTheDocument();
+  });
+
+  it("shows no buy line when the list is empty", () => {
+    render(<QuoteCard card={estimate({ materialList: [] })} index={0} isPicked={false} isRevalidating={false} {...hrefs} />);
+
+    expect(screen.queryByText(/What you need to buy/)).not.toBeInTheDocument();
+  });
+
+  it("makes a turnkey decoration estimate clear without showing a shopping list", () => {
+    render(
+      <QuoteCard
+        card={estimate({
+          materialFulfilmentMode: "PARTNER_TURNKEY",
+          includedSupplyList: [
+            { title: "Floral entrance arch", spec: "Fresh flowers", quantityLabel: "1 set", note: null },
+          ],
+        })}
+        index={0}
+        isPicked={false}
+        isRevalidating={false}
+        {...hrefs}
+      />,
+    );
+
+    expect(screen.getByText("Materials, setup & removal included")).toBeInTheDocument();
+    expect(screen.queryByText(/What you need to buy/)).not.toBeInTheDocument();
+  });
+
+  it("counts the professional's questions waiting on the customer", () => {
+    render(
+      <QuoteCard
+        card={estimate({
+          questions: [
+            { id: "q1", askedByRole: "VENDOR", question: "Old tiling off?", answer: null, askedAt: "2026-08-22T08:00:00Z", answeredAt: null },
+          ],
+        })}
+        index={0}
+        isPicked={false}
+        isRevalidating={false}
+        {...hrefs}
+      />,
+    );
+    expect(screen.getByText("1 question for you")).toBeInTheDocument();
+  });
+
+  it("shows an applied overall discount as part of the estimate price", () => {
+    render(
+      <QuoteCard
+        card={estimate({
+          revision: 2,
+          payableLabel: "₹1,74,800",
+          payablePaise: 17_480_000,
+          discountKind: "PERCENT",
+          discountPercent: 5,
+          discountBaseLabel: "₹1,84,000",
+          discountBasePaise: 18_400_000,
+          discountLabel: "₹9,200",
+          discountPaise: 920_000,
+        })}
+        index={0}
+        isPicked={false}
+        isRevalidating={false}
+        {...hrefs}
+      />,
+    );
+
+    expect(screen.getByText("5% off")).toBeInTheDocument();
+    expect(screen.getByText("You save ₹9,200")).toBeInTheDocument();
+    expect(screen.getByText("₹1,84,000")).toHaveClass("line-through");
   });
 });

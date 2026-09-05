@@ -1,20 +1,18 @@
 "use client";
 
 import { ApiRequestError } from "@vsolve/api-client";
-import { useAuthGuard, useServerCountdown, type Countdown } from "@vsolve/query";
-import { ErrorState, Spinner, cn, formatMoney } from "@vsolve/ui";
+import { useServerCountdown, type Countdown } from "@vsolve/query";
+import { Badge, ErrorState, Spinner, cn, formatMoney } from "@vsolve/ui";
 import Link from "next/link";
 import { useSyncExternalStore, type ReactNode } from "react";
 
 import { Pictogram, type PictogramName } from "@/components/pictogram";
+import { ApplicationOverview } from "@/features/application/view/application-overview";
 import { usePartnerApplication } from "@/features/application/queries";
-import { ReadinessChecklist } from "@/features/application/view/readiness-checklist";
-import { ApplicationStatusBanner } from "@/features/application/view/status-banner";
+
 import { usePartnerPerformance, type PartnerPerformance } from "@/features/earnings/queries";
 import { readStoredSession } from "@/features/presence/model/stored-session";
 import { PartnerPresence } from "@/features/presence/view/partner-presence";
-import { PARTNER_ROLE, SwitchToPartner } from "@/features/session/partner-shell";
-import { getApiClient } from "@/lib/api/browser";
 
 import type { WorkItem } from "../model/work-item";
 import { useWorkStack } from "../queries";
@@ -41,12 +39,10 @@ import { WaitingRadar } from "./waiting-radar";
  * `docs/superpowers/specs/2026-08-19-partner-tap-first-redesign-design.md`.
  */
 
-const PRIMARY_LINK =
-  "inline-flex min-h-12 items-center rounded-control bg-action px-7 font-semibold text-action-text hover:bg-action-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action";
 
 function Home({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <main className="mx-auto w-full max-w-2xl px-4 py-6">
+    <main className="mx-auto w-full max-w-2xl px-4 py-6 lg:max-w-5xl lg:px-8 lg:py-10">
       <h1 className="text-2xl font-bold text-text">{title}</h1>
       <div className="mt-5 flex flex-col gap-5">{children}</div>
     </main>
@@ -55,18 +51,14 @@ function Home({ title, children }: { title: string; children: ReactNode }) {
 
 export function WorkHome() {
   const query = usePartnerApplication();
-  const guard = useAuthGuard(getApiClient());
 
   const isMissing = query.error instanceof ApiRequestError && query.error.status === 404;
 
   if (query.isPending) {
     return (
-      <Home title="Your work">
-        <p className="flex items-center gap-2 text-text-secondary">
-          <Spinner size="sm" />
-          Loading your account…
-        </p>
-      </Home>
+      <div className="mx-auto w-full max-w-md px-4 py-6 lg:max-w-3xl lg:px-8 lg:py-10">
+        <ApplicationOverview />
+      </div>
     );
   }
 
@@ -83,77 +75,16 @@ export function WorkHome() {
     );
   }
 
-  // A 404 is a state, not a failure: this person has never applied.
-  if (isMissing || query.data === undefined) {
+  // A 404 or non-approved application renders the full ApplicationOverview
+  if (isMissing || query.data === undefined || query.data.status !== "APPROVED") {
     return (
-      <Home title="Start your application">
-        <p className="max-w-prose text-sm leading-6 text-text-secondary">
-          It takes a few minutes. You can stop and come back — nothing is sent for
-          review until you choose to send it.
-        </p>
-        <div>
-          <Link href="/apply/about" className={PRIMARY_LINK}>
-            Begin
-          </Link>
-        </div>
-      </Home>
-    );
-  }
-
-  const application = query.data;
-
-  if (application.status === "APPROVED") {
-    /*
-      Django selects the alphabetically first grant at login, so a Partner who
-      is also a Customer arrives acting as `customer` and every work request
-      would 403. The stack is withheld until the session is acting as Partner —
-      showing it and letting each request fail is the version of this screen
-      that reads as "the app is broken".
-    */
-    return guard.activeRole === PARTNER_ROLE ? (
-      <WorkStack />
-    ) : (
-      <Home title="Your work">
-        <SwitchToPartner inline />
-      </Home>
-    );
-  }
-
-  if (application.status === "SUSPENDED" || application.status === "OFFBOARDED") {
-    // No work and no presence control: both are refused by Django in these
-    // states, and an appeal runs through support rather than this screen.
-    return (
-      <Home title="Your account">
-        <ApplicationStatusBanner application={application} />
-      </Home>
-    );
-  }
-
-  if (application.status === "SUBMITTED" || application.status === "UNDER_REVIEW") {
-    return (
-      <Home title="Your application">
-        <ApplicationStatusBanner application={application} />
-        <p className="max-w-prose text-sm leading-6 text-text-secondary">
-          Job offers start once a reviewer has approved you. There is nothing
-          waiting on you in the meantime, and you do not need to check back — we
-          will message you.
-        </p>
-      </Home>
-    );
-  }
-
-  // DRAFT and CHANGES_REQUIRED: the work is theirs, and it is on `/apply`.
-  return (
-    <Home title="Your application">
-      <ApplicationStatusBanner application={application} />
-      <ReadinessChecklist application={application} />
-      <div className="border-t border-line pt-4">
-        <Link href="/apply/review" className={PRIMARY_LINK}>
-          Continue your application
-        </Link>
+      <div className="mx-auto w-full max-w-md px-4 py-6 lg:max-w-3xl lg:px-8 lg:py-10">
+        <ApplicationOverview />
       </div>
-    </Home>
-  );
+    );
+  }
+
+  return <WorkStack />;
 }
 
 /* --------------------------------------------------------------------------
@@ -195,26 +126,53 @@ function WorkStack() {
   );
 
   return (
-    <main className="flex min-h-[calc(100dvh-9rem)] flex-col bg-[linear-gradient(180deg,var(--color-warm-25)_0%,var(--color-canvas)_100%)]">
+    <main className="relative flex min-h-[calc(100dvh-3.5rem)] flex-col bg-[var(--color-ink-900)]">
       <h1 className="sr-only">Your work</h1>
 
-      <div className="flex flex-col gap-3.5 px-4 pt-3.5">
-        {/* The one presence control in the app, shared with `/me` rather than
-            copied — see `PartnerPresence`'s own reasoning against a second one.
-            First on the screen because an offline Partner has exactly one thing
-            worth doing here, and every number below it is history until they do. */}
-        <PartnerPresence />
-
-        <TodayPlate
-          netPaise={performance.data?.today_net_paise ?? null}
-          jobs={performance.data?.today_jobs ?? null}
+      {/* Map-style hero — earnings front and centre */}
+      <div className="relative flex shrink-0 flex-col px-4 pb-12 pt-6 sm:pt-7">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 opacity-[0.07]"
+          style={{
+            backgroundImage:
+              "linear-gradient(var(--color-surface) 1px, transparent 1px), linear-gradient(90deg, var(--color-surface) 1px, transparent 1px)",
+            backgroundSize: "28px 28px",
+          }}
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-[linear-gradient(180deg,transparent_0%,var(--color-ink-900)_100%)]"
         />
 
-        <MonthStrip performance={performance.data ?? null} />
+        {/*
+          The banner's colour, grid texture and bottom fade stay full-bleed on
+          the parent; only the figures inside are centred and capped. Capping the
+          banner itself would have put a hard seam where the texture stopped.
+          Below `lg:` this wrapper is a plain block and changes nothing.
+        */}
+        <div className="relative lg:mx-auto lg:w-full lg:max-w-7xl lg:px-4">
+          <TodayPlate
+            netPaise={performance.data?.today_net_paise ?? null}
+            jobs={performance.data?.today_jobs ?? null}
+          />
+
+          <MonthStrip performance={performance.data ?? null} />
+        </div>
       </div>
 
-      <div className="flex flex-1 flex-col gap-3.5 px-4 pt-4 pb-3">
-        <StackBody stack={stack} needsYou={needsYou} />
+      {/* Bottom sheet — availability + work stack */}
+      <div className="relative -mt-6 flex flex-1 flex-col rounded-t-[1.75rem] bg-surface shadow-[0_-12px_48px_color-mix(in_oklab,var(--color-ink-900)_25%,transparent)]">
+        <div aria-hidden className="mx-auto mt-3 h-1 w-10 rounded-full bg-line" />
+
+        {/* The white sheet spans the viewport; its contents stay a readable width. */}
+        <div className="px-4 pt-4 pb-2 lg:mx-auto lg:w-full lg:max-w-7xl lg:px-8">
+          <PartnerPresence variant="driver" />
+        </div>
+
+        <div className="flex flex-1 flex-col gap-3 px-4 pb-4 pt-2 lg:mx-auto lg:w-full lg:max-w-7xl lg:px-8">
+          <StackBody stack={stack} needsYou={needsYou} />
+        </div>
       </div>
     </main>
   );
@@ -239,7 +197,7 @@ function MonthStrip({ performance }: { performance: PartnerPerformance | null })
   if (performance === null) return null;
 
   return (
-    <div className="grid grid-cols-3 gap-2">
+    <div className="relative z-10 mt-3 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <Metric label="This month" value={formatMoney(performance.month_net_paise)} />
       <Metric
         label={performance.month_jobs === 1 ? "Job done" : "Jobs done"}
@@ -252,11 +210,11 @@ function MonthStrip({ performance }: { performance: PartnerPerformance | null })
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex flex-col gap-0.5 rounded-card border border-line bg-surface px-3 py-2.5">
-      <span className="truncate text-[1.0625rem] font-extrabold leading-none tracking-[-0.02em] text-text">
+    <div className="flex min-w-[7.5rem] shrink-0 snap-start flex-col gap-0.5 rounded-2xl border border-surface/10 bg-surface/8 px-3.5 py-2.5 backdrop-blur-sm">
+      <span className="truncate text-[1.0625rem] font-extrabold leading-none tracking-[-0.02em] text-surface">
         {value}
       </span>
-      <span className="truncate text-[0.6875rem] font-semibold text-text-muted">{label}</span>
+      <span className="truncate text-[0.6875rem] font-medium text-surface/55">{label}</span>
     </div>
   );
 }
@@ -305,11 +263,11 @@ function StackBody({
 
   return (
     <section className="flex flex-col gap-2.5">
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-text-muted">
+      <div className="flex items-baseline justify-between gap-3 px-0.5">
+        <h2 className="text-xs font-bold uppercase tracking-[0.08em] text-text-muted">
           Needs you
         </h2>
-        <span className="text-[0.6875rem] font-bold text-text-muted">
+        <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-[0.6875rem] font-bold tabular-nums text-text-muted">
           {needsYou.length}
         </span>
       </div>
@@ -364,36 +322,35 @@ function subscribeToNothing(): () => void {
  */
 function TodayPlate({ netPaise, jobs }: { netPaise: number | null; jobs: number | null }) {
   return (
-    <div className="flex items-center gap-3 rounded-card bg-[linear-gradient(160deg,var(--color-navy-700)_0%,var(--color-navy-900)_100%)] p-3.5 shadow-card">
-      <Pictogram name="days" size="lg" className="shrink-0 text-action-hover" />
-      <span className="flex flex-col gap-px">
-        <span className="text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-navy-200">
-          Earned today
-        </span>
-        <span className="text-[2rem] font-extrabold leading-none tracking-[-0.02em] text-surface">
+    <div className="relative z-10 flex flex-col gap-1 pt-2">
+      <span className="text-[0.6875rem] font-bold uppercase tracking-[0.1em] text-surface/50">
+        Earned today
+      </span>
+      <div className="flex items-end justify-between gap-3 min-w-0">
+        <span
+          data-numeric
+          className="text-[clamp(1.875rem,10vw,3.5rem)] font-extrabold leading-none tracking-[-0.03em] text-surface truncate min-w-0"
+        >
           {netPaise === null ? "—" : formatMoney(netPaise)}
         </span>
-      </span>
-      {/* Zero is a real answer and says so. A blank space where a count belongs
-          reads as a screen that failed to load, which is the one thing an idle
-          Partner must not conclude. */}
-      {jobs === null ? null : (
-        <span className="ml-auto flex shrink-0 flex-col items-end text-[0.8125rem] font-semibold leading-snug text-navy-200">
-          {jobs === 0 ? (
-            <>
-              <span>No jobs</span>
-              <span>yet today</span>
-            </>
-          ) : (
-            <>
-              <span>
-                {jobs} {jobs === 1 ? "job" : "jobs"}
-              </span>
-              <span>finished</span>
-            </>
-          )}
-        </span>
-      )}
+        {jobs === null ? null : (
+          <span className="mb-1 flex shrink-0 flex-col items-end text-right text-sm font-medium leading-snug text-surface/55">
+            {jobs === 0 ? (
+              <>
+                <span>No jobs</span>
+                <span>yet today</span>
+              </>
+            ) : (
+              <>
+                <span>
+                  {jobs} {jobs === 1 ? "job" : "jobs"}
+                </span>
+                <span>finished</span>
+              </>
+            )}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -513,6 +470,35 @@ function whenLabel(item: WorkItem): string | null {
   ).format(at);
 }
 
+function dateLabel(item: WorkItem): string | null {
+  if (item.whenIso === null) return null;
+  const at = new Date(item.whenIso);
+  if (Number.isNaN(at.getTime())) return null;
+  return new Intl.DateTimeFormat("en-IN", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  }).format(at);
+}
+
+function startTimeLabel(item: WorkItem): string | null {
+  if (item.whenIso === null || item.whenIsDay) return null;
+  const at = new Date(item.whenIso);
+  if (Number.isNaN(at.getTime())) return null;
+  return new Intl.DateTimeFormat("en-IN", {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(at);
+}
+
+function durationLabel(minutes: number | null): string | null {
+  if (minutes === null) return null;
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return remainder === 0 ? `${hours} ${hours === 1 ? "hr" : "hrs"}` : `${hours} hr ${remainder} min`;
+}
+
 /** The headline number, or the canvas's "₹ ?" for something not yet priced. */
 function money(amountPaise: number | null): string {
   return amountPaise === null ? "₹ ?" : formatMoney(amountPaise);
@@ -528,14 +514,58 @@ function money(amountPaise: number | null): string {
  * than decides. So an engagement's figure is announced as the agreement's
  * value, never as money this Partner will receive.
  */
-function spokenAmount(item: WorkItem): string {
-  if (item.amountPaise === null) return "no price yet";
+function spokenAmount(item: WorkItem): string | null {
+  if (item.amountPaise === null) return null;
   const amount = formatMoney(item.amountPaise);
-  return item.kind === "engagement" ? `agreed total ${amount}` : amount;
+  return item.amountLabel === null ? amount : `${item.amountLabel.toLowerCase()} ${amount}`;
 }
 
 function cardLabel(item: WorkItem): string {
-  return `${item.accessibleName}, ${spokenAmount(item)}`;
+  const facts = [item.accessibleName];
+  const amount = spokenAmount(item);
+  if (amount !== null) facts.push(amount);
+  const date = dateLabel(item);
+  const starts = startTimeLabel(item);
+  const duration = durationLabel(item.durationMinutes);
+  if (date !== null) facts.push(`date ${date}`);
+  if (starts !== null) facts.push(`starts ${starts}`);
+  if (duration !== null) facts.push(`duration ${duration}`);
+  if (item.areaLabel !== null && item.areaLabel !== item.stateLabel) {
+    facts.push(`area ${item.areaLabel}`);
+  }
+  return facts.join(", ");
+}
+
+function ScheduleFacts({ item }: { readonly item: WorkItem }) {
+  const date = dateLabel(item);
+  const starts = startTimeLabel(item);
+  const duration = durationLabel(item.durationMinutes);
+  if (date === null && starts === null && duration === null && item.areaLabel === null) return null;
+
+  return (
+    <span className="grid grid-cols-2 gap-x-4 gap-y-2">
+      {date === null ? null : (
+        <Fact name="date" label="Date">
+          {date}
+        </Fact>
+      )}
+      {starts === null ? null : (
+        <Fact name="time" label="Starts">
+          {starts}
+        </Fact>
+      )}
+      {duration === null ? null : (
+        <Fact name="time" label="Duration">
+          {duration}
+        </Fact>
+      )}
+      {item.areaLabel === null ? null : (
+        <Fact name="distance" label="Area">
+          {item.areaLabel}
+        </Fact>
+      )}
+    </span>
+  );
 }
 
 /**
@@ -548,23 +578,21 @@ function cardLabel(item: WorkItem): string {
  * many words, and names `href` as what separates them. It does: an A3 offer
  * opens its own detail screen, an A1 offer opens the inbox that answers it.
  *
- * ## The lapse guard, and why it lives here rather than in the adapter
+ * ## A lapsed offer is not drawn at all
  *
- * `toWorkItems` filters A3 offers through `isOfferLive` against the server's
- * own `server_now`, but deliberately applies no equivalent clock to A1 offers —
- * Celery owns those deadlines and `status` is the truth. The consequence is
- * that an A1 offer whose deadline has passed but whose next five-second poll
- * has not landed sorts to the very top of the stack, since the comparator reads
- * a dead deadline as the most urgent thing a Partner owns.
- *
- * So the card checks. `useServerCountdown` measures against the calibrated
- * server clock rather than the device's, and a lapsed one drops the heat
- * gradient and the countdown instead of shouting. It is not removed: the server
- * decides what is expired, this only decides what to shout about.
+ * `toWorkItems` already keeps a dead offer out of the stack it hands this
+ * screen — the backend fix the Owner asked for, plus `isOfferLive`'s own
+ * server-clock guard for A3. What is left to close here is the gap *inside one
+ * poll*: an offer that was live when the list last landed and expires while a
+ * Partner is still looking at the card. `useServerCountdown` — the calibrated
+ * server clock, never the device's — is what notices that moment, and the
+ * card removes itself rather than repainting as a "lapsed" card nobody asked
+ * for any more: the query's own poll (fifteen seconds for A3, five for A1)
+ * lands shortly after and redraws the stack without it.
  */
 function LiveOfferCard({ item }: { item: WorkItem }) {
   const countdown = useServerCountdown(item.respondsBy, 1000);
-  const lapsed = countdown?.isExpired ?? false;
+  if (countdown?.isExpired) return null;
 
   return (
     <Link
@@ -572,31 +600,34 @@ function LiveOfferCard({ item }: { item: WorkItem }) {
       aria-label={cardLabel(item)}
       className={cn(
         CARD,
-        lapsed
-          ? "border border-line bg-surface"
-          : "bg-[linear-gradient(135deg,var(--color-signal-400)_0%,var(--color-action)_55%,var(--color-action-active)_100%)] shadow-[0_4px_12px_color-mix(in_oklab,var(--color-action-active)_32%,transparent)]",
+        "bg-[linear-gradient(135deg,var(--color-signal-400)_0%,var(--color-action)_55%,var(--color-action-active)_100%)] shadow-[0_4px_12px_color-mix(in_oklab,var(--color-action-active)_32%,transparent)]",
       )}
     >
       <span className="flex items-center gap-2.75">
-        <span className={cn(TILE, lapsed ? "bg-surface-sunken" : "bg-surface")}>
+        <span className={cn(TILE, "bg-surface")}>
           <Pictogram name="now" size="lg" className="text-text" />
         </span>
 
         <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-text">
           <CardTitle item={item} />
-          <span className="text-[1.875rem] font-extrabold leading-none tracking-[-0.02em]">
-            {money(item.amountPaise)}
+          <span className="flex items-baseline gap-2">
+            <span className="text-[1.875rem] font-extrabold leading-none tracking-[-0.02em]">
+              {money(item.amountPaise)}
+            </span>
+            {item.amountLabel === null ? null : (
+              <span className="text-[0.6875rem] font-bold uppercase tracking-[0.04em] opacity-70">
+                {item.amountLabel}
+              </span>
+            )}
           </span>
         </span>
 
-        {countdown && !lapsed ? <CountdownDial countdown={countdown} /> : null}
+        {countdown ? <CountdownDial countdown={countdown} /> : null}
       </span>
 
-      {item.areaLabel ? (
-        <span className="text-text">
-          <Fact name="distance">{item.areaLabel}</Fact>
-        </span>
-      ) : null}
+      <span className="text-text">
+        <ScheduleFacts item={item} />
+      </span>
 
       <span className={cn(BAR, "bg-surface")}>
         <Pictogram name="yes" size="md" className="text-success-text" />
@@ -605,6 +636,23 @@ function LiveOfferCard({ item }: { item: WorkItem }) {
     </Link>
   );
 }
+
+/**
+ * The tone every card's status chip renders in, keyed off the same urgency
+ * that already picks the card's own colour — so the badge reinforces the
+ * card rather than arguing with it. `not_chosen` and `closed` share `neutral`:
+ * both are over, and neither is a warning or a failure on the vendor's part.
+ */
+const STATE_TONE: Record<WorkItem["urgency"], "warning" | "action" | "info" | "neutral" | "success"> =
+  {
+    live: "warning",
+    needs_price: "action",
+    doing: "info",
+    answered: "neutral",
+    settled: "success",
+    not_chosen: "neutral",
+    closed: "neutral",
+  };
 
 /**
  * What the job is, which is the first thing a card has to say.
@@ -617,12 +665,12 @@ function LiveOfferCard({ item }: { item: WorkItem }) {
  */
 function CardTitle({ item }: { item: WorkItem }) {
   return (
-    <span className="flex min-w-0 flex-col gap-0.5">
+    <span className="flex min-w-0 flex-col gap-1">
       <span className="truncate text-base font-semibold leading-snug">{item.title}</span>
       {item.stateLabel === null ? null : (
-        <span className="truncate text-[0.6875rem] font-bold uppercase tracking-[0.04em] opacity-70">
+        <Badge tone={STATE_TONE[item.urgency]} className="w-fit truncate">
           {item.stateLabel}
-        </span>
+        </Badge>
       )}
     </span>
   );
@@ -674,29 +722,26 @@ function NeedsPriceCard({ item }: { item: WorkItem }) {
 
         <span className="flex min-w-0 flex-1 flex-col gap-0.75">
           <CardTitle item={item} />
-          <span className="flex items-baseline gap-2">
-            <span className="text-[1.875rem] font-extrabold leading-none tracking-[-0.02em] text-signal-700">
-              {money(item.amountPaise)}
-            </span>
-            {item.amountPaise === null ? (
-              <span className="text-[0.8125rem] font-semibold text-text-muted">
-                no price yet
-              </span>
+          <span className="flex flex-col gap-1 text-text-secondary">
+            {item.areaLabel ? (
+              <Fact name="distance" label="Near">
+                {item.areaLabel}
+              </Fact>
             ) : null}
-          </span>
-          {at ? (
-            <span className="text-text-secondary">
-              <Fact name={item.whenIsDay ? "date" : "time"} label="Starts">
+            {at ? (
+              <Fact name={item.whenIsDay ? "date" : "time"} label="Requested">
                 {at}
               </Fact>
-            </span>
-          ) : null}
+            ) : null}
+          </span>
         </span>
       </span>
 
       <span className={cn(BAR, "bg-action shadow-[0_2px_0_var(--color-action-active)]")}>
-        <Pictogram name="price" size="md" className="text-action-text" />
-        <span className="text-base font-bold text-action-text">Send a price</span>
+        <Pictogram name="go" size="md" className="text-action-text" />
+        <span className="text-base font-bold text-action-text">
+          {item.actionLabel ?? "Review request"}
+        </span>
       </span>
     </Link>
   );
@@ -718,8 +763,6 @@ function NeedsPriceCard({ item }: { item: WorkItem }) {
  * glyph beside the number says which is which.
  */
 function DoingCard({ item }: { item: WorkItem }) {
-  const at = whenLabel(item);
-
   return (
     <Link
       href={item.href}
@@ -741,17 +784,26 @@ function DoingCard({ item }: { item: WorkItem }) {
 
         <span className="flex min-w-0 flex-1 flex-col gap-1 text-text">
           <CardTitle item={item} />
-          <span className="flex min-w-0 items-center gap-3 text-action-secondary">
-            {at ? <Fact name={item.whenIsDay ? "date" : "time"}>{at}</Fact> : null}
-            {item.areaLabel ? <Fact name="distance">{item.areaLabel}</Fact> : null}
-            {at === null && item.areaLabel === null ? (
+          {item.amountPaise === null ? null : (
+            <span className="flex items-baseline gap-2">
               <span className="text-[1.5rem] font-extrabold leading-none tracking-[-0.02em] text-text">
                 {money(item.amountPaise)}
               </span>
-            ) : null}
-          </span>
+              {item.amountLabel === null ? null : (
+                <span className="text-[0.6875rem] font-bold uppercase tracking-[0.04em] text-text-muted">
+                  {item.amountLabel}
+                </span>
+              )}
+            </span>
+          )}
         </span>
       </span>
+
+      {item.whenIso !== null || item.durationMinutes !== null || item.areaLabel !== null ? (
+        <span className="rounded-xl bg-surface-sunken px-3 py-2.5 text-action-secondary">
+          <ScheduleFacts item={item} />
+        </span>
+      ) : null}
 
       <span
         className={cn(BAR, "bg-action-secondary shadow-[0_2px_0_var(--color-navy-900)]")}
@@ -763,14 +815,17 @@ function DoingCard({ item }: { item: WorkItem }) {
   );
 }
 
-/**
- * Settled — green surface, and the padlock that says the money is held.
- *
- * Only a completed A1 visit reaches this state. An engagement is never mapped
- * to `settled` by the adapter, which is what keeps the "you got paid" treatment
- * off the one figure that is not a payout.
- */
+/** Settled work — with payment copy that reflects how this kind was paid. */
 function SettledCard({ item }: { item: WorkItem }) {
+  const date = dateLabel(item);
+  const starts = startTimeLabel(item);
+  const settlementCopy =
+    item.kind === "engagement"
+      ? item.amountLabel === "Collected directly"
+        ? "Paid directly by customer"
+        : "Work completed"
+      : "Held until payout";
+
   return (
     <Link
       href={item.href}
@@ -787,14 +842,23 @@ function SettledCard({ item }: { item: WorkItem }) {
         <span className="truncate text-[0.9375rem] font-semibold leading-snug">
           {item.title}
         </span>
+        {date === null ? null : (
+          <span className="flex items-center gap-1 truncate text-xs font-semibold opacity-75">
+            <Pictogram name="time" size="xs" className="shrink-0" />
+            {date}
+            {starts === null ? null : ` · ${starts}`}
+          </span>
+        )}
         <span className="flex items-center gap-1 text-xs font-semibold opacity-75">
           <Pictogram name="held" size="xs" className="shrink-0" />
-          Held until payout
+          {settlementCopy}
         </span>
       </span>
-      <span className="text-[1.375rem] font-extrabold leading-none tracking-[-0.02em] text-success-text">
-        {money(item.amountPaise)}
-      </span>
+      {item.amountPaise === null ? null : (
+        <span className="text-[1.375rem] font-extrabold leading-none tracking-[-0.02em] text-success-text">
+          {money(item.amountPaise)}
+        </span>
+      )}
     </Link>
   );
 }
@@ -830,9 +894,7 @@ function AnsweredCard({ item }: { item: WorkItem }) {
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-px text-info-text">
         <span className="truncate text-[0.9375rem] font-semibold leading-snug">{item.title}</span>
-        <span className="truncate text-xs font-semibold opacity-75">
-          Waiting for the customer to decide
-        </span>
+        <span className="truncate text-xs font-semibold opacity-75">{item.stateLabel}</span>
       </span>
       <Pictogram name="go" size="sm" className="shrink-0 text-info-text" />
     </Link>
@@ -856,9 +918,7 @@ function OutcomeCard({ item }: { item: WorkItem }) {
         <span className="truncate text-[0.9375rem] font-semibold leading-snug text-text">
           {item.title}
         </span>
-        <span className="text-xs font-semibold capitalize text-text-muted">
-          {item.stateLabel}
-        </span>
+        <span className="text-xs font-semibold text-text-muted">{item.stateLabel}</span>
       </span>
       <Pictogram name="go" size="sm" className="shrink-0 text-text-muted" />
     </Link>

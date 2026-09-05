@@ -422,7 +422,7 @@ function TermsSection({
 
           <div className="flex flex-col gap-2">
             <SubLabel>Do you guarantee your work?</SubLabel>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 min-[420px]:grid-cols-4 gap-2">
               {WARRANTY_CHOICES.map((choice) => (
                 <Tile
                   key={choice.code}
@@ -437,7 +437,7 @@ function TermsSection({
 
           <div className="flex flex-col gap-2">
             <SubLabel>Anything you will not do?</SubLabel>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 min-[360px]:grid-cols-3 gap-2">
               {EXCLUSION_CHOICES.map((choice) => (
                 <Tile
                   key={choice.code}

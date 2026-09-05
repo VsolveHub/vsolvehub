@@ -33,14 +33,17 @@ from apps.identity.models import User
 from apps.partners.models import PartnerProfile
 from apps.requirements import matching, metrics, pricing, purchase_gates, visit_slots
 from apps.requirements.exceptions import (
+    CapacityUnavailableError,
     LifecycleNotSupportedError,
     RequirementDomainError,
     RequirementTransitionError,
     VisitPlanNotChargeableError,
     VisitPlanRequiredError,
+    VisitSlotTakenError,
     VisitSlotUnavailableError,
 )
 from apps.requirements.models import (
+    CapacityHold,
     CustomerRequirement,
     SiteVisit,
     VendorInvitation,
@@ -194,6 +197,143 @@ class VisitSlotConfirmation:
     #: True when this is the confirmation that opens the Customer's plan checkout. Later slots
     #: book free and this is `False` for them.
     opens_plan_checkout: bool
+
+
+@transaction.atomic
+def accept_fixed_visit_offer(*, invitation_id: uuid.UUID) -> VisitSlotConfirmation:
+    """Atomically accept the immutable Customer-selected time; the first valid Partner wins."""
+
+    invitation = (
+        VendorInvitation.objects.select_for_update(of=("self",))
+        .select_related(
+            "partner",
+            "requirement__configuration",
+            "requested_visit_share__plan",
+        )
+        .get(pk=invitation_id)
+    )
+    share = invitation.requested_visit_share
+    if share is None:
+        raise RequirementTransitionError("This is not a fixed-time visit offer.")
+    requirement = CustomerRequirement.objects.select_for_update().get(pk=invitation.requirement_id)
+    share = (
+        VisitPlanShare.objects.select_for_update(of=("self",))
+        .select_related("plan")
+        .get(pk=share.pk)
+    )
+    plan = VisitPlan.objects.select_for_update().get(pk=share.plan_id)
+    if invitation.status == VendorInvitation.Status.ACCEPTED:
+        visit = SiteVisit.objects.get(invitation=invitation, plan_share=share)
+        return VisitSlotConfirmation(
+            visit=visit,
+            share=share,
+            plan=plan,
+            opens_plan_checkout=plan.status in (VisitPlan.Status.CHOSEN, VisitPlan.Status.PENDING),
+        )
+    if invitation.status != VendorInvitation.Status.INVITED:
+        raise VisitSlotTakenError()
+    if invitation.responds_by is not None and invitation.responds_by <= timezone.now():
+        invitation.status = VendorInvitation.Status.EXPIRED
+        invitation.save(update_fields=("status", "updated_at"))
+        matching.settle_customer_visit_offer_exhaustion(share_id=share.id)
+        raise VisitSlotUnavailableError("This offer has expired.")
+    if share.matching_status != VisitPlanShare.MatchingStatus.SEARCHING:
+        raise VisitSlotTakenError()
+    if share.requested_start is None or share.duration_minutes is None:
+        raise VisitSlotUnavailableError("The Customer's selected time is no longer available.")
+    if (
+        share.plan.shares.filter(
+            partner=invitation.partner,
+            status=VisitPlanShare.Status.COMMITTED,
+        )
+        .exclude(pk=share.pk)
+        .exists()
+    ):
+        raise CapacityUnavailableError()
+
+    choice = visit_slots.VisitSlotChoice(
+        starts_at=share.requested_start,
+        duration_minutes=int(share.duration_minutes),
+    )
+    if choice.starts_at <= timezone.now() or not visit_slots.slot_is_still_free(
+        invitation=invitation,
+        choice=choice,
+    ):
+        raise VisitSlotUnavailableError()
+
+    is_unpaid = plan.status in (VisitPlan.Status.CHOSEN, VisitPlan.Status.PENDING)
+    visit = SiteVisit.objects.create(
+        requirement=requirement,
+        invitation=invitation,
+        plan_share=share,
+        status=SiteVisit.Status.REQUESTED if is_unpaid else SiteVisit.Status.SCHEDULED,
+        fee_paise=share.amount_paise,
+        adjusts_against_final_price=False,
+        scheduled_for=choice.starts_at,
+        duration_minutes=choice.duration_minutes,
+    )
+    _hold_grid_slot(
+        visit=visit,
+        partner=invitation.partner,
+        choice=choice,
+        tentative=is_unpaid,
+    )
+    invitation.status = VendorInvitation.Status.ACCEPTED
+    invitation.accepted_at = timezone.now()
+    invitation.save(update_fields=("status", "accepted_at", "updated_at"))
+    CapacityHold.objects.update_or_create(
+        invitation=invitation,
+        defaults={
+            "partner": invitation.partner,
+            "starts_on": choice.starts_at.date(),
+            "ends_on": choice.starts_at.date(),
+            "crew_size": 1,
+            "strength": CapacityHold.Strength.HARD,
+            "status": CapacityHold.Status.ACTIVE,
+        },
+    )
+    share.status = VisitPlanShare.Status.COMMITTED
+    share.matching_status = (
+        VisitPlanShare.MatchingStatus.HELD if is_unpaid else VisitPlanShare.MatchingStatus.BOOKED
+    )
+    share.partner = invitation.partner
+    share.committed_at = timezone.now()
+    share.save(
+        update_fields=(
+            "status",
+            "matching_status",
+            "partner",
+            "committed_at",
+            "updated_at",
+        )
+    )
+    VendorInvitation.objects.filter(
+        requested_visit_share=share,
+        status=VendorInvitation.Status.INVITED,
+    ).exclude(pk=invitation.pk).update(
+        status=VendorInvitation.Status.WITHDRAWN,
+        decline_reason_code="slot_taken",
+        updated_at=timezone.now(),
+    )
+    if not is_unpaid and requirement.status == CustomerRequirement.Status.MATCHING:
+        _mark_visits_booked(requirement)
+    enqueue_outbox_event(
+        aggregate_type="visit_plan_share",
+        aggregate_id=share.id,
+        event_type="m2.fixed_visit_offer.held" if is_unpaid else "m2.fixed_visit_offer.booked",
+        idempotency_key=f"fixed-visit-accepted:{share.id}:{invitation.id}",
+        payload={
+            "requirement_id": str(requirement.id),
+            "requested_visit_share_id": str(share.id),
+            "vendor_invitation_id": str(invitation.id),
+        },
+    )
+    return VisitSlotConfirmation(
+        visit=visit,
+        share=share,
+        plan=plan,
+        opens_plan_checkout=is_unpaid and plan.status == VisitPlan.Status.CHOSEN,
+    )
 
 
 @transaction.atomic
@@ -469,6 +609,22 @@ def complete_visit_plan(*, payment_attempt_id: uuid.UUID) -> VisitPlan | None:
             site_visit=visit,
             status=Reservation.Status.TENTATIVE,
         ).update(status=Reservation.Status.CONFIRMED, released_at=None)
+        if visit.plan_share_id is not None:
+            VisitPlanShare.objects.filter(pk=visit.plan_share_id).update(
+                matching_status=VisitPlanShare.MatchingStatus.BOOKED,
+                updated_at=timezone.now(),
+            )
+        enqueue_outbox_event(
+            aggregate_type="site_visit",
+            aggregate_id=visit.id,
+            event_type="m2.visit.booked",
+            idempotency_key=f"visit-booked:{visit.id}",
+            payload={
+                "requirement_id": str(requirement.id),
+                "vendor_invitation_id": str(visit.invitation_id),
+                "site_visit_id": str(visit.id),
+            },
+        )
     _mark_visits_booked(requirement)
     enqueue_outbox_event(
         aggregate_type="requirement",
@@ -510,6 +666,11 @@ def reschedule_plan_visit(*, visit: SiteVisit, scheduled_for: datetime) -> SiteV
     choice = visit_slots.VisitSlotChoice(starts_at=scheduled_for, duration_minutes=duration)
     if choice.starts_at <= timezone.now():
         raise VisitSlotUnavailableError("That time has passed. Pick another.")
+    # A reschedule must not push the visit past the day the work is needed — the one move the
+    # clamped picker grids cannot bound, because the request arrives as a bare timestamp.
+    visit_slots.assert_visit_serves_event_date(
+        requirement=visit.requirement, starts_at=choice.starts_at
+    )
 
     existing = list(
         Reservation.objects.select_for_update().filter(

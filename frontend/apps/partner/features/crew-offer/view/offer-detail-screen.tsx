@@ -1,22 +1,27 @@
 "use client";
 
 import { describeError, hasWorkspaceAction, useServerCountdown, type Countdown } from "@vsolve/query";
-import { ConfirmAction, ErrorState, Spinner, formatMoney } from "@vsolve/ui";
+import { ConfirmAction, ErrorState, Spinner, cn, formatMoney } from "@vsolve/ui";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { Pictogram, type PictogramName } from "@/components/pictogram";
+import { CrewMixTable } from "./crew-mix-table";
 import { usePartnerWorkspaceGrants } from "@/features/workspace/queries";
 import { WORKFORCE_WORKSPACE } from "@/features/workspace/registry";
 
 import {
-  ACCEPT_COMMITMENT,
-  WAGE_SETTLEMENT,
-  dayNoun,
-  describeOvertime,
-  helperNoun,
+  ACCEPT_CONSEQUENCE,
+  HOW_DAY_HIRE_WORKS_HREF,
+  PAID_DAILY,
+  acceptQuestion,
+  crewMathsLine,
+  crewSizeLine,
+  inclusionsLine,
   isOfferLive,
+  overtimeLine,
+  startDayLabel,
   type CrewOffer,
   type CrewOfferAnswer,
 } from "../model/offer-state";
@@ -32,69 +37,31 @@ import { CrewOfferOutcome } from "./crew-offer-outcome";
 /**
  * One A3 crew offer, at the size a lead can answer it standing in the street.
  *
- * The detail screen behind every `live` A3 card in the merged WORK stack —
- * `work-item.ts`'s `CREW_OFFER_HREF` points here, and `LiveOfferSheet`
- * deliberately suppresses itself on `/work/offers/*` so the same offer is never
- * on screen twice with two accept buttons.
+ * The detail screen behind every `live` A3 card in the merged WORK stack.
+ * `LiveOfferSheet` suppresses itself on `/work/offers/*` so the same offer is
+ * never on screen twice with two accept buttons.
  *
- * Ported from the design canvas artboard "3 · Offer, clock running": the
- * countdown ring, the ₹ figure, four fact rows, an accept/pass pair. Per the
- * plan's Deviation 1 the canvas's "4 km" chip is `offer.area_label` — no
- * Partner-facing field publishes a distance.
+ * ## What this screen is the only place for
  *
- * ## What this screen is now the only place for
- *
- * `CrewOfferScreen`/`CrewOfferList`/`CrewOfferCard` are no longer mounted by any
- * route — `/workforce/offers` redirects to `/work`. So this is the only surface
- * on which an A3 offer can be accepted or declined, and three things the older
- * card carried are kept here rather than dropped with the styling:
- *
- * 1. **The decline reason.** `useDeclineCrewOffer` requires a published
- *    `CrewOfferDeclineReasonCodeEnum` member, and ADR-0009 makes the decline
- *    rate an Operations *alarm* rather than a report — a rate that has slipped
- *    below the street rate is only visible through these codes. So the ✗ button
- *    opens `CrewOfferDeclineDialog` rather than posting a code this screen chose.
- * 2. **The commitment, before the tap.** Accepting an A3 offer is accepting the
- *    published rate with nothing to negotiate on site, and unlike an A1 offer it
- *    carries no undo window. `ConfirmAction` states `ACCEPT_COMMITMENT` — the
- *    same string the previous card used — so the sentence is said once, in one
- *    place, before an irreversible money commitment on an 80px button.
- *    `ACCEPT_COMMITMENT` itself ends "…at the rates below", and the dialog's
- *    `children` slot is what "below" points at: `WAGE_SETTLEMENT`, the
- *    published overtime rate and the inclusions list, the same three facts
- *    the previous card rendered inline. Without them the sentence pointed at
- *    nothing — this is now the only reachable A3 accept surface.
- * 3. **The outcome, after the answer.** See `CrewOfferAnswerHandlers` in
- *    `queries.ts`: a successful accept or decline removes the row from
- *    `GET /partner/crew-offers/` (it filters to `INVITED`), so a screen that
- *    redirected on "the offer is gone" would replace **"do not travel yet"** with
- *    the WORK list. The answer is captured synchronously in `answer` and drawn by
- *    `CrewOfferOutcome`, and the redirect below is held back while it is set.
+ * 1. **The decline reason.** ADR-0009 makes the decline rate an Operations
+ *    *alarm*; the Pass button opens `CrewOfferDeclineDialog` rather than
+ *    posting a code this screen chose.
+ * 2. **The one-line confirm.** Accepting an A3 offer is accepting the published
+ *    rate with no undo window, so `ConfirmAction` asks the question once, in
+ *    one line, before an irreversible money commitment. The long explanation
+ *    lives on `HOW_DAY_HIRE_WORKS_HREF`, linked once from here.
+ * 3. **The outcome, after the answer.** A successful accept or decline removes
+ *    the row from `GET /partner/crew-offers/`, so the answer is captured in
+ *    `answer` and drawn by `CrewOfferOutcome`; the redirect is held while set.
  */
 
 /** `2 · π · 66`, the radius the canvas draws the ring at. */
 const RING_CIRCUMFERENCE = 414.7;
 
 /**
- * The ring's denominator floor, in milliseconds.
- *
- * **No endpoint publishes the length of a dispatch window.** `CrewOffer` carries
- * `responds_by` and no `invited_at`, so the fraction the arc draws has no server
- * figure behind it — which is exactly why `work-home.tsx` refuses to draw an arc
- * on the stack card and shows digits alone.
- *
- * Here the arc is the artboard, so it is drawn against a denominator that is
- * stated rather than inferred: the larger of this constant and however much time
- * was left when the screen first painted. Two minutes is this module's own
- * documented figure for the window (`LiveOfferSheet`: "a crew offer expires in
- * about two minutes"; `OFFER_CLOSING_SOON_MS` is the same two minutes as the
- * "closing" threshold). Taking the maximum is what keeps it honest in both
- * directions: a lead arriving with 40 seconds left sees a ring already two-thirds
- * drained, and an offer with a longer deadline than the constant starts full
- * instead of overflowing the arc.
- *
- * The digits inside the ring are the measured truth and come from
- * `useServerCountdown`. The arc is the affordance around them.
+ * The ring's denominator floor. No endpoint publishes the length of a dispatch
+ * window, so the arc is drawn against the larger of two minutes and however
+ * much was left on first paint. The digits inside are the measured truth.
  */
 const OFFER_WINDOW_MS = 120_000;
 
@@ -102,25 +69,14 @@ export function OfferDetailScreen({ invitationId }: { invitationId: string }) {
   const router = useRouter();
   const offers = usePartnerCrewOffers();
 
-  /**
-   * Held here rather than inside `OfferDecision`, because the row that produced
-   * it is about to disappear and take that component with it.
-   */
   const [answer, setAnswer] = useState<CrewOfferAnswer | null>(null);
 
   const data = offers.data ?? null;
   const offer = data?.offers.find((entry) => entry.invitation_id === invitationId) ?? null;
   const live = data !== null && offer !== null && isOfferLive(offer, data.server_now);
 
-  /*
-    The offer lapsed, another lead took it, or it was answered on another tab —
-    all three make it vanish from a list the server filters to `INVITED`. A dead
-    detail screen is worse than the stack, so leave.
-
-    Never while `answer` is set: this lead's own accept or decline removes the
-    row too, and redirecting on that path is precisely the defect
-    `CrewOfferAnswerHandlers` exists to prevent.
-  */
+  // The offer lapsed, another lead took it, or it was answered elsewhere. Never
+  // while `answer` is set: this lead's own answer removes the row too.
   const gone = !offers.isPending && !offers.isError && !live && answer === null;
 
   useEffect(() => {
@@ -155,17 +111,8 @@ export function OfferDetailScreen({ invitationId }: { invitationId: string }) {
     );
   }
 
-  // `gone` — the effect above is on its way to `/work`. Render nothing rather
-  // than a half-screen that flashes.
   if (offer === null || !live) return null;
 
-  /*
-    Keyed by invitation so the countdown, and the ring window it is measured
-    against, belong to one offer. The same reason `LiveOfferSheet` splits
-    `OfferSheet` out: a hook reading `responds_by` off a row the poll replaced
-    would count the previous deadline down for a commit, which is visible on a
-    two-minute clock.
-  */
   return <OfferDecision key={offer.invitation_id} offer={offer} onAnswered={setAnswer} />;
 }
 
@@ -186,10 +133,6 @@ function OfferDecision({
   const grants = usePartnerWorkspaceGrants();
   const canManageCrew = hasWorkspaceAction(grants.grants ?? [], WORKFORCE_WORKSPACE, "crew.manage");
 
-  // One second, because this deadline is minutes away rather than hours. The
-  // second argument is `tickMs` — `useServerCountdown` reads `server_now`
-  // through `serverClock`, which is calibrated from every response, so no
-  // instant is passed in here.
   const countdown = useServerCountdown(offer.responds_by, 1000);
 
   const accept = useAcceptCrewOffer(offer.invitation_id, {
@@ -206,53 +149,73 @@ function OfferDecision({
     },
   });
 
-  /*
-    Seeded once, on this offer's first paint, and never recomputed — a
-    denominator that moved with the numerator would draw a ring that never
-    drains. See `OFFER_WINDOW_MS`.
-  */
+  // Seeded once, on first paint — a denominator that moved with the numerator
+  // would draw a ring that never drains.
   const [windowMs] = useState(() => Math.max(OFFER_WINDOW_MS, countdown?.remainingMs ?? 0));
 
-  const start = startLabel(offer.requested_start);
+  const start = startDayLabel(offer.requested_start);
   const area = offer.area_label.trim();
-  const overtime = describeOvertime(offer);
+  const overtime = overtimeLine(offer.overtime_hourly_paise, offer.standard_day_hours);
+  const inclusions = inclusionsLine(offer.inclusions, 3);
   const busy = accept.isPending || decline.isPending;
 
   return (
     <Screen>
-      {/* The screen is a ring, a number and four pictures; the landmark still
-          needs a name. */}
-      <h1 className="sr-only">
-        Crew offer — {offer.headcount} {helperNoun(offer.headcount)} for {offer.days}{" "}
-        {dayNoun(offer.days)}
-      </h1>
+      <h1 className="sr-only">Crew offer — {crewSizeLine(offer.headcount, offer.days)}</h1>
 
-      <div className="flex flex-col items-center gap-3.5 rounded-b-[26px] bg-[linear-gradient(135deg,var(--color-signal-400)_0%,var(--color-action)_55%,var(--color-action-active)_100%)] px-5 pt-6 pb-6.5 shadow-raised">
+      <div className="flex flex-col items-center gap-3 rounded-b-[26px] bg-[linear-gradient(135deg,var(--color-signal-400)_0%,var(--color-action)_55%,var(--color-action-active)_100%)] px-5 pt-6 pb-6 shadow-raised">
         {countdown ? <CountdownRing countdown={countdown} windowMs={windowMs} /> : null}
 
-        {/*
-          The figure keeps its size; the words above and below it are what say
-          whose money it is and when it arrives. The long sentence was `sr-only`
-          before — the screen showed a number on an orange field and nothing
-          else, which is the one fact on this screen a lead cannot afford to
-          guess at.
-        */}
-        <span className="text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-action-text opacity-80">
-          You receive
-        </span>
         <span className="text-[3.25rem] font-extrabold leading-none tracking-[-0.025em] text-text">
           {formatMoney(offer.lead_total_receipt_paise)}
         </span>
-        <span className="max-w-[26ch] text-center text-[0.8125rem] font-semibold leading-snug text-action-text">
-          For the whole job. The customer pays you directly, at the end of each day.
+        <span className="text-[0.8125rem] font-bold uppercase tracking-[0.06em] text-action-text">
+          to you
+        </span>
+        <span className="text-center text-[0.9375rem] font-semibold leading-snug text-text">
+          {crewMathsLine({
+            leadDayReceiptPaise: offer.lead_day_receipt_paise,
+            headcount: offer.headcount,
+            days: offer.days,
+          })}{" "}
+          · {PAID_DAILY}
         </span>
       </div>
 
-      <div className="flex flex-1 flex-col gap-2.5 px-4 pt-4.5">
+      <div className="flex flex-1 flex-col gap-2.5 px-4 pt-4">
+        <FactRow icon="crew" label="Crew" value={crewSizeLine(offer.headcount, offer.days)} />
         <FactRow icon="distance" label="Where" value={area === "" ? "Not stated" : area} />
-        <FactRow icon="time" label="Starts" value={start ?? "Not stated"} />
-        <FactRow icon="days" label="Days" value={String(offer.days)} />
-        <FactRow icon="crew" label="People" value={String(offer.headcount)} />
+        <FactRow icon="date" label="From" value={start ?? "Not stated"} />
+        {inclusions === null && overtime === null ? null : (
+          <div className="flex flex-col gap-1 rounded-card border border-line bg-surface px-3.5 py-3 text-sm leading-5 text-text">
+            {inclusions === null ? null : <p className="font-semibold">{inclusions}</p>}
+            {overtime === null ? null : <p className="text-text-secondary">{overtime}</p>}
+          </div>
+        )}
+        {/* Above the brief, because this is the one term on the offer a lead can accept
+            and then find they cannot meet. `verified_roster_size` is on the same screen,
+            so the footnote makes the comparison they are about to make explicit. */}
+        <CrewMixTable
+          lines={offer.crew_mix}
+          footnote={
+            offer.crew_mix.length === 0
+              ? undefined
+              : `Your verified crew list has ${offer.verified_roster_size} ${
+                  offer.verified_roster_size === 1 ? "person" : "people"
+                }. Vsolve checks the men and women on it when you accept, and again when you name the crew.`
+          }
+        />
+        <BriefList brief={offer.brief} />
+
+        <Link
+          href={HOW_DAY_HIRE_WORKS_HREF}
+          className="flex w-fit items-center gap-1.5 py-1 text-sm font-semibold text-action-secondary underline-offset-2 hover:underline"
+        >
+          <span aria-hidden className="grid h-5 w-5 place-items-center rounded-full border border-current text-xs">
+            i
+          </span>
+          How day-hire works
+        </Link>
       </div>
 
       {accept.error ? (
@@ -265,16 +228,6 @@ function OfferDecision({
       ) : null}
 
       <div className="flex flex-col gap-3 px-4 pt-4 pb-5">
-        {/*
-          Both controls state their verb.
-
-          They used to be a green square holding a tick and a grey square
-          holding a cross, with the words in `sr-only` — a lead committing to
-          staff a job for three days, or turning that money down, on a glyph
-          alone. The tier is still carried by shape (filled and 80px versus
-          outlined and 64px) so the pair cannot be confused at a glance; the
-          words are what make them unmistakable.
-        */}
         <button
           type="button"
           onClick={() => setConfirming(true)}
@@ -282,7 +235,7 @@ function OfferDecision({
           className="flex h-20 items-center justify-center gap-3 rounded-[20px] bg-success-text shadow-[0_3px_0_var(--color-success-active)] disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >
           <Pictogram name="yes" size="lg" className="text-surface" />
-          <span className="text-xl font-bold text-surface">Take this job</span>
+          <span className="text-xl font-bold text-surface">Take it</span>
         </button>
 
         <button
@@ -292,53 +245,25 @@ function OfferDecision({
           className="flex h-16 items-center justify-center gap-2.5 rounded-2xl border border-line bg-surface disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >
           <Pictogram name="no" size="md" className="text-text-muted" />
-          <span className="text-base font-bold text-text-secondary">Pass on this one</span>
+          <span className="text-base font-bold text-text-secondary">Pass</span>
         </button>
       </div>
 
       <ConfirmAction
         open={confirming}
         onOpenChange={setConfirming}
-        title={`Take ${offer.headcount} ${helperNoun(offer.headcount)} for ${offer.days} ${dayNoun(offer.days)} at ${formatMoney(offer.lead_day_receipt_paise)} a day?`}
-        consequence={`${ACCEPT_COMMITMENT} If you are the first to answer, the job is held for you while the customer pays the booking fee that confirms it — do not travel until Vsolve confirms.`}
-        confirmLabel="Yes, take it at this rate"
+        title={acceptQuestion(offer)}
+        consequence={ACCEPT_CONSEQUENCE}
+        confirmLabel="Yes, send them"
+        cancelLabel="Back"
         pending={accept.isPending}
         onConfirm={() => {
-          // Success closes it through `onAccepted` above. Failure closes it
-          // here, via the per-call `onError` rather than the hook's own
-          // `CrewOfferAnswerHandlers` (which carries no `onError` slot):
-          // `Dialog` is a native `showModal()`, so leaving `confirming` true
-          // after a refusal would draw `AcceptRefusal` below the fold but
-          // make it unreachable — the background goes inert under the top
-          // layer — while the still-live confirm button invites a second POST
-          // to a command with no `Idempotency-Key` (see `AcceptRefusal`
-          // below). Safe to deliver here, unlike the success path: a refusal
-          // never unmounts this component, only an accepted answer does.
+          // Success closes it through `onAccepted`. Failure closes it here so
+          // `AcceptRefusal` is reachable and the still-live confirm button is
+          // not one tap from a second POST (no `Idempotency-Key` on accept).
           accept.mutate(undefined, { onError: () => setConfirming(false) });
         }}
-      >
-        {/* "…at the rates below", from `ACCEPT_COMMITMENT` above, points here:
-            the wage settlement sentence and the published overtime rate, the
-            same facts `CrewOfferCard` showed on the card itself before this
-            screen replaced it as the only reachable A3 accept surface. */}
-        <div className="flex flex-col gap-2 text-sm leading-6 text-text-secondary">
-          <p>{WAGE_SETTLEMENT}</p>
-          {overtime ? <p>{overtime}</p> : null}
-          {offer.inclusions.length > 0 ? (
-            <div>
-              <h3 className="text-sm font-semibold text-text">What the day covers</h3>
-              <ul className="mt-1 flex list-disc flex-col gap-1 pl-5">
-                {/* Keyed by position: `inclusions` is ops-authored free text
-                    and two identical lines are a duplicate React key, not an
-                    impossibility. Nothing here reorders. */}
-                {offer.inclusions.map((line, index) => (
-                  <li key={`${index}-${line}`}>{line}</li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-        </div>
-      </ConfirmAction>
+      />
 
       <CrewOfferDeclineDialog
         open={declining}
@@ -358,33 +283,16 @@ function OfferDecision({
    -------------------------------------------------------------------------- */
 
 /**
- * `min-h-[calc(100dvh-9rem)]` rather than `min-h-screen`: `PartnerShell` owns a
- * sticky top bar and a fixed bottom tab bar, so a full-viewport `main` inside it
- * scrolls by exactly the height of that chrome with nothing on the screen. 9rem
- * is that allowance, and it is the same figure `work-home.tsx`, `me-home.tsx`
- * and `language-picker.tsx` carry.
+ * `min-h-[calc(100dvh-9rem)]`: `PartnerShell` owns a sticky top bar and a fixed
+ * bottom tab bar, and 9rem is that allowance.
  */
 function Screen({ children }: { children: ReactNode }) {
   return <main className="flex min-h-[calc(100dvh-9rem)] flex-col bg-canvas">{children}</main>;
 }
 
 /**
- * The clock, as an arc that empties and digits that are measured.
- *
- * `stroke-dashoffset` grows from 0 to the full circumference as the remaining
- * fraction falls, so the stroke retreats anticlockwise from a full ring. Clamped
- * at both ends: an unclamped fraction above 1 wraps the dash pattern and redraws
- * a full ring, which would read as a clock that had just been reset.
- *
- * The digits are `aria-hidden` and the coarse `announce` string is what is read
- * out. A per-second reading of a ticking clock under an `aria-live` region makes
- * a screen reader unusable.
- *
- * The track and its backing disc are `fill-text/12` and `stroke-text/18` —
- * the `text` token (`rgb(0 17 46)`, `tokens.css`) at low opacity — rather than
- * a raw `rgb(...)` literal: colour is a closed set of token utilities in this
- * app, never a literal hex or `rgb()` in application code. Verified against a
- * real Tailwind v4 compile to render identically to the literal it replaced.
+ * The clock, as an arc that empties and digits that are measured. The digits
+ * are `aria-hidden` and the coarse `announce` string is what is read out.
  */
 function CountdownRing({
   countdown,
@@ -426,7 +334,10 @@ function CountdownRing({
         <Pictogram name="time" size="md" className="text-text" />
         <span
           aria-hidden
-          className="text-[2.375rem] font-extrabold leading-tight tabular-nums text-text"
+          className={cn(
+            "font-black leading-tight tabular-nums text-text tracking-tight",
+            countdown.display.length > 5 ? "text-2xl" : "text-3xl",
+          )}
         >
           {countdown.display}
         </span>
@@ -436,18 +347,7 @@ function CountdownRing({
   );
 }
 
-/**
- * A picture and a number, which is the only way this app states a fact.
- *
- * `label` is never drawn. `Pictogram` is `aria-hidden`, so without it a screen
- * reader hears four bare values in a row — "Kondapur", "18 Aug, 9:00 am", "3",
- * "4" — with nothing saying which is which.
- *
- * Sized at or above `Pictogram`'s own `h-6 w-6` default for the reason
- * `work-home.tsx` records: `cn` is `clsx` rather than `tailwind-merge`, so a
- * caller's size class joins the default instead of replacing it and the cascade
- * settles the tie by stylesheet order.
- */
+/** A picture, a label and a value. */
 function FactRow({
   icon,
   label,
@@ -466,7 +366,7 @@ function FactRow({
         <span className="text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-text-muted">
           {label}
         </span>
-        <span className="min-w-0 truncate text-2xl font-extrabold tabular-nums text-text">
+        <span className="min-w-0 truncate text-xl font-extrabold tabular-nums text-text">
           {value}
         </span>
       </span>
@@ -475,15 +375,34 @@ function FactRow({
 }
 
 /**
- * What the lead just did, on the screen they did it from.
- *
- * `CrewOfferOutcome` is reused verbatim rather than restyled — it is the one
- * component that says **"do not travel yet"** with the hold window beside it,
- * and rewording a held win to match a visual pass is not a styling change. It
- * still carries the older card treatment; that is disclosed rather than fixed
- * here, since `features/crew-offer/view/crew-offer-outcome.tsx` is outside this
- * task's file list.
+ * What the customer actually asked for. `brief` is the customer's own answers,
+ * already worded by the server from the catalogue, so this renders rows and
+ * knows nothing about any one service.
  */
+function BriefList({ brief }: { readonly brief: CrewOffer["brief"] }) {
+  if (brief.length === 0) return null;
+  return (
+    <section className="rounded-card border border-line bg-surface px-3.5 py-3">
+      <h2 className="text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-text-muted">
+        What they asked for
+      </h2>
+      <dl className="mt-2 flex flex-col divide-y divide-line">
+        {brief.map((line) => (
+          <div key={line.code} className="flex items-baseline justify-between gap-3 py-2">
+            <dt className="min-w-0 text-[0.8125rem] leading-5 text-text-secondary">
+              {line.question}
+            </dt>
+            <dd className="shrink-0 text-right text-[0.9375rem] font-bold leading-5 text-text">
+              {line.value}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
+/** What the lead just did, on the screen they did it from. */
 function AnsweredScreen({ answer }: { readonly answer: CrewOfferAnswer }) {
   return (
     <Screen>
@@ -491,11 +410,11 @@ function AnsweredScreen({ answer }: { readonly answer: CrewOfferAnswer }) {
         <CrewOfferOutcome answer={answer} />
 
         <Link
-          href="/home"
+          href="/work"
           className="flex h-16 items-center justify-center gap-2 rounded-2xl border border-line bg-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >
           <Pictogram name="back" size="md" className="text-action-secondary" />
-          <span className="text-base font-bold text-action-secondary">Back to your work</span>
+          <span className="text-base font-bold text-action-secondary">Work</span>
         </Link>
       </div>
     </Screen>
@@ -503,20 +422,9 @@ function AnsweredScreen({ answer }: { readonly answer: CrewOfferAnswer }) {
 }
 
 /**
- * A refused accept.
- *
- * Two branches, not the seven the older card drew. `m2_roster_insufficient` is
- * the only refusal this lead can act on — one lead is accountable for the whole
- * crew and ADR-0009 forbids assembling one from other agencies, so the fix is
- * always "verify more of your own people" — and it gets a door to the roster.
- * Everything else is presented through `describeError`, which already carries
- * this product's wording for a taken offer, an exhausted slot and a lapsed
- * window.
- *
- * Recovery is always a re-read, never a resend: `accept_crew_offer` declares no
- * `Idempotency-Key`, so a blind retry is a second attempt rather than a replay.
- * `accept.reset()` is not offered as "try again" for that reason — the mutation
- * already invalidated the inbox on error.
+ * A refused accept. `m2_roster_insufficient` is the only refusal this lead can
+ * act on and gets a door to the roster; everything else goes through
+ * `describeError`. Recovery is always a re-read, never a resend.
  */
 function AcceptRefusal({
   error,
@@ -532,7 +440,7 @@ function AcceptRefusal({
       <ErrorState
         inline
         title="Your verified crew is smaller than this job"
-        message="Vsolve sends one lead who is accountable for the whole crew, so we never make the numbers up from another agency. Add the people you would actually send and get them verified — you will be offered this size of job again."
+        message="Verify more of your own people to take jobs this size."
         severity="warning"
         actionLabel={onGoToCrew ? "Go to your crew" : undefined}
         onAction={onGoToCrew ?? undefined}
@@ -549,17 +457,4 @@ function AcceptRefusal({
       reference={presentation.reference}
     />
   );
-}
-
-/** "18 Aug, 9:00 am" in the device's own zone. Null-safe: `requested_start` is nullable. */
-function startLabel(iso: string | null): string | null {
-  if (iso === null) return null;
-  const at = new Date(iso);
-  if (Number.isNaN(at.getTime())) return null;
-  return new Intl.DateTimeFormat("en-IN", {
-    day: "2-digit",
-    month: "short",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(at);
 }

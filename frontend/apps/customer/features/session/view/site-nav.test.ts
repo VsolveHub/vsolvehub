@@ -29,6 +29,7 @@ describe("isCurrentTarget", () => {
       "/bookings",
       "/bookings/abc/pay",
       "/bookings/abc/receipt",
+      "/bookings/abc/visits/def",
       "/bookings/workforce",
       "/requests",
       "/requests/abc",
@@ -51,7 +52,7 @@ describe("isCurrentTarget", () => {
     expect(isCurrentTarget("/cart", "/cartography")).toBe(false);
   });
 
-  it("keeps the three main targets mutually exclusive", () => {
+  it("keeps the main targets mutually exclusive", () => {
     for (const pathname of ["/catalog/electrical", "/cart", "/requests/abc"]) {
       const lit = NAV_TARGETS.filter((target) => isCurrentTarget(target.href, pathname));
       // Two lit items is a navigation that contradicts itself; none is a
@@ -61,10 +62,11 @@ describe("isCurrentTarget", () => {
   });
 
   it("leaves profile in the header instead of duplicating it in main navigation", () => {
-    // The tab bar lays these out in a single row on a 390px viewport. A fourth
+    // The tab bar lays these out in a single row on a 390px viewport. A third
     // target is a design decision, not an incidental one, and should fail here
-    // first.
-    expect(NAV_TARGETS).toHaveLength(3);
+    // first. (The basket left main navigation for the header icon; the cart
+    // routes are owned by Services now.)
+    expect(NAV_TARGETS).toHaveLength(2);
     expect(NAV_TARGETS.map((target) => target.href)).not.toContain("/account");
   });
 });

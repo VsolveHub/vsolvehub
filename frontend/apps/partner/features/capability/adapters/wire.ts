@@ -1,4 +1,4 @@
-import type { Schemas } from "@vsolve/api-client";
+import { ApiRequestError, type Schemas } from "@vsolve/api-client";
 
 /**
  * The Partner registration surface, as contract 1.22.0 actually publishes it.
@@ -244,4 +244,24 @@ export function readCrewStatus(value: string): CrewMembershipStatus | null {
   return CREW_STATUSES.includes(value as CrewMembershipStatus)
     ? (value as CrewMembershipStatus)
     : null;
+}
+
+/**
+ * Field errors Django returned, keyed to the control that caused them.
+ *
+ * Lives here rather than in the view because it names the generated client —
+ * the layering rule `boundary.test.ts` enforces: views consume adapters, and
+ * adapters are the only modules that read `@vsolve/api-client`.
+ */
+export function serverFieldProblems<TField extends string>(
+  error: unknown,
+  fields: readonly TField[],
+): { field: TField; message: string }[] {
+  if (!(error instanceof ApiRequestError)) return [];
+  const byField = error.fieldErrors;
+
+  return fields.flatMap((field) => {
+    const [message] = byField[field] ?? [];
+    return message === undefined ? [] : [{ field, message }];
+  });
 }

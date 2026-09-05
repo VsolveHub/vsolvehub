@@ -346,7 +346,10 @@ export function toMaterialLineRequests(
       }
       return {
         title: material.description.trim(),
-        quantity: material.quantity ?? 1,
+        // A decimal STRING since 1.44.0: a material can be 2.5 kg, and the
+        // server keeps the precision the vendor typed rather than a float's
+        // idea of it.
+        quantity: String(material.quantity ?? 1),
         unit: material.unit.trim(),
         amount_paise: material.amountPaise,
       };
@@ -393,14 +396,19 @@ export function toOnsiteRequest(input: {
   return {
     invitation_id: input.invitationId,
     site_visit_id: input.siteVisitId,
-    total_paise: total,
-    tax_basis: draft.taxBasis,
-    tax_paise: draft.taxBasis === "EXCLUSIVE" ? draft.taxPaise : 0,
+    // `total_paise`, `tax_basis` and `tax_paise` came off this request at
+    // contract 1.44.0. The vendor states what they will do and what they charge
+    // for each line; Django resolves the tax from the approved policy version
+    // and the vendor's verified tax profile, and publishes the totals back. A
+    // client that sends a total is a client that can disagree with the invoice.
     stages: toStageRequests(workRows),
     material_lines: toMaterialLineRequests(draft.materials),
     exclusions: draft.exclusions.map((line) => line.trim()).filter((line) => line !== ""),
     warranty_terms: draft.warrantyTerms.trim(),
     valid_until: draft.validUntil,
+    // Required on the wire since 1.48.0. The preset composer prices materials
+    // itself rather than handing the customer a list, so no tier applies.
+    material_brand_tier: "",
   };
 }
 

@@ -3,6 +3,8 @@ from typing import Any, cast
 from django.conf import settings
 from drf_spectacular.generators import SchemaGenerator
 
+from apps.catalog.icons import ServiceIconKey
+
 
 def _operation(schema: dict[str, Any], path: str, method: str) -> dict[str, Any]:
     paths = cast(dict[str, dict[str, dict[str, Any]]], schema["paths"])
@@ -16,6 +18,37 @@ def _required_idempotency_header(operation: dict[str, Any]) -> dict[str, Any]:
     assert header["in"] == "header"
     assert header["required"] is True
     return header
+
+
+def test_compact_service_catalogue_contract_publishes_the_controlled_icon_enum() -> None:
+    schema = cast(dict[str, Any], SchemaGenerator().get_schema(public=True))
+
+    operation = _operation(schema, "/api/v1/services/", "get")
+    assert operation["operationId"] == "catalog_service_index"
+    response_schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
+    component_name = response_schema["items"]["$ref"].rsplit("/", 1)[-1]
+    properties = schema["components"]["schemas"][component_name]["properties"]
+    assert set(properties) == {
+        "id",
+        "slug",
+        "name",
+        "icon_key",
+        "display_order",
+        "category_id",
+        "category_slug",
+        "category_name",
+        "category_display_order",
+        "subcategory_id",
+        "subcategory_slug",
+        "subcategory_name",
+        "subcategory_display_order",
+    }
+    icon_schema = properties["icon_key"]
+    icon_reference = icon_schema.get("$ref") or icon_schema["allOf"][0]["$ref"]
+    icon_enum_name = icon_reference.rsplit("/", 1)[-1]
+    assert set(schema["components"]["schemas"][icon_enum_name]["enum"]) == set(
+        ServiceIconKey.values
+    )
 
 
 def test_browser_session_and_idempotency_contract_is_published() -> None:
@@ -379,8 +412,19 @@ def test_the_richest_projection_fields_are_typed_rather_than_unknown() -> None:
 
     schema = cast(dict[str, Any], SchemaGenerator().get_schema(public=True))
     customer = schema["components"]["schemas"]["CustomerBooking"]["properties"]
+    partner = schema["components"]["schemas"]["PartnerBooking"]["properties"]
 
     assert customer["work_tasks"]["type"] == "array"
     assert customer["work_tasks"]["items"]["$ref"].endswith("/WorkTask")
     assert "$ref" in str(customer["active_amendment"])
     assert "$ref" in str(customer["completion"])
+    assert partner["display_title"]["type"] == "string"
+    assert partner["display_title"]["nullable"] is True
+    assert partner["approximate_area"]["type"] == "string"
+    assert partner["approximate_area"]["nullable"] is True
+    assert partner["service_lines"]["type"] == "array"
+    assert partner["service_lines"]["items"]["$ref"].endswith("/PartnerBookingServiceLine")
+    assert partner["requirements"]["type"] == "array"
+    assert partner["requirements"]["items"]["type"] == "string"
+    assert "$ref" in str(partner["estimated_earning"])
+    assert "$ref" in str(partner["earning"])

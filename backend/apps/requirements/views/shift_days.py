@@ -24,7 +24,7 @@ from apps.foundation.services import execute_idempotent
 from apps.identity.models import User
 from apps.partners.exceptions import PartnerDomainError
 from apps.partners.permissions import IsPartnerUser
-from apps.requirements import workforce
+from apps.requirements import crew_mix, workforce
 from apps.requirements.exceptions import RequirementDomainError
 from apps.requirements.models import EngagementStage
 from apps.requirements.selectors import (
@@ -160,6 +160,10 @@ class EngagementStageCrewView(APIView):
         payload = CrewAssignSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
         membership_ids = list(payload.validated_data["membership_ids"])
+        roles = {
+            uuid.UUID(str(key)): str(value)
+            for key, value in (payload.validated_data.get("roles") or {}).items()
+        }
         reason_code = payload.validated_data["reason_code"]
 
         def command() -> tuple[int, dict[str, object]]:
@@ -168,6 +172,7 @@ class EngagementStageCrewView(APIView):
                     stage_id=stage.id,
                     actor=actor,
                     membership_ids=membership_ids,
+                    roles=roles,
                     reason_code=reason_code,
                 )
                 attendance = workforce.ensure_attendance(stage=stage)
@@ -176,6 +181,22 @@ class EngagementStageCrewView(APIView):
             body = StageCrewListSerializer(
                 {
                     "crew": stage_crew_rows(assignments, include_membership_id=True),
+                    "role_fulfilment": [
+                        {
+                            "role_code": row.role_code,
+                            "role_label": row.role_label,
+                            "wanted_men": row.wanted_men,
+                            "wanted_women": row.wanted_women,
+                            "named_men": row.named_men,
+                            "named_women": row.named_women,
+                            "is_met": row.is_met,
+                            "gap": row.describe_gap(),
+                        }
+                        for row in crew_mix.role_fulfilment(
+                            stage.engagement.requirement,
+                            [(a.role_code, a.crew_member.gender) for a in assignments],
+                        )
+                    ],
                     "expected_count": attendance.expected_count,
                     "shift_date": stage.scheduled_on,
                     "server_now": timezone.now(),

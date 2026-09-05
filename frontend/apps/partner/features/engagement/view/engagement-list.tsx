@@ -52,8 +52,6 @@ export interface EngagementListProps<Key extends string> {
   /** Which mode belongs in this workspace. */
   readonly commercialMode: Engagement["commercial_mode"];
   readonly wording: StageWording;
-  /** `/workforce/shifts` or `/projects/stages`. */
-  readonly basePath: string;
   /** What a customer buys here, for the empty state. */
   readonly workLabel: string;
 }
@@ -63,7 +61,6 @@ export function EngagementList<Key extends string>({
   bucketFor,
   commercialMode,
   wording,
-  basePath,
   workLabel,
 }: EngagementListProps<Key>) {
   const query = usePartnerEngagements();
@@ -147,7 +144,6 @@ export function EngagementList<Key extends string>({
                   key={engagement.id}
                   engagement={engagement}
                   wording={wording}
-                  basePath={basePath}
                 />
               ))}
             </div>
@@ -175,7 +171,6 @@ export function EngagementList<Key extends string>({
                 key={engagement.id}
                 engagement={engagement}
                 wording={wording}
-                basePath={basePath}
               />
             ))}
           </div>

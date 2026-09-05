@@ -1,0 +1,124 @@
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+
+import type { WorkItem } from "../model/work-item";
+import { WorkCard } from "./work-home";
+
+describe("WorkCard — a confirmed A1 job", () => {
+  it("shows the service, estimated payout, full schedule, duration and area", () => {
+    const item: WorkItem = {
+      kind: "job",
+      key: "job:b1",
+      href: "/work/jobs/b1",
+      amountPaise: 255_000,
+      amountLabel: "Est. payout",
+      urgency: "doing",
+      respondsBy: null,
+      whenIso: "2026-08-20T09:00:00Z",
+      whenIsDay: false,
+      durationMinutes: 90,
+      areaLabel: "Madhapur",
+      title: "Bathroom deep clean",
+      stateLabel: null,
+      accessibleName: "Bathroom deep clean",
+    };
+
+    render(<WorkCard item={item} />);
+
+    expect(screen.getByText("Bathroom deep clean")).toBeInTheDocument();
+    expect(screen.getByText("Est. payout")).toBeInTheDocument();
+    expect(screen.getByText(/2,550/)).toBeInTheDocument();
+    expect(screen.getByText("Date")).toBeInTheDocument();
+    expect(screen.getByText("Starts")).toBeInTheDocument();
+    expect(screen.getByText("Duration")).toBeInTheDocument();
+    expect(screen.getByText("1 hr 30 min")).toBeInTheDocument();
+    expect(screen.getByText("Area")).toBeInTheDocument();
+    expect(screen.getByText("Madhapur")).toBeInTheDocument();
+  });
+});
+
+describe("WorkCard — a project enquiry", () => {
+  it("shows locality and requested day without a fake or missing price", () => {
+    const item: WorkItem = {
+      kind: "enquiry",
+      key: "enquiry:e1",
+      href: "/work/enquiries/e1",
+      amountPaise: null,
+      amountLabel: null,
+      urgency: "needs_price",
+      respondsBy: "2026-08-21T10:00:00Z",
+      whenIso: "2026-08-24T00:00:00Z",
+      whenIsDay: true,
+      durationMinutes: null,
+      areaLabel: "Kukatpally, Hyderabad",
+      actionLabel: "Review & book visit",
+      title: "Interior fit-out project",
+      stateLabel: "waiting on your answer",
+      accessibleName: "Interior fit-out project, waiting on your answer",
+    };
+
+    render(<WorkCard item={item} />);
+
+    expect(screen.getByText("Interior fit-out project")).toBeInTheDocument();
+    expect(screen.getByText("Near")).toBeInTheDocument();
+    expect(screen.getByText("Kukatpally, Hyderabad")).toBeInTheDocument();
+    expect(screen.getByText("Review & book visit")).toBeInTheDocument();
+    expect(screen.queryByText("₹ ?")).not.toBeInTheDocument();
+    expect(screen.queryByText(/no price/i)).not.toBeInTheDocument();
+  });
+
+  it("shows the status chip in an action tone, distinct from a live offer's warning tone", () => {
+    const item: WorkItem = {
+      kind: "enquiry",
+      key: "enquiry:e1",
+      href: "/work/enquiries/e1",
+      amountPaise: null,
+      amountLabel: null,
+      urgency: "needs_price",
+      respondsBy: "2026-08-21T10:00:00Z",
+      whenIso: "2026-08-24T00:00:00Z",
+      whenIsDay: true,
+      durationMinutes: null,
+      areaLabel: "Kukatpally, Hyderabad",
+      actionLabel: "Review & book visit",
+      title: "Interior fit-out project",
+      stateLabel: "Waiting for your answer",
+      accessibleName: "Interior fit-out project, Waiting for your answer",
+    };
+
+    render(<WorkCard item={item} />);
+
+    const chip = screen.getByText("Waiting for your answer");
+    // `Badge`'s `action` tone class — see `STATE_TONE` in `work-home.tsx`,
+    // which keys every card's chip tone off its own urgency.
+    expect(chip.className).toContain("bg-signal-50");
+  });
+});
+
+describe("WorkCard — a completed direct-paid crew job", () => {
+  it("states that the customer paid directly instead of promising a Vsolve payout", () => {
+    const item: WorkItem = {
+      kind: "engagement",
+      key: "engagement:g1",
+      href: "/work/jobs/g1",
+      amountPaise: 500_000,
+      amountLabel: "Collected directly",
+      urgency: "settled",
+      respondsBy: null,
+      whenIso: "2026-09-02T12:17:43Z",
+      whenIsDay: true,
+      durationMinutes: null,
+      areaLabel: null,
+      title: "Crew booking",
+      stateLabel: "Completed",
+      accessibleName: "Crew booking, Completed",
+    };
+
+    render(<WorkCard item={item} />);
+
+    expect(screen.getByText("Crew booking")).toBeInTheDocument();
+    expect(screen.getByText("Paid directly by customer")).toBeInTheDocument();
+    expect(screen.queryByText("Held until payout")).not.toBeInTheDocument();
+    expect(screen.getByText(/5,000/)).toBeInTheDocument();
+  });
+});

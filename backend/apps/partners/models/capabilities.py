@@ -60,6 +60,9 @@ class PartnerBusinessProfile(models.Model):
     registration_number = models.CharField(max_length=64, blank=True)
     gst_registered = models.BooleanField(default=False)
     gstin = models.CharField(max_length=15, blank=True)
+    gstin_verified_at = models.DateTimeField(null=True, blank=True)
+    registered_state_code = models.CharField(max_length=8, blank=True)
+    tax_profile_effective_from = models.DateField(null=True, blank=True)
     years_in_operation = models.PositiveSmallIntegerField(default=0)
     #: The lead's own UPI handle, for the evening "Day settled?" convenience link (`M2-BE-536`).
     #:
@@ -80,6 +83,11 @@ class PartnerBusinessProfile(models.Model):
             models.CheckConstraint(
                 condition=models.Q(gst_registered=False, gstin="") | models.Q(gst_registered=True),
                 name="partners_gstin_requires_gst_registered",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(gstin_verified_at__isnull=True)
+                | models.Q(gst_registered=True, gstin__gt="", registered_state_code__gt=""),
+                name="partners_verified_gstin_has_tax_identity",
             ),
             models.CheckConstraint(
                 condition=~models.Q(business_type="INDIVIDUAL") | models.Q(registration_number=""),

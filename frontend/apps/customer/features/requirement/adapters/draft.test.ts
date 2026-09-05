@@ -204,6 +204,7 @@ describe("screen 1's questions", () => {
       code: "standard",
       name: "Standard",
       description: "",
+      image_url: "",
       fulfilment_archetype: "A3_TIME_BLOCK",
       starting_price: { amount_paise: 0, currency: "INR" } as Schemas["Money"],
       minimum_service_subtotal: { amount_paise: 0, currency: "INR" } as Schemas["Money"],
@@ -232,12 +233,34 @@ describe("screen 1's questions", () => {
     expect(set.unsupported).toEqual([]);
   });
 
-  it("reports a multiple-choice question rather than guessing a control for it", () => {
-    // `validate_scope` accepts INTEGER, TEXT, BOOLEAN and SELECT — there is no
-    // list-valued answer it would take, so any control invented here produces
-    // an answer the submit command refuses, with the refusal landing on the
-    // Customer.
-    const set = toQuestionSet(variant([question({ code: "rooms", kind: "MULTIPLE_CHOICE" })]));
+  it("renders a multiple-choice question as `multi`, carrying its options", () => {
+    // `validate_scope` takes a MULTI_SELECT list of option codes since the
+    // event-decor redesign, so the control is real and the answer is an array.
+    const set = toQuestionSet(
+      variant([
+        question({
+          code: "decor_areas",
+          kind: "MULTIPLE_CHOICE",
+          options: [
+            { id: "o-1", code: "stage", label: "Stage or backdrop", description: "" },
+            { id: "o-2", code: "entrance", label: "Entrance & walkway", description: "" },
+          ],
+        }),
+      ]),
+    );
+
+    expect(set.unsupported).toEqual([]);
+    expect(set.questions[0]?.kind).toBe("multi");
+    expect(set.questions[0]?.options?.map((option) => option.value)).toEqual([
+      "stage",
+      "entrance",
+    ]);
+  });
+
+  it("still reports a kind neither side knows rather than guessing a control", () => {
+    // A kind the contract may publish one day and this bundle predates.
+    const kind = "RANGE" as Schemas["ServiceQuestion"]["kind"];
+    const set = toQuestionSet(variant([question({ code: "rooms", kind })]));
 
     expect(set.questions).toEqual([]);
     expect(set.unsupported).toEqual(["rooms"]);

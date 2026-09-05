@@ -74,4 +74,12 @@ describe("the detail record", () => {
     const record = readEnquiryRecord(enquiryDetail({ archetype: "A5_CUSTOM_PROJECT" }));
     expect(record.archetype).toBe("A5_CUSTOM_PROJECT");
   });
+
+  it("keeps the explicit material owner instead of inferring it from the service", () => {
+    const record = readEnquiryRecord(
+      enquiryDetail({ material_fulfilment_mode: "PARTNER_TURNKEY" }),
+    );
+
+    expect(record.materialFulfilmentMode).toBe("PARTNER_TURNKEY");
+  });
 });

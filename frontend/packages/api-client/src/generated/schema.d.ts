@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.39.0)
- * Checksum: bd604e25bc60e1f8
+ * Source:   contracts/openapi/v1.yaml (version 1.66.0)
+ * Checksum: 92988aa9e9a7ca79
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -425,6 +425,37 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["booking_completion_dispute"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bookings/{booking_id}/platform-feedback/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Reuses the rating routes' subject resolution and nothing else.
+         *
+         *     The same 404-not-403 rule therefore applies without restating it: a job the caller is not part
+         *     of does not exist. What differs is the question asked and who may answer it — the two
+         *     subclasses below serve the two subject kinds, and `can_submit_platform_feedback` refuses a
+         *     Partner outright.
+         */
+        get: operations["booking_platform_feedback_read"];
+        put?: never;
+        /**
+         * @description Record the customer's verdict on Vsolve for one job.
+         *
+         *     Everything is individually optional and the command refuses only the wholly empty submission — a customer who taps one chip and closes has told us the useful thing, and demanding a star first would lose it. Selecting **All good** alongside a complaint is refused rather than silently resolved: either half might be the one they meant.
+         *
+         *     Only the customer is asked. A Partner has their own relationship with Vsolve, and the same question put to them would collect a different thing under the same label.
+         */
+        post: operations["booking_platform_feedback_submit"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1459,6 +1490,37 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/engagements/{engagement_id}/platform-feedback/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Reuses the rating routes' subject resolution and nothing else.
+         *
+         *     The same 404-not-403 rule therefore applies without restating it: a job the caller is not part
+         *     of does not exist. What differs is the question asked and who may answer it — the two
+         *     subclasses below serve the two subject kinds, and `can_submit_platform_feedback` refuses a
+         *     Partner outright.
+         */
+        get: operations["engagement_platform_feedback_read"];
+        put?: never;
+        /**
+         * @description Record the customer's verdict on Vsolve for one job.
+         *
+         *     Everything is individually optional and the command refuses only the wholly empty submission — a customer who taps one chip and closes has told us the useful thing, and demanding a star first would lose it. Selecting **All good** alongside a complaint is refused rather than silently resolved: either half might be the one they meant.
+         *
+         *     Only the customer is asked. A Partner has their own relationship with Vsolve, and the same question put to them would collect a different thing under the same label.
+         */
+        post: operations["engagement_platform_feedback_submit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/engagements/{engagement_id}/project/": {
         parameters: {
             query?: never;
@@ -2133,6 +2195,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/commercial-policies/activate/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["m2_operations_commercial_policy_activate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/compatibility-rules/": {
         parameters: {
             query?: never;
@@ -2213,6 +2291,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/crew-documents/{document_id}/review/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Record a decision on one crew identity document.
+         *
+         *     **Approving the last required kind verifies the membership**, through the same `verify_crew_documents` command with the same actor and audit event. The alternative — approve every document, then separately remember to press *verified* — has a failure mode where a fully-approved worker is still excluded from every crew offer, which is exactly the silent state this whole surface exists to end.
+         *
+         *     **Rejecting a required kind withdraws verification**, carrying the rejection's own reason, because the Partner is about to lose a worker off jobs they may already be assigned to. A rejection therefore requires a reason and the model enforces it too.
+         */
+        post: operations["m2_operations_crew_document_review"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/crew-memberships/": {
         parameters: {
             query?: never;
@@ -2221,13 +2322,59 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * @description Active crew memberships whose documents have never been verified, oldest first.
+         * @description Active crew memberships and where their document check stands, oldest first.
          *
          *     This queue is why the A3 cascade can find anybody: `documents_verified_at` is what `verified_roster_size` counts when it sizes a lead's roster against the requested headcount, and a vendor with no verified crew is excluded from every crew offer.
+         *
+         *     `documents_pending` and `documents_approved` are on each row so the queue can tell the two waiting states apart: a row with nothing uploaded is the Partner's move, and a row with a file on it is the reviewer's.
          */
         get: operations["m2_operations_crew_verification_queue"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/crew-memberships/{membership_id}/documents/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Every live identity document on one crew membership, newest version of each kind, each with a short-lived signed link to the stored file.
+         *
+         *     `review_url` is **nullable** and null is not an error: a storage outage degrades this to a queue with one missing preview rather than to an error page that hides the other nine people waiting. Nothing stores the URL — a stored URL is a stored expiry.
+         */
+        get: operations["m2_operations_crew_documents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/crew-memberships/{membership_id}/gender/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Correct what one worker is recorded as, across every agency that has them.
+         *
+         *     `CrewMember.gender` is one row per person, so the Partner-facing rule is first-write-wins: a second agency writing a contradiction is refused with `m2_crew_gender_conflict` rather than silently flipping which gendered slots the first agency can fill. That rule is right and it had **no exit** — the refusal said "contact support if that is wrong" and support had no endpoint, so a worker recorded wrongly by whichever agency typed first lost gendered work permanently.
+         *
+         *     **A reason is required.** Unlike a first recording, this overwrites a value another agency is already being dispatched against, and the previous value is written to the audit event so a reopened dispute can see what was overwritten. Clearing is not offered: it would re-open every gendered slot the worker had been filling. `UNDISCLOSED` is the value for a worker who declined to say.
+         */
+        post: operations["m2_operations_crew_gender_correct"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2251,6 +2398,38 @@ export interface paths {
          *     Verifying needs no reason — the documents were seen. **Removing** verification does, because it takes a named person off jobs they may already be assigned to. Verifying an already-verified membership is a no-op rather than a re-stamp, so the date keeps meaning when the documents were actually checked.
          */
         post: operations["m2_operations_crew_verify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/custom-item-reviews/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["m2_operations_custom_item_review_queue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/custom-item-reviews/{review_id}/resolve/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["m2_operations_custom_item_review_resolve"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2570,6 +2749,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/partners/{partner_id}/tax-profile/verify/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["operations_partner_tax_profile_verify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/payments/{payment_attempt_id}/chargeback/": {
         parameters: {
             query?: never;
@@ -2707,6 +2902,39 @@ export interface paths {
         get: operations["m2_operations_queues"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/quote-guardrails/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Every guardrail policy version, newest first. Mirrors the commercial policy review calendar's own read. */
+        get: operations["m2_operations_guardrail_policy_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/quote-guardrails/activate/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["m2_operations_guardrail_policy_activate"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2942,6 +3170,73 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/service-feedback/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Every service anybody has left feedback on, worst platform score first.
+         *
+         *     **The partner score and the platform score are published separately and never blended.** A service rated 4.6 for its partners and 3.1 for the experience of booking it is the finding: the people are fine and the product is not. One combined number averages exactly that away.
+         *
+         *     A service nobody has rated sorts **last**, not first — silence is not a bad score. One row may carry a null `variant_id`: feedback on a visit that covered more than one service, counted honestly rather than attributed to whichever line came first.
+         */
+        get: operations["operations_service_feedback"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/service-feedback/{variant_id}/notes/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Written platform-feedback notes for one service, newest first.
+         *
+         *     Each note carries the same customer's rating of the **partner** on that job, because `platform 2 / partner 5` is the pattern worth acting on and it is invisible when the two are read on separate screens.
+         *
+         *     The route without a `variant_id` returns the notes attached to feedback that could not be attributed to a single service.
+         */
+        get: operations["operations_service_feedback_notes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/service-feedback/unattributed/notes/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Written notes left on jobs whose visit covered more than one service.
+         *
+         *     Kept reachable rather than hidden: an operator reading per-service averages needs to know what those averages left out.
+         */
+        get: operations["operations_unattributed_feedback_notes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/unpayable-partners/": {
         parameters: {
             query?: never;
@@ -2953,6 +3248,55 @@ export interface paths {
         get: operations["operations_unpayable_partners"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/work-items/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["m2_operations_work_item_list"];
+        put?: never;
+        post: operations["m2_operations_work_item_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/work-items/{work_item_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["m2_operations_work_item_update"];
+        trace?: never;
+    };
+    "/api/v1/operations/work-items/{work_item_id}/rates/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["m2_operations_work_item_rate_list"];
+        put?: never;
+        /** @description Publish a reference rate for one item in one city, effective immediately. Loaded, never edited — the previous published version is retired in the same transaction. */
+        post: operations["m2_operations_work_item_rate_publish"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3519,7 +3863,15 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** @description Skills and the supervisor flag. `display_name` is **not** editable: it belongs to the global crew member, and one agency renaming a person would rename them on every other roster. */
+        /**
+         * @description The name this agency uses, their skills, the supervisor flag and `gender`.
+         *
+         *     `display_name` writes a **per-roster label** (`PartnerCrewMembership.display_name`) and never the shared `CrewMember`, so correcting a typo cannot rename the person on another agency's roster. Blank clears the override and falls back to the global record. It used to be read-only for that cross-agency reason, which left a typo unfixable: re-adding resolves by `identity_hash` and returns the same wrong name.
+         *
+         *     `gender` is on the shared crew record on purpose -- a Customer's men/women split is checked against it at accept and again at assignment, so it cannot be per-roster without two agencies staffing one wedding from two answers.
+         *
+         *     **It is editable whenever this Partner is the only agency holding the worker**, which is the ordinary case. The refusal exists to stop one agency flipping another's roster, so it applies only when there *is* another agency: a contradicting write is then answered `m2_crew_gender_conflict` and settled by Operations (`m2_operations_crew_gender_correct`). Clients should offer the field unconditionally and surface the refusal -- the server does not publish whether a worker is on another roster, because that is the fact `crew_roster` suppresses `crew_member_id` to hide. There is no way to clear a recorded gender; `UNDISCLOSED` is what a worker who declined to say is.
+         */
         patch: operations["m2_partner_crew_update"];
         trace?: never;
     };
@@ -3551,6 +3903,32 @@ export interface paths {
         /** @description Mark one worker off, or back on, for one date. Exception-shaped rather than a weekly calendar because that is what a supervisor actually knows: the default is available, and what gets recorded is the wedding on the 14th. `assert_crew_available` refuses an assignment on a day marked unavailable, naming the person. */
         put: operations["m2_partner_crew_availability_set"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/crew/{membership_id}/documents/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * @description The upload finished. The stored object is streamed back through the storage boundary and its real size, media type and SHA-256 compared against what was declared; on a match the document joins the Operations review queue.
+         *
+         *     **Verified rather than trusted**, because the party claiming the upload succeeded is the party that benefits from the claim. An approved earlier version is left approved until this replacement is itself approved, so re-uploading does not silently un-verify a worker who is already on next Tuesday's shift.
+         */
+        put: operations["m2_partner_crew_document_submit"];
+        /**
+         * @description Ask for somewhere to put one identity document. Returns a short-lived signed URL to `PUT` the file to, and the `document_id` to send back afterwards.
+         *
+         *     Nothing is visible to a reviewer yet. Declaring metadata first is what lets `m2_partner_crew_document_submit` compare the stored object against it — a client that declares a clean PDF and uploads something else fails there, not at a reviewer's desk.
+         */
+        post: operations["m2_partner_crew_document_upload"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3663,23 +4041,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/partner/enquiries/{invitation_id}/attachments/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description Short-lived signed links to the requirement's **checked** attachments. Access lasts as long as the invitation holds a quote slot, and ends when it is declined, expired or withdrawn — only the selected vendor keeps it. Expiry is reported as `has_access: false` on a `200`, not as an error: the vendor still owns their enquiry record, and an empty list without that flag would read as 'the Customer attached nothing'. No link is minted once access has lapsed, because a signed URL is a bearer credential and hiding a button is not revocation. */
-        get: operations["m2_partner_enquiry_attachment_list"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/partner/enquiries/{invitation_id}/decline/": {
         parameters: {
             query?: never;
@@ -3723,34 +4084,6 @@ export interface paths {
         put?: never;
         /** @description Request a paid site visit. The fee is what makes a vendor willing to travel before winning the job; free visits are not offered. Charging the fee is not built until BE4 — this records the request and its fee. */
         post: operations["m2_partner_site_visit_request"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/partner/enquiries/{invitation_id}/visit-slots/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * @description The visit times this vendor may confirm, drawn from the **same `carts.availability` grid the A1 technician flow reads** and narrowed to this one invited vendor. Same payload shape as `POST /api/v1/booking/windows/` minus `capacity`, which on a single-vendor grid would be a readout of that vendor's own diary depth.
-         *
-         *     Each `id` is a **signed token** bound to this invitation and this start; it is the only thing the confirm command accepts, so a vendor cannot book a time the grid never offered or a slot drawn for a competitor. Tokens expire, so a picker left open must re-read rather than post a stale one.
-         *
-         *     An ineligible vendor receives a grid in which every slot reads `NO_CAPACITY` rather than an error — that is the truth and it is renderable, where a refusal would leave the screen with nothing to say.
-         */
-        get: operations["m2_visit_slot_list"];
-        put?: never;
-        /**
-         * @description Commit to being on site at a specific time. **This is A5 acceptance** — it takes the quote slot and the soft capacity hold, and then a hard slot on the shared availability grid, so a visit and an A1 booking cannot double-book the same vendor.
-         *
-         *     The **first** confirmation on an unpaid plan holds its slot and opens the Customer's checkout (`opens_plan_checkout: true`); the visit reads `REQUESTED` until that payment is verified, and the hold lapses harmlessly if it never is. Later slots on a paid plan are confirmed outright.
-         */
-        post: operations["m2_visit_slot_confirm"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3959,9 +4292,9 @@ export interface paths {
          *
          *     Separate from `earnings/`, which answers "what am I owed" — a balance by
          *     state. This answers "how am I doing" — throughput and revenue over time.
-         *     Both are aggregates over the same ledger, and folding them into one payload
-         *     would make a screen that only wants today's total pull a full balance
-         *     breakdown it does not render.
+         *     Performance includes direct customer payments recorded by mutually confirmed
+         *     A3 day settlements. The balance remains ledger-only because direct-paid money
+         *     is not a debt Vsolve can reserve or pay out.
          *
          *     No `partner_id`: the Partner is resolved from the session, which is the one
          *     filter a caller cannot get wrong.
@@ -4017,6 +4350,40 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["partner_presence_online_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/price-book/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The catalog for this Partner's skills and one city, with their own saved rates. */
+        get: operations["m2_partner_price_book_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/price-book/items/{work_item_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Set this Partner's own rate for one catalog item. */
+        put: operations["m2_partner_price_book_item_set"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4312,6 +4679,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/proposals/{proposal_id}/revision-requests/{request_id}/decline/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Decline the Customer's open request for a revised estimate. Your estimate stays on the table exactly as sent; the Customer sees your note beside their request. To accept the request, send a revision instead — `POST /api/v1/proposals/` supersedes and answers it in one step. */
+        post: operations["m2_proposal_revision_decline"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/proposals/{proposal_id}/revision-requests/{request_id}/discount/apply/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Apply a Customer-requested overall discount. The command clones the estimate, recalculates tax, fees, payout and payment allocations, publishes a new immutable revision, supersedes the previous one and answers the price request atomically. */
+        post: operations["m2_proposal_overall_discount_apply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/proposals/{proposal_id}/revision-requests/{request_id}/discount/preview/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Preview an overall discount against the Partner's live estimate. This writes nothing: it returns the exact customer total, tax, payout and payment allocations that the apply command will publish. Percentage and final-amount input are mutually exclusive, and the server caps either at 15%. */
+        post: operations["m2_proposal_overall_discount_preview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/proposals/{proposal_id}/withdraw/": {
         parameters: {
             query?: never;
@@ -4322,6 +4740,23 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["m2_proposal_withdraw"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/proposals/preview/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Debounced, server-authoritative financial preview for the Partner composer. */
+        post: operations["m2_proposal_price_preview"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4390,57 +4825,6 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["m2_requirement_update"];
-        trace?: never;
-    };
-    "/api/v1/requirements/{requirement_id}/attachments/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Turn a completed upload into an attachment, after verifying what actually arrived. */
-        post: operations["m2_requirement_attachment_finalize"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/requirements/{requirement_id}/attachments/{attachment_id}/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** @description Remove an attachment and delete the stored object. Refused after the requirement leaves DRAFT, because a vendor was invited against a snapshot and removing a photograph they quoted on rewrites the question after the answer. An `INFECTED` attachment is removable in any state. */
-        delete: operations["m2_requirement_attachment_remove"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/requirements/{requirement_id}/attachments/uploads/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Ask for a signed upload URL. The server names the object key and records the size, media type and SHA-256 the client declares; finalization streams the stored object back and refuses anything that does not match. `scan_status` is `PENDING` on arrival because the object does not exist yet. */
-        post: operations["m2_requirement_attachment_upload_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
         trace?: never;
     };
     "/api/v1/requirements/{requirement_id}/booking-fee/cancel/": {
@@ -4553,6 +4937,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/requirements/{requirement_id}/questions/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Every clarification question on this request, both directions, oldest first. A professional's question arrives before any estimate — often before the visit — so this is readable at every status and is not gated on the paywall. The vendor's identity is not on a question; `invitation` links it to the estimate it belongs to once one exists. */
+        get: operations["m2_requirement_question_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/requirements/{requirement_id}/quotes/": {
         parameters: {
             query?: never;
@@ -4621,6 +5022,40 @@ export interface paths {
         put?: never;
         /** @description Ask this vendor to put a fresh price on a quote whose validity has passed. **This charges nothing and reuses the unlock or visit plan already paid for** — expiry must not be a dead end that forces a second purchase. The vendor answers by superseding the quote; the expired revision stays readable and stays unselectable, because only a vendor can state a price. */
         post: operations["m2_quote_revalidate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requirements/{requirement_id}/quotes/{proposal_id}/revision-request/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Ask the professional behind one live estimate for a different one, with the reason attached: leave named lines out, change materials, split the work into phases, ask whether they can move on price, or something else in a sentence. **`requested_discount_bps` is what the Customer hopes to pay, never what the work costs** — it changes no total, obliges nobody, and the estimate stays live and selectable at the price as sent. The vendor answers by superseding the estimate, which lands under the same entitlement. One open request per estimate; a second call re-reads the first. A price may be asked about once per estimate. */
+        post: operations["m2_quote_revision_request"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requirements/{requirement_id}/quotes/{proposal_id}/shopping-list/download/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Download one estimate's shopping list — what the Customer should buy before work starts — as a PDF branded V Solve Hub and naming the professional who wrote it. Quantities and specs only; never a price. `Content-Disposition: attachment`. Same entitlement as `m2_quote_list`: an A5 request needs a charged visit plan. */
+        get: operations["m2_quote_shopping_list_pdf"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4879,6 +5314,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/requirements/{requirement_id}/visit-slots/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Customer availability grid and the complete signed slot selection. */
+        get: operations["m2_customer_visit_slot_list"];
+        put?: never;
+        /** @description Customer availability grid and the complete signed slot selection. */
+        post: operations["m2_customer_visit_slot_choose"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requirements/{requirement_id}/visit-slots/{share_id}/drop/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Drop one visit slot the matching engine settled as `no_professional_found`, so the plan stops charging for it. The share is refunded through the ordinary settlement path: money already taken comes back in full, including the platform's part, and an uncharged plan simply quotes less at checkout rather than taking money in order to return it. Idempotent — dropping twice re-reads the dropped slot. Refused on a slot that is still searching, already held or booked, and on the last remaining slot of a plan (cancel the request instead). */
+        post: operations["m2_customer_visit_slot_drop"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requirements/{requirement_id}/visit-slots/{share_id}/replace/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Replace one exhausted Customer slot while preserving every successful sibling. */
+        post: operations["m2_customer_visit_slot_replace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/requirements/duplicate-check/": {
         parameters: {
             query?: never;
@@ -5018,6 +5505,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["serviceability_check_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/services/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["catalog_service_index"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -5365,21 +5868,25 @@ export interface components {
         AssistedProposalRequest: {
             /** Format: uuid */
             invitation_id: string;
-            total_paise: number;
-            tax_basis: components["schemas"]["ProposalTaxBasisEnum"];
-            /** @default 0 */
-            tax_paise: number;
             rate_paise_per_worker_day?: number | null;
             minimum_days?: number | null;
             worker_count?: number | null;
             stages?: components["schemas"]["ProposalStageRequest"][];
             material_lines?: components["schemas"]["ProposalMaterialLineRequest"][];
+            material_list?: components["schemas"]["ProposalMaterialListLineRequest"][];
+            included_supply_list?: components["schemas"]["ProposalIncludedSupplyLineRequest"][];
+            material_brand_tier?: components["schemas"]["MaterialBrandTierEnum"] | components["schemas"]["BlankEnum"];
+            estimate_type?: components["schemas"]["EstimateTypeEnum"];
+            item_lines?: components["schemas"]["ProposalItemLineRequest"][];
+            labour_lines?: components["schemas"]["ProposalLabourLineRequest"][];
+            other_charges?: components["schemas"]["ProposalOtherChargeRequest"][];
             inclusions?: string[];
             exclusions?: string[];
+            scope_summary?: string;
             warranty_terms?: string;
+            completion_days?: number | null;
             /** Format: date-time */
             valid_until?: string | null;
-            commission_treatment?: string;
             /** Format: uuid */
             site_visit_id?: string | null;
             /** @default false */
@@ -5395,40 +5902,6 @@ export interface components {
         AssistedStartRequestRequest: {
             expected_version: number;
             outage_reason: string;
-        };
-        AttachmentFinalizeRequest: {
-            /** Format: uuid */
-            upload_id: string;
-        };
-        /** @description The signed-upload grant. Bytes go to storage, never through Django. */
-        AttachmentUploadGrant: {
-            /** Format: uuid */
-            readonly id: string;
-            readonly kind: string;
-            /** Format: uri */
-            readonly upload_url: string;
-            readonly upload_token: string;
-            /** Format: date-time */
-            readonly upload_expires_at: string;
-            readonly scan_status: string;
-            /** Format: date-time */
-            readonly server_now: string;
-        };
-        /**
-         * @description What the client declares before any bytes exist.
-         *
-         *     The checksum is required, and it is the point of the whole handshake: finalization streams the
-         *     stored object back and compares it against these three values, so an upload that swapped the
-         *     file after presigning is refused rather than stored. Without them "verify the upload" would mean
-         *     "believe the client".
-         */
-        AttachmentUploadRequestRequest: {
-            kind: components["schemas"]["RequirementAttachmentKindEnum"];
-            content_type: string;
-            size_bytes: number;
-            sha256: string;
-            /** @default  */
-            language: string;
         };
         /**
          * @description * `CONFIRM` - The count is right
@@ -5482,6 +5955,9 @@ export interface components {
             readonly receipt_sequence: number | null;
             readonly settlement_reason_code: string;
             readonly failure_code: string;
+            /** Format: uuid */
+            readonly payment_attempt_id: string | null;
+            readonly simulated_capture_available: boolean;
             /** Format: date-time */
             readonly activated_at: string | null;
             /** Format: date-time */
@@ -5934,6 +6410,8 @@ export interface components {
             readonly name: string;
             readonly description: string;
             readonly icon_key: string;
+            /** Format: uri */
+            readonly image_url: string;
             readonly subcategories: components["schemas"]["Subcategory"][];
         };
         /**
@@ -5978,6 +6456,78 @@ export interface components {
          * @enum {string}
          */
         CheckoutStatusEnum: "CREATED" | "FINDING_PARTNER" | "PARTNER_COMMITTED" | "PAYMENT_PENDING" | "COMPLETED" | "REPLAN_REQUIRED" | "CANCELLED" | "EXPIRED";
+        /**
+         * @description * `PARTNER_QUOTE` - Partner quote total
+         *     * `TAXABLE_VALUE` - Taxable value
+         *     * `NONE` - Not applicable
+         * @enum {string}
+         */
+        CommercialAmountBasisEnum: "PARTNER_QUOTE" | "TAXABLE_VALUE" | "NONE";
+        CommercialPolicy: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly version: number;
+            readonly status: components["schemas"]["Status24aEnum"];
+            readonly approval_reference: string;
+            /** Format: date-time */
+            readonly effective_from: string;
+            /** Format: date-time */
+            readonly effective_until: string | null;
+            /** Format: date-time */
+            readonly approved_at: string | null;
+            readonly supplier_of_record: components["schemas"]["CommercialSupplierOfRecordEnum"];
+            readonly material_supplier_of_record: components["schemas"]["CommercialSupplierOfRecordEnum"];
+            readonly visit_supplier_of_record: components["schemas"]["CommercialSupplierOfRecordEnum"];
+            readonly tax_basis: components["schemas"]["CommercialPolicyTaxBasisEnum"];
+            readonly tax_rates_bps: unknown;
+            readonly material_tax_category: string;
+            readonly charge_tax_categories: unknown;
+            readonly platform_fee_treatment: components["schemas"]["PlatformFeeTreatmentEnum"];
+            readonly platform_fee_bps: number | null;
+            readonly platform_fee_tax_bps: number | null;
+            readonly commission_bps: number | null;
+            readonly commission_basis: components["schemas"]["CommercialAmountBasisEnum"];
+            readonly withholding_bps: number | null;
+            readonly withholding_basis: components["schemas"]["CommercialAmountBasisEnum"];
+        };
+        CommercialPolicyActivateRequest: {
+            version: number;
+            approval_reference: string;
+            /** Format: date-time */
+            effective_from: string;
+            /** Format: date-time */
+            effective_until?: string | null;
+            supplier_of_record: components["schemas"]["CommercialSupplierOfRecordEnum"];
+            material_supplier_of_record: components["schemas"]["CommercialSupplierOfRecordEnum"];
+            visit_supplier_of_record: components["schemas"]["CommercialSupplierOfRecordEnum"];
+            tax_basis: components["schemas"]["CommercialPolicyTaxBasisEnum"];
+            tax_rates_bps: {
+                [key: string]: number;
+            };
+            material_tax_category: string;
+            charge_tax_categories?: {
+                [key: string]: string;
+            };
+            platform_fee_treatment: components["schemas"]["PlatformFeeTreatmentEnum"];
+            platform_fee_bps: number;
+            platform_fee_tax_bps: number;
+            commission_bps: number;
+            commission_basis: components["schemas"]["CommercialAmountBasisEnum"];
+            withholding_bps: number;
+            withholding_basis: components["schemas"]["CommercialAmountBasisEnum"];
+        };
+        /**
+         * @description * `INCLUSIVE` - Included in Partner rates
+         *     * `EXCLUSIVE` - Added to Partner rates
+         * @enum {string}
+         */
+        CommercialPolicyTaxBasisEnum: "INCLUSIVE" | "EXCLUSIVE";
+        /**
+         * @description * `PARTNER` - Partner
+         *     * `VSOLVE` - V Solve Hub
+         * @enum {string}
+         */
+        CommercialSupplierOfRecordEnum: "PARTNER" | "VSOLVE";
         CommunicationPreference: {
             channel: components["schemas"]["ChannelEnum"];
             purpose: string;
@@ -6115,6 +6665,9 @@ export interface components {
          */
         CrewAssignRequest: {
             membership_ids: string[];
+            roles?: {
+                [key: string]: string;
+            };
             /** @default  */
             reason_code: string;
         };
@@ -6133,6 +6686,130 @@ export interface components {
             date: string;
             is_available: boolean;
             reason?: string;
+        };
+        /**
+         * @description One thing the Customer said, in the catalogue's own words (`crew_brief`).
+         *
+         *     `question` and `value` are display text resolved server-side from the configuration's question
+         *     schema — an option's label rather than its code, "Yes" rather than `true` — so a client renders
+         *     the brief without knowing any service's vocabulary. `code` travels for support and tests.
+         */
+        CrewBriefLine: {
+            readonly code: string;
+            readonly question: string;
+            readonly value: string;
+        };
+        /** @description Approve or reject one document. A rejection's reason reaches the Partner verbatim. */
+        CrewDocumentDecisionRequest: {
+            approved: boolean;
+            /** @default  */
+            reason: string;
+        };
+        /**
+         * @description * `GOVERNMENT_ID` - Government identity
+         *     * `ADDRESS_PROOF` - Address proof
+         *     * `POLICE_VERIFICATION` - Police verification
+         * @enum {string}
+         */
+        CrewDocumentKindEnum: "GOVERNMENT_ID" | "ADDRESS_PROOF" | "POLICE_VERIFICATION";
+        CrewDocumentReviewList: {
+            /** Format: uuid */
+            membership_id: string;
+            crew_member_name: string;
+            partner_name: string;
+            /** Format: date-time */
+            documents_verified_at: string | null;
+            missing_required_kinds: string[];
+            documents: components["schemas"]["CrewDocumentReviewRow"][];
+            /** Format: date-time */
+            server_now: string;
+        };
+        /**
+         * @description One identity document as a reviewer sees it, including the link to the file itself.
+         *
+         *     `review_url` is signed, short-lived and **nullable**: a storage outage degrades this screen to
+         *     a queue with one missing preview rather than to an error page that hides the other nine people
+         *     waiting. Nothing stores the URL, because a stored URL is a stored expiry.
+         */
+        CrewDocumentReviewRow: {
+            /** Format: uuid */
+            document_id: string;
+            kind: components["schemas"]["CrewDocumentKindEnum"];
+            kind_label: string;
+            status: components["schemas"]["CrewDocumentStatusEnum"];
+            version: number;
+            content_type: string;
+            size_bytes: number;
+            /** Format: date-time */
+            uploaded_at: string;
+            /** Format: date-time */
+            reviewed_at: string | null;
+            review_reason: string;
+            /** Format: date */
+            expires_on: string | null;
+            review_url: string | null;
+        };
+        /**
+         * @description Where one kind of identity document stands, as the Partner is allowed to see it.
+         *
+         *     No reviewer name and no link to the file. A Partner is entitled to know whether their worker
+         *     is cleared and, on a rejection, why; who inside Operations decided is not theirs, and the
+         *     stored object is reachable only through a reviewer's short-lived signed link.
+         */
+        CrewDocumentState: {
+            readonly kind: components["schemas"]["CrewDocumentKindEnum"];
+            readonly status: components["schemas"]["CrewDocumentStatusEnum"];
+            readonly reason: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `AWAITING_UPLOAD` - Awaiting upload
+         *     * `PENDING` - Pending review
+         *     * `APPROVED` - Approved
+         *     * `REJECTED` - Rejected
+         *     * `SUPERSEDED` - Superseded
+         *     * `FAILED` - Failed
+         * @enum {string}
+         */
+        CrewDocumentStatusEnum: "AWAITING_UPLOAD" | "PENDING" | "APPROVED" | "REJECTED" | "SUPERSEDED" | "FAILED";
+        CrewDocumentSubmitRequest: {
+            /** Format: uuid */
+            document_id: string;
+        };
+        /** @description Where to PUT the file, and the row that is waiting for it. */
+        CrewDocumentUploadGrant: {
+            /** Format: uuid */
+            readonly document_id: string;
+            readonly kind: components["schemas"]["CrewDocumentKindEnum"];
+            readonly upload_url: string;
+            readonly upload_token: string;
+            /** Format: date-time */
+            readonly expires_at: string;
+            readonly max_bytes: number;
+        };
+        /**
+         * @description What the Partner declares before a byte is sent.
+         *
+         *     Declared up front so the stored object can be checked against it afterwards. A client that
+         *     says "a 2 MB PDF with this digest" and uploads something else fails at `submit`, not at a
+         *     reviewer's desk.
+         */
+        CrewDocumentUploadRequestRequest: {
+            kind: components["schemas"]["CrewDocumentKindEnum"];
+            content_type: string;
+            size_bytes: number;
+            sha256: string;
+        };
+        /**
+         * @description Settle a disputed crew gender. `reason` is required, and blank is not a gender.
+         *
+         *     The domain refuses both a blank value and a blank reason, so this only has to accept the
+         *     shape; the rule lives in `operations.correct_crew_gender` where a second caller reaches it too.
+         */
+        CrewGenderCorrectionRequest: {
+            gender: components["schemas"]["GenderEnum"];
+            reason: string;
         };
         CrewList: {
             readonly members: components["schemas"]["CrewMember"][];
@@ -6160,6 +6837,8 @@ export interface components {
             readonly documents_verified_at: string | null;
             /** Format: date-time */
             readonly added_at: string;
+            readonly gender: components["schemas"]["GenderEnum"] | components["schemas"]["BlankEnum"];
+            readonly documents: components["schemas"]["CrewDocumentState"][];
         };
         CrewMemberCreateRequest: {
             display_name: string;
@@ -6167,6 +6846,8 @@ export interface components {
             skill_codes?: string[];
             /** @default false */
             is_supervisor: boolean;
+            /** @default  */
+            gender: components["schemas"]["GenderEnum"] | components["schemas"]["BlankEnum"];
         };
         CrewMembershipVerificationRow: {
             /** Format: uuid */
@@ -6180,6 +6861,27 @@ export interface components {
             added_at: string;
             /** Format: date-time */
             documents_verified_at: string | null;
+            gender: components["schemas"]["GenderEnum"] | components["schemas"]["BlankEnum"];
+            documents_pending: number;
+            documents_approved: number;
+        };
+        /**
+         * @description One role and the men/women the Customer asked for in it (`crew_mix`).
+         *
+         *     Structured rather than prose because the Partner does not read this, they *check* it: the
+         *     offer screen draws a counter per role, and the assignment screen ticks each one off as names
+         *     are added. A sentence cannot be counted against.
+         *
+         *     `role_label` is the catalogue's own words, resolved server-side, so no client hard-codes what a
+         *     "hostess" is. Roles nobody asked for are absent rather than zeroed -- "0 bartenders" is not a
+         *     fact a lead plans around.
+         */
+        CrewMixLine: {
+            readonly role_code: string;
+            readonly role_label: string;
+            readonly men: number;
+            readonly women: number;
+            readonly total: number;
         };
         /**
          * @description * `customer_no_show` - Nobody was at the site
@@ -6221,6 +6923,8 @@ export interface components {
             /** Format: date-time */
             readonly requested_start: string | null;
             readonly area_label: string;
+            readonly brief: components["schemas"]["CrewBriefLine"][];
+            readonly crew_mix: components["schemas"]["CrewMixLine"][];
             /** Format: date-time */
             readonly server_now: string;
         };
@@ -6258,6 +6962,8 @@ export interface components {
             readonly hold_expires_at: string | null;
             /** Format: date-time */
             readonly requested_start: string | null;
+            readonly brief: components["schemas"]["CrewBriefLine"][];
+            readonly crew_mix: components["schemas"]["CrewMixLine"][];
             /** Format: date-time */
             readonly server_now: string;
         };
@@ -6280,6 +6986,29 @@ export interface components {
             /** Format: date-time */
             readonly server_now: string;
         };
+        /**
+         * @description The frozen rate-card terms behind a crew booking, as both sides need to read them.
+         *
+         *     Every figure is the one snapshotted at booking (`terms_snapshot`), never the live card. The
+         *     Customer's all-in total and the lead's receipt are both here because the two apps show
+         *     different halves: the Customer sees what they pay the crew and the fee they paid Vsolve; the
+         *     lead sees what they receive per day and never the fee.
+         */
+        CrewTerms: {
+            readonly headcount: number;
+            readonly days: number;
+            readonly per_worker_day_paise: number;
+            readonly lead_day_receipt_paise: number;
+            readonly lead_receipt_paise: number;
+            readonly booking_fee_paise: number;
+            readonly total_customer_paise: number;
+            readonly standard_day_hours: number | null;
+            readonly overtime_hourly_paise: number | null;
+            readonly add_on_rates: {
+                [key: string]: number;
+            };
+            readonly inclusions: string[];
+        };
         CrewVerificationQueue: {
             memberships: components["schemas"]["CrewMembershipVerificationRow"][];
             /** Format: date-time */
@@ -6300,6 +7029,42 @@ export interface components {
         CsrfToken: {
             readonly csrf_token: string;
         };
+        CustomWorkItemReview: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly partner: string;
+            readonly partner_business_name: string;
+            /** Format: uuid */
+            readonly proposal: string | null;
+            readonly title: string;
+            readonly unit: string;
+            readonly rate_paise: number;
+            readonly status: components["schemas"]["CustomWorkItemReviewStatusEnum"];
+            /** Format: uuid */
+            readonly resolved_by: string | null;
+            /** Format: date-time */
+            readonly resolved_at: string | null;
+            /** Format: uuid */
+            readonly promoted_work_item: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        CustomWorkItemReviewList: {
+            reviews: components["schemas"]["CustomWorkItemReview"][];
+        };
+        CustomWorkItemReviewResolveRequest: {
+            approve: boolean;
+            /** Format: uuid */
+            skill_id?: string | null;
+        };
+        /**
+         * @description * `PENDING` - Pending review
+         *     * `APPROVED` - Approved
+         *     * `REJECTED` - Rejected
+         * @enum {string}
+         */
+        CustomWorkItemReviewStatusEnum: "PENDING" | "APPROVED" | "REJECTED";
         /**
          * @description One visit, as the Customer who paid for it sees it.
          *
@@ -6355,6 +7120,15 @@ export interface components {
             readonly revision: number;
             /** Format: date-time */
             readonly revalidation_requested_at: string | null;
+            readonly revision_request: components["schemas"]["RevisionRequest"] | null;
+            readonly questions: components["schemas"]["RequirementQuestion"][];
+            /**
+             * @description Who wrote this, and what a Customer may weigh before choosing them.
+             *
+             *     The trust figures are read off completed engagements and Customer ratings at read time —
+             *     never stored, never an input to matching. A vendor with no rated work publishes `null`
+             *     rather than a number nobody gave.
+             */
             readonly vendor: {
                 [key: string]: unknown;
             };
@@ -6362,15 +7136,37 @@ export interface components {
             readonly rate_paise_per_worker_day: number | null;
             readonly minimum_days: number | null;
             readonly worker_count: number | null;
+            readonly estimate_type: components["schemas"]["EstimateTypeEnum"];
+            readonly item_lines: components["schemas"]["ProposalItemLine"][];
+            readonly labour_lines: components["schemas"]["ProposalLabourLine"][];
+            readonly other_charges: components["schemas"]["ProposalOtherCharge"][];
+            readonly discount_kind: (components["schemas"]["DiscountKindEnum"] | components["schemas"]["NullEnum"]) | null;
+            readonly discount_bps: number | null;
+            readonly discount_base_paise: number;
+            readonly discount_paise: number;
+            readonly discount_source: (components["schemas"]["DiscountSourceEnum"] | components["schemas"]["NullEnum"]) | null;
             readonly total_paise: number;
             readonly tax_paise: number;
             readonly tax_basis: components["schemas"]["ProposalTaxBasisEnum"];
-            readonly commission_treatment: string;
+            readonly calculation_snapshot: unknown;
+            readonly line_subtotal_paise: number;
+            readonly authorized_charges_paise: number;
+            readonly taxable_value_paise: number;
+            readonly partner_quote_total_paise: number;
+            readonly platform_fee_paise: number;
+            readonly platform_fee_tax_paise: number;
+            readonly customer_total_paise: number;
             readonly inclusions: unknown;
             readonly exclusions: unknown;
+            readonly scope_summary: string;
             readonly stages: components["schemas"]["ProposalStage"][];
             readonly material_lines: components["schemas"]["ProposalMaterialLine"][];
+            readonly material_list: components["schemas"]["ProposalMaterialListLine"][];
+            readonly material_brand_tier: string;
+            readonly material_fulfilment_mode: components["schemas"]["MaterialFulfilmentModeEnum"];
+            readonly included_supply_list: components["schemas"]["ProposalIncludedSupplyLine"][];
             readonly warranty_terms: string;
+            readonly completion_days: number | null;
             /** Format: date-time */
             readonly valid_until: string | null;
             /** Format: date-time */
@@ -6381,6 +7177,18 @@ export interface components {
             readonly non_responsive_rejections_remaining: number | null;
             /** Format: date-time */
             readonly server_now: string;
+        };
+        CustomerRequestedVisitSlots: {
+            readonly slots: components["schemas"]["VisitPlanShare"][];
+            /** Format: date-time */
+            readonly server_now: string;
+        };
+        /** @description Exactly one signed grid token per estimate requested by the Customer. */
+        CustomerVisitSlotChoiceRequest: {
+            slot_ids: string[];
+        };
+        CustomerVisitSlotReplaceRequest: {
+            slot_id: string;
         };
         /**
          * @description The evening dual tap, and the exact published amount behind it (`M2-BE-536`, `537`).
@@ -6499,6 +7307,18 @@ export interface components {
          * @enum {string}
          */
         DependencyEnum: "NONE" | "LEFT_BEFORE_RIGHT" | "RIGHT_BEFORE_LEFT";
+        /**
+         * @description * `PERCENT` - Percentage
+         *     * `FIXED` - Final amount
+         * @enum {string}
+         */
+        DiscountKindEnum: "PERCENT" | "FIXED";
+        /**
+         * @description * `CUSTOMER_REQUEST` - Customer request
+         *     * `PARTNER_OFFER` - Partner offer
+         * @enum {string}
+         */
+        DiscountSourceEnum: "CUSTOMER_REQUEST" | "PARTNER_OFFER";
         DispatchAttempt: {
             /** Format: uuid */
             attempt_id: string;
@@ -6598,6 +7418,12 @@ export interface components {
             readonly id: string;
             /** Format: uuid */
             readonly requirement: string;
+            readonly service_name: string;
+            readonly service_slug: string;
+            readonly crew_terms: components["schemas"]["CrewTerms"] | null;
+            readonly site_address: components["schemas"]["EngagementSiteAddress"] | null;
+            readonly customer_contact: components["schemas"]["EngagementContact"] | null;
+            readonly partner_contact: components["schemas"]["EngagementContact"] | null;
             /** Format: uuid */
             readonly proposal: string | null;
             /** Format: uuid */
@@ -6696,6 +7522,11 @@ export interface components {
          * @enum {string}
          */
         EngagementCommercialModeEnum: "LEAD_ONLY" | "MANAGED_PAYMENT_REQUIRED";
+        /** @description A name and a phone number, disclosed only once `contact_released_at` is stamped. */
+        EngagementContact: {
+            readonly name: string;
+            readonly phone: string;
+        };
         /**
          * @description One line of the agreement's history.
          *
@@ -6727,6 +7558,16 @@ export interface components {
             readonly previous: string | null;
             readonly results: components["schemas"]["Engagement"][];
         };
+        /** @description Where the work is. Same shape as the visit-side disclosure; no coordinates. */
+        EngagementSiteAddress: {
+            readonly line1: string;
+            readonly line2: string;
+            readonly landmark: string;
+            readonly locality: string;
+            readonly city: string;
+            readonly state: string;
+            readonly postal_code: string;
+        };
         /**
          * @description One shift-day or one milestone, with its money and its clocks.
          *
@@ -6745,6 +7586,8 @@ export interface components {
             readonly position: number;
             readonly label: string;
             readonly amount_paise: number;
+            readonly funding_breakdown: unknown;
+            readonly shift_summary: components["schemas"]["ShiftDaySummary"] | null;
             readonly kind: components["schemas"]["EngagementStageKindEnum"];
             /** Format: date */
             readonly starts_on: string | null;
@@ -6823,7 +7666,8 @@ export interface components {
          *
          *     Reads the **snapshot**, not the live requirement: the snapshot is what this vendor was invited
          *     against, and re-reading the requirement would silently move the goalposts under a quote in
-         *     progress. Customer identity and address are absent before acceptance by design.
+         *     progress. Customer identity and the exact address are absent from this list by design; only a
+         *     locality-level area is published.
          */
         EnquiryDetail: {
             /** Format: uuid */
@@ -6832,6 +7676,7 @@ export interface components {
             readonly requirement_id: string;
             readonly category_slug: string;
             readonly service_name: string;
+            readonly approximate_area: string;
             readonly archetype: string;
             readonly requirement_status: string;
             readonly status: components["schemas"]["VendorInvitationStatusEnum"];
@@ -6840,15 +7685,22 @@ export interface components {
             readonly requested_start: string;
             /** Format: date */
             readonly service_by: string;
-            readonly language: string;
+            /** Format: date-time */
+            readonly fixed_visit_start: string | null;
+            readonly fixed_visit_duration_minutes: number | null;
+            readonly fixed_visit_earning_paise: number | null;
+            readonly fixed_visit_status: string | null;
             /** Format: date-time */
             readonly responds_by: string;
+            readonly pricing_skill_code: string;
+            readonly material_fulfilment_mode: (components["schemas"]["MaterialFulfilmentModeEnum"] | components["schemas"]["NullEnum"]) | null;
             readonly latest_proposal_status: string | null;
             readonly latest_proposal_rejection_reason: string | null;
             /** Format: date-time */
             readonly created_at: string;
             readonly answers: unknown;
-            readonly additional_details: string;
+            readonly brief: components["schemas"]["CrewBriefLine"][];
+            readonly crew_mix: components["schemas"]["CrewMixLine"][];
             readonly budget_min_paise: number | null;
             readonly budget_max_paise: number | null;
             readonly required_tax_basis: string;
@@ -6858,6 +7710,9 @@ export interface components {
             }[];
             readonly questions: components["schemas"]["RequirementQuestion"][];
             readonly site_visits: components["schemas"]["SiteVisit"][];
+            readonly site_address: components["schemas"]["PartnerSiteAddress"] | null;
+            readonly customer_name: string | null;
+            readonly customer_phone: string | null;
             readonly server_now: string;
         };
         /**
@@ -6865,7 +7720,8 @@ export interface components {
          *
          *     Reads the **snapshot**, not the live requirement: the snapshot is what this vendor was invited
          *     against, and re-reading the requirement would silently move the goalposts under a quote in
-         *     progress. Customer identity and address are absent before acceptance by design.
+         *     progress. Customer identity and the exact address are absent from this list by design; only a
+         *     locality-level area is published.
          */
         EnquirySummary: {
             /** Format: uuid */
@@ -6874,6 +7730,7 @@ export interface components {
             readonly requirement_id: string;
             readonly category_slug: string;
             readonly service_name: string;
+            readonly approximate_area: string;
             readonly archetype: string;
             readonly requirement_status: string;
             readonly status: components["schemas"]["VendorInvitationStatusEnum"];
@@ -6882,9 +7739,15 @@ export interface components {
             readonly requested_start: string;
             /** Format: date */
             readonly service_by: string;
-            readonly language: string;
+            /** Format: date-time */
+            readonly fixed_visit_start: string | null;
+            readonly fixed_visit_duration_minutes: number | null;
+            readonly fixed_visit_earning_paise: number | null;
+            readonly fixed_visit_status: string | null;
             /** Format: date-time */
             readonly responds_by: string;
+            readonly pricing_skill_code: string;
+            readonly material_fulfilment_mode: (components["schemas"]["MaterialFulfilmentModeEnum"] | components["schemas"]["NullEnum"]) | null;
             readonly latest_proposal_status: string | null;
             readonly latest_proposal_rejection_reason: string | null;
             /** Format: date-time */
@@ -6908,6 +7771,12 @@ export interface components {
             expected_version: number;
             severity: components["schemas"]["OperationsCaseSeverityEnum"];
         };
+        /**
+         * @description * `ITEM_WISE` - Item-wise
+         *     * `LABOUR_WISE` - Labour-wise
+         * @enum {string}
+         */
+        EstimateTypeEnum: "ITEM_WISE" | "LABOUR_WISE";
         /**
          * @description The client's claim about what it uploaded; Django streams the object and checks it.
          *
@@ -7076,6 +7945,14 @@ export interface components {
          * @enum {string}
          */
         GateNextActionEnum: "SUBMIT_APPLICATION" | "ADD_PAYOUT_ACCOUNT" | "ADD_CREW_MEMBER";
+        /**
+         * @description * `MAN` - Man
+         *     * `WOMAN` - Woman
+         *     * `OTHER` - Other
+         *     * `UNDISCLOSED` - Prefers not to say
+         * @enum {string}
+         */
+        GenderEnum: "MAN" | "WOMAN" | "OTHER" | "UNDISCLOSED";
         GroupAddressChangeRequestRequest: {
             expected_version: number;
             /** Format: uuid */
@@ -7168,6 +8045,54 @@ export interface components {
             note: string;
             items: components["schemas"]["DeliverableInputRequest"][];
         };
+        /**
+         * @description * `service` - Generic service
+         *     * `electrical` - Electrical
+         *     * `plumbing` - Plumbing
+         *     * `carpentry` - Carpentry
+         *     * `air-conditioning` - Air conditioning
+         *     * `water-purifier` - Water purifier
+         *     * `internet-wifi` - Internet and Wi-Fi
+         *     * `gas-stove` - Gas stove
+         *     * `computer` - Computer
+         *     * `mobile` - Mobile
+         *     * `security-camera` - Security camera
+         *     * `locksmith` - Locksmith
+         *     * `home-automation` - Home automation
+         *     * `fire-safety` - Fire safety
+         *     * `face-care` - Face care
+         *     * `beauty-treatment` - Beauty treatment
+         *     * `waxing` - Waxing
+         *     * `threading` - Threading
+         *     * `hair-care` - Hair care
+         *     * `nail-care` - Nail care
+         *     * `makeup` - Makeup
+         *     * `mehendi` - Mehendi
+         *     * `body-care` - Body care
+         *     * `skin-care` - Advanced skin care
+         *     * `home-cleaning` - Home cleaning
+         *     * `sofa-carpet` - Sofa and carpet cleaning
+         *     * `pest-control` - Pest control
+         *     * `water-tank` - Water tank
+         *     * `septic-tank` - Septic tank
+         *     * `laundry` - Laundry
+         *     * `gardening` - Gardening
+         *     * `swimming-pool` - Swimming pool
+         *     * `chimney-exhaust` - Chimney and exhaust
+         *     * `home-organization` - Home organization
+         *     * `home-inspection` - Home inspection
+         *     * `home-maintenance` - Home maintenance
+         *     * `pet-grooming` - Pet grooming
+         *     * `veterinary` - Veterinary
+         *     * `pet-walking` - Pet walking
+         *     * `pet-sitting` - Pet sitting
+         *     * `pet-training` - Pet training
+         *     * `pet-photography` - Pet photography
+         *     * `workforce` - Workforce
+         *     * `custom-project` - Custom project
+         * @enum {string}
+         */
+        IconKeyEnum: "service" | "electrical" | "plumbing" | "carpentry" | "air-conditioning" | "water-purifier" | "internet-wifi" | "gas-stove" | "computer" | "mobile" | "security-camera" | "locksmith" | "home-automation" | "fire-safety" | "face-care" | "beauty-treatment" | "waxing" | "threading" | "hair-care" | "nail-care" | "makeup" | "mehendi" | "body-care" | "skin-care" | "home-cleaning" | "sofa-carpet" | "pest-control" | "water-tank" | "septic-tank" | "laundry" | "gardening" | "swimming-pool" | "chimney-exhaust" | "home-organization" | "home-inspection" | "home-maintenance" | "pet-grooming" | "veterinary" | "pet-walking" | "pet-sitting" | "pet-training" | "pet-photography" | "workforce" | "custom-project";
         /**
          * @description * `partner` - partner
          * @enum {string}
@@ -7277,6 +8202,31 @@ export interface components {
             /** @default false */
             all: boolean;
         };
+        /**
+         * @description * `SEARCHING` - Searching
+         *     * `HELD` - Professional held while payment is pending
+         *     * `BOOKED` - Booked
+         *     * `VISITED` - Visited
+         *     * `ESTIMATE_RECEIVED` - Estimate received
+         *     * `NO_PROFESSIONAL_FOUND` - No professional found
+         *     * `CANCELLED` - Cancelled
+         *     * `RECOVERY` - Recovery
+         * @enum {string}
+         */
+        MatchingStatusEnum: "SEARCHING" | "HELD" | "BOOKED" | "VISITED" | "ESTIMATE_RECEIVED" | "NO_PROFESSIONAL_FOUND" | "CANCELLED" | "RECOVERY";
+        /**
+         * @description * `STANDARD` - Standard
+         *     * `PREMIUM` - Premium
+         * @enum {string}
+         */
+        MaterialBrandTierEnum: "STANDARD" | "PREMIUM";
+        /**
+         * @description * `NOT_APPLICABLE` - Not applicable
+         *     * `CUSTOMER_PROCURES` - Customer procures
+         *     * `PARTNER_TURNKEY` - Partner supplies turnkey
+         * @enum {string}
+         */
+        MaterialFulfilmentModeEnum: "NOT_APPLICABLE" | "CUSTOMER_PROCURES" | "PARTNER_TURNKEY";
         /**
          * @description * `SAME_PARTNER_SEQUENTIAL` - Same Partner sequential
          *     * `PARALLEL_ALLOWED` - Parallel allowed
@@ -7785,6 +8735,10 @@ export interface components {
             reason: string;
             decision: components["schemas"]["OperationsRefundReviewDecisionEnum"];
         };
+        OperationsTaxProfileVerifyRequest: {
+            /** @default  */
+            registered_state_code: string;
+        };
         OperationsTouch: {
             /** Format: uuid */
             id: string;
@@ -7981,16 +8935,21 @@ export interface components {
         /**
          * @description The same visit, as the Partner assigned to it sees it.
          *
-         *     Deliberately does not carry `order_id`, any sibling unit, or any money beyond the per-task
-         *     amounts the Partner is working to. The Booking Group is not addressable from here at all:
-         *     `G7` requires that a Partner cannot reach a sibling unit's scope or earnings, and the
-         *     cheapest way to guarantee that is to never publish the identifier that would let them try.
+         *     Deliberately does not carry `order_id`, any sibling unit, the Customer's invoice, or their
+         *     exact address. Its estimate and settled earning are this Partner's own money for this one
+         *     unit. The Booking Group is not addressable from here at all: `G7` requires that a Partner
+         *     cannot reach a sibling unit's scope or earnings, and the cheapest way to guarantee that is to
+         *     never publish the identifier that would let them try.
          */
         PartnerBooking: {
             /** Format: uuid */
             readonly id: string;
             /** Format: uuid */
             readonly fulfilment_unit_id: string | null;
+            readonly display_title: string | null;
+            readonly approximate_area: string | null;
+            readonly service_lines: components["schemas"]["PartnerBookingServiceLine"][];
+            readonly requirements: string[];
             readonly status: components["schemas"]["BookingStatusEnum"];
             readonly version: number;
             /** Format: date-time */
@@ -8007,7 +8966,9 @@ export interface components {
             readonly work_tasks: components["schemas"]["WorkTask"][];
             readonly evidence: components["schemas"]["WorkEvidence"][];
             readonly active_amendment: components["schemas"]["ScopeAmendment"] | null;
+            readonly estimated_earning: components["schemas"]["PartnerBookingEstimatedEarning"] | null;
             readonly earning: components["schemas"]["PartnerBookingEarning"] | null;
+            /** Format: date-time */
             readonly server_now: string;
         };
         /** @description One Partner's own money for one job — never the Customer's invoice. */
@@ -8019,6 +8980,13 @@ export interface components {
             status: string;
             calculation_snapshot: unknown;
         };
+        /** @description The booked-scope estimate, before completion determines the final ledger earning. */
+        PartnerBookingEstimatedEarning: {
+            gross_paise: number;
+            commission_paise: number;
+            net_paise: number;
+            currency: string;
+        };
         PartnerBookingPage: {
             /** Format: uri */
             next: string | null;
@@ -8028,12 +8996,27 @@ export interface components {
             /** Format: date-time */
             server_now: string;
         };
+        /** @description One immutable service line carried from the offer into the accepted job. */
+        PartnerBookingServiceLine: {
+            /** Format: uuid */
+            line_id: string;
+            service_label: string;
+            quantity: number;
+            scope: {
+                [key: string]: unknown;
+            };
+        };
         PartnerBusinessProfile: {
             readonly business_type: components["schemas"]["PartnerBusinessTypeEnum"];
             readonly legal_name: string;
             readonly registration_number: string;
             readonly gst_registered: boolean;
             readonly gstin: string;
+            /** Format: date-time */
+            readonly gstin_verified_at: string | null;
+            readonly registered_state_code: string;
+            /** Format: date */
+            readonly tax_profile_effective_from: string | null;
             readonly years_in_operation: number;
             readonly upi_vpa: string;
             /** Format: date-time */
@@ -8302,18 +9285,21 @@ export interface components {
         /**
          * @description How a Partner is doing, in the periods they think in.
          *
-         *     Counts come from `EARNING` ledger entries — one per completed booking, written
-         *     at settlement — so "jobs done" is never inferred from a mutable booking
-         *     timestamp. Revenue sums every entry kind, so an adjustment or reversal shows
-         *     up the day it lands rather than drifting from the balance beside it.
+         *     Platform-paid earnings come from the immutable payout ledger; direct-paid A3
+         *     crew earnings come from mutually confirmed day settlements. Job counts use
+         *     durable booking/visit earning records and engagement ``completed_at`` values,
+         *     never mutable update timestamps or one row per project stage.
          */
         PartnerPerformance: {
             today_net_paise: number;
+            today_direct_paise: number;
             today_jobs: number;
             month_net_paise: number;
+            month_direct_paise: number;
             month_jobs: number;
             average_monthly_net_paise: number;
             lifetime_net_paise: number;
+            lifetime_direct_paise: number;
             lifetime_jobs: number;
             daily: components["schemas"]["PartnerDailyPerformance"][];
             currency: string;
@@ -8375,6 +9361,21 @@ export interface components {
             readonly member_since: string;
             readonly has_payout_account: boolean;
         };
+        PartnerRateItem: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly work_item: string;
+            readonly rate_paise: number;
+            readonly is_active: boolean;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        PartnerRateItemSetRequest: {
+            rate_paise: number;
+            /** @default true */
+            is_active: boolean;
+        };
         PartnerSchedule: {
             readonly rules: components["schemas"]["PartnerAvailabilityRule"][];
             readonly exceptions: components["schemas"]["PartnerAvailabilityException"][];
@@ -8390,6 +9391,21 @@ export interface components {
             readonly name: string;
             readonly timezone: string;
             readonly is_accepting_partners: boolean;
+        };
+        /**
+         * @description The visit destination, disclosed only once the paid visit is genuinely scheduled.
+         *
+         *     Customer identity and contact remain absent. Coordinates remain absent too: the Partner needs
+         *     a destination, not a reusable precision-location feed.
+         */
+        PartnerSiteAddress: {
+            line1: string;
+            line2: string;
+            landmark: string;
+            locality: string;
+            city: string;
+            state: string;
+            postal_code: string;
         };
         /** @description A code/name pair, for the chips the directory renders. */
         PartnerSkillChip: {
@@ -8475,15 +9491,20 @@ export interface components {
             };
         };
         /**
-         * @description Skills and the supervisor flag only.
+         * @description The name this agency uses, their skills, the supervisor flag, and gender.
          *
-         *     `display_name` is **not** editable here. It belongs to the global `CrewMember`, which several
-         *     agencies may share, so one agency renaming a person would rename them on every other roster.
-         *     Read-only with the reason stated beats editable-and-scoped, which a later caller can forget.
+         *     `display_name` writes `PartnerCrewMembership.display_name` -- a per-roster label -- and never
+         *     the global `CrewMember`. That is what makes it safe to edit: the shared row keeps whatever the
+         *     first agency registered, and one agency correcting a typo cannot rename the person on another
+         *     agency's screen. Blank is allowed and means "use the global name", which is where every row
+         *     starts.
          */
         PatchedCrewMemberUpdateRequest: {
+            display_name?: string;
             skill_codes?: string[];
             is_supervisor?: boolean;
+            /** @default  */
+            gender: components["schemas"]["GenderEnum"] | components["schemas"]["BlankEnum"];
         };
         /** @description The customer-owned personal fields that may change independently of login. */
         PatchedCustomerProfileUpdateRequest: {
@@ -8540,6 +9561,15 @@ export interface components {
             budget_max_paise?: number | null;
             additional_details?: string;
             language?: string;
+        };
+        /** @description A partial edit. Every field optional — Operations edits one thing at a time. */
+        PatchedWorkItemUpdateRequest: {
+            name?: string;
+            description?: string;
+            status?: components["schemas"]["Status423Enum"];
+            sort_order?: number;
+            band_below_bps?: number | null;
+            band_above_bps?: number | null;
         };
         PaymentAllocation: {
             /** Format: uuid */
@@ -8743,11 +9773,87 @@ export interface components {
             readonly scope_snapshot: unknown;
             readonly configuration_snapshot: unknown;
         };
+        /**
+         * @description * `NONE` - Not applicable
+         *     * `CUSTOMER` - Charged separately to Customer
+         *     * `PARTNER` - Deducted from Partner proceeds
+         * @enum {string}
+         */
+        PlatformFeeTreatmentEnum: "NONE" | "CUSTOMER" | "PARTNER";
+        /** @description One customer's submission, returned only to the customer who wrote it. */
+        PlatformFeedback: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly score: number | null;
+            readonly comment: string;
+            readonly tags: string[];
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        /**
+         * @description Everything optional individually; the command refuses the wholly empty submission.
+         *
+         *     `score` is nullable because a customer who taps "Pricing wasn't clear" and closes has told us
+         *     the useful thing, and demanding a star first would lose it.
+         */
+        PlatformFeedbackCreateRequest: {
+            score?: number | null;
+            tags?: components["schemas"]["PlatformFeedbackTagEnum"][];
+            /** @default  */
+            comment: string;
+        };
+        PlatformFeedbackSummary: {
+            subject_kind: components["schemas"]["SubjectKindEnum"];
+            /** Format: uuid */
+            subject_id: string;
+            can_submit: boolean;
+            my_feedback: components["schemas"]["PlatformFeedback"] | null;
+            available_tags: components["schemas"]["PlatformFeedbackTagOption"][];
+        };
+        /**
+         * @description * `ALL_GOOD` - All good
+         *     * `HARD_TO_BOOK` - Booking was confusing
+         *     * `PRICE_UNCLEAR` - Pricing wasn't clear
+         *     * `SLOW_MATCH` - Took too long to find someone
+         *     * `POOR_UPDATES` - I wasn't kept updated
+         *     * `PAYMENT_TROUBLE` - Payment was a problem
+         *     * `APP_PROBLEM` - The app was slow
+         *     * `WRONG_SERVICE` - What I picked wasn't what I needed
+         * @enum {string}
+         */
+        PlatformFeedbackTagEnum: "ALL_GOOD" | "HARD_TO_BOOK" | "PRICE_UNCLEAR" | "SLOW_MATCH" | "POOR_UPDATES" | "PAYMENT_TROUBLE" | "APP_PROBLEM" | "WRONG_SERVICE";
+        /**
+         * @description One chip, as the server defines it.
+         *
+         *     Published so neither app hardcodes the vocabulary. Two clients drifting from one taxonomy
+         *     produce two sets of counts that look like one.
+         */
+        PlatformFeedbackTagOption: {
+            code: components["schemas"]["PlatformFeedbackTagEnum"];
+            label: string;
+            is_exclusive: boolean;
+        };
         /** @description One visit's chosen start, keyed by the scheduling group it belongs to. */
         PreferredStartRequest: {
             group_key: string;
             /** Format: date-time */
             starts_at: string;
+        };
+        /** @description One catalog item, with its band context and this Partner's own saved rate, if any. */
+        PriceBookEntry: {
+            work_item: components["schemas"]["WorkItem"];
+            reference_rate_paise: number | null;
+            rate_version: number | null;
+            floor_paise: number | null;
+            ceiling_paise: number | null;
+            partner_rate_paise: number | null;
+            partner_is_active: boolean;
+            is_default_rate: boolean;
+            trade_code: string;
+            trade_name: string;
+        };
+        PriceBookList: {
+            items: components["schemas"]["PriceBookEntry"][];
         };
         PrivacyRequest: {
             /** Format: uuid */
@@ -9068,8 +10174,7 @@ export interface components {
             readonly invitation: string;
             /** @default 1 */
             readonly revision: number;
-            /** Format: date-time */
-            readonly revision_expires_at: string | null;
+            readonly revision_request: components["schemas"]["RevisionRequest"] | null;
             readonly status: components["schemas"]["ProposalStatusEnum"];
             readonly usability: components["schemas"]["ProposalUsabilityEnum"];
             readonly rejection_reason: components["schemas"]["RejectionReasonEnum"];
@@ -9080,15 +10185,41 @@ export interface components {
             readonly rate_paise_per_worker_day: number | null;
             readonly minimum_days: number | null;
             readonly worker_count: number | null;
+            readonly estimate_type: components["schemas"]["EstimateTypeEnum"];
+            readonly item_lines: components["schemas"]["ProposalItemLine"][];
+            readonly labour_lines: components["schemas"]["ProposalLabourLine"][];
+            readonly other_charges: components["schemas"]["ProposalOtherCharge"][];
+            readonly discount_kind: (components["schemas"]["DiscountKindEnum"] | components["schemas"]["NullEnum"]) | null;
+            readonly discount_bps: number | null;
+            readonly discount_base_paise: number;
+            readonly discount_paise: number;
+            readonly discount_source: (components["schemas"]["DiscountSourceEnum"] | components["schemas"]["NullEnum"]) | null;
             readonly total_paise: number;
             readonly tax_paise: number;
             readonly tax_basis: components["schemas"]["ProposalTaxBasisEnum"];
             readonly commission_treatment: string;
+            readonly calculation_snapshot: unknown;
+            readonly line_subtotal_paise: number;
+            readonly authorized_charges_paise: number;
+            readonly taxable_value_paise: number;
+            readonly partner_quote_total_paise: number;
+            readonly platform_fee_paise: number;
+            readonly platform_fee_tax_paise: number;
+            readonly customer_total_paise: number;
+            readonly commission_paise: number;
+            readonly withholding_paise: number;
+            readonly partner_net_paise: number;
             readonly inclusions: unknown;
             readonly exclusions: unknown;
+            readonly scope_summary: string;
             readonly stages: components["schemas"]["ProposalStage"][];
             readonly material_lines: components["schemas"]["ProposalMaterialLine"][];
+            readonly material_list: components["schemas"]["ProposalMaterialListLine"][];
+            readonly material_brand_tier: string;
+            readonly material_fulfilment_mode: components["schemas"]["MaterialFulfilmentModeEnum"];
+            readonly included_supply_list: components["schemas"]["ProposalIncludedSupplyLine"][];
             readonly warranty_terms: string;
+            readonly completion_days: number | null;
             /** Format: date-time */
             readonly valid_until: string | null;
             /** Format: date-time */
@@ -9107,23 +10238,162 @@ export interface components {
         ProposalCreateRequest: {
             /** Format: uuid */
             invitation_id: string;
-            total_paise: number;
-            tax_basis: components["schemas"]["ProposalTaxBasisEnum"];
-            /** @default 0 */
-            tax_paise: number;
             rate_paise_per_worker_day?: number | null;
             minimum_days?: number | null;
             worker_count?: number | null;
             stages?: components["schemas"]["ProposalStageRequest"][];
             material_lines?: components["schemas"]["ProposalMaterialLineRequest"][];
+            material_list?: components["schemas"]["ProposalMaterialListLineRequest"][];
+            included_supply_list?: components["schemas"]["ProposalIncludedSupplyLineRequest"][];
+            material_brand_tier?: components["schemas"]["MaterialBrandTierEnum"] | components["schemas"]["BlankEnum"];
+            estimate_type?: components["schemas"]["EstimateTypeEnum"];
+            item_lines?: components["schemas"]["ProposalItemLineRequest"][];
+            labour_lines?: components["schemas"]["ProposalLabourLineRequest"][];
+            other_charges?: components["schemas"]["ProposalOtherChargeRequest"][];
             inclusions?: string[];
             exclusions?: string[];
+            scope_summary?: string;
             warranty_terms?: string;
+            completion_days?: number | null;
             /** Format: date-time */
             valid_until?: string | null;
-            commission_treatment?: string;
             /** Format: uuid */
             site_visit_id?: string | null;
+        };
+        ProposalDiscountPreview: {
+            /** Format: uuid */
+            proposal_id: string;
+            /** Format: uuid */
+            request_id: string;
+            discount_kind: components["schemas"]["DiscountKindEnum"];
+            discount_bps: number | null;
+            discount_base_paise: number;
+            discount_paise: number;
+            customer_total_paise: number;
+            tax_paise: number;
+            partner_net_paise: number;
+            stages: components["schemas"]["ProposalStage"][];
+            material_lines: components["schemas"]["ProposalMaterialLine"][];
+        };
+        /**
+         * @description How the Partner wants the requested overall discount expressed.
+         *
+         *     ``PERCENT`` is the one-tap agreement and carries basis points. ``FIXED`` means the Partner
+         *     typed the final customer total, not a negative charge. Exactly one value is accepted so an
+         *     ambiguous request can never choose whichever number happens to be cheaper.
+         */
+        ProposalDiscountRequestRequest: {
+            discount_kind: components["schemas"]["DiscountKindEnum"];
+            discount_bps?: number | null;
+            final_total_paise?: number | null;
+        };
+        ProposalFinancialSummary: {
+            estimate_type: components["schemas"]["EstimateTypeEnum"];
+            item_lines: components["schemas"]["ProposalItemLine"][];
+            labour_lines: components["schemas"]["ProposalLabourLine"][];
+            material_lines: components["schemas"]["ProposalMaterialLine"][];
+            other_charges: components["schemas"]["ProposalOtherCharge"][];
+            stages: components["schemas"]["ProposalStage"][];
+            suggested_material_list: components["schemas"]["ProposalMaterialListLine"][];
+            suggested_included_supply_list: components["schemas"]["ProposalIncludedSupplyLine"][];
+            material_fulfilment_mode: components["schemas"]["MaterialFulfilmentModeEnum"];
+            line_subtotal_paise: number;
+            material_total_paise: number;
+            authorized_charges_paise: number;
+            discount_base_paise: number;
+            pricing_discount_paise: number;
+            pre_discount_customer_total_paise: number;
+            customer_savings_paise: number;
+            taxable_value_paise: number;
+            partner_service_tax_paise: number;
+            partner_quote_total_paise: number;
+            platform_fee_paise: number;
+            platform_fee_tax_paise: number;
+            customer_total_paise: number;
+            commission_paise: number;
+            withholding_paise: number;
+            partner_net_paise: number;
+            tax_basis: components["schemas"]["ProposalTaxBasisEnum"];
+            policy_version: number;
+            calculation_snapshot: unknown;
+        };
+        /**
+         * @description One material/specification included inside a Partner-turnkey quoted rate.
+         *
+         *     This deliberately shares the quantity/spec/note wire shape with a shopping-list row while
+         *     remaining a different field: it is disclosure, not a task for the Customer and not another
+         *     amount to add to the estimate.
+         */
+        ProposalIncludedSupplyLine: {
+            title: string;
+            spec?: string;
+            unit?: string;
+            /** Format: decimal */
+            quantity: string;
+            note?: string;
+        };
+        /**
+         * @description One material/specification included inside a Partner-turnkey quoted rate.
+         *
+         *     This deliberately shares the quantity/spec/note wire shape with a shopping-list row while
+         *     remaining a different field: it is disclosure, not a task for the Customer and not another
+         *     amount to add to the estimate.
+         */
+        ProposalIncludedSupplyLineRequest: {
+            title: string;
+            spec?: string;
+            unit?: string;
+            /** Format: decimal */
+            quantity: string;
+            note?: string;
+        };
+        /**
+         * @description One priced line. A catalog line names its `work_item_id` and is band-checked at
+         *     submission; any other line is a custom item the Partner added on site (`price_book`).
+         */
+        ProposalItemLine: {
+            category?: string;
+            title: string;
+            unit: components["schemas"]["UnitEnum"];
+            /** Format: decimal */
+            quantity: string;
+            rate_paise: number;
+            readonly amount_paise: number;
+            /** Format: uuid */
+            work_item_id?: string | null;
+            is_custom?: boolean;
+        };
+        /**
+         * @description One priced line. A catalog line names its `work_item_id` and is band-checked at
+         *     submission; any other line is a custom item the Partner added on site (`price_book`).
+         */
+        ProposalItemLineRequest: {
+            category?: string;
+            title: string;
+            unit: components["schemas"]["UnitEnum"];
+            /** Format: decimal */
+            quantity: string;
+            rate_paise: number;
+            /** Format: uuid */
+            work_item_id?: string | null;
+            is_custom?: boolean;
+        };
+        ProposalLabourLine: {
+            role: string;
+            /** @default  */
+            team: string;
+            member_count: number;
+            day_count: number;
+            rate_paise_per_day: number;
+            readonly amount_paise: number;
+        };
+        ProposalLabourLineRequest: {
+            role: string;
+            /** @default  */
+            team: string;
+            member_count: number;
+            day_count: number;
+            rate_paise_per_day: number;
         };
         /**
          * @description One material line on an A5 estimate — **not** a stage, and that is the whole point.
@@ -9143,11 +10413,21 @@ export interface components {
          */
         ProposalMaterialLine: {
             title: string;
-            /** @default 1 */
-            quantity: number;
+            /**
+             * Format: decimal
+             * @default 1.000
+             */
+            quantity: string;
             /** @default  */
             unit: string;
-            amount_paise: number;
+            rate_paise?: number;
+            amount_paise?: number;
+            readonly discount_paise: number;
+            readonly discounted_amount_paise: number;
+            readonly tax_paise: number;
+            readonly platform_fee_paise: number;
+            readonly platform_fee_tax_paise: number;
+            readonly total_due_paise: number;
         };
         /**
          * @description One material line on an A5 estimate — **not** a stage, and that is the whole point.
@@ -9167,10 +10447,66 @@ export interface components {
          */
         ProposalMaterialLineRequest: {
             title: string;
-            /** @default 1 */
-            quantity: number;
+            /**
+             * Format: decimal
+             * @default 1.000
+             */
+            quantity: string;
             /** @default  */
             unit: string;
+            rate_paise?: number;
+            amount_paise?: number;
+        };
+        /**
+         * @description One thing the Customer should buy. Quantities and a spec — **never a price**.
+         *
+         *     Used only when the service configuration says `CUSTOMER_PROCURES`. The server suggests this
+         *     list from the tapped catalog items' recipes; the Partner corrects it after the visit; the
+         *     Customer shops from it. Turnkey services use `included_supply_list` instead. `unit` is free
+         *     text because coils, boxes and bags are all real.
+         */
+        ProposalMaterialListLine: {
+            title: string;
+            spec?: string;
+            unit?: string;
+            /** Format: decimal */
+            quantity: string;
+            note?: string;
+        };
+        /**
+         * @description One thing the Customer should buy. Quantities and a spec — **never a price**.
+         *
+         *     Used only when the service configuration says `CUSTOMER_PROCURES`. The server suggests this
+         *     list from the tapped catalog items' recipes; the Partner corrects it after the visit; the
+         *     Customer shops from it. Turnkey services use `included_supply_list` instead. `unit` is free
+         *     text because coils, boxes and bags are all real.
+         */
+        ProposalMaterialListLineRequest: {
+            title: string;
+            spec?: string;
+            unit?: string;
+            /** Format: decimal */
+            quantity: string;
+            note?: string;
+        };
+        ProposalOtherCharge: {
+            code: components["schemas"]["ProposalOtherChargeCodeEnum"];
+            label: string;
+            amount_paise: number;
+        };
+        /**
+         * @description * `CUSTOM` - CUSTOM
+         *     * `DISPOSAL` - DISPOSAL
+         *     * `EQUIPMENT_DELIVERY` - EQUIPMENT_DELIVERY
+         *     * `LOADING_UNLOADING` - LOADING_UNLOADING
+         *     * `PERMIT` - PERMIT
+         *     * `TRANSPORT` - TRANSPORT
+         * @enum {string}
+         */
+        ProposalOtherChargeCodeEnum: "CUSTOM" | "DISPOSAL" | "EQUIPMENT_DELIVERY" | "LOADING_UNLOADING" | "PERMIT" | "TRANSPORT";
+        ProposalOtherChargeRequest: {
+            code: components["schemas"]["ProposalOtherChargeCodeEnum"];
+            label: string;
             amount_paise: number;
         };
         ProposalPage: {
@@ -9179,6 +10515,39 @@ export interface components {
             /** Format: uri */
             previous: string | null;
             results: components["schemas"]["Proposal"][];
+        };
+        /**
+         * @description Both composers in one shape; the domain validates which fields the archetype requires.
+         *
+         *     Deliberately not two serializers. `proposals.submit_proposal` already runs `_assert_a3_shape`
+         *     or `_assert_a5_shape` against the requirement's own archetype, and a second archetype check
+         *     here would be a copy of that rule which could disagree with it. A vendor sending A5 stages on
+         *     an A3 requirement gets one refusal, from the layer that knows.
+         */
+        ProposalPreviewRequest: {
+            /** Format: uuid */
+            invitation_id: string;
+            rate_paise_per_worker_day?: number | null;
+            minimum_days?: number | null;
+            worker_count?: number | null;
+            stages?: components["schemas"]["ProposalStageRequest"][];
+            material_lines?: components["schemas"]["ProposalMaterialLineRequest"][];
+            material_list?: components["schemas"]["ProposalMaterialListLineRequest"][];
+            included_supply_list?: components["schemas"]["ProposalIncludedSupplyLineRequest"][];
+            material_brand_tier?: components["schemas"]["MaterialBrandTierEnum"] | components["schemas"]["BlankEnum"];
+            estimate_type?: components["schemas"]["EstimateTypeEnum"];
+            item_lines?: components["schemas"]["ProposalItemLineRequest"][];
+            labour_lines?: components["schemas"]["ProposalLabourLineRequest"][];
+            other_charges?: components["schemas"]["ProposalOtherChargeRequest"][];
+            inclusions?: string[];
+            exclusions?: string[];
+            scope_summary?: string;
+            warranty_terms?: string;
+            completion_days?: number | null;
+            /** Format: date-time */
+            valid_until?: string | null;
+            /** Format: uuid */
+            site_visit_id?: string | null;
         };
         ProposalRejectRequest: {
             reason: components["schemas"]["RejectionReasonEnum"];
@@ -9235,6 +10604,13 @@ export interface components {
             /** @default  */
             deliverable: string;
             amount_paise: number;
+            readonly discount_paise: number;
+            readonly discounted_amount_paise: number;
+            readonly position: number;
+            readonly tax_paise: number;
+            readonly platform_fee_paise: number;
+            readonly platform_fee_tax_paise: number;
+            readonly total_due_paise: number;
             /** Format: date */
             starts_on?: string | null;
             duration_days?: number | null;
@@ -9363,6 +10739,41 @@ export interface components {
             /** Format: uuid */
             address_id: string;
             window_id: string;
+        };
+        QuoteGuardrailPolicy: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly version: number;
+            readonly status: components["schemas"]["Status24aEnum"];
+            readonly approval_reference: string;
+            /** Format: date-time */
+            readonly approved_at: string | null;
+            /** Format: date-time */
+            readonly effective_from: string | null;
+            readonly default_band_below_bps: number | null;
+            readonly default_band_above_bps: number | null;
+            readonly misc_cap_bps: number | null;
+            readonly margin_cap_bps: number | null;
+            readonly custom_share_cap_bps: number | null;
+            readonly per_skill_bands: unknown;
+        };
+        /**
+         * @description Every value required, none defaulted — the same rule `CommercialPolicyActivateSerializer`
+         *     keeps, for the same reason: a default here would be this file setting a commercial term.
+         */
+        QuoteGuardrailPolicyActivateRequest: {
+            version: number;
+            approval_reference: string;
+            /** Format: date-time */
+            effective_from: string;
+            default_band_below_bps: number;
+            default_band_above_bps: number;
+            misc_cap_bps: number;
+            margin_cap_bps: number;
+            custom_share_cap_bps: number;
+            per_skill_bands?: {
+                [key: string]: components["schemas"]["SkillBandRequest"];
+            };
         };
         QuoteLine: {
             readonly code: string;
@@ -9651,13 +11062,27 @@ export interface components {
             /** @default  */
             comment: string;
         };
+        /**
+         * @description Whether this participant may rate, and what they themselves said.
+         *
+         *     ``ratings`` is always empty: the **counterparty's** score and comment are private, and the
+         *     marketplace surfaces read aggregates rather than individual rows.
+         *
+         *     ``my_rating`` is the author's own submission, returned to its author and nobody else. Pinning
+         *     it to null as well went one step too far -- it left a rated job indistinguishable from an
+         *     unrated one on the customer's own screen, so somebody who had already rated saw no dialog, no
+         *     confirmation and no record, and reasonably concluded the feature was broken. Withholding a
+         *     person's own words from them protects nobody.
+         */
         RatingSummary: {
             subject_kind: components["schemas"]["SubjectKindEnum"];
             /** Format: uuid */
             subject_id: string;
             can_rate: boolean;
             counterparty_label: string;
+            /** @description The caller's own rating, or null. Never the counterparty's. */
             my_rating: components["schemas"]["ServiceRating"] | null;
+            /** @description Deprecated compatibility field. Always empty; only aggregate ratings display. */
             ratings: components["schemas"]["ServiceRating"][];
         };
         /**
@@ -9835,8 +11260,7 @@ export interface components {
             /** Format: uuid */
             variant_id: string;
             answers?: unknown;
-            /** @default en-IN */
-            language: string;
+            language?: string;
         };
         /**
          * @description The full record the four-screen flow reads after every write.
@@ -9910,6 +11334,12 @@ export interface components {
             readonly asked_at: string;
             /** Format: date-time */
             readonly answered_at: string | null;
+        };
+        /** @description Every question on one request, both directions, oldest first. */
+        RequirementQuestionList: {
+            readonly questions: components["schemas"]["RequirementQuestion"][];
+            /** Format: date-time */
+            readonly server_now: string;
         };
         /**
          * @description * `PENDING` - Pending
@@ -10018,6 +11448,8 @@ export interface components {
             readonly code: string;
             readonly name: string;
             readonly description: string;
+            /** Format: uri */
+            readonly image_url: string;
             readonly fulfilment_archetype: string;
             readonly questions: components["schemas"]["ServiceQuestion"][];
         };
@@ -10071,6 +11503,81 @@ export interface components {
             /** Format: decimal */
             readonly longitude: string;
             readonly provider: string;
+        };
+        /**
+         * @description A Customer's ask for a different estimate, as both sides read it.
+         *
+         *     It names what to change, and the vendor's answer is a superseding proposal read through the
+         *     ordinary quote surfaces.
+         *
+         *     ``requested_discount_bps`` is what the Customer *hoped* to pay, in basis points, and is present
+         *     only on a ``PRICE`` ask. It is not a price and nothing computes money from it — the vendor's
+         *     revision sets the figure. ``countered_discount_bps`` describes what their revision actually
+         *     moved, so a Customer reads "they came back at 2%, not 5%" rather than being left to subtract.
+         */
+        RevisionRequest: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly proposal: string;
+            readonly status: components["schemas"]["RevisionRequestStatusEnum"];
+            readonly reason_code: components["schemas"]["RevisionRequestReasonCodeEnum"];
+            readonly excluded_items: unknown;
+            readonly note: string;
+            readonly requested_discount_bps: number | null;
+            readonly countered_discount_bps: number | null;
+            readonly decline_note: string;
+            /** Format: uuid */
+            readonly answered_by_proposal: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly resolved_at: string | null;
+        };
+        RevisionRequestCreateRequest: {
+            reason_code: components["schemas"]["RevisionRequestReasonCodeEnum"];
+            excluded_items?: string[];
+            /** @default  */
+            note: string;
+            requested_discount_bps?: number | null;
+        };
+        RevisionRequestDeclineRequest: {
+            /** @default  */
+            note: string;
+        };
+        /**
+         * @description * `LEAVE_OUT` - Leave something out
+         *     * `CHANGE_MATERIALS` - Change materials or finish
+         *     * `PHASE_WORK` - Split the work into phases
+         *     * `PRICE` - Asked about the price
+         *     * `OTHER` - Something else
+         * @enum {string}
+         */
+        RevisionRequestReasonCodeEnum: "LEAVE_OUT" | "CHANGE_MATERIALS" | "PHASE_WORK" | "PRICE" | "OTHER";
+        /**
+         * @description * `OPEN` - Waiting for the vendor
+         *     * `ANSWERED` - Answered with a revised estimate
+         *     * `DECLINED` - Declined by the vendor
+         * @enum {string}
+         */
+        RevisionRequestStatusEnum: "OPEN" | "ANSWERED" | "DECLINED";
+        /**
+         * @description One role, as booked against as named.
+         *
+         *     **A warning, never a refusal.** `assign_crew` refuses on totals -- five men and two women,
+         *     roles collapsed -- which is a floor rather than the promise the offer screen makes. This is
+         *     what lets the assignment screen say "you have named two women, both on setup; the customer
+         *     asked for two on the serving line" without blocking a supervisor who has a good reason.
+         */
+        RoleFulfilment: {
+            readonly role_code: string;
+            readonly role_label: string;
+            readonly wanted_men: number;
+            readonly wanted_women: number;
+            readonly named_men: number;
+            readonly named_women: number;
+            readonly is_met: boolean;
+            readonly gap: string;
         };
         RoleSwitchRequest: {
             role: string;
@@ -10249,6 +11756,7 @@ export interface components {
             readonly id: string;
             readonly slug: string;
             readonly name: string;
+            readonly icon_key: components["schemas"]["IconKeyEnum"];
             readonly short_description: string;
             readonly category_slug: string;
             readonly subcategory_slug: string;
@@ -10263,6 +11771,7 @@ export interface components {
             readonly id: string;
             readonly slug: string;
             readonly name: string;
+            readonly icon_key: components["schemas"]["IconKeyEnum"];
             readonly short_description: string;
             readonly category_slug: string;
             readonly subcategory_slug: string;
@@ -10276,6 +11785,80 @@ export interface components {
             readonly requirement_variants: components["schemas"]["RequirementVariant"][];
             readonly policies: components["schemas"]["ServicePolicy"][];
             readonly media: components["schemas"]["ServiceMedia"][];
+        };
+        ServiceFeedbackList: {
+            services: components["schemas"]["ServiceFeedbackRow"][];
+            /** Format: date-time */
+            server_now: string;
+        };
+        /** @description One written note, with the partner rating from the same job beside it. */
+        ServiceFeedbackNote: {
+            /** Format: uuid */
+            feedback_id: string;
+            score: number | null;
+            comment: string;
+            tags: components["schemas"]["ServiceFeedbackTagCount"][];
+            partner_name: string;
+            partner_score: number | null;
+            subject_kind: string;
+            /** Format: uuid */
+            subject_id: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        ServiceFeedbackNoteList: {
+            /** Format: uuid */
+            variant_id: string | null;
+            variant_name: string;
+            notes: components["schemas"]["ServiceFeedbackNote"][];
+            /** Format: date-time */
+            server_now: string;
+        };
+        /**
+         * @description One service, with both verdicts side by side.
+         *
+         *     `variant_id` is null on exactly one row: the bucket for feedback whose booking covered more
+         *     than one service. Published rather than dropped, because an operator reading these averages
+         *     needs to know how much was left out of them.
+         */
+        ServiceFeedbackRow: {
+            /** Format: uuid */
+            variant_id: string | null;
+            variant_name: string;
+            service_name: string;
+            category_name: string;
+            /** Format: double */
+            partner_score: number | null;
+            partner_count: number;
+            /** Format: double */
+            platform_score: number | null;
+            platform_count: number;
+            tags: components["schemas"]["ServiceFeedbackTagCount"][];
+            note_count: number;
+        };
+        ServiceFeedbackTagCount: {
+            code: string;
+            label: string;
+            count: number;
+        };
+        /** @description The complete icon catalogue's intentionally small row contract. */
+        ServiceIndexItem: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly slug: string;
+            readonly name: string;
+            readonly icon_key: components["schemas"]["IconKeyEnum"];
+            readonly display_order: number;
+            /** Format: uuid */
+            readonly category_id: string;
+            readonly category_slug: string;
+            readonly category_name: string;
+            readonly category_display_order: number;
+            /** Format: uuid */
+            readonly subcategory_id: string;
+            readonly subcategory_slug: string;
+            readonly subcategory_name: string;
+            readonly subcategory_display_order: number;
         };
         ServiceMedia: {
             /** Format: uuid */
@@ -10350,6 +11933,8 @@ export interface components {
             readonly code: string;
             readonly name: string;
             readonly description: string;
+            /** Format: uri */
+            readonly image_url: string;
             readonly fulfilment_archetype: string;
             readonly starting_price: components["schemas"]["Money"];
             readonly minimum_service_subtotal: components["schemas"]["Money"];
@@ -10464,6 +12049,7 @@ export interface components {
             readonly scheduled_on: string | null;
             readonly stage_status: string;
             readonly crew: components["schemas"]["StageCrewMember"][];
+            readonly role_fulfilment: components["schemas"]["RoleFulfilment"][];
             readonly attendance: components["schemas"]["ShiftAttendance"] | null;
             readonly settlement: components["schemas"]["DaySettlement"] | null;
             readonly per_worker_paise: number;
@@ -10474,6 +12060,24 @@ export interface components {
             };
             /** Format: date-time */
             readonly server_now: string;
+        };
+        /**
+         * @description One crew day at a glance, for the day chips on both job pages.
+         *
+         *     The full shift-day read (`/engagement-stages/{id}/shift-day/`) is still where the day is
+         *     worked; this is the state of every day in one engagement read so a hub can draw "Name crew ·
+         *     Reached · 4 of 5 · Paid" without one request per day. Null on anything that is not a crew day.
+         */
+        ShiftDaySummary: {
+            readonly crew_named: number;
+            readonly expected_count: number;
+            /** Format: date-time */
+            readonly arrived_at: string | null;
+            readonly present_count: number | null;
+            readonly attendance_status: string;
+            readonly settlement_status: string;
+            readonly settlement_amount_paise: number | null;
+            readonly shortfall_choice: string;
         };
         /**
          * @description * `OVERTIME` - Hours past the published shift
@@ -10567,6 +12171,10 @@ export interface components {
          * @enum {string}
          */
         SiteVisitStatusEnum: "REQUESTED" | "SCHEDULED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED" | "VENDOR_NO_SHOW" | "CUSTOMER_NO_SHOW";
+        SkillBandRequest: {
+            below_bps: number;
+            above_bps: number;
+        };
         /**
          * @description * `MANUAL` - Manual
          *     * `REVERSE_GEOCODED` - Reverse geocoded
@@ -10578,6 +12186,7 @@ export interface components {
         };
         StageCrewList: {
             readonly crew: components["schemas"]["StageCrewMember"][];
+            readonly role_fulfilment: components["schemas"]["RoleFulfilment"][];
             readonly expected_count: number;
             /** Format: date */
             readonly shift_date: string | null;
@@ -10603,6 +12212,7 @@ export interface components {
             readonly status: string;
             /** Format: date-time */
             readonly assigned_at: string;
+            readonly role_code: string;
         };
         StageDisputeDecisionRequest: {
             outcome: components["schemas"]["StageDisputeOutcomeEnum"];
@@ -10706,6 +12316,19 @@ export interface components {
             expected_version: number;
             code: string;
         };
+        /**
+         * @description * `DRAFT` - Draft
+         *     * `ACTIVE` - Active
+         *     * `RETIRED` - Retired
+         * @enum {string}
+         */
+        Status24aEnum: "DRAFT" | "ACTIVE" | "RETIRED";
+        /**
+         * @description * `ACTIVE` - Active
+         *     * `RETIRED` - Retired
+         * @enum {string}
+         */
+        Status423Enum: "ACTIVE" | "RETIRED";
         StepUpSession: {
             /** Format: date-time */
             readonly stepped_up_at: string;
@@ -10737,6 +12360,11 @@ export interface components {
             readonly slug: string;
             readonly name: string;
             readonly description: string;
+            readonly icon_key: string;
+            /** Format: uri */
+            readonly image_url: string;
+            /** @default 0 */
+            readonly service_count: number;
         };
         /**
          * @description * `CATALOG_BOOKING` - CATALOG_BOOKING
@@ -10872,6 +12500,20 @@ export interface components {
             fee_paise: number;
             refund_ids: string[];
         };
+        /**
+         * @description * `day` - day
+         *     * `each` - each
+         *     * `hour` - hour
+         *     * `job` - job
+         *     * `kg` - kg
+         *     * `litre` - litre
+         *     * `metre` - metre
+         *     * `running_ft` - running_ft
+         *     * `set` - set
+         *     * `sq_ft` - sq_ft
+         * @enum {string}
+         */
+        UnitEnum: "day" | "each" | "hour" | "job" | "kg" | "litre" | "metre" | "running_ft" | "set" | "sq_ft";
         UnitRescheduleOutcome: {
             /** Format: uuid */
             fulfilment_unit_id: string;
@@ -10928,37 +12570,6 @@ export interface components {
             /** Format: date-time */
             readonly expires_at: string;
             readonly is_current: boolean;
-        };
-        /**
-         * @description One of the Customer's checked files, as a short-lived signed link.
-         *
-         *     `download_url` is a bearer credential — anyone holding it holds the file — which is why it is
-         *     minted per read and expires in minutes rather than being stored anywhere.
-         */
-        VendorAttachment: {
-            /** Format: uuid */
-            readonly id: string;
-            readonly kind: string;
-            readonly size_bytes: number;
-            readonly language: string;
-            /** Format: uri */
-            readonly download_url: string;
-            /** Format: date-time */
-            readonly expires_at: string;
-        };
-        /**
-         * @description Attachments this vendor may see, and whether they still may.
-         *
-         *     `has_access` is `false` once the invitation was declined, expired or withdrawn and this vendor
-         *     was not selected. It is published as a state on a `200` rather than as an error because the
-         *     vendor is entitled to their own enquiry record either way, and because "there are no
-         *     photographs" and "you may no longer see the photographs" are different things to render.
-         */
-        VendorAttachmentList: {
-            readonly has_access: boolean;
-            readonly attachments: components["schemas"]["VendorAttachment"][];
-            /** Format: date-time */
-            readonly server_now: string;
         };
         /**
          * @description A responding vendor, as much of one as the Customer has paid to see.
@@ -11081,7 +12692,20 @@ export interface components {
             readonly plan_size: number;
             readonly price_paise: number;
             readonly credit_paise: number;
-            /** @description What the Customer still owes: the tier price less any carried-over unlock credit. */
+            /**
+             * @description What the Customer still owes: the tier price, less credit, less what cannot be delivered.
+             *
+             *     The third term is the one that was missing. A share nobody could be found for is
+             *     ``REFUNDED`` — the money machinery already gives it back *after* a charge — but before the
+             *     charge this property still quoted the full tier price, so a Customer whose second visit had
+             *     no professional within reach was asked to pay for two and then refunded for one. Taking
+             *     money for a visit we already know cannot happen, in order to hand it back later, is not a
+             *     refund policy; it is a worse version of not charging for it.
+             *
+             *     Only shares already settled as undeliverable are subtracted. A share still `SEARCHING` — or
+             *     one the Customer re-timed after an exhausted match — is chargeable, because it may still be
+             *     filled and a price that flickered with the matching state would be worse than either answer.
+             */
             readonly chargeable_paise: number;
             /** Format: uuid */
             readonly payment_attempt_id: string | null;
@@ -11112,6 +12736,10 @@ export interface components {
             readonly id: string;
             readonly position: number;
             readonly status: components["schemas"]["VisitPlanShareStatusEnum"];
+            readonly matching_status: components["schemas"]["MatchingStatusEnum"];
+            /** Format: date-time */
+            readonly requested_start: string | null;
+            readonly duration_minutes: number | null;
             readonly amount_paise: number;
             readonly vendor_payout_paise: number;
             readonly platform_share_paise: number;
@@ -11180,16 +12808,6 @@ export interface components {
             readonly is_available: boolean;
             readonly unavailable_reason: (components["schemas"]["UnavailableReasonEnum"] | components["schemas"]["NullEnum"]) | null;
         };
-        VisitSlotConfirmRequest: {
-            slot_id: string;
-        };
-        VisitSlotConfirmation: {
-            readonly visit: components["schemas"]["SiteVisit"];
-            readonly share: components["schemas"]["VisitPlanShare"];
-            readonly opens_plan_checkout: boolean;
-            /** Format: date-time */
-            readonly server_now: string;
-        };
         VisitSlotDay: {
             /** Format: date */
             readonly date: string;
@@ -11208,6 +12826,7 @@ export interface components {
             /** Format: date-time */
             readonly server_now: string;
             readonly visit_duration_minutes: number;
+            readonly turnaround_minutes: number;
             readonly availability_is_preliminary: boolean;
             readonly timezone: string;
             readonly days: components["schemas"]["VisitSlotDay"][];
@@ -11283,6 +12902,63 @@ export interface components {
          * @enum {string}
          */
         WorkEvidenceKindEnum: "BEFORE" | "AFTER" | "CONTACT_ATTEMPT" | "SAFETY" | "DAMAGE" | "AMENDMENT" | "COMPLETION" | "WAIT";
+        WorkItem: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            skill: string;
+            name: string;
+            unit: string;
+            description?: string;
+            /** @default ACTIVE */
+            status: components["schemas"]["Status423Enum"];
+            sort_order?: number;
+            group?: string;
+            material_recipe?: unknown;
+            bundle_quantities?: unknown;
+            band_below_bps?: number | null;
+            band_above_bps?: number | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        WorkItemCreateRequest: {
+            /** Format: uuid */
+            skill_id: string;
+            name: string;
+            unit: string;
+            /** @default  */
+            description: string;
+            /** @default 0 */
+            sort_order: number;
+        };
+        WorkItemRate: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly work_item: string;
+            /** Format: uuid */
+            readonly service_area: string;
+            readonly version: number;
+            readonly reference_rate_paise: number;
+            /** @default DRAFT */
+            readonly status: components["schemas"]["WorkItemRateStatusEnum"];
+            /** Format: date-time */
+            readonly published_at: string | null;
+        };
+        WorkItemRatePublishRequest: {
+            /** Format: uuid */
+            service_area_id: string;
+            reference_rate_paise: number;
+        };
+        /**
+         * @description * `DRAFT` - Draft
+         *     * `PUBLISHED` - Published
+         *     * `RETIRED` - Retired
+         * @enum {string}
+         */
+        WorkItemRateStatusEnum: "DRAFT" | "PUBLISHED" | "RETIRED";
         WorkOutcome: {
             /** Format: uuid */
             readonly id: string;
@@ -12464,6 +14140,86 @@ export interface operations {
                 };
             };
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    booking_platform_feedback_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformFeedbackSummary"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    booking_platform_feedback_submit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PlatformFeedbackCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PlatformFeedbackCreateRequest"];
+                "multipart/form-data": components["schemas"]["PlatformFeedbackCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformFeedbackSummary"];
+                };
+            };
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -14800,6 +16556,86 @@ export interface operations {
             };
         };
     };
+    engagement_platform_feedback_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformFeedbackSummary"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    engagement_platform_feedback_submit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PlatformFeedbackCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PlatformFeedbackCreateRequest"];
+                "multipart/form-data": components["schemas"]["PlatformFeedbackCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformFeedbackSummary"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     m2_project_read: {
         parameters: {
             query?: never;
@@ -16398,6 +18234,47 @@ export interface operations {
             };
         };
     };
+    m2_operations_commercial_policy_activate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommercialPolicyActivateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CommercialPolicyActivateRequest"];
+                "multipart/form-data": components["schemas"]["CommercialPolicyActivateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommercialPolicy"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     operations_compatibility_rule_list: {
         parameters: {
             query?: {
@@ -16697,11 +18574,67 @@ export interface operations {
             };
         };
     };
+    m2_operations_crew_document_review: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CrewDocumentDecisionRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CrewDocumentDecisionRequest"];
+                "multipart/form-data": components["schemas"]["CrewDocumentDecisionRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CrewDocumentReviewRow"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     m2_operations_crew_verification_queue: {
         parameters: {
             query?: {
                 /** @description Narrow to one vendor's roster. */
                 partner?: string;
+                /** @description `PENDING` (default) is the worklist. `VERIFIED` is how a reviewer reaches somebody already cleared, which is the only way to un-verify a worker whose document turned out to be expired — the command supported it and no screen could get to it. */
+                state?: "ALL" | "PENDING" | "VERIFIED";
             };
             header?: never;
             path?: never;
@@ -16718,6 +18651,105 @@ export interface operations {
                 };
             };
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_operations_crew_documents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                membership_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CrewDocumentReviewList"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_operations_crew_gender_correct: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                membership_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CrewGenderCorrectionRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CrewGenderCorrectionRequest"];
+                "multipart/form-data": components["schemas"]["CrewGenderCorrectionRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CrewMembershipVerificationRow"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -16773,6 +18805,76 @@ export interface operations {
             };
             /** @description `m2_requirement_transition_not_allowed` when the membership is archived, or when verification is being removed with no reason given. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_operations_custom_item_review_queue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomWorkItemReviewList"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_operations_custom_item_review_resolve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                review_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomWorkItemReviewResolveRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CustomWorkItemReviewResolveRequest"];
+                "multipart/form-data": components["schemas"]["CustomWorkItemReviewResolveRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomWorkItemReview"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -17654,6 +19756,49 @@ export interface operations {
             };
         };
     };
+    operations_partner_tax_profile_verify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                partner_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["OperationsTaxProfileVerifyRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["OperationsTaxProfileVerifyRequest"];
+                "multipart/form-data": components["schemas"]["OperationsTaxProfileVerifyRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerBusinessProfile"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     m2_operations_record_chargeback: {
         parameters: {
             query?: never;
@@ -18066,6 +20211,74 @@ export interface operations {
                 };
             };
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_operations_guardrail_policy_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuoteGuardrailPolicy"][];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_operations_guardrail_policy_activate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuoteGuardrailPolicyActivateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["QuoteGuardrailPolicyActivateRequest"];
+                "multipart/form-data": components["schemas"]["QuoteGuardrailPolicyActivateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuoteGuardrailPolicy"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -18643,6 +20856,98 @@ export interface operations {
             };
         };
     };
+    operations_service_feedback: {
+        parameters: {
+            query?: {
+                /** @description Window in days. Omitted means everything ever recorded. */
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceFeedbackList"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_service_feedback_notes: {
+        parameters: {
+            query?: {
+                /** @description Window in days. Omitted means everything ever recorded. */
+                days?: number;
+            };
+            header?: never;
+            path: {
+                variant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceFeedbackNoteList"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_unattributed_feedback_notes: {
+        parameters: {
+            query?: {
+                /** @description Window in days. Omitted means everything ever recorded. */
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceFeedbackNoteList"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     operations_unpayable_partners: {
         parameters: {
             query: {
@@ -18664,6 +20969,192 @@ export interface operations {
                 };
             };
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_operations_work_item_list: {
+        parameters: {
+            query?: {
+                skill_id?: string;
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkItem"][];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_operations_work_item_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkItemCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["WorkItemCreateRequest"];
+                "multipart/form-data": components["schemas"]["WorkItemCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkItem"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_operations_work_item_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                work_item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedWorkItemUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedWorkItemUpdateRequest"];
+                "multipart/form-data": components["schemas"]["PatchedWorkItemUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkItem"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_operations_work_item_rate_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                work_item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkItemRate"][];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_operations_work_item_rate_publish: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                work_item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkItemRatePublishRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["WorkItemRatePublishRequest"];
+                "multipart/form-data": components["schemas"]["WorkItemRatePublishRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkItemRate"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -20285,6 +22776,15 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
+            /** @description `m2_crew_gender_conflict` when another agency has this person recorded as a different gender. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
         };
     };
     m2_partner_crew_archive: {
@@ -20355,6 +22855,108 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CrewAvailability"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_partner_crew_document_submit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                membership_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CrewDocumentSubmitRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CrewDocumentSubmitRequest"];
+                "multipart/form-data": components["schemas"]["CrewDocumentSubmitRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CrewMember"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_partner_crew_document_upload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                membership_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CrewDocumentUploadRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CrewDocumentUploadRequestRequest"];
+                "multipart/form-data": components["schemas"]["CrewDocumentUploadRequestRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CrewDocumentUploadGrant"];
                 };
             };
             400: {
@@ -20605,54 +23207,8 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
-            /** @description `m2_invitation_expired`, `m2_invitation_slots_exhausted`, `m2_proposal_slot_conflict` when a linked account already holds a slot, or `m2_capacity_unavailable` when the vendor already has work booked on these dates — either another M2 enquiry they accepted or an A1 booking on the shared availability grid. */
+            /** @description `slot_taken` when another professional accepted the same fixed visit first; `m2_invitation_expired`, `m2_invitation_slots_exhausted`, `m2_proposal_slot_conflict` when a linked account already holds a slot, or `m2_capacity_unavailable` when the vendor already has work booked on these dates — either another M2 enquiry they accepted or an A1 booking on the shared availability grid. */
             409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-        };
-    };
-    m2_partner_enquiry_attachment_list: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                invitation_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VendorAttachmentList"];
-                };
-            };
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            /** @description `m2_attachment_unavailable` when the storage adapter is down. */
-            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -20809,116 +23365,6 @@ export interface operations {
                 };
             };
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-        };
-    };
-    m2_visit_slot_list: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                invitation_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VisitSlotGrid"];
-                };
-            };
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            /** @description `m2_policy_unavailable` when the owner has not set how long a visit takes for this service — the grid cannot be drawn at an invented width; `m2_visit_slot_unavailable` when the request has no serviceable area. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-        };
-    };
-    m2_visit_slot_confirm: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
-                "Idempotency-Key": string;
-            };
-            path: {
-                invitation_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["VisitSlotConfirmRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["VisitSlotConfirmRequest"];
-                "multipart/form-data": components["schemas"]["VisitSlotConfirmRequest"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VisitSlotConfirmation"];
-                };
-            };
-            /** @description `m2_lifecycle_not_supported` — only project requests book visit slots. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            /** @description `m2_visit_slot_unavailable` when the slot has gone, the token is stale or the start has passed — the availability grid's exclusion constraint is the final authority and this is what losing that race reads as; `m2_visit_plan_required` when no plan is live; `m2_capacity_unavailable` and `m2_invitation_slots_exhausted` from the acceptance underneath. */
-            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -21294,14 +23740,16 @@ export interface operations {
     };
     partner_offer_stream: {
         parameters: {
-            query?: never;
+            query?: {
+                format?: "event-stream" | "json";
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description A `text/event-stream` of `offer_created` events. Each event's `data` is the notification context documented in contracts/proposals/partner-offer-events.md: `offer_id`, `fulfilment_unit_id`, `requested_start`, `expires_at`. Comment lines are keepalives. The server closes the connection after M1_OFFER_STREAM_MAX_SECONDS and the client reconnects. */
+            /** @description A `text/event-stream` multiplexed for Partner foreground delivery. Events: `offer_created` (same-day offers), `job_assigned` (advance bookings), `notification_created` (in-app booking and enquiry notices). Comment lines are keepalives. The server closes the connection after M1_OFFER_STREAM_MAX_SECONDS and the client reconnects. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -21493,6 +23941,108 @@ export interface operations {
                 };
             };
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_partner_price_book_read: {
+        parameters: {
+            query?: {
+                /** @description One of the Partner's own active service areas. Defaults to their sole area when they serve only one. */
+                service_area_id?: string;
+                /** @description Narrow to one trade's catalogue - the enquiry's `pricing_skill_code`. Omitted, every trade the Partner prices from is listed. */
+                skill?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceBookList"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_partner_price_book_item_set: {
+        parameters: {
+            query?: {
+                service_area_id?: string;
+            };
+            header?: never;
+            path: {
+                work_item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PartnerRateItemSetRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PartnerRateItemSetRequest"];
+                "multipart/form-data": components["schemas"]["PartnerRateItemSetRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerRateItem"];
+                };
+            };
+            /** @description `rate_outside_band` when the rate sits outside the allowed range for this item in this city. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -22130,6 +24680,181 @@ export interface operations {
             };
         };
     };
+    m2_proposal_revision_decline: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RevisionRequestDeclineRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["RevisionRequestDeclineRequest"];
+                "multipart/form-data": components["schemas"]["RevisionRequestDeclineRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevisionRequest"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_proposal_overall_discount_apply: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                proposal_id: string;
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProposalDiscountRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProposalDiscountRequestRequest"];
+                "multipart/form-data": components["schemas"]["ProposalDiscountRequestRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Proposal"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_proposal_overall_discount_preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProposalDiscountRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProposalDiscountRequestRequest"];
+                "multipart/form-data": components["schemas"]["ProposalDiscountRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalDiscountPreview"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     m2_proposal_withdraw: {
         parameters: {
             query?: never;
@@ -22150,6 +24875,63 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Proposal"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_proposal_price_preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProposalPreviewRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProposalPreviewRequest"];
+                "multipart/form-data": components["schemas"]["ProposalPreviewRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalFinancialSummary"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
                 };
             };
             403: {
@@ -22392,176 +25174,6 @@ export interface operations {
             };
             /** @description `m2_requirement_locked` once the requirement has left DRAFT and vendors have seen it. */
             409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-        };
-    };
-    m2_requirement_attachment_finalize: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
-                "Idempotency-Key": string;
-            };
-            path: {
-                requirement_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AttachmentFinalizeRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["AttachmentFinalizeRequest"];
-                "multipart/form-data": components["schemas"]["AttachmentFinalizeRequest"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RequirementAttachment"];
-                };
-            };
-            /** @description `m2_attachment_invalid` when the stored object does not match the size, media type or checksum the client declared, when the upload expired, or when it has already been finalized. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-        };
-    };
-    m2_requirement_attachment_remove: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                attachment_id: string;
-                requirement_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Removed. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-        };
-    };
-    m2_requirement_attachment_upload_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                requirement_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AttachmentUploadRequestRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["AttachmentUploadRequestRequest"];
-                "multipart/form-data": components["schemas"]["AttachmentUploadRequestRequest"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AttachmentUploadGrant"];
-                };
-            };
-            /** @description `m2_attachment_invalid` for an unsupported media type, an oversized file, a malformed checksum, or more attachments than one requirement may carry. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            /** @description `m2_requirement_locked` once the requirement has left DRAFT — a photograph appearing after a vendor quoted is a scope change, not an attachment. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            /** @description `m2_attachment_unavailable` when the storage adapter is down. Retryable, and the only retryable error on this path. */
-            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -22856,6 +25468,35 @@ export interface operations {
             };
         };
     };
+    m2_requirement_question_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementQuestionList"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     m2_quote_list: {
         parameters: {
             query?: never;
@@ -23048,6 +25689,108 @@ export interface operations {
                 };
             };
             /** @description `m2_proposal_not_selectable` when the quote has not expired, when the request already has a chosen vendor, or when the caller has not unlocked these quotes at all. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_quote_revision_request: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                proposal_id: string;
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RevisionRequestCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["RevisionRequestCreateRequest"];
+                "multipart/form-data": components["schemas"]["RevisionRequestCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevisionRequest"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_proposal_not_selectable` when the estimate is no longer live, when the request already has a chosen vendor, or when the caller has not unlocked these quotes. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_quote_shopping_list_pdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -23727,6 +26470,188 @@ export interface operations {
             };
         };
     };
+    m2_customer_visit_slot_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VisitSlotGrid"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_customer_visit_slot_choose: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomerVisitSlotChoiceRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CustomerVisitSlotChoiceRequest"];
+                "multipart/form-data": components["schemas"]["CustomerVisitSlotChoiceRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerRequestedVisitSlots"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `slot_expired` for an expired signed token; otherwise the slot is unavailable or the plan shape no longer permits the selection. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_customer_visit_slot_drop: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                requirement_id: string;
+                share_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerRequestedVisitSlots"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `slot_unavailable` when the slot is not an exhausted one, or is the only one left on the plan. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_customer_visit_slot_replace: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                requirement_id: string;
+                share_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomerVisitSlotReplaceRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CustomerVisitSlotReplaceRequest"];
+                "multipart/form-data": components["schemas"]["CustomerVisitSlotReplaceRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerRequestedVisitSlots"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `slot_expired` for an expired signed token; `no_professional_found` is the prior share state that makes replacement valid. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     m2_requirement_duplicate_check: {
         parameters: {
             query: {
@@ -24065,6 +26990,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    catalog_service_index: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceIndexItem"][];
                 };
             };
         };

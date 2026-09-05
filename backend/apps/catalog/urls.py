@@ -5,6 +5,7 @@ from apps.catalog.views import (
     CategoryServiceListView,
     ServiceConfigurationView,
     ServiceDetailView,
+    ServiceIndexView,
 )
 
 app_name = "catalog"
@@ -16,6 +17,7 @@ urlpatterns = [
         CategoryServiceListView.as_view(),
         name="category-service-list",
     ),
+    path("services/", ServiceIndexView.as_view(), name="service-index"),
     path("services/<slug:service_slug>/", ServiceDetailView.as_view(), name="service-detail"),
     path(
         "services/<slug:service_slug>/configuration/",

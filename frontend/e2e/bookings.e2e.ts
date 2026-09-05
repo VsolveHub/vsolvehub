@@ -224,6 +224,81 @@ test.describe("cancelling", () => {
     await expect(page.getByText(/everything is confirmed/i)).toBeVisible();
     await expect(page.getByRole("button", { name: /cancel this booking/i })).toHaveCount(0);
   });
+
+  test("opens each paid visit from its overview card", async ({ page }) => {
+    await installDispatchApi(page, {
+      groupReads: [
+        {
+          body: group({
+            status: "BOOKED",
+            recovery_action: "NONE",
+            order_id: "order-1",
+            units: [
+              unit({
+                id: "fu-1",
+                position: 0,
+                status: "BOOKED",
+                booking_id: "booking-1",
+                booking_status: "CONFIRMED",
+                professional: {
+                  display_name: "Carpenter Pro",
+                  headline: "Bed Assembly",
+                  experience_years: 5,
+                },
+              }),
+              unit({
+                id: "fu-2",
+                position: 1,
+                status: "BOOKED",
+                booking_id: "booking-2",
+                booking_status: "CONFIRMED",
+                lines: [unitLine({ id: "ul-2", label: "Switch Board Replacement" })],
+                professional: {
+                  display_name: "Switch Pro",
+                  headline: "Junction Box Fixing",
+                  experience_years: 5,
+                },
+              }),
+            ],
+          }),
+        },
+      ],
+      bookingReads: [
+        {
+          body: {
+            id: "booking-1",
+            fulfilment_unit_id: "fu-1",
+            status: "CONFIRMED",
+            version: 1,
+            scheduled_start: "2026-08-04T10:00:00Z",
+            estimated_duration_minutes: 45,
+            partner_display_name: "Carpenter Pro",
+            en_route_at: null,
+            arrived_at: null,
+            work_tasks: [],
+            completion: null,
+            reschedule_preview: { is_available: true, unavailable_reason: "" },
+            scope_amendments: [],
+            server_now: "2026-08-03T09:00:00Z",
+            next_transition_at: null,
+          },
+        },
+      ],
+    });
+    await page.goto("/bookings/group-1");
+
+    await expect(page.getByRole("heading", { name: "Visit 1 of 2" })).toBeVisible();
+    await page.getByRole("link", { name: /view details/i }).first().click();
+
+    await expect(page).toHaveURL("/bookings/group-1/visits/booking-1");
+    await expect(page.getByRole("heading", { name: "Visit 1 of 2" })).toBeVisible();
+    await expect(page.getByText("Real Partner Details Unlocked")).toBeVisible();
+    await expect(page.getByText("Visit total")).toBeVisible();
+    await expect(page.getByRole("link", { name: /back to this booking/i })).toHaveAttribute(
+      "href",
+      "/bookings/group-1",
+    );
+  });
 });
 
 test.describe("the bookings list", () => {

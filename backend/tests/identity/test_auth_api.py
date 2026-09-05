@@ -211,6 +211,25 @@ def test_resend_cooldown_returns_retryable_error() -> None:
     assert response.json()["error"]["details"] == {"retry_after_seconds": retry_after}
 
 
+def test_otp_request_is_unavailable_when_rate_limiter_is_down(monkeypatch) -> None:
+    # Underscored because this stands in for `cache.add`, whose signature it must
+    # accept in full and none of which it reads.
+    def redis_down(*_args: object, **_kwargs: object) -> bool:
+        raise ConnectionError("redis down")
+
+    monkeypatch.setattr("apps.identity.services.cache.add", redis_down)
+
+    response = APIClient().post(
+        "/api/v1/auth/otp/request/",
+        {"phone_number": "9876543210"},
+        format="json",
+    )
+
+    assert response.status_code == HTTPStatus.SERVICE_UNAVAILABLE
+    assert response.json()["error"]["code"] == "otp_unavailable"
+    assert response.json()["error"]["retryable"] is True
+
+
 @override_settings(OTP_DEVELOPMENT_CODE_ENABLED=False)
 def test_code_is_not_exposed_when_development_flag_is_disabled() -> None:
     response = APIClient().post(

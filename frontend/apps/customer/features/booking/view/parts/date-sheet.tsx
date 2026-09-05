@@ -52,6 +52,19 @@ export interface DateSheetProps {
    * away — raises it and accepts the scroll.
    */
   horizonDays?: number;
+  /**
+   * The first day to offer, counted from today. Zero — today — by default.
+   *
+   * One for anything that cannot honestly be delivered the same day. Staffing an event
+   * is the case this exists for: a crew has to be rostered, briefed and told where to
+   * go, so offering today is offering something nobody can supply. The server permits a
+   * same-day shift, which is why this is a product decision made here rather than a rule
+   * read from the catalogue — if that ever changes, it changes in one place.
+   */
+  earliestOffsetDays?: number;
+  /** The sheet's own title and line. "Start from" for a crew booked by the day. */
+  title?: string;
+  description?: string;
 }
 
 /** `YYYY-MM-DD` in the customer's own timezone, not UTC. */
@@ -62,19 +75,28 @@ function toIsoDate(date: Date): string {
 }
 
 /**
- * The offered days, starting today.
+ * The offered days.
+ *
+ * `earliestOffsetDays` is where the list starts, counted from today — zero offers today,
+ * one starts tomorrow. Each day still knows its true distance from today, so "Tomorrow"
+ * stays "Tomorrow" wherever the list begins rather than becoming "Today" because it
+ * happens to be first.
  *
  * Built from local date parts throughout. A browser east of UTC that formats a
  * `new Date(iso)` gets the previous day, which on a booking screen means a crew
  * arriving twenty-four hours early.
  */
-function offeredDays(horizonDays: number): { iso: string; date: Date }[] {
+function offeredDays(
+  horizonDays: number,
+  earliestOffsetDays: number,
+): { iso: string; date: Date; offset: number }[] {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  return Array.from({ length: horizonDays }, (_, offset) => {
+  return Array.from({ length: horizonDays }, (_, index) => {
+    const offset = index + earliestOffsetDays;
     const date = new Date(today);
     date.setDate(today.getDate() + offset);
-    return { iso: toIsoDate(date), date };
+    return { iso: toIsoDate(date), date, offset };
   });
 }
 
@@ -107,10 +129,13 @@ export function DateSheet({
   value,
   onSelect,
   horizonDays = 10,
+  earliestOffsetDays = 0,
+  title = "Start from",
+  description = "The first day you need the crew.",
 }: DateSheetProps) {
   // Staged, so dismissing the sheet leaves the committed value alone.
   const [pending, setPending] = useState<string | null>(value);
-  const days = offeredDays(horizonDays);
+  const days = offeredDays(horizonDays, earliestOffsetDays);
 
   return (
     <Sheet
@@ -121,8 +146,8 @@ export function DateSheet({
         if (!next) setPending(value);
         onOpenChange(next);
       }}
-      title="Start from"
-      description="The first day you need the crew."
+      title={title}
+      description={description}
       footer={
         <>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
@@ -148,13 +173,13 @@ export function DateSheet({
             up below the fold; as tiles they all fit at once and the footer stays
             where the thumb expects it. */}
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-          {days.map(({ iso, date }, offset) => {
+          {days.map(({ iso, date, offset }) => {
             const checked = pending === iso;
             return (
               <label
                 key={iso}
                 className={cn(
-                  "flex min-h-[68px] cursor-pointer flex-col items-center justify-center gap-0.5",
+                  "relative flex min-h-[68px] cursor-pointer flex-col items-center justify-center gap-0.5",
                   "rounded-[14px] border px-1 py-2 text-center transition-colors duration-fast",
                   "has-[:focus-visible]:outline has-[:focus-visible]:outline-2",
                   "has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-focus-ring",

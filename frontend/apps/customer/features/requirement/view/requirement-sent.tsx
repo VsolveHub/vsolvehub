@@ -7,20 +7,20 @@ import Link from "next/link";
 /**
  * What the Customer sees the moment the request goes — `M2-FE-212`.
  *
- * ## This is not a fifth screen
+ * ## This is not a third screen
  *
- * `SCREENS` is four and stays four; the budget is on the *form*, and this is
- * the outcome of a command rather than a step in filling one in. Review is
- * still the single confirmation — there is no "are you sure" between the button
- * and the send. What this replaces is landing a Customer on a list with no
- * acknowledgement that the thing they just spent four screens on arrived.
+ * `SCREENS` is two and stays two; the budget is on the *form*, and this is
+ * the outcome of a command rather than a step in filling one in. There is no
+ * "are you sure" between the button and the send. What this replaces is
+ * landing a Customer on a list with no acknowledgement that the thing they
+ * just sent arrived.
  *
- * ## Why the free promise is made here and not on review
+ * ## Why the free promise is made here and not before the send
  *
  * `M2-FE-212` wants the Customer told plainly that this costs nothing. The only
  * published field that says so is `is_free` on `RequirementSubmitted` — the
  * *response* to submitting — so before they press the button the server has not
- * said it and the review screen deliberately says nothing about money rather
+ * said it and the send screen keeps its reassurance to the plan price rather
  * than asserting it locally. A hardcoded "this is free" would be a promise that
  * outlives the policy it describes, and this flow will one day sit beside one
  * that is not free.

@@ -6,7 +6,8 @@ import { useState } from "react";
 import { AsyncSection, type AsyncState } from "@/components/async-section";
 import { Pictogram, type PictogramName } from "@/components/pictogram";
 
-import type { CrewRow, RosterView } from "../adapters/roster";
+import { outstandingDocumentKinds, type CrewRow, type RosterView } from "../adapters/roster";
+import { crewGenderLabel } from "./crew-gender";
 
 /**
  * The crew roster: who you can send, and who can report attendance.
@@ -68,6 +69,7 @@ export interface CrewRosterProps {
   readonly state: AsyncState<RosterView>;
   readonly onAdd: () => void;
   readonly onArchive: (membershipId: string) => void;
+  readonly onEdit: (row: CrewRow) => void;
   readonly archivingId?: string | null;
   /** Set when archiving was refused — a future assignment, most often. */
   readonly archiveError?: { readonly membershipId: string; readonly message: string } | null;
@@ -79,6 +81,7 @@ export function CrewRoster({
   state,
   onAdd,
   onArchive,
+  onEdit,
   archivingId = null,
   archiveError = null,
   onRetry,
@@ -128,7 +131,9 @@ export function CrewRoster({
             </Button>
           </div>
 
-          <ul className="grid list-none grid-cols-2 gap-3 p-0">
+          <GenderGapNotice count={view.genderUnrecordedCount} />
+
+          <ul className="grid list-none grid-cols-1 min-[420px]:grid-cols-2 gap-3 p-0">
             {view.active.map((row) => (
               <li key={row.membershipId}>
                 <CrewCard
@@ -138,6 +143,7 @@ export function CrewRoster({
                     archiveError?.membershipId === row.membershipId ? archiveError.message : null
                   }
                   onArchive={() => onArchive(row.membershipId)}
+                  onEdit={() => onEdit(row)}
                 />
               </li>
             ))}
@@ -269,11 +275,13 @@ function CrewCard({
   pending,
   error,
   onArchive,
+  onEdit,
 }: {
   row: CrewRow;
   pending: boolean;
   error: string | null;
   onArchive: () => void;
+  onEdit: () => void;
 }) {
   const [confirming, setConfirming] = useState(false);
 
@@ -294,10 +302,27 @@ function CrewCard({
         <Badge tone={row.documentsVerified ? "success" : "neutral"}>
           {row.documentsVerified ? "Documents checked" : "Documents not checked"}
         </Badge>
+        {/* Only the gap is called out. A recorded gender is not news and a badge for it on
+            every card would bury the one row that needs attention. */}
+        {row.gender === "" ? null : (
+          <Badge tone="neutral">{crewGenderLabel(row.gender)}</Badge>
+        )}
       </div>
 
       {row.skillCodes.length > 0 ? (
         <p className="text-xs text-text-secondary">{row.skillCodes.join(" · ")}</p>
+      ) : null}
+
+      {/* Two unverified states that look identical on a badge and mean opposite things. A row
+          with nothing uploaded is the Partner's move; a row with a file on it is Operations'.
+          Collapsing them is why every worker read as "waiting on Vsolve" and nobody sent
+          anything. */}
+      {!row.documentsVerified ? (
+        <p className="text-xs leading-5 text-text-muted">
+          {outstandingDocumentKinds(row).length > 0
+            ? "Send their ID so Operations can check it."
+            : "Their documents are with Operations."}
+        </p>
       ) : null}
 
       {error ? (
@@ -306,14 +331,19 @@ function CrewCard({
         </p>
       ) : null}
 
-      <Button
-        variant="ghost"
-        loading={pending}
-        loadingLabel="Archiving"
-        onClick={() => setConfirming(true)}
-      >
-        Archive
-      </Button>
+      <div className="mt-auto flex flex-wrap justify-center gap-2 pt-1">
+        <Button variant="outline" onClick={onEdit}>
+          {row.gender === "" ? "Edit details" : "Edit"}
+        </Button>
+        <Button
+          variant="ghost"
+          loading={pending}
+          loadingLabel="Archiving"
+          onClick={() => setConfirming(true)}
+        >
+          Archive
+        </Button>
+      </div>
 
       <ConfirmAction
         open={confirming}
@@ -327,6 +357,36 @@ function CrewCard({
           onArchive();
         }}
       />
+
     </Card>
+  );
+}
+
+
+/**
+ * The one roster gap with a consequence a Partner cannot see coming.
+ *
+ * Customers booking event staff ask for a number of men and a number of women. A worker with
+ * nothing recorded fills the headcount and no gendered slot, so a roster of blanks passes dispatch
+ * — which is deliberately forgiving about unknowns — and is then refused at accept, or at
+ * assignment on the day.
+ *
+ * Stated as a count with the consequence attached rather than as a red banner. Nothing is broken:
+ * the Partner keeps every job that does not ask for a mix, and this is work they are quietly
+ * missing out on rather than a fault to fix before they can continue.
+ */
+function GenderGapNotice({ count }: { readonly count: number }) {
+  if (count === 0) return null;
+
+  return (
+    <p className="rounded-card border border-warning-line bg-warning-surface px-3.5 py-3 text-sm leading-6 text-warning-text">
+      <span className="font-bold">
+        {count === 1
+          ? "One person has no man/woman recorded."
+          : `${count} people have no man/woman recorded.`}
+      </span>{" "}
+      Customers booking event staff ask for a number of men and a number of women, and Vsolve can
+      only count someone toward that once it is set. Open anyone below to add it.
+    </p>
   );
 }

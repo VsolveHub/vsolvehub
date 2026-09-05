@@ -4,7 +4,14 @@ import { describeError, queryKeys } from "@vsolve/query";
 import { Button, EmptyState, ErrorState, Skeleton, buttonStyles } from "@vsolve/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
+import type { ReactNode } from "react";
 
+import {
+  BookingListBody,
+  CatalogServiceThumbRow,
+  formatBookingWhen,
+} from "@/features/catalog/components/catalog-service-thumb";
+import { serviceSlugFromLineCode } from "@/features/catalog/service-cover";
 import { Money } from "@/features/checkout/view/money";
 
 import {
@@ -13,7 +20,7 @@ import {
   useBookingGroups,
   type BookingGroup,
 } from "../queries";
-import { GROUP_STATUS_MEANING, GroupStatusBadge } from "./group-status";
+import { GroupStatusBadge } from "./group-status";
 
 /**
  * The customer's bookings.
@@ -28,16 +35,43 @@ import { GROUP_STATUS_MEANING, GroupStatusBadge } from "./group-status";
  * tapped while the list grew underneath.
  */
 
-function totalOf(group: BookingGroup) {
-  // Deliberately not summed. Each unit carries its own server-calculated total
-  // and there is no group total on this projection, so the row shows the count
-  // and the per-visit money lives in the detail. Adding the units here would be
-  // frontend financial arithmetic on data that has a fee allocated across it.
-  return group.units.length;
+function primaryServiceLine(group: BookingGroup) {
+  const first = group.units[0];
+  if (!first) return null;
+  return first.lines.find((line) => line.kind === "SERVICE") ?? first.lines[0] ?? null;
+}
+
+const HIDE_PRICE_STATUSES = new Set<BookingGroup["status"]>([
+  "REPLAN_REQUIRED",
+  "CANCELLED",
+  "EXPIRED",
+  "FAILED",
+]);
+
+function groupListLine(group: BookingGroup): { text: ReactNode; action: boolean } | null {
+  if (group.recovery_action === "REPLAN") {
+    return { text: "Choose a new arrangement", action: true };
+  }
+  if (group.recovery_action === "PAYMENT_REQUIRED") {
+    return { text: "Payment is needed to confirm", action: true };
+  }
+  const first = group.units[0];
+  if (first === undefined) return null;
+  return {
+    text: <time dateTime={first.starts_at}>{formatBookingWhen(first.starts_at)}</time>,
+    action: false,
+  };
 }
 
 export function BookingGroupRow({ group }: { group: BookingGroup }) {
   const first = group.units[0];
+  const serviceLine = primaryServiceLine(group);
+  const serviceName = serviceLine?.label ?? "Booking";
+  const line = groupListLine(group);
+  const showPrice =
+    first !== undefined &&
+    first.total.amount_paise > 0 &&
+    !HIDE_PRICE_STATUSES.has(group.status);
 
   return (
     <li>
@@ -45,40 +79,27 @@ export function BookingGroupRow({ group }: { group: BookingGroup }) {
         href={`/bookings/${group.id}`}
         className="block rounded-card border border-line bg-surface p-4 hover:border-warm-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
       >
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-base font-semibold text-text">
-            {totalOf(group)} {totalOf(group) === 1 ? "visit" : "visits"}
-          </h2>
-          <GroupStatusBadge group={group} />
-        </div>
-
-        {first ? (
-          <p className="mt-1 text-sm text-text-secondary">
-            {first.lines.map((line) => line.label).join(", ")}
-          </p>
-        ) : null}
-
-        <p className="mt-2 text-sm text-text-secondary">
-          {GROUP_STATUS_MEANING[group.status]}
-        </p>
-
-        {first ? (
-          <p className="mt-2 flex justify-between text-sm text-text-secondary">
-            <span>
-              First visit{" "}
-              <time dateTime={first.starts_at}>
-                {new Date(first.starts_at).toLocaleString("en-IN", {
-                  weekday: "short",
-                  day: "numeric",
-                  month: "short",
-                  hour: "numeric",
-                  minute: "2-digit",
-                })}
-              </time>
-            </span>
-            <Money value={first.total} className="tabular-nums" />
-          </p>
-        ) : null}
+        <CatalogServiceThumbRow
+          hint={{
+            slug: serviceLine ? serviceSlugFromLineCode(serviceLine.code) : null,
+            name: serviceName,
+          }}
+        >
+          <BookingListBody
+            title={serviceName}
+            badge={<GroupStatusBadge group={group} />}
+            detail={line?.text}
+            detailAction={line?.action === true}
+            price={
+              showPrice ? (
+                <Money
+                  value={first.total}
+                  className="shrink-0 font-semibold tabular-nums text-navy-900"
+                />
+              ) : undefined
+            }
+          />
+        </CatalogServiceThumbRow>
       </Link>
     </li>
   );
@@ -96,7 +117,7 @@ export function BookingGroupList() {
     return (
       <div className="flex flex-col gap-3">
         {Array.from({ length: 3 }, (_, index) => (
-          <Skeleton key={index} className="h-32 w-full" />
+          <Skeleton key={index} className="h-36 w-full" />
         ))}
       </div>
     );

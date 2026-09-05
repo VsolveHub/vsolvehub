@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   PRESENCE_COPY,
   STALE_AFTER_MS,
+  canReceivePartnerLiveBookings,
   presenceStatus,
   type PresenceInput,
 } from "./presence";
@@ -92,6 +93,15 @@ describe("presence status", () => {
     expect(
       presenceStatus({ ...base, hasSession: true, msSinceHeartbeat: null }),
     ).toBe("unknown");
+  });
+});
+
+describe("live booking delivery", () => {
+  it("only foregrounds bookings when the Partner is genuinely online", () => {
+    expect(canReceivePartnerLiveBookings("online")).toBe(true);
+    expect(canReceivePartnerLiveBookings("offline")).toBe(false);
+    expect(canReceivePartnerLiveBookings("stale")).toBe(false);
+    expect(canReceivePartnerLiveBookings("checking")).toBe(false);
   });
 });
 

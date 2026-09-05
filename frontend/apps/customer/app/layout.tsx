@@ -3,6 +3,7 @@ import { Plus_Jakarta_Sans } from "next/font/google";
 import { QueryProvider, SessionSync } from "@vsolve/query";
 
 import { AppChrome } from "@/features/session/view/app-chrome";
+import { CUSTOMER_VIEWPORT_WIDTH_CLASS } from "@/features/session/view/app-chrome-layout";
 import "./globals.css";
 
 const appFont = Plus_Jakarta_Sans({
@@ -53,9 +54,9 @@ export const viewport = {
  */
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={appFont.variable} suppressHydrationWarning>
-      <body className="antialiased">
-        <QueryProvider>
+    <html lang="en" className={`${appFont.variable} bg-[#FAF9F7]`} suppressHydrationWarning>
+      <body className={`${CUSTOMER_VIEWPORT_WIDTH_CLASS} bg-[#FAF9F7] antialiased`}>
+        <QueryProvider showDevtools={false}>
           <SessionSync />
           {/* The chrome wraps the page rather than sitting above it: the phone
               tab bar is fixed to the bottom of the viewport, so the same

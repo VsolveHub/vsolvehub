@@ -43,8 +43,18 @@ from apps.partners.models import (
     PartnerCrewMembership,
     PartnerProfile,
 )
-from apps.requirements import matching, purchase_gates, rate_cards, services
+from apps.requirements import (
+    crew_brief,
+    matching,
+    purchase_gates,
+    rate_cards,
+    services,
+)
+from apps.requirements import (
+    crew_mix as crew_mix_module,
+)
 from apps.requirements.exceptions import (
+    CrewMixUnmetError,
     InvitationTransitionError,
     LifecycleNotSupportedError,
     PolicyUnavailableError,
@@ -198,6 +208,22 @@ def book_at_published_rate(
         ),
     )
     invitations = _invite_crew_wave(booking=booking, policy=policy)
+    if not invitations:
+        # Nobody is in reach at all, and this is the one wave where that is terminal rather than
+        # merely disappointing. `advance_cascade` already settles an empty wave for exactly the
+        # reason quoted in its own comment -- the Customer decides what happens rather than
+        # watching a holding state that will never resolve -- but that rule was written for the
+        # second wave onward and could not cover this one.
+        #
+        # It has to be handled here because every recovery in this cascade is driven by an
+        # invitation expiring: the sweep finds a lapsed offer and calls `advance_cascade`. A first
+        # wave that invites nobody leaves no invitation, so no sweep can ever fire and nothing can
+        # ever advance it. Left alone, the booking sits `MATCHING` at wave 0 for good.
+        #
+        # Free, and provably so: `booking_fees` only writes a fee from `accept_crew_offer` onward,
+        # and no lead was even asked.
+        exhaust_cascade(requirement_id=requirement.id, reason_code="no_eligible_leads")
+        booking.refresh_from_db()
     return RateCardBookingResult(booking=booking, requirement=requirement, invitations=invitations)
 
 
@@ -303,8 +329,9 @@ def _invite_crew_wave(
         if len(chosen) >= size:
             break
 
-    invitations = [
-        VendorInvitation.objects.create(
+    invitations: list[VendorInvitation] = []
+    for partner in chosen:
+        invitation = VendorInvitation.objects.create(
             requirement=requirement,
             partner=partner,
             snapshot=snapshot,
@@ -313,8 +340,24 @@ def _invite_crew_wave(
             responds_by=responds_by,
             ranking_provenance=provenance,
         )
-        for partner in chosen
-    ]
+        # The lead's push. Before this the wave wrote rows and said nothing, so on a wall-clock
+        # deadline of minutes the only lead who could answer was one already looking at the app.
+        enqueue_outbox_event(
+            aggregate_type="vendor_invitation",
+            aggregate_id=invitation.id,
+            event_type="m2.crew_offer.invited",
+            idempotency_key=f"m2-crew-offer-invited:{invitation.id}",
+            payload={
+                "requirement_id": str(requirement.id),
+                "vendor_invitation_id": str(invitation.id),
+                "partner_id": str(partner.id),
+                "crew_size": booking.headcount,
+                "days": booking.days,
+                "amount_paise": booking.lead_receipt_paise,
+                "responds_by": responds_by.isoformat(),
+            },
+        )
+        invitations.append(invitation)
     booking.wave = wave
     booking.save(update_fields=("wave", "updated_at"))
     return invitations
@@ -405,6 +448,14 @@ class CrewOffer:
     inclusions: list[str]
     responds_by: datetime | None
     verified_roster_size: int
+    #: What the Customer actually asked for, in the catalogue's words — the occasion, the roles,
+    #: the dress code. Without it a lead accepts a headcount and a day count and learns on site
+    #: whether it was a wedding or a demolition. See `crew_brief`.
+    brief: list[crew_brief.BriefLine]
+    #: The men/women split, per role. The one thing on this offer a lead must check against their
+    #: own roster **before** accepting -- everything else on the screen is money and dates, which
+    #: they can meet or not; this is the one they can be wrong about without noticing.
+    crew_mix: list[crew_mix_module.CrewMixLine]
 
 
 def crew_offer_for(invitation: VendorInvitation) -> CrewOffer | None:
@@ -428,6 +479,8 @@ def crew_offer_for(invitation: VendorInvitation) -> CrewOffer | None:
         inclusions=list(booking.inclusions),
         responds_by=invitation.responds_by,
         verified_roster_size=verified_roster_size(invitation.partner),
+        brief=crew_brief.brief_lines(invitation.requirement),
+        crew_mix=crew_mix_module.mix_lines(invitation.requirement),
     )
 
 
@@ -485,8 +538,33 @@ def accept_crew_offer(*, invitation_id: uuid.UUID) -> RateCardBooking:
     if verified_roster_size(invitation.partner) < booking.headcount:
         raise RosterInsufficientError()
 
+    # The mix, re-checked. The offer this lead is answering is a snapshot taken when the wave went
+    # out, and a roster changes -- a worker archived between invite and accept is exactly how a
+    # lead ends up holding a job they can no longer staff. Verified-only here for the same reason
+    # the headcount above is: this confirms a crew today.
+    men_wanted, women_wanted = crew_mix_module.requested_mix(requirement)
+    if men_wanted or women_wanted:
+        shortfall = crew_mix_module.shortfall_against(
+            crew_mix_module.roster_mix(invitation.partner, verified_only=True),
+            men=men_wanted,
+            women=women_wanted,
+            count_unknown=True,
+        )
+        if shortfall:
+            raise CrewMixUnmetError(shortfall.describe())
+
     policy = rate_cards.cascade_policy(requirement)
     matching.accept_invitation(invitation_id=invitation.id)
+    # First accept wins, so the rest of the wave is over. Left `INVITED`, those offers sat in the
+    # other leads' inboxes until the sweep caught them, and a lead who opened one was told a race
+    # had happened. Withdrawn here, under the same lock, they are gone the moment it is decided.
+    for sibling_id in (
+        VendorInvitation.objects.select_for_update()
+        .filter(requirement=requirement, status=VendorInvitation.Status.INVITED)
+        .exclude(pk=invitation.id)
+        .values_list("id", flat=True)
+    ):
+        matching.withdraw_invitation(invitation_id=sibling_id, reason_code="offer_taken")
 
     booking.status = RateCardBooking.Status.OFFER_HELD
     booking.accepted_invitation = invitation
@@ -599,7 +677,20 @@ def advance_cascade(*, requirement_id: uuid.UUID) -> list[VendorInvitation]:
     ).exists():
         return []
 
-    policy = rate_cards.cascade_policy(requirement)
+    try:
+        policy = rate_cards.cascade_policy(requirement)
+    except PolicyUnavailableError:
+        # Fail closed, exactly as `cascade_progress` does over the same configuration and for the
+        # same reason. A variant with no cascade policy has no cascade to advance, and this is
+        # reached from a **read** -- `reconcile_lapsed_offers`, on the Customer's own request page
+        # -- so raising turned an unconfigured variant into a 500 on a page somebody was merely
+        # looking at.
+        #
+        # Doing nothing rather than parking the booking: a missing policy is Operations having not
+        # configured this service, not the market having no supply. Exhausting the Customer's
+        # request over a configuration gap would tell them nobody is available when nobody was
+        # ever asked.
+        return []
     if booking.wave >= _wave_ceiling(booking=booking, policy=policy):
         exhaust_cascade(requirement_id=requirement.id, reason_code="cascade_exhausted")
         return []
@@ -1209,6 +1300,39 @@ def breached_decline_rates(*, window_hours: int, at: datetime | None = None) -> 
 # ---------------------------------------------------------------------------
 # Sweep selectors. `tasks.py` decides only *when* to look.
 # ---------------------------------------------------------------------------
+
+
+def reconcile_lapsed_offers(
+    *,
+    requirement_id: uuid.UUID | None = None,
+    partner: PartnerProfile | None = None,
+    limit: int = 20,
+) -> int:
+    """Expire lapsed crew offers now, and let their cascades move. Returns how many moved.
+
+    The sweep does this on the beat. This does the same thing on **read**: the Customer opening
+    their request, or a lead opening the offers inbox, is the moment the answer matters, and
+    waiting a beat tick for it meant a Customer staring at "finding your crew" while every offer
+    had already died. Scoped to one requirement or one Partner so a read never pays for the whole
+    city, and bounded so a read never pays for more than a handful. Idempotent: an offer already
+    expired is skipped by `expire_crew_offer_and_advance` itself.
+    """
+    lapsed = VendorInvitation.objects.filter(
+        status=VendorInvitation.Status.INVITED,
+        responds_by__isnull=False,
+        responds_by__lt=timezone.now(),
+        requirement__rate_card_booking__status=RateCardBooking.Status.MATCHING,
+    )
+    if requirement_id is not None:
+        lapsed = lapsed.filter(requirement_id=requirement_id)
+    if partner is not None:
+        lapsed = lapsed.filter(partner=partner)
+    moved = 0
+    for invitation_id in list(lapsed.values_list("id", flat=True)[:limit]):
+        with transaction.atomic():
+            expire_crew_offer_and_advance(invitation_id=invitation_id)
+        moved += 1
+    return moved
 
 
 def expired_crew_offer_ids(*, at: datetime | None = None) -> list[uuid.UUID]:

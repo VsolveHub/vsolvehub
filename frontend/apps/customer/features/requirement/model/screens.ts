@@ -1,94 +1,63 @@
 /**
- * The four-screen requirement sequence, and why it is exactly four.
+ * The three-screen requirement sequence:
+ * Step 1 of 3 — What needs doing?
+ * Step 2 of 3 — Where and when?
+ * Step 3 of 3 — Choose visits & send
  *
- * Revision 2 of the M2 plan fixed a flow-weight budget, and this list is the
- * enforceable half of it: *What*, *Where/When*, *Details*, *Review*. Exceeding it
- * is recorded as a design regression rather than a detail, so the sequence is a
- * closed constant with a test on its length — a fifth screen has to be an
- * argument somebody makes on purpose, not a file somebody adds.
+ * ## The three steps
  *
- * ## Review is the confirmation
- *
- * There is no `confirm` screen after `review`, and `M2-FE-206` is explicit that
- * one must not be added. The earlier design had the Customer approve an immutable
- * version *after* reviewing it, which is the same act twice: the second screen
- * asks "are you sure?" about a page whose entire job was to let them be sure.
- *
- * ## What is deliberately not a screen
- *
- * Callback preference, site-visit interest, access constraints and preferred
- * communication were each a step in the pre-audit design. `FLOW-02` moved them
- * to optional entry points reached *from* review. They are real options and some
- * Customers want them; none is worth a screen every Customer walks through, and
- * four of them turned a four-screen flow into an eight-screen one for the benefit
- * of a minority.
- *
- * See `OPTIONAL_DETAILS` below — they are modelled, just not sequenced.
+ * `what` collects category facts (choices, numbers, booleans) with zero typing.
+ * `where_when` collects site address and date information only.
+ * `visits_send` contains compact fact recaps, the 1/2/3 estimate chooser, visit
+ * slot selections, and the single Send action.
  */
 
-export const SCREENS = ["what", "where_when", "details", "review"] as const;
+export const SCREENS = ["what", "where_when", "visits_send"] as const;
 
 export type Screen = (typeof SCREENS)[number];
 
 /**
  * The flow-weight budget as a number the tests can read.
  *
- * `03-frontend-tasks.md` fixes it at four. Duplicated here rather than referenced
- * because a Markdown table cannot fail a build.
+ * Three steps.
  */
-export const SCREEN_BUDGET = 4;
+export const SCREEN_BUDGET = 3;
 
-export function screenIndex(screen: Screen): number {
-  return SCREENS.indexOf(screen);
+/**
+ * Every navigation helper takes the *active* sequence as an optional second
+ * argument and defaults to the full budget. A variant that publishes no
+ * questions walks `["where_when", "visits_send"]` — see `active-screens.ts` —
+ * and the reducer must step through that list, not this one, or Continue
+ * from "Where and when" would land on a step the Customer never saw.
+ */
+export function screenIndex(screen: Screen, screens: readonly Screen[] = SCREENS): number {
+  return screens.indexOf(screen);
 }
 
-export function nextScreen(screen: Screen): Screen | null {
-  const index = screenIndex(screen);
-  if (index === -1 || index === SCREENS.length - 1) return null;
-  return SCREENS[index + 1] ?? null;
+export function nextScreen(screen: Screen, screens: readonly Screen[] = SCREENS): Screen | null {
+  const index = screenIndex(screen, screens);
+  if (index === -1 || index === screens.length - 1) return null;
+  return screens[index + 1] ?? null;
 }
 
-export function previousScreen(screen: Screen): Screen | null {
-  const index = screenIndex(screen);
+export function previousScreen(
+  screen: Screen,
+  screens: readonly Screen[] = SCREENS,
+): Screen | null {
+  const index = screenIndex(screen, screens);
   if (index <= 0) return null;
-  return SCREENS[index - 1] ?? null;
+  return screens[index - 1] ?? null;
 }
 
-export function isFinalScreen(screen: Screen): boolean {
-  return screen === SCREENS[SCREENS.length - 1];
+export function isFinalScreen(screen: Screen, screens: readonly Screen[] = SCREENS): boolean {
+  return screen === screens[screens.length - 1];
 }
 
 /**
  * Customer-facing screen labels for the progress indicator.
- *
- * Plain nouns, not our vocabulary. "What you need" rather than "Scope", because
- * the Customer is describing a problem and has not agreed to learn a word for it.
  */
 export const SCREEN_LABELS: Record<Screen, string> = {
-  what: "What you need",
+  what: "What needs doing",
   where_when: "Where and when",
-  details: "Details",
-  review: "Review",
-};
-
-/**
- * The optional extras, reachable from review and never sequenced.
- *
- * `FLOW-02`. Modelled as data so the review screen can render them in one place
- * and so adding one cannot accidentally become adding a step.
- */
-export const OPTIONAL_DETAILS = [
-  "callback_preference",
-  "site_visit_interest",
-  "access_constraints",
-  "preferred_communication",
-] as const;
-
-export type OptionalDetail = (typeof OPTIONAL_DETAILS)[number];
-
-export const OPTIONAL_DETAIL_LABELS: Record<OptionalDetail, string> = {
-  callback_preference: "Ask us to call you",
-  site_visit_interest: "Request a site visit",
-  access_constraints: "Access instructions",
-  preferred_communication: "How to reach you",
+  visits_send: "Choose visits & send",
 };

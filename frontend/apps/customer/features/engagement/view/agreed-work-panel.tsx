@@ -1,7 +1,7 @@
 "use client";
 
 import { readVendorIdentity } from "@vsolve/query";
-import { Badge, Skeleton, buttonStyles, formatMoney } from "@vsolve/ui";
+import { Badge, Skeleton, buttonStyles } from "@vsolve/ui";
 import Link from "next/link";
 
 import { useCustomerQuotes } from "@/features/quotes/queries";
@@ -14,8 +14,92 @@ export interface AgreedWorkPanelProps {
   quotesHref: string;
 }
 
-/** The accepted professional and quote, kept compact because the quote has its own page. */
+/**
+ * Who is doing the work.
+ *
+ * Two shapes, because the two archetypes publish different facts:
+ *
+ * - **A3 (`lead_only`)** reads the supervisor off the engagement itself —
+ *   `partner_contact` and `crew_terms`, contract 1.49.0. There is no accepted
+ *   quote on a rate-card booking, so the quote lookup is never made and the
+ *   card never says "Professional details unavailable" against a booking that
+ *   published a name and a number.
+ * - **A5 (managed)** keeps the accepted quote, which has its own page.
+ */
 export function AgreedWorkPanel({ engagement, nouns, quotesHref }: AgreedWorkPanelProps) {
+  if (engagement.mode === "lead_only") {
+    return <CrewPartnerPanel engagement={engagement} />;
+  }
+  return <QuotedProfessionalPanel engagement={engagement} nouns={nouns} quotesHref={quotesHref} />;
+}
+
+/* --------------------------------------------------------------------------
+   A3 — the supervisor, from the engagement
+   -------------------------------------------------------------------------- */
+
+function CrewPartnerPanel({ engagement }: { engagement: EngagementView }) {
+  const contact = engagement.partnerContact;
+  const terms = engagement.crewTerms;
+  const site = engagement.siteAddress;
+
+  return (
+    <section aria-labelledby="agreed-work-heading" className="mt-6">
+      <p className="text-xs font-bold uppercase text-text-muted">Your crew</p>
+      <h2 id="agreed-work-heading" className="mt-1 text-xl font-extrabold text-text">
+        Who is coming
+      </h2>
+
+      <div className="mt-3 overflow-hidden rounded-card border border-line bg-surface shadow-card">
+        <div className="flex items-center gap-4 p-4 sm:p-5">
+          <VendorMark name={contact?.name ?? null} />
+          <div className="min-w-0 flex-1">
+            <p className="text-lg font-extrabold text-text">
+              {contact?.name ?? "Supervisor"}
+            </p>
+            <p className="mt-0.5 text-sm font-medium text-text-secondary">
+              {contact === null
+                ? engagement.contactReleasedAt === null
+                  ? "Name and number arrive once the booking fee is confirmed."
+                  : "Number not published for this booking."
+                : contact.phone}
+            </p>
+          </div>
+          {contact !== null && contact.phone !== "" ? (
+            <a href={contact.telHref} className={buttonStyles({ variant: "primary" })}>
+              Call
+            </a>
+          ) : null}
+        </div>
+
+        {terms !== null ? (
+          <div className="flex items-center gap-3 border-t border-line px-4 py-3 sm:px-5">
+            <PanelIcon kind="team" />
+            <p className="min-w-0 flex-1 text-sm font-medium text-text-secondary">
+              <strong className="font-extrabold text-text">
+                {terms.headcount} {terms.headcount === 1 ? "person" : "people"}
+              </strong>{" "}
+              · {terms.days} {terms.days === 1 ? "day" : "days"} · {terms.perWorkerDayLabel}
+              /person/day
+            </p>
+          </div>
+        ) : null}
+
+        {site !== null ? (
+          <div className="flex items-center gap-3 border-t border-line px-4 py-3 sm:px-5">
+            <PanelIcon kind="pin" />
+            <p className="min-w-0 flex-1 text-sm font-medium text-text-secondary">{site.summary}</p>
+          </div>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+/* --------------------------------------------------------------------------
+   A5 — the accepted quote
+   -------------------------------------------------------------------------- */
+
+function QuotedProfessionalPanel({ engagement, nouns, quotesHref }: AgreedWorkPanelProps) {
   const query = useCustomerQuotes(engagement.requirementId);
   const quote =
     query.data === undefined
@@ -41,7 +125,7 @@ export function AgreedWorkPanel({ engagement, nouns, quotesHref }: AgreedWorkPan
           <div className="min-w-0 flex-1">
             <p className="text-sm font-extrabold text-text">Professional details unavailable</p>
             <p className="mt-0.5 text-xs font-medium text-text-secondary">
-              The accepted quote remains available.
+              The accepted quote remains available for this {nouns.engagement}.
             </p>
           </div>
           <Link href={quotesHref} className={buttonStyles({ variant: "outline" })}>
@@ -53,34 +137,6 @@ export function AgreedWorkPanel({ engagement, nouns, quotesHref }: AgreedWorkPan
           <div className="flex items-center gap-4 p-4 sm:p-5">
             <Identity vendor={quote.vendor} />
           </div>
-
-          {engagement.mode === "lead_only" &&
-          quote.worker_count !== null &&
-          quote.minimum_days !== null ? (
-            <div className="flex items-center gap-3 border-t border-line px-4 py-3 sm:px-5">
-              <PanelIcon kind="team" />
-              <p className="min-w-0 flex-1 text-sm font-medium text-text-secondary">
-                <strong className="font-extrabold text-text">
-                  {quote.worker_count} {quote.worker_count === 1 ? "person" : "people"}
-                </strong>{" "}
-                for {quote.minimum_days} {quote.minimum_days === 1 ? "day" : "days"}
-                {quote.rate_paise_per_worker_day !== null
-                  ? ` at ${formatMoney(quote.rate_paise_per_worker_day)} per person per day`
-                  : ""}
-              </p>
-            </div>
-          ) : null}
-
-          {engagement.mode === "lead_only" ? (
-            <details className="group border-t border-line">
-              <summary className="flex min-h-12 cursor-pointer list-none items-center px-4 py-3 text-sm font-bold text-text transition-colors duration-fast hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring sm:px-5 [&::-webkit-details-marker]:hidden">
-                Team attendance details
-              </summary>
-              <p className="border-t border-line bg-canvas px-4 py-3 text-sm leading-6 text-text-secondary sm:px-5">
-                The professional runs their team. If fewer people arrive than agreed, report it on that {nouns.stage}.
-              </p>
-            </details>
-          ) : null}
 
           <div className="grid border-t border-line sm:grid-cols-2">
             <div className="flex min-h-16 items-center gap-3 px-4 py-3 sm:border-r sm:border-line sm:px-5">
@@ -158,11 +214,12 @@ function friendlyVendorType(value: string): string {
     .join(" ");
 }
 
-function PanelIcon({ kind }: { kind: "team" | "contact" | "quote" }) {
+function PanelIcon({ kind }: { kind: "team" | "contact" | "quote" | "pin" }) {
   const path = {
     team: "M16 18v-1.5A3.5 3.5 0 0 0 12.5 13h-5A3.5 3.5 0 0 0 4 16.5V18m6-8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm7 1a2.5 2.5 0 0 0 0-5m1 12v-1a3 3 0 0 0-2-2.83",
     contact: "M6 4h3l2 5-2 1.5a14 14 0 0 0 4.5 4.5L15 13l5 2v3a2 2 0 0 1-2 2C10.27 20 4 13.73 4 6a2 2 0 0 1 2-2Z",
     quote: "M7 3h7l4 4v14H7V3Zm7 0v5h5M10 13h5m-5 4h5",
+    pin: "M12 21s-6-5.5-6-11a6 6 0 1 1 12 0c0 5.5-6 11-6 11Zm0-8.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z",
   }[kind];
 
   return (

@@ -4,7 +4,7 @@ import type { Schemas } from "@vsolve/api-client";
 import { Badge, Button, Dialog, EmptyState, Field, Input, Spinner, cn } from "@vsolve/ui";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 
-import { AddressForm } from "./address-form";
+import { AddressForm, EMPTY_DRAFT, draftFromLocated, type Draft } from "./address-form";
 import { ChoiceCard } from "./choice-card";
 
 /**
@@ -81,10 +81,9 @@ export interface AddressStageProps {
   /**
    * Supply to offer **add a new address** as a second mode inside this dialog.
    *
-   * Optional, and omitting it leaves the dialog exactly as it was: a saved list
-   * plus "use my current location". That keeps the callers who have not adopted
-   * the form — the checkout workspace — working unchanged, rather than making a
-   * new capability a breaking change to a shared surface.
+   * Optional, and omitting it leaves the dialog as a saved list plus "use my
+   * current location". Callers that pass it get **Use my location** and **Add a
+   * new address** on the picker; locating fills the form, typing opens it blank.
    */
   addNew?: {
     /** Resolves the device's position into fields. Must not save. */
@@ -165,6 +164,15 @@ export function AddressStage({
     addressId: string | null;
     value: AddressPatch;
   }>({ addressId: null, value: {} });
+  /**
+   * Seed for the add form. Changing `addFormKey` remounts it (fresh GPS fill).
+   * Leaving the key alone and switching `mode` back to `list` is what preserves
+   * an in-progress draft when the Customer presses Back.
+   */
+  const [addDraft, setAddDraft] = useState<Draft>(EMPTY_DRAFT);
+  const [addFromLocation, setAddFromLocation] = useState(false);
+  const [addFormKey, setAddFormKey] = useState(0);
+  const [isFindingLocation, setIsFindingLocation] = useState(false);
   const editingAddress =
     addresses.find((address) => address.id === pendingAddressId) ?? selectedAddress;
   const draft =
@@ -197,6 +205,33 @@ export function AddressStage({
     setPickerOpen(false);
     setMode("list");
     setPendingAddressId(null);
+    setAddDraft(EMPTY_DRAFT);
+    setAddFromLocation(false);
+    setAddFormKey((key) => key + 1);
+    setIsFindingLocation(false);
+  }
+
+  /**
+   * Device fix → reverse geocode → the add form, with street/city/pin filled
+   * and the flat left empty. Failures stay on this list so the Customer can
+   * retry or type the address instead.
+   */
+  async function handleUseMyLocation() {
+    if (!addNew) {
+      onUseCurrentLocation();
+      return;
+    }
+    setIsFindingLocation(true);
+    try {
+      const resolved = await addNew.onLocate();
+      if (resolved === null) return;
+      setAddDraft(draftFromLocated(resolved));
+      setAddFromLocation(true);
+      setAddFormKey((key) => key + 1);
+      setMode("add");
+    } finally {
+      setIsFindingLocation(false);
+    }
   }
 
   function commitSelection() {
@@ -259,7 +294,7 @@ export function AddressStage({
     </div>
   );
 
-  if (isLoading) {
+  if (isLoading && presentation !== "none") {
     return (
       <div className="flex items-center gap-3 py-8 text-text-secondary">
         <Spinner />
@@ -326,7 +361,12 @@ export function AddressStage({
           ) : null
         }
       >
-        {mode === "edit" && editingAddress ? (
+        {isLoading ? (
+          <div className="flex items-center gap-3 py-8 text-text-secondary">
+            <Spinner />
+            <span>Loading your saved addresses...</span>
+          </div>
+        ) : mode === "edit" && editingAddress ? (
           <SelectedAddressForm
             selectedAddress={editingAddress}
             draft={draft}
@@ -336,47 +376,70 @@ export function AddressStage({
             isUpdatingAddress={isUpdatingAddress}
             onBack={() => setMode("list")}
           />
-        ) : mode === "add" && addNew ? (
-          <AddressForm
-            formId={ADD_FORM_ID}
-            onLocate={addNew.onLocate}
-            isLocating={addNew.isLocating}
-            locateError={addNew.locateError}
-            onSubmit={(request) => void handleCreate(request)}
-            saveError={addNew.createError}
-            onPostalCodeChange={addNew.onPostalCodeChange}
-            serviceability={addNew.draftServiceability}
-            isCheckingServiceability={addNew.isCheckingDraftServiceability}
-          />
-        ) : addresses.length === 0 ? (
-          <EmptyState
-            compact
-            title="No saved addresses"
-            description={
-              addNew
-                ? "Add one so we can check coverage and send the professional to the right place."
-                : "Use your current location to add a pinned address for this job."
-            }
-            action={
-              addNew ? (
-                <Button onClick={() => setMode("add")}>Add a new address</Button>
-              ) : (
-                locationAction
-              )
-            }
-          />
         ) : (
-          <AddressPickerDialogBody
-            addresses={addresses}
-            pendingAddressId={pendingAddressId}
-            locationAction={addNew ? null : locationAction}
-            onHighlight={setPendingAddressId}
-            onEdit={(address) => {
-              setPendingAddressId(address.id);
-              setMode("edit");
-            }}
-            onAddNew={addNew ? () => setMode("add") : null}
-          />
+          <>
+            <div hidden={mode === "add"}>
+              {addresses.length === 0 ? (
+                <EmptyState
+                  compact
+                  title="No saved addresses"
+                  description={
+                    addNew
+                      ? "Use your location to fill the address, or add one by typing."
+                      : "Use your current location to add a pinned address for this job."
+                  }
+                  action={
+                    addNew ? (
+                      <AddAddressActions
+                        onUseMyLocation={() => void handleUseMyLocation()}
+                        onAddNew={() => setMode("add")}
+                        isFindingLocation={isFindingLocation || addNew.isLocating}
+                        locateError={addNew.locateError}
+                      />
+                    ) : (
+                      locationAction
+                    )
+                  }
+                />
+              ) : (
+                <AddressPickerDialogBody
+                  addresses={addresses}
+                  pendingAddressId={pendingAddressId}
+                  locationAction={addNew ? null : locationAction}
+                  onHighlight={setPendingAddressId}
+                  onEdit={(address) => {
+                    setPendingAddressId(address.id);
+                    setMode("edit");
+                  }}
+                  addActions={
+                    addNew
+                      ? {
+                          onUseMyLocation: () => void handleUseMyLocation(),
+                          onAddNew: () => setMode("add"),
+                          isFindingLocation: isFindingLocation || addNew.isLocating,
+                          locateError: addNew.locateError,
+                        }
+                      : null
+                  }
+                />
+              )}
+            </div>
+            {addNew ? (
+              <div hidden={mode !== "add"}>
+                <AddressForm
+                  key={addFormKey}
+                  formId={ADD_FORM_ID}
+                  initial={addDraft}
+                  showPinnedBanner={addFromLocation}
+                  onSubmit={(request) => void handleCreate(request)}
+                  saveError={addNew.createError}
+                  onPostalCodeChange={addNew.onPostalCodeChange}
+                  serviceability={addNew.draftServiceability}
+                  isCheckingServiceability={addNew.isCheckingDraftServiceability}
+                />
+              </div>
+            ) : null}
+          </>
         )}
       </Dialog>
     </div>
@@ -560,6 +623,8 @@ function ServiceabilityStatus({
   isCheckingServiceability: boolean;
   serviceability: Schemas["ServiceabilityResponse"] | null;
 }) {
+  if (!isCheckingServiceability && serviceability === null) return null;
+
   return (
     <div className="mt-3" aria-live="polite">
       {isCheckingServiceability ? (
@@ -581,6 +646,40 @@ function ServiceabilityStatus({
   );
 }
 
+function AddAddressActions({
+  onUseMyLocation,
+  onAddNew,
+  isFindingLocation,
+  locateError,
+}: {
+  onUseMyLocation: () => void;
+  onAddNew: () => void;
+  isFindingLocation: boolean;
+  locateError: string | null;
+}) {
+  return (
+    <div className="flex w-full min-w-[16rem] flex-col gap-2">
+      <Button
+        type="button"
+        block
+        onClick={onUseMyLocation}
+        loading={isFindingLocation}
+        loadingLabel="Finding your location"
+      >
+        Use my location
+      </Button>
+      <Button type="button" variant="outline" block onClick={onAddNew} disabled={isFindingLocation}>
+        Add a new address
+      </Button>
+      {locateError ? (
+        <p role="alert" className="text-sm font-medium text-danger-text">
+          {locateError}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 /**
  * The saved list.
  *
@@ -596,14 +695,19 @@ function AddressPickerDialogBody({
   locationAction,
   onHighlight,
   onEdit,
-  onAddNew,
+  addActions,
 }: {
   addresses: readonly Address[];
   pendingAddressId: string | null;
   locationAction: ReactNode;
   onHighlight: (addressId: string) => void;
   onEdit: (address: Address) => void;
-  onAddNew: (() => void) | null;
+  addActions: {
+    onUseMyLocation: () => void;
+    onAddNew: () => void;
+    isFindingLocation: boolean;
+    locateError: string | null;
+  } | null;
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -653,10 +757,13 @@ function AddressPickerDialogBody({
         </div>
       </fieldset>
 
-      {onAddNew !== null ? (
-        <Button variant="outline" block onClick={onAddNew}>
-          + Add a new address
-        </Button>
+      {addActions !== null ? (
+        <AddAddressActions
+          onUseMyLocation={addActions.onUseMyLocation}
+          onAddNew={addActions.onAddNew}
+          isFindingLocation={addActions.isFindingLocation}
+          locateError={addActions.locateError}
+        />
       ) : (
         <div className="rounded-card border border-line bg-surface p-4">
           <h3 className="text-sm font-semibold text-text">Add another pinned address</h3>

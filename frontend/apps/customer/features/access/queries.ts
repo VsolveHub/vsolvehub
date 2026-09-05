@@ -57,6 +57,9 @@ import { getApiClient } from "@/lib/api/browser";
 
 export type { UnlockState, VisitPlanState, VisitPlan, SiteVisit, QuoteTeaserList };
 
+export type CustomerVisitSlotGrid = Schemas["VisitSlotGrid"];
+export type CustomerRequestedVisitSlots = Schemas["CustomerRequestedVisitSlots"];
+
 /* --------------------------------------------------------------------------
    A3 — teasers and the unlock
    -------------------------------------------------------------------------- */
@@ -212,6 +215,164 @@ export function useVisitPlan(requirementId: string | null, enabled = true) {
     ...M2_FRESHNESS.unlock,
     ...boundedPoll<VisitPlanState>({ isSettled: isVisitPlanSettled }),
     retry: shouldRetryM2Read,
+  });
+}
+
+/**
+ * Candidate visit times owned by the Customer's draft requirement.
+ *
+ * The slot ids are short-lived signed tokens. This query therefore uses the
+ * expiry freshness tier and is explicitly refreshed again by the submit path
+ * before any token is redeemed.
+ */
+export function useCustomerVisitSlotGrid(requirementId: string | null, enabled = true) {
+  return useQuery<CustomerVisitSlotGrid>({
+    queryKey: m2QueryKeys.visits.customerSlots(requirementId ?? ""),
+    queryFn: () =>
+      request(() =>
+        getApiClient().GET("/api/v1/requirements/{requirement_id}/visit-slots/", {
+          params: { path: { requirement_id: requirementId! } },
+        }),
+      ),
+    enabled: requirementId !== null && enabled,
+    ...M2_FRESHNESS.visitSlots,
+    retry: shouldRetryM2Read,
+  });
+}
+
+export interface ChooseCustomerVisitSlotsInput {
+  requirementId: string;
+  slotIds: readonly string[];
+  /**
+   * Identifies the exact grid snapshot and visible choices behind this write.
+   * A refreshed grid issues new signed tokens, so it must also start a new
+   * idempotent command instead of reusing a key whose stored payload differs.
+   */
+  selectionVersion: string;
+}
+
+export function customerVisitSlotChoiceKey(input: ChooseCustomerVisitSlotsInput): string {
+  return getStableIdempotencyKey(
+    `m2-customer-visit-slots:${input.requirementId}:${input.selectionVersion}`,
+  );
+}
+
+/** Save the complete set of one signed visit token per requested estimate. */
+export function useChooseCustomerVisitSlots() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: ChooseCustomerVisitSlotsInput) =>
+      request(() =>
+        getApiClient().POST("/api/v1/requirements/{requirement_id}/visit-slots/", {
+          params: {
+            path: { requirement_id: input.requirementId },
+            header: { "Idempotency-Key": customerVisitSlotChoiceKey(input) },
+          },
+          body: { slot_ids: [...input.slotIds] },
+        }),
+      ),
+    onSuccess: (chosen: CustomerRequestedVisitSlots, input) => {
+      const planKey = m2AccessKeys.visitPlan(input.requirementId);
+      const previous = queryClient.getQueryData<VisitPlanState>(planKey);
+      if (previous?.plan === null || previous?.plan === undefined) {
+        void queryClient.invalidateQueries({ queryKey: planKey });
+        return;
+      }
+      queryClient.setQueryData<VisitPlanState>(planKey, {
+        ...previous,
+        plan: { ...previous.plan, shares: chosen.slots },
+        server_now: chosen.server_now,
+      });
+    },
+    onError: (_error, input) => {
+      // A token can expire or lose capacity between read and write. Never retry
+      // that credential; redraw the grid so recovery starts from current truth.
+      void queryClient.invalidateQueries({
+        queryKey: m2QueryKeys.visits.customerSlots(input.requirementId),
+      });
+    },
+    retry: false,
+  });
+}
+
+export interface UnmatchedVisitSlotInput {
+  requirementId: string;
+  shareId: string;
+}
+
+/**
+ * Try another time for a visit nobody could be found for.
+ *
+ * The server already refused this on anything but an exhausted slot; what was
+ * missing was any caller. The endpoint has existed since the fixed-visit
+ * broadcast landed and the customer app never once called it, so a slot the
+ * matching engine had given up on showed a spinner with no way off it.
+ */
+export function useReplaceVisitSlot() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: UnmatchedVisitSlotInput & { slotId: string }) =>
+      request(() =>
+        getApiClient().POST(
+          "/api/v1/requirements/{requirement_id}/visit-slots/{share_id}/replace/",
+          {
+            params: {
+              path: { requirement_id: input.requirementId, share_id: input.shareId },
+              header: {
+                "Idempotency-Key": getStableIdempotencyKey(
+                  `m2-visit-slot-replace:${input.shareId}:${input.slotId}`,
+                ),
+              },
+            },
+            body: { slot_id: input.slotId },
+          },
+        ),
+      ),
+    onSuccess: (_slots, input) => {
+      void queryClient.invalidateQueries({ queryKey: m2AccessKeys.visitPlan(input.requirementId) });
+      void queryClient.invalidateQueries({
+        queryKey: m2QueryKeys.visits.customerSlots(input.requirementId),
+      });
+    },
+    retry: false,
+  });
+}
+
+/**
+ * Do without a visit nobody could be found for, and stop paying for it.
+ *
+ * The money moves on the server: the share is refunded in full through the
+ * ordinary settlement path, and an uncharged plan simply quotes less at
+ * checkout. The plan read is invalidated rather than patched because
+ * `chargeable_paise` changes with it, and a stale price on a checkout button is
+ * the one thing this whole change exists to prevent.
+ */
+export function useDropVisitSlot() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: UnmatchedVisitSlotInput) =>
+      request(() =>
+        getApiClient().POST(
+          "/api/v1/requirements/{requirement_id}/visit-slots/{share_id}/drop/",
+          {
+            params: {
+              path: { requirement_id: input.requirementId, share_id: input.shareId },
+              header: {
+                "Idempotency-Key": getStableIdempotencyKey(
+                  `m2-visit-slot-drop:${input.shareId}`,
+                ),
+              },
+            },
+          },
+        ),
+      ),
+    onSuccess: (_slots, input) => {
+      void queryClient.invalidateQueries({ queryKey: m2AccessKeys.visitPlan(input.requirementId) });
+    },
+    retry: false,
   });
 }
 

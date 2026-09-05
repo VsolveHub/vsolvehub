@@ -13,7 +13,7 @@ Two guards here exist because the platform, not only the vendor, carries the con
 import re
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 
 from django.db import transaction
@@ -24,8 +24,9 @@ from apps.foundation.services import enqueue_outbox_event
 from apps.identity.models import User
 from apps.partners.capabilities import assert_rate_meets_wage_floor
 from apps.partners.exceptions import WageFloorUnsetError
-from apps.requirements import access, matching, pricing
+from apps.requirements import access, financials, matching, pricing, visit_slots
 from apps.requirements.exceptions import (
+    FinancialPolicyUnavailableError,
     ProposalNotSelectableError,
     ProposalShapeError,
     ProposalWindowClosedError,
@@ -39,6 +40,7 @@ from apps.requirements.models import (
     Proposal,
     ProposalSelection,
     RequirementQuestion,
+    RevisionRequest,
     SiteVisit,
     VendorInvitation,
     VisitPlanShare,
@@ -52,38 +54,71 @@ _CONTACT_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
-#: A project estimate is editable only while the vendor is still correcting the
-#: submission they just made. After this window it remains an offer the Customer
-#: can act on, so any change belongs to a later engagement amendment rather than
-#: a quietly replaced estimate.
-ESTIMATE_REVISION_WINDOW = timedelta(minutes=5)
-
-
-def estimate_revision_expires_at(proposal: Proposal) -> datetime:
-    """The immutable end of an A5 estimate's correction window."""
-
-    return proposal.submitted_at + ESTIMATE_REVISION_WINDOW
+#: The A5 estimate states a vendor may still replace with a new one.
+#:
+#: `SUBMITTED` is the live offer, revisable until the Customer chooses it — exactly what an A3
+#: quote has always been. `WITHDRAWN` is the vendor's own retraction, and the withdraw dialog
+#: promises in as many words that "your enquiry stays open, so you can send a new one"; this
+#: command refused to keep that promise for projects until now.
+#:
+#: `EXPIRED` is deliberately absent and handled on its own below: an estimate that ran out of
+#: validity comes back only when the Customer asks for a fresh price, which is a different door.
+REPLACEABLE_ESTIMATE_STATUSES = frozenset(
+    {
+        Proposal.Status.SUBMITTED,
+        Proposal.Status.WITHDRAWN,
+    }
+)
 
 
 def _assert_project_revision_allowed(
     *, previous: Proposal | None, requirement: CustomerRequirement
 ) -> None:
-    """Keep a rejected or settled A5 estimate immutable, and close editing after five minutes."""
+    """Keep a settled A5 estimate immutable; a live one stays the vendor's to replace.
+
+    Until the owner decision of 2 September 2026 this also closed editing five minutes after
+    submission, reasoning that a later change "belongs to a later engagement amendment rather than
+    a quietly replaced estimate". Two things were wrong with that. It made projects the odd one
+    out — an A3 quote has always been revisable for as long as it is live — and it left a Partner
+    looking at a price they could no longer correct while the Customer was still deciding, which
+    is precisely when a correction is worth something to both of them.
+
+    Nothing is quiet about the replacement. Supersession is append-only, so every version the
+    Customer was offered survives and a dispute is argued from the chain; `m2.proposal.submitted`
+    fires per proposal id, so each revision tells the Customer it arrived.
+
+    The line is now the Customer's decision rather than a clock, and `submit_proposal` already
+    draws it: it refuses once the requirement is `SELECTED` or `ENGAGED`, under the requirement's
+    row lock, so a revision racing an acceptance cannot both win.
+    """
 
     if (
         previous is None
         or requirement.archetype != ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT
     ):
         return
-    if previous.status != Proposal.Status.SUBMITTED:
+    if (
+        previous.status == Proposal.Status.EXPIRED
+        and previous.revalidation_requested_at is not None
+    ):
+        # The Customer asked for a fresh price on an expired estimate. That is the one way an
+        # expired row is superseded, and refusing it here would make `request_revalidation` a
+        # button that promises a revision nobody can send.
+        return
+    if previous.status not in REPLACEABLE_ESTIMATE_STATUSES:
         raise RequirementTransitionError(
-            "This estimate can no longer be revised. You may only withdraw a live estimate "
-            "until the Customer chooses it."
+            "This estimate can no longer be revised. The customer has already acted on it."
         )
-    if timezone.now() >= estimate_revision_expires_at(previous):
-        raise RequirementTransitionError(
-            "An estimate can only be revised during the first 5 minutes after it is sent."
-        )
+
+
+def open_revision_request_for(proposal: Proposal) -> RevisionRequest | None:
+    """The Customer's unanswered request for a different estimate, if there is one."""
+    return proposal.revision_requests.filter(status=RevisionRequest.Status.OPEN).first()
+
+
+def latest_revision_request_for(proposal: Proposal) -> RevisionRequest | None:
+    """The most recent request on this proposal, in any state — what a screen shows beside it."""
+    return proposal.revision_requests.order_by("-created_at").first()
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,6 +131,34 @@ class QuoteTeaser:
     price_band_low_paise: int
     price_band_high_paise: int
     usability: str
+
+
+@dataclass(frozen=True, slots=True)
+class DiscountPreview:
+    """The exact totals a Partner confirms before an overall discount is published."""
+
+    proposal_id: uuid.UUID
+    request_id: uuid.UUID
+    discount_kind: str
+    discount_bps: int | None
+    discount_base_paise: int
+    discount_paise: int
+    calculation: financials.CalculationResult
+
+    def as_payload(self) -> dict[str, Any]:
+        return {
+            "proposal_id": self.proposal_id,
+            "request_id": self.request_id,
+            "discount_kind": self.discount_kind,
+            "discount_bps": self.discount_bps,
+            "discount_base_paise": self.discount_base_paise,
+            "discount_paise": self.discount_paise,
+            "customer_total_paise": self.calculation.customer_total_paise,
+            "tax_paise": self.calculation.partner_service_tax_paise,
+            "partner_net_paise": self.calculation.partner_net_paise,
+            "stages": self.calculation.stages,
+            "material_lines": self.calculation.material_lines,
+        }
 
 
 def _assert_a3_shape(payload: dict[str, Any]) -> None:
@@ -269,28 +332,51 @@ def assert_rate_meets_derived_wage_floor(
     )
 
 
-def required_tax_basis(requirement: CustomerRequirement) -> str:
-    """One basis per requirement, taken from whoever quoted first.
+def required_tax_basis(_requirement: CustomerRequirement) -> str:
+    """The Operations-owned comparison basis, never the first Partner's preference."""
 
-    Comparing a tax-inclusive total against a tax-exclusive one is the trap the comparison view
-    cannot fix on the Customer's behalf, so it is prevented at submission.
-    """
-    existing = (
-        Proposal.objects.filter(requirement=requirement)
-        .exclude(status=Proposal.Status.WITHDRAWN)
-        .order_by("submitted_at")
-        .first()
+    try:
+        return financials.active_policy().tax_basis
+    except FinancialPolicyUnavailableError:
+        return ""
+
+
+def preview_proposal(
+    *,
+    invitation: VendorInvitation,
+    estimate_type: str,
+    item_lines: list[dict[str, Any]] | None = None,
+    labour_lines: list[dict[str, Any]] | None = None,
+    material_lines: list[dict[str, Any]] | None = None,
+    other_charges: list[dict[str, Any]] | None = None,
+    stages: list[dict[str, Any]] | None = None,
+    **_ignored: Any,
+) -> financials.CalculationResult:
+    """Return the authoritative A5 calculation without writing a proposal revision."""
+
+    if invitation.requirement.archetype != ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT:
+        raise ProposalShapeError("Only managed-project estimates use the estimate preview.")
+    if invitation.status not in (VendorInvitation.Status.ACCEPTED, VendorInvitation.Status.QUOTED):
+        raise RequirementTransitionError("Accept this enquiry before pricing it.")
+    return financials.calculate_estimate(
+        requirement=invitation.requirement,
+        partner=invitation.partner,
+        estimate_type=estimate_type,
+        item_lines=item_lines,
+        labour_lines=labour_lines,
+        material_lines=material_lines,
+        other_charges=other_charges,
+        stages=stages,
     )
-    return existing.tax_basis if existing is not None else ""
 
 
 @transaction.atomic
-def submit_proposal(
+def submit_proposal(  # noqa: PLR0912, PLR0915 - one transaction owns the append-only revision
     *,
     invitation_id: uuid.UUID,
-    total_paise: int,
-    tax_basis: str,
-    tax_paise: int = 0,
+    total_paise: int | None = None,
+    tax_basis: str | None = None,
+    tax_paise: int | None = None,
     rate_paise_per_worker_day: int | None = None,
     minimum_days: int | None = None,
     worker_count: int | None = None,
@@ -299,10 +385,24 @@ def submit_proposal(
     inclusions: list[str] | None = None,
     exclusions: list[str] | None = None,
     warranty_terms: str = "",
+    completion_days: int | None = None,
     valid_until: Any = None,
     commission_treatment: str = "",
     site_visit_id: uuid.UUID | None = None,
     captured_by: User | None = None,
+    estimate_type: str | None = None,
+    item_lines: list[dict[str, Any]] | None = None,
+    labour_lines: list[dict[str, Any]] | None = None,
+    other_charges: list[dict[str, Any]] | None = None,
+    scope_summary: str = "",
+    material_list: list[dict[str, Any]] | None = None,
+    material_brand_tier: str = "",
+    included_supply_list: list[dict[str, Any]] | None = None,
+    discount_kind: str | None = None,
+    discount_bps: int | None = None,
+    discount_target_total_paise: int | None = None,
+    discount_base_total_paise: int | None = None,
+    discount_source: str | None = None,
 ) -> Proposal:
     """Submit a first quote, or a revision that supersedes the vendor's previous one.
 
@@ -351,20 +451,79 @@ def submit_proposal(
         "total_paise": total_paise,
     }
     site_visit: SiteVisit | None = None
+    calculation: financials.CalculationResult | None = None
+    fulfilment_mode: str
     if requirement.archetype == ServiceVariant.BookingArchetype.A3_TIME_BLOCK:
-        if material_lines:
+        if material_lines or material_list or included_supply_list:
             raise ProposalShapeError("A workforce quote does not have material lines.")
+        if item_lines or labour_lines or other_charges or estimate_type:
+            raise ProposalShapeError("A workforce quote uses the published daily-rate fields.")
+        if total_paise is None and all(
+            value is not None for value in (rate_paise_per_worker_day, minimum_days, worker_count)
+        ):
+            total_paise = (
+                int(rate_paise_per_worker_day or 0)
+                * int(minimum_days or 0)
+                * int(worker_count or 0)
+            )
+            payload["total_paise"] = total_paise
+        tax_basis = Proposal.TaxBasis.INCLUSIVE
+        tax_paise = 0
+        commission_treatment = ""
+        fulfilment_mode = Proposal.MaterialFulfilmentMode.NOT_APPLICABLE
         _assert_a3_shape(payload)
     else:
-        _assert_a5_shape(payload)
+        fulfilment_mode = financials.material_fulfilment_mode(requirement)
+        if fulfilment_mode == Proposal.MaterialFulfilmentMode.PARTNER_TURNKEY:
+            if material_list or material_brand_tier:
+                raise ProposalShapeError(
+                    "A Partner-turnkey estimate cannot ask the Customer to buy materials."
+                )
+        elif included_supply_list:
+            raise ProposalShapeError(
+                "A customer-procured estimate cannot publish a Partner-turnkey supply list."
+            )
         _assert_warranty_is_funded(requirement=requirement, warranty_terms=warranty_terms)
         site_visit = _assert_completed_visit(invitation=invitation, site_visit_id=site_visit_id)
-
-    required_basis = required_tax_basis(requirement)
-    if required_basis and tax_basis != required_basis:
-        raise ProposalShapeError(
-            f"Quotes for this request are compared {required_basis.lower()} of tax.",
+        calculation = financials.calculate_estimate(
+            requirement=requirement,
+            partner=invitation.partner,
+            estimate_type=estimate_type or "",
+            item_lines=item_lines,
+            labour_lines=labour_lines,
+            material_lines=material_lines,
+            other_charges=other_charges,
+            stages=stages,
+            discount_target_total_paise=discount_target_total_paise,
         )
+        total_paise = calculation.customer_total_paise
+        tax_basis = calculation.tax_basis
+        tax_paise = calculation.partner_service_tax_paise
+        commission_treatment = "SERVER_POLICY"
+        stages = calculation.stages
+        material_lines = calculation.material_lines
+
+    if discount_target_total_paise is None:
+        discount_kind = None
+        discount_bps = None
+        discount_source = None
+        discount_base_total_paise = int(total_paise or 0)
+        applied_discount_paise = 0
+    else:
+        if discount_kind not in Proposal.DiscountKind.values:
+            raise ProposalShapeError("Choose percentage or final amount for the overall discount.")
+        if discount_kind == Proposal.DiscountKind.PERCENT and not (
+            discount_bps is not None and 1 <= discount_bps <= RevisionRequest.MAX_DISCOUNT_BPS
+        ):
+            raise ProposalShapeError("Choose an overall discount between 1% and 15%.")
+        if discount_kind == Proposal.DiscountKind.FIXED and discount_bps is not None:
+            raise ProposalShapeError("A final-amount discount does not also carry a percentage.")
+        if discount_source not in Proposal.DiscountSource.values:
+            raise ProposalShapeError("Say where this overall discount came from.")
+        discount_base_total_paise = int(discount_base_total_paise or 0)
+        applied_discount_paise = discount_base_total_paise - int(total_paise or 0)
+        if applied_discount_paise <= 0:
+            raise ProposalShapeError("The overall discount must reduce the customer total.")
 
     # A3 only. An A5 estimate is a price for an outcome, not a rate per worker per day, so there is
     # no statutory floor to measure it against.
@@ -403,23 +562,101 @@ def submit_proposal(
         supersedes=previous,
         revision=(previous.revision + 1) if previous is not None else 1,
         status=Proposal.Status.SUBMITTED,
-        usability=classify_usability(requirement=requirement, total_paise=total_paise),
+        usability=classify_usability(requirement=requirement, total_paise=int(total_paise or 0)),
         rate_paise_per_worker_day=rate_paise_per_worker_day,
         minimum_days=minimum_days,
         worker_count=worker_count,
-        total_paise=total_paise,
-        tax_paise=tax_paise,
-        tax_basis=tax_basis,
+        estimate_type=(
+            calculation.estimate_type if calculation else Proposal.EstimateType.LABOUR_WISE
+        ),
+        item_lines=calculation.item_lines if calculation else [],
+        labour_lines=calculation.labour_lines if calculation else [],
+        other_charges=calculation.other_charges if calculation else [],
+        commercial_policy_id=(
+            calculation.calculation_snapshot["policy"]["id"] if calculation else None
+        ),
+        calculation_snapshot=calculation.calculation_snapshot if calculation else {},
+        line_subtotal_paise=(
+            calculation.line_subtotal_paise if calculation else int(total_paise or 0)
+        ),
+        authorized_charges_paise=(calculation.authorized_charges_paise if calculation else 0),
+        taxable_value_paise=(
+            calculation.taxable_value_paise if calculation else int(total_paise or 0)
+        ),
+        partner_quote_total_paise=(
+            calculation.partner_quote_total_paise if calculation else int(total_paise or 0)
+        ),
+        platform_fee_paise=calculation.platform_fee_paise if calculation else 0,
+        platform_fee_tax_paise=calculation.platform_fee_tax_paise if calculation else 0,
+        customer_total_paise=(
+            calculation.customer_total_paise if calculation else int(total_paise or 0)
+        ),
+        commission_paise=calculation.commission_paise if calculation else 0,
+        withholding_paise=calculation.withholding_paise if calculation else 0,
+        partner_net_paise=calculation.partner_net_paise if calculation else int(total_paise or 0),
+        discount_kind=discount_kind,
+        discount_bps=discount_bps,
+        discount_base_paise=int(discount_base_total_paise or total_paise or 0),
+        discount_paise=applied_discount_paise,
+        discount_source=discount_source,
+        total_paise=int(total_paise or 0),
+        tax_paise=int(tax_paise or 0),
+        tax_basis=tax_basis or Proposal.TaxBasis.INCLUSIVE,
         commission_treatment=commission_treatment,
         inclusions=inclusions or [],
         exclusions=exclusions or [],
         stages=stages or [],
         material_lines=material_lines or [],
+        material_list=material_list or [],
+        material_brand_tier=material_brand_tier,
+        material_fulfilment_mode=fulfilment_mode,
+        included_supply_list=included_supply_list or [],
         warranty_terms=warranty_terms,
+        completion_days=completion_days,
+        scope_summary=scope_summary.strip(),
         valid_until=valid_until,
         captured_by=captured_by,
         vendor_confirmed_at=None if captured_by is not None else timezone.now(),
     )
+
+    if previous is not None:
+        # A revision is the answer to whatever the Customer asked for on the row it replaces.
+        #
+        # When what they asked for was a price, the movement is *read back off the vendor's own
+        # revision* rather than taken from the ask. The vendor may have agreed in full, moved
+        # part of the way, or moved on something else entirely; whichever it was, the new
+        # `total_paise` is the only number that ever set a price, and `countered_discount_bps`
+        # merely describes it so the Customer reads "they came back at 2%, not 5%". A revision
+        # that raised the price records no discount rather than a negative one.
+        answered = RevisionRequest.objects.filter(
+            proposal=previous, status=RevisionRequest.Status.OPEN
+        ).first()
+        if answered is not None:
+            granted_bps: int | None = None
+            if (
+                answered.reason_code == RevisionRequest.ReasonCode.PRICE
+                and previous.total_paise > 0
+            ):
+                if discount_kind == Proposal.DiscountKind.PERCENT and discount_bps is not None:
+                    granted_bps = discount_bps
+                else:
+                    moved = previous.total_paise - int(total_paise or 0)
+                    granted_bps = max(
+                        0,
+                        (moved * 10_000 + previous.total_paise // 2) // previous.total_paise,
+                    )
+            answered.status = RevisionRequest.Status.ANSWERED
+            answered.answered_by_proposal = proposal
+            answered.countered_discount_bps = granted_bps
+            answered.resolved_at = timezone.now()
+            answered.save(
+                update_fields=(
+                    "status",
+                    "answered_by_proposal",
+                    "countered_discount_bps",
+                    "resolved_at",
+                )
+            )
 
     if invitation.status != VendorInvitation.Status.QUOTED:
         invitation.status = VendorInvitation.Status.QUOTED
@@ -431,6 +668,11 @@ def submit_proposal(
         # `settle_share_for_estimate` re-checks usability and share state itself, so an
         # out-of-budget estimate or a share somebody already settled changes nothing.
         access.settle_share_for_estimate(proposal=proposal)
+        if site_visit.plan_share_id is not None:
+            VisitPlanShare.objects.filter(pk=site_visit.plan_share_id).update(
+                matching_status=VisitPlanShare.MatchingStatus.ESTIMATE_RECEIVED,
+                updated_at=timezone.now(),
+            )
 
     _promote_requirement_when_quoted(requirement)
     _announce_proposal(proposal)
@@ -798,6 +1040,323 @@ def request_revalidation(
     return proposal
 
 
+@transaction.atomic
+def request_revision(
+    *,
+    requirement_id: uuid.UUID,
+    proposal_id: uuid.UUID,
+    actor: User,
+    reason_code: str,
+    excluded_items: list[str],
+    note: str,
+    requested_discount_bps: int | None = None,
+) -> RevisionRequest:
+    """Ask a vendor for a different estimate, with the reason attached.
+
+    A Customer can say *what* they want different — leave the false ceiling out, cheaper tiles,
+    two phases, or a smaller number — instead of turning the estimate down and hoping the
+    replacement guesses.
+
+    **The price rule holds.** ``requested_discount_bps`` is what the Customer hopes to pay, not
+    what the work costs. Nothing here writes it to a proposal, applies it to a total, or obliges
+    the vendor to honour it; the answer is an ordinary superseding proposal the vendor authors and
+    the Customer reads in full. The estimate as sent stays live and selectable throughout — asking
+    about a price costs nothing and gives nothing up.
+
+    Gated on the same entitlement that lets them read the estimate, refused once somebody has been
+    chosen, and one open request at a time per estimate so a vendor is never answering two asks
+    with one revision. A price may be asked about **once per estimate**: a second ask on the same
+    proposal is refused rather than becoming a haggle.
+    """
+    requirement = (
+        CustomerRequirement.objects.select_for_update(of=("self",))
+        .select_related("configuration")
+        .get(pk=requirement_id)
+    )
+    if requirement.status in CustomerRequirement.CLOSED_STATUSES:
+        raise RequirementTransitionError("This request is closed.")
+    if not access.customer_may_read_full_quotes(requirement):
+        raise ProposalNotSelectableError("Unlock this request's quotes before asking about them.")
+    if ProposalSelection.objects.filter(
+        requirement=requirement,
+        status__in=ProposalSelection.LIVE_STATUSES,
+    ).exists():
+        raise ProposalNotSelectableError("This request already has a chosen vendor.")
+
+    proposal = Proposal.objects.select_for_update().get(pk=proposal_id, requirement=requirement)
+    if proposal.status != Proposal.Status.SUBMITTED:
+        raise ProposalNotSelectableError(
+            "This estimate is no longer live, so a revision cannot be asked for."
+        )
+    existing = open_revision_request_for(proposal)
+    if existing is not None:
+        # Idempotent by state: a second tap re-reads the open request rather than sending the
+        # vendor a duplicate.
+        return existing
+    if reason_code not in RevisionRequest.ReasonCode.values:
+        raise RequirementTransitionError("Say what you would like changed.")
+
+    if reason_code == RevisionRequest.ReasonCode.PRICE:
+        if requested_discount_bps is None or not (
+            1 <= requested_discount_bps <= RevisionRequest.MAX_DISCOUNT_BPS
+        ):
+            raise RequirementTransitionError(
+                "Say how much you are hoping they can move, up to "
+                f"{RevisionRequest.MAX_DISCOUNT_BPS // 100}%."
+            )
+        if proposal.rate_paise_per_worker_day is not None:
+            # A3 day-hire. The figure is the ops-published city day rate, not the vendor's, so
+            # there is nothing here for them to give away and asking would be asking the wrong
+            # person. The client hides the control too; this is the gate that means it.
+            raise ProposalNotSelectableError(
+                "This price comes from the published rate card, so the professional "
+                "cannot change it."
+            )
+        already_asked = RevisionRequest.objects.filter(
+            proposal=proposal, reason_code=RevisionRequest.ReasonCode.PRICE
+        ).exists()
+        if already_asked:
+            # One ask per estimate, resolved or not. A second one is a haggle, and a haggle is a
+            # different product. If the vendor sends a revision, that is a new proposal row and
+            # the Customer may ask again against it.
+            raise ProposalNotSelectableError(
+                "You have already asked about this price. If they send a revised "
+                "estimate you can ask again."
+            )
+    elif requested_discount_bps is not None:
+        raise RequirementTransitionError("Only a price ask carries a figure.")
+
+    request = RevisionRequest.objects.create(
+        requirement=requirement,
+        proposal=proposal,
+        requested_by=actor,
+        reason_code=reason_code,
+        excluded_items=[item.strip() for item in excluded_items if item.strip()][:20],
+        note=note.strip(),
+        requested_discount_bps=(
+            requested_discount_bps if reason_code == RevisionRequest.ReasonCode.PRICE else None
+        ),
+    )
+    record_transition(
+        requirement=requirement,
+        from_status=requirement.status,
+        to_status=requirement.status,
+        actor=actor,
+        reason_code="revision_requested",
+        reason=f"proposal:{proposal.id} partner:{proposal.partner_id} {reason_code}",
+    )
+    enqueue_outbox_event(
+        aggregate_type="requirement",
+        aggregate_id=requirement.id,
+        event_type="m2.proposal.revision_requested",
+        idempotency_key=f"proposal-revision-request:{request.id}",
+        payload={
+            "requirement_id": str(requirement.id),
+            "proposal_id": str(proposal.id),
+            "partner_id": str(proposal.partner_id),
+            "invitation_id": str(proposal.invitation_id),
+            "revision_request_id": str(request.id),
+            "reason_code": reason_code,
+            # Rides the existing envelope rather than a new topic: a price ask is a revision
+            # request with a figure on it, and notification routing already knows this event.
+            "requested_discount_bps": requested_discount_bps
+            if reason_code == RevisionRequest.ReasonCode.PRICE
+            else None,
+        },
+    )
+    return request
+
+
+def _price_request_for_partner(
+    *,
+    request_id: uuid.UUID,
+    proposal_id: uuid.UUID,
+    partner_id: uuid.UUID,
+    for_update: bool = False,
+) -> RevisionRequest:
+    queryset = RevisionRequest.objects.select_related(
+        "proposal",
+        "proposal__partner",
+        "proposal__requirement",
+        "proposal__requirement__configuration",
+        "proposal__requirement__service_area",
+        "proposal__requirement__variant",
+    )
+    if for_update:
+        queryset = queryset.select_for_update(of=("self", "proposal"))
+    request = queryset.filter(
+        pk=request_id, proposal_id=proposal_id, proposal__partner_id=partner_id
+    ).first()
+    if request is None:
+        raise RequirementNotFoundError()
+    if request.reason_code != RevisionRequest.ReasonCode.PRICE:
+        raise RequirementTransitionError("Only a price request can receive an overall discount.")
+    if request.status != RevisionRequest.Status.OPEN:
+        raise RequirementTransitionError("This price request has already been answered.")
+    if request.proposal.status != Proposal.Status.SUBMITTED:
+        raise ProposalNotSelectableError("This estimate is no longer live.")
+    if request.proposal.requirement.archetype != ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT:
+        raise ProposalShapeError("Only managed-project estimates support an overall discount.")
+    return request
+
+
+def _target_total_for_discount(
+    *,
+    proposal: Proposal,
+    discount_kind: str,
+    discount_bps: int | None,
+    final_total_paise: int | None,
+) -> int:
+    if discount_kind == Proposal.DiscountKind.PERCENT:
+        if discount_bps is None or not 1 <= discount_bps <= RevisionRequest.MAX_DISCOUNT_BPS:
+            raise ProposalShapeError("Choose an overall discount between 1% and 15%.")
+        saving = (proposal.total_paise * discount_bps + 5_000) // 10_000
+        target = proposal.total_paise - saving
+    elif discount_kind == Proposal.DiscountKind.FIXED:
+        if discount_bps is not None or final_total_paise is None:
+            raise ProposalShapeError("Enter the final customer total.")
+        target = final_total_paise
+        saving = proposal.total_paise - target
+    else:
+        raise ProposalShapeError("Choose percentage or final amount for the overall discount.")
+
+    maximum_saving = (proposal.total_paise * RevisionRequest.MAX_DISCOUNT_BPS + 5_000) // 10_000
+    if saving <= 0:
+        raise ProposalShapeError("The final total must be below the current estimate.")
+    if saving > maximum_saving:
+        raise ProposalShapeError(
+            f"An overall discount cannot exceed {RevisionRequest.MAX_DISCOUNT_BPS // 100}%."
+        )
+    return target
+
+
+def _calculation_for_price_discount(
+    *, request: RevisionRequest, target_total_paise: int
+) -> financials.CalculationResult:
+    proposal = request.proposal
+    return financials.calculate_estimate(
+        requirement=proposal.requirement,
+        partner=proposal.partner,
+        estimate_type=proposal.estimate_type,
+        item_lines=proposal.item_lines,
+        labour_lines=proposal.labour_lines,
+        material_lines=proposal.material_lines,
+        other_charges=proposal.other_charges,
+        stages=proposal.stages,
+        discount_target_total_paise=target_total_paise,
+    )
+
+
+def preview_overall_discount(
+    *,
+    request_id: uuid.UUID,
+    proposal_id: uuid.UUID,
+    partner_id: uuid.UUID,
+    discount_kind: str,
+    discount_bps: int | None,
+    final_total_paise: int | None,
+) -> DiscountPreview:
+    """Preview the exact new total, payment allocations and Partner receipt without writing."""
+
+    request = _price_request_for_partner(
+        request_id=request_id, proposal_id=proposal_id, partner_id=partner_id
+    )
+    proposal = request.proposal
+    target = _target_total_for_discount(
+        proposal=proposal,
+        discount_kind=discount_kind,
+        discount_bps=discount_bps,
+        final_total_paise=final_total_paise,
+    )
+    calculation = _calculation_for_price_discount(request=request, target_total_paise=target)
+    return DiscountPreview(
+        proposal_id=proposal.id,
+        request_id=request.id,
+        discount_kind=discount_kind,
+        discount_bps=discount_bps,
+        discount_base_paise=proposal.total_paise,
+        discount_paise=proposal.total_paise - calculation.customer_total_paise,
+        calculation=calculation,
+    )
+
+
+@transaction.atomic
+def apply_overall_discount(
+    *,
+    request_id: uuid.UUID,
+    proposal_id: uuid.UUID,
+    partner_id: uuid.UUID,
+    discount_kind: str,
+    discount_bps: int | None,
+    final_total_paise: int | None,
+) -> Proposal:
+    """Clone the live estimate, apply one overall concession, and answer the price request."""
+
+    request_ref = RevisionRequest.objects.only("requirement_id").filter(pk=request_id).first()
+    if request_ref is None:
+        raise RequirementNotFoundError()
+    CustomerRequirement.objects.select_for_update(of=("self",)).get(pk=request_ref.requirement_id)
+    request = _price_request_for_partner(
+        request_id=request_id,
+        proposal_id=proposal_id,
+        partner_id=partner_id,
+        for_update=True,
+    )
+    proposal = request.proposal
+    target = _target_total_for_discount(
+        proposal=proposal,
+        discount_kind=discount_kind,
+        discount_bps=discount_bps,
+        final_total_paise=final_total_paise,
+    )
+    return submit_proposal(
+        invitation_id=proposal.invitation_id,
+        stages=proposal.stages,
+        material_lines=proposal.material_lines,
+        inclusions=proposal.inclusions,
+        exclusions=proposal.exclusions,
+        warranty_terms=proposal.warranty_terms,
+        completion_days=proposal.completion_days,
+        valid_until=proposal.valid_until,
+        site_visit_id=proposal.site_visit_id,
+        estimate_type=proposal.estimate_type,
+        item_lines=proposal.item_lines,
+        labour_lines=proposal.labour_lines,
+        other_charges=proposal.other_charges,
+        scope_summary=proposal.scope_summary,
+        material_list=proposal.material_list,
+        material_brand_tier=proposal.material_brand_tier,
+        included_supply_list=proposal.included_supply_list,
+        discount_kind=discount_kind,
+        discount_bps=discount_bps,
+        discount_target_total_paise=target,
+        discount_base_total_paise=proposal.total_paise,
+        discount_source=Proposal.DiscountSource.CUSTOMER_REQUEST,
+    )
+
+
+@transaction.atomic
+def decline_revision_request(
+    *, request_id: uuid.UUID, partner_id: uuid.UUID, note: str
+) -> RevisionRequest:
+    """The vendor says no to a requested change. Their estimate stands as sent."""
+    request = (
+        RevisionRequest.objects.select_for_update()
+        .select_related("proposal")
+        .filter(pk=request_id, proposal__partner_id=partner_id)
+        .first()
+    )
+    if request is None:
+        raise RequirementNotFoundError()
+    if request.status != RevisionRequest.Status.OPEN:
+        raise RequirementTransitionError("This request has already been answered.")
+    request.status = RevisionRequest.Status.DECLINED
+    request.decline_note = note.strip()
+    request.resolved_at = timezone.now()
+    request.save(update_fields=("status", "decline_note", "resolved_at"))
+    return request
+
+
 def expired_proposal_ids(*, at: datetime | None = None) -> list[uuid.UUID]:
     moment = at or timezone.now()
     return list(
@@ -1015,6 +1574,11 @@ def schedule_site_visit(*, site_visit_id: uuid.UUID, scheduled_for: Any) -> Site
     if visit.plan_share_id is not None:
         return access.reschedule_plan_visit(visit=visit, scheduled_for=scheduled_for)
 
+    # An ad-hoc visit is a bare timestamp with no grid in front of it, so the event-date
+    # ceiling every picker enforces has to be re-asserted here.
+    visit_slots.assert_visit_serves_event_date(
+        requirement=visit.requirement, starts_at=scheduled_for
+    )
     visit.status = SiteVisit.Status.SCHEDULED
     visit.scheduled_for = scheduled_for
     visit.save(update_fields=("status", "scheduled_for", "updated_at"))

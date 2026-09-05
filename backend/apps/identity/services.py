@@ -1,5 +1,6 @@
 """Transactional identity commands."""
 
+import logging
 import secrets
 import uuid
 from dataclasses import dataclass
@@ -29,6 +30,8 @@ from apps.identity.models import (
     UserSession,
 )
 from apps.identity.phone import normalize_phone_number
+
+logger = logging.getLogger(__name__)
 
 
 class OtpRateLimitError(RuntimeError):
@@ -61,6 +64,7 @@ def _increment_rate_counter(key: str, limit: int) -> None:
     try:
         count = 1 if cache.add(key, 1, timeout=window_seconds) else cache.incr(key)
     except Exception as exc:
+        logger.exception("OTP rate limiter is unavailable.")
         raise OtpDeliveryError("OTP rate limiter is unavailable.") from exc
 
     if count > limit:
@@ -107,6 +111,7 @@ def issue_login_otp(
             timeout=settings.OTP_RESEND_COOLDOWN_SECONDS,
         )
     except Exception as exc:
+        logger.exception("OTP rate limiter is unavailable.")
         raise OtpDeliveryError("OTP rate limiter is unavailable.") from exc
     if not cooldown_acquired:
         raise OtpRateLimitError(settings.OTP_RESEND_COOLDOWN_SECONDS)

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { CrewOffer } from "@/features/crew-offer/queries";
 import type { EnquirySummary } from "@/features/enquiry/queries";
-import type { Engagement } from "@/features/engagement/queries";
+import type { Engagement, EngagementStage } from "@/features/engagement/queries";
 import type { Offer } from "@/features/offers/queries";
 import type { PartnerVisit } from "@/features/work/queries";
 
@@ -42,7 +42,9 @@ function offer(overrides: Partial<CrewOffer> = {}): CrewOffer {
     verified_roster_size: 4,
     requested_start: "2026-08-20T00:00:00Z",
     area_label: "Kondapur",
-    server_now: NOW,
+    brief: [],
+    crew_mix: [],
+  server_now: NOW,
     ...overrides,
   };
 }
@@ -83,14 +85,20 @@ function enquiry(overrides: Partial<EnquirySummary> = {}): EnquirySummary {
     requirement_id: "r2",
     category_slug: "deep-cleaning",
     service_name: "Deep clean",
+    approximate_area: "Kukatpally, Hyderabad",
     archetype: "A5_CUSTOM_PROJECT",
     requirement_status: "MATCHING",
+    fixed_visit_start: null,
+    fixed_visit_duration_minutes: null,
+    fixed_visit_earning_paise: null,
+    fixed_visit_status: null,
     status: "INVITED",
     wave: 1,
     requested_start: "2026-08-22T04:00:00Z",
     service_by: "2026-08-25",
-    language: "en",
     responds_by: "2026-08-20T10:00:00Z",
+    pricing_skill_code: "electrician",
+    material_fulfilment_mode: "PARTNER_TURNKEY",
     latest_proposal_status: null,
     latest_proposal_rejection_reason: null,
     created_at: "2026-08-19T06:00:00Z",
@@ -102,6 +110,12 @@ function engagement(overrides: Partial<Engagement> = {}): Engagement {
   return {
     id: "g1",
     requirement: "r3",
+    service_name: "Full home rewiring",
+    service_slug: "full-home-rewiring",
+    crew_terms: null,
+    site_address: null,
+    customer_contact: null,
+    partner_contact: null,
     proposal: "p1",
     partner: "v1",
     archetype: "A3_WORKFORCE",
@@ -130,15 +144,79 @@ function engagement(overrides: Partial<Engagement> = {}): Engagement {
   };
 }
 
+/** One A3 shift-day, settled or not, with the 1.49.0 `shift_summary` on it. */
+function shiftDay(
+  overrides: Partial<EngagementStage> & {
+    summary?: Partial<NonNullable<EngagementStage["shift_summary"]>>;
+  } = {},
+): EngagementStage {
+  const { summary, ...rest } = overrides;
+  return {
+    id: "s1",
+    position: 1,
+    label: "Day 1",
+    amount_paise: 300_000,
+    funding_breakdown: null,
+    shift_summary: {
+      crew_named: 5,
+      expected_count: 5,
+      arrived_at: "2026-08-19T03:30:00Z",
+      present_count: 5,
+      attendance_status: "CUSTOMER_CONFIRMED",
+      settlement_status: "SETTLED",
+      settlement_amount_paise: 300_000,
+      shortfall_choice: "",
+      ...summary,
+    },
+    kind: "WORK",
+    starts_on: null,
+    duration_days: 1,
+    scheduled_on: "2026-08-19",
+    status: "RELEASED",
+    funding_state: "NOT_REQUIRED",
+    funded_paise: 0,
+    approved_amount_paise: 300_000,
+    released_amount_paise: 300_000,
+    refunded_amount_paise: 0,
+    correction_note: "",
+    dispute_reason_code: "",
+    review_due_at: null,
+    payout_release_due_at: null,
+    evidence: [],
+    funded_at: null,
+    started_at: null,
+    evidence_submitted_at: null,
+    approved_at: null,
+    released_at: null,
+    disputed_at: null,
+    ...rest,
+  };
+}
+
+const CREW_TERMS: NonNullable<Engagement["crew_terms"]> = {
+  headcount: 5,
+  days: 3,
+  per_worker_day_paise: 60_000,
+  lead_day_receipt_paise: 300_000,
+  lead_receipt_paise: 900_000,
+  booking_fee_paise: 50_000,
+  total_customer_paise: 950_000,
+  standard_day_hours: 8,
+  overtime_hourly_paise: 10_000,
+  add_on_rates: {},
+  inclusions: ["Loading & shifting", "Own tools"],
+};
+
 function job(overrides: Partial<PartnerVisit> = {}): PartnerVisit {
   return {
     id: "j1",
     fulfilment_unit_id: null,
+    display_title: "Bathroom deep clean",
+    approximate_area: "Madhapur",
+    service_lines: [],
+    requirements: [],
     status: "COMPLETED",
     version: 3,
-    // Within the 24h settled window (`NOW` minus one hour) so a bare `job()`
-    // stays visible by default — tests exercising the window itself override
-    // this explicitly.
     scheduled_start: "2026-08-19T09:00:00Z",
     estimated_duration_minutes: 120,
     en_route_at: null,
@@ -148,6 +226,12 @@ function job(overrides: Partial<PartnerVisit> = {}): PartnerVisit {
     work_tasks: [],
     evidence: [],
     active_amendment: null,
+    estimated_earning: {
+      gross_paise: 300_000,
+      commission_paise: 45_000,
+      net_paise: 255_000,
+      currency: "INR",
+    },
     earning: {
       gross_paise: 700_000,
       commission_paise: 100_000,
@@ -168,6 +252,7 @@ const EMPTY = {
   enquiries: [] as readonly EnquirySummary[],
   engagements: [] as readonly Engagement[],
   jobs: [] as readonly PartnerVisit[],
+  serverNow: null as string | null,
 };
 
 describe("toWorkItems — urgency ordering", () => {
@@ -179,6 +264,7 @@ describe("toWorkItems — urgency ordering", () => {
       enquiries: [enquiry()],
       engagements: [engagement()],
       jobs: [job()],
+      serverNow: NOW,
     });
 
     expect(items.map((item) => item.kind)).toEqual(["offer", "enquiry", "engagement", "job"]);
@@ -273,6 +359,23 @@ describe("toWorkItems — crew offers", () => {
 
     expect(item?.areaLabel).toBeNull();
   });
+
+  it("chips the time left off the same server clock the countdown dial reads", () => {
+    // `offer()`'s default `responds_by` is two minutes after `NOW`.
+    const [item] = toWorkItems({ ...EMPTY, offers: [offer()], offersServerNow: NOW });
+
+    expect(item?.stateLabel).toBe("Offer · 2:00 left");
+  });
+
+  it("chips a null deadline as an offer with nothing to count down", () => {
+    const [item] = toWorkItems({
+      ...EMPTY,
+      offers: [offer({ responds_by: null })],
+      offersServerNow: NOW,
+    });
+
+    expect(item?.stateLabel).toBe("Offer");
+  });
 });
 
 describe("toWorkItems — A1 direct offers", () => {
@@ -339,6 +442,14 @@ describe("toWorkItems — A1 direct offers", () => {
     expect(item?.areaLabel).toBe("Madhapur");
     expect(item?.whenIso).toBe("2026-08-20T09:00:00Z");
     expect(item?.href).toBe("/work/offers");
+  });
+
+  it("chips the time left off its own server_now, matching the crew-offer wording", () => {
+    // `directOffer()`'s default `expires_at` is three minutes after its
+    // `server_now`, and carries no `undo_deadline`.
+    const [item] = toWorkItems({ ...EMPTY, directOffers: [directOffer()] });
+
+    expect(item?.stateLabel).toBe("Offer · 3:00 left");
   });
 
   it("reads a missing area and an unpriced unit as absent, not as zero", () => {
@@ -408,6 +519,60 @@ describe("toWorkItems — enquiries", () => {
     expect(items.map((item) => item.key)).toEqual(["enquiry:invited", "enquiry:accepted"]);
   });
 
+  it("drops an INVITED enquiry whose response window has already passed by the server clock", () => {
+    // The backend fix this build is the client half of: the list endpoint no
+    // longer returns a lapsed invitation, and this closes the same
+    // poll-staleness window `isOfferLive` closes for crew offers — a cached
+    // page up to a poll interval old still showing an enquiry that expired in
+    // the meantime.
+    const items = toWorkItems({
+      ...EMPTY,
+      enquiries: [enquiry({ status: "INVITED", responds_by: "2026-08-19T09:00:00Z" })],
+      serverNow: NOW,
+    });
+
+    expect(items).toHaveLength(0);
+  });
+
+  it("keeps an INVITED enquiry exactly at its deadline as lapsed too", () => {
+    const items = toWorkItems({
+      ...EMPTY,
+      enquiries: [enquiry({ status: "INVITED", responds_by: NOW })],
+      serverNow: NOW,
+    });
+
+    expect(items).toHaveLength(0);
+  });
+
+  it("does not lapse-check an ACCEPTED enquiry, whose clock means something else", () => {
+    // `isVendorsMove`'s `accepted` bucket is a capacity hold with its own
+    // lifecycle, not a response deadline — `responds_by` on that bucket is not
+    // the same clock the INVITED lapse guard exists to close.
+    const items = toWorkItems({
+      ...EMPTY,
+      enquiries: [
+        enquiry({ status: "ACCEPTED", responds_by: "2026-08-01T00:00:00Z" }),
+      ],
+      serverNow: NOW,
+    });
+
+    expect(items).toHaveLength(1);
+  });
+
+  it("keeps every INVITED enquiry when no calibrated clock has landed yet", () => {
+    // No offers read means no server instant to judge against — see
+    // `toWorkItems`'s own `serverNow` doc. A phone's own clock must never
+    // decide an enquiry is dead, so nothing here is filtered on a guess; the
+    // list endpoint's own filtering is the backstop.
+    const items = toWorkItems({
+      ...EMPTY,
+      enquiries: [enquiry({ status: "INVITED", responds_by: "2026-08-01T00:00:00Z" })],
+      serverNow: null,
+    });
+
+    expect(items).toHaveLength(1);
+  });
+
   it("drops an enquiry this vendor has already quoted, declined or lost", () => {
     const items = toWorkItems({
       ...EMPTY,
@@ -434,12 +599,36 @@ describe("toWorkItems — enquiries", () => {
     expect(items.map((item) => item.key)).toEqual(["enquiry:sooner", "enquiry:later"]);
   });
 
-  it("never carries a price or an area label for a kind that publishes neither", () => {
+  it("carries no price and only the published approximate area", () => {
     const [item] = toWorkItems({ ...EMPTY, enquiries: [enquiry()] });
 
     expect(item?.amountPaise).toBeNull();
-    expect(item?.areaLabel).toBeNull();
+    expect(item?.areaLabel).toBe("Kukatpally, Hyderabad");
+    expect(item?.actionLabel).toBe("Review & book visit");
     expect(item?.href).toBe("/work/enquiries/e1");
+  });
+
+  it("chips an INVITED enquiry as waiting for an answer, and an accepted one as needing a price", () => {
+    const [invited] = toWorkItems({
+      ...EMPTY,
+      enquiries: [enquiry({ id: "e1", status: "INVITED" })],
+    });
+    const [accepted] = toWorkItems({
+      ...EMPTY,
+      enquiries: [enquiry({ id: "e1", status: "ACCEPTED" })],
+    });
+
+    expect(invited?.stateLabel).toBe("Waiting for your answer");
+    expect(accepted?.stateLabel).toBe("Needs a price");
+  });
+
+  it("chips a booked visit-first slot as Visit booked ahead of the ordinary wording", () => {
+    const [item] = toWorkItems({
+      ...EMPTY,
+      enquiries: [enquiry({ id: "e1", status: "ACCEPTED", fixed_visit_status: "BOOKED" })],
+    });
+
+    expect(item?.stateLabel).toBe("Visit booked");
   });
 });
 
@@ -478,11 +667,11 @@ describe("toWorkItems — a sent quote", () => {
 
     const items = toWorkItems({ ...EMPTY, enquiries: [quoted] });
 
-    expect(items[0]?.accessibleName).toBe("Deep clean, quote sent");
+    expect(items[0]?.accessibleName).toBe("Deep clean, Quote sent — waiting on the customer");
     // The title is the work alone — the chip carries the state, so a card can
     // truncate the first without losing the second.
     expect(items[0]?.title).toBe("Deep clean");
-    expect(items[0]?.stateLabel).toBe("quote sent");
+    expect(items[0]?.stateLabel).toBe("Quote sent — waiting on the customer");
   });
 
   it("does not also appear as a needs-price card", () => {
@@ -506,8 +695,8 @@ describe("toWorkItems — a sent quote", () => {
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({
       urgency: "not_chosen",
-      stateLabel: "not chosen",
-      accessibleName: "Deep clean, not chosen",
+      stateLabel: "Not chosen",
+      accessibleName: "Deep clean, Not chosen",
     });
   });
 
@@ -530,7 +719,7 @@ describe("toWorkItems — a sent quote", () => {
 
     expect(toWorkItems({ ...EMPTY, enquiries: [quoted] })[0]).toMatchObject({
       urgency: "closed",
-      stateLabel: "cancelled",
+      stateLabel: "Cancelled",
     });
   });
 });
@@ -554,10 +743,10 @@ describe("toWorkItems — engagements", () => {
       "engagement:active",
       "engagement:completing",
     ]);
-    expect(items.every((item) => item.urgency === "doing")).toBe(true);
+    expect(items.map((item) => item.urgency)).toEqual(["doing", "doing", "answered"]);
   });
 
-  it("drops an engagement that is over or in dispute", () => {
+  it("keeps every terminal and exception status in the correct work bucket", () => {
     const items = toWorkItems({
       ...EMPTY,
       engagements: [
@@ -569,7 +758,24 @@ describe("toWorkItems — engagements", () => {
       ],
     });
 
-    expect(items).toHaveLength(0);
+    expect(Object.fromEntries(items.map((item) => [item.key, item.urgency]))).toEqual({
+      "engagement:disputed": "doing",
+      "engagement:cancelled": "closed",
+      "engagement:done": "settled",
+      "engagement:warranty": "settled",
+      "engagement:closed": "settled",
+    });
+    expect(Object.fromEntries(items.map((item) => [item.key, item.stateLabel]))).toEqual({
+      "engagement:disputed": "In dispute",
+      "engagement:cancelled": "Cancelled",
+      "engagement:done": "Completed",
+      "engagement:warranty": "Warranty period",
+      "engagement:closed": "Closed",
+    });
+    expect(items.find((item) => item.key === "engagement:cancelled")).toMatchObject({
+      amountPaise: null,
+      amountLabel: null,
+    });
   });
 
   it("shows what the work is against today, never the platform's commission", () => {
@@ -599,6 +805,145 @@ describe("toWorkItems — engagements", () => {
     expect(item?.whenIso).toBeNull();
     expect(item?.respondsBy).toBeNull();
     expect(item?.areaLabel).toBeNull();
+  });
+
+  it("labels a managed project as the agreed total", () => {
+    const [item] = toWorkItems({ ...EMPTY, engagements: [engagement()] });
+
+    expect(item?.amountLabel).toBe("Agreed total");
+    expect(item?.amountPaise).toBe(2_160_000);
+  });
+
+  it("chips a managed project's status in the vendor's own words", () => {
+    const items = toWorkItems({
+      ...EMPTY,
+      engagements: [
+        engagement({ id: "pending", status: "PENDING_START" }),
+        engagement({ id: "active", status: "ACTIVE" }),
+        engagement({ id: "completing", status: "COMPLETING" }),
+      ],
+    });
+
+    expect(items.map((item) => item.stateLabel)).toEqual([
+      "Confirmed",
+      "In progress",
+      "Waiting for the customer",
+    ]);
+  });
+});
+
+describe("toWorkItems — A3 day-hire engagements", () => {
+  const dayHire = (overrides: Partial<Engagement> = {}) =>
+    engagement({
+      archetype: "A3_TIME_BLOCK",
+      commercial_mode: "LEAD_ONLY",
+      crew_terms: CREW_TERMS,
+      staged_total_paise: 950_000,
+      ...overrides,
+    });
+
+  it("shows the lead's own receipt while the days are still being worked", () => {
+    // `staged_total_paise` on A3 is the customer's figure, booking fee
+    // included. The lead's number is `crew_terms.lead_receipt_paise`.
+    const [item] = toWorkItems({ ...EMPTY, engagements: [dayHire({ status: "ACTIVE" })] });
+
+    expect(item?.amountPaise).toBe(900_000);
+    expect(item?.amountLabel).toBe("To you, paid daily");
+    expect(item?.title).toBe("Full home rewiring");
+  });
+
+  it("says what was collected directly after the customer completes the job", () => {
+    const [item] = toWorkItems({
+      ...EMPTY,
+      engagements: [
+        dayHire({
+          status: "COMPLETED",
+          completed_at: NOW,
+          stages: [
+            shiftDay({ id: "s1", position: 1, summary: { settlement_amount_paise: 320_000 } }),
+            shiftDay({ id: "s2", position: 2, summary: { settlement_amount_paise: 300_000 } }),
+            shiftDay({ id: "s3", position: 3, summary: { settlement_amount_paise: 300_000 } }),
+          ],
+        }),
+      ],
+    });
+
+    expect(item?.amountPaise).toBe(920_000);
+    expect(item?.amountLabel).toBe("Collected directly");
+    expect(item?.urgency).toBe("settled");
+    expect(item?.whenIso).toBe(NOW);
+  });
+
+  it("does not print a zero when a closing job has no settled day on it", () => {
+    // An older record with no `shift_summary`, or a job closed before any
+    // settlement landed. The agreed receipt is the honest figure.
+    const [item] = toWorkItems({
+      ...EMPTY,
+      engagements: [
+        dayHire({
+          status: "COMPLETING",
+          stages: [shiftDay({ shift_summary: null })],
+        }),
+      ],
+    });
+
+    expect(item?.amountPaise).toBe(900_000);
+    expect(item?.amountLabel).toBe("To you, paid daily");
+  });
+
+  it("falls back to the staged total on a record written before crew terms were published", () => {
+    const [item] = toWorkItems({
+      ...EMPTY,
+      engagements: [dayHire({ crew_terms: null, staged_total_paise: 900_000 })],
+    });
+
+    expect(item?.amountPaise).toBe(900_000);
+    expect(item?.amountLabel).toBe("To you, paid daily");
+  });
+
+  it("chips the day count off settled shift-days rather than a raw ACTIVE label", () => {
+    const [item] = toWorkItems({
+      ...EMPTY,
+      engagements: [
+        dayHire({
+          status: "ACTIVE",
+          stages: [
+            shiftDay({ id: "s1", position: 1 }),
+            shiftDay({ id: "s2", position: 2, summary: { settlement_status: "SUPERVISOR_CLAIMED" } }),
+            shiftDay({ id: "s3", position: 3, summary: { settlement_status: "SUPERVISOR_CLAIMED" } }),
+          ],
+        }),
+      ],
+    });
+
+    // One of three settled, so the day in front of the lead is the second.
+    expect(item?.stateLabel).toBe("Day 2 of 3");
+  });
+
+  it("drops a cancelled day from the count rather than always reading a stale total", () => {
+    // Three stages, one cancelled: the total reads 2, not 3, and the cancelled
+    // day (unsettled by construction) never inflates the settled count either.
+    const [item] = toWorkItems({
+      ...EMPTY,
+      engagements: [
+        dayHire({
+          status: "ACTIVE",
+          stages: [
+            shiftDay({ id: "s1", position: 1 }),
+            shiftDay({ id: "s2", position: 2, status: "CANCELLED" }),
+            shiftDay({ id: "s3", position: 3, summary: { settlement_status: "SUPERVISOR_CLAIMED" } }),
+          ],
+        }),
+      ],
+    });
+
+    expect(item?.stateLabel).toBe("Day 2 of 2");
+  });
+
+  it("falls back to In progress when a day-hire record has no stages yet", () => {
+    const [item] = toWorkItems({ ...EMPTY, engagements: [dayHire({ status: "ACTIVE", stages: [] })] });
+
+    expect(item?.stateLabel).toBe("In progress");
   });
 });
 
@@ -649,10 +994,35 @@ describe("toWorkItems — A1 visits", () => {
     expect(items.every((item) => item.urgency === "doing")).toBe(true);
   });
 
+  it("chips every visit status in the one wording the job list and job detail screen already share", () => {
+    // `STATUS_COPY` (`features/work/model/status.ts`) is reused rather than
+    // reinvented here — a card in this stack disagreeing with the job detail
+    // screen about the same status would be a third vocabulary.
+    const items = toWorkItems({
+      ...EMPTY,
+      jobs: [
+        job({ id: "confirmed", status: "CONFIRMED" }),
+        job({ id: "enroute", status: "EN_ROUTE" }),
+        job({ id: "arrived", status: "ARRIVED" }),
+        job({ id: "onsite", status: "IN_PROGRESS" }),
+        job({ id: "filed", status: "COMPLETION_SUBMITTED" }),
+        job({ id: "done", status: "COMPLETED" }),
+        job({ id: "part", status: "PARTIALLY_COMPLETED" }),
+      ],
+    });
+
+    expect(Object.fromEntries(items.map((item) => [item.key, item.stateLabel]))).toEqual({
+      "job:confirmed": "Booked",
+      "job:enroute": "On the way",
+      "job:arrived": "Arrived",
+      "job:onsite": "Working",
+      "job:filed": "Waiting for customer",
+      "job:done": "Done",
+      "job:part": "Part done",
+    });
+  });
+
   it("sorts the next job soonest-first and finished ones newest-first", () => {
-    // Both settled jobs stay inside the 24h window (see `isRecentlySettled`) —
-    // this test is about relative order among visible jobs, not the window
-    // itself, which has its own describe block below.
     const items = toWorkItems({
       ...EMPTY,
       jobs: [
@@ -671,7 +1041,7 @@ describe("toWorkItems — A1 visits", () => {
     ]);
   });
 
-  it("drops a settled job older than 24h", () => {
+  it("keeps completed job history regardless of age", () => {
     const items = toWorkItems({
       ...EMPTY,
       jobs: [
@@ -682,7 +1052,7 @@ describe("toWorkItems — A1 visits", () => {
       ],
     });
 
-    expect(items.map((item) => item.key)).toEqual(["job:recent"]);
+    expect(items.map((item) => item.key)).toEqual(["job:recent", "job:old"]);
   });
 
   it("keeps a job in progress regardless of how old its scheduled start is", () => {
@@ -694,13 +1064,10 @@ describe("toWorkItems — A1 visits", () => {
       ],
     });
 
-    expect(items.map((item) => item.key)).toEqual(["job:old-doing"]);
+    expect(items.map((item) => item.key)).toEqual(["job:old-doing", "job:old-done"]);
   });
 
-  it("drops a job in a state this stack has no card for", () => {
-    // The complete excluded set. All three need a card that says something about
-    // money moving backwards or an Operations case, which is a product decision
-    // this adapter must not invent.
+  it("keeps dispute, recovery, and cancellation states visible", () => {
     const items = toWorkItems({
       ...EMPTY,
       jobs: [
@@ -710,10 +1077,23 @@ describe("toWorkItems — A1 visits", () => {
       ],
     });
 
-    expect(items).toHaveLength(0);
+    expect(Object.fromEntries(items.map((item) => [item.key, item.urgency]))).toEqual({
+      "job:disputed": "doing",
+      "job:recovery": "doing",
+      "job:cancelled": "closed",
+    });
+    expect(Object.fromEntries(items.map((item) => [item.key, item.stateLabel]))).toEqual({
+      "job:disputed": "Customer raised a problem",
+      "job:recovery": "Needs help",
+      "job:cancelled": "Cancelled",
+    });
+    expect(items.find((item) => item.key === "job:cancelled")).toMatchObject({
+      amountPaise: null,
+      amountLabel: null,
+    });
   });
 
-  it("carries the Partner's net earning, and nothing at all before it settles", () => {
+  it("uses the final net earning after settlement and the estimate before it settles", () => {
     const [settled] = toWorkItems({ ...EMPTY, jobs: [job()] });
     const [unsettled] = toWorkItems({
       ...EMPTY,
@@ -721,8 +1101,33 @@ describe("toWorkItems — A1 visits", () => {
     });
 
     expect(settled?.amountPaise).toBe(600_000);
-    expect(unsettled?.amountPaise).toBeNull();
+    expect(settled?.amountLabel).toBe("You earned");
+    expect(unsettled?.amountPaise).toBe(255_000);
+    expect(unsettled?.amountLabel).toBe("Est. payout");
     expect(settled?.href).toBe("/work/jobs/j1");
+  });
+
+  it("keeps the durable booked title, area, schedule and duration before tasks exist", () => {
+    const [item] = toWorkItems({
+      ...EMPTY,
+      jobs: [
+        job({
+          status: "CONFIRMED",
+          work_tasks: [],
+          earning: null,
+          scheduled_start: "2026-08-20T09:00:00Z",
+          estimated_duration_minutes: 90,
+        }),
+      ],
+    });
+
+    expect(item).toMatchObject({
+      title: "Bathroom deep clean",
+      areaLabel: "Madhapur",
+      whenIso: "2026-08-20T09:00:00Z",
+      whenIsDay: false,
+      durationMinutes: 90,
+    });
   });
 });
 

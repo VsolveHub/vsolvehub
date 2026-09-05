@@ -46,7 +46,7 @@ export interface WorkforceEngagementsScreenProps {
 export function WorkforceEngagementsScreen({ heading }: WorkforceEngagementsScreenProps) {
   return (
     <WorkspaceRoute workspaceKey={WORKFORCE_WORKSPACE} actions={["attendance.confirm"]}>
-      {(workspace) => (
+      {() => (
         <>
           <h1 className="text-xl font-semibold text-text">{heading}</h1>
           <EngagementList
@@ -54,7 +54,6 @@ export function WorkforceEngagementsScreen({ heading }: WorkforceEngagementsScre
             bucketFor={workforceBucketFor}
             commercialMode="LEAD_ONLY"
             wording={WORKFORCE_WORDING}
-            basePath={`${workspace.home}/shifts`}
             workLabel={ENQUIRY_LABELS.workforce}
           />
         </>
@@ -70,7 +69,7 @@ export interface ProjectEngagementsScreenProps {
 export function ProjectEngagementsScreen({ heading }: ProjectEngagementsScreenProps) {
   return (
     <WorkspaceRoute workspaceKey={PROJECT_WORKSPACE} actions={["stage.submit_evidence"]}>
-      {(workspace) => (
+      {() => (
         <>
           <h1 className="text-xl font-semibold text-text">{heading}</h1>
           <EngagementList
@@ -78,7 +77,6 @@ export function ProjectEngagementsScreen({ heading }: ProjectEngagementsScreenPr
             bucketFor={projectBucketFor}
             commercialMode="MANAGED_PAYMENT_REQUIRED"
             wording={PROJECT_WORDING}
-            basePath={`${workspace.home}/stages`}
             workLabel={ENQUIRY_LABELS.project}
           />
         </>
@@ -95,11 +93,10 @@ export interface EngagementDetailScreenProps {
 export function WorkforceEngagementScreen({ engagementId }: EngagementDetailScreenProps) {
   return (
     <WorkspaceRoute workspaceKey={WORKFORCE_WORKSPACE} actions={["attendance.confirm"]}>
-      {(workspace) => (
+      {() => (
         <EngagementDetail
           engagementId={engagementId}
           wording={WORKFORCE_WORDING}
-          basePath={`${workspace.home}/shifts`}
           workspace="workforce"
         />
       )}
@@ -113,11 +110,10 @@ export function ProjectEngagementScreen({
 }: EngagementDetailScreenProps) {
   return (
     <WorkspaceRoute workspaceKey={PROJECT_WORKSPACE} actions={["stage.submit_evidence"]}>
-      {(workspace) => (
+      {() => (
         <EngagementDetail
           engagementId={engagementId}
           wording={PROJECT_WORDING}
-          basePath={`${workspace.home}/stages`}
           workspace="project"
           focusStageId={stageId}
         />

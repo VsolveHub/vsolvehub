@@ -91,10 +91,11 @@ export interface EnquiryStatusCopy {
  * The six statuses in the vendor's own words.
  *
  * `EXPIRED` and `WITHDRAWN` are deliberately different sentences. An expiry is
- * the vendor running out of time; a withdrawal is the platform pulling the
- * enquiry back because the requirement changed under them, and it carries no
- * penalty. Collapsing them into "no longer available" would tell a vendor they
- * were too slow when they were not.
+ * the vendor running out of time; a withdrawal is the platform releasing the
+ * enquiry, and it carries no penalty. Collapsing them into "no longer
+ * available" would tell a vendor they were too slow when they were not.
+ *
+ * `WITHDRAWN` alone is not a sentence yet — see `WITHDRAWN_REASON_COPY`.
  */
 const STATUS_COPY: Record<EnquiryStatus, EnquiryStatusCopy> = {
   INVITED: {
@@ -125,12 +126,62 @@ const STATUS_COPY: Record<EnquiryStatus, EnquiryStatusCopy> = {
   WITHDRAWN: {
     label: "Pulled back",
     tone: "gone",
-    meaning: "Vsolve withdrew this enquiry, usually because the request changed. This does not count against you.",
+    meaning: "Vsolve released this enquiry. This does not count against you.",
   },
 };
 
-export function describeStatus(status: EnquiryStatus): EnquiryStatusCopy {
-  return STATUS_COPY[status];
+/**
+ * Why a withdrawal happened, in the vendor's words.
+ *
+ * ## The sentence this replaces was false
+ *
+ * `WITHDRAWN` used to read "Vsolve withdrew this enquiry, **usually because
+ * the request changed**". Across every withdrawal on the platform the stored
+ * `decline_reason_code` was `slot_taken` (18), `offer_taken` (6) or
+ * `non_responsive_quote` (1) — and `requirement_changed` **zero times**. The
+ * copy named the one case that has never occurred and omitted the only ones
+ * that have, so a professional who simply came second in a race was told the
+ * customer had changed their mind. That reads as the platform pulling work out
+ * from under them, and it is the opposite of what happened.
+ *
+ * The server has always recorded the real reason, the API has always published
+ * it, and `wire.ts` has always mapped it — it just never reached a screen.
+ *
+ * ## Two rules hold for every sentence here
+ *
+ * Every one ends by saying the withdrawal does not count against the vendor,
+ * because none of these are faults — losing a race is not a performance
+ * problem. And an unknown code falls back to the generic sentence rather than
+ * guessing: a reason this bundle has no words for is better left unexplained
+ * than explained wrongly, which is the whole defect being fixed here.
+ */
+const WITHDRAWN_REASON_COPY: Record<string, string> = {
+  slot_taken:
+    "Another professional accepted this visit slot first. This does not count against you.",
+  offer_taken:
+    "Another professional took this offer first. This does not count against you.",
+  non_responsive_quote:
+    "The window to send your quote closed, so the customer was offered someone else. This does not count against you.",
+  requirement_changed:
+    "Vsolve withdrew this enquiry because the customer's request changed. This does not count against you.",
+};
+
+/**
+ * The vendor-facing copy for one enquiry state.
+ *
+ * `declineReasonCode` is read only on `WITHDRAWN`, where it is the difference
+ * between "you lost a race" and "the customer changed their mind". It is
+ * ignored everywhere else: the other five statuses already say what happened,
+ * and a reason code left over on one of them must not rewrite them.
+ */
+export function describeStatus(
+  status: EnquiryStatus,
+  declineReasonCode?: string,
+): EnquiryStatusCopy {
+  const copy = STATUS_COPY[status];
+  if (status !== "WITHDRAWN" || declineReasonCode === undefined) return copy;
+  const reason = WITHDRAWN_REASON_COPY[declineReasonCode.trim()];
+  return reason === undefined ? copy : { ...copy, meaning: reason };
 }
 
 /* ---------------------------------------------------------------------------
@@ -239,6 +290,6 @@ export function describeDeadline(state: DeadlineState): string {
     case "closing":
       return "This is close to its deadline. Accepting now is the only way to keep the slot.";
     case "passed":
-      return "By our clock the window has closed. Vsolve decides when an enquiry actually expires, so this may still be open — re-read before assuming it is gone.";
+      return "By our clock the window has closed. Vsolve decides when an enquiry actually expires, so this may still be open — re-read before assuming anything.";
   }
 }

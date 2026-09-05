@@ -27,8 +27,10 @@ from .crew import (
     assert_crew_available,
     crew_identity_hash,
     crew_roster,
+    is_sole_agency_for,
     masked_crew_phone,
     set_crew_availability,
+    set_crew_gender,
     unavailable_crew_membership_ids,
     update_crew_member,
 )
@@ -59,6 +61,7 @@ from .registration import (
     declare_insurance,
     live_insurance_declaration,
     upsert_business_profile,
+    verify_business_tax_profile,
 )
 from .vendor_records import (
     WageFloorCheck,
@@ -101,6 +104,7 @@ __all__ = [
     "expired_required_document_kinds",
     "gate_refusal_detail",
     "gate_states",
+    "is_sole_agency_for",
     "language_subtag",
     "link_partner_by_signal",
     "live_insurance_declaration",
@@ -111,6 +115,7 @@ __all__ = [
     "registration_question_schema",
     "request_capability",
     "set_crew_availability",
+    "set_crew_gender",
     "set_partner_languages",
     "submit_capability_for_review",
     "suspend_partner_a3_capabilities",
@@ -118,5 +123,6 @@ __all__ = [
     "unavailable_crew_membership_ids",
     "update_crew_member",
     "upsert_business_profile",
+    "verify_business_tax_profile",
     "workspace_grants",
 ]

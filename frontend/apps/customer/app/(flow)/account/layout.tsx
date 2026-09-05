@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { AccountNav } from "@/features/account/view/account-nav";
+import { NotificationBell } from "@/features/notifications/view/notification-bell";
 import { CustomerShell } from "@/features/session/view/customer-shell";
 
 /**
@@ -20,13 +21,20 @@ import { CustomerShell } from "@/features/session/view/customer-shell";
 export default function AccountLayout({ children }: { children: ReactNode }) {
   return (
     <CustomerShell>
-      <div className="mx-auto w-full max-w-4xl px-4 pb-16 pt-6">
-        <h1 className="text-xl font-bold text-text">Your profile</h1>
-        <p className="mt-1 max-w-prose text-sm text-text-secondary">
-          Your details, preferences and signed-in devices.
+      <div className="mx-auto w-full max-w-[1216px] bg-[#FAF9F7] px-4 pb-24 pt-5 md:bg-transparent md:px-6 md:pb-16 md:pt-8 lg:px-8">
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="min-w-0 text-[1.875rem] font-extrabold leading-[1.15] tracking-tight text-navy-900 sm:text-[2.125rem] md:text-[2.5rem]">
+            Your profile
+          </h1>
+          <div className="md:hidden -mr-1.5 -mt-0.5 shrink-0">
+            <NotificationBell />
+          </div>
+        </div>
+        <p className="mt-2 max-w-prose text-[15px] leading-relaxed text-text-secondary md:mt-3 md:text-[1.05rem]">
+          Manage your details, communication preferences, and signed-in devices.
         </p>
 
-        <div className="mt-6 flex flex-col gap-6 lg:flex-row lg:gap-10">
+        <div className="mt-6 flex flex-col gap-6 md:mt-10 lg:flex-row lg:gap-12">
           <AccountNav />
           <div className="min-w-0 flex-1">{children}</div>
         </div>

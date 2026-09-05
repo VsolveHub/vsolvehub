@@ -1,45 +1,29 @@
 "use client";
 
 import type { Schemas } from "@vsolve/api-client";
-import { Button, ChoiceChips, Field, Input, Spinner, cn } from "@vsolve/ui";
-import { useEffect, useState, type FormEvent } from "react";
+import { ChoiceChips, Field, Input, Spinner } from "@vsolve/ui";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
 /**
  * Typing a new address, inside the picker rather than instead of it.
  *
- * ## Why this exists at all
+ * Locating happens on the picker (popup 1). This form is the second step: the
+ * fields the Customer checks and completes. Reverse geocoding is good at the
+ * street and bad at everything a courier actually needs — it cannot know the
+ * flat number, the gate, or which of two towers is yours — so "Flat, plot or
+ * building" is always left for them, even when the rest arrived from GPS.
  *
- * Until now the only way to add an address was **Use my current location**,
- * which reverse-geocoded the device's coordinates and saved the result
- * immediately, unseen. Reverse geocoding is good at the street and bad at
- * everything a courier actually needs: it cannot know the flat number, the gate,
- * or which of two towers is yours, and it has no opinion about what to call the
- * place. That is why so many saved addresses read "Saved address" and carry the
- * wrong first line — nobody was ever offered the chance to correct them.
- *
- * So locating and saving are now two steps. The pin still comes from the device,
- * and the fields it resolves are a **starting point the Customer edits** before
- * anything is written.
- *
- * ## Why the pin has to come from the device
+ * ## Why a pin still matters
  *
  * `AddressRequest` requires `latitude` and `longitude`, and there is no forward
- * geocoder — `POST /geocoding/reverse/` goes coordinates-to-address and there is
- * nothing going the other way. A typed address therefore cannot be saved on its
- * own, and the honest consequence is that **Use my location** is a required step
- * rather than a convenience. The form says so plainly instead of letting
- * somebody fill in six fields and then refusing them.
- *
- * (The design has a map with a draggable pin here. That needs a map library and
- * a tile provider, and both are decisions rather than code — see the note in the
- * dialog's own header.)
+ * geocoder. The pin comes from **Use my location** on the picker. A form opened
+ * from **Add a new address** has no pin yet; Save says so rather than sending a
+ * request the server would refuse.
  *
  * ## Serviceability is shown and never blocks
  *
- * The same rule the rest of the picker follows. Coverage is advisory —
- * Operations can serve an area the lookup does not know about — so an
- * unserviceable pincode is a warning the Customer reads, not a door this form
- * closes. The commands re-check for real.
+ * Coverage is advisory — Operations can serve an area the lookup does not know
+ * about — so an unserviceable pincode is a warning, not a door this form closes.
  */
 
 type AddressRequest = Schemas["AddressRequest"];
@@ -72,10 +56,13 @@ export interface AddressFormProps {
    * answer to that, and it keeps the form a real form.
    */
   formId: string;
-  /** Resolves the device's position into fields. Never saves. */
-  onLocate: () => Promise<LocatedAddress | null>;
-  isLocating: boolean;
-  locateError: string | null;
+  /**
+   * Seed from **Use my location**. GPS cannot resolve a flat number, so `line1`
+   * is left empty even when the geocoder guessed one.
+   */
+  initial?: Draft;
+  /** Confirmation that the fields arrived from the device, not from typing. */
+  showPinnedBanner?: boolean;
   /** Writes the address. Resolving is the caller's; this only reports the draft. */
   onSubmit: (draft: AddressRequest) => void;
   saveError: string | null;
@@ -85,7 +72,7 @@ export interface AddressFormProps {
   isCheckingServiceability: boolean;
 }
 
-interface Draft {
+export interface Draft {
   label: string;
   labelChoice: string;
   line1: string;
@@ -99,7 +86,7 @@ interface Draft {
   longitude: string;
 }
 
-const EMPTY: Draft = {
+export const EMPTY_DRAFT: Draft = {
   label: "",
   labelChoice: "Home",
   line1: "",
@@ -113,59 +100,121 @@ const EMPTY: Draft = {
   longitude: "",
 };
 
+const REQUIRED_MESSAGE: Record<"line1" | "locality" | "city" | "state" | "postalCode", string> = {
+  line1: "Add the flat, plot or building.",
+  locality: "Add the street or area.",
+  city: "Add the city.",
+  state: "Add the state.",
+  postalCode: "Add the 6-digit pincode.",
+};
+
+/**
+ * Turns a reverse-geocode result into form fields.
+ *
+ * Flat/building is always left empty — GPS cannot determine unit-level detail.
+ * Street/area takes the neighbourhood, or the geocoder's line1 when that is all
+ * we got. City suffixes like "mandal" are stripped because they are administrative
+ * noise, not how someone describes where they live.
+ */
+export function draftFromLocated(resolved: LocatedAddress): Draft {
+  const postalCode = (resolved.postal_code ?? "").trim();
+  const locality = (resolved.locality ?? "").trim();
+  let city = (resolved.city ?? "").trim();
+  let line1 = (resolved.line1 ?? "").trim();
+
+  if (postalCode && line1.startsWith(postalCode)) {
+    line1 = line1.slice(postalCode.length).replace(/^[\s,/-]+/, "").trim();
+  } else if (/^\d{6}\b/.test(line1)) {
+    line1 = line1.replace(/^\d{6}[\s,/-]*/, "").trim();
+  }
+
+  if (
+    /^\d+$/.test(line1) ||
+    line1.toLowerCase() === locality.toLowerCase() ||
+    line1.toLowerCase() === city.toLowerCase()
+  ) {
+    line1 = "";
+  }
+
+  city = city
+    .replace(/\s+(mandal|district|rural|urban)\b/gi, "")
+    .replace(/,\s*.*$/, "")
+    .trim();
+
+  return {
+    ...EMPTY_DRAFT,
+    line1: "",
+    locality: locality || line1,
+    city: city || (resolved.city ?? ""),
+    state: resolved.state ?? "",
+    postalCode,
+    latitude: resolved.latitude ?? "",
+    longitude: resolved.longitude ?? "",
+  };
+}
+
 export function AddressForm({
   formId,
-  onLocate,
-  isLocating,
-  locateError,
+  initial = EMPTY_DRAFT,
+  showPinnedBanner = false,
   onSubmit,
   saveError,
   onPostalCodeChange,
   serviceability,
   isCheckingServiceability,
 }: AddressFormProps) {
-  const [draft, setDraft] = useState<Draft>(EMPTY);
+  const [draft, setDraft] = useState<Draft>(initial);
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof Draft, string>>>({});
+  const [pinError, setPinError] = useState<string | null>(null);
+  const line1Ref = useRef<HTMLInputElement>(null);
 
   const isPinned = draft.latitude !== "" && draft.longitude !== "";
   const resolvedLabel = draft.labelChoice === OTHER_LABEL ? draft.label : draft.labelChoice;
 
-  // The caller checks coverage against whatever is typed. Debounced there would
-  // be premature: a pincode is six characters and the check is cheap, so this
-  // reports every change and the caller's query key does the deduplication.
   useEffect(() => {
     onPostalCodeChange(draft.postalCode);
   }, [draft.postalCode, onPostalCodeChange]);
 
+  useEffect(() => {
+    if (!showPinnedBanner) return;
+    line1Ref.current?.focus();
+  }, [showPinnedBanner]);
+
   function set<K extends keyof Draft>(field: K, value: Draft[K]) {
     setDraft((current) => ({ ...current, [field]: value }));
+    setFieldErrors((current) => {
+      if (current[field] === undefined) return current;
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
+    if (field === "latitude" || field === "longitude") setPinError(null);
   }
 
-  async function locate() {
-    const resolved = await onLocate();
-    if (resolved === null) return;
-    // Merged rather than replaced: anything already typed is the Customer's own
-    // correction and outranks the geocoder, which is the whole point of the two
-    // steps. Only the coordinates are taken unconditionally — they are the one
-    // thing the device knows better.
-    setDraft((current) => ({
-      ...current,
-      line1: current.line1 === "" ? (resolved.line1 ?? "") : current.line1,
-      locality: current.locality === "" ? (resolved.locality ?? "") : current.locality,
-      city: current.city === "" ? resolved.city : current.city,
-      state: current.state === "" ? (resolved.state ?? "") : current.state,
-      postalCode: current.postalCode === "" ? (resolved.postal_code ?? "") : current.postalCode,
-      latitude: resolved.latitude ?? "",
-      longitude: resolved.longitude ?? "",
-    }));
+  function validate(): boolean {
+    const next: Partial<Record<keyof Draft, string>> = {};
+    (["line1", "locality", "city", "state", "postalCode"] as const).forEach((field) => {
+      if (draft[field].trim() === "") next[field] = REQUIRED_MESSAGE[field];
+    });
+    if (draft.labelChoice === OTHER_LABEL && draft.label.trim() === "") {
+      next.label = "Name this address so you can pick it out later.";
+    }
+    setFieldErrors(next);
+
+    if (!isPinned) {
+      setPinError(
+        "We need your location to send a professional. Go back and tap Use my location, then add your flat or building number.",
+      );
+    } else {
+      setPinError(null);
+    }
+
+    return Object.keys(next).length === 0 && isPinned;
   }
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    // Every text field is `required`, so the browser has already refused an
-    // incomplete form and said which field is missing — better than anything
-    // this component could render, and it moves focus there too. The one rule
-    // the platform cannot check is the pin, because it is not a field.
-    if (!isPinned) return;
+    if (!validate()) return;
     onSubmit({
       label: resolvedLabel.trim(),
       line1: draft.line1.trim(),
@@ -178,36 +227,37 @@ export function AddressForm({
       country_code: "IN",
       latitude: draft.latitude,
       longitude: draft.longitude,
-      // The server records how the coordinates were obtained, and they came from
-      // the device through the reverse geocoder — which is what
-      // `REVERSE_GEOCODED` means. Claiming anything else would misdescribe the
-      // provenance of a pin a courier is going to drive to.
       source: "REVERSE_GEOCODED",
     });
   }
 
   return (
-    <form id={formId} onSubmit={submit} className="flex flex-col gap-4">
-      <PinStatus isPinned={isPinned} isLocating={isLocating} onLocate={() => void locate()} />
-
-      {locateError !== null ? (
-        <p role="alert" className="text-sm font-medium text-danger-text">
-          {locateError}
-        </p>
+    <form id={formId} onSubmit={submit} noValidate className="flex flex-col gap-4">
+      {showPinnedBanner ? (
+        <div className="rounded-card border border-success-line bg-success-surface p-4">
+          <p className="text-sm font-bold text-text">Location pinned</p>
+          <p className="mt-0.5 text-sm leading-5 text-text-secondary">
+            Check the details below and add your flat or building number.
+          </p>
+        </div>
       ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Flat, plot or building" required className="sm:col-span-2">
+        <Field
+          label="Flat, plot or building"
+          required
+          className="sm:col-span-2"
+          error={fieldErrors.line1}
+        >
           <Input
-            required
+            ref={line1Ref}
             value={draft.line1}
             onChange={(event) => set("line1", event.target.value)}
             autoComplete="address-line1"
           />
         </Field>
-        <Field label="Street, area" required>
+        <Field label="Street, area" required error={fieldErrors.locality}>
           <Input
-            required
             value={draft.locality}
             onChange={(event) => set("locality", event.target.value)}
             autoComplete="address-level3"
@@ -219,25 +269,22 @@ export function AddressForm({
             onChange={(event) => set("landmark", event.target.value)}
           />
         </Field>
-        <Field label="City" required>
+        <Field label="City" required error={fieldErrors.city}>
           <Input
-            required
             value={draft.city}
             onChange={(event) => set("city", event.target.value)}
             autoComplete="address-level2"
           />
         </Field>
-        <Field label="State" required>
+        <Field label="State" required error={fieldErrors.state}>
           <Input
-            required
             value={draft.state}
             onChange={(event) => set("state", event.target.value)}
             autoComplete="address-level1"
           />
         </Field>
-        <Field label="Pincode" required>
+        <Field label="Pincode" required error={fieldErrors.postalCode}>
           <Input
-            required
             inputMode="numeric"
             value={draft.postalCode}
             onChange={(event) => set("postalCode", event.target.value)}
@@ -263,9 +310,8 @@ export function AddressForm({
         />
         {draft.labelChoice === OTHER_LABEL ? (
           <div className="mt-3">
-            <Field label="What should we call it?" required>
+            <Field label="What should we call it?" required error={fieldErrors.label}>
               <Input
-                required
                 value={draft.label}
                 onChange={(event) => set("label", event.target.value)}
                 maxLength={60}
@@ -275,64 +321,18 @@ export function AddressForm({
         ) : null}
       </fieldset>
 
-      {/* Inside the dialog, beside the control that failed. The cart's own
-          comment explains the trap this avoids: an error rendered on the page
-          behind an open dialog is an error nobody can see. */}
+      {pinError !== null ? (
+        <p role="alert" className="text-sm font-medium text-danger-text">
+          {pinError}
+        </p>
+      ) : null}
+
       {saveError !== null ? (
         <p role="alert" className="text-sm font-medium text-danger-text">
           {saveError}
         </p>
       ) : null}
     </form>
-  );
-}
-
-/**
- * The pin, and why it is not optional.
- *
- * Stated up front rather than as a validation message on submit. A Customer who
- * fills in six fields and is then told the form needs something it never asked
- * for has been wasted, and this is the one requirement they cannot satisfy by
- * typing.
- */
-function PinStatus({
-  isPinned,
-  isLocating,
-  onLocate,
-}: {
-  isPinned: boolean;
-  isLocating: boolean;
-  onLocate: () => void;
-}) {
-  return (
-    <div
-      className={cn(
-        "rounded-card border p-4",
-        isPinned ? "border-success-line bg-success-surface" : "border-action-line bg-action-surface",
-      )}
-    >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-bold text-text">
-            {isPinned ? "Location pinned" : "Pin the location first"}
-          </p>
-          <p className="mt-0.5 text-sm leading-5 text-text-secondary">
-            {isPinned
-              ? "We have the coordinates. Correct the address below — we usually get the street right and the flat number wrong."
-              : "We need coordinates to send somebody to the right gate, and only your device can give us those."}
-          </p>
-        </div>
-        <Button
-          type="button"
-          variant={isPinned ? "outline" : "primary"}
-          onClick={onLocate}
-          loading={isLocating}
-          loadingLabel="Finding your location"
-        >
-          {isPinned ? "Re-pin" : "Use my location"}
-        </Button>
-      </div>
-    </div>
   );
 }
 

@@ -30,6 +30,7 @@ from .capabilities import (
 )
 from .crew import (
     CrewAvailabilityException,
+    CrewDocument,
     CrewMember,
     CrewSkill,
     PartnerCrewMembership,
@@ -57,6 +58,7 @@ from .standing import (
 
 __all__ = [
     "CrewAvailabilityException",
+    "CrewDocument",
     "CrewMember",
     "CrewSkill",
     "MinimumWageFloor",

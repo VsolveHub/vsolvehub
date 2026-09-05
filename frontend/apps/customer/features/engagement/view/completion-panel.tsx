@@ -59,9 +59,17 @@ export interface CompletionPanelProps {
   project: ProjectView | null;
   nouns: ModeNouns;
   onDone: () => void;
+  /** Render the live question as a booking-hub card instead of a page section. */
+  embedded?: boolean;
 }
 
-export function CompletionPanel({ engagement, project, nouns, onDone }: CompletionPanelProps) {
+export function CompletionPanel({
+  engagement,
+  project,
+  nouns,
+  onDone,
+  embedded = false,
+}: CompletionPanelProps) {
   const accept = useAcceptCompletion();
   const [confirming, setConfirming] = useState(false);
 
@@ -97,7 +105,14 @@ export function CompletionPanel({ engagement, project, nouns, onDone }: Completi
   const blocker = engagement.completionBlocker;
 
   return (
-    <section aria-labelledby="completion-heading" className="mt-8">
+    <section
+      aria-labelledby="completion-heading"
+      className={
+        embedded
+          ? "rounded-card border border-warning-line bg-warning-surface p-4"
+          : "mt-8"
+      }
+    >
       <h2 id="completion-heading" className="text-lg font-semibold text-text">
         Is this finished?
       </h2>
@@ -132,7 +147,11 @@ export function CompletionPanel({ engagement, project, nouns, onDone }: Completi
           </p>
 
           <div className="mt-3">
-            <Button onClick={() => setConfirming(true)} disabled={accept.isPending}>
+            <Button
+              className="w-full sm:w-auto"
+              onClick={() => setConfirming(true)}
+              disabled={accept.isPending}
+            >
               Confirm it is finished
             </Button>
           </div>

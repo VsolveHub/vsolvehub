@@ -8,17 +8,17 @@ import { cn } from "./cn";
  */
 export function Logo({ className, dark = false }: { className?: string; dark?: boolean }) {
   return (
-    <span className={cn("inline-flex items-center gap-2 font-bold", className)}>
+    <span className={cn("inline-flex items-center gap-2 font-bold whitespace-nowrap shrink-0", className)}>
       <span
         className={cn(
-          "inline-flex h-7 w-7 items-center justify-center overflow-hidden rounded-full",
+          "inline-flex h-7 w-7 items-center justify-center overflow-hidden rounded-full shrink-0",
           dark && "bg-white",
         )}
       >
         <img src="/logo-mark.png" alt="V Solve Hub" className="h-full w-full object-contain" />
       </span>
-      <span className={cn(dark ? "text-white" : "text-ink-900")}>
-        V Solve <span className="text-brand-600">Hub</span>
+      <span className={cn("font-sans font-extrabold tracking-tight text-[1.15rem] whitespace-nowrap", dark ? "text-white" : "text-navy-900")}>
+        V Solve <span className={dark ? "text-[#FF8F50]" : "text-[#EA580C]"}>Hub</span>
       </span>
     </span>
   );

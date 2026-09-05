@@ -1,10 +1,15 @@
+import { describeCountdown } from "@vsolve/query";
+
 import { helperNoun, isOfferLive } from "@/features/crew-offer/model/offer-state";
 import type { CrewOffer } from "@/features/crew-offer/queries";
 import { bucketOf } from "@/features/enquiry/model/enquiry-state";
 import type { EnquirySummary } from "@/features/enquiry/queries";
 import type { Engagement } from "@/features/engagement/queries";
 import { isOfferSettled, type Offer } from "@/features/offers/queries";
+import { STATUS_COPY } from "@/features/work/model/status";
 import type { PartnerVisit } from "@/features/work/queries";
+
+import { collectedDirectlyPaise, settledDayCount } from "./day-chip";
 
 /**
  * The one timeline every Partner-facing record collapses into: somebody
@@ -86,6 +91,8 @@ export interface WorkItem {
    * "this is what you will be paid" for an engagement.
    */
   readonly amountPaise: number | null;
+  /** Short visible label that says whether the amount is estimated, final, or agreed. */
+  readonly amountLabel: string | null;
   readonly urgency: WorkUrgency;
   /**
    * ISO deadline for a card that is racing a clock (an offer's
@@ -111,13 +118,15 @@ export interface WorkItem {
    * mis-render the one job that really does start then.
    */
   readonly whenIsDay: boolean;
+  /** Published duration for a scheduled A1 offer or visit. `null` when the source has none. */
+  readonly durationMinutes: number | null;
   /**
-   * The published area label, when the source type carries one. This is
-   * NOT a distance — no Partner-facing field publishes distance today (see
-   * plan Deviation 1). `null` where the source type has no area field
-   * (enquiries and engagements do not).
+   * A published locality or service-area label, never a measured distance or
+   * exact street address. `null` where the source type has no area field.
    */
   readonly areaLabel: string | null;
+  /** The next useful action when this card needs a source-specific verb. */
+  readonly actionLabel?: string;
   /**
    * What the work **is**, and nothing else — the card's visible title.
    *
@@ -162,27 +171,27 @@ export interface WorkItem {
 }
 
 /**
- * What to call an engagement, from the only field that distinguishes one.
- *
- * `archetype` is an unenumerated `type: string` on the wire, so this matches the
- * one value the A3 path is known to publish and treats everything else as a
- * project — the A5 case, and the larger one. Getting it wrong costs a vendor a
- * slightly generic noun; inventing a service name would cost them a wrong one.
+ * What to call an engagement: the catalogue's service name since 1.48.0
+ * ("Full home rewiring"), and the archetype noun only for a record written
+ * before the name was published.
  */
 function engagementTitle(engagement: Engagement): string {
+  const named = engagement.service_name?.trim();
+  if (named) return named;
   return engagement.archetype === "A3_TIME_BLOCK" ? "Crew booking" : "Project";
 }
 
 /**
- * What to call a booking: the work its first task names.
+ * What to call a booking: its durable booked-scope title.
  *
- * `PartnerBooking` publishes no service name, but `work_tasks[].label` is the
- * real description of the work and `VisitJobView` titles its own screen from
- * the same field — so the card and the screen it opens say the same thing. A
- * booking with no tasks is a real state (`canReport` documents it), and gets the
- * generic noun rather than an empty title.
+ * `display_title` exists before operational tasks are materialized, which keeps
+ * a confirmed booking from collapsing to "Job". The work-task label remains a
+ * compatibility fallback for older records, and the generic noun is reserved
+ * for a record that genuinely publishes neither.
  */
 function jobTitle(job: PartnerVisit): string {
+  const durableTitle = blankToNull(job.display_title);
+  if (durableTitle !== null) return durableTitle;
   const [first, ...rest] = job.work_tasks;
   if (first === undefined) return "Job";
   return rest.length === 0 ? first.label : `${first.label} +${rest.length}`;
@@ -242,6 +251,25 @@ function blankToNull(value: string | null): string | null {
   return trimmed === "" ? null : trimmed;
 }
 
+/**
+ * "Offer · 1:58 left" — the chip both offer sources share.
+ *
+ * Built from `describeCountdown`'s own `mm:ss`, so a card's chip and the
+ * ticking `CountdownDial` beside it (`work-home.tsx`) never disagree about the
+ * digits. Both arguments are server-authored — `respondsBy` off the row,
+ * `serverNow` off the read that produced it — so this is one more read of a
+ * calibrated instant, never `Date.now()`. It is computed once per poll rather
+ * than once per second: the chip is presentation text redrawn when the list
+ * refreshes, while the live second-by-second digits stay the dial's job alone.
+ * A null deadline — the nullable A3 `responds_by` — reads as "Offer" with
+ * nothing to count down.
+ */
+function offerStateLabel(respondsBy: string | null, serverNow: string): string {
+  if (respondsBy === null) return "Offer";
+  const remainingMs = new Date(respondsBy).getTime() - new Date(serverNow).getTime();
+  return `Offer · ${describeCountdown(Math.max(remainingMs, 0)).display} left`;
+}
+
 /* --------------------------------------------------------------------------
    A3 crew offers — the rate-card cascade
    -------------------------------------------------------------------------- */
@@ -251,6 +279,9 @@ function fromCrewOffers(offers: readonly CrewOffer[], serverNow: string): WorkIt
     .filter((offer) => isOfferLive(offer, serverNow))
     .map((offer) => {
       const area = blankToNull(offer.area_label);
+      // The first line of the customer's brief — "Wedding", "Loading and
+      // unloading" — is what tells two crew offers apart on a stack of cards.
+      const headline = offer.brief[0]?.value ?? null;
       return {
         kind: "offer" as const,
         key: `offer:${offer.invitation_id}`,
@@ -260,14 +291,18 @@ function fromCrewOffers(offers: readonly CrewOffer[], serverNow: string): WorkIt
         // it is never reconstructed from a rate card here (`offer-state.ts`
         // rule 1).
         amountPaise: offer.lead_total_receipt_paise,
+        amountLabel: "Your payout",
         urgency: "live" as const,
         respondsBy: offer.responds_by,
         whenIso: offer.requested_start,
         whenIsDay: false,
+        durationMinutes: null,
         areaLabel: area,
         ...named(
-          `Crew offer · ${offer.headcount} ${helperNoun(offer.headcount)}`,
-          area,
+          headline === null
+            ? `Crew offer · ${offer.headcount} ${helperNoun(offer.headcount)}`
+            : `${headline} · ${offer.headcount} ${offer.headcount === 1 ? "person" : "people"}`,
+          offerStateLabel(offer.responds_by, serverNow),
         ),
       };
     });
@@ -328,6 +363,7 @@ function fromDirectOffers(offers: readonly Offer[]): WorkItem[] {
         // `estimated_net` is the server's own gross-minus-commission figure.
         // Null before the projection has priced the unit.
         amountPaise: offer.estimated_net?.amount_paise ?? null,
+        amountLabel: "Est. payout",
         urgency: "live" as const,
         // `undo_deadline` first, because once the offer is `ACCEPTED_PENDING_UNDO`
         // that is the clock actually running — `expires_at` is the window the
@@ -337,8 +373,12 @@ function fromDirectOffers(offers: readonly Offer[]): WorkItem[] {
         respondsBy: offer.undo_deadline ?? offer.expires_at,
         whenIso: offer.starts_at,
         whenIsDay: false,
+        durationMinutes: offer.estimated_duration_minutes,
         areaLabel: area,
-        ...named(label, area),
+        // `offer.server_now` (not `sources.serverNow`, which belongs to the A3
+        // read): each `Offer` row carries its own calibrated clock, published
+        // for exactly this reason.
+        ...named(label, offerStateLabel(offer.undo_deadline ?? offer.expires_at, offer.server_now)),
       };
     });
 }
@@ -366,30 +406,73 @@ function isVendorsMove(enquiry: EnquirySummary): boolean {
   return bucket === "needs_response" || bucket === "accepted";
 }
 
-function fromEnquiries(enquiries: readonly EnquirySummary[]): WorkItem[] {
-  return enquiries.filter(isVendorsMove).map((enquiry) => ({
-    kind: "enquiry" as const,
-    key: `enquiry:${enquiry.id}`,
-    href: ENQUIRY_HREF(enquiry.id),
-    amountPaise: null,
-    urgency: "needs_price" as const,
-    // Both are published non-nullable on `EnquirySummary`, so neither is
-    // defaulted. `responds_by` is a business-hours deadline rather than a
-    // wall-clock one — see `enquiry-state.describeDeadline`; the sort below only
-    // needs the instant.
-    respondsBy: enquiry.responds_by,
-    whenIso: enquiry.requested_start,
-    // The customer picked a day, not a time — see `whenIsDay`.
-    whenIsDay: true,
-    areaLabel: null,
-    // An `INVITED` enquiry has not been accepted yet, so "needs a price" would
-    // be the wrong state for it even though it shares the `needs_price`
-    // urgency. The urgency is the card's colour; this is the chip.
-    ...named(
-      enquiry.service_name,
-      enquiry.status === "INVITED" ? "waiting on your answer" : "needs a price",
-    ),
-  }));
+/**
+ * Whether an `INVITED` enquiry's own clock has already run out, by the one
+ * server instant this merge has in hand.
+ *
+ * Mirrors `isOfferLive`'s shape but is deliberately not that function: an
+ * enquiry has no `status` value produced by expiring locally (the server
+ * still says `INVITED` until it re-reads), so this is presentation-only,
+ * closing the same poll-staleness window the crew-offer lapse guard closes —
+ * the list endpoint already stopped returning a lapsed invitation, this is
+ * the fifteen-or-so seconds before the next page reflects that. `serverNow`
+ * absent means no calibrated instant is available at all, so nothing is
+ * judged against a guess and the row is kept.
+ */
+function isEnquiryLapsed(enquiry: EnquirySummary, serverNow: string | null): boolean {
+  if (enquiry.status !== "INVITED" || serverNow === null) return false;
+  return new Date(enquiry.responds_by).getTime() <= new Date(serverNow).getTime();
+}
+
+function fromEnquiries(
+  enquiries: readonly EnquirySummary[],
+  serverNow: string | null,
+): WorkItem[] {
+  return enquiries
+    .filter((enquiry) => isVendorsMove(enquiry) && !isEnquiryLapsed(enquiry, serverNow))
+    .map((enquiry) => ({
+      kind: "enquiry" as const,
+      key: `enquiry:${enquiry.id}`,
+      href: ENQUIRY_HREF(enquiry.id),
+      amountPaise: null,
+      amountLabel: null,
+      urgency: "needs_price" as const,
+      // Both are published non-nullable on `EnquirySummary`, so neither is
+      // defaulted. `responds_by` is a business-hours deadline rather than a
+      // wall-clock one — see `enquiry-state.describeDeadline`; the sort below only
+      // needs the instant.
+      respondsBy: enquiry.responds_by,
+      whenIso: enquiry.requested_start,
+      // The customer picked a day, not a time — see `whenIsDay`.
+      whenIsDay: true,
+      durationMinutes: null,
+      areaLabel: enquiry.approximate_area.trim() || null,
+      actionLabel:
+        enquiry.archetype === "A5_CUSTOM_PROJECT"
+          ? enquiry.status === "INVITED"
+            ? "Review & book visit"
+            : "Book visit"
+          : enquiry.status === "INVITED"
+            ? "Review request"
+            : "Prepare quote",
+      // An `INVITED` enquiry has not been accepted yet, so "needs a price" would
+      // be the wrong state for it even though it shares the `needs_price`
+      // urgency. The urgency is the card's colour; this is the chip.
+      //
+      // `fixed_visit_status === "BOOKED"` wins over both: it is this vendor's
+      // own confirmed visit slot on an A5 request (`VisitPlanShare.MatchingStatus
+      // .BOOKED`, `backend/apps/requirements/models/access.py:317`), and "Visit
+      // booked" is the truer thing to say than "waiting on your answer" once a
+      // slot exists.
+      ...named(
+        enquiry.service_name,
+        enquiry.fixed_visit_status === "BOOKED"
+          ? "Visit booked"
+          : enquiry.status === "INVITED"
+            ? "Waiting for your answer"
+            : "Needs a price",
+      ),
+    }));
 }
 
 /**
@@ -407,6 +490,10 @@ function quotedOutcome(
   enquiry: EnquirySummary,
 ): "waiting" | "not_chosen" | "cancelled" | null {
   if (bucketOf(enquiry.status) !== "quoted") return null;
+  // Closed wins over everything: a customer who cancelled is not "waiting on
+  // the customer" no matter what state the quote was in when the door shut —
+  // that reading left a vendor watching a request that had already ended.
+  if (enquiry.requirement_status.startsWith("CLOSED_")) return "cancelled";
   if (enquiry.latest_proposal_status === "SUBMITTED") return "waiting";
   if (
     enquiry.latest_proposal_status === "REJECTED" &&
@@ -414,7 +501,6 @@ function quotedOutcome(
   ) {
     return "not_chosen";
   }
-  if (enquiry.requirement_status.startsWith("CLOSED_")) return "cancelled";
   return null;
 }
 
@@ -428,15 +514,21 @@ function fromQuotedEnquiries(enquiries: readonly EnquirySummary[]): WorkItem[] {
         key: `enquiry:${enquiry.id}`,
         href: ENQUIRY_HREF(enquiry.id),
         amountPaise: null,
+        amountLabel: null,
         urgency:
           outcome === "waiting" ? "answered" : outcome === "not_chosen" ? "not_chosen" : "closed",
         respondsBy: null,
         whenIso: enquiry.requested_start,
         whenIsDay: true,
-        areaLabel: null,
+        durationMinutes: null,
+        areaLabel: enquiry.approximate_area.trim() || null,
         ...named(
           enquiry.service_name,
-          outcome === "waiting" ? "quote sent" : outcome === "not_chosen" ? "not chosen" : "cancelled",
+          outcome === "waiting"
+            ? "Quote sent — waiting on the customer"
+            : outcome === "not_chosen"
+              ? "Not chosen"
+              : "Cancelled",
         ),
       },
     ];
@@ -447,64 +539,134 @@ function fromQuotedEnquiries(enquiries: readonly EnquirySummary[]): WorkItem[] {
    Engagements — the agreements being performed
    -------------------------------------------------------------------------- */
 
-/**
- * Engagement statuses that read as "doing it now" rather than settled.
- *
- * The published members are `PENDING_START | ACTIVE | COMPLETING | COMPLETED |
- * WARRANTY | CLOSED | DISPUTED | CANCELLED`. `ACTIVE` is "work is under way" and
- * `COMPLETING` is "every stage is settled, the customer is signing off" — both
- * are still the vendor's open business — while `PENDING_START` is agreed but not
- * begun. The other four are over, and an engagement is never mapped to `settled`
- * here: this stack shows a vendor what they are on the hook for, and a closed
- * agreement is not that.
- *
- * `DISPUTED` is left out on purpose. It is a state that needs a screen with the
- * dispute on it, not a row in a merged stack that would render it as ordinary
- * work in progress.
- */
+/** The server's complete engagement lifecycle, mapped exhaustively below. */
 type EngagementStatus = Engagement["status"];
 
-const DOING_ENGAGEMENT_STATUS: ReadonlySet<EngagementStatus> = new Set<EngagementStatus>([
-  "PENDING_START",
-  "ACTIVE",
-  "COMPLETING",
-]);
+/** Every published engagement status has a visible home in All Work. */
+function engagementUrgency(status: EngagementStatus): WorkUrgency {
+  switch (status) {
+    case "PENDING_START":
+    case "ACTIVE":
+    case "DISPUTED":
+      return "doing";
+    case "COMPLETING":
+      return "answered";
+    case "COMPLETED":
+    case "WARRANTY":
+    case "CLOSED":
+      return "settled";
+    case "CANCELLED":
+      return "closed";
+  }
+}
+
+/**
+ * What an engagement card is worth, and what to call it.
+ *
+ * **A5 (`MANAGED_PAYMENT_REQUIRED`)** — `staged_total_paise`, "now owed", the
+ * number the work is against today, amendments included. `total_paise` never
+ * moves, so on an engagement with an accepted amendment the original is a
+ * figure nobody is owed. Explicitly **not** `commission_paise`, which is
+ * Vsolve's cut. This is the one kind whose amount is **not** a net payout
+ * figure — see `WorkItem.amountPaise` for what `commission_treatment` leaves
+ * undecided — so it is labelled "Agreed total".
+ *
+ * **A3 (`LEAD_ONLY`)** — the crew is paid directly by the customer each
+ * evening, and since 1.49.0 `crew_terms.lead_receipt_paise` is the lead's own
+ * figure for the whole job. Once every day is closed (`COMPLETING`) the card
+ * says what was actually collected: the sum of settled `shift_summary`
+ * amounts, labelled "Collected directly". A record with no settled day yet
+ * falls back to the agreed receipt rather than printing a zero.
+ */
+function engagementMoney(engagement: Engagement): {
+  amountPaise: number | null;
+  amountLabel: string | null;
+} {
+  if (engagement.status === "CANCELLED") {
+    return { amountPaise: null, amountLabel: null };
+  }
+  if (engagement.commercial_mode !== "LEAD_ONLY") {
+    return { amountPaise: engagement.staged_total_paise, amountLabel: "Agreed total" };
+  }
+  if (
+    engagement.status === "COMPLETING" ||
+    engagement.status === "COMPLETED" ||
+    engagement.status === "WARRANTY" ||
+    engagement.status === "CLOSED"
+  ) {
+    const collected = collectedDirectlyPaise(engagement.stages);
+    if (collected !== null) return { amountPaise: collected, amountLabel: "Collected directly" };
+  }
+  return {
+    amountPaise: engagement.crew_terms?.lead_receipt_paise ?? engagement.staged_total_paise,
+    amountLabel: "To you, paid daily",
+  };
+}
+
+/**
+ * The engagement's own status chip.
+ *
+ * `PENDING_START` reads as "Confirmed" — the agreement exists and nothing is
+ * under way yet. `COMPLETING` reads as "Waiting for the customer": every stage
+ * is settled and the only thing left is the customer's sign-off, so the chip
+ * says whose move it is exactly as the enquiry chips do. `ACTIVE` is "In
+ * progress" for a managed project, but for an A3 day-hire booking
+ * (`LEAD_ONLY`) it becomes "Day 2 of 3" — `settledDayCount` counts settled
+ * shift-days off `shift_summary` the same way `engagementMoney` sums their
+ * payout, so the chip and the figure above it can never disagree about how
+ * many days are done. A record with no stages at all (an older booking, or one
+ * not yet materialised) falls back to "In progress" rather than printing
+ * "Day 0 of 0".
+ */
+function engagementStatusLabel(engagement: Engagement): string {
+  switch (engagement.status) {
+    case "PENDING_START":
+      return "Confirmed";
+    case "ACTIVE": {
+      if (engagement.commercial_mode === "LEAD_ONLY" && engagement.stages.length > 0) {
+        const { settled, total } = settledDayCount(engagement.stages);
+        if (total > 0) return `Day ${Math.min(settled + 1, total)} of ${total}`;
+      }
+      return "In progress";
+    }
+    case "COMPLETING":
+      return "Waiting for the customer";
+    case "COMPLETED":
+      return "Completed";
+    case "WARRANTY":
+      return "Warranty period";
+    case "CLOSED":
+      return "Closed";
+    case "DISPUTED":
+      return "In dispute";
+    case "CANCELLED":
+      return "Cancelled";
+  }
+}
 
 function fromEngagements(engagements: readonly Engagement[]): WorkItem[] {
-  return engagements
-    .filter((engagement) => DOING_ENGAGEMENT_STATUS.has(engagement.status))
-    .map((engagement) => ({
-      kind: "engagement" as const,
-      key: `engagement:${engagement.id}`,
-      href: ENGAGEMENT_HREF(engagement.id),
-      // `staged_total_paise` — "now owed", the number the work is against
-      // today, amendments included. The same field `EngagementCard` shows, for
-      // the reason written there: `total_paise` never moves, so on an engagement
-      // with an accepted amendment the original is a figure nobody is owed.
-      // `@vsolve/query`'s `agreedTotals().owedPaise` is the canonical name for
-      // this rule and is read directly here only because that barrel re-exports
-      // `QueryProvider` — pulling a React provider and the devtools into a pure
-      // model module, and into every node test that imports it, is a heavier
-      // dependency than one field read justifies.
-      //
-      // Explicitly **not** `commission_paise`: that is Vsolve's cut, rendered as
-      // a deduction in `agreement-panel.tsx`, and it is documented server-side as
-      // "zero for `LEAD_ONLY`" — so on the whole A3 direct-pay path it is not
-      // even a number, let alone the vendor's.
-      //
-      // This is the one kind whose amount is **not** a net payout figure. See
-      // `WorkItem.amountPaise` for what `commission_treatment` leaves undecided.
-      amountPaise: engagement.staged_total_paise,
-      urgency: "doing" as const,
-      // An engagement publishes no schedule of its own — its stages carry
-      // `scheduled_on`, the agreement does not — so there is nothing honest to
-      // sort it by. It falls to the end of its own bucket rather than being
-      // given a date this module made up.
-      respondsBy: null,
-      whenIso: null,
-      whenIsDay: false,
-      areaLabel: null,
-      /*
+  return engagements.map((engagement) => ({
+    kind: "engagement" as const,
+    key: `engagement:${engagement.id}`,
+    href: ENGAGEMENT_HREF(engagement.id),
+    ...engagementMoney(engagement),
+    urgency: engagementUrgency(engagement.status),
+    respondsBy: null,
+    // Only terminal engagements publish an honest completion instant. Active
+    // agreements remain unscheduled here because their dates belong to stages.
+    whenIso:
+      engagement.status === "COMPLETED" ||
+      engagement.status === "WARRANTY" ||
+      engagement.status === "CLOSED"
+        ? engagement.completed_at
+        : null,
+    whenIsDay:
+      engagement.status === "COMPLETED" ||
+      engagement.status === "WARRANTY" ||
+      engagement.status === "CLOSED",
+    durationMinutes: null,
+    areaLabel: null,
+    /*
         `Engagement` publishes no service name — only `archetype`, a
         `requirement` uuid and money (`schema.d.ts:6544`). So the title is what
         kind of record this is in the vendor's own vocabulary, which is what
@@ -512,9 +674,9 @@ function fromEngagements(engagements: readonly Engagement[]): WorkItem[] {
         "Project" beats the status: a card reading "Engagement, active" told a
         vendor the one thing they could already see from its colour, and none
         of the thing they opened the app to find out.
-      */
-      ...named(engagementTitle(engagement), null),
-    }));
+    */
+    ...named(engagementTitle(engagement), engagementStatusLabel(engagement)),
+  }));
 }
 
 /* --------------------------------------------------------------------------
@@ -523,92 +685,46 @@ function fromEngagements(engagements: readonly Engagement[]): WorkItem[] {
 
 type VisitStatus = PartnerVisit["status"];
 
-/**
- * A visit that is still this Partner's to finish.
- *
- * `ABORTED` and `COMPLETION_SUBMITTED` are in here for a reason worth writing
- * down, because both look at first glance like states that are over:
- *
- * - **`ABORTED`** is not finished — `canReportCompletion` returns true for it
- *   (`features/work/queries.ts:68-70`), so a Partner who abandoned a job on site
- *   still owes the completion report that settles the money. Leaving it out made
- *   the job vanish from the only screen that lists work, at exactly the moment
- *   the Partner needed to act on it.
- * - **`COMPLETION_SUBMITTED`** is the ordinary transient state immediately after
- *   filing that report. Dropping it made the card blink out of existence in the
- *   second the Partner would look for confirmation that it landed.
- *
- * Neither gets its own urgency. They render as ordinary "doing" cards — the fix
- * is that they are visible, not that they are special.
- */
-const DOING_VISIT_STATUS: ReadonlySet<VisitStatus> = new Set<VisitStatus>([
-  "CONFIRMED",
-  "EN_ROUTE",
-  "ARRIVED",
-  "IN_PROGRESS",
-  "ABORTED",
-  "COMPLETION_SUBMITTED",
-]);
-
 const SETTLED_VISIT_STATUS: ReadonlySet<VisitStatus> = new Set<VisitStatus>([
   "COMPLETED",
   "PARTIALLY_COMPLETED",
 ]);
 
-const SETTLED_WINDOW_MS = 24 * 60 * 60 * 1000;
-
-/**
- * A settled job stays on the stack for 24h, then drops off — otherwise every
- * job a Partner has ever finished becomes a permanent green tail and
- * `EmptyWork` ("Nothing today") is unreachable for anyone with history.
- *
- * `scheduled_start` is the closest instant `PartnerVisit` publishes for a
- * finished job — there is no separate completed-at timestamp on the wire
- * today, so this is measured from when the job was due to start, not from
- * when it was actually marked done. `server_now` (not the browser's clock)
- * is the reference instant, the same clock-skew guard `offersServerNow` gives
- * the crew-offer countdown.
- */
-function isRecentlySettled(job: PartnerVisit): boolean {
-  const scheduled = new Date(job.scheduled_start).getTime();
-  const now = new Date(job.server_now).getTime();
-  if (Number.isNaN(scheduled) || Number.isNaN(now)) return true;
-  return now - scheduled < SETTLED_WINDOW_MS;
+function visitUrgency(status: VisitStatus): WorkUrgency {
+  if (SETTLED_VISIT_STATUS.has(status)) return "settled";
+  if (status === "CANCELLED") return "closed";
+  return "doing";
 }
 
-/*
- * `DISPUTED`, `RECOVERY_REQUIRED` and `CANCELLED` are still dropped, and
- * deliberately so rather than by oversight. What a disputed or clawed-back job
- * should say — and what the Partner is even allowed to do from the card — is a
- * product question with money and an Operations case behind it. Rendering one as
- * an ordinary work card would be this module inventing that answer.
- */
-
 function fromJobs(jobs: readonly PartnerVisit[]): WorkItem[] {
-  return jobs
-    .filter(
-      (job) =>
-        DOING_VISIT_STATUS.has(job.status) ||
-        (SETTLED_VISIT_STATUS.has(job.status) && isRecentlySettled(job)),
-    )
-    .map((job) => ({
+  return jobs.map((job) => ({
       kind: "job" as const,
       key: `job:${job.id}`,
       href: JOB_HREF(job.id),
-      // `PartnerBookingEarning` is documented on the wire as "one Partner's own
-      // money for one job — never the Customer's invoice", and `net_paise` is
-      // the figure after commission. Null until Django has settled the job.
-      amountPaise: job.earning?.net_paise ?? null,
-      urgency: (SETTLED_VISIT_STATUS.has(job.status) ? "settled" : "doing") as WorkUrgency,
+      // Both figures are server-calculated after commission and scoped to this
+      // Partner. The ledger earning wins once settlement makes it authoritative;
+      // before then, the immutable booked-scope estimate keeps the fare visible.
+      amountPaise:
+        job.status === "CANCELLED"
+          ? null
+          : (job.earning?.net_paise ?? job.estimated_earning?.net_paise ?? null),
+      amountLabel:
+        job.status === "CANCELLED" ? null : job.earning === null ? "Est. payout" : "You earned",
+      urgency: visitUrgency(job.status),
       respondsBy: null,
       whenIso: job.scheduled_start,
       // A real slot on the availability grid, unlike an enquiry's requested day.
       whenIsDay: false,
-      areaLabel: null,
-      // The first work task's own `label` — the only field on `PartnerBooking`
-      // that names the work. `VisitJobView` titles the job screen from the same
-      // place, so the card and the screen it opens agree.
-      ...named(jobTitle(job), SETTLED_VISIT_STATUS.has(job.status) ? "done" : null),
+      durationMinutes: job.estimated_duration_minutes,
+      areaLabel: blankToNull(job.approximate_area),
+      // `display_title` names the booked scope before tasks exist. `jobTitle`
+      // retains task labels only as compatibility for older projections.
+      //
+      // The chip reuses `STATUS_COPY` rather than inventing its own wording —
+      // that table is already the one truth the job list and the job detail
+      // screen both read, and a card here saying something different for the
+      // same status would be a third, disagreeing, vocabulary.
+      ...named(jobTitle(job), STATUS_COPY[job.status].label),
     }));
 }
 
@@ -665,6 +781,19 @@ export function toWorkItems(sources: {
   enquiries: readonly EnquirySummary[];
   engagements: readonly Engagement[];
   jobs: readonly PartnerVisit[];
+  /**
+   * The one calibrated instant this merge trusts for "has an enquiry's
+   * `responds_by` already passed".
+   *
+   * `EnquirySummary` publishes no `server_now` of its own — the enquiry read
+   * carries no clock the way the offers read does — so this is
+   * `offersServerNow` reused rather than a second source of truth. When the
+   * offers read has not landed either, there is no server instant available at
+   * all, and `fromEnquiries` skips the lapse check rather than falling back to
+   * the device clock: a phone with a skewed clock must never decide an enquiry
+   * is dead. The list endpoint's own filtering is the backstop in that gap.
+   */
+  serverNow: string | null;
 }): WorkItem[] {
   const items: WorkItem[] = [
     // No `server_now` means the offers read has not landed — `CrewOfferList`
@@ -683,7 +812,7 @@ export function toWorkItems(sources: {
     // comparator already does that on `respondsBy` without knowing which source
     // produced the row.
     ...fromDirectOffers(sources.directOffers),
-    ...fromEnquiries(sources.enquiries),
+    ...fromEnquiries(sources.enquiries, sources.serverNow),
     ...fromQuotedEnquiries(sources.enquiries),
     ...fromEngagements(sources.engagements),
     ...fromJobs(sources.jobs),

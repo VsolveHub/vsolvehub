@@ -17,6 +17,9 @@ export {
 } from "./freshness";
 export type { FreshnessTier } from "./freshness";
 
+export { fetchCachedQuery, ensureCachedQuery } from "./cached-fetch";
+export type { CachedQueryDefinition } from "./cached-fetch";
+
 export { boundedPoll, nextPollDelay } from "./polling";
 export type { BoundedPollOptions, PollPolicyInput } from "./polling";
 
@@ -112,7 +115,6 @@ export {
 } from "./m2-requirement";
 export type {
   AttachmentScanStatus,
-  AttachmentUploadGrant,
   ProbableDuplicate,
   RequirementAttachment,
   RequirementAttachmentKind,
@@ -184,6 +186,11 @@ export type {
   CustomerQuoteList,
   ProposalSelection,
   ProposalSelectionStatus,
+  EstimateType,
+  ProposalItemLine,
+  ProposalLabourLine,
+  ProposalMaterialLine,
+  ProposalOtherCharge,
   ProposalStage,
   ProposalStatus,
   ProposalTaxBasis,
@@ -193,6 +200,10 @@ export type {
   QuoteUnlock,
   QuoteUnlockStatus,
   RejectionReason,
+  RequirementQuestion,
+  RequirementQuestionList,
+  RevisionRequest,
+  RevisionRequestReasonCode,
   SiteVisit,
   SiteVisitStatus,
   UnlockPhase,

@@ -12,9 +12,18 @@ import {
   type CustomerQuoteList,
   type ProposalSelection,
   type RejectionReason,
+  type RequirementQuestion,
+  type RequirementQuestionList,
+  type RevisionRequest,
+  type RevisionRequestReasonCode,
 } from "@vsolve/query";
 
+import { canReadFullEstimates, canReadFullQuotes } from "@vsolve/query";
+
+import { useUnlockState, useVisitPlan } from "@/features/access/queries";
 import { getApiClient } from "@/lib/api/browser";
+
+import { toQuoteListView } from "./adapters";
 
 /**
  * Reading, refusing and choosing — contract 1.24.0.
@@ -42,7 +51,206 @@ import { getApiClient } from "@/lib/api/browser";
  * building revision 2.
  */
 
-export type { CustomerProposal, CustomerQuoteList, ProposalSelection };
+export type {
+  CustomerProposal,
+  CustomerQuoteList,
+  ProposalSelection,
+  RequirementQuestion,
+  RevisionRequest,
+  RevisionRequestReasonCode,
+};
+
+/* --------------------------------------------------------------------------
+   Clarification — contract 1.47.0 gives the Customer both halves
+   -------------------------------------------------------------------------- */
+
+/**
+ * Every question on one request, both directions.
+ *
+ * Readable at every status and **not** gated on the paywall: a professional's
+ * question usually arrives before the visit, and until now the Customer had no
+ * way to answer it — the timeline showed the words with nothing to press.
+ */
+export function useRequirementQuestions(requirementId: string | null, enabled = true) {
+  return useQuery({
+    queryKey: m2QueryKeys.requirements.questions(requirementId ?? ""),
+    queryFn: () =>
+      request(() =>
+        getApiClient().GET("/api/v1/requirements/{requirement_id}/questions/", {
+          params: { path: { requirement_id: requirementId! } },
+        }),
+      ),
+    enabled: requirementId !== null && enabled,
+    ...M2_FRESHNESS.proposals,
+    retry: shouldRetryM2Read,
+  });
+}
+
+export interface AnswerQuestionInput {
+  requirementId: string;
+  questionId: string;
+  answer: string;
+}
+
+/** The Customer answers a professional's question. One answer per question; the server refuses a second. */
+export function useAnswerQuestion() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: AnswerQuestionInput) =>
+      request(() =>
+        getApiClient().POST("/api/v1/requirements/questions/{question_id}/answer/", {
+          params: { path: { question_id: input.questionId } },
+          body: { answer: input.answer },
+        }),
+      ),
+    onSuccess: (_answered: RequirementQuestion, input) => {
+      void queryClient.invalidateQueries({
+        queryKey: m2QueryKeys.requirements.questions(input.requirementId),
+      });
+      void queryClient.invalidateQueries({ queryKey: m2AccessKeys.quotes(input.requirementId) });
+      void queryClient.invalidateQueries({
+        queryKey: m2QueryKeys.requirements.timeline(input.requirementId),
+      });
+    },
+    retry: false,
+  });
+}
+
+export interface AskVendorQuestionInput {
+  requirementId: string;
+  proposalId: string;
+  question: string;
+}
+
+/**
+ * The Customer asks the professional behind one estimate a question.
+ *
+ * Addressed to a proposal so it reaches the vendor who wrote it. Gated by the
+ * server on the same entitlement that lets them read it, and capped at three
+ * unanswered questions per thread — a wait for a reply, not a rate limit.
+ */
+export function useAskVendorQuestion() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: AskVendorQuestionInput) =>
+      request(() =>
+        getApiClient().POST(
+          "/api/v1/requirements/{requirement_id}/quotes/{proposal_id}/questions/",
+          {
+            params: {
+              path: { requirement_id: input.requirementId, proposal_id: input.proposalId },
+              header: {
+                "Idempotency-Key": getStableIdempotencyKey(
+                  `m2-quote-question:${input.proposalId}:${input.question}`,
+                ),
+              },
+            },
+            body: { question: input.question },
+          },
+        ),
+      ),
+    onSuccess: (_question: RequirementQuestion, input) => {
+      void queryClient.invalidateQueries({ queryKey: m2AccessKeys.quotes(input.requirementId) });
+      void queryClient.invalidateQueries({
+        queryKey: m2QueryKeys.requirements.questions(input.requirementId),
+      });
+    },
+    retry: false,
+  });
+}
+
+export interface RequestRevisionInput {
+  requirementId: string;
+  proposalId: string;
+  reasonCode: RevisionRequestReasonCode;
+  excludedItems: readonly string[];
+  note: string;
+  /**
+   * What the Customer hopes the vendor can move, in basis points -- 5% is 500.
+   * Non-null only with `reasonCode: "PRICE"`; the server refuses a figure on
+   * any other reason, and refuses a price ask without one.
+   */
+  requestedDiscountBps: number | null;
+}
+
+/**
+ * Asks the professional for a different estimate, with the reason attached.
+ *
+ * **A price ask states what the Customer hopes to pay, never what the work
+ * costs.** `requestedDiscountBps` changes no total and obliges nobody: the
+ * vendor answers by superseding the estimate, which lands under the
+ * entitlement already paid for, and the estimate as sent stays live and
+ * selectable the whole time. The server keeps one open request per estimate
+ * and re-reads it on a second press, so this needs no override path.
+ */
+export function useRequestRevision() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: RequestRevisionInput) =>
+      request(() =>
+        getApiClient().POST(
+          "/api/v1/requirements/{requirement_id}/quotes/{proposal_id}/revision-request/",
+          {
+            params: {
+              path: { requirement_id: input.requirementId, proposal_id: input.proposalId },
+              header: {
+                "Idempotency-Key": getStableIdempotencyKey(
+                  // The figure is in the key: asking for 3% and asking for 5% are
+                  // different requests, and a shared key would replay the first
+                  // answer at the second ask.
+                  `m2-quote-revision:${input.proposalId}:${input.reasonCode}:${input.requestedDiscountBps ?? "none"}`,
+                ),
+              },
+            },
+            body: {
+              reason_code: input.reasonCode,
+              excluded_items: [...input.excludedItems],
+              note: input.note,
+              requested_discount_bps: input.requestedDiscountBps,
+            },
+          },
+        ),
+      ),
+    onSuccess: (_request: RevisionRequest, input) => {
+      void queryClient.invalidateQueries({ queryKey: m2AccessKeys.quotes(input.requirementId) });
+    },
+    retry: false,
+  });
+}
+
+export type { RequirementQuestionList };
+
+/**
+ * The estimates, once the server says they are readable.
+ *
+ * Both access reads are mounted because a requirement is A3 or A5 and the
+ * screen does not know which until something answers; each answers
+ * `null`-shaped emptiness for the archetype it does not apply to. The quote
+ * read is enabled only on the server's own entitlement flag, so the ordinary
+ * pre-payment path never puts a `403` in the console.
+ */
+export function useEntitledQuoteList(requirementId: string) {
+  const unlockQuery = useUnlockState(requirementId);
+  const planQuery = useVisitPlan(requirementId);
+  const unlockState = unlockQuery.data ?? null;
+  const planState = planQuery.data ?? null;
+  const entitled =
+    (unlockState !== null && canReadFullQuotes(unlockState)) ||
+    (planState !== null && canReadFullEstimates(planState));
+  const isA5 = planState !== null && planState.plan !== null;
+  const quotesQuery = useCustomerQuotes(requirementId, entitled);
+  return {
+    entitled,
+    isA5,
+    isPending: (unlockQuery.isPending && planQuery.isPending) || (entitled && quotesQuery.isPending),
+    error: quotesQuery.error,
+    list: quotesQuery.data === undefined ? null : toQuoteListView(quotesQuery.data),
+    refetch: () => void quotesQuery.refetch(),
+  };
+}
 
 /* --------------------------------------------------------------------------
    Reads

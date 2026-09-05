@@ -20,21 +20,26 @@ export function ProcessSteps({ steps }: { steps: ServiceDetail["policies"] }) {
   if (ordered.length === 0) return null;
 
   return (
-    <ol className="mt-4 space-y-4">
+    <div className="mt-8 flex flex-col md:flex-row gap-8 md:gap-4 justify-center items-start relative max-w-4xl mx-auto">
+      {/* Optional connecting line for desktop */}
+      {ordered.length > 1 && (
+        <div className="hidden md:block absolute top-6 left-[15%] right-[15%] h-[1px] bg-line/60 -z-10" />
+      )}
+      
       {ordered.map((step, index) => (
-        <li key={step.id} className="flex gap-3">
+        <div key={step.id} className="flex-1 flex flex-col items-center text-center relative z-10 w-full">
           <span
             aria-hidden
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-signal-50 text-sm font-bold text-signal-700"
+            className="flex size-12 shrink-0 items-center justify-center rounded-full bg-action text-[1.1rem] font-bold text-white shadow-sm mb-5"
           >
             {index + 1}
           </span>
-          <div className="min-w-0 flex-1 pt-0.5">
-            {step.title ? <p className="font-semibold text-text">{step.title}</p> : null}
-            <p className="mt-0.5 text-sm text-text-secondary">{step.text}</p>
-          </div>
-        </li>
+          {step.title ? <h3 className="font-medium text-navy-900 mb-2.5">{step.title}</h3> : null}
+          <p className="text-[0.875rem] leading-relaxed text-text-secondary max-w-[16rem]">
+            {step.text}
+          </p>
+        </div>
       ))}
-    </ol>
+    </div>
   );
 }

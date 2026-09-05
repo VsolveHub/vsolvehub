@@ -15,6 +15,8 @@ export interface CrewBookingIntent {
   /** Opaque id only. Exact address text never enters browser storage. */
   addressId: string | null;
   requestedStart: string;
+  /** `HH:MM` local, or null for a crew booked by the day. */
+  reportingTime: string | null;
   /** A rate is never persisted; this only remembers which screen was open. */
   step: CrewBookingStep;
 }
@@ -30,7 +32,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isStep(value: unknown): value is CrewBookingStep {
-  return value === "work" || value === "details" || value === "rate";
+  return (
+    value === "occasion" ||
+    value === "work" ||
+    value === "crew" ||
+    value === "details" ||
+    value === "rate"
+  );
 }
 
 /**
@@ -53,6 +61,12 @@ export function readCrewBookingIntent(
     if (value.requirementId !== null && typeof value.requirementId !== "string") return null;
     if (value.addressId !== null && typeof value.addressId !== "string") return null;
     if (typeof value.requestedStart !== "string") return null;
+    // Absent on entries written before the reporting time existed. Those were
+    // day bookings, and null is exactly what a day booking carries.
+    const reportingTime =
+      typeof value.reportingTime === "string" && /^\d{2}:\d{2}$/.test(value.reportingTime)
+        ? value.reportingTime
+        : null;
     return {
       serviceSlug,
       variantId,
@@ -60,6 +74,7 @@ export function readCrewBookingIntent(
       answers: value.answers,
       addressId: value.addressId,
       requestedStart: value.requestedStart,
+      reportingTime,
       step: value.step,
     };
   } catch {

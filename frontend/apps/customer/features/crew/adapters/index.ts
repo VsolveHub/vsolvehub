@@ -7,6 +7,11 @@ import type {
 } from "@vsolve/query";
 import { formatMoney } from "@vsolve/ui";
 
+// Type-only: `toRateTermsView` accepts the engagement's own frozen terms so one
+// sheet can explain the rate before booking and after it. This file never
+// imports `features/engagement`'s runtime code, only the shape it publishes.
+import type { CrewTermsView } from "@/features/engagement/adapters";
+
 /**
  * The only code in the crew feature that knows what the wire looks like.
  *
@@ -374,4 +379,72 @@ export function toFeeMoneyView(fee: BookingFee): FeeMoneyView {
 export function confirmedCrewName(state: RateCardState): string | null {
   const name = state.confirmed_partner_name;
   return name === null || name.trim() === "" ? null : name;
+}
+
+/* --------------------------------------------------------------------------
+   The one rate & terms sheet — screen 11
+
+   Every place on the A3 path that used to spell out the day rate, the
+   inclusions, the overtime rule and the cancellation window in its own words
+   now hands its own record to `toRateTermsView` and gets back one shape.
+   `RateTermsSheet` renders it. There is exactly one of these per screen.
+   -------------------------------------------------------------------------- */
+
+/**
+ * Everything `RateTermsSheet` needs, regardless of which record it came from.
+ *
+ * `standardDayHours` and `overtimeHourlyLabel` are nullable because the
+ * post-booking `CrewTermsView` (`features/engagement/adapters`) carries them
+ * nullable too — an older record can predate the fields. Pre-booking views
+ * never omit them; `toRateDisclosureView`/`toBookingView` already refuse to
+ * produce a view without every figure present.
+ */
+export interface RateTermsView {
+  headcount: number;
+  days: number;
+  dayRateLabel: string;
+  totalLabel: string;
+  leadReceiptLabel: string;
+  leadDayReceiptLabel: string;
+  bookingFeeLabel: string;
+  standardDayHours: number | null;
+  overtimeHourlyLabel: string | null;
+  inclusions: readonly string[];
+  addOns: readonly AddOnRateView[];
+}
+
+/**
+ * The one adapter behind `RateTermsSheet`, for every shape the rate travels in.
+ *
+ * Three callers, one output: the live preview before a Customer books
+ * (`RateDisclosureView`), the frozen booking through the cascade and after
+ * (`BookingView`), and the engagement's own frozen terms once the request
+ * became a booking (`CrewTermsView`, imported as a type only from
+ * `features/engagement/adapters` — this file never reaches into that feature's
+ * runtime code, only its published shape). All three already carry
+ * server-formatted labels; this only picks the common fields out.
+ */
+export function toRateTermsView(
+  source: RateDisclosureView | BookingView | CrewTermsView,
+): RateTermsView {
+  return {
+    headcount: source.headcount,
+    days: source.days,
+    dayRateLabel: "dayRateLabel" in source ? source.dayRateLabel : source.perWorkerDayLabel,
+    totalLabel: "totalLabel" in source ? source.totalLabel : source.totalCustomerLabel,
+    leadReceiptLabel: source.leadReceiptLabel,
+    leadDayReceiptLabel: source.leadDayReceiptLabel,
+    bookingFeeLabel: source.bookingFeeLabel,
+    standardDayHours: source.standardDayHours,
+    overtimeHourlyLabel: source.overtimeHourlyLabel,
+    inclusions: source.inclusions,
+    addOns:
+      "addOns" in source
+        ? source.addOns
+        : source.addOnRates.map((rate) => ({
+            code: rate.code,
+            label: rate.label,
+            amountLabel: rate.amountLabel,
+          })),
+  };
 }

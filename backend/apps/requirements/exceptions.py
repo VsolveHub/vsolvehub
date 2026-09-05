@@ -147,6 +147,33 @@ class ProposalShapeError(RequirementDomainError):
         )
 
 
+class UnsupportedChargeError(RequirementDomainError):
+    def __init__(self, message: str = "") -> None:
+        super().__init__(
+            code="m2_unsupported_charge",
+            message=message or "That charge is not supported.",
+            status_code=400,
+        )
+
+
+class InstallmentMismatchError(RequirementDomainError):
+    def __init__(self, message: str = "") -> None:
+        super().__init__(
+            code="m2_installment_mismatch",
+            message=message or "The installments do not match the estimate amount.",
+            status_code=400,
+        )
+
+
+class FinancialPolicyUnavailableError(RequirementDomainError):
+    def __init__(self, message: str = "") -> None:
+        super().__init__(
+            code="m2_financial_policy_unavailable",
+            message=message or "This estimate cannot be priced until Finance approves a policy.",
+            status_code=409,
+        )
+
+
 class ProposalNotSelectableError(RequirementDomainError):
     def __init__(self, message: str) -> None:
         super().__init__(
@@ -256,10 +283,38 @@ class UnlockPaymentPendingError(RequirementDomainError):
 
 
 class VisitPlanRequiredError(RequirementDomainError):
-    def __init__(self) -> None:
+    def __init__(self, message: str = "") -> None:
         super().__init__(
             code="m2_visit_plan_required",
-            message="Choose how many professionals should visit before sending this request.",
+            message=message
+            or "Choose how many professionals should visit before sending this request.",
+            status_code=409,
+        )
+
+
+class VisitSlotTakenError(RequirementDomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="slot_taken",
+            message="This visit was taken by another professional.",
+            status_code=409,
+        )
+
+
+class VisitSlotExpiredError(RequirementDomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="slot_expired",
+            message="That visit time expired. Refresh and choose again.",
+            status_code=409,
+        )
+
+
+class NoProfessionalFoundError(RequirementDomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="no_professional_found",
+            message="No professional is available for this slot. Nothing has been charged.",
             status_code=409,
         )
 
@@ -458,6 +513,30 @@ class RosterInsufficientError(RequirementDomainError):
         )
 
 
+class CrewMixUnmetError(RequirementDomainError):
+    """The lead's verified roster cannot field the men/women mix the Customer booked.
+
+    Separate from `RosterInsufficientError` because they are different problems with different
+    remedies: one lead needs more people, the other needs different people, and telling somebody
+    with eight verified workers that their "roster is too small" for a five-person job sends them
+    to the wrong screen.
+
+    Raised only at accept and beyond. Dispatch is deliberately more forgiving -- see
+    `crew_mix` on why a roster with no gender recorded is invited rather than excluded.
+    """
+
+    def __init__(self, shortfall: str = "") -> None:
+        super().__init__(
+            code="m2_crew_mix_unmet",
+            message=(
+                f"This job needs {shortfall} than your verified crew list has."
+                if shortfall
+                else "Your verified crew list cannot cover the men and women this job needs."
+            ),
+            status_code=409,
+        )
+
+
 class BookingFeeNotChargeableError(RequirementDomainError):
     """A booking-fee checkout was attempted with no held accepted offer behind it.
 
@@ -511,4 +590,47 @@ class PurchasesPausedError(RequirementDomainError):
             "under way is unaffected. Try again shortly.",
             status_code=409,
             retryable=True,
+        )
+
+
+# ---------------------------------------------------------------------------
+# The vendor price book (`price_book.py`). Every rule is enforced at quote submission against
+# the live catalogue and the live policy — never trusted from a composer.
+# ---------------------------------------------------------------------------
+
+
+class GuardrailPolicyUnavailableError(RequirementDomainError):
+    def __init__(self, message: str = "") -> None:
+        super().__init__(
+            code="m2_guardrail_policy_unavailable",
+            message=message
+            or "Rate-card pricing is not set up for your city yet. Nothing has been sent.",
+            status_code=409,
+        )
+
+
+class WorkItemRateUnavailableError(RequirementDomainError):
+    def __init__(self, message: str = "") -> None:
+        super().__init__(
+            code="m2_work_item_rate_unavailable",
+            message=message or "This item has no published rate in your service area yet.",
+            status_code=409,
+        )
+
+
+class RateOutsideBandError(RequirementDomainError):
+    def __init__(self, message: str = "") -> None:
+        super().__init__(
+            code="rate_outside_band",
+            message=message or "That rate is outside the allowed range for this item.",
+            status_code=400,
+        )
+
+
+class CustomTitleScreenedError(RequirementDomainError):
+    def __init__(self, message: str = "") -> None:
+        super().__init__(
+            code="custom_title_screened",
+            message=message or "An item name cannot carry a phone number, email address or link.",
+            status_code=400,
         )

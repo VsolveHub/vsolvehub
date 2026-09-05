@@ -3,6 +3,9 @@
 import type { Schemas } from "@vsolve/api-client";
 
 import type { Cart, GroupQuote, SchedulingGroup } from "../queries";
+import { checkoutCardClass } from "./checkout-section";
+import { CheckoutServiceThumbnail } from "./checkout-service-thumbnail";
+import { PricingInfoIllustration } from "./checkout-illustrations";
 import { Money } from "./money";
 import { formatServiceDuration } from "./duration";
 
@@ -53,26 +56,44 @@ export function OrderSummary({ cart, groups, quote }: OrderSummaryProps) {
  * shape the booking will actually take and showing a flat list first would make
  * the visits look like something checkout introduced later.
  */
-function UnpricedSummary({ cart, groups }: { cart: Cart; groups: readonly SchedulingGroup[] }) {
+function UnpricedSummary({
+  cart,
+  groups,
+}: {
+  cart: Cart;
+  groups: readonly SchedulingGroup[];
+}) {
   const grouped =
     groups.length > 0
       ? groups.map((group) => ({
           key: group.key,
           heading: group.label,
           note: `Approx. ${formatServiceDuration(group.estimated_duration_minutes)}`,
-          items: cart.items.filter((item) => group.cart_item_ids.includes(item.id)),
+          items: cart.items.filter((item) =>
+            group.cart_item_ids.includes(item.id),
+          ),
         }))
-      : [{ key: "all", heading: "Your services", note: null, items: cart.items }];
+      : [
+          {
+            key: "all",
+            heading: "Your services",
+            note: null,
+            items: cart.items,
+          },
+        ];
 
   return (
     <>
       {grouped.map((section) => (
         <section
           key={section.key}
-          className="rounded-card border border-line bg-surface p-5"
+          className={`${checkoutCardClass} p-5`}
           aria-labelledby={`summary-${section.key}`}
         >
-          <h3 id={`summary-${section.key}`} className="text-base font-bold text-text">
+          <h3
+            id={`summary-${section.key}`}
+            className="text-base font-bold text-text"
+          >
             {section.heading}
           </h3>
           {section.note === null ? null : (
@@ -81,10 +102,18 @@ function UnpricedSummary({ cart, groups }: { cart: Cart; groups: readonly Schedu
 
           <ul className="mt-4 flex flex-col gap-3 border-t border-line pt-4">
             {section.items.map((item) => (
-              <li key={item.id} className="flex justify-between gap-3 text-sm">
-                <span className="text-text">
-                  {item.service_name}
-                  <span className="block text-text-secondary">{item.variant_name}</span>
+              <li
+                key={item.id}
+                className="flex items-center justify-between gap-3 text-sm"
+              >
+                <span className="flex min-w-0 items-center gap-3">
+                  <CheckoutServiceThumbnail serviceSlug={item.service_slug} />
+                  <span className="min-w-0 text-text">
+                    {item.service_name}
+                    <span className="block text-text-secondary">
+                      {item.variant_name}
+                    </span>
+                  </span>
                 </span>
                 {item.quantity > 1 ? (
                   <span className="shrink-0 tabular-nums text-text-secondary">
@@ -97,9 +126,12 @@ function UnpricedSummary({ cart, groups }: { cart: Cart; groups: readonly Schedu
         </section>
       ))}
 
-      <p className="rounded-card border border-line bg-surface-sunken p-4 text-sm text-text-secondary">
-        We work out the price once every visit has a time — it depends on how many
-        professionals your booking needs.
+      <p
+        className={`flex items-start gap-3 ${checkoutCardClass} bg-surface-sunken p-4 text-sm text-text-secondary`}
+      >
+        <PricingInfoIllustration />
+        We work out the price once every visit has a time — it depends on how
+        many professionals your booking needs.
       </p>
     </>
   );
@@ -112,14 +144,20 @@ function PricedSummary({ quote }: { quote: GroupQuote }) {
       {quote.units.map((unit, index) => (
         <section
           key={unit.id}
-          className="rounded-card border border-line bg-surface p-5"
+          className={`${checkoutCardClass} p-5`}
           aria-labelledby={`summary-unit-${unit.id}`}
         >
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h3 id={`summary-unit-${unit.id}`} className="text-base font-bold text-text">
+            <h3
+              id={`summary-unit-${unit.id}`}
+              className="text-base font-bold text-text"
+            >
               Visit {index + 1} of {quote.units.length}
             </h3>
-            <Money value={unit.total} className="text-sm font-semibold tabular-nums text-text" />
+            <Money
+              value={unit.total}
+              className="text-sm font-semibold tabular-nums text-text"
+            />
           </div>
 
           <p className="mt-0.5 text-sm text-text-secondary">
@@ -144,9 +182,14 @@ function PricedSummary({ quote }: { quote: GroupQuote }) {
                   <dt className="text-text">
                     {line.label}
                     {line.quantity > 1 ? (
-                      <span className="text-text-secondary"> × {line.quantity}</span>
+                      <span className="text-text-secondary">
+                        {" "}
+                        × {line.quantity}
+                      </span>
                     ) : null}
-                    {hint ? <span className="block text-text-secondary">{hint}</span> : null}
+                    {hint ? (
+                      <span className="block text-text-secondary">{hint}</span>
+                    ) : null}
                   </dt>
                   <dd className="shrink-0 tabular-nums text-text">
                     <Money value={line.amount} />
@@ -159,16 +202,21 @@ function PricedSummary({ quote }: { quote: GroupQuote }) {
       ))}
 
       <section
-        className="rounded-card border border-line-strong bg-surface p-5"
+        className={`${checkoutCardClass} border-line-strong p-5`}
         aria-labelledby="summary-total"
       >
         <div className="flex items-baseline justify-between gap-3">
           <h3 id="summary-total" className="text-base font-bold text-text">
             Total bill
           </h3>
-          <Money value={quote.total} className="text-xl font-bold tabular-nums text-text" />
+          <Money
+            value={quote.total}
+            className="text-xl font-bold tabular-nums text-text"
+          />
         </div>
-        <p className="mt-1 text-sm text-text-secondary">Includes taxes and charges.</p>
+        <p className="mt-1 text-sm text-text-secondary">
+          Includes taxes and charges.
+        </p>
 
         {/* Native disclosure: the breakup is already on screen above, so this is
             a summary of it rather than a second source of numbers. */}

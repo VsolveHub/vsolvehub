@@ -18,6 +18,8 @@ from http import HTTPStatus
 import pytest
 from rest_framework.test import APIClient
 
+from apps.assignments.models import PartnerOffer
+from apps.carts.models import QuoteLine
 from apps.commerce.models import Booking
 from apps.fulfilment.models import BookingOtp, ScopeAmendment, WorkTask
 from apps.identity.models import Role, User, UserRole
@@ -249,6 +251,54 @@ def test_the_partner_projection_carries_no_route_to_a_sibling_unit() -> None:
     assert "order_id" not in body
     assert "customer" not in body
     assert str(units[1].id) not in str(body), "a sibling unit id leaked into the Partner payload"
+
+
+def test_a_confirmed_job_names_and_prices_the_booked_scope_before_work_starts() -> None:
+    """The work list must not depend on WorkTasks that only exist after OTP verification."""
+
+    booked = create_booked_group(key_prefix="api-job-summary")
+    booking = booked.booking
+    assert not WorkTask.objects.filter(booking=booking).exists()
+
+    response = _partner_client(booked.partner).get(f"/api/v1/partner/bookings/{booking.id}/")
+
+    assert response.status_code == HTTPStatus.OK
+    body = response.json()
+    service_lines = list(booked.unit.lines.filter(kind=QuoteLine.Kind.SERVICE).order_by("position"))
+    expected_title = service_lines[0].label
+    if len(service_lines) > 1:
+        expected_title = f"{expected_title} +{len(service_lines) - 1} more"
+    offer = PartnerOffer.objects.get(reservation=booking.reservation)
+    offered = offer.partner_projection_snapshot
+
+    assert body["display_title"] == expected_title
+    assert body["display_title"] != "Job"
+    assert body["approximate_area"] == booked.unit.service_area.name
+    assert body["service_lines"] == [
+        {
+            "line_id": str(line.id),
+            "service_label": line.label,
+            "quantity": line.quantity,
+            "scope": line.snapshot.get("scope", {}),
+        }
+        for line in service_lines
+    ]
+    assert body["requirements"] == sorted(
+        {
+            requirement
+            for line in service_lines
+            for requirement in line.snapshot.get("configuration", {}).get("required_equipment", [])
+        }
+    )
+    assert body["estimated_earning"] == {
+        "gross_paise": offered["estimated_gross"]["amount_paise"],
+        "commission_paise": offered["commission"]["amount_paise"],
+        "net_paise": offered["estimated_net"]["amount_paise"],
+        "currency": offered["estimated_net"]["currency"],
+    }
+    assert body["earning"] is None
+    assert body["scheduled_start"] == booking.scheduled_start.isoformat().replace("+00:00", "Z")
+    assert body["estimated_duration_minutes"] == booking.estimated_duration_minutes
 
 
 def test_the_customer_projection_names_the_partner_but_publishes_nothing_else_about_them() -> None:

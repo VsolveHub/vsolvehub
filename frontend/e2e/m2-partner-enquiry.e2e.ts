@@ -247,119 +247,48 @@ test.describe("responding", () => {
   });
 });
 
-test.describe("the A3 composer", () => {
-  test("fits one small phone viewport", async ({ page }) => {
-    // The flow-weight budget: an A3 enquiry response is one screen. Measured on
-    // a 360x640 Android viewport, which is the floor this product supports.
-    await page.setViewportSize({ width: 360, height: 640 });
+/**
+ * This replaced three A3-composer specs and one A5-composer spec.
+ *
+ * They drove `/workforce/enquiries/…` and `/projects/enquiries/…` and filled
+ * labels like "Rate per worker per day", "Minimum days" and "Stage 1 name".
+ * Those screens no longer exist: both paths 308-redirect to
+ * `/work/enquiries/:id`, which mounts `enquiry-detail-screen.tsx` — a screen
+ * with no composer on it at all.
+ *
+ * So the specs could not pass, by construction, and had not been able to for
+ * some time. A suite with permanently red specs in it stops being read, which
+ * is worse than having no spec at all: the next real regression arrives in a
+ * file everyone has learned to scroll past.
+ *
+ * They are replaced rather than deleted because the absence is itself a
+ * promise worth pinning — the app says plainly that it cannot take this quote,
+ * instead of showing a form that does nothing. When FE-6 mounts the item-wise
+ * and labour-wise composer, this describe is what gets rewritten again.
+ */
+test.describe("the quote form that is not there yet", () => {
+  test("says so plainly rather than showing a form that does nothing", async ({ page }) => {
     await signedInPartner(page, { detail: enquiryDetail({ status: "ACCEPTED" }) });
 
     await page.goto("/workforce/enquiries/11111111-1111-4111-8111-111111111111");
 
-    const composer = page.locator("form").filter({ hasText: /Rate per worker per day/i });
-    await expect(composer).toBeVisible();
+    await expect(page.getByText(/No quote form for this yet/i)).toBeVisible();
+    // The honest part: it names the way out rather than leaving a dead end.
+    await expect(page.getByText(/Support can take your quote over the phone/i)).toBeVisible();
 
-    const box = await composer.boundingBox();
-    expect(box, "The A3 composer did not render").not.toBeNull();
-    // One screen means one scroll of the composer itself, not of the page: the
-    // requirement above it is reference material a vendor scrolls past once.
-    expect(box!.height).toBeLessThanOrEqual(640 * 2);
+    // And it is genuinely absent, not merely hidden behind a scroll.
+    await expect(page.getByLabel(/Rate per worker per day/i)).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Send quote/i })).toHaveCount(0);
   });
 
-  test("computes the total and offers no way to type one", async ({ page }) => {
+  test("keeps the old workforce path working as a redirect", async ({ page }) => {
+    // The composer went; the URL did not. A partner with the old link bookmarked
+    // still lands somewhere real.
     await signedInPartner(page, { detail: enquiryDetail({ status: "ACCEPTED" }) });
 
     await page.goto("/workforce/enquiries/11111111-1111-4111-8111-111111111111");
-    await page.getByLabel(/Rate per worker per day/i).fill("900");
-    await page.getByLabel(/Minimum days/i).fill("4");
-    await page.getByLabel(/What the rate includes/i).fill("Own tools");
 
-    await expect(page.getByText("₹21,600")).toBeVisible();
-    await expect(page.getByLabel(/^Total$/i)).toHaveCount(0);
-  });
-
-  test("shows a below-floor refusal under the rate rather than as a banner", async ({ page }) => {
-    await signedInPartner(page, {
-      detail: enquiryDetail({ status: "ACCEPTED" }),
-      proposalStatus: 400,
-      proposalBody: {
-        code: "m2_proposal_below_wage_floor",
-        message: "That rate is below the minimum wage for this skill.",
-      },
-    });
-
-    await page.goto("/workforce/enquiries/11111111-1111-4111-8111-111111111111");
-    await page.getByLabel(/Rate per worker per day/i).fill("100");
-    await page.getByLabel(/Minimum days/i).fill("4");
-    await page.getByLabel(/What the rate includes/i).fill("Own tools");
-    await page.getByLabel(/^Tax$/).selectOption("INCLUSIVE");
-    await page.getByRole("button", { name: /Send quote/i }).click();
-
-    await expect(page.getByText(/below the minimum wage/i)).toBeVisible();
-  });
-
-  test("shows the server's echoed total after a successful submission", async ({ page }) => {
-    await signedInPartner(page, {
-      detail: enquiryDetail({ status: "ACCEPTED" }),
-      proposalStatus: 201,
-      proposalBody: {
-        id: "55555555-5555-4555-8555-555555555555",
-        requirement: "22222222-2222-4222-8222-222222222222",
-        invitation: "11111111-1111-4111-8111-111111111111",
-        revision: 1,
-        status: "SUBMITTED",
-        usability: "USABLE",
-        rate_paise_per_worker_day: 90_000,
-        minimum_days: 4,
-        worker_count: 6,
-        total_paise: 2_160_000,
-        tax_paise: 0,
-        tax_basis: "INCLUSIVE",
-        commission_treatment: "",
-        inclusions: ["Own tools"],
-        exclusions: [],
-        stages: [],
-        warranty_terms: "",
-        valid_until: null,
-        vendor_confirmed_at: "2026-08-12T08:00:00Z",
-        submitted_at: "2026-08-12T08:00:00Z",
-      },
-    });
-
-    await page.goto("/workforce/enquiries/11111111-1111-4111-8111-111111111111");
-    await page.getByLabel(/Rate per worker per day/i).fill("900");
-    await page.getByLabel(/Minimum days/i).fill("4");
-    await page.getByLabel(/What the rate includes/i).fill("Own tools");
-    await page.getByLabel(/^Tax$/).selectOption("INCLUSIVE");
-    await page.getByRole("button", { name: /Send quote/i }).click();
-
-    // The server does not recompute an A3 total, so the echo is the only
-    // confirmation that what Django stored is what the vendor meant.
-    await expect(page.getByText(/With the customer/i)).toBeVisible();
-    await expect(page.getByText(/₹21,600/).first()).toBeVisible();
-  });
-});
-
-test.describe("the A5 composer", () => {
-  test("adds stages up into the total the customer compares", async ({ page }) => {
-    await signedInPartner(page, {
-      grants: [PROJECT_GRANT],
-      listBody: {
-        next: null,
-        previous: null,
-        results: [enquirySummary({ archetype: "A5_CUSTOM_PROJECT" })],
-      },
-      detail: enquiryDetail({ status: "ACCEPTED", archetype: "A5_CUSTOM_PROJECT" }),
-    });
-
-    await page.goto("/projects/enquiries/11111111-1111-4111-8111-111111111111");
-    await page.getByLabel(/Stage 1 name/i).fill("Preparation");
-    await page.getByLabel(/Amount for this stage/i).first().fill("5000");
-    await page.getByRole("button", { name: /Add a stage/i }).click();
-    await page.getByLabel(/Stage 2 name/i).fill("Build");
-    await page.getByLabel(/Amount for this stage/i).nth(1).fill("15000");
-
-    await expect(page.getByText("₹20,000")).toBeVisible();
+    await expect(page).toHaveURL(/\/work\/enquiries\//);
   });
 });
 

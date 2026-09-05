@@ -48,19 +48,54 @@ export interface EnquiryRow {
    * format it into a title.
    */
   readonly serviceName: string;
+  /** Locality-level location only. Never a street, building or coordinate. */
+  readonly approximateArea: string;
   /** The server's archetype for this record. Decides which composer opens. */
   readonly archetype: string;
+  /** The trade whose price book the composer opens — `electrician`, `plumber`, … */
+  readonly pricingSkillCode: string;
+  /** Who owns material procurement. Never inferred from the service slug. */
+  readonly materialFulfilmentMode: Schemas["MaterialFulfilmentModeEnum"] | null;
   readonly status: EnquiryStatus;
   readonly requestedStart: string | null;
   readonly serviceBy: string | null;
   readonly respondsBy: string | null;
-  readonly language: string;
   readonly createdAt: string;
 }
 
+/** One line of the customer's brief: the question as asked, the answer as a label. */
+export type BriefLine = Schemas["CrewBriefLine"];
+
 export interface EnquiryRecord extends EnquiryRow {
   readonly answers: AnswerMap;
-  readonly additionalDetails: string;
+  /**
+   * The customer's answers as labels (1.48.0).
+   *
+   * What every screen renders. `answers` above is the raw map keyed by question
+   * code and is read by name for exactly two codes (`worker_count`,
+   * `duration_days`); nothing else may de-slug it into prose now that the
+   * server publishes the question and the chosen label itself.
+   */
+  readonly brief: readonly BriefLine[];
+  /**
+   * The men/women split per role (1.53.0), in the catalogue's own words.
+   *
+   * Empty for every service that does not ask for one. Structured rather than
+   * folded into `brief` because a lead counts this against their roster; the
+   * brief is prose and cannot be counted against.
+   */
+  readonly crewMix: readonly Schemas["CrewMixLine"][];
+  /**
+   * The visit the customer already chose, published from contract 1.44.0.
+   *
+   * Null until they pick one. The partner never sets these — BE-2 moved the
+   * choice to the customer, and the slot-selection endpoints this app used to
+   * call were removed in the same release.
+   */
+  readonly fixedVisitStart: string | null;
+  readonly fixedVisitDurationMinutes: number | null;
+  readonly fixedVisitEarningPaise: number | null;
+  readonly fixedVisitStatus: string | null;
   readonly budgetMinPaise: number | null;
   readonly budgetMaxPaise: number | null;
   /**
@@ -76,6 +111,15 @@ export interface EnquiryRecord extends EnquiryRow {
   readonly declineReasonCode: string;
   readonly questions: readonly Schemas["RequirementQuestion"][];
   readonly siteVisits: readonly Schemas["SiteVisit"][];
+  /** Exact visit destination, released only once a paid visit is scheduled. */
+  readonly siteAddress: Schemas["PartnerSiteAddress"] | null;
+  /**
+   * The visit-day contact rung (1.52.0). First name with the address; the
+   * phone only from two hours before the slot until the visit completes.
+   * Both null outside their windows — the server decides, never this app.
+   */
+  readonly customerName: string | null;
+  readonly customerPhone: string | null;
   /**
    * The server's own clock at the moment this enquiry was read (1.24.0).
    *
@@ -102,12 +146,14 @@ export function readEnquiryRow(summary: Schemas["EnquirySummary"]): EnquiryRow {
     id: summary.id,
     requirementId: summary.requirement_id,
     serviceName: summary.service_name,
+    approximateArea: summary.approximate_area,
     archetype: summary.archetype,
+    pricingSkillCode: summary.pricing_skill_code,
+    materialFulfilmentMode: summary.material_fulfilment_mode,
     status: summary.status,
     requestedStart: nullableInstant(summary.requested_start),
     serviceBy: nullableInstant(summary.service_by),
     respondsBy: nullableInstant(summary.responds_by),
-    language: summary.language,
     createdAt: summary.created_at,
   };
 }
@@ -116,13 +162,21 @@ export function readEnquiryRecord(detail: Schemas["EnquiryDetail"]): EnquiryReco
   return {
     ...readEnquiryRow(detail),
     answers: readAnswers(detail.answers),
-    additionalDetails: detail.additional_details,
+    brief: Array.isArray(detail.brief) ? detail.brief : [],
+    crewMix: Array.isArray(detail.crew_mix) ? detail.crew_mix : [],
+    fixedVisitStart: detail.fixed_visit_start,
+    fixedVisitDurationMinutes: detail.fixed_visit_duration_minutes,
+    fixedVisitEarningPaise: detail.fixed_visit_earning_paise,
+    fixedVisitStatus: detail.fixed_visit_status,
     budgetMinPaise: detail.budget_min_paise,
     budgetMaxPaise: detail.budget_max_paise,
     requiredTaxBasis: detail.required_tax_basis,
     declineReasonCode: detail.decline_reason_code,
     questions: detail.questions,
     siteVisits: detail.site_visits,
+    siteAddress: detail.site_address,
+    customerName: detail.customer_name,
+    customerPhone: detail.customer_phone,
     serverNow: detail.server_now,
   };
 }

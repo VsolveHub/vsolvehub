@@ -90,13 +90,39 @@ function countDigits(value: string): number {
   return (value.match(/\d/g) ?? []).length;
 }
 
+const INDIAN_MOBILE_DIGITS = 10;
+
+function capIndianMobileDigits(digitsOnly: string): string {
+  if (digitsOnly.startsWith("91") && digitsOnly.length > INDIAN_MOBILE_DIGITS) {
+    return digitsOnly.slice(2, 2 + INDIAN_MOBILE_DIGITS);
+  }
+  return digitsOnly.slice(0, INDIAN_MOBILE_DIGITS);
+}
+
 /** Keeps only what a phone field can legally contain, so paste is forgiving. */
 export function sanitizePhoneInput(value: string): string {
   const compact = value.replace(/[^\d+\s-]/g, "").trimStart();
-  // A leading `+` is meaningful; anywhere else it is a typo.
-  return compact.startsWith("+")
+  const normalized = compact.startsWith("+")
     ? `+${compact.slice(1).replace(/\+/g, "")}`
     : compact.replace(/\+/g, "");
+
+  const digitsOnly = (normalized.match(/\d/g) ?? []).join("");
+  const cappedDigits = capIndianMobileDigits(digitsOnly);
+
+  if (normalized.startsWith("+")) {
+    return cappedDigits;
+  }
+
+  let digits = 0;
+  let out = "";
+  for (const ch of normalized) {
+    if (/\d/.test(ch)) {
+      if (digits >= INDIAN_MOBILE_DIGITS) continue;
+      digits += 1;
+    }
+    out += ch;
+  }
+  return out;
 }
 
 /** Codes are digits only. Autofill from an SMS often arrives with spaces. */

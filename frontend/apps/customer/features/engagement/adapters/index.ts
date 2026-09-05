@@ -203,6 +203,94 @@ export interface StageView {
   approvedAt: string | null;
   releasedAt: string | null;
   disputedAt: string | null;
+
+  /**
+   * Where this shift-day has got to, on the engagement read itself — contract
+   * 1.49.0. Null on a project milestone and on records older than the field.
+   */
+  shiftSummary: ShiftSummaryView | null;
+}
+
+/* --------------------------------------------------------------------------
+   Shift-day summary and the day chip — contract 1.49.0
+   -------------------------------------------------------------------------- */
+
+/**
+ * One shift-day's state in a word or two, for the day chips.
+ *
+ * The same derivation the Partner app uses, read from the same published
+ * fields, so both sides of a booking see the same day in the same state. The
+ * checks run from the most settled fact backwards: a settled day is "Paid"
+ * whatever the attendance row says, and a disputed count outranks anything
+ * short of settlement.
+ */
+export type ShiftDayChipState =
+  | "crew_not_named"
+  | "crew_named"
+  | "reached"
+  | "confirm_count"
+  | "pay_today"
+  | "confirm_paid"
+  | "waiting_on_them"
+  | "paid"
+  | "disputed";
+
+export interface ShiftSummaryView {
+  crewNamed: number;
+  expectedCount: number;
+  arrivedAt: string | null;
+  presentCount: number | null;
+  attendanceStatus: string;
+  settlementStatus: string;
+  settlementAmountLabel: string | null;
+  shortfallChoice: string | null;
+  /** The chip, decided here so no screen re-derives it. */
+  chip: { state: ShiftDayChipState; label: string; needsYou: boolean };
+}
+
+function toShiftSummaryView(
+  summary: NonNullable<EngagementStage["shift_summary"]>,
+): ShiftSummaryView {
+  const amountLabel =
+    summary.settlement_amount_paise === null ? null : formatMoney(summary.settlement_amount_paise);
+  const count = `${summary.present_count ?? 0} of ${summary.expected_count}`;
+
+  let chip: ShiftSummaryView["chip"];
+  if (summary.settlement_status === "SETTLED") {
+    chip = {
+      state: "paid",
+      label: amountLabel === null ? "Paid ✓" : `Paid ✓ ${amountLabel}`,
+      needsYou: false,
+    };
+  } else if (summary.attendance_status === "DISPUTED") {
+    chip = { state: "disputed", label: "Count disputed", needsYou: false };
+  } else if (summary.settlement_status === "CUSTOMER_CLAIMED") {
+    chip = { state: "waiting_on_them", label: "You said paid · waiting for them", needsYou: false };
+  } else if (summary.settlement_status === "SUPERVISOR_CLAIMED") {
+    chip = { state: "confirm_paid", label: "Confirm you paid", needsYou: true };
+  } else if (summary.attendance_status === "CUSTOMER_CONFIRMED") {
+    chip = { state: "pay_today", label: `${count} · pay today`, needsYou: true };
+  } else if (summary.attendance_status === "SUPERVISOR_CONFIRMED") {
+    chip = { state: "confirm_count", label: `${count} · confirm`, needsYou: true };
+  } else if (summary.arrived_at !== null) {
+    chip = { state: "reached", label: "Reached", needsYou: false };
+  } else if (summary.crew_named > 0) {
+    chip = { state: "crew_named", label: "Who is coming", needsYou: false };
+  } else {
+    chip = { state: "crew_not_named", label: "Crew not named yet", needsYou: false };
+  }
+
+  return {
+    crewNamed: summary.crew_named,
+    expectedCount: summary.expected_count,
+    arrivedAt: formatInstant(summary.arrived_at),
+    presentCount: summary.present_count,
+    attendanceStatus: summary.attendance_status,
+    settlementStatus: summary.settlement_status,
+    settlementAmountLabel: amountLabel,
+    shortfallChoice: summary.shortfall_choice.trim() === "" ? null : summary.shortfall_choice,
+    chip,
+  };
 }
 
 function toStageView(stage: EngagementStage, nextFundableStageId: string | null): StageView {
@@ -245,6 +333,9 @@ function toStageView(stage: EngagementStage, nextFundableStageId: string | null)
     approvedAt: formatInstant(stage.approved_at),
     releasedAt: formatInstant(stage.released_at),
     disputedAt: formatInstant(stage.disputed_at),
+
+    // `== null`: a record older than 1.49.0 has no field at all.
+    shiftSummary: stage.shift_summary == null ? null : toShiftSummaryView(stage.shift_summary),
   };
 }
 
@@ -322,6 +413,112 @@ function toAccessReceiptView(engagement: Engagement): AccessReceiptView | null {
 }
 
 /* --------------------------------------------------------------------------
+   A3 crew terms, contact and site — contract 1.49.0
+   -------------------------------------------------------------------------- */
+
+/**
+ * The rate-card terms frozen on an A3 booking, formatted.
+ *
+ * Every figure is the server's. `per_worker_day × headcount × days` is read out
+ * beside `lead_receipt` rather than multiplied into it: the Customer agreed to
+ * the published total, and a product this client computed would be the number
+ * that disagrees in a dispute.
+ */
+export interface CrewTermsView {
+  headcount: number;
+  days: number;
+  perWorkerDayLabel: string;
+  leadDayReceiptLabel: string;
+  leadReceiptLabel: string;
+  bookingFeeLabel: string;
+  totalCustomerLabel: string;
+  standardDayHours: number | null;
+  overtimeHourlyLabel: string | null;
+  addOnRates: readonly { code: string; label: string; amountLabel: string }[];
+  inclusions: readonly string[];
+}
+
+export interface EngagementContactView {
+  name: string;
+  phone: string;
+  /** `tel:` with the number, for a Call button. */
+  telHref: string;
+}
+
+export interface SiteAddressView {
+  line1: string;
+  line2: string | null;
+  landmark: string | null;
+  locality: string | null;
+  city: string;
+  state: string | null;
+  postalCode: string | null;
+  /** The non-empty parts joined, for a one-line address. */
+  summary: string;
+}
+
+function toCrewTermsView(terms: NonNullable<Engagement["crew_terms"]>): CrewTermsView {
+  return {
+    headcount: terms.headcount,
+    days: terms.days,
+    perWorkerDayLabel: formatMoney(terms.per_worker_day_paise),
+    leadDayReceiptLabel: formatMoney(terms.lead_day_receipt_paise),
+    leadReceiptLabel: formatMoney(terms.lead_receipt_paise),
+    bookingFeeLabel: formatMoney(terms.booking_fee_paise),
+    totalCustomerLabel: formatMoney(terms.total_customer_paise),
+    standardDayHours: terms.standard_day_hours,
+    overtimeHourlyLabel:
+      terms.overtime_hourly_paise === null ? null : formatMoney(terms.overtime_hourly_paise),
+    addOnRates: Object.entries(terms.add_on_rates ?? {}).map(([code, paise]) => ({
+      code,
+      label: deSlug(code),
+      amountLabel: formatMoney(paise),
+    })),
+    inclusions: (terms.inclusions ?? []).filter((line) => line.trim() !== ""),
+  };
+}
+
+function toContactView(contact: Engagement["partner_contact"]): EngagementContactView | null {
+  if (contact == null) return null;
+  const name = contact.name.trim();
+  const phone = contact.phone.trim();
+  if (name === "" && phone === "") return null;
+  return {
+    name: name === "" ? "Your supervisor" : name,
+    phone,
+    telHref: `tel:${phone.replace(/\s+/g, "")}`,
+  };
+}
+
+function toSiteAddressView(address: Engagement["site_address"]): SiteAddressView | null {
+  if (address == null) return null;
+  const blankToNull = (value: string): string | null =>
+    value.trim() === "" ? null : value.trim();
+  const parts = [
+    address.line1,
+    address.line2,
+    address.landmark,
+    address.locality,
+    address.city,
+    address.state,
+    address.postal_code,
+  ]
+    .map((part) => part.trim())
+    .filter((part) => part !== "");
+  if (parts.length === 0) return null;
+  return {
+    line1: address.line1.trim(),
+    line2: blankToNull(address.line2),
+    landmark: blankToNull(address.landmark),
+    locality: blankToNull(address.locality),
+    city: address.city.trim(),
+    state: blankToNull(address.state),
+    postalCode: blankToNull(address.postal_code),
+    summary: parts.join(", "),
+  };
+}
+
+/* --------------------------------------------------------------------------
    The engagement
    -------------------------------------------------------------------------- */
 
@@ -335,6 +532,13 @@ export interface EngagementView {
    * and nothing else — and the full history still has to be one link away.
    */
   requirementId: string;
+  /**
+   * The catalogue's name for what was agreed — "Full home rewiring". Published
+   * since 1.48.0; an older record without it reads as the mode noun.
+   */
+  serviceName: string | null;
+  /** The catalogue slug for "book again" — `bookCrewHref`. Null when blank. */
+  serviceSlug: string | null;
   mode: EngagementMode;
   commercialMode: EngagementCommercialMode | null;
   status: Engagement["status"];
@@ -417,6 +621,16 @@ export interface EngagementView {
    */
   accessReceipt: AccessReceiptView | null;
 
+  /**
+   * The frozen A3 rate-card terms — contract 1.49.0. Null on A5 and on any
+   * record older than the field.
+   */
+  crewTerms: CrewTermsView | null;
+  /** The supervisor's name and number. Null until contact is released. */
+  partnerContact: EngagementContactView | null;
+  /** Where the work is. Null until contact is released. */
+  siteAddress: SiteAddressView | null;
+
   /** When contact may be exchanged. A3 at engagement creation; A5 at first funding. */
   contactReleasedAt: string | null;
   /** When work may begin, on the server's own record. */
@@ -438,6 +652,8 @@ export function toEngagementView(engagement: Engagement): EngagementView {
   return {
     engagementId: engagement.id,
     requirementId: engagement.requirement,
+    serviceName: engagement.service_name?.trim() ? engagement.service_name.trim() : null,
+    serviceSlug: engagement.service_slug?.trim() ? engagement.service_slug.trim() : null,
     mode,
     commercialMode: mode === "unknown" ? null : engagement.commercial_mode,
     status: engagement.status,
@@ -474,6 +690,10 @@ export function toEngagementView(engagement: Engagement): EngagementView {
 
     accessReceipt: toAccessReceiptView(engagement),
 
+    crewTerms: engagement.crew_terms == null ? null : toCrewTermsView(engagement.crew_terms),
+    partnerContact: toContactView(engagement.partner_contact),
+    siteAddress: toSiteAddressView(engagement.site_address),
+
     contactReleasedAt: formatInstant(engagement.contact_released_at),
     workMayStartAt: formatInstant(engagement.work_may_start_at),
     completedAt: formatInstant(engagement.completed_at),
@@ -488,6 +708,10 @@ export function toEngagementView(engagement: Engagement): EngagementView {
 export interface EngagementRowView {
   engagementId: string;
   requirementId: string;
+  /** "Full home rewiring", or null on a record that predates the field. */
+  serviceName: string | null;
+  /** Catalogue slug so the list row uses the same cover as the service page. */
+  serviceSlug: string | null;
   mode: EngagementMode;
   status: Engagement["status"];
   /** The active stage's label, or null when every stage is settled. */
@@ -496,6 +720,7 @@ export interface EngagementRowView {
   activeStageOn: string | null;
   progress: { done: number; total: number };
   stagedTotalLabel: string;
+  stagedTotalPaise: number;
   fundedTotalLabel: string;
   nextAction: CustomerNextAction;
   /** The stage the next action is about, when it is about one. */
@@ -522,12 +747,15 @@ function toRow(engagement: Engagement): EngagementRowView {
   return {
     engagementId: view.engagementId,
     requirementId: view.requirementId,
+    serviceName: view.serviceName,
+    serviceSlug: view.serviceSlug,
     mode: view.mode,
     status: view.status,
     activeStageLabel: active?.label ?? null,
     activeStageOn: active?.scheduledOn ?? null,
     progress: view.progress,
     stagedTotalLabel: view.stagedTotalLabel,
+    stagedTotalPaise: view.stagedTotalPaise,
     fundedTotalLabel: view.fundedTotalLabel,
     nextAction: view.nextAction,
     actionStageId,

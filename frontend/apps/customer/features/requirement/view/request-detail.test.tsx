@@ -5,6 +5,14 @@ import { describe, expect, it, vi } from "vitest";
 import type { RequestRowView, TimelineEventView } from "../adapters";
 import { RequestDetail } from "./request-detail";
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    back: vi.fn(),
+    push: vi.fn(),
+    replace: vi.fn(),
+  }),
+}));
+
 /**
  * One request's page.
  *
@@ -26,6 +34,7 @@ function request(overrides: Partial<RequestRowView> = {}): RequestRowView {
     closure: "SLA_BREACH",
     lastActivityAt: null,
     lifecycleExplanation: "You are hiring people for a period of time.",
+    categorySlug: "housekeeping-staff",
     ...overrides,
   };
 }
@@ -57,8 +66,8 @@ describe("the two reads fail independently", () => {
   it("still states the closure when the timeline will not load", () => {
     renderDetail({ events: [], timelineError: new ApiNetworkError("offline", null) });
 
-    expect(screen.getByText(/we missed our deadline/i)).toBeInTheDocument();
-    expect(screen.getByText(/refunded in full/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/we missed our deadline/i)[0]).toBeInTheDocument();
+    expect(screen.getAllByText(/refunded in full/i)[0]).toBeInTheDocument();
   });
 
   it("still shows the record when the request header will not load", () => {
@@ -80,7 +89,7 @@ describe("the header", () => {
   it("offers support on a closure that is our fault", () => {
     renderDetail({ supportAction: <button type="button">Talk to us</button> });
 
-    expect(screen.getByRole("button", { name: /talk to us/i })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /talk to us/i })[0]).toBeInTheDocument();
   });
 
   it("withholds support on a closure that is not", () => {
@@ -98,7 +107,8 @@ describe("the header", () => {
       request: request({ status: "QUOTES_READY", closure: null, teaserCount: 2 }),
     });
 
-    expect(screen.getByText(/2 quotes waiting/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Quotes waiting/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("2").length).toBeGreaterThan(0);
   });
 
   it("places the quote comparison action beside the request heading", () => {
@@ -110,5 +120,10 @@ describe("the header", () => {
       "href",
       "/requests/req-1/quotes",
     );
+  });
+
+  it("renders a back button to navigate to the previous view", () => {
+    renderDetail();
+    expect(screen.getByRole("button", { name: "Go back" })).toBeInTheDocument();
   });
 });

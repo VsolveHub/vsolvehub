@@ -1,9 +1,19 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { DuplicateView } from "../adapters";
 import { DuplicateNotice } from "./duplicate-notice";
 import { RequirementProvider } from "./requirement-context";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: vi.fn(),
+    back: vi.fn(),
+  }),
+  usePathname: () => "/",
+  useSearchParams: () => new URLSearchParams(),
+}));
 
 /**
  * `M2-FE-210` / `GAP-004`.

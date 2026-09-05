@@ -6,7 +6,7 @@ import { usePartnerCrewOffers } from "@/features/crew-offer/queries";
 import { usePartnerEnquiries } from "@/features/enquiry/queries";
 import { usePartnerEngagements } from "@/features/engagement/queries";
 import { usePartnerOffers } from "@/features/offers/queries";
-import { usePartnerJobs } from "@/features/work/queries";
+import { usePartnerJobs, type PartnerVisit } from "@/features/work/queries";
 
 import { toWorkItems, type WorkItem } from "./model/work-item";
 
@@ -57,7 +57,15 @@ export function useWorkStack() {
   const directOffers = usePartnerOffers();
   const enquiries = usePartnerEnquiries();
   const engagements = usePartnerEngagements();
-  const activeJobs = usePartnerJobs("active");
+  /*
+    `all`, not `active`. The `active` shelf is date-windowed to today and
+    tomorrow *and* has a lower bound at midnight, so a job that started
+    yesterday and is still running falls out of it — see `JobBucket` for the
+    four bookings this hid in the seeded database, two of them live work with a
+    Partner on site. `fromJobs` already decides which statuses are work, so the
+    unfiltered read costs one page and removes the whole class of gap.
+  */
+  const allJobs = usePartnerJobs("all");
   const completedJobs = usePartnerJobs("completed");
 
   const isPending =
@@ -65,7 +73,7 @@ export function useWorkStack() {
     directOffers.isPending ||
     enquiries.isPending ||
     engagements.isPending ||
-    activeJobs.isPending ||
+    allJobs.isPending ||
     completedJobs.isPending;
 
   const firstError =
@@ -73,7 +81,7 @@ export function useWorkStack() {
     directOffers.error ??
     enquiries.error ??
     engagements.error ??
-    activeJobs.error ??
+    allJobs.error ??
     completedJobs.error ??
     null;
 
@@ -95,7 +103,13 @@ export function useWorkStack() {
             directOffers: directOffers.data?.pages.flatMap((page) => page.results) ?? [],
             enquiries: enquiries.data?.pages.flatMap((page) => page.results) ?? [],
             engagements: engagements.data?.results ?? [],
-            jobs: [...(activeJobs.data ?? []), ...(completedJobs.data ?? [])],
+            jobs: mergeJobs(allJobs.data, completedJobs.data),
+            // `EnquirySummary` publishes no server clock of its own — the crew
+            // offers read is the one query in this merge that does, so its
+            // instant is reused for the enquiry lapse check too. See
+            // `toWorkItems`'s own `serverNow` doc for why this is not a second
+            // source of truth and never falls back to the device clock.
+            serverNow: offers.data?.server_now ?? null,
           }),
     [
       isPending,
@@ -104,10 +118,39 @@ export function useWorkStack() {
       directOffers.data,
       enquiries.data,
       engagements.data,
-      activeJobs.data,
+      allJobs.data,
       completedJobs.data,
     ],
   );
 
   return { items, isPending, error: firstError };
+}
+
+/**
+ * Two reads, one list, never the same booking twice.
+ *
+ * `all` and `completed` overlap by construction — every completed booking is
+ * also in the unfiltered read — and `toWorkItems` keys each job as
+ * `job:{id}`. Concatenating them would put two elements with the same React key
+ * in the stack, which renders the job twice and makes the "needs you" count
+ * wrong. Deduplication is by booking id, first occurrence winning.
+ *
+ * `all` is listed first so it wins: both reads project the same booking through
+ * the same serializer, but `all` is the one refetched by every mutation's cache
+ * invalidation, so it is the fresher of the two after a status change.
+ *
+ * `completed` is still read rather than dropped. `all` is one cursor page of 25
+ * ordered by `-scheduled_start`; on an established account that page can be
+ * entirely recent work, and the dedicated shelf is what keeps finished jobs on
+ * the stack for their 24-hour settled window.
+ */
+function mergeJobs(
+  all: readonly PartnerVisit[] | undefined,
+  completed: readonly PartnerVisit[] | undefined,
+): PartnerVisit[] {
+  const byId = new Map<string, PartnerVisit>();
+  for (const job of [...(all ?? []), ...(completed ?? [])]) {
+    if (!byId.has(job.id)) byId.set(job.id, job);
+  }
+  return [...byId.values()];
 }

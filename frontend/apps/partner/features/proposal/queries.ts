@@ -8,7 +8,7 @@ import {
   type Schemas,
 } from "@vsolve/api-client";
 import { M2_FRESHNESS, invalidateForM2Command, m2QueryKeys } from "@vsolve/query";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getApiClient } from "@/lib/api/browser";
 
@@ -51,6 +51,10 @@ import { getApiClient } from "@/lib/api/browser";
 
 export type Proposal = Schemas["Proposal"];
 export type ProposalCreateRequest = Schemas["ProposalCreateRequest"];
+export type ProposalPreviewRequest = Schemas["ProposalPreviewRequest"];
+export type ProposalFinancialSummary = Schemas["ProposalFinancialSummary"];
+export type ProposalDiscountRequest = Schemas["ProposalDiscountRequestRequest"];
+export type ProposalDiscountPreview = Schemas["ProposalDiscountPreview"];
 
 /**
  * The key for one logical submission.
@@ -70,6 +74,12 @@ export function submitProposalKey(input: {
 
 export function withdrawProposalKey(proposalId: string): string {
   return getStableIdempotencyKey(`m2-proposal-withdraw:${proposalId}`);
+}
+
+export function applyDiscountKey(requestId: string, body: ProposalDiscountRequest): string {
+  return getStableIdempotencyKey(
+    `m2-proposal-discount:${requestId}:${body.discount_kind}:${body.discount_bps ?? body.final_total_paise ?? "none"}`,
+  );
 }
 
 /**
@@ -142,6 +152,75 @@ export function useMyProposals(requirementId: string, enabled = true) {
       error instanceof ApiRequestError && [401, 403, 404].includes(error.status)
         ? false
         : failureCount < 2,
+  });
+}
+
+/**
+ * Server-authoritative estimate arithmetic for the exact visible draft.
+ *
+ * Preview is a POST because the body is too rich for a query string, but it is
+ * still a read: TanStack Query deduplicates equal drafts and the caller debounces
+ * before enabling it. The full serialized body participates in the key so a
+ * previous total can never enable Send for newer inputs.
+ */
+export function useProposalFinancialPreview(input: {
+  invitationId: string;
+  fingerprint: string;
+  body: ProposalPreviewRequest | null;
+  /**
+   * Keep the last answered preview on screen while the next one is in flight.
+   *
+   * The tap flow derives the customer's shopping list from
+   * `suggested_material_list`, and a list that blinks empty on every keystroke
+   * is a list nobody can edit. `isPlaceholderData` still says which it is, and
+   * the fingerprint gate on Send is unaffected — a placeholder is never current.
+   */
+  keepPrevious?: boolean;
+}) {
+  return useQuery<ProposalFinancialSummary>({
+    queryKey: m2QueryKeys.proposals.preview(input.invitationId, input.fingerprint),
+    queryFn: () =>
+      request(() =>
+        getApiClient().POST("/api/v1/proposals/preview/", {
+          body: input.body as ProposalPreviewRequest,
+        }),
+      ),
+    enabled: input.body !== null,
+    staleTime: Number.POSITIVE_INFINITY,
+    gcTime: 5 * 60 * 1000,
+    retry: false,
+    ...(input.keepPrevious ? { placeholderData: keepPreviousData } : {}),
+  });
+}
+
+export function useOverallDiscountPreview(input: {
+  proposalId: string;
+  requestId: string;
+  body: ProposalDiscountRequest | null;
+}) {
+  const fingerprint = input.body === null ? "none" : JSON.stringify(input.body);
+  return useQuery<ProposalDiscountPreview>({
+    queryKey: m2QueryKeys.proposals.discountPreview(
+      input.proposalId,
+      input.requestId,
+      fingerprint,
+    ),
+    queryFn: () =>
+      request(() =>
+        getApiClient().POST(
+          "/api/v1/proposals/{proposal_id}/revision-requests/{request_id}/discount/preview/",
+          {
+            params: {
+              path: { proposal_id: input.proposalId, request_id: input.requestId },
+            },
+            body: input.body as ProposalDiscountRequest,
+          },
+        ),
+      ),
+    enabled: input.body !== null,
+    staleTime: Number.POSITIVE_INFINITY,
+    gcTime: 5 * 60 * 1000,
+    retry: false,
   });
 }
 
@@ -244,6 +323,86 @@ export function useWithdrawProposal() {
   });
 }
 
+export interface DeclineRevisionInput {
+  readonly proposalId: string;
+  readonly requestId: string;
+  readonly requirementId: string;
+  readonly note: string;
+}
+
+/**
+ * Say no to a customer's requested change; the estimate stands as sent.
+ *
+ * A scope change is answered by the ordinary proposal composer. A price request can instead use
+ * the overall-discount preview and apply command below; both paths publish a new immutable
+ * revision rather than editing the estimate the customer already saw.
+ */
+export function useDeclineRevisionRequest() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: DeclineRevisionInput) =>
+      request(() =>
+        getApiClient().POST(
+          "/api/v1/proposals/{proposal_id}/revision-requests/{request_id}/decline/",
+          {
+            params: { path: { proposal_id: input.proposalId, request_id: input.requestId } },
+            body: { note: input.note },
+          },
+        ),
+      ),
+    onSuccess: async (_declined, input) => {
+      await queryClient.invalidateQueries({
+        queryKey: m2QueryKeys.proposals.mine(input.requirementId),
+      });
+      await queryClient.invalidateQueries({
+        queryKey: m2QueryKeys.proposals.detail(input.proposalId),
+      });
+    },
+    retry: false,
+  });
+}
+
+export interface ApplyOverallDiscountInput {
+  readonly proposalId: string;
+  readonly requestId: string;
+  readonly requirementId: string;
+  readonly body: ProposalDiscountRequest;
+}
+
+export function useApplyOverallDiscount() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: ApplyOverallDiscountInput) =>
+      request(() =>
+        getApiClient().POST(
+          "/api/v1/proposals/{proposal_id}/revision-requests/{request_id}/discount/apply/",
+          {
+            params: {
+              path: { proposal_id: input.proposalId, request_id: input.requestId },
+              header: { "Idempotency-Key": applyDiscountKey(input.requestId, input.body) },
+            },
+            body: input.body,
+          },
+        ),
+      ),
+    onSuccess: async (proposal, input) => {
+      queryClient.setQueryData(m2QueryKeys.proposals.detail(proposal.id), proposal);
+      clearIdempotencyKey(
+        `m2-proposal-discount:${input.requestId}:${input.body.discount_kind}:${input.body.discount_bps ?? input.body.final_total_paise ?? "none"}`,
+      );
+      await queryClient.invalidateQueries({
+        queryKey: m2QueryKeys.proposals.mine(input.requirementId),
+      });
+      await queryClient.invalidateQueries({
+        queryKey: m2QueryKeys.proposals.detail(input.proposalId),
+      });
+    },
+    retry: false,
+  });
+}
+
 /* ---------------------------------------------------------------------------
    Refusals worth naming
    --------------------------------------------------------------------------- */
@@ -279,6 +438,53 @@ export function isNotQuotable(error: unknown): boolean {
     error instanceof ApiRequestError &&
     (error.status === 409 || error.code === "m2_invitation_expired")
   );
+}
+
+/**
+ * A catalogue line's rate sits outside the city band (1.48.0). The message
+ * names the ₹ range, so it is shown verbatim beside the rate.
+ */
+export function isRateOutsideBand(error: unknown): boolean {
+  return error instanceof ApiRequestError && error.code === "rate_outside_band";
+}
+
+/** A custom line's title was screened out (1.48.0). Shown beside the title. */
+export function isCustomTitleScreened(error: unknown): boolean {
+  return error instanceof ApiRequestError && error.code === "custom_title_screened";
+}
+
+/** No band policy or no reference rate is published for this city yet (409). */
+export function isRateCardUnavailable(error: unknown): boolean {
+  return (
+    error instanceof ApiRequestError &&
+    (error.code === "m2_guardrail_policy_unavailable" ||
+      error.code === "m2_work_item_rate_unavailable")
+  );
+}
+
+/**
+ * Which line a 1.48.0 refusal points at, when the envelope says.
+ *
+ * `details` is `unknown` on the contract; a `work_item_id`, `title` or numeric
+ * `index` is read if present and nothing is guessed otherwise — the caller
+ * falls back to the lines the client's own band check can identify.
+ */
+export function refusedLineOf(error: unknown): {
+  readonly workItemId: string | null;
+  readonly title: string | null;
+  readonly index: number | null;
+} {
+  const none = { workItemId: null, title: null, index: null };
+  if (!(error instanceof ApiRequestError)) return none;
+  const details = error.details;
+  if (typeof details !== "object" || details === null || Array.isArray(details)) return none;
+  const record = details as Record<string, unknown>;
+  const index = record.index ?? record.line_index;
+  return {
+    workItemId: typeof record.work_item_id === "string" ? record.work_item_id : null,
+    title: typeof record.title === "string" ? record.title : null,
+    index: typeof index === "number" && Number.isInteger(index) ? index : null,
+  };
 }
 
 /** Belongs to another Partner, or this session holds no Partner profile. */

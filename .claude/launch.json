@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "partner",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--dir", "frontend", "--filter", "partner", "dev"],
+      "port": 3001
+    },
+    {
+      "name": "customer",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--dir", "frontend", "--filter", "customer", "dev"],
+      "port": 3000
+    }
+  ]
+}

@@ -8,8 +8,11 @@ neither shape may carry the other side's number.
 
 from typing import Any
 
+from django.conf import settings
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
+from apps.commerce.providers import FakePaymentProvider
 from apps.requirements.models import BookingFee, RateCard, RateCardBooking, VendorInvitation
 
 from .base import VISIT_NO_SHOW_PARTIES
@@ -237,6 +240,22 @@ class BookingFeeSerializer(serializers.ModelSerializer[BookingFee]):
     — it is the true amount so far.
     """
 
+    simulated_capture_available = serializers.SerializerMethodField()
+
+    @staticmethod
+    @extend_schema_field(serializers.BooleanField())
+    def get_simulated_capture_available(fee: BookingFee) -> bool:
+        """Whether this fee's pending attempt can be captured by hand.
+
+        Published rather than inferred so the Customer app can recover a fake checkout after a
+        reload without rendering a development control against Razorpay or in production. This is
+        the A3 booking-fee equivalent of ``VisitPlan.simulated_capture_available``.
+        """
+        attempt = fee.payment_attempt
+        return bool(settings.PAYMENTS_ALLOW_SIMULATED_CAPTURE) and (
+            attempt is not None and attempt.provider == FakePaymentProvider.code
+        )
+
     class Meta:
         model = BookingFee
         fields = (
@@ -249,6 +268,13 @@ class BookingFeeSerializer(serializers.ModelSerializer[BookingFee]):
             "receipt_sequence",
             "settlement_reason_code",
             "failure_code",
+            #: The attempt behind a `PENDING` fee, so a screen reopened mid-payment can find the
+            #: charge it started — and hand it to the provider, or to the development simulator —
+            #: instead of sitting on "confirming your payment" with nothing to confirm.
+            "payment_attempt_id",
+            #: Server-owned development affordance. False for real providers and whenever the
+            #: fail-closed simulator setting is off.
+            "simulated_capture_available",
             "activated_at",
             "earned_at",
             "settled_at",
@@ -306,6 +332,38 @@ class RateCardStateSerializer(serializers.Serializer[dict[str, Any]]):
     server_now = serializers.DateTimeField(read_only=True)
 
 
+class CrewBriefLineSerializer(serializers.Serializer[dict[str, Any]]):
+    """One thing the Customer said, in the catalogue's own words (`crew_brief`).
+
+    `question` and `value` are display text resolved server-side from the configuration's question
+    schema — an option's label rather than its code, "Yes" rather than `true` — so a client renders
+    the brief without knowing any service's vocabulary. `code` travels for support and tests.
+    """
+
+    code = serializers.CharField(read_only=True)
+    question = serializers.CharField(read_only=True)
+    value = serializers.CharField(read_only=True)
+
+
+class CrewMixLineSerializer(serializers.Serializer[dict[str, Any]]):
+    """One role and the men/women the Customer asked for in it (`crew_mix`).
+
+    Structured rather than prose because the Partner does not read this, they *check* it: the
+    offer screen draws a counter per role, and the assignment screen ticks each one off as names
+    are added. A sentence cannot be counted against.
+
+    `role_label` is the catalogue's own words, resolved server-side, so no client hard-codes what a
+    "hostess" is. Roles nobody asked for are absent rather than zeroed -- "0 bartenders" is not a
+    fact a lead plans around.
+    """
+
+    role_code = serializers.CharField(read_only=True)
+    role_label = serializers.CharField(read_only=True)
+    men = serializers.IntegerField(read_only=True)
+    women = serializers.IntegerField(read_only=True)
+    total = serializers.IntegerField(read_only=True)
+
+
 class CrewOfferSerializer(serializers.Serializer[dict[str, Any]]):
     """One crew offer as the **lead** sees it (`M2-BE-435`).
 
@@ -346,6 +404,11 @@ class CrewOfferSerializer(serializers.Serializer[dict[str, Any]]):
     verified_roster_size = serializers.IntegerField(read_only=True)
     requested_start = serializers.DateTimeField(read_only=True, allow_null=True)
     area_label = serializers.CharField(read_only=True, allow_blank=True)
+    #: What the Customer asked for beyond a size — the occasion, the roles, the dress code — in
+    #: the catalogue's order and words. Empty when the form asked nothing beyond a size.
+    brief = CrewBriefLineSerializer(many=True, read_only=True)
+    #: The men/women split per role. Empty for every service that does not ask for one.
+    crew_mix = CrewMixLineSerializer(many=True, read_only=True)
     server_now = serializers.DateTimeField(read_only=True)
 
 
@@ -390,6 +453,10 @@ class CrewOfferAcceptedSerializer(serializers.Serializer[dict[str, Any]]):
     #: hold lapses, your standing is untouched and the cascade moves on.
     hold_expires_at = serializers.DateTimeField(read_only=True, allow_null=True)
     requested_start = serializers.DateTimeField(read_only=True, allow_null=True)
+    #: The same brief the offer carried, so the held job still says what it is for.
+    brief = CrewBriefLineSerializer(many=True, read_only=True)
+    #: The men/women split per role. Empty for every service that does not ask for one.
+    crew_mix = CrewMixLineSerializer(many=True, read_only=True)
     server_now = serializers.DateTimeField(read_only=True)
 
 

@@ -41,22 +41,25 @@ and device-token storage. Deliberately out of scope.
 import json
 import math
 import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from datetime import datetime, timedelta
-from typing import cast
+from typing import Any, cast
 from uuid import UUID
 
 from django.conf import settings
 from django.db import close_old_connections
+from django.db.models import Q
 from django.http import StreamingHttpResponse
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.renderers import BaseRenderer, JSONRenderer
 from rest_framework.request import Request
 from rest_framework.views import APIView
 
 from apps.identity.models import User
 from apps.notifications.models import NotificationIntent
+from apps.notifications.templates_registry import render_notification
 from apps.partners.permissions import IsPartnerUser
 
 #: The one purpose this stream carries. Written by
@@ -64,6 +67,24 @@ from apps.partners.permissions import IsPartnerUser
 #: `contracts/proposals/partner-offer-events.md`.
 OFFER_CREATED_PURPOSE = "partner.offer_created"
 OFFER_CREATED_EVENT = "offer_created"
+
+#: Advance bookings assigned directly — same transport, different event.
+JOB_ASSIGNED_PURPOSE = "partner.job_assigned"
+JOB_ASSIGNED_EVENT = "job_assigned"
+
+#: In-app notices that should foreground-pop when a customer books or enquires.
+NOTIFICATION_CREATED_EVENT = "notification_created"
+PARTNER_IN_APP_STREAM_PURPOSES = frozenset(
+    {
+        "m2.invitation.received",
+        # Both offer purposes ride the stream because both are first-accept-wins: the delay the
+        # poll fallback tolerates is exactly the delay that loses the job to another Partner.
+        "m2.fixed_visit_offer.received",
+        "m2.crew_offer.invited",
+        "m2.booking_fee.charged",
+        "m2.engagement.opened",
+    }
+)
 
 
 def _frame(*, event: str, data: dict[str, object]) -> str:
@@ -82,6 +103,127 @@ def _comment(text: str) -> str:
     return f": {text}\n\n"
 
 
+def _stream_filter(*, recipient_id: UUID, since: datetime) -> Q:
+    """Intents this connection may carry for one partner."""
+
+    return Q(recipient_id=recipient_id, created_at__gt=since) & (
+        Q(
+            purpose=OFFER_CREATED_PURPOSE,
+            channel=NotificationIntent.Channel.PUSH,
+        )
+        | Q(
+            purpose=JOB_ASSIGNED_PURPOSE,
+            channel=NotificationIntent.Channel.PUSH,
+        )
+        | Q(
+            purpose__in=PARTNER_IN_APP_STREAM_PURPOSES,
+            channel=NotificationIntent.Channel.IN_APP,
+            status=NotificationIntent.Status.SENT,
+        )
+    )
+
+
+#: Purposes whose notice is an *offer to answer*, addressed by an invitation id in `target_id`.
+#:
+#: The Partner app raises one of these as a first-accept-wins interrupt — a full-screen dialog,
+#: an alarm and a countdown — rather than as an inbox line. Everything else on this stream is a
+#: report, and a report is true forever; an offer is only true while it can still be taken.
+OFFER_PURPOSES = frozenset(
+    {
+        "m2.invitation.received",
+        "m2.fixed_visit_offer.received",
+        "m2.crew_offer.invited",
+    }
+)
+
+
+def _unanswerable_offer_intent_ids(rows: list[NotificationIntent]) -> set[UUID]:
+    """Of `rows`, the offer intents whose invitation nobody can answer any more.
+
+    **Why the server has to be the one to withhold these.** Every connection opens at
+    `now - M1_OFFER_STREAM_REPLAY_SECONDS` and the server closes it at
+    `M1_OFFER_STREAM_MAX_SECONDS`, so each reconnect — and each app reload, and each remount —
+    replays that window. Nothing downstream re-reads the invitation: `_stream_filter` selects on
+    `(recipient, purpose, channel, status, created_at)` and never on whether the offer is live.
+    A Partner who accepted a fixed-visit offer and then reloaded inside the window was therefore
+    shown their own acceptance again as a fresh race, alarm and all, over an Accept button the
+    server correctly refuses to honour twice.
+
+    Client-side de-duplication cannot close this. Its memory is a `useRef` that dies with the
+    mount and a five-minute TTL besides, so the first reload after an acceptance has nothing left
+    to de-duplicate against — and it must keep showing genuinely new offers, so it cannot simply
+    fall silent. Liveness is a fact only the database holds.
+
+    An `INVITED` invitation past its own `responds_by` counts as unanswerable too: acceptance
+    expires it rather than taking it, so streaming it would start a countdown that has already
+    finished.
+
+    One query for the whole batch, and none at all when the batch carries no offer.
+    """
+    by_invitation: dict[UUID, list[UUID]] = {}
+    for intent in rows:
+        if intent.purpose not in OFFER_PURPOSES:
+            continue
+        target_id = cast(dict[str, Any], intent.context).get("target_id")
+        if not isinstance(target_id, str):
+            continue
+        try:
+            key = UUID(target_id)
+        except ValueError:
+            continue
+        by_invitation.setdefault(key, []).append(intent.id)
+    if not by_invitation:
+        return set()
+
+    # Deferred so `apps.notifications` keeps no module-level dependency on `apps.requirements`,
+    # which imports this package.
+    from apps.requirements.models import VendorInvitation  # noqa: PLC0415
+
+    now = timezone.now()
+    answerable = set(
+        VendorInvitation.objects.filter(
+            Q(responds_by__isnull=True) | Q(responds_by__gt=now),
+            pk__in=by_invitation,
+            status=VendorInvitation.Status.INVITED,
+        ).values_list("id", flat=True)
+    )
+    return {
+        intent_id
+        for invitation_id, intent_ids in by_invitation.items()
+        if invitation_id not in answerable
+        for intent_id in intent_ids
+    }
+
+
+def _payload_for_intent(intent: NotificationIntent) -> tuple[str, dict[str, object]] | None:
+    if intent.purpose == OFFER_CREATED_PURPOSE:
+        return OFFER_CREATED_EVENT, cast(dict[str, object], intent.context)
+    if intent.purpose == JOB_ASSIGNED_PURPOSE:
+        return JOB_ASSIGNED_EVENT, cast(dict[str, object], intent.context)
+    if (
+        intent.channel == NotificationIntent.Channel.IN_APP
+        and intent.purpose in PARTNER_IN_APP_STREAM_PURPOSES
+    ):
+        rendered = render_notification(
+            template_code=intent.template_code,
+            context=cast(dict[str, Any], intent.context),
+        )
+        payload: dict[str, object] = {
+            "notification_id": str(intent.id),
+            "purpose": intent.purpose,
+            "title": rendered.title,
+            "body": rendered.body,
+        }
+        context = cast(dict[str, Any], intent.context)
+        target_kind = context.get("target_kind")
+        target_id = context.get("target_id")
+        if isinstance(target_kind, str) and isinstance(target_id, str):
+            payload["target_kind"] = target_kind
+            payload["target_id"] = target_id
+        return NOTIFICATION_CREATED_EVENT, payload
+    return None
+
+
 def offer_event_frames(
     *,
     recipient_id: UUID,
@@ -94,7 +236,9 @@ def offer_event_frames(
     One query per poll, filtered on `(recipient, purpose, channel, created_at)`.
     `SUPPRESSED` intents are excluded: a suppressed intent is a recorded decision
     *not* to notify — usually an engaged kill switch — and streaming it anyway would
-    route around the switch.
+    route around the switch. Offer intents whose invitation has since been answered or
+    lost are excluded too — see `_unanswerable_offer_intent_ids`, which is what stops the
+    replay window from re-raising a Partner's own acceptance as a fresh race.
 
     Scoped to `recipient_id` in the query itself, so there is no path by which one
     partner's connection can carry another partner's offer.
@@ -117,20 +261,53 @@ def offer_event_frames(
         close_old_connections()
         rows = list(
             NotificationIntent.objects.filter(
-                recipient_id=recipient_id,
-                purpose=OFFER_CREATED_PURPOSE,
-                channel=NotificationIntent.Channel.PUSH,
-                created_at__gt=last_seen,
+                _stream_filter(recipient_id=recipient_id, since=last_seen)
             )
             .exclude(status=NotificationIntent.Status.SUPPRESSED)
             .order_by("created_at", "id")
         )
+        withheld = _unanswerable_offer_intent_ids(rows)
         for intent in rows:
+            # Advanced before the two skips below, so an intent this connection declined to send
+            # is not re-read on every remaining poll of its life.
             last_seen = intent.created_at
-            yield _frame(event=OFFER_CREATED_EVENT, data=cast(dict[str, object], intent.context))
+            if intent.id in withheld:
+                continue
+            framed = _payload_for_intent(intent)
+            if framed is None:
+                continue
+            event, data = framed
+            yield _frame(event=event, data=data)
         if not rows:
             yield _comment("keepalive")
         time.sleep(poll_seconds)
+
+
+class EventStreamRenderer(BaseRenderer):
+    """Accept `Accept: text/event-stream` from browser `EventSource`.
+
+    DRF negotiates renderers before the view runs. Without one whose
+    `media_type` matches, `EventSource`'s Accept header gets a `406` even
+    though the view returns a `StreamingHttpResponse` directly.
+    """
+
+    media_type = "text/event-stream"
+    format = "event-stream"
+    charset = None
+
+    def render(
+        self,
+        data: object,
+        accepted_media_type: str | None = None,
+        renderer_context: Mapping[str, Any] | None = None,
+    ) -> bytes:
+        if data is None:
+            return b""
+        if isinstance(data, bytes):
+            return data
+        if isinstance(data, str):
+            return data.encode("utf-8")
+        return bytes(JSONRenderer().render(data, accepted_media_type, renderer_context))
 
 
 class PartnerOfferStreamView(APIView):
@@ -143,6 +320,7 @@ class PartnerOfferStreamView(APIView):
     """
 
     permission_classes = (IsAuthenticated, IsPartnerUser)
+    renderer_classes = (EventStreamRenderer, JSONRenderer)
 
     @extend_schema(
         tags=["Partner"],
@@ -151,12 +329,12 @@ class PartnerOfferStreamView(APIView):
         responses={
             200: OpenApiResponse(
                 description=(
-                    "A `text/event-stream` of `offer_created` events. Each event's "
-                    "`data` is the notification context documented in "
-                    "contracts/proposals/partner-offer-events.md: `offer_id`, "
-                    "`fulfilment_unit_id`, `requested_start`, `expires_at`. Comment "
-                    "lines are keepalives. The server closes the connection after "
-                    "M1_OFFER_STREAM_MAX_SECONDS and the client reconnects."
+                    "A `text/event-stream` multiplexed for Partner foreground delivery. "
+                    "Events: `offer_created` (same-day offers), `job_assigned` "
+                    "(advance bookings), `notification_created` (in-app booking and "
+                    "enquiry notices). Comment lines are keepalives. The server closes "
+                    "the connection after M1_OFFER_STREAM_MAX_SECONDS and the client "
+                    "reconnects."
                 ),
             ),
         },

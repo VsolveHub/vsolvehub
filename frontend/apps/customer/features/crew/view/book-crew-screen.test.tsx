@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { Schemas } from "@vsolve/api-client";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -18,9 +18,10 @@ import { writeCrewBookingIntent } from "../model/booking-intent";
 
 const client = { GET: vi.fn(), POST: vi.fn(), PATCH: vi.fn(), PUT: vi.fn(), DELETE: vi.fn() };
 const push = vi.fn();
+const replace = vi.fn();
 
 vi.mock("@/lib/api/browser", () => ({ getApiClient: () => client }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push, replace }) }));
 
 const { BookCrewScreen } = await import("./book-crew-screen");
 
@@ -163,6 +164,7 @@ function respondToReads(state = rateState()) {
   client.GET.mockImplementation((path: string) => {
     if (path === ADDRESS_PATH) return Promise.resolve(ok([address]));
     if (path === RATE_PATH) return Promise.resolve(ok(state));
+    if (path === "/api/v1/requirements/") return Promise.resolve(ok({ results: [] }));
     return Promise.resolve(ok(null));
   });
 }
@@ -178,9 +180,15 @@ function respondToWrites() {
 
 /** Picks the saved address through the dialog, which is what makes the rail price. */
 async function chooseAddress() {
-  fireEvent.click(await screen.findByRole("button", { name: /choose the address/i }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: /choose the address|change address/i }),
+  );
   const dialog = await screen.findByRole("dialog");
   fireEvent.click(within(dialog).getByRole("radio", { name: /Site/ }));
+  const useButton = within(dialog).queryByRole("button", { name: "Use this address" });
+  if (useButton) {
+    fireEvent.click(useButton);
+  }
 }
 
 /** Confirms step one. This must remain a local-only choice. */
@@ -222,6 +230,7 @@ beforeEach(() => {
   for (const method of Object.values(client)) method.mockReset();
   push.mockReset();
   window.sessionStorage.clear();
+  window.scrollTo = vi.fn();
   Object.defineProperty(window, "matchMedia", {
     configurable: true,
     value: vi.fn(() => ({
@@ -233,7 +242,9 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  cleanup();
   queryClient.clear();
+  window.sessionStorage.clear();
 });
 
 describe("BookCrewScreen rate rail", () => {
@@ -251,7 +262,7 @@ describe("BookCrewScreen rate rail", () => {
       "/api/v1/requirements/",
       expect.anything(),
     );
-    expect(screen.queryByText("₹5,400")).not.toBeInTheDocument();
+    expect(screen.queryByText("₹900")).not.toBeInTheDocument();
   });
 
   it("prices the size only after the complete plan is confirmed", async () => {
@@ -302,14 +313,15 @@ describe("BookCrewScreen rate rail", () => {
     render(<BookCrewScreen service={service} variant={variant} />, { wrapper });
     await openRate();
 
-    // Every one of these is a field on the payload. The per-day cash is the
-    // load-bearing case: it is `lead_day_receipt_paise`, not the total divided
-    // by the day count.
-    expect(await screen.findByText("₹5,400")).toBeInTheDocument();
-    expect(screen.getByText("₹5,100")).toBeInTheDocument();
-    expect(screen.getByText("₹2,550 at the end of each day")).toBeInTheDocument();
-    expect(screen.getByText("₹900")).toBeInTheDocument();
-    expect(screen.getByText(/You pay ₹300 only when a supervisor accepts/)).toBeInTheDocument();
+    // The trimmed rail shows exactly two figures — the day rate and the
+    // booking fee — both fields on the payload, plus the booking control that
+    // states the fee again rather than a total this screen would compute.
+    expect(await screen.findByText("₹900")).toBeInTheDocument();
+    expect(screen.getByText(/a day to the crew/)).toBeInTheDocument();
+    expect(screen.getByText(/₹300 booking fee/)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Book — pay ₹300 when accepted/ }),
+    ).toBeInTheDocument();
   });
 
   it("shows no amounts at all when the server publishes no rate", async () => {
@@ -342,7 +354,9 @@ describe("BookCrewScreen rate rail", () => {
       await screen.findByText(/We do not have a published day rate for this yet/),
     ).toBeInTheDocument();
     // The fail-closed rule: no booking control, and no invented figure.
-    expect(screen.queryByRole("button", { name: "Book this crew" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Book — pay/ }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Get quotes instead" })).toBeInTheDocument();
     expect(screen.queryByText(/^₹/)).not.toBeInTheDocument();
   });
@@ -363,6 +377,7 @@ describe("BookCrewScreen booking", () => {
       },
       addressId: address.id,
       requestedStart: "2026-09-07",
+      reportingTime: null,
       step: "details",
     });
 
@@ -379,6 +394,7 @@ describe("BookCrewScreen booking", () => {
       "/api/v1/requirements/",
       expect.anything(),
     );
+    window.sessionStorage.clear();
   });
 
   it("asks for a sentence only when Something else is chosen", async () => {
@@ -389,7 +405,7 @@ describe("BookCrewScreen booking", () => {
     fireEvent.click(await screen.findByRole("radio", { name: /^Something else/ }));
     fireEvent.click(screen.getByRole("button", { name: "Plan this crew" }));
 
-    expect(screen.getByLabelText("Tell us what the work is")).toBeInTheDocument();
+    expect(screen.getByLabelText(/Tell us what the work is/)).toBeInTheDocument();
   });
 
   it("saves the size on screen before booking it", async () => {
@@ -437,5 +453,248 @@ describe("BookCrewScreen booking", () => {
 
     // The start date is unanswered, so the details action cannot create or price a draft.
     expect(screen.getByRole("button", { name: "See my live rate" })).toBeDisabled();
+  });
+});
+
+/** The event-staff catalogue: an occasion, a crowd, a service style, roles, then how they turn up. */
+const eventVariant = {
+  id: "variant-event",
+  questions: [
+    {
+      id: "q-occasion",
+      code: "event_type",
+      prompt: "What's the occasion?",
+      help_text: "",
+      kind: "SINGLE_CHOICE",
+      is_required: true,
+      validation_rules: {},
+      options: [
+        { id: "o-w", code: "wedding", label: "Wedding", description: "Reception or the day itself." },
+        { id: "o-o", code: "other", label: "Something else", description: "Tell us in a sentence." },
+      ],
+    },
+    { id: "q-desc", code: "event_description", prompt: "Tell us about the event", help_text: "", kind: "TEXT", is_required: false, validation_rules: {}, options: [] },
+    {
+      id: "q-guests",
+      code: "guest_band",
+      prompt: "How many guests?",
+      help_text: "",
+      kind: "SINGLE_CHOICE",
+      is_required: true,
+      validation_rules: {},
+      options: [
+        { id: "o-g1", code: "under-50", label: "Under 50", description: "" },
+        { id: "o-g2", code: "100-200", label: "100 to 200", description: "" },
+      ],
+    },
+    {
+      id: "q-style",
+      code: "service_style",
+      prompt: "How is food served?",
+      help_text: "",
+      kind: "SINGLE_CHOICE",
+      is_required: true,
+      validation_rules: {},
+      options: [{ id: "o-b", code: "buffet", label: "Buffet", description: "Guests walk up to the counters." }],
+    },
+    { id: "q-waiters", code: "waiter_count", prompt: "Waiters and serving staff", help_text: "Serving and clearing.", kind: "NUMBER", is_required: false, validation_rules: { minimum: 0 }, options: [] },
+    { id: "q-bar", code: "bar_staff_count", prompt: "Bar and beverage staff", help_text: "", kind: "NUMBER", is_required: false, validation_rules: { minimum: 0 }, options: [] },
+    { id: "q-staff", code: "worker_count", prompt: "Staff", help_text: "", kind: "NUMBER", is_required: true, validation_rules: { minimum: 1 }, options: [] },
+    { id: "q-days", code: "duration_days", prompt: "Days", help_text: "", kind: "NUMBER", is_required: true, validation_rules: { minimum: 1 }, options: [] },
+    {
+      id: "q-dress",
+      code: "dress_code",
+      prompt: "Dress code",
+      help_text: "",
+      kind: "SINGLE_CHOICE",
+      is_required: true,
+      validation_rules: {},
+      options: [{ id: "o-bw", code: "black-white", label: "Black and white formal", description: "" }],
+    },
+    { id: "q-meal", code: "staff_meal_provided", prompt: "Will you provide a meal for the staff?", help_text: "", kind: "BOOLEAN", is_required: true, validation_rules: {}, options: [] },
+  ],
+} as unknown as Parameters<typeof BookCrewScreen>[0]["variant"];
+
+const eventService = { slug: "event-staff-by-the-day", name: "Event staff by the day" } as Parameters<
+  typeof BookCrewScreen
+>[0]["service"];
+
+describe("BookCrewScreen for event staff", () => {
+  it("opens on the occasion and prices nobody until a role is counted", async () => {
+    respondToReads();
+    respondToWrites();
+
+    render(<BookCrewScreen service={eventService} variant={eventVariant} />, { wrapper });
+
+    expect(await screen.findByRole("heading", { name: "Staff your event, role by role." })).toBeInTheDocument();
+    expect(screen.getByText("Nobody yet")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Continue to Crew" })).toBeDisabled();
+    expect(rateSizes()).toHaveLength(0);
+  });
+
+  it("keeps a serving count the customer set by hand when the occasion changes", async () => {
+    respondToReads();
+    respondToWrites();
+
+    render(<BookCrewScreen service={eventService} variant={eventVariant} />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("radio", { name: /^Wedding/ }));
+    fireEvent.click(screen.getByRole("radio", { name: "Under 50" }));
+    fireEvent.click(screen.getByRole("radio", { name: /^Buffet/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue to Crew" }));
+    // 40 guests at a buffet: one serving person. The customer wants three.
+    expect(screen.getByText(/1 person · 1 man · 0 women/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "More men for waiters and serving staff" }));
+    fireEvent.click(screen.getByRole("button", { name: "More men for waiters and serving staff" }));
+
+    // A bigger crowd would suggest five — but three was theirs, and it stays.
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    fireEvent.click(screen.getByRole("radio", { name: "100 to 200" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue to Crew" }));
+    expect(screen.getByText(/3 people · 3 men · 0 women/)).toBeInTheDocument();
+  });
+
+  it("prices the sum of the roles, and saves the roles beside the headcount", async () => {
+    respondToReads();
+    respondToWrites();
+
+    render(<BookCrewScreen service={eventService} variant={eventVariant} />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("radio", { name: /^Wedding/ }));
+    fireEvent.click(screen.getByRole("radio", { name: "100 to 200" }));
+    fireEvent.click(screen.getByRole("radio", { name: /^Buffet/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue to Crew" }));
+    // 150 guests at a buffet starts the crew with five serving staff, already
+    // on the roster rather than in a sentence. The customer adjusts from there.
+    expect(screen.getByText(/we have started you with/)).toBeInTheDocument();
+    expect(screen.getByText(/5 people · 3 men · 2 women/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "More men for waiters and serving staff" }));
+    fireEvent.click(screen.getByRole("button", { name: "More men for bar and beverage staff" }));
+    fireEvent.click(screen.getByRole("button", { name: "More men for bar and beverage staff" }));
+    expect(screen.getByText(/8 people · 6 men · 2 women/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue to Date & Venue" }));
+    await chooseAddress();
+    fireEvent.change(screen.getByLabelText(/Start from/), { target: { value: "2026-09-14" } });
+    fireEvent.change(screen.getByLabelText(/Reporting time/), { target: { value: "17:00" } });
+    fireEvent.click(screen.getByRole("radio", { name: "Black and white formal" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Yes" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "See my live rate" }));
+
+    await waitFor(
+      () => expect(rateSizes()).toContainEqual({ headcount: 8, days: 1 }),
+      AFTER_DEBOUNCE,
+    );
+
+    const answered = client.PATCH.mock.calls.find(
+      ([, options]) => options.body?.answers !== undefined,
+    );
+    expect(answered?.[1].body.answers).toMatchObject({
+      event_type: "wedding",
+      guest_band: "100-200",
+      service_style: "buffet",
+      waiter_count: 6,
+      bar_staff_count: 2,
+      worker_count: 8,
+      duration_days: 1,
+      dress_code: "black-white",
+      staff_meal_provided: true,
+    });
+    // The reporting time rides on `requested_start` rather than a midnight day.
+    const saved = new Date(answered?.[1].body.requested_start as string);
+    expect(saved.getHours()).toBe(17);
+    expect(saved.getDate()).toBe(14);
+  });
+});
+
+const cookVariant = {
+  id: "variant-cook",
+  questions: [
+    {
+      id: "cook-event",
+      code: "event_type",
+      prompt: "What's the occasion?",
+      help_text: "",
+      kind: "SINGLE_CHOICE",
+      is_required: true,
+      validation_rules: {},
+      options: [{ id: "housewarming", code: "housewarming", label: "Housewarming", description: "" }],
+    },
+    {
+      id: "cook-guests",
+      code: "guest_band",
+      prompt: "How many guests?",
+      help_text: "",
+      kind: "SINGLE_CHOICE",
+      is_required: true,
+      validation_rules: {},
+      options: [
+        { id: "under-25", code: "under-25", label: "Under 25", description: "" },
+        { id: "25-50", code: "25-50", label: "25 to 50", description: "" },
+        { id: "50-75", code: "50-75", label: "50 to 75", description: "" },
+      ],
+    },
+    {
+      id: "cook-meals",
+      code: "meals",
+      prompt: "Which meals?",
+      help_text: "",
+      kind: "MULTIPLE_CHOICE",
+      is_required: true,
+      validation_rules: {},
+      options: [
+        { id: "lunch", code: "lunch", label: "Lunch", description: "" },
+        { id: "dinner", code: "dinner", label: "Dinner", description: "" },
+      ],
+    },
+    ...["cuisine", "food_preference", "kitchen_setup"].map((code) => ({
+      id: `cook-${code}`,
+      code,
+      prompt: code === "cuisine" ? "What kind of food?" : code === "food_preference" ? "Veg or non-veg?" : "What's the kitchen like?",
+      help_text: "",
+      kind: "SINGLE_CHOICE",
+      is_required: true,
+      validation_rules: {},
+      options: [{ id: `${code}-option`, code: "option", label: "Option", description: "" }],
+    })),
+    { id: "cook-meal", code: "staff_meal_provided", prompt: "Will you provide a meal for the cook and helpers?", help_text: "", kind: "BOOLEAN", is_required: true, validation_rules: {}, options: [] },
+    { id: "cook-teams", code: "worker_count", prompt: "Cook teams", help_text: "", kind: "NUMBER", is_required: true, validation_rules: { minimum: 1 }, options: [] },
+    { id: "cook-days", code: "duration_days", prompt: "Days", help_text: "", kind: "NUMBER", is_required: true, validation_rules: { minimum: 1 }, options: [] },
+  ],
+} as unknown as Parameters<typeof BookCrewScreen>[0]["variant"];
+
+const cookService = {
+  slug: "house-function-cook",
+  name: "Cook for a house function",
+  short_description: "A cook and his own helpers at your home for the day.",
+  policies: [],
+} as unknown as Parameters<typeof BookCrewScreen>[0]["service"];
+
+describe("BookCrewScreen for a fixed cook team", () => {
+  it("asks for guests and meals, never a cook count, and offers the larger-event hand-off", async () => {
+    respondToReads();
+    respondToWrites();
+
+    render(<BookCrewScreen service={cookService} variant={cookVariant} />, { wrapper });
+
+    expect(await screen.findByText("Your cook brings their own helpers.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "More cook teams" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "More days" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Reporting time")).toBeInTheDocument();
+
+    const lunch = screen.getByRole("checkbox", { name: "Lunch" });
+    const dinner = screen.getByRole("checkbox", { name: "Dinner" });
+    fireEvent.click(lunch);
+    fireEvent.click(dinner);
+    expect(lunch).toBeChecked();
+    expect(dinner).toBeChecked();
+
+    expect(screen.getByText(/Above 75 guests/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Get quotes from event cooks/ })).toHaveAttribute(
+      "href",
+      "/requests/new/event-cook",
+    );
   });
 });

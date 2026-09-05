@@ -1,8 +1,441 @@
 # API Contract Changelog
 
+## 1.66.0 - A requested price reduction becomes an overall estimate discount
+
+The Partner no longer has to rebuild an estimate to answer a Customer's price request. Two new
+Partner commands sit on the open revision request:
+
+- `.../discount/preview/` returns the server-calculated customer total, tax, Partner receipt and
+  payment allocations without writing anything.
+- `.../discount/apply/` applies that confirmed figure idempotently as a new immutable proposal
+  revision, supersedes the old estimate and answers the request in the same transaction.
+
+The command accepts either `PERCENT` plus `discount_bps`, or `FIXED` plus the desired
+`final_total_paise`; both are capped at 15% of the current total. The estimate records
+`discount_kind`, `discount_bps`, `discount_base_paise`, `discount_paise` and `discount_source`.
+`total_paise` and `customer_total_paise` are the final discounted payable amount.
+
+The discount is not a negative named charge. Item, labour, material and charge rows remain at the
+rates the Partner authored; the calculator allocates one first-class concession across their tax
+groups and payment parts in integer paise, then recalculates tax, platform fees, commission,
+withholding and Partner net. Stage and material responses expose `discount_paise` and
+`discounted_amount_paise`, and the financial preview exposes its undiscounted total and savings.
+
+- Removed: none.
+
+## 1.61.0 - A project estimate is revisable until the customer chooses it
+
+A vendor could correct an A5 estimate for five minutes after sending it, and not one second
+longer. That made projects the odd one out — an A3 quote has always been revisable for as long as
+it is live — and it left a Partner looking at a price they could no longer fix while the Customer
+was still deciding.
+
+`POST /api/v1/proposals/` now accepts a revision for as long as the vendor's latest estimate is
+`SUBMITTED` or `WITHDRAWN`. The line is the Customer's decision rather than a clock: submission
+still refuses once the requirement is `SELECTED` or `ENGAGED`, taking the requirement's row lock
+first, so a revision racing an acceptance cannot both win. `WITHDRAWN` is included because the
+withdraw dialog has always told vendors "your enquiry stays open, so you can send a new one" — a
+promise this endpoint refused to keep for projects.
+
+An `EXPIRED` estimate is unchanged: it is superseded only after the Customer asks whether the
+price still stands.
+
+Nothing about the record changes. Supersession stays append-only, so the Customer keeps seeing
+every version they were offered, and `m2.proposal.submitted` still fires per proposal id, so each
+revision announces itself.
+
+- Removed: `Proposal.revision_expires_at`. It published the end of the five-minute window and had
+  no other meaning; a field that could only ever return null now would be a worse answer than no
+  field. Clients that gated a "revise" control on it should read `status` instead.
+
+## 1.60.0 - Partner earnings separate direct payments from Vsolve payouts
+
+`PartnerPerformance` now includes `today_direct_paise`, `month_direct_paise` and
+`lifetime_direct_paise`. These are mutually confirmed A3 crew-day amounts paid by the Customer
+straight to the Partner. They contribute to the existing total earnings fields and trend, while
+`PartnerBalance` remains the amount Vsolve collected and can actually pay out.
+
+Completed A3/A5 engagements are counted once from their durable completion timestamp. A5 stage
+earnings and retention releases still move money, but no longer inflate the number of jobs done.
+
+- Removed: none.
+
+## 1.59.0 - Two questions after a job, and both read per service
+
+A customer is now asked two separate things when work finishes, and they are kept apart on purpose.
+A five-star crew booked through a confusing checkout is `partner 5 / platform 2`, and one blended
+score hides exactly the finding worth having.
+
+**"How was your partner"** is unchanged: `ServiceRating`, one per participant per job.
+
+**"How was Vsolve"** is new. `POST /api/v1/engagements/{id}/platform-feedback/` and the matching
+`/bookings/{id}/` route record a score, a set of chips and an optional note. `GET` on either
+returns `can_submit`, the caller's own submission, and **`available_tags`** — the chip vocabulary,
+server-authored, so no client hardcodes it and two apps cannot drift into two sets of counts that
+look like one.
+
+- Everything is individually optional; only the wholly empty submission is refused
+  (`feedback_empty`). Someone who taps one chip and closes has told us the useful thing, and
+  demanding a star first would lose it.
+- `ALL_GOOD` is exclusive. Sending it with a complaint is refused (`feedback_tags_invalid`) rather
+  than silently resolved — either half might be the one they meant.
+- Only the customer is asked. The same question put to a Partner would collect a different thing
+  under the same label.
+
+**Both records carry the service they were about.** `ServiceRating` and `PlatformFeedback` each
+store a `ServiceVariant` resolved **by the server**, never sent by a client — feedback whose
+subject the rater picks is feedback you cannot aggregate. An engagement always resolves, from its
+requirement. A catalogue booking may not: its visit can cover several cart items, and one that
+covered a deep clean and a tap repair is not evidence about either service alone. Unresolvable is
+recorded as null and counted separately, never assigned to whichever line came first.
+
+**Operations reads both per service.** `GET /api/v1/operations/service-feedback/` returns one row
+per service with the partner score and the platform score **side by side and never blended**, plus
+a chip histogram, worst platform score first. A service nobody has rated sorts last — silence is
+not a bad score. `GET /api/v1/operations/service-feedback/{variant_id}/notes/` returns the written
+notes, each carrying the same customer's partner rating for that job, because `platform 2 /
+partner 5` is invisible when the two are read apart.
+`.../service-feedback/unattributed/notes/` serves the multi-service bucket.
+
+**`RatingSummary.my_rating` is published again, to its author only.** 1.57.0 pinned it to null
+along with `ratings`, which went a step too far: it left a rated job indistinguishable from an
+unrated one on the customer's own screen, so somebody who had already rated saw no dialog, no
+confirmation and no record. `ratings` stays empty — the **counterparty's** score and comment remain
+private, which is what that release was actually protecting.
+
+- Removed: none.
+
+## 1.58.0 - A crew name that can be corrected, and a document behind the verification
+
+Three gaps in the crew surface, all of which had a rule with no exit.
+
+**A crew member's name is now a per-roster label.** `CrewMemberUpdateRequest` gains
+**`display_name`**, which writes `PartnerCrewMembership.display_name` and never the shared
+`CrewMember`. The name was previously read-only because the global row is shared by every agency
+that resolved to the same number — correct as far as it went, and it left a typo permanently
+unfixable: the screen's advice to archive and re-add cannot work, because `add_crew_to_roster`
+resolves by `identity_hash` and `get_or_create` ignores `defaults` on a hit. Blank clears the
+override and falls back to the global record. Every partner-, customer- and Operations-facing
+projection of a crew name now reads the membership label first, including the shift-day crew rows
+and the refusal messages that name a worker.
+
+**A crew member's gender is editable by the only agency that has them.** `CrewMember.gender` stays
+on the shared crew record — a Customer's men/women split is checked against it at accept and again
+at assignment, so it cannot become per-roster without two agencies staffing one wedding from two
+answers. But first-write-wins was applied unconditionally, including to a worker **nobody else
+held**, where the refusal protected no one and left the record permanently wrong. It now applies
+only when a second agency has the worker on an active roster; that case still answers
+`m2_crew_gender_conflict`. Whether a worker is shared is deliberately **not published** — that is
+the fact `crew_roster` suppresses `crew_member_id` to hide — so clients offer the field
+unconditionally and surface the refusal. Clearing a recorded gender remains unavailable.
+
+**Operations can settle a disputed gender.** New
+`POST /api/v1/operations/crew-memberships/{membership_id}/gender/`
+(`m2_operations_crew_gender_correct`). `CrewMember.gender` is one row per person, so the
+Partner-facing rule stays first-write-wins and a contradiction is still refused with
+`m2_crew_gender_conflict` — but that refusal told the Partner to *contact support*, and support had
+no endpoint, so a worker recorded wrongly by whichever agency typed first lost gendered work
+permanently. A reason is required and the previous value is written to the audit event. Clearing is
+not offered; `UNDISCLOSED` is the value for a worker who declined to say.
+
+**Crew identity documents exist.** Until now `documents_verified_at` recorded that a reviewer had
+checked something, with nothing anywhere in the system to check.
+
+- `POST /api/v1/partner/crew/{membership_id}/documents/` (`m2_partner_crew_document_upload`)
+  issues a short-lived signed upload against declared kind, media type, size and SHA-256.
+- `PUT` on the same path (`m2_partner_crew_document_submit`) confirms the upload; the stored object
+  is streamed back and compared against what was declared before any reviewer sees it.
+- `GET /api/v1/operations/crew-memberships/{membership_id}/documents/`
+  (`m2_operations_crew_documents`) publishes each live document with a short-lived signed
+  `review_url`. It is **nullable**: a storage outage degrades the screen to one missing preview
+  rather than an error page hiding everyone else in the queue.
+- `POST /api/v1/operations/crew-documents/{document_id}/review/`
+  (`m2_operations_crew_document_review`) approves or rejects one document. Approving the last
+  required kind verifies the membership through the existing `verify_crew_documents` command;
+  rejecting a required kind withdraws verification, carrying the rejection's reason. A rejection
+  requires a reason.
+- `CrewMember` gains **`documents`**: per-kind status and, on a rejection, the reason — so a
+  Partner's roster can tell "waiting on Operations" apart from "waiting on you". No reviewer
+  identity and no file link is published to a Partner.
+
+**The verification queue can show verified crew.** `m2_operations_crew_verification_queue` gains a
+**`state`** parameter (`PENDING`, the default, / `VERIFIED` / `ALL`). `verify_crew_documents` has
+always been able to *un*-verify, and no screen could reach a verified membership to do it.
+`CrewMembershipVerificationRow` gains **`gender`**, **`documents_pending`** and
+**`documents_approved`**, so a queue row distinguishes "nobody has uploaded anything" from "there
+is a file to open".
+
+- Removed: none. `display_name` stays read-only on `CrewMember` responses and still resolves to
+  the same string for any roster that has not set an override.
+
+## 1.57.0 - Booking-level ratings stay private
+
+- Rating submission is unchanged: a Customer and Partner may each rate a completed booking or
+  engagement once, and the immutable stored score continues to feed aggregate marketplace trust.
+- `RatingSummary.my_rating` is now always `null` and `RatingSummary.ratings` is always empty.
+  They remain temporarily as compatibility fields for generated clients, but booking screens can
+  no longer display “Customer rating”, “Partner rating” or “Your rating” with an individual score
+  or comment.
+- Overall Partner rating and rating count are unchanged; those aggregates remain the only rating
+  values intended for display.
+- Removed: no contract fields in this compatibility release.
+
+## 1.56.0 - Crew booking fee development capture
+
+- `BookingFee` gains **`simulated_capture_available`**. It is true only when the server's
+  fail-closed development simulator setting is enabled and the fee's own payment attempt uses the
+  fake provider. The Customer can therefore offer the same one-click **Mark as paid** recovery as
+  visit plans after either a fresh checkout or a page reload, without inferring environment or
+  provider policy in the browser.
+- The existing `payment_attempt_simulate_capture` operation already accepts `M2_BOOKING_FEE` and
+  routes it through the real capture completion: the fee becomes active, the crew booking becomes
+  confirmed and the engagement is created in the same transaction.
+- Removed: none.
+
+## 1.55.0 - Which role a worker was named into, recorded before it is enforced
+
+- `StageCrewAssignment` gains **`role_code`**, published on every shift-day crew row, and the crew
+  assign command accepts an optional **`roles`** map (membership id -> role code). Blank on every
+  job that asks for no roles, which is most of them. A code the requirement does not publish is
+  dropped rather than refused: it describes how a crew is arranged, not who is turning up.
+- New **`role_fulfilment`** on the shift-day read and the assign response: per role, `wanted_men` /
+  `wanted_women` against `named_men` / `named_women`, plus `is_met` and a server-composed `gap`
+  ("1 woman short") so two clients cannot word the same shortfall differently.
+- **This is a warning, not a gate.** `assign_crew` still refuses on totals -- five men and two
+  women, roles collapsed -- and that is deliberately a floor rather than the promise the offer
+  screen makes: a lead can satisfy it with both women on setup while the Customer asked for them on
+  the serving line. `role_fulfilment` is what lets a screen say so without blocking a supervisor
+  who has a good reason to swap somebody on the morning of an event, which is ordinary and which
+  the attendance shortfall path already settles.
+- Recorded now, enforced later if ever. The strictness is a branch in `_assert_mix_met` and can
+  change any day; the column cannot be backfilled, because a shift settled without it is history
+  nobody can reconstruct.
+
+## 1.54.0 - Recording what a worker is, on a row several agencies share
+
+- `CrewMember` (the roster read) gains **`gender`**: `MAN` / `WOMAN` / `OTHER` / `UNDISCLOSED`, or
+  blank when nobody has recorded it. `CrewMemberCreateRequest` and the crew `PATCH` accept it.
+- **First write wins.** `CrewMember` is one row per person across every agency that has registered
+  them, so this field is shared. A blank accepts, the same value is a no-op, and a contradiction is
+  refused with the new **`m2_crew_gender_conflict`** (409) rather than overwritten -- silently
+  flipping it would change which jobs the *other* agency is dispatched for, without them touching
+  anything. There is no way to clear a recorded value.
+- `display_name` remains read-only for the same underlying reason and a different one: a name is
+  something an agency typed and might want to change, so one agency editing it would rename the
+  person on every other roster. Gender is a fact about the person, so it is editable-once instead
+  of not editable at all.
+- Blank is never male. Every row that existed before 1.53.0 starts blank, and blank, `OTHER` and
+  `UNDISCLOSED` alike fill a headcount and no gendered slot.
+
+## 1.53.0 - The crew mix a Partner can see, and the roster that has to meet it
+
+- **`CrewMixLine`** is new, and `EnquiryDetail` and the A3 crew offer both gain `crew_mix`: a
+  list of `{role_code, role_label, men, women, total}` in the catalogue's own order and words.
+  Structured rather than prose, because the Partner does not read this so much as *check* it --
+  the offer screen counts a roster against it before accepting, and the assignment screen ticks
+  each role off as names are added. Roles nobody asked for are absent, not zeroed.
+- The men/women halves are **real catalogue questions** now (`<role>_men`, `<role>_women`,
+  `INTEGER`, optional) on a new `event-staff-by-the-day` configuration version. They replace the
+  client-invented `<role>__men` answer keys, which were not in any schema, were invisible to
+  `brief`, and would have been refused by `validate_scope` the first time an event-staff
+  requirement reached `submit_requirement`.
+- **`staff_preference` (`any` / `female` / `male`) is removed.** It asked once for the whole crew
+  what the roles now ask per role, and a Customer could answer it in contradiction of the counts
+  with nobody downstream able to see the disagreement. Requirements pin a `configuration`, so
+  in-flight ones keep reading the version they were captured under.
+- The gendered codes are excluded from `brief`'s prose lines, the way `worker_count` and
+  `duration_days` already are: twelve lines reading "Waiters and serving staff - men: 3" is a
+  spreadsheet, not a brief.
+- New refusal **`m2_crew_mix_unmet`** (409) on `POST /partner/crew-offers/{id}/accept/` and on
+  `assign_crew`. Distinct from `m2_roster_insufficient` because the remedies differ: one lead
+  needs more people, the other needs different people.
+- New matching exclusion reason **`crew_mix_unmet`**. Dispatch is deliberately unknown-tolerant --
+  a lead is excluded only when even counting every gender-unrecorded worker as the needed gender
+  leaves them short, so a roster nobody has been asked about stays in the pool.
+
+## 1.52.0 - Offers that interrupt, waves that refill, and the visit-day contact rung
+
+- `EnquiryDetailSerializer` gains `customer_name` and `customer_phone`, both nullable. The name —
+  first name only — discloses with the site address (a paid plan visit `SCHEDULED` or
+  `IN_PROGRESS`); the phone only from two hours before the slot (the arrival-code window) until
+  the visit completes, and disappears again after. Full contact both ways stays on the
+  engagement's `contact_released_at`, unchanged.
+- New outbox event `m2.fixed_visit_offer.received`, routed to the vendor's in-app feed (target
+  `PROJECT_INVITATION`) and carried on the partner SSE stream — the one offer type that
+  previously reached nobody. `m2.crew_offer.invited` joins the stream purposes too.
+- New outbox event `m2.quote_wave.thin_supply`, routed to the Customer once per requirement when
+  a wave top-up finds no eligible vendor while the quote count is below what was promised.
+- `M2VariantConfiguration.fixed_visit_offer_timeout_seconds` (nullable): the fixed-visit offer's
+  wall-clock answer window, capping the borrowed business-hours deadline. Behavioural, not
+  contractual: declines now refill quote slots, and searching visit shares re-dispatch until
+  `starts_at - 15min` instead of settling `NO_PROFESSIONAL_FOUND` on the first dead wave.
+- Removed: none.
+
+## 1.49.0 - The crew booking, readable from one engagement
+
+- `EngagementSerializer` gains four nullable fields. `crew_terms` is the frozen rate-card
+  snapshot behind an A3 agreement (headcount, days, per-worker day rate, the lead's daily and
+  total receipt, the booking fee, shift length, overtime rate, add-ons, inclusions) — null on a
+  quote-flow engagement. `site_address`, `customer_contact` and `partner_contact` are disclosed
+  once `contact_released_at` is stamped, which on A3 is the moment the booking fee verifies;
+  before this a confirmed lead had no endpoint that told them where to go.
+- `EngagementStageSerializer.shift_summary`: the state of a crew day at a glance (crew named,
+  arrival, the supervisor's count, the customer's answer, the settlement status and amount) so
+  a job page can draw every day without one shift-day read per day. Null on project stages.
+- New outbox events, all routed to the vendor's in-app feed: `m2.crew_offer.invited` (the
+  push a lead never had), `m2.booking_fee.forfeited` (travel compensation landed),
+  `m2.shift.attendance_confirmed` (the customer agreed the count — collect this much),
+  `m2.shift.attendance_disputed`, and `m2.vendor.cash_demand_reported`. `m2.booking_fee.waived`
+  and `m2.crew.vendor_no_show` now reach both sides. On a `LEAD_ONLY` engagement the partner
+  copy for `m2.engagement.opened` and `m2.stage.disputed` no longer talks about a quote or a
+  held payment.
+- Notification target kind `CREW_OFFER` (id = the invitation) — opens the offer screen rather
+  than the enquiry inbox.
+
+## 1.48.0 - The vendor price book, wired; estimates carry a shopping list
+
+- New Partner operations `GET /partner/price-book/` (`m2_partner_price_book_read`) and
+  `PUT /partner/price-book/items/{work_item_id}/` (`m2_partner_price_book_item_set`): the
+  ops-curated work-item catalogue for the Partner's skills and one city, each entry carrying the
+  reference rate, the allowed band, the Partner's own rate and `is_default_rate` (true until they
+  save one — an unsaved rate *is* the city reference, so a new Partner can quote on day one).
+- New Operations operations for the catalogue (`/operations/work-items/…`), the guardrail
+  policy (`/operations/quote-guardrails/…`) and the custom-item queue
+  (`/operations/custom-item-reviews/…`).
+- `WorkItem` publishes `group` (the composer tab), `material_recipe` (what one unit consumes)
+  and `bundle_quantities` (quick-set quantities keyed by set code).
+- `ProposalItemLine` gains optional `work_item_id` and `is_custom`; `category` is now optional. A
+  catalogue line is band-checked at preview and submission (`rate_outside_band`); a custom line
+  is accepted as-is once its title passes contact screening (`custom_title_screened`). There is
+  no review queue and no share cap — an on-site estimate must be able to go out.
+- `ProposalCreateRequest` accepts `material_list` (what the Customer should buy — quantities and
+  a spec, never money; materials are always the Customer's to purchase) and
+  `material_brand_tier` (`STANDARD` / `PREMIUM` / blank). `Proposal` and `CustomerProposal`
+  publish both. `ProposalFinancialSummary` (the preview) publishes `suggested_material_list`,
+  built from the tapped catalogue items' recipes and rounded up to sellable packs.
+- `EnquiryDetail` gains `brief`: the Customer's answers as `{code, question, value}` lines in
+  the catalogue's own words (option labels, not codes) — the projection `CrewOffer.brief` has
+  carried since 1.46.0. `answers` remains for compatibility.
+- New `GET /requirements/{id}/quotes/{proposal_id}/shopping-list/download/` (`m2_quote_shopping_list_pdf`):
+  the estimate's shopping list as a V Solve Hub-branded PDF naming the professional; quantities
+  and specs only. Same entitlement as `m2_quote_list`.
+- `EnquirySummary`/`EnquiryDetail` gain `pricing_skill_code`: the trade whose price book the
+  composer opens (`electrician` for a rewiring, a consultation or a day-hire alike; falls back to
+  the dispatch skill). `GET /partner/price-book/` accepts `?skill=` to narrow to that trade, and
+  every `PriceBookEntry` carries `trade_code` / `trade_name`. Additive.
+- `Engagement` gains `service_name` and `service_slug` (read through the requirement), so the
+  agreement screens title themselves "Full home rewiring" rather than "Project". Additive.
+- New partner notification `m2.visit.booked` (template `m2_visit_booked_partner`) when a plan
+  payment confirms a held visit. Not a contract operation; recorded because clients render it.
+- Removed: `Proposal.misc_bps` / `margin_bps` columns (never published, never written).
+
+## 1.47.0 - Estimates a Customer can act on
+
+- `CustomerProposal` gains `scope_summary`, `questions` (the clarification thread with that
+  vendor, both directions) and `revision_request` (the Customer's latest ask for a change, or
+  null). `CustomerProposal.vendor` now also carries `rating_average` (nullable), `rating_count`,
+  `jobs_completed`, `experience_years` and `active_since` — read at request time from completed
+  engagements and Customer ratings, never stored and never an input to matching.
+- `Proposal` (the vendor's own read) gains `scope_summary` and `revision_request`;
+  `ProposalCreateRequest` accepts `scope_summary`.
+- New `POST /requirements/{id}/quotes/{proposal_id}/revision-request/`
+  (`m2_quote_revision_request`): the Customer asks for a different estimate with a reason
+  (`RevisionRequestReasonCodeEnum`), named lines to leave out and a note. Carries no price. One
+  open request per estimate; a second call re-reads the first. An open request keeps the A5
+  five-minute revision window open until the vendor supersedes (which answers it) or declines.
+- New `POST /proposals/{id}/revision-requests/{request_id}/decline/`
+  (`m2_proposal_revision_decline`) for the vendor.
+- New `GET /requirements/{id}/questions/` (`m2_requirement_question_list`): every question on a
+  request, readable at any status so a Customer can answer a professional's pre-visit question.
+- An expired A5 estimate with a revalidation request can now be superseded — previously the
+  revision window refused the very revision `m2_quote_revalidate` asked for.
+
+## 1.46.0 - Crew offers carry the Customer's brief
+
+- `CrewOffer` and `CrewOfferAccepted` gain `brief`: the Customer's answers beyond headcount and
+  days, as `{code, question, value}` lines resolved server-side from the variant's question schema
+  (option labels rather than codes, `Yes`/`No` for booleans, zero counts omitted, sizing codes
+  omitted). Additive; empty for a form that asks nothing beyond a size.
+- No operation, path or status change. The event-staff catalogue now publishes an occasion, a
+  guest band, a service style, per-role counts, a dress code, a staff-meal flag and a staff
+  preference on the same `ServiceQuestion` shapes already in the schema.
+
+## 1.44.0 - Customer-booked visits and server-priced estimates
+
+- Added Customer signed-slot discovery, exact 1/2/3 slot selection, per-slot matching status and
+  unmatched-slot replacement operations.
+- Partner offers now publish the immutable visit time, duration, earning and response deadline;
+  acceptance is first-wins and returns `slot_taken` after another professional commits.
+- Removed initial Partner visit-slot selection and requirement media-upload operations from the
+  published flow. Historical attachment records and project stage evidence remain intact.
+- Added `ITEM_WISE` and `LABOUR_WISE` estimate shapes, controlled named charges, material advances,
+  Partner-defined installments and the authoritative price-preview operation.
+- Proposal writes no longer accept tax basis, tax amount or commission treatment. Django publishes
+  the immutable policy/tax calculation, Partner quote, Customer total and Partner settlement values.
+- Paid estimate calculation fails closed with `m2_financial_policy_unavailable` until an approved,
+  effective Operations policy and canonical Partner tax profile exist.
+- Added Operations-only policy activation and Partner tax-profile verification operations. Policy
+  versions carry a Finance/legal approval reference and explicit supplier, fee, commission,
+  withholding and mixed service/material/charge tax-category decisions.
+- Engagement installments publish an immutable funding breakdown for Partner-service amount, tax,
+  separately customer-paid platform fee/tax and final amount due.
+
 > Entries for 1.19.0 and 1.20.0 were never written. This file therefore jumps 1.18.0 → 1.21.0.
 > The gap is recorded rather than backfilled, because inventing a description of a change nobody
 > documented is worse than an honest hole.
+
+## 1.43.0 - Icon-first service discovery
+
+Customer clients can now load the complete offerable service catalogue with one cacheable request:
+`GET /api/v1/services/` (`catalog_service_index`). Each compact `ServiceIndexItem` contains only
+service identity, category/subcategory identity and ordering, plus the backend-owned `icon_key`.
+It deliberately contains no cover image, description, pricing, question or policy payload.
+
+`icon_key` is also additive on the existing service-card and service-detail schemas. Its
+`IconKeyEnum` is a controlled semantic vocabulary; clients map those values to their own approved
+icon components and must not infer icons from service names. The database constraint and catalogue
+seeds ensure published values are supported, with `service` reserved as the explicit generic icon
+for a genuinely new service type.
+
+The index includes active services that are either currently priceable A1 tasks or active A3/A5
+requirement services, excludes unpublished/unofferable services, and preserves Operations-managed
+category, subcategory and service ordering with deterministic tie-breakers.
+
+**Breaking/removal notes:** none. Existing category listing, category service listing, service
+detail, media and pricing fields remain available on their existing operations.
+
+## 1.42.0 - Accepted jobs retain their service scope
+
+The Partner booking projection now publishes `service_lines` and `requirements`, copied from the
+immutable fulfilment-unit snapshots that produced the accepted offer. This keeps each booked
+service, quantity, structured scope and required equipment visible before start-OTP verification
+materializes operational `work_tasks`.
+
+The projection remains unit-scoped and contains no Customer identity, contact details, exact
+address, invoice, Booking Group identifier or sibling-unit data.
+
+## 1.41.0 - Project enquiries reveal place progressively
+
+Partner enquiry summaries now publish `approximate_area`, a locality-level label with no street,
+building, coordinates, customer identity or contact details. `EnquiryDetail.site_address` is
+nullable and remains null before visit commitment and while the first visit is held for Customer
+payment. It is populated only when a paid A5 plan visit reaches `SCHEDULED` or `IN_PROGRESS`.
+
+The exact destination contains address lines, landmark, locality, city, state and postal code. It
+still contains no Customer name, phone number, email or coordinates. The disclosure lets the
+Partner travel to a booked visit without turning an unaccepted enquiry into an off-platform lead.
+
+## 1.40.0 - A booked job keeps its offer context
+
+The Partner booking projection now publishes `display_title`, `approximate_area` and
+`estimated_earning`. These are durable booked-scope values available while a booking is still
+`CONFIRMED`, before `work_tasks` are materialized at work start and before settlement creates the
+final `earning` ledger entry.
+
+`estimated_earning` carries gross, commission, net and currency using the same frozen quote and
+commission policy shown in the accepted offer. It is an estimate, not a replacement for `earning`:
+completion outcomes and accepted amendments can change the final amount. The projection continues
+to withhold the Customer's invoice, exact address, Booking Group id and sibling-unit data.
 
 ## 1.34.0 - Somebody is finally told
 

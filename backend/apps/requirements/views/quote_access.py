@@ -28,6 +28,8 @@ from apps.requirements.serializers import (
     CustomerProposalSerializer,
     CustomerQuoteListSerializer,
     ProposalRejectSerializer,
+    RevisionRequestCreateSerializer,
+    RevisionRequestSerializer,
     UnlockStateSerializer,
     VisitPlanChooseSerializer,
     VisitPlanSerializer,
@@ -461,6 +463,86 @@ class RequirementQuoteRejectView(ThrottledWriteMixin, APIView):
                 "requirement_id": str(requirement_id),
                 "proposal_id": str(proposal_id),
                 **serializer.validated_data,
+            },
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class RequirementQuoteRevisionRequestView(ThrottledWriteMixin, APIView):
+    permission_classes = (IsAuthenticated,)
+    throttle_scope = "m2_quote_action"
+
+    @extend_schema(
+        tags=["M2 - Quotes"],
+        operation_id="m2_quote_revision_request",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=RevisionRequestCreateSerializer,
+        description=(
+            "Ask the professional behind one live estimate for a different one, with the reason "
+            "attached: leave named lines out, change materials, split the work into phases, ask "
+            "whether they can move on price, or something else in a sentence. "
+            "**`requested_discount_bps` is what the Customer hopes to pay, never what the work "
+            "costs** — it changes no total, obliges nobody, and the estimate stays live and "
+            "selectable at the price as sent. The vendor answers by superseding the estimate, "
+            "which lands under the same entitlement. One open request per estimate; a second call "
+            "re-reads the first. A price may be asked about once per estimate."
+        ),
+        responses={
+            201: RevisionRequestSerializer,
+            400: ApiErrorSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_proposal_not_selectable` when the estimate is no longer live, "
+                "when the request already has a chosen vendor, or when the caller has not "
+                "unlocked these quotes.",
+            ),
+        },
+    )
+    def post(self, request: Request, requirement_id: uuid.UUID, proposal_id: uuid.UUID) -> Response:
+        serializer = RevisionRequestCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        customer = cast(User, request.user)
+        key = _idempotency_key(request)
+        try:
+            requirement = requirement_for_customer(customer=customer, requirement_id=requirement_id)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        proposal = _proposal_for_customer(requirement=requirement, proposal_id=proposal_id)
+        data = serializer.validated_data
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                asked = proposals.request_revision(
+                    requirement_id=requirement.id,
+                    proposal_id=proposal.id,
+                    actor=customer,
+                    reason_code=str(data["reason_code"]),
+                    excluded_items=list(data["excluded_items"]),
+                    note=str(data["note"]),
+                    requested_discount_bps=data["requested_discount_bps"],
+                )
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            return status.HTTP_201_CREATED, cast(
+                dict[str, object], RevisionRequestSerializer(asked).data
+            )
+
+        result = execute_idempotent(
+            actor=customer,
+            operation="m2.quote.revision_request",
+            key=key,
+            request_payload={
+                "requirement_id": str(requirement_id),
+                "proposal_id": str(proposal_id),
+                "reason_code": str(data["reason_code"]),
+                "excluded_items": "|".join(data["excluded_items"]),
+                "note": str(data["note"]),
+                # In the replay fingerprint: asking for 3% and asking for 5% are different
+                # requests, and a shared key would serve the first answer to the second ask.
+                "requested_discount_bps": str(data["requested_discount_bps"]),
             },
             command=command,
         )

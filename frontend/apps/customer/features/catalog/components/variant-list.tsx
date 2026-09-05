@@ -1,6 +1,6 @@
-import Link from "next/link";
-import { Badge, buttonStyles, formatMoney } from "@vsolve/ui";
+import { Badge, formatMoney } from "@vsolve/ui";
 
+import { AddToCartButton } from "./add-to-cart-button";
 import type { ServiceDetail } from "../queries";
 
 /**
@@ -33,7 +33,7 @@ import type { ServiceDetail } from "../queries";
  */
 export function VariantList({
   variants,
-  serviceSlug,
+  serviceSlug: _serviceSlug,
 }: {
   variants: ServiceDetail["variants"];
   serviceSlug: string;
@@ -43,28 +43,30 @@ export function VariantList({
   const isChoice = variants.length > 1;
 
   return (
-    <ul className="mt-3 divide-y divide-line rounded-card border border-line bg-surface">
+    <ul className="mt-4 space-y-4">
       {variants.map((variant) => (
-        <li key={variant.id} className="flex flex-wrap items-start justify-between gap-3 p-4">
+        <li key={variant.id} className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 p-5 rounded-[0.75rem] bg-[#F4F2EE]">
           <div className="min-w-0 flex-1">
-            <p className="font-semibold text-text">{variant.name}</p>
+            <p className="text-[1.05rem] font-medium text-navy-900">{variant.name}</p>
             {variant.description ? (
-              <p className="mt-0.5 text-sm text-text-secondary">{variant.description}</p>
+              <p className="mt-2.5 text-[0.9rem] leading-relaxed text-text-secondary">{variant.description}</p>
             ) : null}
-            <p className="mt-1.5 text-xs text-text-muted">
+            <p className="mt-3.5 text-[0.85rem] italic text-text-muted/90">
               {variant.task_lines.length > 0
                 ? `${variant.task_lines.length} task${variant.task_lines.length === 1 ? "" : "s"} you can choose from`
                 : "Priced on booking"}
             </p>
           </div>
 
-          <div className="text-right">
-            <span className="block text-xs uppercase tracking-[0.08em] text-text-muted">
-              Starts at
-            </span>
-            <span data-numeric className="text-lg font-bold text-text">
-              {formatMoney(variant.starting_price.amount_paise)}
-            </span>
+          <div className="text-left sm:text-right sm:pl-6 sm:ml-4 sm:border-l sm:border-line/40 flex sm:flex-col items-center sm:items-end justify-between sm:justify-start">
+            <div className="text-left sm:text-right">
+              <span className="block text-[0.65rem] uppercase font-bold tracking-wider text-text-muted">
+                Starts at
+              </span>
+              <span data-numeric className="mt-0.5 block text-[1.1rem] font-bold tabular-nums text-navy-900">
+                {formatMoney(variant.starting_price.amount_paise)}
+              </span>
+            </div>
             {/* The minimum visit charge is the number a customer is actually
                 held to when they pick one small task, so it is disclosed here
                 rather than discovered at review. */}
@@ -76,12 +78,13 @@ export function VariantList({
             ) : null}
 
             {isChoice ? (
-              <Link
-                href={`/book/${serviceSlug}?variant=${encodeURIComponent(variant.code)}`}
-                className={buttonStyles({ size: "sm", variant: "secondary", className: "mt-2" })}
-              >
-                Book<span className="sr-only"> {variant.name}</span>
-              </Link>
+              <div className="mt-3 flex w-full flex-col gap-2 sm:mt-2 sm:w-auto sm:items-end">
+                <AddToCartButton
+                  variantId={variant.id}
+                  size="compact"
+                  className="w-full sm:w-auto"
+                />
+              </div>
             ) : null}
           </div>
         </li>

@@ -112,7 +112,7 @@ describe("My requests", () => {
   it("keeps a failed read distinguishable from an empty one", async () => {
     // The rule the whole file turns on. A dropped connection must never be able
     // to tell a Customer they have never asked for anything.
-    client.GET.mockReturnValue(refusal(503, "service_unavailable"));
+    client.GET.mockReturnValue(refusal(403, "permission_denied"));
 
     const { result } = renderHook(() => useMyRequests(), { wrapper });
 
@@ -145,7 +145,7 @@ describe("one requirement and its timeline", () => {
   it("reads them under separate keys so they can fail independently", async () => {
     client.GET.mockImplementation((path: string) =>
       path.endsWith("/timeline/")
-        ? refusal(500, "server_error")
+        ? refusal(403, "permission_denied")
         : Promise.resolve(ok({ id: "req-1", status: "MATCHING" })),
     );
 

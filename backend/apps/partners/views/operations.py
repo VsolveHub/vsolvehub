@@ -20,8 +20,9 @@ from rest_framework.views import APIView
 
 from apps.identity.models import AccessAuditEvent, User
 from apps.identity.services import record_access_event
+from apps.partners.capabilities import verify_business_tax_profile
 from apps.partners.exceptions import PartnerDomainError, PartnerSelfReviewError
-from apps.partners.models import PartnerDocument
+from apps.partners.models import PartnerDocument, PartnerProfile
 from apps.partners.permissions import IsOperationsUser
 from apps.partners.selectors import (
     operations_partner_application_detail,
@@ -41,8 +42,10 @@ from apps.partners.serializers import (
     OperationsPartnerDirectoryPageSerializer,
     OperationsPartnerDirectoryQuerySerializer,
     OperationsPartnerScheduleUpdateSerializer,
+    OperationsTaxProfileVerifySerializer,
     OperationsTransitionSerializer,
     PartnerApplicationSerializer,
+    PartnerBusinessProfileSerializer,
     PartnerDocumentReviewAccessSerializer,
     PartnerDocumentSerializer,
     PartnerScheduleSerializer,
@@ -191,6 +194,38 @@ class OperationsPartnerDetailView(APIView):
             request_id=get_request_id() or "",
         )
         return Response(OperationsPartnerDetailSerializer(partner).data)
+
+
+class OperationsPartnerTaxProfileVerificationView(APIView):
+    permission_classes = (IsOperationsUser,)
+
+    @extend_schema(
+        tags=["Operations - Partners"],
+        operation_id="operations_partner_tax_profile_verify",
+        request=OperationsTaxProfileVerifySerializer,
+        responses={
+            200: PartnerBusinessProfileSerializer,
+            400: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request, partner_id: uuid.UUID) -> Response:
+        serializer = OperationsTaxProfileVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        partner = PartnerProfile.objects.filter(pk=partner_id).first()
+        if partner is None:
+            raise NotFound("Partner not found.")
+        try:
+            profile = verify_business_tax_profile(
+                partner=partner,
+                actor=cast(User, request.user),
+                registered_state_code=str(
+                    serializer.validated_data.get("registered_state_code") or ""
+                ),
+            )
+        except PartnerDomainError as exc:
+            _raise_api_error(exc)
+        return Response(PartnerBusinessProfileSerializer(profile).data)
 
 
 class OperationsPartnerApplicationDetailView(APIView):

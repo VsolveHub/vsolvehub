@@ -1,157 +1,205 @@
 "use client";
 
+import { useMemo } from "react";
 import { Badge, ErrorState, Spinner } from "@vsolve/ui";
 
-import { useApplicationEditor } from "./application-editor";
-
-import type { OfferableService } from "@/features/catalog/queries";
-
+import { useApplicationEditor, useProceedDisabled } from "./application-editor";
+import type { MainCategory, OfferableService } from "@/features/catalog/queries";
 import { toggle } from "../model/draft";
+import {
+  isTradeCategorySelected,
+  selectedTradeCategories,
+  toggleTradeCategorySelection,
+  variantIdsForCategory,
+} from "../model/main-categories";
 import { useApplicationReference } from "../reference-queries";
 import { SelectableRow } from "./selectable-row";
 
-/**
- * What the applicant does, and which jobs they will accept.
- *
- * Two separate questions on purpose. The trade is how a Partner thinks about
- * themselves; the service variants are what the dispatcher can actually offer
- * them. Merging them into one list would either hide work someone can do or
- * sign them up for jobs they never agreed to.
- *
- * Trades come from `GET /api/v1/partner/skills/` — the canonical set, with real
- * names and descriptions. They used to be derived by walking the public catalog
- * and humanising each `required_skill_code`, which was a request waterfall that
- * could only ever guess the label.
- *
- * Services still come from the catalog, which is where they belong: they are the
- * same bookable variants a customer sees, so a variant Operations deactivates
- * stops being offerable without a frontend change.
- */
-
 export interface WorkStepProps {
-  /**
-   * Bookable services, read from the public catalog during server rendering.
-   *
-   * A prop rather than a context read because it is the one input here that is
-   * genuinely not per-applicant: it is identical for everyone, needs no session,
-   * and is therefore cheaper fetched once on the server than once per browser.
-   * The applicant's own answers come from `useApplicationEditor`.
-   */
+  mainCategories: readonly MainCategory[];
   services: readonly OfferableService[];
 }
 
-export function WorkStep({ services }: WorkStepProps) {
-  const { draft, update, isReadOnly } = useApplicationEditor();
+function servicesForCategory(
+  category: MainCategory,
+  catalog: readonly OfferableService[],
+): OfferableService[] {
+  return catalog.filter((service) => service.categoryName === category.name);
+}
 
+export function WorkStep({ mainCategories, services }: WorkStepProps) {
+  const { draft, update, isReadOnly } = useApplicationEditor();
   const reference = useApplicationReference();
 
-  const byCategory = new Map<string, OfferableService[]>();
-  for (const service of services) {
-    const bucket = byCategory.get(service.categoryName) ?? [];
-    bucket.push(service);
-    byCategory.set(service.categoryName, bucket);
-  }
+  const selectedCategories = useMemo(
+    () => selectedTradeCategories(mainCategories, reference.skills, draft.skillCodes),
+    [draft.skillCodes, mainCategories, reference.skills],
+  );
+
+  const selectableServices = useMemo(() => {
+    const activeNames = new Set(selectedCategories.map((category) => category.name));
+    return services.filter((service) => activeNames.has(service.categoryName));
+  }, [selectedCategories, services]);
+
+  const selectedServiceCount = useMemo(
+    () =>
+      draft.serviceVariantIds.filter((id) =>
+        selectableServices.some((service) => service.variantId === id),
+      ).length,
+    [draft.serviceVariantIds, selectableServices],
+  );
+
+  useProceedDisabled(
+    selectedCategories.length === 0 ||
+      (selectableServices.length > 0 && selectedServiceCount === 0),
+  );
 
   return (
-    <div className="flex flex-col gap-8">
-      <fieldset className="border-0 p-0">
-        <legend className="text-base font-semibold text-text">What kind of work do you do?</legend>
-        <p className="mt-1 text-sm text-text-secondary">
-          Choose every trade you are qualified for. You can change this later.
+    <fieldset className="border-0 p-0">
+      <legend className="text-sm font-bold text-navy-900">
+        Select Your Trades <span className="text-danger-text">*</span>
+      </legend>
+      <p className="mt-1 text-xs leading-5 text-text-muted">
+        Choose your main categories, then pick the job types you want under each one.
+      </p>
+
+      {reference.isPending ? (
+        <p className="mt-3 flex items-center gap-2 py-4 text-sm text-text-secondary">
+          <Spinner size="sm" />
+          Loading categories…
         </p>
-
-        {reference.isPending ? (
-          <p className="mt-3 flex items-center gap-2 text-sm text-text-secondary">
-            <Spinner size="sm" />
-            Loading trades…
-          </p>
-        ) : reference.isError ? (
-          <ErrorState
-            className="mt-3"
-            inline
-            title="We could not load the trades"
-            message="Nothing you have chosen is lost. Check your connection and try again."
-            actionLabel="Try again"
-            onAction={reference.refetch}
-          />
-        ) : reference.skills.length === 0 ? (
-          <p className="mt-3 rounded-card border border-line bg-surface p-4 text-sm text-text-secondary">
-            No trades are open for applications right now.
-          </p>
-        ) : (
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            {reference.skills.map((skill) => (
-              <SelectableRow
-                key={skill.code}
-                checked={draft.skillCodes.includes(skill.code)}
-                disabled={isReadOnly}
-                onChange={() => update({ skillCodes: toggle(draft.skillCodes, skill.code) })}
-                label={skill.name}
-                caption={skill.description || undefined}
-              />
-            ))}
-          </div>
-        )}
-      </fieldset>
-
-      <fieldset className="border-0 p-0">
-        <legend className="text-base font-semibold text-text">
-          Which jobs will you accept?
-        </legend>
-        <p className="mt-1 text-sm text-text-secondary">
-          You will only be offered jobs you have ticked here.
+      ) : reference.isError ? (
+        <ErrorState
+          className="mt-3"
+          inline
+          title="Could not load categories"
+          message="Check your connection and try again."
+          actionLabel="Try again"
+          onAction={reference.refetch}
+        />
+      ) : mainCategories.length === 0 ? (
+        <p className="mt-3 rounded-control border border-line bg-surface p-4 text-sm text-text-secondary">
+          No categories are currently open for registration.
         </p>
+      ) : (
+        <div className="mt-3 flex flex-col gap-4">
+          {mainCategories.map((category) => {
+            const checked = isTradeCategorySelected(
+              category,
+              reference.skills,
+              draft.skillCodes,
+            );
+            const categoryServices = servicesForCategory(category, services);
+            const allCategoryIds = variantIdsForCategory(category.name, services);
+            const allServicesSelected =
+              allCategoryIds.length > 0 &&
+              allCategoryIds.every((id) => draft.serviceVariantIds.includes(id));
 
-        {services.length === 0 ? (
-          <p className="mt-3 rounded-card border border-line bg-surface p-4 text-sm text-text-secondary">
-            No services are open for applications right now.
-          </p>
-        ) : (
-          <div className="mt-3 flex flex-col gap-5">
-            {[...byCategory.entries()].map(([category, categoryServices]) => (
-              <div key={category}>
-                <h3 className="text-sm font-semibold uppercase tracking-[0.06em] text-text-secondary">
-                  {category}
-                </h3>
-                <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                  {categoryServices.map((service) => {
-                    const needsSkill =
-                      service.requiredSkillCode.length > 0 &&
-                      !draft.skillCodes.includes(service.requiredSkillCode);
+            return (
+              <div key={category.id} className="flex flex-col gap-2.5">
+                <SelectableRow
+                  checked={checked}
+                  disabled={isReadOnly}
+                  onChange={() =>
+                    update(
+                      toggleTradeCategorySelection(
+                        category,
+                        reference.skills,
+                        services,
+                        draft.skillCodes,
+                        draft.serviceVariantIds,
+                      ),
+                    )
+                  }
+                  label={category.name}
+                />
 
-                    return (
-                      <div key={service.variantId} className="flex flex-col gap-1">
-                        <SelectableRow
-                          checked={draft.serviceVariantIds.includes(service.variantId)}
-                          disabled={isReadOnly}
-                          onChange={() =>
-                            update({
-                              serviceVariantIds: toggle(
-                                draft.serviceVariantIds,
-                                service.variantId,
-                              ),
-                            })
-                          }
-                          label={service.variantName}
-                          caption={service.serviceName}
-                        />
-                        {/* A hint, not a rule: whether Django requires the
-                            matching skill is its decision, not this form's. */}
-                        {needsSkill && draft.serviceVariantIds.includes(service.variantId) ? (
-                          <Badge tone="warning">
-                            Usually needs the {service.requiredSkillCode.replace(/-/g, " ")}{" "}
-                            trade above
-                          </Badge>
+                {checked ? (
+                  categoryServices.length > 0 ? (
+                    <div className="ml-1 flex flex-col gap-2 border-l-2 border-line pl-3 sm:ml-2 sm:pl-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-text-muted">
+                          Job types
+                        </p>
+                        {!isReadOnly ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (allServicesSelected) {
+                                update({
+                                  serviceVariantIds: draft.serviceVariantIds.filter(
+                                    (id) => !allCategoryIds.includes(id),
+                                  ),
+                                });
+                              } else {
+                                update({
+                                  serviceVariantIds: Array.from(
+                                    new Set([...draft.serviceVariantIds, ...allCategoryIds]),
+                                  ),
+                                });
+                              }
+                            }}
+                            className="text-xs font-semibold text-navy-700 hover:text-signal-700"
+                          >
+                            {allServicesSelected ? "Deselect all" : "Select all"}
+                          </button>
                         ) : null}
                       </div>
-                    );
-                  })}
-                </div>
+
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {categoryServices.map((service) => {
+                          const needsSkill =
+                            service.requiredSkillCode.length > 0 &&
+                            !draft.skillCodes.includes(service.requiredSkillCode);
+
+                          return (
+                            <div key={service.variantId} className="flex flex-col gap-1">
+                              <SelectableRow
+                                checked={draft.serviceVariantIds.includes(service.variantId)}
+                                disabled={isReadOnly}
+                                onChange={() =>
+                                  update({
+                                    serviceVariantIds: toggle(
+                                      draft.serviceVariantIds,
+                                      service.variantId,
+                                    ),
+                                  })
+                                }
+                                label={service.variantName}
+                                caption={service.serviceName}
+                              />
+                              {needsSkill &&
+                              draft.serviceVariantIds.includes(service.variantId) ? (
+                                <Badge tone="warning">
+                                  Requires {service.requiredSkillCode.replace(/-/g, " ")} trade
+                                </Badge>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="ml-1 border-l-2 border-line pl-3 text-xs leading-5 text-text-secondary sm:ml-2 sm:pl-4">
+                      No bookable job types are open for this category yet.
+                    </p>
+                  )
+                ) : null}
               </div>
-            ))}
-          </div>
-        )}
-      </fieldset>
-    </div>
+            );
+          })}
+        </div>
+      )}
+
+      {selectedCategories.length === 0 ? (
+        <p className="mt-3 text-xs font-semibold text-danger-text">
+          * Please select at least one category to proceed.
+        </p>
+      ) : selectableServices.length > 0 && selectedServiceCount === 0 ? (
+        <p className="mt-3 text-xs font-semibold text-danger-text">
+          * Please select at least one job type under your chosen categories.
+        </p>
+      ) : null}
+    </fieldset>
   );
 }

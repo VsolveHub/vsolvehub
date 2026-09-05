@@ -17,6 +17,19 @@ from .base import PAYMENT_FINAL_STATES
 from .capture import apply_provider_payment
 
 
+def attempt_belongs_to(*, attempt: PaymentAttempt, customer_id: UUID) -> bool:
+    """Whether this Customer may read or act on the attempt, checkout-free purposes included.
+
+    The detail and reconcile reads used to answer through `checkout__customer` alone, which made
+    every M2 charge — the visit plan, the unlock, the booking fee — a `404` to the very Customer
+    who started it. A crew booking fee therefore could never be handed to the provider or the
+    simulator from the screen that started it. Same rule the simulator already used, published.
+    """
+    if attempt.checkout is not None:
+        return bool(attempt.checkout.customer_id == customer_id)
+    return _standalone_attempt_belongs_to(attempt=attempt, customer_id=customer_id)
+
+
 def _standalone_attempt_belongs_to(*, attempt: PaymentAttempt, customer_id: UUID) -> bool:
     """Whose charge is a checkout-free `PaymentAttempt`?
 

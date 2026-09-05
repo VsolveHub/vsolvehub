@@ -177,6 +177,46 @@ class CrewConflictError(PartnerDomainError):
         )
 
 
+class CrewGenderConflictError(PartnerDomainError):
+    """Two agencies have recorded different genders for the same person.
+
+    `CrewMember` is one row per person across every agency that has registered them, so this field
+    is shared. First write wins and a contradicting write is refused, rather than the second agency
+    silently flipping the first one's roster -- which would change who the first agency is eligible
+    to be dispatched for, without them touching anything.
+
+    A refusal rather than a merge because there is no version of this the server can decide: one of
+    the two agencies is wrong, and only a person can say which.
+    """
+
+    def __init__(self, name: str, recorded: str) -> None:
+        super().__init__(
+            code="m2_crew_gender_conflict",
+            message=(
+                f"Vsolve already has {name} recorded as {recorded.lower()}, from another agency's "
+                "crew list. Contact support if that is wrong."
+            ),
+            status_code=409,
+        )
+
+
+class CrewDocumentError(PartnerDomainError):
+    """A crew identity document could not be accepted, reviewed, or replaced.
+
+    `400` rather than `409`: every case here is something the Partner or reviewer can fix by
+    sending a different request — a wrong media type, an expired signed upload, a file that did
+    not match what was declared, a rejection with no reason. Nothing in it is a race with another
+    actor, which is what a `409` would claim.
+    """
+
+    def __init__(self, message: str) -> None:
+        super().__init__(
+            code="m2_crew_document_rejected",
+            message=message,
+            status_code=400,
+        )
+
+
 class LifecycleNotSupportedError(PartnerDomainError):
     def __init__(self, message: str) -> None:
         super().__init__(

@@ -1,7 +1,7 @@
 "use client";
 
 import type { Schemas } from "@vsolve/api-client";
-import { Badge } from "@vsolve/ui";
+import { cn } from "@vsolve/ui";
 
 /**
  * The application's current standing, stated plainly.
@@ -91,11 +91,11 @@ export interface ApplicationStatusBannerProps {
 }
 
 export function ApplicationStatusBanner({ application }: ApplicationStatusBannerProps) {
+  // When in DRAFT, the NextAction hero card handles the primary progress guidance directly.
+  if (application.status === "DRAFT") return null;
+
   const presentation = PRESENTATION[application.status];
 
-  // The reviewer's own words, when there are any. Falling back to generic copy
-  // when a reviewer requested changes without saying why is a backend bug worth
-  // surfacing honestly rather than papering over.
   const detail =
     application.status === "CHANGES_REQUIRED"
       ? application.change_request_message ||
@@ -104,23 +104,41 @@ export function ApplicationStatusBanner({ application }: ApplicationStatusBanner
 
   return (
     <section
-      // Waiting states are polite; states that need action interrupt.
       aria-live={presentation.isWaiting ? "polite" : "assertive"}
-      className="rounded-card border border-line bg-surface p-4"
+      className={cn(
+        "rounded-2xl border p-5 shadow-xs transition-all",
+        presentation.tone === "info" && "bg-sky-50/70 border-sky-200 text-sky-950",
+        presentation.tone === "warning" && "bg-amber-50/80 border-amber-300 text-amber-950",
+        presentation.tone === "success" && "bg-emerald-50/80 border-emerald-300 text-emerald-950",
+        presentation.tone === "danger" && "bg-rose-50/80 border-rose-300 text-rose-950",
+        presentation.tone === "neutral" && "bg-surface-sunken border-line text-text",
+      )}
     >
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge tone={presentation.tone}>{presentation.label}</Badge>
-        <h2 className="text-base font-semibold text-text">{presentation.headline}</h2>
+      <div className="flex flex-wrap items-center gap-2.5">
+        <span
+          className={cn(
+            "rounded-full px-2.5 py-0.5 text-xs font-black uppercase tracking-wider",
+            presentation.tone === "info" && "bg-sky-600 text-white",
+            presentation.tone === "warning" && "bg-amber-600 text-white",
+            presentation.tone === "success" && "bg-emerald-600 text-white",
+            presentation.tone === "danger" && "bg-rose-600 text-white",
+            presentation.tone === "neutral" && "bg-navy-900 text-white",
+          )}
+        >
+          {presentation.label}
+        </span>
+        <h2 className="text-base font-bold text-navy-900">{presentation.headline}</h2>
       </div>
 
-      <p className="mt-2 text-sm text-text-secondary">{detail}</p>
+      <p className="mt-2 text-sm text-text-secondary leading-relaxed">{detail}</p>
 
       {application.submitted_at && presentation.isWaiting ? (
-        <p className="mt-2 text-sm text-text-muted">
-          Submitted{" "}
-          <time dateTime={application.submitted_at}>
+        <p className="mt-3 text-xs text-text-muted font-medium border-t border-line/40 pt-2">
+          Submitted on{" "}
+          <time dateTime={application.submitted_at} className="font-bold text-navy-900">
             {new Intl.DateTimeFormat("en-IN", {
               dateStyle: "medium",
+              timeStyle: "short",
               timeZone: "Asia/Kolkata",
             }).format(new Date(application.submitted_at))}
           </time>

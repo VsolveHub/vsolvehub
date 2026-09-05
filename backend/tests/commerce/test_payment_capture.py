@@ -409,7 +409,7 @@ def test_ambiguous_order_creation_stays_reconcilable_and_opens_exception(
             raise PaymentProviderAmbiguousError
 
     monkeypatch.setattr(
-        "apps.commerce.services.get_payment_provider",
+        "apps.commerce.services.payments.get_payment_provider",
         lambda **_kwargs: AmbiguousProvider(),
     )
 
@@ -441,7 +441,7 @@ def test_rejected_provider_order_fails_definitively_without_financial_exception(
             raise PaymentProviderRejectedError
 
     monkeypatch.setattr(
-        "apps.commerce.services.get_payment_provider",
+        "apps.commerce.services.payments.get_payment_provider",
         lambda **_kwargs: RejectedProvider(),
     )
 
@@ -475,7 +475,7 @@ def test_provider_order_amount_mismatch_fails_closed_and_opens_exception(
             )
 
     monkeypatch.setattr(
-        "apps.commerce.services.get_payment_provider",
+        "apps.commerce.services.payments.get_payment_provider",
         lambda **_kwargs: MismatchedProvider(),
     )
 
@@ -653,7 +653,7 @@ def test_definitive_refund_failure_is_visible_to_finance(
             raise PaymentProviderRejectedError
 
     monkeypatch.setattr(
-        "apps.commerce.services.get_payment_provider",
+        "apps.commerce.services.refunds.get_payment_provider",
         lambda **_kwargs: RejectedProvider(),
     )
 

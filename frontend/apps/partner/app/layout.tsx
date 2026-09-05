@@ -2,6 +2,11 @@ import type { Metadata } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import { QueryProvider, SessionSync } from "@vsolve/query";
 import { ToastProvider } from "@vsolve/ui";
+
+import { PartnerGlobalPopup } from "@/features/notifications/view/partner-global-popup";
+import { PartnerAudioUnlock } from "@/features/notifications/view/partner-audio-unlock";
+import { PartnerPresenceProvider } from "@/features/presence/view/partner-presence-provider";
+
 import "./globals.css";
 
 const appFont = Plus_Jakarta_Sans({
@@ -48,7 +53,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               throws without this. Mounted at the root so the live region exists
               before any message arrives, per the WAI-ARIA pattern the provider
               implements. */}
-          <ToastProvider>{children}</ToastProvider>
+          <ToastProvider>
+            <PartnerPresenceProvider>
+              <PartnerAudioUnlock />
+              {children}
+              <PartnerGlobalPopup />
+            </PartnerPresenceProvider>
+          </ToastProvider>
         </QueryProvider>
       </body>
     </html>

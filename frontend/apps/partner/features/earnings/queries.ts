@@ -67,9 +67,10 @@ export type PartnerPerformance = Schemas["PartnerPerformance"];
 /**
  * How the Partner is doing — today, this month, and the trend behind them.
  *
- * Distinct from `usePartnerBalance`, which answers "what am I owed". Both are
- * aggregates over the same ledger; folding them together would make a screen
- * that wants today's total pull a full balance breakdown it never renders.
+ * Distinct from `usePartnerBalance`, which answers "what does Vsolve owe me".
+ * Performance also includes mutually confirmed A3 payments made directly by
+ * the Customer, because they are earnings even though they never enter Vsolve's
+ * payout ledger.
  *
  * The daily series is computed server-side on purpose. Grouping the ledger in
  * the browser silently under-reports the moment a Partner has more entries than

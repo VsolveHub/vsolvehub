@@ -30,6 +30,7 @@ from .m2_crew import (
     PartnerCrewAvailabilityView,
     PartnerCrewCollectionView,
     PartnerCrewDetailView,
+    PartnerCrewDocumentView,
     _crew_entry,
     _crew_membership_or_404,
 )
@@ -55,6 +56,7 @@ from .operations import (
     OperationsPartnerDocumentAccessView,
     OperationsPartnerDocumentReviewView,
     OperationsPartnerScheduleView,
+    OperationsPartnerTaxProfileVerificationView,
 )
 from .partner_application import (
     ApplicantServiceAreaListView,
@@ -84,6 +86,7 @@ __all__ = [
     "OperationsPartnerDocumentAccessView",
     "OperationsPartnerDocumentReviewView",
     "OperationsPartnerScheduleView",
+    "OperationsPartnerTaxProfileVerificationView",
     "PartnerApiException",
     "PartnerApplicationSubmitView",
     "PartnerApplicationView",
@@ -96,6 +99,7 @@ __all__ = [
     "PartnerCrewAvailabilityView",
     "PartnerCrewCollectionView",
     "PartnerCrewDetailView",
+    "PartnerCrewDocumentView",
     "PartnerDocumentCreateView",
     "PartnerDocumentUploadView",
     "PartnerGateListView",
