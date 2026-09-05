@@ -1,5 +1,28 @@
 # API Contract Changelog
 
+## 1.66.0 - A requested price reduction becomes an overall estimate discount
+
+The Partner no longer has to rebuild an estimate to answer a Customer's price request. Two new
+Partner commands sit on the open revision request:
+
+- `.../discount/preview/` returns the server-calculated customer total, tax, Partner receipt and
+  payment allocations without writing anything.
+- `.../discount/apply/` applies that confirmed figure idempotently as a new immutable proposal
+  revision, supersedes the old estimate and answers the request in the same transaction.
+
+The command accepts either `PERCENT` plus `discount_bps`, or `FIXED` plus the desired
+`final_total_paise`; both are capped at 15% of the current total. The estimate records
+`discount_kind`, `discount_bps`, `discount_base_paise`, `discount_paise` and `discount_source`.
+`total_paise` and `customer_total_paise` are the final discounted payable amount.
+
+The discount is not a negative named charge. Item, labour, material and charge rows remain at the
+rates the Partner authored; the calculator allocates one first-class concession across their tax
+groups and payment parts in integer paise, then recalculates tax, platform fees, commission,
+withholding and Partner net. Stage and material responses expose `discount_paise` and
+`discounted_amount_paise`, and the financial preview exposes its undiscounted total and savings.
+
+- Removed: none.
+
 ## 1.61.0 - A project estimate is revisable until the customer chooses it
 
 A vendor could correct an A5 estimate for five minutes after sending it, and not one second

@@ -29,6 +29,14 @@ export interface SegmentedOption {
 
 export interface SegmentedProps {
   label: string;
+  /**
+   * The id of a heading already on screen that names this group.
+   *
+   * When given, the track points at that instead of repeating the label in its own
+   * `sr-only` span — a control sitting under a visible `FieldLabel` otherwise announces
+   * its question twice to a screen reader while a sighted reader sees it once.
+   */
+  labelledBy?: string;
   name: string;
   options: readonly SegmentedOption[];
   value: string | null;
@@ -38,13 +46,15 @@ export interface SegmentedProps {
 
 export function Segmented({
   label,
+  labelledBy,
   name,
   options,
   value,
   onChange,
   disabled = false,
 }: SegmentedProps) {
-  const labelId = useId();
+  const ownLabelId = useId();
+  const labelId = labelledBy ?? ownLabelId;
 
   return (
     <div
@@ -52,9 +62,11 @@ export function Segmented({
       aria-labelledby={labelId}
       className="flex gap-[5px] rounded-xl bg-warm-200 p-1"
     >
-      <span id={labelId} className="sr-only">
-        {label}
-      </span>
+      {labelledBy === undefined ? (
+        <span id={labelId} className="sr-only">
+          {label}
+        </span>
+      ) : null}
 
       {options.map((option) => {
         const checked = value === option.value;

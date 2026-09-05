@@ -27,6 +27,8 @@ from apps.requirements.models import Proposal
 from apps.requirements.selectors import invitation_for_partner, partner_proposals
 from apps.requirements.serializers import (
     ProposalCreateSerializer,
+    ProposalDiscountPreviewSerializer,
+    ProposalDiscountRequestSerializer,
     ProposalFinancialSummarySerializer,
     ProposalPageSerializer,
     ProposalPreviewSerializer,
@@ -266,6 +268,114 @@ class PartnerProposalRevisionDeclineView(ThrottledWriteMixin, APIView):
         except RequirementDomainError as exc:
             _raise_api_error(exc)
         return Response(RevisionRequestSerializer(declined).data)
+
+
+class PartnerProposalDiscountPreviewView(ThrottledWriteMixin, APIView):
+    """The server-priced confirmation shown before a requested discount is applied."""
+
+    permission_classes = (IsAuthenticated, IsPartnerUser)
+    throttle_scope = "m2_partner_response"
+
+    @extend_schema(
+        tags=["M2 - Proposals"],
+        operation_id="m2_proposal_overall_discount_preview",
+        request=ProposalDiscountRequestSerializer,
+        description=(
+            "Preview an overall discount against the Partner's live estimate. This writes "
+            "nothing: it returns the exact customer total, tax, payout and payment allocations "
+            "that the apply command will publish. Percentage and final-amount input are mutually "
+            "exclusive, and the server caps either at 15%."
+        ),
+        responses={
+            200: ProposalDiscountPreviewSerializer,
+            400: ApiErrorSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request, proposal_id: uuid.UUID, request_id: uuid.UUID) -> Response:
+        serializer = ProposalDiscountRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        values = dict(serializer.validated_data)
+        try:
+            profile = _partner_profile(request)
+            preview = proposals.preview_overall_discount(
+                proposal_id=proposal_id,
+                request_id=request_id,
+                partner_id=profile.id,
+                discount_kind=str(values["discount_kind"]),
+                discount_bps=cast(int | None, values.get("discount_bps")),
+                final_total_paise=cast(int | None, values.get("final_total_paise")),
+            )
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        return Response(ProposalDiscountPreviewSerializer(preview.as_payload()).data)
+
+
+class PartnerProposalDiscountApplyView(ThrottledWriteMixin, APIView):
+    """Apply the confirmed overall discount as an immutable proposal revision."""
+
+    permission_classes = (IsAuthenticated, IsPartnerUser)
+    throttle_scope = "m2_partner_response"
+
+    @extend_schema(
+        tags=["M2 - Proposals"],
+        operation_id="m2_proposal_overall_discount_apply",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=ProposalDiscountRequestSerializer,
+        description=(
+            "Apply a Customer-requested overall discount. The command clones the estimate, "
+            "recalculates tax, fees, payout and payment allocations, publishes a new immutable "
+            "revision, supersedes the previous one and answers the price request atomically."
+        ),
+        responses={
+            201: ProposalSerializer,
+            400: ApiErrorSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request, proposal_id: uuid.UUID, request_id: uuid.UUID) -> Response:
+        serializer = ProposalDiscountRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        values = dict(serializer.validated_data)
+        key = _idempotency_key(request)
+        actor = cast(User, request.user)
+        try:
+            profile = _partner_profile(request)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                proposal = proposals.apply_overall_discount(
+                    proposal_id=proposal_id,
+                    request_id=request_id,
+                    partner_id=profile.id,
+                    discount_kind=str(values["discount_kind"]),
+                    discount_bps=cast(int | None, values.get("discount_bps")),
+                    final_total_paise=cast(int | None, values.get("final_total_paise")),
+                )
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            return status.HTTP_201_CREATED, cast(
+                dict[str, object], ProposalSerializer(proposal).data
+            )
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.proposal.overall_discount.apply",
+            key=key,
+            request_payload={
+                "proposal_id": str(proposal_id),
+                "request_id": str(request_id),
+                **values,
+            },
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
 
 
 class PartnerProposalWithdrawView(ThrottledWriteMixin, APIView):

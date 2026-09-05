@@ -491,7 +491,7 @@ function QuoteBody({
                 </Button>
                 {canAskAboutPrice(only) ? (
                   <Button variant="outline" onClick={() => onAskAboutPrice(only.proposalId)}>
-                    Ask about the price
+                    Any negotiations?
                   </Button>
                 ) : null}
               </div>

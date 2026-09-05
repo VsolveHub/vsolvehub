@@ -1,6 +1,7 @@
 "use client";
 
 import { Button, ChoiceChips, Field, Input, cn } from "@vsolve/ui";
+import { useId, useState } from "react";
 
 import { FieldLabel, MobileScreen, ScreenHeading } from "@/features/booking/view/mobile-screen";
 import { Segmented } from "@/features/booking/view/parts/segmented";
@@ -9,8 +10,23 @@ import type { RequirementQuestionView } from "@/features/requirement/adapters";
 import {
   EVENT_TYPE_CODE,
   GUEST_BAND_CODE,
+  MAX_GUESTS,
   SERVICE_STYLE_CODE,
+  isExactGuestCount,
 } from "../model/event-flow";
+
+/**
+ * The tab that opens the number field. Never stored — choosing it writes a blank answer
+ * and the figure the Customer types replaces it, so `guest_band` only ever holds a real
+ * band code or a real number.
+ */
+const CUSTOM_BAND = "__custom__";
+
+/**
+ * The published band Custom replaces. Its midpoint (250) was a guess standing in for
+ * everything from 200 guests to 2,000, which is precisely the answer worth typing.
+ */
+const OPEN_ENDED_BAND = "200-plus";
 import { EventTypeIcon } from "./event-icons";
 import { requiredAnswersPresent } from "./preset-questions";
 
@@ -205,33 +221,63 @@ export function GuestBandSelector({
   onSelect: (value: string) => void;
   wide?: boolean;
 }) {
-  const options = question.options ?? [];
+  const headingId = useId();
+  const exact = isExactGuestCount(value);
+  // The open-ended band is the one a midpoint cannot stand in for: "200 or more" resolved
+  // to 250, so a 600-guest wedding was staffed for 250. Custom replaces it rather than
+  // sitting beside it — two ways to say "a lot" is one too many.
+  const bands = (question.options ?? []).filter((option) => option.value !== OPEN_ENDED_BAND);
+  const [customOpen, setCustomOpen] = useState(exact);
+  const custom = customOpen || exact;
+
+  const tabs = [
+    ...bands.map((option) => ({ value: option.value, label: option.label })),
+    { value: CUSTOM_BAND, label: "Custom" },
+  ];
+
+  function choose(next: string) {
+    if (next === CUSTOM_BAND) {
+      setCustomOpen(true);
+      // Opens blank. Carrying a band's midpoint into the field would put a number in
+      // front of the Customer that they never typed, on the field whose whole purpose
+      // is that they type it.
+      if (!isExactGuestCount(value)) onSelect("");
+      return;
+    }
+    setCustomOpen(false);
+    onSelect(next);
+  }
 
   if (!wide) {
     return (
       <div>
-        <FieldLabel>{question.label}</FieldLabel>
+        <FieldLabel id={headingId}>{question.label}</FieldLabel>
         <Segmented
           label={question.label}
+          labelledBy={headingId}
           name={question.code}
-          options={options.map((option) => ({ value: option.value, label: option.label }))}
-          value={typeof value === "string" ? value : null}
-          onChange={onSelect}
+          options={tabs}
+          value={custom ? CUSTOM_BAND : typeof value === "string" ? value : null}
+          onChange={choose}
         />
+        {custom ? (
+          <ExactGuestCount questionCode={question.code} value={value} onChange={onSelect} />
+        ) : null}
       </div>
     );
   }
 
   return (
     <div>
-      <FieldLabel>{question.label}</FieldLabel>
+      <FieldLabel id={headingId}>{question.label}</FieldLabel>
       <div
         role="radiogroup"
-        aria-label={question.label}
+        aria-labelledby={headingId}
         className="grid grid-cols-2 gap-3 sm:grid-cols-4"
       >
-        {options.map((option) => {
-          const checked = option.value === value;
+        {tabs.map((option) => {
+          const checked =
+            option.value === CUSTOM_BAND ? custom : !custom && option.value === value;
           return (
             <label
               key={option.value}
@@ -251,7 +297,7 @@ export function GuestBandSelector({
                 value={option.value}
                 aria-label={option.label}
                 checked={checked}
-                onChange={() => onSelect(option.value)}
+                onChange={() => choose(option.value)}
                 className="sr-only"
               />
               <span
@@ -266,11 +312,87 @@ export function GuestBandSelector({
                 </svg>
               </span>
               <span className="block text-sm font-bold text-text">{option.label}</span>
-              <span className="text-[11px] font-medium text-text-muted">guests</span>
+              <span className="text-[11px] font-medium text-text-muted">
+                {option.value === CUSTOM_BAND ? "your number" : "guests"}
+              </span>
             </label>
           );
         })}
       </div>
+      {custom ? (
+        <ExactGuestCount questionCode={question.code} value={value} onChange={onSelect} />
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * "Or enter the exact number" — the answer a band cannot give.
+ *
+ * ## Why a band was not enough
+ *
+ * The bands drive `suggestedServers`, which resolves each to a midpoint: "200 or more"
+ * meant 250. A 600-guest wedding was therefore staffed for 250 — eight serving staff
+ * where twenty are needed — and the customer had no way to say otherwise. Every band
+ * carries that error; the open-ended one carries it without limit.
+ *
+ * ## Why it shares the band's answer rather than adding a question
+ *
+ * The exact figure is written to `guest_band` itself, as a numeric string. Requirement
+ * answers are opaque JSON server-side and validated only for the presence of required
+ * codes, so one field holds either shape — no second question, no seed change, no
+ * contract change, and nothing downstream has to learn that guests can arrive two ways
+ * except the one function that reads them.
+ *
+ * The bands stay because they are faster for most people. This is the escape hatch, not
+ * the replacement.
+ */
+function ExactGuestCount({
+  questionCode,
+  value,
+  onChange,
+}: {
+  questionCode: string;
+  value: unknown;
+  onChange: (value: string) => void;
+}) {
+  const current = isExactGuestCount(value) ? String(value).trim() : "";
+
+  // No visible label of its own. The question is already answered by the `FieldLabel`
+  // above the tabs; repeating it here asked "How many guests?" twice on one screen.
+  // The accessible name comes from `aria-label`, which sighted readers never see.
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2">
+      <input
+        id={`${questionCode}-exact`}
+        type="text"
+        inputMode="numeric"
+        enterKeyHint="done"
+        autoComplete="off"
+        aria-label="Exact number of guests"
+        value={current}
+        onChange={(event) => {
+          const next = event.currentTarget.value;
+          // Digits only, and never past the cap — a typed extra zero should not
+          // quietly become a five-figure crowd.
+          if (!/^\d*$/.test(next)) return;
+          if (next === "") {
+            onChange("");
+            return;
+          }
+          const parsed = Number(next);
+          if (!Number.isSafeInteger(parsed)) return;
+          onChange(String(Math.min(parsed, MAX_GUESTS)));
+        }}
+        placeholder="e.g. 180"
+        autoFocus
+        className={cn(
+          "h-11 w-24 rounded-control border border-navy-900 bg-surface px-3 text-center",
+          "text-base font-bold tabular-nums text-text ring-2 ring-navy-900/10",
+          "transition-colors duration-fast focus:border-action focus:bg-action-surface focus:outline-none focus:ring-2 focus:ring-focus-ring",
+        )}
+      />
+      <span className="text-sm font-medium text-text-muted">guests</span>
     </div>
   );
 }

@@ -136,6 +136,41 @@ class RevisionRequestDeclineSerializer(serializers.Serializer[dict[str, Any]]):
     note = serializers.CharField(required=False, allow_blank=True, default="", max_length=1000)
 
 
+class ProposalDiscountRequestSerializer(serializers.Serializer[dict[str, Any]]):
+    """How the Partner wants the requested overall discount expressed.
+
+    ``PERCENT`` is the one-tap agreement and carries basis points. ``FIXED`` means the Partner
+    typed the final customer total, not a negative charge. Exactly one value is accepted so an
+    ambiguous request can never choose whichever number happens to be cheaper.
+    """
+
+    discount_kind = serializers.ChoiceField(choices=Proposal.DiscountKind.choices)
+    discount_bps = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        default=None,
+        min_value=1,
+        max_value=RevisionRequest.MAX_DISCOUNT_BPS,
+    )
+    final_total_paise = serializers.IntegerField(
+        required=False, allow_null=True, default=None, min_value=1
+    )
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        kind = attrs["discount_kind"]
+        bps = attrs.get("discount_bps")
+        final_total = attrs.get("final_total_paise")
+        if kind == Proposal.DiscountKind.PERCENT and (bps is None or final_total is not None):
+            raise serializers.ValidationError(
+                "A percentage discount needs discount_bps and no final total."
+            )
+        if kind == Proposal.DiscountKind.FIXED and (final_total is None or bps is not None):
+            raise serializers.ValidationError(
+                "A final-amount discount needs final_total_paise and no percentage."
+            )
+        return attrs
+
+
 class QuestionCreateSerializer(serializers.Serializer[dict[str, Any]]):
     question = serializers.CharField(max_length=2000)
 
@@ -698,6 +733,8 @@ class ProposalStageSerializer(serializers.Serializer[dict[str, Any]]):
         required=False, allow_blank=True, max_length=2000, default=""
     )
     amount_paise = serializers.IntegerField(min_value=1)
+    discount_paise = serializers.IntegerField(read_only=True)
+    discounted_amount_paise = serializers.IntegerField(read_only=True)
     position = serializers.IntegerField(read_only=True)
     tax_paise = serializers.IntegerField(read_only=True)
     platform_fee_paise = serializers.IntegerField(read_only=True)
@@ -738,6 +775,10 @@ class ProposalStageSerializer(serializers.Serializer[dict[str, Any]]):
             "title": str(stage.get("title") or stage.get("label") or ""),
             "deliverable": str(stage.get("deliverable") or ""),
             "amount_paise": int(stage.get("amount_paise") or 0),
+            "discount_paise": int(stage.get("discount_paise") or 0),
+            "discounted_amount_paise": int(
+                stage.get("discounted_amount_paise") or stage.get("amount_paise") or 0
+            ),
             "position": stage.get("position"),
             "tax_paise": int(stage.get("tax_paise") or 0),
             "platform_fee_paise": int(stage.get("platform_fee_paise") or 0),
@@ -777,6 +818,8 @@ class ProposalMaterialLineSerializer(serializers.Serializer[dict[str, Any]]):
     unit = serializers.CharField(max_length=32, required=False, allow_blank=True, default="")
     rate_paise = serializers.IntegerField(min_value=1, required=False)
     amount_paise = serializers.IntegerField(min_value=1, required=False)
+    discount_paise = serializers.IntegerField(read_only=True)
+    discounted_amount_paise = serializers.IntegerField(read_only=True)
     tax_paise = serializers.IntegerField(read_only=True)
     platform_fee_paise = serializers.IntegerField(read_only=True)
     platform_fee_tax_paise = serializers.IntegerField(read_only=True)
@@ -801,6 +844,10 @@ class ProposalMaterialLineSerializer(serializers.Serializer[dict[str, Any]]):
             "unit": str(line.get("unit") or ""),
             "rate_paise": int(line.get("rate_paise") or line.get("amount_paise") or 0),
             "amount_paise": int(line.get("amount_paise") or 0),
+            "discount_paise": int(line.get("discount_paise") or 0),
+            "discounted_amount_paise": int(
+                line.get("discounted_amount_paise") or line.get("amount_paise") or 0
+            ),
             "tax_paise": int(line.get("tax_paise") or 0),
             "platform_fee_paise": int(line.get("platform_fee_paise") or 0),
             "platform_fee_tax_paise": int(line.get("platform_fee_tax_paise") or 0),
@@ -887,6 +934,10 @@ class ProposalFinancialSummarySerializer(serializers.Serializer[dict[str, Any]])
     line_subtotal_paise = serializers.IntegerField(min_value=0)
     material_total_paise = serializers.IntegerField(min_value=0)
     authorized_charges_paise = serializers.IntegerField(min_value=0)
+    discount_base_paise = serializers.IntegerField(min_value=1)
+    pricing_discount_paise = serializers.IntegerField(min_value=0)
+    pre_discount_customer_total_paise = serializers.IntegerField(min_value=1)
+    customer_savings_paise = serializers.IntegerField(min_value=0)
     taxable_value_paise = serializers.IntegerField(min_value=0)
     partner_service_tax_paise = serializers.IntegerField(min_value=0)
     partner_quote_total_paise = serializers.IntegerField(min_value=0)
@@ -899,6 +950,20 @@ class ProposalFinancialSummarySerializer(serializers.Serializer[dict[str, Any]])
     tax_basis = serializers.ChoiceField(choices=Proposal.TaxBasis.choices)
     policy_version = serializers.IntegerField(min_value=1)
     calculation_snapshot = serializers.JSONField()
+
+
+class ProposalDiscountPreviewSerializer(serializers.Serializer[dict[str, Any]]):
+    proposal_id = serializers.UUIDField()
+    request_id = serializers.UUIDField()
+    discount_kind = serializers.ChoiceField(choices=Proposal.DiscountKind.choices)
+    discount_bps = serializers.IntegerField(allow_null=True, min_value=1)
+    discount_base_paise = serializers.IntegerField(min_value=1)
+    discount_paise = serializers.IntegerField(min_value=1)
+    customer_total_paise = serializers.IntegerField(min_value=1)
+    tax_paise = serializers.IntegerField(min_value=0)
+    partner_net_paise = serializers.IntegerField(min_value=0)
+    stages = ProposalStageSerializer(many=True)
+    material_lines = ProposalMaterialLineSerializer(many=True)
 
 
 class ProposalSerializer(serializers.ModelSerializer[Proposal]):
@@ -939,6 +1004,11 @@ class ProposalSerializer(serializers.ModelSerializer[Proposal]):
             "item_lines",
             "labour_lines",
             "other_charges",
+            "discount_kind",
+            "discount_bps",
+            "discount_base_paise",
+            "discount_paise",
+            "discount_source",
             "total_paise",
             "tax_paise",
             "tax_basis",

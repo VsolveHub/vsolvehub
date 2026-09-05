@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.65.0
+  version: 1.66.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -12505,6 +12505,148 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/proposals/{proposal_id}/revision-requests/{request_id}/discount/apply/:
+    post:
+      operationId: m2_proposal_overall_discount_apply
+      description: Apply a Customer-requested overall discount. The command clones
+        the estimate, recalculates tax, fees, payout and payment allocations, publishes
+        a new immutable revision, supersedes the previous one and answers the price
+        request atomically.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: proposal_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: request_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Proposals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProposalDiscountRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProposalDiscountRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProposalDiscountRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Proposal'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/proposals/{proposal_id}/revision-requests/{request_id}/discount/preview/:
+    post:
+      operationId: m2_proposal_overall_discount_preview
+      description: 'Preview an overall discount against the Partner''s live estimate.
+        This writes nothing: it returns the exact customer total, tax, payout and
+        payment allocations that the apply command will publish. Percentage and final-amount
+        input are mutually exclusive, and the server caps either at 15%.'
+      parameters:
+      - in: path
+        name: proposal_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: request_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Proposals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProposalDiscountRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProposalDiscountRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProposalDiscountRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProposalDiscountPreview'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/proposals/{proposal_id}/withdraw/:
     post:
       operationId: m2_proposal_withdraw
@@ -18865,6 +19007,28 @@ components:
           items:
             $ref: '#/components/schemas/ProposalOtherCharge'
           readOnly: true
+        discount_kind:
+          readOnly: true
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/DiscountKindEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        discount_bps:
+          type: integer
+          readOnly: true
+          nullable: true
+        discount_base_paise:
+          type: integer
+          readOnly: true
+        discount_paise:
+          type: integer
+          readOnly: true
+        discount_source:
+          readOnly: true
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/DiscountSourceEnum'
+          - $ref: '#/components/schemas/NullEnum'
         total_paise:
           type: integer
           readOnly: true
@@ -18953,6 +19117,11 @@ components:
       - calculation_snapshot
       - completion_days
       - customer_total_paise
+      - discount_base_paise
+      - discount_bps
+      - discount_kind
+      - discount_paise
+      - discount_source
       - estimate_type
       - exclusions
       - id
@@ -19290,6 +19459,22 @@ components:
         * `NONE` - No ordering dependency
         * `LEFT_BEFORE_RIGHT` - Left before right
         * `RIGHT_BEFORE_LEFT` - Right before left
+    DiscountKindEnum:
+      enum:
+      - PERCENT
+      - FIXED
+      type: string
+      description: |-
+        * `PERCENT` - Percentage
+        * `FIXED` - Final amount
+    DiscountSourceEnum:
+      enum:
+      - CUSTOMER_REQUEST
+      - PARTNER_OFFER
+      type: string
+      description: |-
+        * `CUSTOMER_REQUEST` - Customer request
+        * `PARTNER_OFFER` - Partner offer
     DispatchAttempt:
       type: object
       properties:
@@ -26469,6 +26654,28 @@ components:
           items:
             $ref: '#/components/schemas/ProposalOtherCharge'
           readOnly: true
+        discount_kind:
+          readOnly: true
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/DiscountKindEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        discount_bps:
+          type: integer
+          readOnly: true
+          nullable: true
+        discount_base_paise:
+          type: integer
+          readOnly: true
+        discount_paise:
+          type: integer
+          readOnly: true
+        discount_source:
+          readOnly: true
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/DiscountSourceEnum'
+          - $ref: '#/components/schemas/NullEnum'
         total_paise:
           type: integer
           readOnly: true
@@ -26576,6 +26783,11 @@ components:
       - commission_treatment
       - completion_days
       - customer_total_paise
+      - discount_base_paise
+      - discount_bps
+      - discount_kind
+      - discount_paise
+      - discount_source
       - estimate_type
       - exclusions
       - id
@@ -26708,6 +26920,78 @@ components:
           nullable: true
       required:
       - invitation_id
+    ProposalDiscountPreview:
+      type: object
+      properties:
+        proposal_id:
+          type: string
+          format: uuid
+        request_id:
+          type: string
+          format: uuid
+        discount_kind:
+          $ref: '#/components/schemas/DiscountKindEnum'
+        discount_bps:
+          type: integer
+          minimum: 1
+          nullable: true
+        discount_base_paise:
+          type: integer
+          minimum: 1
+        discount_paise:
+          type: integer
+          minimum: 1
+        customer_total_paise:
+          type: integer
+          minimum: 1
+        tax_paise:
+          type: integer
+          minimum: 0
+        partner_net_paise:
+          type: integer
+          minimum: 0
+        stages:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalStage'
+        material_lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalMaterialLine'
+      required:
+      - customer_total_paise
+      - discount_base_paise
+      - discount_bps
+      - discount_kind
+      - discount_paise
+      - material_lines
+      - partner_net_paise
+      - proposal_id
+      - request_id
+      - stages
+      - tax_paise
+    ProposalDiscountRequestRequest:
+      type: object
+      description: |-
+        How the Partner wants the requested overall discount expressed.
+
+        ``PERCENT`` is the one-tap agreement and carries basis points. ``FIXED`` means the Partner
+        typed the final customer total, not a negative charge. Exactly one value is accepted so an
+        ambiguous request can never choose whichever number happens to be cheaper.
+      properties:
+        discount_kind:
+          $ref: '#/components/schemas/DiscountKindEnum'
+        discount_bps:
+          type: integer
+          maximum: 1500
+          minimum: 1
+          nullable: true
+        final_total_paise:
+          type: integer
+          minimum: 1
+          nullable: true
+      required:
+      - discount_kind
     ProposalFinancialSummary:
       type: object
       properties:
@@ -26752,6 +27036,18 @@ components:
         authorized_charges_paise:
           type: integer
           minimum: 0
+        discount_base_paise:
+          type: integer
+          minimum: 1
+        pricing_discount_paise:
+          type: integer
+          minimum: 0
+        pre_discount_customer_total_paise:
+          type: integer
+          minimum: 1
+        customer_savings_paise:
+          type: integer
+          minimum: 0
         taxable_value_paise:
           type: integer
           minimum: 0
@@ -26789,7 +27085,9 @@ components:
       - authorized_charges_paise
       - calculation_snapshot
       - commission_paise
+      - customer_savings_paise
       - customer_total_paise
+      - discount_base_paise
       - estimate_type
       - item_lines
       - labour_lines
@@ -26804,6 +27102,8 @@ components:
       - platform_fee_paise
       - platform_fee_tax_paise
       - policy_version
+      - pre_discount_customer_total_paise
+      - pricing_discount_paise
       - stages
       - suggested_included_supply_list
       - suggested_material_list
@@ -27029,6 +27329,12 @@ components:
         amount_paise:
           type: integer
           minimum: 1
+        discount_paise:
+          type: integer
+          readOnly: true
+        discounted_amount_paise:
+          type: integer
+          readOnly: true
         tax_paise:
           type: integer
           readOnly: true
@@ -27042,6 +27348,8 @@ components:
           type: integer
           readOnly: true
       required:
+      - discount_paise
+      - discounted_amount_paise
       - platform_fee_paise
       - platform_fee_tax_paise
       - tax_paise
@@ -27412,6 +27720,12 @@ components:
         amount_paise:
           type: integer
           minimum: 1
+        discount_paise:
+          type: integer
+          readOnly: true
+        discounted_amount_paise:
+          type: integer
+          readOnly: true
         position:
           type: integer
           readOnly: true
@@ -27442,6 +27756,8 @@ components:
           nullable: true
       required:
       - amount_paise
+      - discount_paise
+      - discounted_amount_paise
       - platform_fee_paise
       - platform_fee_tax_paise
       - position

@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.65.0)
- * Checksum: eb333f627cced062
+ * Source:   contracts/openapi/v1.yaml (version 1.66.0)
+ * Checksum: 92988aa9e9a7ca79
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -4696,6 +4696,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/proposals/{proposal_id}/revision-requests/{request_id}/discount/apply/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Apply a Customer-requested overall discount. The command clones the estimate, recalculates tax, fees, payout and payment allocations, publishes a new immutable revision, supersedes the previous one and answers the price request atomically. */
+        post: operations["m2_proposal_overall_discount_apply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/proposals/{proposal_id}/revision-requests/{request_id}/discount/preview/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Preview an overall discount against the Partner's live estimate. This writes nothing: it returns the exact customer total, tax, payout and payment allocations that the apply command will publish. Percentage and final-amount input are mutually exclusive, and the server caps either at 15%. */
+        post: operations["m2_proposal_overall_discount_preview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/proposals/{proposal_id}/withdraw/": {
         parameters: {
             query?: never;
@@ -7106,6 +7140,11 @@ export interface components {
             readonly item_lines: components["schemas"]["ProposalItemLine"][];
             readonly labour_lines: components["schemas"]["ProposalLabourLine"][];
             readonly other_charges: components["schemas"]["ProposalOtherCharge"][];
+            readonly discount_kind: (components["schemas"]["DiscountKindEnum"] | components["schemas"]["NullEnum"]) | null;
+            readonly discount_bps: number | null;
+            readonly discount_base_paise: number;
+            readonly discount_paise: number;
+            readonly discount_source: (components["schemas"]["DiscountSourceEnum"] | components["schemas"]["NullEnum"]) | null;
             readonly total_paise: number;
             readonly tax_paise: number;
             readonly tax_basis: components["schemas"]["ProposalTaxBasisEnum"];
@@ -7268,6 +7307,18 @@ export interface components {
          * @enum {string}
          */
         DependencyEnum: "NONE" | "LEFT_BEFORE_RIGHT" | "RIGHT_BEFORE_LEFT";
+        /**
+         * @description * `PERCENT` - Percentage
+         *     * `FIXED` - Final amount
+         * @enum {string}
+         */
+        DiscountKindEnum: "PERCENT" | "FIXED";
+        /**
+         * @description * `CUSTOMER_REQUEST` - Customer request
+         *     * `PARTNER_OFFER` - Partner offer
+         * @enum {string}
+         */
+        DiscountSourceEnum: "CUSTOMER_REQUEST" | "PARTNER_OFFER";
         DispatchAttempt: {
             /** Format: uuid */
             attempt_id: string;
@@ -10138,6 +10189,11 @@ export interface components {
             readonly item_lines: components["schemas"]["ProposalItemLine"][];
             readonly labour_lines: components["schemas"]["ProposalLabourLine"][];
             readonly other_charges: components["schemas"]["ProposalOtherCharge"][];
+            readonly discount_kind: (components["schemas"]["DiscountKindEnum"] | components["schemas"]["NullEnum"]) | null;
+            readonly discount_bps: number | null;
+            readonly discount_base_paise: number;
+            readonly discount_paise: number;
+            readonly discount_source: (components["schemas"]["DiscountSourceEnum"] | components["schemas"]["NullEnum"]) | null;
             readonly total_paise: number;
             readonly tax_paise: number;
             readonly tax_basis: components["schemas"]["ProposalTaxBasisEnum"];
@@ -10204,6 +10260,33 @@ export interface components {
             /** Format: uuid */
             site_visit_id?: string | null;
         };
+        ProposalDiscountPreview: {
+            /** Format: uuid */
+            proposal_id: string;
+            /** Format: uuid */
+            request_id: string;
+            discount_kind: components["schemas"]["DiscountKindEnum"];
+            discount_bps: number | null;
+            discount_base_paise: number;
+            discount_paise: number;
+            customer_total_paise: number;
+            tax_paise: number;
+            partner_net_paise: number;
+            stages: components["schemas"]["ProposalStage"][];
+            material_lines: components["schemas"]["ProposalMaterialLine"][];
+        };
+        /**
+         * @description How the Partner wants the requested overall discount expressed.
+         *
+         *     ``PERCENT`` is the one-tap agreement and carries basis points. ``FIXED`` means the Partner
+         *     typed the final customer total, not a negative charge. Exactly one value is accepted so an
+         *     ambiguous request can never choose whichever number happens to be cheaper.
+         */
+        ProposalDiscountRequestRequest: {
+            discount_kind: components["schemas"]["DiscountKindEnum"];
+            discount_bps?: number | null;
+            final_total_paise?: number | null;
+        };
         ProposalFinancialSummary: {
             estimate_type: components["schemas"]["EstimateTypeEnum"];
             item_lines: components["schemas"]["ProposalItemLine"][];
@@ -10217,6 +10300,10 @@ export interface components {
             line_subtotal_paise: number;
             material_total_paise: number;
             authorized_charges_paise: number;
+            discount_base_paise: number;
+            pricing_discount_paise: number;
+            pre_discount_customer_total_paise: number;
+            customer_savings_paise: number;
             taxable_value_paise: number;
             partner_service_tax_paise: number;
             partner_quote_total_paise: number;
@@ -10335,6 +10422,8 @@ export interface components {
             unit: string;
             rate_paise?: number;
             amount_paise?: number;
+            readonly discount_paise: number;
+            readonly discounted_amount_paise: number;
             readonly tax_paise: number;
             readonly platform_fee_paise: number;
             readonly platform_fee_tax_paise: number;
@@ -10515,6 +10604,8 @@ export interface components {
             /** @default  */
             deliverable: string;
             amount_paise: number;
+            readonly discount_paise: number;
+            readonly discounted_amount_paise: number;
             readonly position: number;
             readonly tax_paise: number;
             readonly platform_fee_paise: number;
@@ -24613,6 +24704,129 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RevisionRequest"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_proposal_overall_discount_apply: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                proposal_id: string;
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProposalDiscountRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProposalDiscountRequestRequest"];
+                "multipart/form-data": components["schemas"]["ProposalDiscountRequestRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Proposal"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_proposal_overall_discount_preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProposalDiscountRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProposalDiscountRequestRequest"];
+                "multipart/form-data": components["schemas"]["ProposalDiscountRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalDiscountPreview"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
                 };
             };
             403: {

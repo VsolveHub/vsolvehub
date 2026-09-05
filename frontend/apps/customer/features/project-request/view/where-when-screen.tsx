@@ -218,8 +218,9 @@ export function WhereWhenScreen({
         onOpenChange={setStartOpen}
         value={requestedStart}
         onSelect={onRequestedStart}
-        // An event is booked well ahead of the short window a job start gets.
-        {...(eventMode ? { horizonDays: 180 } : {})}
+        // An event is booked well ahead of the short window a job start gets, and never
+        // for today: the professionals who serve it have to be found first.
+        {...(eventMode ? { horizonDays: 180, earliestOffsetDays: 1 } : {})}
       />
 
       <DateSheet

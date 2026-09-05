@@ -237,6 +237,13 @@ export function EstimateDetailScreen({
                 {card.isVerified ? <Badge tone="success">Verified</Badge> : null}
                 {card.isOutOfBudget ? <Badge tone="warning">Over budget</Badge> : null}
                 {card.isExpired ? <Badge tone="neutral">Price expired</Badge> : null}
+                {card.discountPaise > 0 ? (
+                  <Badge tone="success">
+                    {card.discountPercent === null
+                      ? "Price reduced"
+                      : `${card.discountPercent}% off`}
+                  </Badge>
+                ) : null}
               </div>
               {vendorTypeLabel(card.vendorType) !== null ? (
                 <p className="mt-0.5 text-sm font-semibold text-text-secondary">
@@ -251,10 +258,22 @@ export function EstimateDetailScreen({
               copy is hidden: a wide screen keeps the number pinned while the
               document scrolls, and two of them would be two answers. */}
           <section className="rounded-[18px] bg-navy-900 p-5 text-white lg:hidden">
-            <p className="text-xs font-bold uppercase tracking-[0.12em] text-signal-300">Their estimate</p>
+            <p className="text-xs font-bold uppercase tracking-[0.12em] text-signal-300">
+              {card.discountPaise > 0 ? "Discounted estimate" : "Their estimate"}
+            </p>
             <p className="mt-2 text-[34px] font-extrabold leading-none tracking-[-0.02em] tabular-nums">{card.payableLabel}</p>
+            {card.discountPaise > 0 ? (
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                <span className="tabular-nums text-white/60 line-through">
+                  {card.discountBaseLabel}
+                </span>
+                <span className="font-bold text-success-200">You save {card.discountLabel}</span>
+              </div>
+            ) : null}
             <p className="mt-2 text-sm text-white/75">
-              {card.taxBasis === "INCLUSIVE" ? `Includes ${card.taxLabel} tax` : `${card.totalLabel} plus ${card.taxLabel} tax`}
+              {card.taxBasis === "INCLUSIVE"
+                ? `Includes ${card.taxLabel} tax`
+                : `Includes ${card.taxLabel} tax added to service rates`}
               {validity !== null ? ` · ${validity.text.toLowerCase()}` : ""}
               {card.revision > 1 ? ` · revision ${card.revision}` : ""}
             </p>
@@ -274,7 +293,7 @@ export function EstimateDetailScreen({
                 onClick={() => setAsking(true)}
                 className="mt-4 flex w-full items-center justify-between gap-2 border-t border-white/10 pt-3 text-left text-sm font-bold text-signal-300 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
               >
-                Is this price workable for you?
+                Any negotiations?
                 <span aria-hidden className="text-base leading-none">→</span>
               </button>
             ) : null}
@@ -285,6 +304,8 @@ export function EstimateDetailScreen({
           {card.revisionRequest !== null ? (
             <RevisionRequestNotice request={card.revisionRequest} priceLabel={card.payableLabel} />
           ) : null}
+
+          {card.discountPaise > 0 ? <CustomerDiscountSummary card={card} /> : null}
 
           <AccessRefusal error={reject.error} attempting="turn this estimate down" supportAction={supportAction} />
           <AccessRefusal error={revalidate.error} attempting="ask for a fresh price" supportAction={supportAction} />
@@ -302,7 +323,10 @@ export function EstimateDetailScreen({
               id="the-work"
               title={`The work — ${priceLines.length} ${priceLines.length === 1 ? "line" : "lines"}, ${card.payableLabel}`}
             >
-              <PriceLines lines={priceLines} totalPaise={card.payablePaise} />
+              <PriceLines
+                lines={priceLines}
+                totalPaise={card.discountBasePaise || card.payablePaise}
+              />
             </Section>
           ) : null}
 
@@ -492,6 +516,44 @@ export function EstimateDetailScreen({
       />
       <QuestionInbox requirementId={requirementId} />
     </div>
+  );
+}
+
+function CustomerDiscountSummary({ card }: { readonly card: QuoteCardView }) {
+  return (
+    <section
+      aria-labelledby="customer-discount-title"
+      className="rounded-[18px] border border-success-line bg-success-surface p-4 sm:p-5"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 id="customer-discount-title" className="font-extrabold text-text">
+          Overall discount applied
+        </h2>
+        <Badge tone="success">
+          {card.discountPercent === null ? "Price reduced" : `${card.discountPercent}% off`}
+        </Badge>
+      </div>
+      <dl className="mt-3 grid gap-2 text-sm">
+        <div className="flex items-baseline justify-between gap-3">
+          <dt className="text-text-secondary">Original estimate</dt>
+          <dd className="tabular-nums text-text-secondary line-through">
+            {card.discountBaseLabel}
+          </dd>
+        </div>
+        <div className="flex items-baseline justify-between gap-3">
+          <dt className="text-text-secondary">Overall discount</dt>
+          <dd className="font-bold tabular-nums text-success-text">−{card.discountLabel}</dd>
+        </div>
+        <div className="flex items-baseline justify-between gap-3 border-t border-success-line pt-2">
+          <dt className="font-extrabold text-text">Your final total</dt>
+          <dd className="text-lg font-extrabold tabular-nums text-text">{card.payableLabel}</dd>
+        </div>
+      </dl>
+      <p className="mt-2 text-xs leading-5 text-success-text">
+        The scope, warranty and line-item rates are unchanged. The saving is spread across your
+        payment stages automatically.
+      </p>
+    </section>
   );
 }
 

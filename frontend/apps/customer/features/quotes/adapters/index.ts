@@ -407,6 +407,13 @@ export interface QuoteCardView {
   /** What the Customer actually pays, on the one basis. See `comparableTotalPaise`. */
   payableLabel: string;
   payablePaise: number;
+  /** The immutable overall concession on this revision, or null on an ordinary estimate. */
+  discountKind: "PERCENT" | "FIXED" | null;
+  discountPercent: number | null;
+  discountBaseLabel: string;
+  discountBasePaise: number;
+  discountLabel: string;
+  discountPaise: number;
 
   /** A3 only. Null on an estimate. */
   rateLabel: string | null;
@@ -493,9 +500,7 @@ export interface QuoteCardView {
  * addition over two published integers.
  */
 export function comparableTotalPaise(proposal: CustomerProposal): number {
-  return proposal.tax_basis === "EXCLUSIVE"
-    ? proposal.total_paise + proposal.tax_paise
-    : proposal.total_paise;
+  return proposal.customer_total_paise;
 }
 
 /**
@@ -549,6 +554,16 @@ export function toQuoteCard(proposal: CustomerProposal, serverNow: string): Quot
     taxBasis: proposal.tax_basis,
     payableLabel: formatMoney(payable),
     payablePaise: payable,
+    discountKind:
+      proposal.discount_kind === "PERCENT" || proposal.discount_kind === "FIXED"
+        ? proposal.discount_kind
+        : null,
+    discountPercent:
+      proposal.discount_bps === null ? null : Math.round(proposal.discount_bps) / 100,
+    discountBaseLabel: formatMoney(proposal.discount_base_paise),
+    discountBasePaise: proposal.discount_base_paise,
+    discountLabel: formatMoney(proposal.discount_paise),
+    discountPaise: proposal.discount_paise,
 
     rateLabel:
       proposal.rate_paise_per_worker_day === null

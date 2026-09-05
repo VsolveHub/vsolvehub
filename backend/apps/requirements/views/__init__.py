@@ -142,6 +142,8 @@ from .projects import (
 from .proposals import (
     PartnerProposalCollectionView,
     PartnerProposalDetailView,
+    PartnerProposalDiscountApplyView,
+    PartnerProposalDiscountPreviewView,
     PartnerProposalPreviewView,
     PartnerProposalRevisionDeclineView,
     PartnerProposalWithdrawView,
@@ -320,6 +322,8 @@ __all__ = [
     "PartnerProjectCompletionView",
     "PartnerProposalCollectionView",
     "PartnerProposalDetailView",
+    "PartnerProposalDiscountApplyView",
+    "PartnerProposalDiscountPreviewView",
     "PartnerProposalPreviewView",
     "PartnerProposalRevisionDeclineView",
     "PartnerProposalWithdrawView",

@@ -348,11 +348,47 @@ const GUESTS_PER_SERVER: Readonly<Record<string, number>> = {
   passed: 25,
 };
 
+/** The most guests one event may be booked for here. Beyond this it is a different sale. */
+export const MAX_GUESTS = 5000;
+
+/**
+ * How many guests, from whatever the Customer answered.
+ *
+ * `guest_band` holds one of two things: a published band code, or an exact number the
+ * Customer typed. Both live in the same answer because the server stores answers as
+ * opaque JSON and validates only that required codes are *present* — so an exact figure
+ * needs no second question, no seed change and no contract change.
+ *
+ * A band resolves to its own midpoint, which is the guess it always was. "200 or more"
+ * assumed 250, so a 600-guest wedding was staffed for 250 — the strongest reason to let
+ * somebody type the real number.
+ *
+ * Null when the answer is neither: unanswered, or a band this bundle has no midpoint for.
+ */
+export function guestCountFrom(value: unknown): number | null {
+  if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) {
+    return Math.min(value, MAX_GUESTS);
+  }
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (/^\d+$/.test(trimmed)) {
+    const exact = Number(trimmed);
+    return Number.isSafeInteger(exact) && exact > 0 ? Math.min(exact, MAX_GUESTS) : null;
+  }
+  return GUESTS_BY_BAND[trimmed] ?? null;
+}
+
+/** True when this answer is an exact figure rather than one of the published bands. */
+export function isExactGuestCount(value: unknown): boolean {
+  if (typeof value === "number") return true;
+  return typeof value === "string" && /^\d+$/.test(value.trim());
+}
+
 export function suggestedServers(guestBand: unknown, serviceStyle: unknown): number | null {
-  if (typeof guestBand !== "string" || typeof serviceStyle !== "string") return null;
-  const guests = GUESTS_BY_BAND[guestBand];
+  if (typeof serviceStyle !== "string") return null;
+  const guests = guestCountFrom(guestBand);
   const perServer = GUESTS_PER_SERVER[serviceStyle];
-  if (guests === undefined || perServer === undefined) return null;
+  if (guests === null || perServer === undefined) return null;
   return Math.max(1, Math.round(guests / perServer));
 }
 
@@ -369,6 +405,30 @@ export const SERVING_ROLE_CODE = "waiter_count";
  * suggestion (or nothing), which is what makes it a suggestion rather than a
  * form that argues back. The headcount follows, as it always does.
  */
+/**
+ * Start every unanswered question on the catalogue's default.
+ *
+ * Applied once, when the question set arrives, and only to codes the Customer has not
+ * answered — a default that overwrote an answer would be a form arguing with the person
+ * filling it in. Re-running it is therefore safe: a Customer who turned "everyone in
+ * closed shoes" off keeps it off, because `false` is an answer.
+ *
+ * `undefined` is the only unanswered state that counts. `null` and `""` are things a
+ * control wrote on purpose and are left alone.
+ */
+export function applyQuestionDefaults(
+  answers: Readonly<Record<string, unknown>>,
+  questions: readonly RequirementQuestionView[],
+): Record<string, unknown> {
+  const next = { ...answers };
+  for (const question of questions) {
+    if (question.defaultValue === undefined) continue;
+    if (next[question.code] !== undefined) continue;
+    next[question.code] = question.defaultValue;
+  }
+  return next;
+}
+
 export function applyServingSuggestion(
   answers: Readonly<Record<string, unknown>>,
   roles: readonly RequirementQuestionView[],

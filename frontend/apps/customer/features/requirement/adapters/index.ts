@@ -93,6 +93,14 @@ export interface RequirementQuestionView {
    * then choose its own floor rather than assume one.
    */
   minimum?: number;
+  /**
+   * What this question starts on when the Customer has not answered it.
+   *
+   * Published by the catalogue, applied once by the flow. Absent for every question
+   * where no answer is the honest starting state — a default is only defensible where one
+   * answer is the norm and the other is a deliberate choice.
+   */
+  defaultValue?: string | number | boolean;
 }
 
 /**
@@ -107,6 +115,22 @@ export interface RequirementQuestionView {
 function readMinimum(rules: unknown): number | undefined {
   if (rules === null || typeof rules !== "object" || Array.isArray(rules)) return undefined;
   const value = (rules as Record<string, unknown>).minimum;
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+/**
+ * The answer a question starts on, out of the same untyped `validation_rules`.
+ *
+ * Catalogue data rather than a screen's memory: "everyone in closed shoes" starts on yes
+ * because that is the norm for catering and setup work, and Operations can change that
+ * without a deploy. Narrowed to the primitives an answer can actually be — a rule shape
+ * this build does not recognise yields `undefined` and the question simply starts
+ * unanswered, which is the safe direction.
+ */
+function readDefault(rules: unknown): string | number | boolean | undefined {
+  if (rules === null || typeof rules !== "object" || Array.isArray(rules)) return undefined;
+  const value = (rules as Record<string, unknown>).default;
+  if (typeof value === "boolean" || typeof value === "string") return value;
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
@@ -176,6 +200,7 @@ export function toQuestionSet(
       kind,
       required: question.is_required,
       minimum: kind === "number" ? readMinimum(question.validation_rules) : undefined,
+      defaultValue: readDefault(question.validation_rules),
       options:
         kind === "choice" || kind === "multi"
           ? question.options.map((option) => ({

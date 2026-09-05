@@ -439,9 +439,7 @@ def drop_unmatched_visit_slot(
         raise VisitSlotUnavailableError(
             "This is the only visit left on the plan. Cancel the request instead."
         )
-    dropped = settlement.refund_share(
-        share_id=share.id, reason_code=REASON_NO_PROFESSIONAL_FOUND
-    )
+    dropped = settlement.refund_share(share_id=share.id, reason_code=REASON_NO_PROFESSIONAL_FOUND)
     dropped.matching_status = VisitPlanShare.MatchingStatus.CANCELLED
     dropped.save(update_fields=("matching_status", "updated_at"))
     record_transition(

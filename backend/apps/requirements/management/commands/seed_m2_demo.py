@@ -228,6 +228,18 @@ QuestionOptionSeed = tuple[str, str, str]
 #: One authored question: `(code, prompt, catalogue kind, required, minimum, options)`.
 QuestionSeed = tuple[str, str, str, bool, int | None, tuple[QuestionOptionSeed, ...] | None]
 
+#: The answer a question starts on, keyed by code.
+#:
+#: Published in `validation_rules` so it is catalogue data rather than a rule some screen
+#: remembers: Operations can change what "everyone in closed shoes" starts as without a deploy,
+#: and every client that renders the question gets the same starting answer.
+#:
+#: A default is only honest where one answer is genuinely the norm and the other is a deliberate
+#: choice. It is not a way to pre-answer a question the Customer should be making.
+QUESTION_DEFAULT: dict[str, object] = {
+    "closed_shoes": True,
+}
+
 #: `help_text` for the questions that have one, keyed by code.
 #:
 #: A separate map rather than a seventh tuple element, so the questions that need no help stay
@@ -248,6 +260,14 @@ QUESTION_HELP: dict[str, str] = {
     "waiter_count": "Serving, clearing, refills and buffet counters.",
     "bar_staff_count": "Soft drinks, mocktails and counters. No licensed liquor service.",
     "hostess_count": "Welcoming guests, seating and the gifts desk.",
+    "dress_code": (
+        "One standard for the whole crew. Men and women each wear what meets it — we brief "
+        "them before the day."
+    ),
+    "closed_shoes": (
+        "Standard for catering and setup work, and what most venues ask for. Turn it off if "
+        "open footwear is fine at yours."
+    ),
     "kitchen_helper_count": "Plating, dish return and pantry support for your caterer.",
     "cleanup_count": "Keeping the venue and washrooms presentable through the event.",
     "setup_count": "Furniture, decor and equipment before and after.",
@@ -1434,12 +1454,25 @@ EVENT_STAFF_QUESTIONS: tuple[QuestionSeed, ...] = (
         ServiceQuestion.Kind.SINGLE_CHOICE,
         True,
         None,
+        # Named by the *standard*, never by a garment. "Safari suit" is a man's outfit, so on a
+        # crew that is men and women it asked half the staff for something they do not own and
+        # left the Customer to guess what the other half should wear. A colour and a formality
+        # level is something anybody can meet in their own clothes, which is how event staffing
+        # has always briefed it off the platform.
         (
-            ("black-white", "Black and white formal", ""),
+            ("black-white", "Formal — black and white", ""),
+            ("all-black", "All black", ""),
             ("traditional", "Traditional or ethnic", ""),
-            ("safari", "Safari suit", ""),
-            ("client-uniform", "We will provide uniforms", ""),
+            ("client-uniform", "You provide the uniforms", ""),
         ),
+    ),
+    (
+        "closed_shoes",
+        "Everyone in closed shoes?",
+        ServiceQuestion.Kind.BOOLEAN,
+        True,
+        None,
+        None,
     ),
     (
         "staff_meal_provided",
@@ -2203,7 +2236,14 @@ class Command(BaseCommand):
                     "help_text": QUESTION_HELP.get(code, ""),
                     "kind": kind,
                     "is_required": required,
-                    "validation_rules": ({"minimum": minimum} if minimum is not None else {}),
+                    "validation_rules": {
+                        **({"minimum": minimum} if minimum is not None else {}),
+                        **(
+                            {"default": QUESTION_DEFAULT[code]}
+                            if code in QUESTION_DEFAULT
+                            else {}
+                        ),
+                    },
                     "display_order": order,
                     "is_active": True,
                 },

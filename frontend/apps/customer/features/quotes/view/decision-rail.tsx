@@ -51,13 +51,23 @@ export function DecisionRail({
     <aside className="sticky top-6 hidden flex-col gap-4 lg:flex">
       <section className="rounded-[18px] bg-navy-900 p-5 text-white">
         <p className="text-xs font-bold uppercase tracking-[0.12em] text-signal-300">
-          Their estimate
+          {card.discountPaise > 0 ? "Discounted estimate" : "Their estimate"}
         </p>
         <p className="mt-2 text-[32px] font-extrabold leading-none tracking-[-0.02em] tabular-nums">
           {card.payableLabel}
         </p>
+        {card.discountPaise > 0 ? (
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+            <span className="tabular-nums text-white/60 line-through">
+              {card.discountBaseLabel}
+            </span>
+            <span className="font-bold text-success-200">You save {card.discountLabel}</span>
+          </div>
+        ) : null}
         <p className="mt-2 text-sm text-white/75">
-          {card.taxBasis === "INCLUSIVE" ? `Includes ${card.taxLabel} tax` : `plus ${card.taxLabel} tax`}
+          {card.taxBasis === "INCLUSIVE"
+            ? `Includes ${card.taxLabel} tax`
+            : `Includes ${card.taxLabel} tax added to service rates`}
           {validity !== null ? ` · ${validity.text.toLowerCase()}` : ""}
         </p>
 
@@ -85,7 +95,7 @@ export function DecisionRail({
             onClick={onAskAboutPrice}
             className="mt-3 flex w-full items-center justify-between gap-2 border-t border-white/10 pt-3 text-left text-sm font-bold text-signal-300 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
           >
-            Is this price workable for you?
+            Any negotiations?
             <span aria-hidden className="text-base leading-none">→</span>
           </button>
         ) : null}

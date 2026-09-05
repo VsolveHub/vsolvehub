@@ -42,7 +42,7 @@ const LottiePlayer = dynamic(
     } catch {
       return Promise.resolve(() => null);
     }
-    return import("lottie-react").then((mod) => mod.Lottie ?? mod.default);
+    return import("lottie-react").then((mod) => mod.Lottie);
   },
   {
     ssr: false,

@@ -19,6 +19,7 @@ import {
 import { commercialEstimateFromProposal } from "../model/commercial-estimate-draft";
 import { useDeclineRevisionRequest, useMyProposals, useWithdrawProposal } from "../queries";
 import { EstimatePreviewSheet } from "./estimate-preview-sheet";
+import { OverallDiscountDialog } from "./overall-discount-dialog";
 
 /**
  * The quote a vendor already sent, its state, and what they may still do.
@@ -91,7 +92,10 @@ export function ProposalStatus({
     proposals: mine.data?.results ?? [],
     invitationId,
   });
-  const record = submitted ?? trace.current;
+  const record =
+    submitted !== null && (trace.current === null || submitted.revision >= trace.current.revision)
+      ? submitted
+      : trace.current;
   const view = resolveProposalView({ enquiryStatus, proposal: record });
   const documentLabel = documentKind === "estimate" ? "estimate" : "quote";
   const documentCopy = (copy: string) =>
@@ -161,9 +165,13 @@ export function ProposalStatus({
 
       <p className="text-sm leading-6 text-text-secondary">{documentCopy(status.meaning)}</p>
 
+      {current.discount_paise > 0 ? <AppliedDiscountSummary proposal={current} /> : null}
+
       <FactList
         items={[
-          { label: "Total", value: formatMoney(current.total_paise) },
+          ...(current.discount_paise > 0
+            ? []
+            : [{ label: "Total", value: formatMoney(current.total_paise) }]),
           {
             label: "Tax",
             value:
@@ -213,12 +221,6 @@ export function ProposalStatus({
         ]}
       />
 
-      {current.stages.length > 0 ? <StageBreakdown stages={current.stages} /> : null}
-
-      {current.material_lines.length > 0 ? (
-        <MaterialBreakdown lines={current.material_lines} />
-      ) : null}
-
       {current.revision_request !== null ? (
         <RevisionRequestPanel
           proposal={current}
@@ -226,6 +228,12 @@ export function ProposalStatus({
           documentLabel={documentLabel}
           onRevise={onRevise}
         />
+      ) : null}
+
+      {current.stages.length > 0 ? <StageBreakdown stages={current.stages} /> : null}
+
+      {current.material_lines.length > 0 ? (
+        <MaterialBreakdown lines={current.material_lines} />
       ) : null}
 
       {usability ? <p className="text-sm leading-6 text-warning-text">{usability}</p> : null}
@@ -328,6 +336,46 @@ const REVISION_REASON: Record<string, string> = {
   OTHER: "Something else",
 };
 
+function AppliedDiscountSummary({ proposal }: { readonly proposal: Proposal }) {
+  const percentLabel = proposal.discount_bps === null ? null : `${proposal.discount_bps / 100}% off`;
+  return (
+    <section
+      aria-labelledby="applied-discount-title"
+      className="rounded-card border border-success-line bg-success-surface p-4"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p id="applied-discount-title" className="text-2xl font-extrabold tabular-nums text-text">
+          {formatMoney(proposal.total_paise)}
+        </p>
+        {percentLabel ? <Badge tone="success">{percentLabel}</Badge> : null}
+      </div>
+      <dl className="mt-3 grid gap-1.5 text-sm">
+        <div className="flex items-baseline justify-between gap-3">
+          <dt className="text-text-secondary">Original estimate</dt>
+          <dd className="tabular-nums text-text-secondary line-through">
+            {formatMoney(proposal.discount_base_paise)}
+          </dd>
+        </div>
+        <div className="flex items-baseline justify-between gap-3">
+          <dt className="text-text-secondary">Overall discount</dt>
+          <dd className="font-bold tabular-nums text-success-text">
+            −{formatMoney(proposal.discount_paise)}
+          </dd>
+        </div>
+        <div className="flex items-baseline justify-between gap-3 border-t border-success-line pt-2">
+          <dt className="font-extrabold text-text">Final customer total</dt>
+          <dd className="font-extrabold tabular-nums text-text">
+            {formatMoney(proposal.total_paise)}
+          </dd>
+        </div>
+      </dl>
+      <p className="mt-2 text-xs leading-5 text-success-text">
+        The overall discount is applied. Scope, warranty and line-item rates are unchanged.
+      </p>
+    </section>
+  );
+}
+
 /**
  * The customer asked for a change — what, and the two honest answers.
  *
@@ -356,6 +404,8 @@ function RevisionRequestPanel({
     : [];
   const [declining, setDeclining] = useState(false);
   const [note, setNote] = useState("");
+  const [discounting, setDiscounting] = useState(false);
+  const [discountMode, setDiscountMode] = useState<"PERCENT" | "FIXED">("PERCENT");
   if (request === null) return null;
   const isOpen = request.status === "OPEN";
   const presentation = decline.error ? describeError(decline.error, "mutation") : null;
@@ -365,6 +415,141 @@ function RevisionRequestPanel({
   const askedBps = request.requested_discount_bps ?? null;
   const askedSavingPaise =
     askedBps === null ? 0 : Math.round((proposal.total_paise * askedBps) / 10_000);
+
+  if (isOpen && askedBps !== null) {
+    return (
+      <>
+        <section
+          aria-labelledby="overall-discount-request"
+          className="rounded-card border border-line bg-surface-sunken p-4"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p id="overall-discount-request" className="text-sm font-extrabold text-text">
+              Price
+            </p>
+            <Badge tone="neutral">Requested · not applied</Badge>
+          </div>
+          <dl className="mt-3 grid gap-1.5 text-sm">
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="text-text-secondary">Current estimate</dt>
+              <dd className="font-bold tabular-nums text-text">
+                {formatMoney(proposal.total_paise)}
+              </dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="text-text-secondary">Customer requested</dt>
+              <dd className="font-bold text-text">{askedBps / 100}% overall</dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="text-text-secondary">Overall discount</dt>
+              <dd className="font-bold tabular-nums text-success-text">
+                −{formatMoney(askedSavingPaise)}
+              </dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-3 border-t border-line pt-2">
+              <dt className="font-extrabold text-text">New total if applied</dt>
+              <dd className="text-lg font-extrabold tabular-nums text-text">
+                {formatMoney(proposal.total_paise - askedSavingPaise)}
+              </dd>
+            </div>
+          </dl>
+          <p className="mt-2 text-xs text-text-muted">
+            Requested {timeAgo(request.created_at)} · the current price remains live until you
+            confirm.
+          </p>
+          {request.note.trim() !== "" ? (
+            <p className="mt-2 text-sm leading-6 text-text-secondary">“{request.note.trim()}”</p>
+          ) : null}
+          {presentation ? (
+            <ErrorState
+              inline
+              className="mt-3"
+              title={presentation.title}
+              message={presentation.message}
+              severity={presentation.severity}
+            />
+          ) : null}
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              onClick={() => {
+                setDiscountMode("PERCENT");
+                setDiscounting(true);
+              }}
+            >
+              Apply {askedBps / 100}% discount
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setDiscountMode("FIXED");
+                setDiscounting(true);
+              }}
+            >
+              Set another discount
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setDeclining(true)}>
+              Keep current price
+            </Button>
+          </div>
+          <p className="mt-2 text-xs leading-5 text-text-muted">
+            Scope, warranty and line-item rates remain unchanged.
+          </p>
+        </section>
+
+        <Dialog
+          open={declining}
+          onOpenChange={setDeclining}
+          title="Keep the current price?"
+          description={`Your ${documentLabel} stays exactly as sent. The customer reads your note beside their request.`}
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setDeclining(false)}>
+                Back
+              </Button>
+              <Button
+                variant="danger"
+                loading={decline.isPending}
+                loadingLabel="Keeping current price"
+                onClick={() =>
+                  decline.mutate(
+                    {
+                      proposalId: proposal.id,
+                      requestId: request.id,
+                      requirementId,
+                      note: note.trim(),
+                    },
+                    { onSuccess: () => setDeclining(false) },
+                  )
+                }
+              >
+                Keep current price
+              </Button>
+            </>
+          }
+        >
+          <Textarea
+            rows={3}
+            maxLength={1000}
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            placeholder="Material and labour costs are already at the lowest workable amount."
+          />
+        </Dialog>
+
+        <OverallDiscountDialog
+          open={discounting}
+          onClose={() => setDiscounting(false)}
+          proposal={proposal}
+          requestId={request.id}
+          requestedBps={askedBps}
+          requirementId={requirementId}
+          initialMode={discountMode}
+        />
+      </>
+    );
+  }
 
   return (
     <div
@@ -500,7 +685,7 @@ function StageBreakdown({ stages }: { readonly stages: Proposal["stages"] }) {
             ) : null}
           </div>
           <span className="shrink-0 text-sm font-semibold text-text">
-            {formatMoney(stage.amount_paise)}
+            {formatMoney(stage.discounted_amount_paise)}
           </span>
         </li>
       ))}

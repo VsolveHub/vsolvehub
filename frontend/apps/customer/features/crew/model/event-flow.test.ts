@@ -12,6 +12,10 @@ import {
   presentationQuestions,
   roleQuestions,
   splitByGender,
+  applyQuestionDefaults,
+  guestCountFrom,
+  isExactGuestCount,
+  MAX_GUESTS,
   suggestedServers,
   syncHeadcount,
   withRoleCount,
@@ -136,11 +140,89 @@ describe("event crew flow", () => {
     expect(crewGenderTotals(roles, adjusted)).toEqual({ men: 2, women: 2, people: 4 });
   });
 
+  it("starts an unanswered question on the catalogue's default", () => {
+    const shoes: RequirementQuestionView = {
+      code: "closed_shoes",
+      label: "Everyone in closed shoes?",
+      kind: "boolean",
+      required: true,
+      defaultValue: true,
+    };
+
+    expect(applyQuestionDefaults({}, [shoes])).toEqual({ closed_shoes: true });
+  });
+
+  it("never argues with an answer the customer already gave", () => {
+    const shoes: RequirementQuestionView = {
+      code: "closed_shoes",
+      label: "Everyone in closed shoes?",
+      kind: "boolean",
+      required: true,
+      defaultValue: true,
+    };
+
+    // `false` is an answer, not an absence. Re-applying defaults must not flip it back.
+    expect(applyQuestionDefaults({ closed_shoes: false }, [shoes])).toEqual({
+      closed_shoes: false,
+    });
+  });
+
+  it("leaves questions that publish no default unanswered", () => {
+    const dress: RequirementQuestionView = {
+      code: "dress_code",
+      label: "Dress code",
+      kind: "choice",
+      required: true,
+      options: [],
+    };
+
+    expect(applyQuestionDefaults({}, [dress])).toEqual({});
+  });
+
+  it("reads a guest count from either a band or a typed number", () => {
+    expect(guestCountFrom("100-200")).toBe(150);
+    expect(guestCountFrom("180")).toBe(180);
+    expect(guestCountFrom(180)).toBe(180);
+    expect(guestCountFrom("  240 ")).toBe(240);
+  });
+
+  it("refuses an answer that is neither a known band nor a positive whole number", () => {
+    expect(guestCountFrom(null)).toBeNull();
+    expect(guestCountFrom("")).toBeNull();
+    expect(guestCountFrom("lots")).toBeNull();
+    expect(guestCountFrom("0")).toBeNull();
+    expect(guestCountFrom("-5")).toBeNull();
+    expect(guestCountFrom("12.5")).toBeNull();
+    expect(guestCountFrom("a-band-we-retired")).toBeNull();
+  });
+
+  it("caps an absurd figure rather than staffing for it", () => {
+    expect(guestCountFrom("999999")).toBe(MAX_GUESTS);
+  });
+
+  it("knows an exact figure from a band", () => {
+    expect(isExactGuestCount("180")).toBe(true);
+    expect(isExactGuestCount(180)).toBe(true);
+    expect(isExactGuestCount("100-200")).toBe(false);
+    expect(isExactGuestCount(null)).toBe(false);
+  });
+
   it("suggests a serving headcount from the crowd and the service style, and nothing otherwise", () => {
     expect(suggestedServers("100-200", "buffet")).toBe(5);
     expect(suggestedServers("100-200", "sit-down")).toBe(10);
     expect(suggestedServers("under-50", "passed")).toBe(2);
     expect(suggestedServers("100-200", "no-food")).toBeNull();
+  });
+
+  it("staffs an exact guest count from the number itself, not a band midpoint", () => {
+    // The reason exact entry exists: "200 or more" assumed 250, so a 600-guest
+    // wedding was staffed for 250 — 10 servers where 20 are needed.
+    expect(suggestedServers("600", "buffet")).toBe(20);
+    expect(suggestedServers("200-plus", "buffet")).toBe(8);
+    expect(suggestedServers("180", "sit-down")).toBe(12);
+  });
+
+  it("suggests nothing when the crowd is unknown", () => {
     expect(suggestedServers(undefined, "buffet")).toBeNull();
     expect(suggestedServers("a-band-this-build-does-not-know", "buffet")).toBeNull();
   });

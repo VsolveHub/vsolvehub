@@ -133,6 +133,34 @@ class QuoteTeaser:
     usability: str
 
 
+@dataclass(frozen=True, slots=True)
+class DiscountPreview:
+    """The exact totals a Partner confirms before an overall discount is published."""
+
+    proposal_id: uuid.UUID
+    request_id: uuid.UUID
+    discount_kind: str
+    discount_bps: int | None
+    discount_base_paise: int
+    discount_paise: int
+    calculation: financials.CalculationResult
+
+    def as_payload(self) -> dict[str, Any]:
+        return {
+            "proposal_id": self.proposal_id,
+            "request_id": self.request_id,
+            "discount_kind": self.discount_kind,
+            "discount_bps": self.discount_bps,
+            "discount_base_paise": self.discount_base_paise,
+            "discount_paise": self.discount_paise,
+            "customer_total_paise": self.calculation.customer_total_paise,
+            "tax_paise": self.calculation.partner_service_tax_paise,
+            "partner_net_paise": self.calculation.partner_net_paise,
+            "stages": self.calculation.stages,
+            "material_lines": self.calculation.material_lines,
+        }
+
+
 def _assert_a3_shape(payload: dict[str, Any]) -> None:
     """A workforce quote's total is its own arithmetic, and the server checks it.
 
@@ -370,6 +398,11 @@ def submit_proposal(  # noqa: PLR0912, PLR0915 - one transaction owns the append
     material_list: list[dict[str, Any]] | None = None,
     material_brand_tier: str = "",
     included_supply_list: list[dict[str, Any]] | None = None,
+    discount_kind: str | None = None,
+    discount_bps: int | None = None,
+    discount_target_total_paise: int | None = None,
+    discount_base_total_paise: int | None = None,
+    discount_source: str | None = None,
 ) -> Proposal:
     """Submit a first quote, or a revision that supersedes the vendor's previous one.
 
@@ -461,6 +494,7 @@ def submit_proposal(  # noqa: PLR0912, PLR0915 - one transaction owns the append
             material_lines=material_lines,
             other_charges=other_charges,
             stages=stages,
+            discount_target_total_paise=discount_target_total_paise,
         )
         total_paise = calculation.customer_total_paise
         tax_basis = calculation.tax_basis
@@ -468,6 +502,28 @@ def submit_proposal(  # noqa: PLR0912, PLR0915 - one transaction owns the append
         commission_treatment = "SERVER_POLICY"
         stages = calculation.stages
         material_lines = calculation.material_lines
+
+    if discount_target_total_paise is None:
+        discount_kind = None
+        discount_bps = None
+        discount_source = None
+        discount_base_total_paise = int(total_paise or 0)
+        applied_discount_paise = 0
+    else:
+        if discount_kind not in Proposal.DiscountKind.values:
+            raise ProposalShapeError("Choose percentage or final amount for the overall discount.")
+        if discount_kind == Proposal.DiscountKind.PERCENT and not (
+            discount_bps is not None and 1 <= discount_bps <= RevisionRequest.MAX_DISCOUNT_BPS
+        ):
+            raise ProposalShapeError("Choose an overall discount between 1% and 15%.")
+        if discount_kind == Proposal.DiscountKind.FIXED and discount_bps is not None:
+            raise ProposalShapeError("A final-amount discount does not also carry a percentage.")
+        if discount_source not in Proposal.DiscountSource.values:
+            raise ProposalShapeError("Say where this overall discount came from.")
+        discount_base_total_paise = int(discount_base_total_paise or 0)
+        applied_discount_paise = discount_base_total_paise - int(total_paise or 0)
+        if applied_discount_paise <= 0:
+            raise ProposalShapeError("The overall discount must reduce the customer total.")
 
     # A3 only. An A5 estimate is a price for an outcome, not a rate per worker per day, so there is
     # no statutory floor to measure it against.
@@ -538,6 +594,11 @@ def submit_proposal(  # noqa: PLR0912, PLR0915 - one transaction owns the append
         commission_paise=calculation.commission_paise if calculation else 0,
         withholding_paise=calculation.withholding_paise if calculation else 0,
         partner_net_paise=calculation.partner_net_paise if calculation else int(total_paise or 0),
+        discount_kind=discount_kind,
+        discount_bps=discount_bps,
+        discount_base_paise=int(discount_base_total_paise or total_paise or 0),
+        discount_paise=applied_discount_paise,
+        discount_source=discount_source,
         total_paise=int(total_paise or 0),
         tax_paise=int(tax_paise or 0),
         tax_basis=tax_basis or Proposal.TaxBasis.INCLUSIVE,
@@ -576,8 +637,14 @@ def submit_proposal(  # noqa: PLR0912, PLR0915 - one transaction owns the append
                 answered.reason_code == RevisionRequest.ReasonCode.PRICE
                 and previous.total_paise > 0
             ):
-                moved = previous.total_paise - int(total_paise or 0)
-                granted_bps = max(0, round(moved * 10_000 / previous.total_paise))
+                if discount_kind == Proposal.DiscountKind.PERCENT and discount_bps is not None:
+                    granted_bps = discount_bps
+                else:
+                    moved = previous.total_paise - int(total_paise or 0)
+                    granted_bps = max(
+                        0,
+                        (moved * 10_000 + previous.total_paise // 2) // previous.total_paise,
+                    )
             answered.status = RevisionRequest.Status.ANSWERED
             answered.answered_by_proposal = proposal
             answered.countered_discount_bps = granted_bps
@@ -1067,9 +1134,7 @@ def request_revision(
         excluded_items=[item.strip() for item in excluded_items if item.strip()][:20],
         note=note.strip(),
         requested_discount_bps=(
-            requested_discount_bps
-            if reason_code == RevisionRequest.ReasonCode.PRICE
-            else None
+            requested_discount_bps if reason_code == RevisionRequest.ReasonCode.PRICE else None
         ),
     )
     record_transition(
@@ -1100,6 +1165,174 @@ def request_revision(
         },
     )
     return request
+
+
+def _price_request_for_partner(
+    *,
+    request_id: uuid.UUID,
+    proposal_id: uuid.UUID,
+    partner_id: uuid.UUID,
+    for_update: bool = False,
+) -> RevisionRequest:
+    queryset = RevisionRequest.objects.select_related(
+        "proposal",
+        "proposal__partner",
+        "proposal__requirement",
+        "proposal__requirement__configuration",
+        "proposal__requirement__service_area",
+        "proposal__requirement__variant",
+    )
+    if for_update:
+        queryset = queryset.select_for_update(of=("self", "proposal"))
+    request = queryset.filter(
+        pk=request_id, proposal_id=proposal_id, proposal__partner_id=partner_id
+    ).first()
+    if request is None:
+        raise RequirementNotFoundError()
+    if request.reason_code != RevisionRequest.ReasonCode.PRICE:
+        raise RequirementTransitionError("Only a price request can receive an overall discount.")
+    if request.status != RevisionRequest.Status.OPEN:
+        raise RequirementTransitionError("This price request has already been answered.")
+    if request.proposal.status != Proposal.Status.SUBMITTED:
+        raise ProposalNotSelectableError("This estimate is no longer live.")
+    if request.proposal.requirement.archetype != ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT:
+        raise ProposalShapeError("Only managed-project estimates support an overall discount.")
+    return request
+
+
+def _target_total_for_discount(
+    *,
+    proposal: Proposal,
+    discount_kind: str,
+    discount_bps: int | None,
+    final_total_paise: int | None,
+) -> int:
+    if discount_kind == Proposal.DiscountKind.PERCENT:
+        if discount_bps is None or not 1 <= discount_bps <= RevisionRequest.MAX_DISCOUNT_BPS:
+            raise ProposalShapeError("Choose an overall discount between 1% and 15%.")
+        saving = (proposal.total_paise * discount_bps + 5_000) // 10_000
+        target = proposal.total_paise - saving
+    elif discount_kind == Proposal.DiscountKind.FIXED:
+        if discount_bps is not None or final_total_paise is None:
+            raise ProposalShapeError("Enter the final customer total.")
+        target = final_total_paise
+        saving = proposal.total_paise - target
+    else:
+        raise ProposalShapeError("Choose percentage or final amount for the overall discount.")
+
+    maximum_saving = (proposal.total_paise * RevisionRequest.MAX_DISCOUNT_BPS + 5_000) // 10_000
+    if saving <= 0:
+        raise ProposalShapeError("The final total must be below the current estimate.")
+    if saving > maximum_saving:
+        raise ProposalShapeError(
+            f"An overall discount cannot exceed {RevisionRequest.MAX_DISCOUNT_BPS // 100}%."
+        )
+    return target
+
+
+def _calculation_for_price_discount(
+    *, request: RevisionRequest, target_total_paise: int
+) -> financials.CalculationResult:
+    proposal = request.proposal
+    return financials.calculate_estimate(
+        requirement=proposal.requirement,
+        partner=proposal.partner,
+        estimate_type=proposal.estimate_type,
+        item_lines=proposal.item_lines,
+        labour_lines=proposal.labour_lines,
+        material_lines=proposal.material_lines,
+        other_charges=proposal.other_charges,
+        stages=proposal.stages,
+        discount_target_total_paise=target_total_paise,
+    )
+
+
+def preview_overall_discount(
+    *,
+    request_id: uuid.UUID,
+    proposal_id: uuid.UUID,
+    partner_id: uuid.UUID,
+    discount_kind: str,
+    discount_bps: int | None,
+    final_total_paise: int | None,
+) -> DiscountPreview:
+    """Preview the exact new total, payment allocations and Partner receipt without writing."""
+
+    request = _price_request_for_partner(
+        request_id=request_id, proposal_id=proposal_id, partner_id=partner_id
+    )
+    proposal = request.proposal
+    target = _target_total_for_discount(
+        proposal=proposal,
+        discount_kind=discount_kind,
+        discount_bps=discount_bps,
+        final_total_paise=final_total_paise,
+    )
+    calculation = _calculation_for_price_discount(request=request, target_total_paise=target)
+    return DiscountPreview(
+        proposal_id=proposal.id,
+        request_id=request.id,
+        discount_kind=discount_kind,
+        discount_bps=discount_bps,
+        discount_base_paise=proposal.total_paise,
+        discount_paise=proposal.total_paise - calculation.customer_total_paise,
+        calculation=calculation,
+    )
+
+
+@transaction.atomic
+def apply_overall_discount(
+    *,
+    request_id: uuid.UUID,
+    proposal_id: uuid.UUID,
+    partner_id: uuid.UUID,
+    discount_kind: str,
+    discount_bps: int | None,
+    final_total_paise: int | None,
+) -> Proposal:
+    """Clone the live estimate, apply one overall concession, and answer the price request."""
+
+    request_ref = RevisionRequest.objects.only("requirement_id").filter(pk=request_id).first()
+    if request_ref is None:
+        raise RequirementNotFoundError()
+    CustomerRequirement.objects.select_for_update(of=("self",)).get(pk=request_ref.requirement_id)
+    request = _price_request_for_partner(
+        request_id=request_id,
+        proposal_id=proposal_id,
+        partner_id=partner_id,
+        for_update=True,
+    )
+    proposal = request.proposal
+    target = _target_total_for_discount(
+        proposal=proposal,
+        discount_kind=discount_kind,
+        discount_bps=discount_bps,
+        final_total_paise=final_total_paise,
+    )
+    return submit_proposal(
+        invitation_id=proposal.invitation_id,
+        stages=proposal.stages,
+        material_lines=proposal.material_lines,
+        inclusions=proposal.inclusions,
+        exclusions=proposal.exclusions,
+        warranty_terms=proposal.warranty_terms,
+        completion_days=proposal.completion_days,
+        valid_until=proposal.valid_until,
+        site_visit_id=proposal.site_visit_id,
+        estimate_type=proposal.estimate_type,
+        item_lines=proposal.item_lines,
+        labour_lines=proposal.labour_lines,
+        other_charges=proposal.other_charges,
+        scope_summary=proposal.scope_summary,
+        material_list=proposal.material_list,
+        material_brand_tier=proposal.material_brand_tier,
+        included_supply_list=proposal.included_supply_list,
+        discount_kind=discount_kind,
+        discount_bps=discount_bps,
+        discount_target_total_paise=target,
+        discount_base_total_paise=proposal.total_paise,
+        discount_source=Proposal.DiscountSource.CUSTOMER_REQUEST,
+    )
 
 
 @transaction.atomic

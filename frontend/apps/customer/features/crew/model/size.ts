@@ -78,6 +78,14 @@ export function initialAnswers(
   for (const question of questions) {
     if (question.kind === "number") {
       seeded[question.code] = question.minimum ?? NUMBER_FLOOR;
+      continue;
+    }
+    // The catalogue's own starting answer, for the questions that publish one. Same
+    // reasoning as the number floor above: the control and the stored answer must agree
+    // from the first render, or the Customer sees "yes" selected while the request
+    // carries nothing.
+    if (question.defaultValue !== undefined) {
+      seeded[question.code] = question.defaultValue;
     }
   }
   return seeded;

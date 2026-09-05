@@ -66,6 +66,7 @@ import {
   DRESS_CODE_CODE,
   EVENT_TYPE_CODE,
   GUEST_BAND_CODE,
+  isExactGuestCount,
   SERVICE_STYLE_CODE,
   STAFF_MEAL_CODE,
   applyServingSuggestion,
@@ -214,6 +215,23 @@ function optionLabel(
   return question.options?.find((option) => option.value === value)?.label ?? null;
 }
 
+/**
+ * How the crowd reads back — "100 to 200", or "180" when the Customer typed it.
+ *
+ * `guest_band` holds a band code or an exact number, so an option lookup answers null for
+ * half the possible answers. Every caller composes prose from this ("a 180 guest event",
+ * "180 guests"), and a null there drops the crowd from the summary the Customer checks
+ * before sending.
+ */
+function guestCountLabel(
+  questions: readonly RequirementQuestionView[],
+  answers: Readonly<Record<string, unknown>>,
+): string | null {
+  const value = answers[GUEST_BAND_CODE];
+  if (isExactGuestCount(value)) return String(value).trim();
+  return optionLabel(questions, GUEST_BAND_CODE, answers);
+}
+
 function joinPresent(parts: readonly (string | null)[], separator = " · "): string | null {
   const present = parts.filter((part): part is string => part !== null && part !== "");
   return present.length === 0 ? null : present.join(separator);
@@ -287,7 +305,10 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
     ? suggestedServers(answers[GUEST_BAND_CODE], answers[SERVICE_STYLE_CODE])
     : null;
   const eventTypeLabel = optionLabel(occasion, EVENT_TYPE_CODE, answers);
-  const guestBandLabel = optionLabel(occasion, GUEST_BAND_CODE, answers);
+  // Not `optionLabel`: an exact count is not an option code, so the lookup returns null
+  // and every sentence built from it silently loses the crowd — the one fact the crew
+  // suggestion is derived from.
+  const guestBandLabel = guestCountLabel(occasion, answers);
   const serviceStyleLabel = optionLabel(occasion, SERVICE_STYLE_CODE, answers);
   const mixLabel = crewMixLabel(roles, answers);
   const mix = crewMix(roles, answers);

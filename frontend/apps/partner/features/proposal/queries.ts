@@ -53,6 +53,8 @@ export type Proposal = Schemas["Proposal"];
 export type ProposalCreateRequest = Schemas["ProposalCreateRequest"];
 export type ProposalPreviewRequest = Schemas["ProposalPreviewRequest"];
 export type ProposalFinancialSummary = Schemas["ProposalFinancialSummary"];
+export type ProposalDiscountRequest = Schemas["ProposalDiscountRequestRequest"];
+export type ProposalDiscountPreview = Schemas["ProposalDiscountPreview"];
 
 /**
  * The key for one logical submission.
@@ -72,6 +74,12 @@ export function submitProposalKey(input: {
 
 export function withdrawProposalKey(proposalId: string): string {
   return getStableIdempotencyKey(`m2-proposal-withdraw:${proposalId}`);
+}
+
+export function applyDiscountKey(requestId: string, body: ProposalDiscountRequest): string {
+  return getStableIdempotencyKey(
+    `m2-proposal-discount:${requestId}:${body.discount_kind}:${body.discount_bps ?? body.final_total_paise ?? "none"}`,
+  );
 }
 
 /**
@@ -185,6 +193,37 @@ export function useProposalFinancialPreview(input: {
   });
 }
 
+export function useOverallDiscountPreview(input: {
+  proposalId: string;
+  requestId: string;
+  body: ProposalDiscountRequest | null;
+}) {
+  const fingerprint = input.body === null ? "none" : JSON.stringify(input.body);
+  return useQuery<ProposalDiscountPreview>({
+    queryKey: m2QueryKeys.proposals.discountPreview(
+      input.proposalId,
+      input.requestId,
+      fingerprint,
+    ),
+    queryFn: () =>
+      request(() =>
+        getApiClient().POST(
+          "/api/v1/proposals/{proposal_id}/revision-requests/{request_id}/discount/preview/",
+          {
+            params: {
+              path: { proposal_id: input.proposalId, request_id: input.requestId },
+            },
+            body: input.body as ProposalDiscountRequest,
+          },
+        ),
+      ),
+    enabled: input.body !== null,
+    staleTime: Number.POSITIVE_INFINITY,
+    gcTime: 5 * 60 * 1000,
+    retry: false,
+  });
+}
+
 export interface SubmitProposalInput {
   readonly body: ProposalCreateRequest;
   /** The revision being replaced. `0` for a first quote. Keys the idempotency scope. */
@@ -294,8 +333,9 @@ export interface DeclineRevisionInput {
 /**
  * Say no to a customer's requested change; the estimate stands as sent.
  *
- * Accepting the request is not a separate command — a revision (`POST
- * /proposals/`) supersedes the estimate and answers the request in one step.
+ * A scope change is answered by the ordinary proposal composer. A price request can instead use
+ * the overall-discount preview and apply command below; both paths publish a new immutable
+ * revision rather than editing the estimate the customer already saw.
  */
 export function useDeclineRevisionRequest() {
   const queryClient = useQueryClient();
@@ -312,6 +352,46 @@ export function useDeclineRevisionRequest() {
         ),
       ),
     onSuccess: async (_declined, input) => {
+      await queryClient.invalidateQueries({
+        queryKey: m2QueryKeys.proposals.mine(input.requirementId),
+      });
+      await queryClient.invalidateQueries({
+        queryKey: m2QueryKeys.proposals.detail(input.proposalId),
+      });
+    },
+    retry: false,
+  });
+}
+
+export interface ApplyOverallDiscountInput {
+  readonly proposalId: string;
+  readonly requestId: string;
+  readonly requirementId: string;
+  readonly body: ProposalDiscountRequest;
+}
+
+export function useApplyOverallDiscount() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: ApplyOverallDiscountInput) =>
+      request(() =>
+        getApiClient().POST(
+          "/api/v1/proposals/{proposal_id}/revision-requests/{request_id}/discount/apply/",
+          {
+            params: {
+              path: { proposal_id: input.proposalId, request_id: input.requestId },
+              header: { "Idempotency-Key": applyDiscountKey(input.requestId, input.body) },
+            },
+            body: input.body,
+          },
+        ),
+      ),
+    onSuccess: async (proposal, input) => {
+      queryClient.setQueryData(m2QueryKeys.proposals.detail(proposal.id), proposal);
+      clearIdempotencyKey(
+        `m2-proposal-discount:${input.requestId}:${input.body.discount_kind}:${input.body.discount_bps ?? input.body.final_total_paise ?? "none"}`,
+      );
       await queryClient.invalidateQueries({
         queryKey: m2QueryKeys.proposals.mine(input.requirementId),
       });

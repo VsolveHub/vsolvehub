@@ -199,6 +199,12 @@ class CapacityHold(models.Model):
         return f"{self.partner_id}:{self.starts_on}..{self.ends_on}:{self.strength}"
 
 
+#: Maximum negotiated movement on one estimate (1500 = 15%). Shared by the immutable discount
+#: snapshot and the Customer's request below, so the ask and the amount a Partner may apply cannot
+#: drift into different limits.
+MAX_DISCOUNT_BPS = 1500
+
+
 class Proposal(models.Model):
     """A vendor's quote. Append-only: a revision supersedes rather than edits."""
 
@@ -238,6 +244,14 @@ class Proposal(models.Model):
         NOT_APPLICABLE = "NOT_APPLICABLE", "Not applicable"
         CUSTOMER_PROCURES = "CUSTOMER_PROCURES", "Customer procures"
         PARTNER_TURNKEY = "PARTNER_TURNKEY", "Partner supplies turnkey"
+
+    class DiscountKind(models.TextChoices):
+        PERCENT = "PERCENT", "Percentage"
+        FIXED = "FIXED", "Final amount"
+
+    class DiscountSource(models.TextChoices):
+        CUSTOMER_REQUEST = "CUSTOMER_REQUEST", "Customer request"
+        PARTNER_OFFER = "PARTNER_OFFER", "Partner offer"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     requirement = models.ForeignKey(
@@ -330,6 +344,20 @@ class Proposal(models.Model):
     commission_paise = models.PositiveBigIntegerField(default=0)
     withholding_paise = models.PositiveBigIntegerField(default=0)
     partner_net_paise = models.PositiveBigIntegerField(default=0)
+
+    #: One visible, audited overall concession. It never masquerades as a negative charge: the
+    #: positive work/material/charge rows stay as authored, while this snapshot says which prior
+    #: customer total the Partner reduced and by exactly how much. Null kind/source plus zero
+    #: amount is the ordinary undiscounted estimate.
+    discount_kind = models.CharField(
+        max_length=12, choices=DiscountKind.choices, null=True, blank=True
+    )
+    discount_bps = models.PositiveSmallIntegerField(null=True, blank=True)
+    discount_base_paise = models.PositiveBigIntegerField(default=0)
+    discount_paise = models.PositiveBigIntegerField(default=0)
+    discount_source = models.CharField(
+        max_length=24, choices=DiscountSource.choices, null=True, blank=True
+    )
 
     total_paise = models.PositiveBigIntegerField()
     tax_paise = models.PositiveBigIntegerField(default=0)
@@ -451,6 +479,35 @@ class Proposal(models.Model):
                 name="requirements_proposal_customer_total_is_total",
             ),
             models.CheckConstraint(
+                condition=models.Q(discount_base_paise=0, discount_paise=0)
+                | models.Q(
+                    discount_base_paise=models.F("total_paise") + models.F("discount_paise")
+                ),
+                name="requirements_proposal_discount_reconciles",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    discount_kind__isnull=True,
+                    discount_bps__isnull=True,
+                    discount_paise=0,
+                    discount_source__isnull=True,
+                )
+                | models.Q(
+                    discount_kind="PERCENT",
+                    discount_bps__gte=1,
+                    discount_bps__lte=MAX_DISCOUNT_BPS,
+                    discount_paise__gt=0,
+                    discount_source__in=("CUSTOMER_REQUEST", "PARTNER_OFFER"),
+                )
+                | models.Q(
+                    discount_kind="FIXED",
+                    discount_bps__isnull=True,
+                    discount_paise__gt=0,
+                    discount_source__in=("CUSTOMER_REQUEST", "PARTNER_OFFER"),
+                ),
+                name="requirements_proposal_discount_shape",
+            ),
+            models.CheckConstraint(
                 condition=models.Q(
                     partner_quote_total_paise=models.F("partner_net_paise")
                     + models.F("commission_paise")
@@ -554,14 +611,6 @@ class RequirementQuestion(models.Model):
 
     def __str__(self) -> str:
         return f"{self.requirement_id}:{self.id}"
-
-
-#: The most a Customer may ask a vendor to move, in basis points (1500 = 15%).
-#:
-#: Module scope because ``Meta.constraints`` is evaluated in the class body, where a class
-#: attribute of the model is not yet in scope. Beyond this figure the honest request is a smaller
-#: scope, not a smaller number, and the sheet steers there rather than sending it.
-MAX_DISCOUNT_BPS = 1500
 
 
 class RevisionRequest(models.Model):

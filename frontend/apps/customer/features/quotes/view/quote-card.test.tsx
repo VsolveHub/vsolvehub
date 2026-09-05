@@ -28,6 +28,12 @@ function estimate(overrides: Partial<QuoteCardView> = {}): QuoteCardView {
     taxBasis: "INCLUSIVE",
     payableLabel: "₹1,84,000",
     payablePaise: 18_400_000,
+    discountKind: null,
+    discountPercent: null,
+    discountBaseLabel: "â‚¹1,84,000",
+    discountBasePaise: 18_400_000,
+    discountLabel: "â‚¹0",
+    discountPaise: 0,
     rateLabel: null,
     minimumDays: null,
     workerCount: null,
@@ -184,5 +190,31 @@ describe("the estimate card", () => {
       />,
     );
     expect(screen.getByText("1 question for you")).toBeInTheDocument();
+  });
+
+  it("shows an applied overall discount as part of the estimate price", () => {
+    render(
+      <QuoteCard
+        card={estimate({
+          revision: 2,
+          payableLabel: "₹1,74,800",
+          payablePaise: 17_480_000,
+          discountKind: "PERCENT",
+          discountPercent: 5,
+          discountBaseLabel: "₹1,84,000",
+          discountBasePaise: 18_400_000,
+          discountLabel: "₹9,200",
+          discountPaise: 920_000,
+        })}
+        index={0}
+        isPicked={false}
+        isRevalidating={false}
+        {...hrefs}
+      />,
+    );
+
+    expect(screen.getByText("5% off")).toBeInTheDocument();
+    expect(screen.getByText("You save ₹9,200")).toBeInTheDocument();
+    expect(screen.getByText("₹1,84,000")).toHaveClass("line-through");
   });
 });

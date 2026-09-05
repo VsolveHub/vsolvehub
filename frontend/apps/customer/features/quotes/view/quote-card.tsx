@@ -180,6 +180,11 @@ export function QuoteCard({
               {card.isVerified ? <Badge tone="success">Verified</Badge> : null}
               {isChosen ? <Badge tone="success">Chosen</Badge> : null}
               {card.isOutOfBudget ? <Badge tone="warning">Over budget</Badge> : null}
+              {card.discountPaise > 0 ? (
+                <Badge tone="success">
+                  {card.discountPercent === null ? "Price reduced" : `${card.discountPercent}% off`}
+                </Badge>
+              ) : null}
             </div>
             <VendorTrustLine trust={card.trust} className="mt-0.5" />
           </div>
@@ -211,11 +216,7 @@ export function QuoteCard({
           <Fact
             label="Total"
             value={card.payableLabel}
-            hint={
-              card.taxBasis === "INCLUSIVE"
-                ? `incl. ${card.taxLabel} tax`
-                : `+ ${card.taxLabel} tax`
-            }
+            hint={`incl. ${card.taxLabel} tax`}
             emphasis
           />
           <Fact
@@ -237,6 +238,19 @@ export function QuoteCard({
             urgent={validity?.urgent ?? false}
           />
         </dl>
+
+        {card.discountPaise > 0 ? (
+          <div className="mt-3 rounded-[12px] border border-success-line bg-success-surface px-3 py-2.5">
+            <div className="flex items-baseline justify-between gap-3 text-sm">
+              <span className="text-text-secondary">
+                Previously <span className="tabular-nums line-through">{card.discountBaseLabel}</span>
+              </span>
+              <span className="font-extrabold tabular-nums text-success-text">
+                You save {card.discountLabel}
+              </span>
+            </div>
+          </div>
+        ) : null}
 
         {card.rateLabel !== null ? (
           <p className="mt-3 text-sm text-text-secondary">
@@ -414,7 +428,7 @@ function CardOverflow({
         </Link>
         {priceAskable ? (
           <button type="button" className={overflowItem} onClick={() => onAskAboutPrice(card.proposalId)}>
-            Ask about the price
+            Any negotiations?
           </button>
         ) : null}
         {revisable ? (

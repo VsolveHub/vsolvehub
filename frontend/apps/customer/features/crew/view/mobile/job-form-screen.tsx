@@ -359,6 +359,11 @@ export function JobFormScreen({
           onReportingTime === undefined ? undefined : "The day of the event."
         }
         horizonDays={dateHorizonDays}
+        // An event opens tomorrow, not today. A shift is staffed by rostering people,
+        // briefing them and telling them where to be — offering today would be offering
+        // something nobody can supply. `onReportingTime` is already how this screen knows
+        // it is looking at an event rather than a day crew.
+        earliestOffsetDays={onReportingTime === undefined ? 0 : 1}
       />
 
       {onReportingTime !== undefined ? (

@@ -4,20 +4,11 @@ import { EmptyState } from "@vsolve/ui";
 import { ServicePhoto } from "./category-artwork";
 import type { Category } from "../queries";
 
-const DESKTOP_PREVIEW_LIMIT = 6;
-
-function seeAllVisibility(subcategoryCount: number): string {
-  if (subcategoryCount <= 3) return "hidden";
-  if (subcategoryCount === 4) return "inline-flex sm:hidden";
-  if (subcategoryCount <= DESKTOP_PREVIEW_LIMIT) return "inline-flex lg:hidden";
-  return "inline-flex";
-}
-
-function previewItemVisibility(index: number): string {
-  if (index < 3) return "block";
-  if (index === 3) return "hidden sm:block";
-  return "hidden lg:block";
-}
+// `DESKTOP_PREVIEW_LIMIT`, `seeAllVisibility` and `previewItemVisibility` are gone with the
+// truncated grid they served. They existed to decide which tiles to hide at each breakpoint
+// and whether "See all" was therefore needed; a row that scrolls hides nothing, so the only
+// question left is whether the category has enough subcategories to deserve its own page —
+// which the caller answers inline.
 
 function SubcategoryArtwork({
   imageUrl,
@@ -69,7 +60,7 @@ export function CatalogCategoryRows({ categories }: { categories: readonly Categ
               <Link
                 href={`/catalog/${category.slug}`}
                 aria-label={`See all ${category.name} subcategories`}
-                className={`${seeAllVisibility(subcategories.length)} min-h-11 items-center gap-1 rounded-control px-1 text-sm font-bold text-action transition-opacity duration-fast hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring`}
+                className={`inline-flex min-h-11 items-center gap-1 rounded-control px-1 text-sm font-bold text-action transition-opacity duration-fast hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring`}
               >
                 See all
                 <svg
@@ -88,9 +79,22 @@ export function CatalogCategoryRows({ categories }: { categories: readonly Categ
             ) : null}
           </header>
 
-          <ul className="grid list-none grid-cols-3 gap-x-3 p-0 sm:grid-cols-4 sm:gap-x-4 lg:grid-cols-6">
-            {subcategories.slice(0, DESKTOP_PREVIEW_LIMIT).map((subcategory, index) => (
-              <li key={subcategory.id} className={`min-w-0 ${previewItemVisibility(index)}`}>
+          {/* A scroller, not a truncated grid.
+              The row used to render six tiles and hide the rest behind per-index
+              visibility classes, so a category with fifteen subcategories showed six and
+              gave no sign the others existed — the only way through was "See all". Now
+              every subcategory is in the row and the row scrolls, which is what a person
+              tries first when a strip of tiles runs off the edge.
+
+              Bleeds to the viewport edge (`-mx-4 px-4`) so the last tile is visibly cut
+              rather than ending flush, which is the cue that there is more. Snapping is
+              per-tile so a flick lands on a tile rather than mid-label. */}
+          <ul className="no-scrollbar -mx-4 flex list-none snap-x snap-mandatory gap-3 overflow-x-auto scroll-px-4 px-4 pb-1 sm:gap-4 lg:mx-0 lg:px-0 lg:scroll-px-0">
+            {subcategories.map((subcategory) => (
+              <li
+                key={subcategory.id}
+                className="w-[92px] shrink-0 snap-start sm:w-[110px] lg:w-[128px]"
+              >
                 <Link
                   href={`/catalog/${category.slug}?tile=${subcategory.slug}`}
                   className="group flex min-h-11 flex-col items-center gap-2 rounded-card active:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"

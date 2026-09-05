@@ -201,6 +201,10 @@ export function ScreenHeading({
 }
 
 /** A field label at the density the phone screens use. */
-export function FieldLabel({ children }: { children: ReactNode }) {
-  return <p className="mb-2 text-[13px] font-semibold text-text">{children}</p>;
+export function FieldLabel({ children, id }: { children: ReactNode; id?: string }) {
+  return (
+    <p id={id} className="mb-2 text-[13px] font-semibold text-text">
+      {children}
+    </p>
+  );
 }

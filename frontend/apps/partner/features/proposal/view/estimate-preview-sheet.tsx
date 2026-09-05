@@ -10,7 +10,7 @@ import {
   type CommercialEstimateDraft,
   type MaterialListLineDraft,
 } from "../model/commercial-estimate-draft";
-import type { ProposalFinancialSummary } from "../queries";
+import type { Proposal, ProposalFinancialSummary } from "../queries";
 
 /**
  * The estimate as the customer will read it, before it is sent.
@@ -37,7 +37,12 @@ export function EstimatePreviewSheet({
   open: boolean;
   onClose: () => void;
   draft: CommercialEstimateDraft;
-  preview: Pick<ProposalFinancialSummary, "customer_total_paise"> | undefined;
+  preview:
+    | (Pick<ProposalFinancialSummary, "customer_total_paise" | "stages"> &
+        Partial<
+          Pick<Proposal, "discount_bps" | "discount_base_paise" | "discount_paise">
+        >)
+    | undefined;
   vendorName: string;
   /** What the customer buys — quantities and a spec, never a price (1.48.0). */
   materialList?: readonly MaterialListLineDraft[];
@@ -51,6 +56,8 @@ export function EstimatePreviewSheet({
       ? draft.itemLines.map((line) => ({ title: line.title || "Untitled", note: `${line.quantity} × ${formatMoney(line.ratePaise ?? 0)}`, amount: itemLineAmount(line) }))
       : draft.labourLines.map((line) => ({ title: line.team ? `${line.role} — ${line.team}` : line.role || "Untitled", note: `${line.memberCount} people × ${line.dayCount} days × ${formatMoney(line.ratePaisePerDay ?? 0)}/day`, amount: labourLineAmount(line) }));
   const first = draft.installments[0] ?? null;
+  const firstDue = preview?.stages[0]?.total_due_paise ?? first?.amountPaise ?? null;
+  const hasDiscount = (preview?.discount_paise ?? 0) > 0;
 
   return (
     <Sheet
@@ -66,10 +73,23 @@ export function EstimatePreviewSheet({
           <p className="mt-1 text-[28px] font-extrabold leading-none tabular-nums">
             {preview ? formatMoney(preview.customer_total_paise) : "—"}
           </p>
+          {hasDiscount && preview ? (
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+              <span className="tabular-nums text-surface/60 line-through">
+                {formatMoney(preview.discount_base_paise ?? 0)}
+              </span>
+              <span className="font-bold text-success-200">
+                {preview.discount_bps !== null && preview.discount_bps !== undefined
+                  ? `${preview.discount_bps / 100}% off · `
+                  : ""}
+                Save {formatMoney(preview.discount_paise ?? 0)}
+              </span>
+            </div>
+          ) : null}
           <div className="mt-3 grid grid-cols-2 gap-3 border-t border-surface/15 pt-3 text-sm">
             <div>
               <p className="text-[11px] uppercase text-surface/60">Pay to start</p>
-              <p className="font-bold">{first?.amountPaise ? formatMoney(first.amountPaise) : "Not stated"}</p>
+              <p className="font-bold">{firstDue ? formatMoney(firstDue) : "Not stated"}</p>
             </div>
             <div>
               <p className="text-[11px] uppercase text-surface/60">Timeline</p>
@@ -159,9 +179,12 @@ export function EstimatePreviewSheet({
 
         <Block title="How they pay">
           <ol className="list-none p-0 text-sm">
-            {draft.installments.map((row, index) => (
-              <li key={row.id} className="flex justify-between gap-3 py-1"><span>{index + 1}. {row.title || `Stage ${index + 1}`}{row.deliverable ? <span className="block text-xs text-text-muted">{row.deliverable}</span> : null}</span><span className="font-semibold tabular-nums">{row.amountPaise === null ? "—" : formatMoney(row.amountPaise)}</span></li>
-            ))}
+            {draft.installments.map((row, index) => {
+              const due = preview?.stages[index]?.total_due_paise ?? row.amountPaise;
+              return (
+                <li key={row.id} className="flex justify-between gap-3 py-1"><span>{index + 1}. {row.title || `Stage ${index + 1}`}{row.deliverable ? <span className="block text-xs text-text-muted">{row.deliverable}</span> : null}</span><span className="font-semibold tabular-nums">{due === null ? "—" : formatMoney(due)}</span></li>
+              );
+            })}
           </ol>
         </Block>
 

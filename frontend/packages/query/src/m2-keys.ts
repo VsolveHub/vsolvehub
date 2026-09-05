@@ -173,6 +173,14 @@ export const m2QueryKeys = {
     all: ["m2", "proposals"] as const,
     preview: (invitationId: string, fingerprint: string) =>
       [...m2QueryKeys.proposals.all, "preview", invitationId, fingerprint] as const,
+    discountPreview: (proposalId: string, requestId: string, fingerprint: string) =>
+      [
+        ...m2QueryKeys.proposals.all,
+        "discount-preview",
+        proposalId,
+        requestId,
+        fingerprint,
+      ] as const,
     mine: (requirementId: string) =>
       [...m2QueryKeys.proposals.all, "mine", requirementId] as const,
     teasers: (requirementId: string) =>

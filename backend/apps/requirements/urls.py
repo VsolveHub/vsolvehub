@@ -92,6 +92,8 @@ from apps.requirements.views import (
     PartnerProjectCompletionView,
     PartnerProposalCollectionView,
     PartnerProposalDetailView,
+    PartnerProposalDiscountApplyView,
+    PartnerProposalDiscountPreviewView,
     PartnerProposalPreviewView,
     PartnerProposalRevisionDeclineView,
     PartnerProposalWithdrawView,
@@ -454,6 +456,16 @@ urlpatterns = [
         "proposals/<uuid:proposal_id>/revision-requests/<uuid:request_id>/decline/",
         PartnerProposalRevisionDeclineView.as_view(),
         name="m2-proposal-revision-decline",
+    ),
+    path(
+        "proposals/<uuid:proposal_id>/revision-requests/<uuid:request_id>/discount/preview/",
+        PartnerProposalDiscountPreviewView.as_view(),
+        name="m2-proposal-overall-discount-preview",
+    ),
+    path(
+        "proposals/<uuid:proposal_id>/revision-requests/<uuid:request_id>/discount/apply/",
+        PartnerProposalDiscountApplyView.as_view(),
+        name="m2-proposal-overall-discount-apply",
     ),
     path(
         "proposals/<uuid:proposal_id>/withdraw/",

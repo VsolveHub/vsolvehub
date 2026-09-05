@@ -54,12 +54,17 @@ describe("catalog category rows", () => {
     );
   });
 
-  it("previews at most one desktop row and links to the complete category", () => {
+  it("puts every subcategory in the row and links to the complete category", () => {
+    // The row used to render six and hide the rest behind breakpoint classes, so a
+    // category with more gave no sign the others existed. It scrolls now, so nothing is
+    // withheld — and "See all" stays, because the category page is still the better
+    // place to browse a long list.
     render(<CatalogCategoryRows categories={[category()]} />);
 
     const section = screen.getByRole("region", { name: "Electrician" });
-    expect(within(section).getAllByRole("link")).toHaveLength(7);
-    expect(screen.queryByRole("link", { name: "Subcategory 7" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Subcategory 7" })).toBeInTheDocument();
+    // Seven subcategories plus the see-all link.
+    expect(within(section).getAllByRole("link")).toHaveLength(8);
     expect(
       screen.getByRole("link", { name: "See all Electrician subcategories" }),
     ).toHaveAttribute("href", "/catalog/electrician");

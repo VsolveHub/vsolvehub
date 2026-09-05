@@ -42,6 +42,10 @@ class CalculationResult:
     line_subtotal_paise: int
     material_total_paise: int
     authorized_charges_paise: int
+    discount_base_paise: int
+    pricing_discount_paise: int
+    pre_discount_customer_total_paise: int
+    customer_savings_paise: int
     taxable_value_paise: int
     partner_service_tax_paise: int
     partner_quote_total_paise: int
@@ -316,6 +320,197 @@ def _allocate(total: int, weights: list[int]) -> list[int]:
     return allocations
 
 
+@dataclass(frozen=True, slots=True)
+class _PriceOutcome:
+    tax_components: list[dict[str, Any]]
+    tax: int
+    pre_tax_value: int
+    gross_priced_value: int
+    quote_total: int
+    platform_fee: int
+    platform_fee_tax: int
+    customer_fee: int
+    partner_fee: int
+    commission: int
+    withholding: int
+    partner_net: int
+
+    @property
+    def customer_total(self) -> int:
+        return self.quote_total + self.customer_fee
+
+
+def _discounted_tax_groups(
+    tax_groups: list[tuple[str, str, int]], discount_paise: int
+) -> list[tuple[str, str, int, int, int]]:
+    """Allocate one overall discount across every priced tax group.
+
+    The estimate keeps its authored item and charge rates. This allocation exists for statutory
+    tax and settlement arithmetic only: each group carries ``gross, discount, net`` and the
+    customer sees the concession once, at the estimate total.
+    """
+
+    gross_values = [amount for _purpose, _category, amount in tax_groups]
+    gross_total = sum(gross_values)
+    if discount_paise < 0 or discount_paise >= gross_total:
+        raise ProposalShapeError("The overall discount must leave a positive estimate amount.")
+    allocations = (
+        _allocate(discount_paise, gross_values) if discount_paise else [0] * len(tax_groups)
+    )
+    return [
+        (purpose, category, gross, allocated, gross - allocated)
+        for (purpose, category, gross), allocated in zip(tax_groups, allocations, strict=True)
+    ]
+
+
+def _price_outcome(
+    *,
+    tax_groups: list[tuple[str, str, int]],
+    discount_paise: int,
+    policy: CommercialPolicy,
+    gst_registered: bool,
+) -> _PriceOutcome:
+    tax_components: list[dict[str, Any]] = []
+    tax = 0
+    pre_tax_value = 0
+    gross_priced_value = 0
+    for purpose, category, gross_amount, allocated_discount, amount in _discounted_tax_groups(
+        tax_groups, discount_paise
+    ):
+        raw_rate = policy.tax_rates_bps.get(category) if gst_registered else 0
+        if not isinstance(raw_rate, int) or not 0 <= raw_rate <= MAX_BASIS_POINTS:
+            raise FinancialPolicyUnavailableError(f"Tax category {category} has no approved rate.")
+        component_tax = (
+            _inclusive_tax(amount, raw_rate)
+            if policy.tax_basis == CommercialPolicy.TaxBasis.INCLUSIVE
+            else _bps(amount, raw_rate)
+        )
+        component_taxable = (
+            amount - component_tax
+            if policy.tax_basis == CommercialPolicy.TaxBasis.INCLUSIVE
+            else amount
+        )
+        tax += component_tax
+        pre_tax_value += component_taxable
+        gross_priced_value += amount
+        tax_components.append(
+            {
+                "purpose": purpose,
+                "category_code": category,
+                "rate_bps": raw_rate,
+                "pre_discount_priced_value_paise": gross_amount,
+                "discount_paise": allocated_discount,
+                "priced_value_paise": amount,
+                "taxable_value_paise": component_taxable,
+                "tax_paise": component_tax,
+            }
+        )
+    quote_total = (
+        gross_priced_value
+        if policy.tax_basis == CommercialPolicy.TaxBasis.INCLUSIVE
+        else gross_priced_value + tax
+    )
+    platform_fee = _bps(quote_total, int(policy.platform_fee_bps or 0))
+    platform_fee_tax = _bps(platform_fee, int(policy.platform_fee_tax_bps or 0))
+    customer_fee = (
+        platform_fee + platform_fee_tax
+        if policy.platform_fee_treatment == CommercialPolicy.PlatformFeeTreatment.CUSTOMER
+        else 0
+    )
+    partner_fee = (
+        platform_fee
+        if policy.platform_fee_treatment == CommercialPolicy.PlatformFeeTreatment.PARTNER
+        else 0
+    )
+    commission_base = (
+        pre_tax_value
+        if policy.commission_basis == CommercialPolicy.AmountBasis.TAXABLE_VALUE
+        else quote_total
+    )
+    withholding_base = (
+        0
+        if policy.withholding_basis == CommercialPolicy.AmountBasis.NONE
+        else (
+            pre_tax_value
+            if policy.withholding_basis == CommercialPolicy.AmountBasis.TAXABLE_VALUE
+            else quote_total
+        )
+    )
+    commission = _bps(commission_base, int(policy.commission_bps or 0))
+    withholding = _bps(withholding_base, int(policy.withholding_bps or 0))
+    partner_net = quote_total - partner_fee - commission - withholding
+    if partner_net < 0:
+        raise FinancialPolicyUnavailableError("Policy deductions exceed the Partner quote total.")
+    return _PriceOutcome(
+        tax_components=tax_components,
+        tax=tax,
+        pre_tax_value=pre_tax_value,
+        gross_priced_value=gross_priced_value,
+        quote_total=quote_total,
+        platform_fee=platform_fee,
+        platform_fee_tax=platform_fee_tax,
+        customer_fee=customer_fee,
+        partner_fee=partner_fee,
+        commission=commission,
+        withholding=withholding,
+        partner_net=partner_net,
+    )
+
+
+def _discount_for_customer_total(
+    *,
+    tax_groups: list[tuple[str, str, int]],
+    target_total_paise: int,
+    policy: CommercialPolicy,
+    gst_registered: bool,
+) -> tuple[int, _PriceOutcome, _PriceOutcome]:
+    """Find the audited pre-tax concession closest to one partner-approved final total.
+
+    Tax and percentage fees make the mapping from a displayed final total to the underlying
+    invoice discount non-linear by a few paise. A monotonic binary search keeps the partner's
+    requested final amount authoritative without floating-point money. Ties choose the lower
+    customer total so the confirmation never promises less discount than it applies.
+    """
+
+    undiscounted = _price_outcome(
+        tax_groups=tax_groups,
+        discount_paise=0,
+        policy=policy,
+        gst_registered=gst_registered,
+    )
+    if target_total_paise <= 0 or target_total_paise >= undiscounted.customer_total:
+        raise ProposalShapeError("Choose a final total below the current estimate amount.")
+
+    gross_total = sum(amount for _purpose, _category, amount in tax_groups)
+    low = 1
+    high = gross_total - 1
+    best_discount = 0
+    best = undiscounted
+    best_distance = abs(undiscounted.customer_total - target_total_paise)
+    while low <= high:
+        candidate_discount = (low + high) // 2
+        candidate = _price_outcome(
+            tax_groups=tax_groups,
+            discount_paise=candidate_discount,
+            policy=policy,
+            gst_registered=gst_registered,
+        )
+        distance = abs(candidate.customer_total - target_total_paise)
+        if distance < best_distance or (
+            distance == best_distance and candidate.customer_total < best.customer_total
+        ):
+            best_discount = candidate_discount
+            best = candidate
+            best_distance = distance
+        if candidate.customer_total > target_total_paise:
+            low = candidate_discount + 1
+        elif candidate.customer_total < target_total_paise:
+            high = candidate_discount - 1
+        else:
+            return candidate_discount, candidate, undiscounted
+    return best_discount, best, undiscounted
+
+
 def calculate_estimate(  # noqa: PLR0912, PLR0915 - mirrors the published money ladder
     *,
     requirement: CustomerRequirement,
@@ -326,6 +521,7 @@ def calculate_estimate(  # noqa: PLR0912, PLR0915 - mirrors the published money 
     material_lines: list[dict[str, Any]] | None = None,
     other_charges: list[dict[str, Any]] | None = None,
     stages: list[dict[str, Any]] | None = None,
+    discount_target_total_paise: int | None = None,
     at: datetime | None = None,
 ) -> CalculationResult:
     """Calculate, validate and snapshot one A5 estimate without caller-owned percentages."""
@@ -388,74 +584,33 @@ def calculate_estimate(  # noqa: PLR0912, PLR0915 - mirrors the published money 
             )
         tax_groups.append((str(charge["code"]), charge_category, int(charge["amount_paise"])))
 
-    tax_components: list[dict[str, Any]] = []
-    tax = 0
-    pre_tax_value = 0
-    gross_priced_value = 0
-    for purpose, category, amount in tax_groups:
-        raw_rate = policy.tax_rates_bps.get(category) if identity.gst_registered else 0
-        if not isinstance(raw_rate, int) or not 0 <= raw_rate <= MAX_BASIS_POINTS:
-            raise FinancialPolicyUnavailableError(f"Tax category {category} has no approved rate.")
-        component_tax = (
-            _inclusive_tax(amount, raw_rate)
-            if policy.tax_basis == CommercialPolicy.TaxBasis.INCLUSIVE
-            else _bps(amount, raw_rate)
+    if discount_target_total_paise is None:
+        pricing_discount = 0
+        outcome = _price_outcome(
+            tax_groups=tax_groups,
+            discount_paise=0,
+            policy=policy,
+            gst_registered=identity.gst_registered,
         )
-        component_taxable = (
-            amount - component_tax
-            if policy.tax_basis == CommercialPolicy.TaxBasis.INCLUSIVE
-            else amount
+        undiscounted = outcome
+    else:
+        pricing_discount, outcome, undiscounted = _discount_for_customer_total(
+            tax_groups=tax_groups,
+            target_total_paise=discount_target_total_paise,
+            policy=policy,
+            gst_registered=identity.gst_registered,
         )
-        tax += component_tax
-        pre_tax_value += component_taxable
-        gross_priced_value += amount
-        tax_components.append(
-            {
-                "purpose": purpose,
-                "category_code": category,
-                "rate_bps": raw_rate,
-                "priced_value_paise": amount,
-                "taxable_value_paise": component_taxable,
-                "tax_paise": component_tax,
-            }
-        )
-    quote_total = (
-        gross_priced_value
-        if policy.tax_basis == CommercialPolicy.TaxBasis.INCLUSIVE
-        else gross_priced_value + tax
-    )
-
-    platform_fee = _bps(quote_total, int(policy.platform_fee_bps or 0))
-    platform_fee_tax = _bps(platform_fee, int(policy.platform_fee_tax_bps or 0))
-    customer_fee = (
-        platform_fee + platform_fee_tax
-        if policy.platform_fee_treatment == CommercialPolicy.PlatformFeeTreatment.CUSTOMER
-        else 0
-    )
-    partner_fee = (
-        platform_fee
-        if policy.platform_fee_treatment == CommercialPolicy.PlatformFeeTreatment.PARTNER
-        else 0
-    )
-    commission_base = (
-        pre_tax_value
-        if policy.commission_basis == CommercialPolicy.AmountBasis.TAXABLE_VALUE
-        else quote_total
-    )
-    withholding_base = (
-        0
-        if policy.withholding_basis == CommercialPolicy.AmountBasis.NONE
-        else (
-            pre_tax_value
-            if policy.withholding_basis == CommercialPolicy.AmountBasis.TAXABLE_VALUE
-            else quote_total
-        )
-    )
-    commission = _bps(commission_base, int(policy.commission_bps or 0))
-    withholding = _bps(withholding_base, int(policy.withholding_bps or 0))
-    partner_net = quote_total - partner_fee - commission - withholding
-    if partner_net < 0:
-        raise FinancialPolicyUnavailableError("Policy deductions exceed the Partner quote total.")
+    tax_components = outcome.tax_components
+    tax = outcome.tax
+    pre_tax_value = outcome.pre_tax_value
+    quote_total = outcome.quote_total
+    platform_fee = outcome.platform_fee
+    platform_fee_tax = outcome.platform_fee_tax
+    customer_fee = outcome.customer_fee
+    partner_fee = outcome.partner_fee
+    commission = outcome.commission
+    withholding = outcome.withholding
+    partner_net = outcome.partner_net
 
     service_state = requirement.service_area.state_code if requirement.service_area else ""
     intra_state = bool(
@@ -471,7 +626,14 @@ def calculate_estimate(  # noqa: PLR0912, PLR0915 - mirrors the published money 
         cgst = sgst = 0
         igst = tax
 
-    weights = [*stage_amounts, material_total] if material_total else stage_amounts
+    gross_weights = [*stage_amounts, material_total] if material_total else stage_amounts
+    discount_allocations = (
+        _allocate(pricing_discount, gross_weights) if pricing_discount else [0] * len(gross_weights)
+    )
+    weights = [
+        amount - discount
+        for amount, discount in zip(gross_weights, discount_allocations, strict=True)
+    ]
     tax_allocations = _allocate(tax, weights)
     customer_platform_fee_allocations = (
         _allocate(platform_fee, weights) if customer_fee else [0] * len(weights)
@@ -484,43 +646,54 @@ def calculate_estimate(  # noqa: PLR0912, PLR0915 - mirrors the published money 
         installment_tax = tax_allocations[position - 1]
         installment_fee = customer_platform_fee_allocations[position - 1]
         installment_fee_tax = customer_platform_tax_allocations[position - 1]
+        installment_discount = discount_allocations[position - 1]
+        discounted_amount = int(row["amount_paise"]) - installment_discount
         installments.append(
             {
                 **row,
                 "position": position,
+                "discount_paise": installment_discount,
+                "discounted_amount_paise": discounted_amount,
                 "tax_paise": installment_tax,
                 "platform_fee_paise": installment_fee,
                 "platform_fee_tax_paise": installment_fee_tax,
                 "total_due_paise": (
-                    int(row["amount_paise"])
-                    + installment_tax
-                    + installment_fee
-                    + installment_fee_tax
+                    discounted_amount + installment_tax + installment_fee + installment_fee_tax
                 ),
             }
         )
     material_tax = tax_allocations[-1] if material_total else 0
     material_fee = customer_platform_fee_allocations[-1] if material_total else 0
     material_fee_tax = customer_platform_tax_allocations[-1] if material_total else 0
+    material_discount = discount_allocations[-1] if material_total else 0
     if normal_materials:
         material_weights = [int(row["amount_paise"]) for row in normal_materials]
-        material_tax_rows = _allocate(material_tax, material_weights)
-        material_fee_rows = _allocate(material_fee, material_weights)
-        material_fee_tax_rows = _allocate(material_fee_tax, material_weights)
-        for row, row_tax, row_fee, row_fee_tax in zip(
+        material_discount_rows = _allocate(material_discount, material_weights)
+        discounted_material_weights = [
+            amount - discount
+            for amount, discount in zip(material_weights, material_discount_rows, strict=True)
+        ]
+        material_tax_rows = _allocate(material_tax, discounted_material_weights)
+        material_fee_rows = _allocate(material_fee, discounted_material_weights)
+        material_fee_tax_rows = _allocate(material_fee_tax, discounted_material_weights)
+        for row, row_discount, row_tax, row_fee, row_fee_tax in zip(
             normal_materials,
+            material_discount_rows,
             material_tax_rows,
             material_fee_rows,
             material_fee_tax_rows,
             strict=True,
         ):
+            discounted_amount = int(row["amount_paise"]) - row_discount
+            row["discount_paise"] = row_discount
+            row["discounted_amount_paise"] = discounted_amount
             row["tax_paise"] = row_tax
             row["platform_fee_paise"] = row_fee
             row["platform_fee_tax_paise"] = row_fee_tax
-            row["total_due_paise"] = int(row["amount_paise"]) + row_tax + row_fee + row_fee_tax
+            row["total_due_paise"] = discounted_amount + row_tax + row_fee + row_fee_tax
     calculated_at = at or timezone.now()
     snapshot = {
-        "calculator_version": 1,
+        "calculator_version": 2,
         "rounding": "integer_paise_half_up; allocation remainder to final row",
         "calculated_at": calculated_at.isoformat(),
         "guardrail_policy_version": guardrail_policy_version,
@@ -559,6 +732,13 @@ def calculate_estimate(  # noqa: PLR0912, PLR0915 - mirrors the published money 
             "material_tax_paise": material_tax,
             "components": tax_components,
         },
+        "discount": {
+            "eligible_base_paise": sum(amount for _purpose, _category, amount in tax_groups),
+            "pricing_discount_paise": pricing_discount,
+            "pre_discount_customer_total_paise": undiscounted.customer_total,
+            "customer_savings_paise": undiscounted.customer_total - outcome.customer_total,
+            "target_customer_total_paise": discount_target_total_paise,
+        },
         "installments": installments,
         "materials": normal_materials,
         "material_fulfilment_mode": fulfilment_mode,
@@ -574,6 +754,10 @@ def calculate_estimate(  # noqa: PLR0912, PLR0915 - mirrors the published money 
         line_subtotal_paise=line_subtotal,
         material_total_paise=material_total,
         authorized_charges_paise=charges_total,
+        discount_base_paise=sum(amount for _purpose, _category, amount in tax_groups),
+        pricing_discount_paise=pricing_discount,
+        pre_discount_customer_total_paise=undiscounted.customer_total,
+        customer_savings_paise=undiscounted.customer_total - outcome.customer_total,
         taxable_value_paise=pre_tax_value,
         partner_service_tax_paise=tax,
         partner_quote_total_paise=quote_total,
