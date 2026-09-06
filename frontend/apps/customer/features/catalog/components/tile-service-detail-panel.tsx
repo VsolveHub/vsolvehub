@@ -9,6 +9,8 @@ import { useServiceDetail, type ServiceCard, type ServiceDetail } from "../clien
 import { displayRating } from "./tile-desktop-rating";
 import { TileCatalogAddButton } from "./tile-catalog-add-button";
 import { ServicePhoto } from "./category-artwork";
+import { PUBLIC_API_BASE_URL } from "@/lib/api/config";
+import { apiFetch } from "@vsolve/api-client";
 
 type BookableVariant = ServiceDetail["variants"][number];
 
@@ -188,23 +190,55 @@ export function TileServiceDetailPanel({
   tileImageUrl?: string;
   onClose: () => void;
 }) {
+  const isRental =
+    service.request_archetypes.includes("A7_RENTAL") ||
+    categorySlug === "rental-services";
+
+  const [rentalListings, setRentalListings] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (isRental) {
+      apiFetch(`${PUBLIC_API_BASE_URL}/api/v1/rentals/browse/?service_slug=${service.slug}`)
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data) => setRentalListings(Array.isArray(data) ? data : []))
+        .catch(() => setRentalListings([]));
+    }
+  }, [isRental, service.slug]);
+
+  const primaryRental = isRental ? rentalListings[0] : null;
+
   const detailQuery = useServiceDetail(service.slug);
   const detail = detailQuery.data;
   const rating = displayRating(service.slug);
   const included = policyText(detail?.policies, "INCLUDED");
-  const includedItems = included.length > 0 ? included : FALLBACK_INCLUDED;
+  const RENTAL_FALLBACK_INCLUDED = [
+    "Direct vendor dispatch & delivery to your address",
+    "Verified functional inspection prior to delivery",
+    "100% refundable security deposit held in escrow",
+    "Easy return collection upon completion",
+  ];
+  const includedItems = isRental
+    ? RENTAL_FALLBACK_INCLUDED
+    : included.length > 0
+    ? included
+    : FALLBACK_INCLUDED;
+
   const imageUrl = detail?.cover?.url ?? service.cover?.url ?? "";
   const about =
     (detail?.description && detail.description.trim() !== ""
       ? detail.description
       : null) ?? service.short_description;
-  const duration = detailField(detail?.policies, ["duration", "mins", "minutes"], FALLBACK_DETAILS.duration);
-  const cancellation = detailField(
-    detail?.policies,
-    ["cancel"],
-    FALLBACK_DETAILS.cancellation,
-  );
-  const warranty = detailField(detail?.policies, ["warrant"], FALLBACK_DETAILS.warranty);
+
+  const duration = isRental
+    ? "Book by the day (flexible rental window)"
+    : detailField(detail?.policies, ["duration", "mins", "minutes"], FALLBACK_DETAILS.duration);
+  const cancellation = isRental
+    ? "Free cancellation prior to equipment dispatch"
+    : detailField(detail?.policies, ["cancel"], FALLBACK_DETAILS.cancellation);
+  const warranty = isRental
+    ? "Protected by V Solve Escrow & Inspection Guarantee"
+    : detailField(detail?.policies, ["warrant"], FALLBACK_DETAILS.warranty);
+
   const bookableVariants = detail?.variants ?? [];
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
   const selectedVariant =
@@ -212,7 +246,9 @@ export function TileServiceDetailPanel({
     bookableVariants[0] ??
     null;
   const pricePaise =
-    selectedVariant?.starting_price.amount_paise ?? service.starting_price?.amount_paise ?? null;
+    (isRental && primaryRental?.daily_price_paise)
+      ? primaryRental.daily_price_paise
+      : selectedVariant?.starting_price.amount_paise ?? service.starting_price?.amount_paise ?? null;
   const showVariantPicker = selectedVariant !== null;
 
   useEffect(() => {
@@ -344,10 +380,15 @@ export function TileServiceDetailPanel({
           <div className="min-w-0">
             {pricePaise !== null ? (
               <>
-                <span className="block text-[11px] font-semibold text-text-secondary">Starts at</span>
-                <span data-numeric className="mt-0.5 block text-xl font-extrabold tabular-nums text-navy-900">
-                  {formatMoney(pricePaise)}
+                <span className="block text-[11px] font-semibold text-text-secondary">
+                  {isRental ? "Daily rate starts at" : "Starts at"}
                 </span>
+                <div className="flex items-baseline gap-1">
+                  <span data-numeric className="mt-0.5 block text-xl font-extrabold tabular-nums text-navy-900">
+                    {formatMoney(pricePaise)}
+                  </span>
+                  {isRental && <span className="text-xs font-semibold text-neutral-500">/ day</span>}
+                </div>
               </>
             ) : (
               <span className="block text-sm font-bold text-navy-900">Price on request</span>
@@ -359,6 +400,7 @@ export function TileServiceDetailPanel({
             variantId={selectedVariant?.id}
             label="Add to cart"
             size="panel"
+            rentalListing={primaryRental}
           />
         </div>
         <Link

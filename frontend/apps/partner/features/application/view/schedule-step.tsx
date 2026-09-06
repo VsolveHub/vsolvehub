@@ -2,9 +2,11 @@
 
 import { ApiRequestError } from "@vsolve/api-client";
 import { ErrorState, Spinner } from "@vsolve/ui";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 
 import { toDraft, toRuleInputs, type DraftPeriod } from "../model/schedule";
+import { isRentalPartner } from "../model/rental";
 import {
   usePartnerApplication,
   usePartnerAvailability,
@@ -26,11 +28,20 @@ import { AvailabilityEditor, type ServiceAreaOption } from "./availability-edito
  */
 
 export function ScheduleStep() {
+  const router = useRouter();
   const application = usePartnerApplication();
   const availability = usePartnerAvailability();
   const save = useUpdateAvailability();
 
   const reference = useApplicationReference();
+
+  const isRental = isRentalPartner(application.data?.skill_codes ?? []);
+
+  useEffect(() => {
+    if (!application.isPending && isRental) {
+      router.replace("/apply/review");
+    }
+  }, [application.isPending, isRental, router]);
 
   const areas = useMemo<ServiceAreaOption[]>(() => {
     const names = new Map(reference.serviceAreas.map((area) => [area.id, area.name]));
@@ -46,6 +57,14 @@ export function ScheduleStep() {
     () => toDraft(availability.data?.rules ?? []),
     [availability.data?.rules],
   );
+
+  if (isRental) {
+    return (
+      <div className="py-6 text-sm text-text-secondary">
+        Working hours are not required for equipment rental partners. Redirecting to review…
+      </div>
+    );
+  }
 
   if (availability.isPending || application.isPending || reference.isPending) {
     return (

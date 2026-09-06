@@ -47,6 +47,13 @@ export const CAPABILITY_STEPS: readonly ApplicationStep[] = [
   { href: "/apply/demand", label: "Work near you" },
 ] as const;
 
+export function getApplicationSteps(isRentalOnly: boolean = false): readonly ApplicationStep[] {
+  if (isRentalOnly) {
+    return APPLICATION_STEPS.filter((step) => step.href !== "/apply/schedule");
+  }
+  return APPLICATION_STEPS;
+}
+
 /**
  * Which step a path is on, or -1.
  *
@@ -54,8 +61,8 @@ export const CAPABILITY_STEPS: readonly ApplicationStep[] = [
  * step, so a `startsWith` check would report the overview for all of them. A
  * trailing slash is tolerated because Next can produce either form.
  */
-export function stepIndexOf(pathname: string): number {
-  return APPLICATION_STEPS.findIndex((step) => step.href === normalise(pathname));
+export function stepIndexOf(pathname: string, isRentalOnly: boolean = false): number {
+  return getApplicationSteps(isRentalOnly).findIndex((step) => step.href === normalise(pathname));
 }
 
 function normalise(pathname: string): string {
@@ -68,12 +75,14 @@ export function capabilityStepIndexOf(pathname: string): number {
 }
 
 /** The step after `pathname`, or null at the end of the sequence or off it. */
-export function nextStep(pathname: string): ApplicationStep | null {
-  const index = stepIndexOf(pathname);
+export function nextStep(pathname: string, isRentalOnly: boolean = false): ApplicationStep | null {
+  const steps = getApplicationSteps(isRentalOnly);
+  const index = steps.findIndex((step) => step.href === normalise(pathname));
   if (index === -1) return null;
-  return APPLICATION_STEPS[index + 1] ?? null;
+  return steps[index + 1] ?? null;
 }
 
-export function isLastStep(pathname: string): boolean {
-  return stepIndexOf(pathname) === APPLICATION_STEPS.length - 1;
+export function isLastStep(pathname: string, isRentalOnly: boolean = false): boolean {
+  const steps = getApplicationSteps(isRentalOnly);
+  return steps.findIndex((step) => step.href === normalise(pathname)) === steps.length - 1;
 }

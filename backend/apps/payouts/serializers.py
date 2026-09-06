@@ -38,6 +38,7 @@ class PartnerLedgerEntrySerializer(serializers.ModelSerializer[PartnerLedgerEntr
     """
 
     booking_id = serializers.UUIDField(read_only=True, allow_null=True)
+    rental_booking_id = serializers.UUIDField(read_only=True, allow_null=True)
     corrects_id = serializers.UUIDField(read_only=True, allow_null=True)
 
     class Meta:
@@ -45,6 +46,7 @@ class PartnerLedgerEntrySerializer(serializers.ModelSerializer[PartnerLedgerEntr
         fields = (
             "id",
             "booking_id",
+            "rental_booking_id",
             "kind",
             "status",
             "gross_paise",

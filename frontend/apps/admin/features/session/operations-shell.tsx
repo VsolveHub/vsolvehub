@@ -67,6 +67,7 @@ import {
   ToggleLeft,
   User,
   Users,
+  Building2,
   Menu,
   X,
   type LucideIcon,
@@ -94,6 +95,7 @@ const WORKSPACES: { href: string; label: string; icon: LucideIcon }[] = [
   // the kinds rather than forking a second case system, so it needs no new entry either, and the
   // `startsWith` match in `SidebarNav` keeps it highlighted on any route beneath it.
   { href: "/operations/requests", label: "Requests", icon: Inbox },
+  { href: "/operations/stays", label: "Stays & Accommodations", icon: Building2 },
   { href: "/operations/rate-cards", label: "Rate cards", icon: IndianRupee },
   { href: "/operations/cases", label: "Cases", icon: Briefcase },
   { href: "/operations/payouts", label: "Payouts", icon: Wallet },

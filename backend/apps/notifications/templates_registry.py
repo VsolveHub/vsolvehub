@@ -61,6 +61,20 @@ class RenderedNotification(NamedTuple):
 #: order, and never make the title carry the only information. A title is what arrives in a push
 #: notification later; a body is what is read in the feed.
 _TEMPLATES: dict[str, tuple[str, str]] = {
+    "rental_asset_reassigned_customer": (
+        "Your rental item was replaced",
+        "We assigned an equivalent item from the same vendor at the same price for booking {booking_id}.",
+    ),
+    "stay_unit_reassigned_customer": (
+        "Your stay unit was changed",
+        "We assigned an equivalent unit of the same room type at no extra cost for reservation {reservation_id}.",
+    ),
+    "stay_no_show_customer": (
+        "Your stay was marked as a no-show",
+        "Reservation {reservation_id} was not checked in before the grace period ended. "
+        "The retained tariff is {first_night_charge_paise} paise and the retained deposit is "
+        "{deposit_forfeit_paise} paise; the remaining captured amount is being refunded.",
+    ),
     # ---- A3: rate-card crews -------------------------------------------------------------
     #: The lead's push. Everything needed to say yes is in the title, because the offer lapses
     #: in minutes and a body is a tap away.

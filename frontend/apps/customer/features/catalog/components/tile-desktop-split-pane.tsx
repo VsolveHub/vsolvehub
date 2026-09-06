@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { type Category, type ServiceCard } from "../client-queries";
+import { serviceHref } from "../service-href";
 import { ServicePhoto } from "./category-artwork";
 import {
   categoryHeadline,
@@ -23,6 +24,7 @@ import {
 import { TileCatalogAddButton } from "./tile-catalog-add-button";
 import { TileServiceDetailPanel } from "./tile-service-detail-panel";
 import { TileDesktopSeeAllModal } from "./tile-desktop-see-all-modal";
+import { StayCatalogListingPane } from "@/features/stays/components/stay-catalog-listing-pane";
 
 type DesktopTile = {
   slug: string;
@@ -107,58 +109,70 @@ function DesktopTileServiceCard({
   const rating = displayRating(service.slug);
   const pricePaise = service.starting_price?.amount_paise ?? null;
 
-  return (
-    <article className="flex items-center gap-4 rounded-[1.25rem] border border-[#e7e2da] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
-      <span className="size-[5.5rem] shrink-0">
-        <ServicePhoto
-          imageUrl={service.cover?.url ?? tile.imageUrl}
-          iconKey={service.icon_key}
-        />
-      </span>
+      const isStay = service.request_archetypes.includes("A9_STAY") || categorySlug === "rooms-pg-hostel";
+      const href = serviceHref(service, categorySlug, tile.slug);
 
-      <div className="min-w-0 flex-1">
-        <h3 className="text-[15px] font-extrabold leading-snug text-navy-900">{service.name}</h3>
-        <p className="mt-0.5 flex items-center gap-1 text-[12px] font-semibold text-navy-900">
-          <span className="text-[#F5A524]" aria-hidden>
-            ★
-          </span>
-          <span>
-            {rating.score}{" "}
-            <span className="font-medium text-text-secondary">({rating.count})</span>
-          </span>
-        </p>
-        <p className="mt-1 line-clamp-2 text-[13px] leading-5 text-text-secondary">
-          {service.short_description}
-        </p>
-      </div>
-
-      <div className="flex shrink-0 flex-col items-end gap-2 pl-2">
-        {pricePaise !== null ? (
-          <div className="text-right">
-            <span className="block text-[11px] font-medium text-text-secondary">Starts at</span>
-            <span data-numeric className="block text-[15px] font-extrabold tabular-nums text-navy-900">
-              {formatMoney(pricePaise)}
-            </span>
-          </div>
-        ) : (
-          <span className="text-[12px] font-bold text-navy-900">Price on request</span>
-        )}
-        <div className="flex items-center gap-2">
-          <Link
-            href={`/catalog/${categorySlug}/${service.slug}`}
-            className="inline-flex h-9 items-center justify-center rounded-lg border border-navy-900 bg-white px-3.5 text-[13px] font-bold text-navy-900 transition-colors hover:bg-[#FAF9F7]"
-          >
-            View details
+      return (
+        <article className="flex items-center gap-4 rounded-[1.25rem] border border-[#e7e2da] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+          <Link href={href} className="size-[5.5rem] shrink-0">
+            <ServicePhoto
+              imageUrl={service.cover?.url ?? tile.imageUrl}
+              iconKey={service.icon_key}
+            />
           </Link>
-          <TileCatalogAddButton
-            service={service}
-            categorySlug={categorySlug}
-            onNeedChoice={onOpenPanel}
-          />
-        </div>
-      </div>
-    </article>
-  );
+
+          <div className="min-w-0 flex-1">
+            <Link href={href} className="hover:underline block">
+              <h3 className="text-[15px] font-extrabold leading-snug text-navy-900">{service.name}</h3>
+            </Link>
+            <p className="mt-0.5 flex items-center gap-1 text-[12px] font-semibold text-navy-900">
+              <span className="text-[#F5A524]" aria-hidden>
+                ★
+              </span>
+              <span>
+                {rating.score}{" "}
+                <span className="font-medium text-text-secondary">({rating.count})</span>
+              </span>
+            </p>
+            <p className="mt-1 line-clamp-2 text-[13px] leading-5 text-text-secondary">
+              {service.short_description}
+            </p>
+          </div>
+
+          <div className="flex shrink-0 flex-col items-end gap-2 pl-2">
+            {pricePaise !== null ? (
+              <div className="text-right">
+                <span className="block text-[11px] font-medium text-text-secondary">Starts at</span>
+                <span data-numeric className="block text-[15px] font-extrabold tabular-nums text-navy-900">
+                  {formatMoney(pricePaise)}
+                </span>
+              </div>
+            ) : (
+              <span className="text-[12px] font-bold text-navy-900">Price on request</span>
+            )}
+            <div className="flex items-center gap-2">
+              <Link
+                href={href}
+                className={cn(
+                  "inline-flex h-9 items-center justify-center rounded-lg px-3.5 text-[13px] font-bold transition-colors",
+                  isStay
+                    ? "bg-navy-900 text-white hover:bg-navy-800 shadow-xs"
+                    : "border border-navy-900 bg-white text-navy-900 hover:bg-[#FAF9F7]"
+                )}
+              >
+                View details
+              </Link>
+              {!isStay && (
+                <TileCatalogAddButton
+                  service={service}
+                  categorySlug={categorySlug}
+                  onNeedChoice={onOpenPanel}
+                />
+              )}
+            </div>
+          </div>
+        </article>
+      );
 }
 
 export function TileDesktopSplitPane({
@@ -306,94 +320,106 @@ export function TileDesktopSplitPane({
       </nav>
 
       <div className="flex min-h-0 min-w-0 flex-1">
-        <section
-          aria-labelledby={`desktop-tile-${activeTile.slug}`}
-          className="no-scrollbar min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-8 py-6"
-        >
-          <Link
-            href={`/catalog/${category.slug}`}
-            className="inline-flex items-center gap-1.5 text-[13px] font-bold text-[#EA580C] hover:text-[#C2410C]"
-          >
-            <svg viewBox="0 0 20 20" fill="none" className="size-4" aria-hidden>
-              <path
-                d="M12.5 4.5 7 10l5.5 5.5"
-                stroke="currentColor"
-                strokeWidth="1.9"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            {category.name}
-          </Link>
-
-          <div className="mt-3 flex items-start justify-between gap-8">
-            <div className="min-w-0 max-w-xl">
-              <h1
-                id={`desktop-tile-${activeTile.slug}`}
-                className="text-[1.85rem] font-extrabold tracking-tight text-navy-900"
-              >
-                {activeTile.name}
-              </h1>
-              <p className="mt-2 text-[14px] leading-relaxed text-text-secondary">
-                {activeTile.description.trim() !== ""
-                  ? activeTile.description
-                  : `Book expert ${activeTile.name} for installation, repair, service and maintenance at your doorstep.`}
-              </p>
-            </div>
-            {activeTile.imageUrl !== "" ? (
-              <span className="flex h-28 w-40 shrink-0 items-center justify-center">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={activeTile.imageUrl}
-                  alt=""
-                  className="max-h-full max-w-full object-contain"
-                />
-              </span>
-            ) : null}
-          </div>
-
-          <ul className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2">
-            {TRUST_BADGES.map((badge) => (
-              <li
-                key={badge.label}
-                className="flex items-center gap-1.5 text-[12px] font-semibold text-navy-800"
-              >
-                <badge.icon className="size-4 text-navy-700" strokeWidth={1.8} />
-                {badge.label}
-              </li>
-            ))}
-          </ul>
-
-          <ul className="mt-6 flex list-none flex-col gap-3 p-0">
-            {activeTile.services.map((service) => (
-              <li key={service.id}>
-                <DesktopTileServiceCard
-                  service={service}
-                  tile={activeTile}
-                  categorySlug={category.slug}
-                  onOpenPanel={() => setSelectedSlug(service.slug)}
-                />
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        <div
-          className={cn(
-            "h-full shrink-0 overflow-hidden py-4 pr-4 transition-[width,opacity] duration-200 ease-out",
-            selectedService ? "w-[416px] opacity-100" : "w-0 py-0 pr-0 opacity-0",
-          )}
-        >
-          {selectedService ? (
-            <TileServiceDetailPanel
-              key={selectedService.slug}
-              service={selectedService}
+        {category.slug === "rooms-pg-hostel" ? (
+          <div className="min-h-0 min-w-0 flex-1 h-full bg-[#FAF9F7]">
+            <StayCatalogListingPane
               categorySlug={category.slug}
-              tileImageUrl={activeTile.imageUrl}
-              onClose={() => setSelectedSlug(null)}
+              categoryName={category.name}
+              activeTile={activeTile}
             />
-          ) : null}
-        </div>
+          </div>
+        ) : (
+          <>
+            <section
+              aria-labelledby={`desktop-tile-${activeTile.slug}`}
+              className="no-scrollbar min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-8 py-6"
+            >
+              <Link
+                href={`/catalog/${category.slug}`}
+                className="inline-flex items-center gap-1.5 text-[13px] font-bold text-[#EA580C] hover:text-[#C2410C]"
+              >
+                <svg viewBox="0 0 20 20" fill="none" className="size-4" aria-hidden>
+                  <path
+                    d="M12.5 4.5 7 10l5.5 5.5"
+                    stroke="currentColor"
+                    strokeWidth="1.9"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                {category.name}
+              </Link>
+
+              <div className="mt-3 flex items-start justify-between gap-8">
+                <div className="min-w-0 max-w-xl">
+                  <h1
+                    id={`desktop-tile-${activeTile.slug}`}
+                    className="text-[1.85rem] font-extrabold tracking-tight text-navy-900"
+                  >
+                    {activeTile.name}
+                  </h1>
+                  <p className="mt-2 text-[14px] leading-relaxed text-text-secondary">
+                    {activeTile.description.trim() !== ""
+                      ? activeTile.description
+                      : `Book expert ${activeTile.name} for installation, repair, service and maintenance at your doorstep.`}
+                  </p>
+                </div>
+                {activeTile.imageUrl !== "" ? (
+                  <span className="flex h-28 w-40 shrink-0 items-center justify-center">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={activeTile.imageUrl}
+                      alt=""
+                      className="max-h-full max-w-full object-contain"
+                    />
+                  </span>
+                ) : null}
+              </div>
+
+              <ul className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2">
+                {TRUST_BADGES.map((badge) => (
+                  <li
+                    key={badge.label}
+                    className="flex items-center gap-1.5 text-[12px] font-semibold text-navy-800"
+                  >
+                    <badge.icon className="size-4 text-navy-700" strokeWidth={1.8} />
+                    {badge.label}
+                  </li>
+                ))}
+              </ul>
+
+              <ul className="mt-6 flex list-none flex-col gap-3 p-0">
+                {activeTile.services.map((service) => (
+                  <li key={service.id}>
+                    <DesktopTileServiceCard
+                      service={service}
+                      tile={activeTile}
+                      categorySlug={category.slug}
+                      onOpenPanel={() => setSelectedSlug(service.slug)}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            <div
+              className={cn(
+                "h-full shrink-0 overflow-hidden py-4 pr-4 transition-[width,opacity] duration-200 ease-out",
+                selectedService ? "w-[416px] opacity-100" : "w-0 py-0 pr-0 opacity-0",
+              )}
+            >
+              {selectedService ? (
+                <TileServiceDetailPanel
+                  key={selectedService.slug}
+                  service={selectedService}
+                  categorySlug={category.slug}
+                  tileImageUrl={activeTile.imageUrl}
+                  onClose={() => setSelectedSlug(null)}
+                />
+              ) : null}
+            </div>
+          </>
+        )}
       </div>
 
       <TileDesktopSeeAllModal

@@ -84,7 +84,10 @@ export default async function CategoryPage({ params, searchParams }: PageProps) 
 
   if (!category) notFound();
 
-  const tileSlug = typeof tile === "string" && tile !== "" ? tile : null;
+  let tileSlug = typeof tile === "string" && tile !== "" ? tile : null;
+  if (category.slug === "rooms-pg-hostel" && tileSlug === null) {
+    tileSlug = "rooms";
+  }
 
   if (tileSlug === null) {
     return (

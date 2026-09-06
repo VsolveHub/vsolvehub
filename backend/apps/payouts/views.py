@@ -177,12 +177,22 @@ class PartnerLedgerView(APIView):
     @extend_schema(
         tags=[PARTNER_TAG],
         operation_id="partner_ledger_list",
-        parameters=[OpenApiParameter("cursor", str, description="Opaque page cursor.")],
+        parameters=[
+            OpenApiParameter("cursor", str, description="Opaque page cursor."),
+            OpenApiParameter(
+                "source",
+                str,
+                description="Filter to one archetype's entries, e.g. 'rental' for A7 earnings only.",
+                required=False,
+            ),
+        ],
         responses={200: PartnerLedgerPageSerializer, 403: ApiErrorSerializer},
     )
     def get(self, request: Request) -> Response:
         profile = _partner_profile(cast(User, request.user))
         queryset = PartnerLedgerEntry.objects.filter(partner=profile)
+        if request.query_params.get("source") == "rental":
+            queryset = queryset.filter(rental_booking__isnull=False)
         paginator = LedgerCursorPagination()
         page = paginator.paginate_queryset(queryset, request, self)
         return paginator.get_paginated_response(

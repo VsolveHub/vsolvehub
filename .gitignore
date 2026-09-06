@@ -46,6 +46,7 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+cookie.txt
 **/google-services.json
 **/GoogleService-Info.plist
 **/firebase_options.dart

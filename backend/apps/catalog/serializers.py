@@ -346,6 +346,7 @@ class RequirementVariantSerializer(serializers.ModelSerializer[ServiceVariant]):
             "description",
             "image_url",
             "fulfilment_archetype",
+            "required_skill_code",
             "questions",
         )
         read_only_fields = fields

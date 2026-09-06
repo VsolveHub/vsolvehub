@@ -3,6 +3,7 @@
 from datetime import timedelta
 
 from django.conf import settings
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework.permissions import BasePermission
 from rest_framework.request import Request
@@ -11,6 +12,7 @@ from rest_framework.views import APIView
 from apps.identity.hashing import keyed_hash
 from apps.identity.models import AccessAuditEvent, User, UserRole, UserSession
 from apps.identity.services import record_access_event
+from apps.partners.models import PartnerCapability
 from common.observability.context import get_request_id
 
 
@@ -68,6 +70,28 @@ class IsPartnerUser(BasePermission):
             and user.is_authenticated
             and user.is_active
             and has_active_session_role(request=request, role_code="partner")
+        )
+
+
+class HasApprovedPartnerCapability(BasePermission):
+    """Require an unexpired approved capability for the view's archetype."""
+
+    archetype = ""
+    message = "An approved capability for this workspace is required."
+
+    def has_permission(self, request: Request, _view: APIView) -> bool:
+        partner = getattr(request.user, "partner_profile", None)
+        if partner is None or not self.archetype:
+            return False
+        now = timezone.now()
+        return (
+            PartnerCapability.objects.filter(
+                partner=partner,
+                archetype=self.archetype,
+                status=PartnerCapability.Status.APPROVED,
+            )
+            .filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now))
+            .exists()
         )
 
 

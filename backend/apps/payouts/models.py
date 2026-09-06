@@ -120,6 +120,12 @@ class PartnerLedgerEntry(models.Model):
     booking = models.ForeignKey(
         Booking, null=True, blank=True, on_delete=models.PROTECT, related_name="ledger_entries"
     )
+    rental_booking = models.ForeignKey(
+        "rentals.RentalBooking", null=True, blank=True, on_delete=models.PROTECT, related_name="ledger_entries"
+    )
+    stay_reservation = models.ForeignKey(
+        "stays.StayReservation", null=True, blank=True, on_delete=models.PROTECT, related_name="ledger_entries"
+    )
     kind = models.CharField(max_length=12, choices=Kind.choices, default=Kind.EARNING)
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)
 
@@ -163,6 +169,16 @@ class PartnerLedgerEntry(models.Model):
                 fields=("booking",),
                 condition=models.Q(kind="EARNING", booking__isnull=False),
                 name="payouts_one_earning_per_booking",
+            ),
+            models.UniqueConstraint(
+                fields=("rental_booking",),
+                condition=models.Q(kind="EARNING", rental_booking__isnull=False),
+                name="payouts_one_earning_per_rental_booking",
+            ),
+            models.UniqueConstraint(
+                fields=("stay_reservation",),
+                condition=models.Q(kind="EARNING", stay_reservation__isnull=False),
+                name="payouts_one_earning_per_stay_reservation",
             ),
             models.CheckConstraint(
                 condition=models.Q(

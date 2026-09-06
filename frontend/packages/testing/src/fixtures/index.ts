@@ -384,6 +384,7 @@ export function requirementServiceDetail(
         description: "",
         image_url: "",
         fulfilment_archetype: "A3_TIME_BLOCK",
+        required_skill_code: "helper",
         questions: [fitOutQuestion()],
       },
     ],

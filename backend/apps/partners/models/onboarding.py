@@ -42,6 +42,7 @@ class PartnerProfile(models.Model):
         REJECTED = "REJECTED", "Rejected"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user_id: uuid.UUID
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
@@ -59,6 +60,7 @@ class PartnerProfile(models.Model):
         choices=PhotoStatus.choices,
         default=PhotoStatus.NONE,
     )
+    photo_reviewed_by_id: uuid.UUID | None
     photo_reviewed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,
@@ -111,6 +113,7 @@ class PartnerApplication(models.Model):
         OFFBOARDED = "OFFBOARDED", "Offboarded"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    partner_id: uuid.UUID
     partner = models.OneToOneField(
         PartnerProfile,
         on_delete=models.PROTECT,
@@ -121,6 +124,7 @@ class PartnerApplication(models.Model):
     change_request_message = models.TextField(blank=True)
     submitted_at = models.DateTimeField(null=True, blank=True)
     reviewed_at = models.DateTimeField(null=True, blank=True)
+    reviewed_by_id: uuid.UUID | None
     reviewed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,
@@ -128,6 +132,7 @@ class PartnerApplication(models.Model):
         on_delete=models.PROTECT,
         related_name="partner_applications_reviewed",
     )
+    review_assigned_to_id: uuid.UUID | None
     review_assigned_to = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,

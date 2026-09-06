@@ -138,6 +138,14 @@ CHECKOUT_FREE_PURPOSES = (
     "M2_MATERIAL_ADVANCE",
     "M2_SCOPE_AMENDMENT",
     "M2_BOOKING_FEE",
+    "A7_RENTAL_BOOKING",
+    "A7_DEPOSIT_HOLD",
+    "A7_DAMAGE_SETTLEMENT",
+    "A7_EXTENSION",
+    "A9_STAY_RESERVATION",
+    "A9_DEPOSIT_HOLD",
+    "A9_DAMAGE_SETTLEMENT",
+    "A9_EXTENSION",
 )
 
 
@@ -176,6 +184,16 @@ class PaymentAttempt(models.Model):
         #: the demoted fallback's product and refunds on different rules, and a shared purpose
         #: would route a forfeit split into the unlock's completion.
         M2_BOOKING_FEE = "M2_BOOKING_FEE", "M2 booking fee"
+        #: A7 Rental purposes:
+        A7_RENTAL_BOOKING = "A7_RENTAL_BOOKING", "A7 rental booking"
+        A7_DEPOSIT_HOLD = "A7_DEPOSIT_HOLD", "A7 deposit hold"
+        A7_DAMAGE_SETTLEMENT = "A7_DAMAGE_SETTLEMENT", "A7 damage settlement"
+        A7_EXTENSION = "A7_EXTENSION", "A7 extension"
+        #: A9 Stay purposes:
+        A9_STAY_RESERVATION = "A9_STAY_RESERVATION", "A9 stay reservation"
+        A9_DEPOSIT_HOLD = "A9_DEPOSIT_HOLD", "A9 deposit hold"
+        A9_DAMAGE_SETTLEMENT = "A9_DAMAGE_SETTLEMENT", "A9 damage settlement"
+        A9_EXTENSION = "A9_EXTENSION", "A9 extension"
 
     #: Purposes that are charged outside a cart and therefore carry no `CheckoutSession`. Bound
     #: from the module-level tuple, which the check constraint below reads from the same name, so

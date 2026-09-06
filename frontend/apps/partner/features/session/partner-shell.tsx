@@ -2,10 +2,10 @@
 
 import { hasRole, useAuthGuard, useCurrentSession, useLogout, useSwitchRole } from "@vsolve/query";
 import { Button, Card, ErrorState, Logo, Spinner, cn } from "@vsolve/ui";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Bell, ChevronDown } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { ApiRequestError } from "@vsolve/api-client";
 
@@ -13,11 +13,17 @@ import { getApiClient } from "@/lib/api/browser";
 import { prepareBookingAlertsFromGesture } from "@/features/notifications/view/booking-alert-audio";
 import { LiveOfferSheet } from "@/features/crew-offer/view/live-offer-sheet";
 import { NotificationNavTab } from "@/features/notifications/view/notification-bell";
+import { NotificationPanel } from "@/features/notifications/view/notification-panel";
+import { useUnreadNotificationCount } from "@/features/notifications/queries";
 import { usePartnerApplication } from "@/features/application/queries";
 import { homeForApplication } from "@/features/session/model/redirect";
 import {
   resolveWorkspaces,
   TAP_FIRST_NAV,
+  RENTAL_NAV,
+  RENTAL_WORKSPACE,
+  STAY_NAV,
+  STAY_WORKSPACE,
   type WorkspaceNavItem,
 } from "@/features/workspace/registry";
 import { usePartnerWorkspaceGrants } from "@/features/workspace/queries";
@@ -28,7 +34,7 @@ export type PartnerChromeMode = "full" | "focused" | "onboarding";
 
 /**
  * Route chrome policy for Partner application:
- * - "full": persistent header + BottomTabBar on /home, /work/all, /money, /me, /me/*
+ * - "full": persistent header + BottomTabBar on /home, /work/all, /money, /me, /me/*, /rentals/*
  * - "onboarding": onboarding shell on /apply/* (no top/bottom navbar)
  * - "focused": compact Back button header, NO bottom tabs on detail/action routes
  */
@@ -41,7 +47,11 @@ export function getPartnerChromeMode(pathname: string): PartnerChromeMode {
     pathname === "/work/all" ||
     pathname === "/money" ||
     pathname === "/me" ||
-    pathname.startsWith("/me/")
+    pathname.startsWith("/me/") ||
+    pathname === "/rentals" ||
+    pathname.startsWith("/rentals/") ||
+    pathname === "/stays" ||
+    pathname.startsWith("/stays/")
   ) {
     return "full";
   }
@@ -350,7 +360,22 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
 
   const workspaces = resolveWorkspaces(workspaceGrants.grants ?? []);
   const workspaceKeys = workspaces.map((item) => item.key);
-  const isDarkHero = pathname === "/home" || pathname === "/work";
+  const hasRentalWorkspace = workspaceKeys.includes(RENTAL_WORKSPACE);
+  const isRentalRoute = pathname === "/rentals" || pathname.startsWith("/rentals/");
+  const isRental = hasRentalWorkspace || isRentalRoute;
+
+  const hasStayWorkspace = workspaceKeys.includes(STAY_WORKSPACE);
+  const isStayRoute = pathname === "/stays" || pathname.startsWith("/stays/");
+  const isStay = hasStayWorkspace || isStayRoute;
+
+  const navItems = isStay ? STAY_NAV : isRental ? RENTAL_NAV : TAP_FIRST_NAV;
+  const isDarkHero = (pathname === "/home" && !isRental && !isStay) || pathname === "/work";
+
+  const user = session.data?.user;
+  const defaultName = isStay ? "Host" : isRental ? "Rental Partner" : "Partner";
+  const userName = user?.display_name || user?.full_name?.split(" ")[0] || defaultName;
+  const fallbackInitial = isStay ? "H" : isRental ? "R" : "P";
+  const userInitial = (user?.display_name?.[0] || user?.full_name?.[0] || fallbackInitial).toUpperCase();
 
   return (
     <div className="flex min-h-screen flex-col items-center bg-background">
@@ -406,17 +431,21 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
                 </Link>
 
                 {isApprovedPartner ? (
-                  <DesktopPrimaryNav items={TAP_FIRST_NAV} workspaceKeys={workspaceKeys} />
+                  <DesktopPrimaryNav items={navItems} workspaceKeys={workspaceKeys} />
                 ) : null}
 
-                <Button
-                  variant="ghost"
-                  onClick={() => logout.mutate()}
-                  loading={logout.isPending}
-                  loadingLabel="Signing out"
-                >
-                  Sign Out
-                </Button>
+                <div className="flex items-center gap-2">
+                  <HeaderNotificationBell workspaceKeys={workspaceKeys} />
+                  <HeaderUserMenu
+                    userName={userName}
+                    userInitial={userInitial}
+                    onSignOut={() => logout.mutate()}
+                    isPending={logout.isPending}
+                    roleLabel={isStay ? "Host" : isRental ? "Rental" : "Partner"}
+                    workspaceLabel={isStay ? "A9 Property Host Workspace" : isRental ? "Rental Partner Workspace" : "Partner Workspace"}
+                    moneyHref={isStay ? "/stays/money" : isRental ? "/rentals/money" : "/money"}
+                  />
+                </div>
               </div>
             </header>
           </div>
@@ -450,7 +479,7 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
         </ShellContent>
 
         {chromeMode === "full" && isApprovedPartner ? (
-          <BottomTabBar items={TAP_FIRST_NAV} workspaceKeys={workspaceKeys} />
+          <BottomTabBar items={navItems} workspaceKeys={workspaceKeys} />
         ) : null}
 
         {/*
@@ -500,7 +529,10 @@ function DesktopPrimaryNav({
   const current = items.reduce<{ href: string; owned: string } | null>((best, item) => {
     if (item.kind === "notifications") return best;
     const owned = item.activePrefix ?? item.href;
-    const matches = pathname === owned || pathname.startsWith(`${owned}/`);
+    const matches =
+      pathname === owned ||
+      pathname.startsWith(`${owned}/`) ||
+      (item.href === "/home" && (pathname === "/stays/home" || pathname === "/rentals/home"));
     if (!matches) return best;
     return best === null || owned.length > best.owned.length ? { href: item.href, owned } : best;
   }, null);
@@ -535,11 +567,16 @@ function DesktopPrimaryNav({
                   "flex h-10 items-center gap-2 whitespace-nowrap rounded-full px-4 text-sm font-semibold transition-colors",
                   "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action",
                   isCurrent
-                    ? "bg-surface-sunken text-navy-900"
-                    : "text-text-secondary hover:bg-surface-sunken/70 hover:text-navy-900",
+                    ? "bg-[#fef3eb] text-[#d9531e] font-bold"
+                    : "text-neutral-600 hover:bg-neutral-100/70 hover:text-neutral-900 font-medium",
                 )}
               >
-                <Icon size={17} strokeWidth={isCurrent ? 2.4 : 2} aria-hidden />
+                <Icon
+                  size={17}
+                  strokeWidth={isCurrent ? 2.4 : 2}
+                  className={isCurrent ? "text-[#d9531e]" : "text-neutral-500"}
+                  aria-hidden
+                />
                 {item.label}
               </Link>
             </li>
@@ -547,6 +584,121 @@ function DesktopPrimaryNav({
         })}
       </ul>
     </nav>
+  );
+}
+
+function HeaderNotificationBell({ workspaceKeys }: { workspaceKeys: readonly string[] }) {
+  const [open, setOpen] = useState(false);
+  const count = useUnreadNotificationCount();
+  const unread = count.isSuccess && count.data !== undefined ? count.data.unread : null;
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label="Notifications"
+        className="relative flex h-10 w-10 items-center justify-center rounded-full text-neutral-700 hover:bg-neutral-100 hover:text-neutral-900 transition-colors focus-visible:outline-none"
+      >
+        <Bell className="h-5 w-5" />
+        <span className="absolute top-2 right-2 h-2.5 w-2.5 rounded-full bg-[#f97316] ring-2 ring-white" />
+      </button>
+      <NotificationPanel
+        open={open}
+        onOpenChange={setOpen}
+        workspaceKeys={workspaceKeys}
+        unreadCount={unread}
+      />
+    </>
+  );
+}
+
+function HeaderUserMenu({
+  userName,
+  userInitial,
+  onSignOut,
+  isPending,
+  roleLabel = "Partner",
+  workspaceLabel = "Partner Workspace",
+  moneyHref = "/rentals/money",
+}: {
+  userName: string;
+  userInitial: string;
+  onSignOut: () => void;
+  isPending: boolean;
+  roleLabel?: string;
+  workspaceLabel?: string;
+  moneyHref?: string;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [isOpen]);
+
+  return (
+    <div className="relative" ref={menuRef}>
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        aria-expanded={isOpen}
+        aria-haspopup="menu"
+        className="flex items-center gap-2.5 rounded-full py-1 pl-1 pr-2 hover:bg-neutral-100 transition-colors focus-visible:outline-none"
+      >
+        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#1e293b] text-white font-bold text-sm shadow-xs">
+          {userInitial}
+        </div>
+        <div className="hidden sm:flex flex-col text-left leading-tight">
+          <span className="text-sm font-bold text-neutral-900">{userName}</span>
+          <span className="text-[11px] font-medium text-neutral-400">{roleLabel}</span>
+        </div>
+        <ChevronDown className="h-3.5 w-3.5 text-neutral-500 ml-0.5" />
+      </button>
+
+      {isOpen && (
+        <div className="absolute right-0 mt-2 w-52 rounded-2xl border border-neutral-200/80 bg-white p-1.5 shadow-xl z-50 animate-in fade-in slide-in-from-top-2">
+          <div className="px-3 py-2 border-b border-neutral-100 mb-1">
+            <div className="text-xs font-bold text-neutral-900">{userName}</div>
+            <div className="text-[11px] text-neutral-500">{workspaceLabel}</div>
+          </div>
+          <Link
+            href="/me"
+            onClick={() => setIsOpen(false)}
+            className="flex w-full items-center rounded-lg px-3 py-2 text-xs font-medium text-neutral-700 hover:bg-neutral-50 transition-colors"
+          >
+            Profile &amp; Account
+          </Link>
+          <Link
+            href={moneyHref}
+            onClick={() => setIsOpen(false)}
+            className="flex w-full items-center rounded-lg px-3 py-2 text-xs font-medium text-neutral-700 hover:bg-neutral-50 transition-colors"
+          >
+            Earnings &amp; Deposits
+          </Link>
+          <div className="my-1 border-t border-neutral-100" />
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={() => {
+              setIsOpen(false);
+              onSignOut();
+            }}
+            className="flex w-full items-center rounded-lg px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 transition-colors"
+          >
+            {isPending ? "Signing out..." : "Sign Out"}
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -562,7 +714,10 @@ function BottomTabBar({
   const current = items.reduce<{ href: string; owned: string } | null>((best, item) => {
     if (item.kind === "notifications") return best;
     const owned = item.activePrefix ?? item.href;
-    const matches = pathname === owned || pathname.startsWith(`${owned}/`);
+    const matches =
+      pathname === owned ||
+      pathname.startsWith(`${owned}/`) ||
+      (item.href === "/home" && (pathname === "/stays/home" || pathname === "/rentals/home"));
     if (!matches) return best;
     return best === null || owned.length > best.owned.length ? { href: item.href, owned } : best;
   }, null);

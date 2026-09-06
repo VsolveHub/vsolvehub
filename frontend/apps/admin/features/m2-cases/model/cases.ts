@@ -128,6 +128,26 @@ export const CASE_KIND_COPY: Record<CaseKind, CaseKindCopy> = {
       "moved, because marking it refunded would announce a decision nobody has taken.",
     isM2: true,
   },
+  RENTAL_ASSET_RECOVERY: {
+    label: "Rental asset recovery",
+    claim: "A rental asset assignment collided, failed custody handover, or requires re-allocation.",
+    isM2: false,
+  },
+  RENTAL_DEPOSIT_DISPUTE: {
+    label: "Rental deposit dispute",
+    claim: "Customer disputes damage deductions from their security deposit on a rental return.",
+    isM2: false,
+  },
+  STAY_UNIT_RECOVERY: {
+    label: "Stay unit recovery",
+    claim: "Host blocked a physical unit or maintenance collision requires room reassignment.",
+    isM2: false,
+  },
+  STAY_DAMAGE_DISPUTE: {
+    label: "Stay damage dispute",
+    claim: "Guest disputes host damage assessment and security deposit deduction.",
+    isM2: false,
+  },
 };
 
 /** Every kind, in queue order — the M2 kinds last so the M1 queue reads unchanged. */

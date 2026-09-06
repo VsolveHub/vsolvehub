@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.52.0
+  version: 1.53.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -10665,6 +10665,12 @@ paths:
         schema:
           type: string
         description: Opaque page cursor.
+      - in: query
+        name: source
+        schema:
+          type: string
+        description: Filter to one archetype's entries, e.g. 'rental' for A7 earnings
+          only.
       tags:
       - Partner
       security:
@@ -12070,6 +12076,779 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Refund'
+          description: ''
+  /api/v1/rentals/bookings/{booking_id}/:
+    get:
+      operationId: rentals_bookings_retrieve
+      description: Detail view for a rental booking, scoped to the requesting customer.
+      parameters:
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - rentals
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RentalBookingDetail'
+          description: ''
+  /api/v1/rentals/bookings/{booking_id}/cancel/:
+    post:
+      operationId: rentals_bookings_cancel_create
+      description: Customer cancels a rental booking before handover.
+      parameters:
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - rentals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelRentalBookingInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CancelRentalBookingInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CancelRentalBookingInputRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancelRentalBookingInput'
+          description: ''
+  /api/v1/rentals/bookings/{booking_id}/confirm/:
+    post:
+      operationId: rentals_bookings_confirm_create
+      description: Confirm a rental booking and captured payment.
+      parameters:
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - rentals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RentalBookingDetailRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RentalBookingDetailRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RentalBookingDetailRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RentalBookingDetail'
+          description: ''
+  /api/v1/rentals/bookings/{booking_id}/dispute/:
+    post:
+      operationId: rentals_bookings_dispute_create
+      description: Customer disputes deposit deductions.
+      parameters:
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - rentals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DisputeDepositInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DisputeDepositInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DisputeDepositInputRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisputeDepositInput'
+          description: ''
+  /api/v1/rentals/bookings/{booking_id}/extend/:
+    post:
+      operationId: rentals_bookings_extend_create
+      description: Customer requests extension of active rental.
+      parameters:
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - rentals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestExtensionInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RequestExtensionInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RequestExtensionInputRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestExtensionInput'
+          description: ''
+  /api/v1/rentals/bookings/{booking_id}/payment/:
+    post:
+      operationId: rentals_bookings_payment_create
+      description: Start real provider orders for the booking price and deposit.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable unique key for safe command replay.
+        required: true
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - rentals
+      security:
+      - cookieAuth: []
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RentalPaymentAttempts'
+          description: ''
+  /api/v1/rentals/browse/:
+    get:
+      operationId: rentals_browse_list
+      description: 'Customer discovery: returns de-duplicated vendor storefront cards
+        for a product type.'
+      tags:
+      - rentals
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RentalListingGroup'
+          description: ''
+  /api/v1/rentals/extensions/{extension_id}/pay/:
+    post:
+      operationId: rentals_extensions_pay_create
+      description: Customer pays for an extension to confirm and apply it.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable unique key for safe command replay.
+        required: true
+      - in: path
+        name: extension_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - rentals
+      security:
+      - cookieAuth: []
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentAttempt'
+          description: ''
+  /api/v1/rentals/holds/:
+    post:
+      operationId: rentals_holds_create
+      description: Customer initiates checkout by locking an asset hold.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable unique key for safe command replay.
+        required: true
+      tags:
+      - rentals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RentalHoldCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RentalHoldCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RentalHoldCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RentalBookingDetail'
+          description: ''
+  /api/v1/rentals/my-bookings/:
+    get:
+      operationId: rentals_my_bookings_retrieve
+      description: Customer's active and historical rentals.
+      tags:
+      - rentals
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RentalBookingDetail'
+          description: ''
+  /api/v1/rentals/ops/bookings/:
+    get:
+      operationId: rentals_ops_bookings_retrieve
+      description: Operations oversight of all rental bookings.
+      tags:
+      - rentals
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RentalBookingDetail'
+          description: ''
+  /api/v1/rentals/ops/bookings/{booking_id}/reassign/:
+    post:
+      operationId: rentals_ops_bookings_reassign_create
+      description: Operations reassigns an unavailable asset pre-handover.
+      parameters:
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - rentals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationsReassignInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperationsReassignInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperationsReassignInputRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsReassignInput'
+          description: ''
+  /api/v1/rentals/ops/cases/{case_id}/resolve/:
+    post:
+      operationId: rentals_ops_cases_resolve_create
+      description: Operations adjudicates a deposit dispute case.
+      parameters:
+      - in: path
+        name: case_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - rentals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationsResolveDisputeInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperationsResolveDisputeInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperationsResolveDisputeInputRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsResolveDisputeInput'
+          description: ''
+  /api/v1/rentals/partner/assets/:
+    get:
+      operationId: rentals_partner_assets_list
+      description: Partner manages their rental assets.
+      tags:
+      - rentals
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RentalAsset'
+          description: ''
+    post:
+      operationId: rentals_partner_assets_create
+      description: Partner manages their rental assets.
+      tags:
+      - rentals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RentalAssetRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RentalAssetRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RentalAssetRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RentalAsset'
+          description: ''
+  /api/v1/rentals/partner/assets/{id}/:
+    get:
+      operationId: rentals_partner_asset_retrieve
+      description: Partner views or updates a single rental asset.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - rentals
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RentalAsset'
+          description: ''
+    put:
+      operationId: rentals_partner_assets_update
+      description: Partner views or updates a single rental asset.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - rentals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RentalAssetRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RentalAssetRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RentalAssetRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RentalAsset'
+          description: ''
+  /api/v1/rentals/partner/assets/{id}/maintenance/:
+    get:
+      operationId: rentals_partner_assets_maintenance_retrieve
+      description: Partner manages maintenance periods on their rental assets.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - rentals
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RentalMaintenancePeriodCreate'
+          description: ''
+    post:
+      operationId: rentals_partner_assets_maintenance_create
+      description: Partner manages maintenance periods on their rental assets.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - rentals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RentalMaintenancePeriodCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RentalMaintenancePeriodCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RentalMaintenancePeriodCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RentalMaintenancePeriodCreate'
+          description: ''
+  /api/v1/rentals/partner/assets/{id}/media/:
+    get:
+      operationId: rentals_partner_assets_media_retrieve
+      description: Partner manages condition and showcase media for an asset.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - rentals
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RentalAssetMediaCreate'
+          description: ''
+    post:
+      operationId: rentals_partner_assets_media_create
+      description: Partner manages condition and showcase media for an asset.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - rentals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RentalAssetMediaCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RentalAssetMediaCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RentalAssetMediaCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RentalAssetMediaCreate'
+          description: ''
+  /api/v1/rentals/partner/bookings/:
+    get:
+      operationId: rentals_partner_bookings_retrieve
+      description: Partner views their rental bookings.
+      tags:
+      - rentals
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RentalBookingDetail'
+          description: ''
+  /api/v1/rentals/partner/bookings/{booking_id}/handover/:
+    post:
+      operationId: rentals_partner_bookings_handover_create
+      description: Partner records outbound condition & transfers custody.
+      parameters:
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - rentals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordHandoverInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RecordHandoverInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RecordHandoverInputRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordHandoverInput'
+          description: ''
+  /api/v1/rentals/partner/bookings/{booking_id}/initiate-return/:
+    post:
+      operationId: rentals_partner_bookings_initiate_return_create
+      description: Partner flags that return is in progress.
+      parameters:
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - rentals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RentalBookingDetailRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RentalBookingDetailRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RentalBookingDetailRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RentalBookingDetail'
+          description: ''
+  /api/v1/rentals/partner/bookings/{booking_id}/return-inspection/:
+    post:
+      operationId: rentals_partner_bookings_return_inspection_create
+      description: Partner inspects returned asset, triggering settlement.
+      parameters:
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - rentals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordReturnInspectionInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RecordReturnInspectionInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RecordReturnInspectionInputRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordReturnInspectionInput'
+          description: ''
+  /api/v1/rentals/partner/extensions/{extension_id}/approve/:
+    post:
+      operationId: rentals_partner_extensions_approve_create
+      description: Partner approves a customer's pending extension request (§4.7).
+      parameters:
+      - in: path
+        name: extension_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - rentals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RentalBookingDetailRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RentalBookingDetailRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RentalBookingDetailRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RentalBookingDetail'
+          description: ''
+  /api/v1/rentals/partner/extensions/{extension_id}/reject/:
+    post:
+      operationId: rentals_partner_extensions_reject_create
+      description: Partner rejects a customer's pending extension request (§4.7).
+      parameters:
+      - in: path
+        name: extension_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - rentals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RentalBookingDetailRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RentalBookingDetailRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RentalBookingDetailRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RentalBookingDetail'
+          description: ''
+  /api/v1/rentals/partner/variants/:
+    get:
+      operationId: rentals_partner_variants_retrieve
+      description: |-
+        Every listable A7_RENTAL product type, for the "list a new item" picker.
+
+        Read-only catalog data, not partner-scoped — every rental vendor picks from
+        the same Category/Subcategory/Service/Variant taxonomy (§4.1a).
+      tags:
+      - rentals
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RentalVariantOption'
           description: ''
   /api/v1/requirements/:
     get:
@@ -14570,6 +15349,1134 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: '`m2_requirement_transition_not_allowed` once the visit is
             completed or cancelled.'
+  /api/v1/stays/browse/:
+    get:
+      operationId: stays_browse_retrieve
+      description: Public browse and filter-first stay search.
+      tags:
+      - stays
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/stays/extensions/{extension_id}/confirm/:
+    post:
+      operationId: stays_extensions_confirm_create
+      description: Confirm stay extension upon payment capture (§5.4, M3-A9-05).
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable unique key for safe command replay.
+        required: true
+      - in: path
+        name: extension_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      security:
+      - cookieAuth: []
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentAttempt'
+          description: ''
+  /api/v1/stays/filter-definitions/:
+    get:
+      operationId: stays_filter_definitions
+      description: Returns dynamic filter definitions authoritative from catalog.ServiceQuestion
+        metadata.
+      summary: Get stay filter definitions
+      parameters:
+      - in: query
+        name: service_slug
+        schema:
+          type: string
+        description: Optional service slug filter (e.g. rooms, pg-accommodation).
+      tags:
+      - stays
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          description: List of filter definitions
+  /api/v1/stays/holds/:
+    post:
+      operationId: stays_holds_create
+      description: Create a tentative calendar hold and draft reservation.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable unique key for safe command replay.
+        required: true
+      tags:
+      - stays
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StayHoldCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StayHoldCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StayHoldCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StayReservationDetail'
+          description: ''
+  /api/v1/stays/my-reservations/:
+    get:
+      operationId: stays_my_reservations_retrieve
+      description: List customer's reservations filtered by upcoming or completed.
+      tags:
+      - stays
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StayReservationDetail'
+          description: ''
+  /api/v1/stays/ops/properties/{property_id}/units/:
+    get:
+      operationId: stays_ops_properties_units_retrieve
+      description: List physical units under a property for reassignment options.
+      parameters:
+      - in: path
+        name: property_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerUnitCreate'
+          description: ''
+  /api/v1/stays/ops/reservations/:
+    get:
+      operationId: stays_ops_reservations_retrieve
+      description: Operations workspace listing for all stay reservations, disputes,
+        and recovery cases.
+      tags:
+      - stays
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StayReservationDetail'
+          description: ''
+  /api/v1/stays/ops/reservations/{reservation_id}/reassign/:
+    post:
+      operationId: stays_ops_reservations_reassign_create
+      description: Operations emergency unit reassignment (§8.2, M3-A9-10).
+      parameters:
+      - in: path
+        name: reservation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpsStayReassignRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OpsStayReassignRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OpsStayReassignRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsStayReassign'
+          description: ''
+  /api/v1/stays/ops/reservations/{reservation_id}/resolve-dispute/:
+    post:
+      operationId: stays_ops_reservations_resolve_dispute_create
+      description: Operations adjudicates damage dispute with maker-checker override
+        (§8.2, M3-A9-06).
+      parameters:
+      - in: path
+        name: reservation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpsStayResolveDisputeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OpsStayResolveDisputeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OpsStayResolveDisputeRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsStayResolveDispute'
+          description: ''
+  /api/v1/stays/partner/pricing-overrides/{override_id}/:
+    put:
+      operationId: stays_partner_pricing_overrides_update
+      description: Update a nightly date override owned by the Host.
+      parameters:
+      - in: path
+        name: override_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerUnitPricingOverrideRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PartnerUnitPricingOverrideRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PartnerUnitPricingOverrideRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerUnitPricingOverride'
+          description: ''
+  /api/v1/stays/partner/pricing-rules/{rule_id}/:
+    put:
+      operationId: stays_partner_pricing_rules_update
+      description: Update or deactivate one Host-owned effective pricing rule.
+      parameters:
+      - in: path
+        name: rule_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerUnitPricingRuleRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PartnerUnitPricingRuleRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PartnerUnitPricingRuleRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerUnitPricingRule'
+          description: ''
+  /api/v1/stays/partner/pricing-rules/{rule_id}/overrides/:
+    get:
+      operationId: stays_partner_pricing_rules_overrides_retrieve
+      description: List or add nightly date overrides on a Host-owned pricing rule.
+      parameters:
+      - in: path
+        name: rule_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerUnitPricingOverride'
+          description: ''
+    post:
+      operationId: stays_partner_pricing_rules_overrides_create
+      description: List or add nightly date overrides on a Host-owned pricing rule.
+      parameters:
+      - in: path
+        name: rule_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerUnitPricingOverrideRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PartnerUnitPricingOverrideRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PartnerUnitPricingOverrideRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerUnitPricingOverride'
+          description: ''
+  /api/v1/stays/partner/properties/:
+    get:
+      operationId: stays_partner_properties_list
+      description: Host properties management endpoint.
+      tags:
+      - stays
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerPropertyCreate'
+          description: ''
+    post:
+      operationId: stays_partner_properties_create
+      description: Host properties management endpoint.
+      tags:
+      - stays
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerPropertyCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PartnerPropertyCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PartnerPropertyCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerPropertyCreate'
+          description: ''
+  /api/v1/stays/partner/properties/{property_id}/:
+    get:
+      operationId: stays_partner_property_retrieve
+      description: Read or update one property owned by the authenticated Host.
+      parameters:
+      - in: path
+        name: property_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerPropertyCreate'
+          description: ''
+    put:
+      operationId: stays_partner_properties_update
+      description: Read or update one property owned by the authenticated Host.
+      parameters:
+      - in: path
+        name: property_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerPropertyCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PartnerPropertyCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PartnerPropertyCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerPropertyCreate'
+          description: ''
+  /api/v1/stays/partner/properties/{property_id}/add-unit/:
+    post:
+      operationId: stays_partner_properties_add_unit_create
+      description: Add a physical bookable room/unit under a property.
+      parameters:
+      - in: path
+        name: property_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerUnitCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PartnerUnitCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PartnerUnitCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerUnitCreate'
+          description: ''
+  /api/v1/stays/partner/properties/{property_id}/policy/:
+    get:
+      operationId: stays_partner_properties_policy_retrieve
+      description: Read or update the booking policy that makes a Host property bookable.
+      parameters:
+      - in: path
+        name: property_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerPropertyPolicy'
+          description: ''
+    put:
+      operationId: stays_partner_properties_policy_update
+      description: Read or update the booking policy that makes a Host property bookable.
+      parameters:
+      - in: path
+        name: property_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerPropertyPolicyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PartnerPropertyPolicyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PartnerPropertyPolicyRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerPropertyPolicy'
+          description: ''
+  /api/v1/stays/partner/properties/{property_id}/unit-types/:
+    get:
+      operationId: stays_partner_properties_unit_types_retrieve
+      description: List or create room configurations under a host property.
+      parameters:
+      - in: path
+        name: property_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerUnitTypeCreate'
+          description: ''
+    post:
+      operationId: stays_partner_properties_unit_types_create
+      description: List or create room configurations under a host property.
+      parameters:
+      - in: path
+        name: property_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerUnitTypeCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PartnerUnitTypeCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PartnerUnitTypeCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerUnitTypeCreate'
+          description: ''
+  /api/v1/stays/partner/properties/{property_id}/units/:
+    get:
+      operationId: stays_partner_properties_units_retrieve
+      description: List physical units under a property for reassignment options.
+      parameters:
+      - in: path
+        name: property_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerUnitCreate'
+          description: ''
+  /api/v1/stays/partner/reservations/:
+    get:
+      operationId: stays_partner_reservations_list
+      description: List host's incoming guest reservations.
+      tags:
+      - stays
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StayReservationDetail'
+          description: ''
+  /api/v1/stays/partner/reservations/{reservation_id}/:
+    get:
+      operationId: stays_partner_reservation_retrieve
+      description: Retrieve full details of a specific guest reservation for the host.
+      parameters:
+      - in: path
+        name: reservation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StayReservationDetail'
+          description: ''
+  /api/v1/stays/partner/reservations/{reservation_id}/check-in/:
+    post:
+      operationId: stays_partner_reservations_check_in_create
+      description: Host records guest arrival and ID verification.
+      parameters:
+      - in: path
+        name: reservation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerCheckInRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PartnerCheckInRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PartnerCheckInRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerCheckIn'
+          description: ''
+  /api/v1/stays/partner/reservations/{reservation_id}/check-out/:
+    post:
+      operationId: stays_partner_reservations_check_out_create
+      description: Host records guest check-out and condition inspection.
+      parameters:
+      - in: path
+        name: reservation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerCheckOutRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PartnerCheckOutRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PartnerCheckOutRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerCheckOut'
+          description: ''
+  /api/v1/stays/partner/reservations/{reservation_id}/reassign-unit/:
+    post:
+      operationId: stays_partner_reservations_reassign_unit_create
+      description: Host swaps unit to another equivalent vacant unit of same UnitType
+        (§5.1a).
+      parameters:
+      - in: path
+        name: reservation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerReassignUnitRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PartnerReassignUnitRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PartnerReassignUnitRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerReassignUnit'
+          description: ''
+  /api/v1/stays/partner/unit-types/{unit_type_id}/:
+    get:
+      operationId: stays_partner_unit_types_retrieve
+      description: Read or update one room configuration owned by the Host.
+      parameters:
+      - in: path
+        name: unit_type_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerUnitTypeCreate'
+          description: ''
+    put:
+      operationId: stays_partner_unit_types_update
+      description: Read or update one room configuration owned by the Host.
+      parameters:
+      - in: path
+        name: unit_type_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerUnitTypeCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PartnerUnitTypeCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PartnerUnitTypeCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerUnitTypeCreate'
+          description: ''
+  /api/v1/stays/partner/unit-types/{unit_type_id}/pricing-rules/:
+    get:
+      operationId: stays_partner_unit_types_pricing_rules_retrieve
+      description: List or add effective-dated prices for one Host-owned room type.
+      parameters:
+      - in: path
+        name: unit_type_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerUnitPricingRule'
+          description: ''
+    post:
+      operationId: stays_partner_unit_types_pricing_rules_create
+      description: List or add effective-dated prices for one Host-owned room type.
+      parameters:
+      - in: path
+        name: unit_type_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerUnitPricingRuleRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PartnerUnitPricingRuleRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PartnerUnitPricingRuleRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerUnitPricingRule'
+          description: ''
+  /api/v1/stays/partner/units/{unit_id}/block/:
+    post:
+      operationId: stays_partner_block_unit
+      description: Marks a unit under maintenance and moves confirmed reservations
+        into recovery.
+      summary: Host block unit
+      parameters:
+      - in: path
+        name: unit_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerBlockUnitRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PartnerBlockUnitRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PartnerBlockUnitRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: Unit marked under maintenance
+  /api/v1/stays/properties/{property_id}/:
+    get:
+      operationId: stays_properties_retrieve
+      description: Public property-first detail endpoint.
+      parameters:
+      - in: path
+        name: property_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/stays/reservations/{reservation_id}/:
+    get:
+      operationId: stays_reservations_retrieve
+      description: View reservation status and details.
+      parameters:
+      - in: path
+        name: reservation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StayReservationDetail'
+          description: ''
+  /api/v1/stays/reservations/{reservation_id}/cancel/:
+    post:
+      operationId: stays_reservations_cancel_create
+      description: Customer self-service cancellation with policy refund bands (§5.4,
+        §5.5, M3-A9-02).
+      parameters:
+      - in: path
+        name: reservation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StayCancelRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StayCancelRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StayCancelRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StayCancel'
+          description: ''
+  /api/v1/stays/reservations/{reservation_id}/confirm/:
+    post:
+      operationId: stays_reservations_confirm_create
+      description: Confirm a HELD reservation upon successful checkout payment capture.
+      parameters:
+      - in: path
+        name: reservation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StayReservationDetailRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StayReservationDetailRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StayReservationDetailRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StayReservationDetail'
+          description: ''
+  /api/v1/stays/reservations/{reservation_id}/dispute/:
+    post:
+      operationId: stays_reservations_dispute_create
+      description: Guest contests damage assessment, opening an Operations case (§5.4,
+        §8.2, M3-A9-06).
+      parameters:
+      - in: path
+        name: reservation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StayDisputeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StayDisputeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StayDisputeRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StayDispute'
+          description: ''
+  /api/v1/stays/reservations/{reservation_id}/early-checkout/:
+    post:
+      operationId: stays_reservations_early_checkout_create
+      description: Record guest early checkout and trim calendar hold (§5.4, M3-A9-04).
+      parameters:
+      - in: path
+        name: reservation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StayEarlyCheckoutRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StayEarlyCheckoutRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StayEarlyCheckoutRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StayEarlyCheckout'
+          description: ''
+  /api/v1/stays/reservations/{reservation_id}/extensions/:
+    post:
+      operationId: stays_reservations_extensions_create
+      description: Customer requests stay extension or late check-out (§5.4, M3-A9-05).
+      parameters:
+      - in: path
+        name: reservation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StayExtensionRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StayExtensionRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StayExtensionRequestRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StayExtensionRequest'
+          description: ''
+  /api/v1/stays/reservations/{reservation_id}/payment/:
+    post:
+      operationId: stays_reservations_payment_create
+      description: Start real provider orders for stay charges and any refundable
+        deposit.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable unique key for safe command replay.
+        required: true
+      - in: path
+        name: reservation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      security:
+      - cookieAuth: []
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StayPaymentAttempts'
+          description: ''
   /api/v1/tax-documents/{document_id}/:
     get:
       operationId: tax_documents_retrieve
@@ -15192,6 +17099,14 @@ components:
       - active_role
       - session_expires_at
       - user
+    BathroomTypeEnum:
+      enum:
+      - ATTACHED
+      - SHARED
+      type: string
+      description: |-
+        * `ATTACHED` - Attached
+        * `SHARED` - Shared
     BlankEnum:
       enum:
       - ''
@@ -15635,6 +17550,20 @@ components:
       - consequence
       - label
       - value
+    CancelRentalBookingInput:
+      type: object
+      properties:
+        reason:
+          type: string
+          default: ''
+          maxLength: 240
+    CancelRentalBookingInputRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          default: ''
+          maxLength: 240
     CancellationBand:
       type: object
       properties:
@@ -15686,6 +17615,18 @@ components:
       - code
       - reschedule_free_notice_hours
       - version
+    CancellationPolicyEnum:
+      enum:
+      - FLEXIBLE
+      - MODERATE
+      - STRICT
+      - NON_REFUNDABLE
+      type: string
+      description: |-
+        * `FLEXIBLE` - Flexible (Full refund up to 24h before check-in)
+        * `MODERATE` - Moderate (Full refund up to 5 days before check-in)
+        * `STRICT` - Strict (50% refund up to 7 days before check-in)
+        * `NON_REFUNDABLE` - Non-refundable
     CancellationPreview:
       type: object
       description: |-
@@ -15861,6 +17802,14 @@ components:
       - reason
       - reason_code
       - to_status
+    CaptureModeEnum:
+      enum:
+      - AUTH_ONLY
+      - IMMEDIATE_CAPTURE
+      type: string
+      description: |-
+        * `AUTH_ONLY` - Pre-authorization hold
+        * `IMMEDIATE_CAPTURE` - Immediate capture and partial refund
     Cart:
       type: object
       properties:
@@ -17005,6 +18954,18 @@ components:
       - response
       - safety_damage_declared
       - submitted_at
+    ConditionGrade895Enum:
+      enum:
+      - EXCELLENT
+      - GOOD
+      - FAIR
+      - DAMAGED
+      type: string
+      description: |-
+        * `EXCELLENT` - Clean & Pristine
+        * `GOOD` - Normal Wear & Tear
+        * `FAIR` - Minor Cleaning Needed
+        * `DAMAGED` - Damage Found
     ConfirmationPolicyEnum:
       enum:
       - ALL_OR_NOTHING
@@ -18256,6 +20217,14 @@ components:
           maxLength: 1000
       required:
       - title
+    DeliveryModeEnum:
+      enum:
+      - PICKUP
+      - DELIVERY
+      type: string
+      description: |-
+        * `PICKUP` - Customer store pickup
+        * `DELIVERY` - Vendor delivery
     DemandPreview:
       type: object
       properties:
@@ -18490,6 +20459,23 @@ components:
       required:
       - dispute_reason
       - expected_version
+    DisputeDepositInput:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+      required:
+      - reason
+    DisputeDepositInputRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+      required:
+      - reason
     DisputedWorkerRequest:
       type: object
       description: One line of a Customer's dispute. Their account, in their words.
@@ -18505,6 +20491,20 @@ components:
           type: string
           default: ''
           maxLength: 400
+    DurationModeEnum:
+      enum:
+      - DAILY
+      - NIGHTLY
+      - WEEKLY
+      - MONTHLY
+      - HOURLY
+      type: string
+      description: |-
+        * `DAILY` - Daily
+        * `NIGHTLY` - Nightly
+        * `WEEKLY` - Weekly
+        * `MONTHLY` - Monthly
+        * `HOURLY` - Hourly
     EngageKillSwitchRequestRequest:
       type: object
       properties:
@@ -19951,6 +21951,16 @@ components:
         * `COMPLETED` - Completed
         * `PARTIALLY_COMPLETED` - Partially completed
         * `DISPUTED` - Disputed
+    FurnishingStatusEnum:
+      enum:
+      - UNFURNISHED
+      - SEMI_FURNISHED
+      - FULLY_FURNISHED
+      type: string
+      description: |-
+        * `UNFURNISHED` - Unfurnished
+        * `SEMI_FURNISHED` - Semi-Furnished
+        * `FULLY_FURNISHED` - Fully Furnished
     GateNextActionEnum:
       enum:
       - SUBMIT_APPLICATION
@@ -20312,6 +22322,20 @@ components:
         * `pet-photography` - Pet photography
         * `workforce` - Workforce
         * `custom-project` - Custom project
+    IdDocumentTypeEnum:
+      enum:
+      - AADHAAR
+      - PASSPORT
+      - DRIVING_LICENSE
+      - VOTER_ID
+      - OTHER
+      type: string
+      description: |-
+        * `AADHAAR` - Aadhaar Card
+        * `PASSPORT` - Passport
+        * `DRIVING_LICENSE` - Driving License
+        * `VOTER_ID` - Voter ID
+        * `OTHER` - Government Photo ID
     IntendedRoleEnum:
       enum:
       - partner
@@ -20483,6 +22507,22 @@ components:
         * `ACTIVE` - Active
         * `RETIRED` - Retired
         * `REJECTED` - Rejected
+    LineTypeEnum:
+      enum:
+      - BASE_RENTAL
+      - DELIVERY_FEE
+      - DEPOSIT_HOLD
+      - TAX
+      - EXTENSION
+      - DAMAGE_SETTLEMENT
+      type: string
+      description: |-
+        * `BASE_RENTAL` - Base rental fee
+        * `DELIVERY_FEE` - Delivery fee
+        * `DEPOSIT_HOLD` - Security deposit hold
+        * `TAX` - Tax
+        * `EXTENSION` - Extension fee
+        * `DAMAGE_SETTLEMENT` - Damage settlement recovery
     ManualOfferRequest:
       type: object
       properties:
@@ -21360,6 +23400,10 @@ components:
       - STAGE
       - OFF_PLATFORM
       - CHARGEBACK
+      - RENTAL_ASSET_RECOVERY
+      - RENTAL_DEPOSIT_DISPUTE
+      - STAY_UNIT_RECOVERY
+      - STAY_DAMAGE_DISPUTE
       type: string
       description: |-
         * `ASSIGNMENT` - Assignment or recovery
@@ -21376,6 +23420,10 @@ components:
         * `STAGE` - Disputed stage or milestone
         * `OFF_PLATFORM` - Off-platform payment claim
         * `CHARGEBACK` - Chargeback on a platform fee
+        * `RENTAL_ASSET_RECOVERY` - Rental asset recovery
+        * `RENTAL_DEPOSIT_DISPUTE` - Rental deposit dispute
+        * `STAY_UNIT_RECOVERY` - Stay unit recovery
+        * `STAY_DAMAGE_DISPUTE` - Stay damage dispute
     OperationsCaseList:
       type: object
       description: |-
@@ -21791,6 +23839,22 @@ components:
           maxLength: 2000
       required:
       - reason
+    OperationsReassignInput:
+      type: object
+      properties:
+        new_asset_id:
+          type: string
+          format: uuid
+      required:
+      - new_asset_id
+    OperationsReassignInputRequest:
+      type: object
+      properties:
+        new_asset_id:
+          type: string
+          format: uuid
+      required:
+      - new_asset_id
     OperationsReclassificationRequest:
       type: object
       description: Every safe Operations action takes a reason. `M2-AC-804` requires
@@ -21827,6 +23891,39 @@ components:
       required:
       - decision
       - reason
+    OperationsResolveDisputeInput:
+      type: object
+      properties:
+        refund_customer_paise:
+          type: integer
+          minimum: 0
+        vendor_payout_paise:
+          type: integer
+          minimum: 0
+        resolution_note:
+          type: string
+          maxLength: 500
+      required:
+      - refund_customer_paise
+      - resolution_note
+      - vendor_payout_paise
+    OperationsResolveDisputeInputRequest:
+      type: object
+      properties:
+        refund_customer_paise:
+          type: integer
+          minimum: 0
+        vendor_payout_paise:
+          type: integer
+          minimum: 0
+        resolution_note:
+          type: string
+          minLength: 1
+          maxLength: 500
+      required:
+      - refund_customer_paise
+      - resolution_note
+      - vendor_payout_paise
     OperationsTaxProfileVerifyRequest:
       type: object
       properties:
@@ -21867,6 +23964,52 @@ components:
       required:
       - expected_version
       - target_status
+    OpsStayReassign:
+      type: object
+      properties:
+        target_unit_id:
+          type: string
+          format: uuid
+        reason:
+          type: string
+          default: Operations emergency reassignment
+      required:
+      - target_unit_id
+    OpsStayReassignRequest:
+      type: object
+      properties:
+        target_unit_id:
+          type: string
+          format: uuid
+        reason:
+          type: string
+          minLength: 1
+          default: Operations emergency reassignment
+      required:
+      - target_unit_id
+    OpsStayResolveDispute:
+      type: object
+      properties:
+        final_consumed_amount_paise:
+          type: integer
+          minimum: 0
+        resolution_notes:
+          type: string
+      required:
+      - final_consumed_amount_paise
+      - resolution_notes
+    OpsStayResolveDisputeRequest:
+      type: object
+      properties:
+        final_consumed_amount_paise:
+          type: integer
+          minimum: 0
+        resolution_notes:
+          type: string
+          minLength: 1
+      required:
+      - final_consumed_amount_paise
+      - resolution_notes
     Order:
       type: object
       properties:
@@ -22355,6 +24498,13 @@ components:
       - pending_paise
       - reserved_paise
       - server_now
+    PartnerBlockUnitRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          default: Host maintenance block
     PartnerBooking:
       type: object
       description: |-
@@ -22782,6 +24932,82 @@ components:
       required:
       - capabilities
       - server_now
+    PartnerCheckIn:
+      type: object
+      properties:
+        id_document_type:
+          allOf:
+          - $ref: '#/components/schemas/IdDocumentTypeEnum'
+          default: AADHAAR
+        guest_notes:
+          type: string
+        condition_photo_urls:
+          type: array
+          items:
+            type: string
+            format: uri
+    PartnerCheckInRequest:
+      type: object
+      properties:
+        id_document_type:
+          allOf:
+          - $ref: '#/components/schemas/IdDocumentTypeEnum'
+          default: AADHAAR
+        id_document_number:
+          type: string
+          writeOnly: true
+          maxLength: 80
+        guest_notes:
+          type: string
+        condition_photo_urls:
+          type: array
+          items:
+            type: string
+            format: uri
+            minLength: 1
+    PartnerCheckOut:
+      type: object
+      properties:
+        condition_grade:
+          allOf:
+          - $ref: '#/components/schemas/ConditionGrade895Enum'
+          default: EXCELLENT
+        damage_found:
+          type: boolean
+          default: false
+        damage_estimate_paise:
+          type: integer
+          minimum: 0
+          default: 0
+        inspection_notes:
+          type: string
+        condition_photo_urls:
+          type: array
+          items:
+            type: string
+            format: uri
+    PartnerCheckOutRequest:
+      type: object
+      properties:
+        condition_grade:
+          allOf:
+          - $ref: '#/components/schemas/ConditionGrade895Enum'
+          default: EXCELLENT
+        damage_found:
+          type: boolean
+          default: false
+        damage_estimate_paise:
+          type: integer
+          minimum: 0
+          default: 0
+        inspection_notes:
+          type: string
+        condition_photo_urls:
+          type: array
+          items:
+            type: string
+            format: uri
+            minLength: 1
     PartnerConsent:
       type: object
       properties:
@@ -23193,6 +25419,11 @@ components:
           format: uuid
           readOnly: true
           nullable: true
+        rental_booking_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
         kind:
           allOf:
           - $ref: '#/components/schemas/LedgerEntryKindEnum'
@@ -23239,6 +25470,7 @@ components:
       - kind
       - net_paise
       - reason
+      - rental_booking_id
       - status
     PartnerLedgerPage:
       type: object
@@ -23481,6 +25713,116 @@ components:
       - phone_number
       - service_areas
       - skills
+    PartnerPropertyCreate:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        title:
+          type: string
+          maxLength: 160
+        property_type:
+          $ref: '#/components/schemas/PropertyTypeEnum'
+        description:
+          type: string
+        locality:
+          type: string
+          maxLength: 100
+        is_active:
+          type: boolean
+      required:
+      - id
+      - title
+    PartnerPropertyCreateRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 160
+        property_type:
+          $ref: '#/components/schemas/PropertyTypeEnum'
+        description:
+          type: string
+        locality:
+          type: string
+          maxLength: 100
+        is_active:
+          type: boolean
+      required:
+      - title
+    PartnerPropertyPolicy:
+      type: object
+      properties:
+        check_in_time:
+          type: string
+          format: time
+        check_out_time:
+          type: string
+          format: time
+        max_guests_per_unit:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        id_verification_required:
+          type: boolean
+        cancellation_policy:
+          $ref: '#/components/schemas/CancellationPolicyEnum'
+        notice_period_days:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          description: Notice period in days for monthly lease departures.
+        no_show_grace_minutes:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        no_show_first_night_charge_basis_points:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        no_show_deposit_forfeit_basis_points:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        house_rules: {}
+    PartnerPropertyPolicyRequest:
+      type: object
+      properties:
+        check_in_time:
+          type: string
+          format: time
+        check_out_time:
+          type: string
+          format: time
+        max_guests_per_unit:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        id_verification_required:
+          type: boolean
+        cancellation_policy:
+          $ref: '#/components/schemas/CancellationPolicyEnum'
+        notice_period_days:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          description: Notice period in days for monthly lease departures.
+        no_show_grace_minutes:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        no_show_first_night_charge_basis_points:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        no_show_deposit_forfeit_basis_points:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        house_rules: {}
     PartnerRateItem:
       type: object
       properties:
@@ -23519,6 +25861,22 @@ components:
           default: true
       required:
       - rate_paise
+    PartnerReassignUnit:
+      type: object
+      properties:
+        target_unit_id:
+          type: string
+          format: uuid
+      required:
+      - target_unit_id
+    PartnerReassignUnitRequest:
+      type: object
+      properties:
+        target_unit_id:
+          type: string
+          format: uuid
+      required:
+      - target_unit_id
     PartnerSchedule:
       type: object
       properties:
@@ -23652,6 +26010,284 @@ components:
       - description
       - id
       - name
+    PartnerUnitCreate:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        unit_type:
+          type: string
+          format: uuid
+        unit_code:
+          type: string
+          description: Room number, bed code, or flat identifier (e.g. 'Room 101',
+            'Bed 2A').
+          maxLength: 60
+        floor:
+          type: string
+          maxLength: 30
+        current_status:
+          $ref: '#/components/schemas/PartnerUnitCreateCurrentStatusEnum'
+      required:
+      - id
+      - unit_code
+      - unit_type
+    PartnerUnitCreateCurrentStatusEnum:
+      enum:
+      - ACTIVE
+      - MAINTENANCE
+      - RETIRED
+      type: string
+      description: |-
+        * `ACTIVE` - Active
+        * `MAINTENANCE` - Under Maintenance
+        * `RETIRED` - Retired
+    PartnerUnitCreateRequest:
+      type: object
+      properties:
+        unit_type:
+          type: string
+          format: uuid
+        unit_code:
+          type: string
+          minLength: 1
+          description: Room number, bed code, or flat identifier (e.g. 'Room 101',
+            'Bed 2A').
+          maxLength: 60
+        floor:
+          type: string
+          maxLength: 30
+        current_status:
+          $ref: '#/components/schemas/PartnerUnitCreateCurrentStatusEnum'
+      required:
+      - unit_code
+      - unit_type
+    PartnerUnitPricingOverride:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        date:
+          type: string
+          format: date
+        rate_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        reason:
+          type: string
+          maxLength: 140
+      required:
+      - date
+      - id
+      - rate_paise
+    PartnerUnitPricingOverrideRequest:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        rate_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        reason:
+          type: string
+          maxLength: 140
+      required:
+      - date
+      - rate_paise
+    PartnerUnitPricingRule:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        duration_mode:
+          $ref: '#/components/schemas/DurationModeEnum'
+        base_rate_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          description: Rate in paise for the duration unit (e.g. per month or per
+            night)
+        deposit_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          description: Required refundable security deposit in paise
+        maintenance_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          description: Monthly/periodic maintenance charges in paise
+        effective_from:
+          type: string
+          format: date
+        effective_to:
+          type: string
+          format: date
+          nullable: true
+        is_active:
+          type: boolean
+      required:
+      - base_rate_paise
+      - id
+    PartnerUnitPricingRuleRequest:
+      type: object
+      properties:
+        duration_mode:
+          $ref: '#/components/schemas/DurationModeEnum'
+        base_rate_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          description: Rate in paise for the duration unit (e.g. per month or per
+            night)
+        deposit_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          description: Required refundable security deposit in paise
+        maintenance_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          description: Monthly/periodic maintenance charges in paise
+        effective_from:
+          type: string
+          format: date
+        effective_to:
+          type: string
+          format: date
+          nullable: true
+        is_active:
+          type: boolean
+      required:
+      - base_rate_paise
+    PartnerUnitTypeCreate:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        variant_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 160
+        description:
+          type: string
+        sharing_type:
+          $ref: '#/components/schemas/SharingTypeEnum'
+        sharing_count:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        is_ac:
+          type: boolean
+        bathroom_type:
+          $ref: '#/components/schemas/BathroomTypeEnum'
+        furnishing_status:
+          $ref: '#/components/schemas/FurnishingStatusEnum'
+        food_included:
+          type: boolean
+        bhk:
+          type: string
+          maxLength: 20
+        bathrooms:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        built_up_sqft:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        facing:
+          type: string
+          maxLength: 30
+        floor:
+          type: string
+          maxLength: 30
+        amenities: {}
+        image_url:
+          type: string
+          format: uri
+          maxLength: 500
+        is_active:
+          type: boolean
+      required:
+      - id
+      - name
+      - variant_id
+    PartnerUnitTypeCreateRequest:
+      type: object
+      properties:
+        variant_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        description:
+          type: string
+        sharing_type:
+          $ref: '#/components/schemas/SharingTypeEnum'
+        sharing_count:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        is_ac:
+          type: boolean
+        bathroom_type:
+          $ref: '#/components/schemas/BathroomTypeEnum'
+        furnishing_status:
+          $ref: '#/components/schemas/FurnishingStatusEnum'
+        food_included:
+          type: boolean
+        bhk:
+          type: string
+          maxLength: 20
+        bathrooms:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        built_up_sqft:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        facing:
+          type: string
+          maxLength: 30
+        floor:
+          type: string
+          maxLength: 30
+        amenities: {}
+        image_url:
+          type: string
+          format: uri
+          maxLength: 500
+        is_active:
+          type: boolean
+      required:
+      - name
+      - variant_id
     PartyCase:
       type: object
       description: |-
@@ -25279,6 +27915,26 @@ components:
         * `ACCEPTED` - Accepted and applied
         * `DECLINED` - Declined by the Customer
         * `EXPIRED` - Not answered in time
+    PropertyTypeEnum:
+      enum:
+      - INDEPENDENT_HOUSE
+      - VILLA
+      - STUDIO_APT
+      - APARTMENT
+      - PG
+      - HOSTEL
+      - CO_LIVING
+      - COMMERCIAL
+      type: string
+      description: |-
+        * `INDEPENDENT_HOUSE` - Independent House
+        * `VILLA` - Villa
+        * `STUDIO_APT` - Studio Apartment
+        * `APARTMENT` - Apartment
+        * `PG` - PG Accommodation
+        * `HOSTEL` - Hostel
+        * `CO_LIVING` - Co-Living Space
+        * `COMMERCIAL` - Commercial / Office
     Proposal:
       type: object
       description: A vendor's own quote, read back to that vendor.
@@ -26440,6 +29096,14 @@ components:
       - M2_MATERIAL_ADVANCE
       - M2_SCOPE_AMENDMENT
       - M2_BOOKING_FEE
+      - A7_RENTAL_BOOKING
+      - A7_DEPOSIT_HOLD
+      - A7_DAMAGE_SETTLEMENT
+      - A7_EXTENSION
+      - A9_STAY_RESERVATION
+      - A9_DEPOSIT_HOLD
+      - A9_DAMAGE_SETTLEMENT
+      - A9_EXTENSION
       type: string
       description: |-
         * `BOOKING_GROUP` - Booking group
@@ -26451,6 +29115,14 @@ components:
         * `M2_MATERIAL_ADVANCE` - M2 material advance
         * `M2_SCOPE_AMENDMENT` - M2 engagement scope amendment
         * `M2_BOOKING_FEE` - M2 booking fee
+        * `A7_RENTAL_BOOKING` - A7 rental booking
+        * `A7_DEPOSIT_HOLD` - A7 deposit hold
+        * `A7_DAMAGE_SETTLEMENT` - A7 damage settlement
+        * `A7_EXTENSION` - A7 extension
+        * `A9_STAY_RESERVATION` - A9 stay reservation
+        * `A9_DEPOSIT_HOLD` - A9 deposit hold
+        * `A9_DAMAGE_SETTLEMENT` - A9 damage settlement
+        * `A9_EXTENSION` - A9 extension
     QuestionAnswerRequest:
       type: object
       properties:
@@ -27508,6 +30180,96 @@ components:
       - open_by_kind
       - refunds_awaiting_provider
       - server_now
+    RecordHandoverInput:
+      type: object
+      properties:
+        photo_urls:
+          type: array
+          items:
+            type: string
+            format: uri
+        condition_notes:
+          type: string
+          default: ''
+        checklist:
+          type: object
+          additionalProperties: {}
+        assigned_serial:
+          type: string
+          default: ''
+      required:
+      - photo_urls
+    RecordHandoverInputRequest:
+      type: object
+      properties:
+        photo_urls:
+          type: array
+          items:
+            type: string
+            format: uri
+            minLength: 1
+        condition_notes:
+          type: string
+          default: ''
+        checklist:
+          type: object
+          additionalProperties: {}
+        assigned_serial:
+          type: string
+          default: ''
+      required:
+      - photo_urls
+    RecordReturnInspectionInput:
+      type: object
+      properties:
+        photo_urls:
+          type: array
+          items:
+            type: string
+            format: uri
+        condition_notes:
+          type: string
+          default: ''
+        damage_found:
+          type: boolean
+          default: false
+        damage_estimated_paise:
+          type: integer
+          minimum: 0
+          default: 0
+        damage_details:
+          type: object
+          additionalProperties: {}
+        late_days:
+          type: integer
+          minimum: 0
+          default: 0
+    RecordReturnInspectionInputRequest:
+      type: object
+      properties:
+        photo_urls:
+          type: array
+          items:
+            type: string
+            format: uri
+            minLength: 1
+        condition_notes:
+          type: string
+          default: ''
+        damage_found:
+          type: boolean
+          default: false
+        damage_estimated_paise:
+          type: integer
+          minimum: 0
+          default: 0
+        damage_details:
+          type: object
+          additionalProperties: {}
+        late_days:
+          type: integer
+          minimum: 0
+          default: 0
     RecoverBookingRequestRequest:
       type: object
       description: |-
@@ -27691,6 +30453,894 @@ components:
           maxLength: 140
       required:
       - scope
+    RentalAsset:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        partner_id:
+          type: string
+          format: uuid
+          readOnly: true
+        variant_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          maxLength: 160
+        description:
+          type: string
+        asset_identifier:
+          type: string
+          description: Serial, plate number, or barcode. Blank for fungible pooled
+            assets.
+          maxLength: 80
+        is_serialized:
+          type: boolean
+        quantity_available:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          description: Tracked quantity for fungible pooled assets (is_serialized=False).
+        daily_price_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        deposit_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        condition_grade:
+          $ref: '#/components/schemas/RentalAssetConditionGradeEnum'
+        current_status:
+          $ref: '#/components/schemas/RentalAssetCurrentStatusEnum'
+        media:
+          type: array
+          items:
+            $ref: '#/components/schemas/RentalAssetMedia'
+          readOnly: true
+        maintenance_periods:
+          type: array
+          items:
+            $ref: '#/components/schemas/RentalMaintenancePeriod'
+          readOnly: true
+        category_attributes: {}
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - daily_price_paise
+      - id
+      - maintenance_periods
+      - media
+      - partner_id
+      - title
+      - updated_at
+      - variant_id
+    RentalAssetConditionGradeEnum:
+      enum:
+      - EXCELLENT
+      - GOOD
+      - FAIR
+      type: string
+      description: |-
+        * `EXCELLENT` - Excellent
+        * `GOOD` - Good
+        * `FAIR` - Fair
+    RentalAssetCurrentStatusEnum:
+      enum:
+      - ACTIVE
+      - UNDER_MAINTENANCE
+      - RETIRED
+      type: string
+      description: |-
+        * `ACTIVE` - Active
+        * `UNDER_MAINTENANCE` - Under maintenance
+        * `RETIRED` - Retired
+    RentalAssetMedia:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        url:
+          type: string
+          format: uri
+          maxLength: 500
+        caption:
+          type: string
+          maxLength: 140
+        is_primary:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - url
+    RentalAssetMediaCreate:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+          maxLength: 500
+        caption:
+          type: string
+          default: ''
+          maxLength: 140
+        is_primary:
+          type: boolean
+          default: false
+      required:
+      - url
+    RentalAssetMediaCreateRequest:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+          minLength: 1
+          maxLength: 500
+        caption:
+          type: string
+          default: ''
+          maxLength: 140
+        is_primary:
+          type: boolean
+          default: false
+      required:
+      - url
+    RentalAssetMediaRequest:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+          minLength: 1
+          maxLength: 500
+        caption:
+          type: string
+          maxLength: 140
+        is_primary:
+          type: boolean
+      required:
+      - url
+    RentalAssetRequest:
+      type: object
+      properties:
+        variant_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          minLength: 1
+          maxLength: 160
+        description:
+          type: string
+        asset_identifier:
+          type: string
+          description: Serial, plate number, or barcode. Blank for fungible pooled
+            assets.
+          maxLength: 80
+        is_serialized:
+          type: boolean
+        quantity_available:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          description: Tracked quantity for fungible pooled assets (is_serialized=False).
+        daily_price_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        deposit_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        condition_grade:
+          $ref: '#/components/schemas/RentalAssetConditionGradeEnum'
+        current_status:
+          $ref: '#/components/schemas/RentalAssetCurrentStatusEnum'
+        category_attributes: {}
+      required:
+      - daily_price_paise
+      - title
+      - variant_id
+    RentalBookingDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        customer_id:
+          type: string
+          format: uuid
+          readOnly: true
+        customer_name:
+          type: string
+          readOnly: true
+        customer_phone:
+          type: string
+          readOnly: true
+        delivery_address:
+          type: object
+          additionalProperties: {}
+          nullable: true
+          readOnly: true
+        asset_id:
+          type: string
+          format: uuid
+          readOnly: true
+        asset_title:
+          type: string
+          readOnly: true
+        daily_price_paise:
+          type: integer
+          readOnly: true
+        deposit_paise:
+          type: integer
+          readOnly: true
+        vendor_name:
+          type: string
+          readOnly: true
+        assigned_serial:
+          type: string
+          description: Assigned unit serial at handover for fungible pooled rentals.
+          maxLength: 80
+        rental_start:
+          type: string
+          format: date
+        rental_end:
+          type: string
+          format: date
+        quantity:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        delivery_mode:
+          $ref: '#/components/schemas/DeliveryModeEnum'
+        status:
+          $ref: '#/components/schemas/RentalBookingDetailStatusEnum'
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/RentalBookingLine'
+          readOnly: true
+        deposit:
+          allOf:
+          - $ref: '#/components/schemas/RentalDeposit'
+          readOnly: true
+        handover:
+          allOf:
+          - $ref: '#/components/schemas/RentalHandover'
+          readOnly: true
+        return_inspection:
+          allOf:
+          - $ref: '#/components/schemas/RentalReturnInspection'
+          readOnly: true
+        extensions:
+          type: array
+          items:
+            $ref: '#/components/schemas/RentalExtension'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - asset_id
+      - asset_title
+      - created_at
+      - customer_id
+      - customer_name
+      - customer_phone
+      - daily_price_paise
+      - delivery_address
+      - deposit
+      - deposit_paise
+      - extensions
+      - handover
+      - id
+      - lines
+      - rental_end
+      - rental_start
+      - return_inspection
+      - updated_at
+      - vendor_name
+    RentalBookingDetailRequest:
+      type: object
+      properties:
+        assigned_serial:
+          type: string
+          description: Assigned unit serial at handover for fungible pooled rentals.
+          maxLength: 80
+        rental_start:
+          type: string
+          format: date
+        rental_end:
+          type: string
+          format: date
+        quantity:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        delivery_mode:
+          $ref: '#/components/schemas/DeliveryModeEnum'
+        status:
+          $ref: '#/components/schemas/RentalBookingDetailStatusEnum'
+      required:
+      - rental_end
+      - rental_start
+    RentalBookingDetailStatusEnum:
+      enum:
+      - DRAFT
+      - HELD
+      - PAYMENT_PENDING
+      - CONFIRMED
+      - HANDED_OVER
+      - ACTIVE
+      - EXTENDED
+      - RETURN_PENDING
+      - RETURNED
+      - INSPECTED
+      - SETTLED
+      - COMPLETED
+      - CANCELLED
+      - DISPUTED
+      - RECOVERY_REQUIRED
+      - FAILED
+      - EXPIRED
+      type: string
+      description: |-
+        * `DRAFT` - Draft
+        * `HELD` - Held
+        * `PAYMENT_PENDING` - Payment pending
+        * `CONFIRMED` - Confirmed
+        * `HANDED_OVER` - Handed over
+        * `ACTIVE` - Active
+        * `EXTENDED` - Extended
+        * `RETURN_PENDING` - Return pending
+        * `RETURNED` - Returned
+        * `INSPECTED` - Inspected
+        * `SETTLED` - Settled
+        * `COMPLETED` - Completed
+        * `CANCELLED` - Cancelled
+        * `DISPUTED` - Disputed
+        * `RECOVERY_REQUIRED` - Recovery required
+        * `FAILED` - Failed
+        * `EXPIRED` - Expired
+    RentalBookingLine:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        line_type:
+          $ref: '#/components/schemas/LineTypeEnum'
+        amount_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        currency:
+          type: string
+          maxLength: 3
+        description:
+          type: string
+          maxLength: 200
+      required:
+      - amount_paise
+      - id
+      - line_type
+    RentalBookingLineRequest:
+      type: object
+      properties:
+        line_type:
+          $ref: '#/components/schemas/LineTypeEnum'
+        amount_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        currency:
+          type: string
+          minLength: 1
+          maxLength: 3
+        description:
+          type: string
+          maxLength: 200
+      required:
+      - amount_paise
+      - line_type
+    RentalDeposit:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        amount_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        authorized_amount_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        captured_amount_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        consumed_amount_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        refunded_amount_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        status:
+          $ref: '#/components/schemas/RentalDepositStatusEnum'
+        capture_mode:
+          $ref: '#/components/schemas/CaptureModeEnum'
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - amount_paise
+      - id
+      - updated_at
+    RentalDepositRequest:
+      type: object
+      properties:
+        amount_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        authorized_amount_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        captured_amount_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        consumed_amount_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        refunded_amount_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        status:
+          $ref: '#/components/schemas/RentalDepositStatusEnum'
+        capture_mode:
+          $ref: '#/components/schemas/CaptureModeEnum'
+      required:
+      - amount_paise
+    RentalDepositStatusEnum:
+      enum:
+      - REQUIRED
+      - AUTHORIZED
+      - HELD
+      - PARTIALLY_CONSUMED
+      - FULLY_CONSUMED
+      - RELEASED
+      - DISPUTED
+      - RESOLVED
+      type: string
+      description: |-
+        * `REQUIRED` - Required
+        * `AUTHORIZED` - Authorized
+        * `HELD` - Held
+        * `PARTIALLY_CONSUMED` - Partially consumed
+        * `FULLY_CONSUMED` - Fully consumed
+        * `RELEASED` - Released
+        * `DISPUTED` - Disputed
+        * `RESOLVED` - Resolved
+    RentalExtension:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        previous_end:
+          type: string
+          format: date
+        new_end:
+          type: string
+          format: date
+        price_delta_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        deposit_delta_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        status:
+          $ref: '#/components/schemas/RentalExtensionStatusEnum'
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        approved_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - created_at
+      - id
+      - new_end
+      - previous_end
+      - price_delta_paise
+    RentalExtensionRequest:
+      type: object
+      properties:
+        previous_end:
+          type: string
+          format: date
+        new_end:
+          type: string
+          format: date
+        price_delta_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        deposit_delta_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        status:
+          $ref: '#/components/schemas/RentalExtensionStatusEnum'
+        approved_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - new_end
+      - previous_end
+      - price_delta_paise
+    RentalExtensionStatusEnum:
+      enum:
+      - PENDING
+      - APPROVED
+      - REJECTED
+      - CANCELLED
+      type: string
+      description: |-
+        * `PENDING` - Pending payment & approval
+        * `APPROVED` - Approved
+        * `REJECTED` - Rejected
+        * `CANCELLED` - Cancelled
+    RentalHandover:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        assigned_serial:
+          type: string
+          maxLength: 80
+        condition_notes:
+          type: string
+        photo_urls: {}
+        checklist: {}
+        handed_over_at:
+          type: string
+          format: date-time
+      required:
+      - id
+    RentalHandoverRequest:
+      type: object
+      properties:
+        assigned_serial:
+          type: string
+          maxLength: 80
+        condition_notes:
+          type: string
+        photo_urls: {}
+        checklist: {}
+        handed_over_at:
+          type: string
+          format: date-time
+    RentalHoldCreateRequest:
+      type: object
+      properties:
+        asset_id:
+          type: string
+          format: uuid
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        quantity:
+          type: integer
+          minimum: 1
+          default: 1
+        delivery_mode:
+          allOf:
+          - $ref: '#/components/schemas/DeliveryModeEnum'
+          default: PICKUP
+        delivery_address_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - asset_id
+      - end_date
+      - start_date
+    RentalListingGroup:
+      type: object
+      properties:
+        asset_id:
+          type: string
+          format: uuid
+        partner_id:
+          type: string
+          format: uuid
+        vendor_name:
+          type: string
+        variant_id:
+          type: string
+          format: uuid
+        service_name:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        daily_price_paise:
+          type: integer
+        deposit_paise:
+          type: integer
+        condition_grade:
+          type: string
+        image_url:
+          type: string
+        pickup_address:
+          type: object
+          additionalProperties: {}
+          nullable: true
+        quantity_available:
+          type: integer
+      required:
+      - asset_id
+      - condition_grade
+      - daily_price_paise
+      - deposit_paise
+      - description
+      - image_url
+      - partner_id
+      - pickup_address
+      - quantity_available
+      - service_name
+      - title
+      - variant_id
+      - vendor_name
+    RentalMaintenancePeriod:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        reason:
+          type: string
+          maxLength: 240
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - end_date
+      - id
+      - start_date
+    RentalMaintenancePeriodCreate:
+      type: object
+      properties:
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        reason:
+          type: string
+          default: ''
+          maxLength: 240
+      required:
+      - end_date
+      - start_date
+    RentalMaintenancePeriodCreateRequest:
+      type: object
+      properties:
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        reason:
+          type: string
+          default: ''
+          maxLength: 240
+      required:
+      - end_date
+      - start_date
+    RentalMaintenancePeriodRequest:
+      type: object
+      properties:
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        reason:
+          type: string
+          maxLength: 240
+      required:
+      - end_date
+      - start_date
+    RentalPaymentAttempts:
+      type: object
+      properties:
+        payment_attempts:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentAttempt'
+      required:
+      - payment_attempts
+    RentalReturnInspection:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        returned_at:
+          type: string
+          format: date-time
+        condition_notes:
+          type: string
+        photo_urls: {}
+        damage_found:
+          type: boolean
+        damage_estimated_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        damage_details: {}
+        late_days:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        late_fee_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        settlement_matrix_outcome: {}
+      required:
+      - id
+    RentalReturnInspectionRequest:
+      type: object
+      properties:
+        returned_at:
+          type: string
+          format: date-time
+        condition_notes:
+          type: string
+        photo_urls: {}
+        damage_found:
+          type: boolean
+        damage_estimated_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        damage_details: {}
+        late_days:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        late_fee_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        settlement_matrix_outcome: {}
+    RentalVariantOption:
+      type: object
+      properties:
+        variant_id:
+          type: string
+          format: uuid
+        variant_name:
+          type: string
+        service_id:
+          type: string
+          format: uuid
+        service_name:
+          type: string
+        subcategory_name:
+          type: string
+        category_name:
+          type: string
+      required:
+      - category_name
+      - service_id
+      - service_name
+      - subcategory_name
+      - variant_id
+      - variant_name
+    RequestExtensionInput:
+      type: object
+      properties:
+        new_end_date:
+          type: string
+          format: date
+      required:
+      - new_end_date
+    RequestExtensionInputRequest:
+      type: object
+      properties:
+        new_end_date:
+          type: string
+          format: date
+      required:
+      - new_end_date
     RequestTimeline:
       type: object
       description: '`M2-BE-711`: everything that happened to one request, in order.'
@@ -28284,6 +31934,10 @@ components:
         fulfilment_archetype:
           type: string
           readOnly: true
+        required_skill_code:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
         questions:
           type: array
           items:
@@ -28297,6 +31951,7 @@ components:
       - image_url
       - name
       - questions
+      - required_skill_code
     RescheduleBookingRequestRequest:
       type: object
       description: |-
@@ -29429,6 +33084,20 @@ components:
       - active_role
       - session_expires_at
       - user
+    SharingTypeEnum:
+      enum:
+      - PRIVATE
+      - DOUBLE
+      - TRIPLE
+      - FOUR_PLUS
+      - ENTIRE_PLACE
+      type: string
+      description: |-
+        * `PRIVATE` - Private Room / 1-Sharing
+        * `DOUBLE` - 2-Sharing
+        * `TRIPLE` - 3-Sharing
+        * `FOUR_PLUS` - 4+ Sharing / Dormitory
+        * `ENTIRE_PLACE` - Entire House / Apartment
     ShiftAttendance:
       type: object
       description: |-
@@ -30218,6 +33887,588 @@ components:
       description: |-
         * `ACTIVE` - Active
         * `RETIRED` - Retired
+    StayCancel:
+      type: object
+      properties:
+        reason:
+          type: string
+          default: Customer requested cancellation
+    StayCancelRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          default: Customer requested cancellation
+    StayCheckInRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        actual_check_in_time:
+          type: string
+          format: date-time
+        id_document_type:
+          $ref: '#/components/schemas/IdDocumentTypeEnum'
+        id_verified:
+          type: boolean
+        condition_photo_urls: {}
+        guest_notes:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+    StayCheckInRecordRequest:
+      type: object
+      properties:
+        actual_check_in_time:
+          type: string
+          format: date-time
+        id_document_type:
+          $ref: '#/components/schemas/IdDocumentTypeEnum'
+        id_verified:
+          type: boolean
+        condition_photo_urls: {}
+        guest_notes:
+          type: string
+    StayCheckOutRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        actual_check_out_time:
+          type: string
+          format: date-time
+        condition_grade:
+          $ref: '#/components/schemas/ConditionGrade895Enum'
+        damage_found:
+          type: boolean
+        damage_estimate_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        inspection_notes:
+          type: string
+        condition_photo_urls: {}
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+    StayCheckOutRecordRequest:
+      type: object
+      properties:
+        actual_check_out_time:
+          type: string
+          format: date-time
+        condition_grade:
+          $ref: '#/components/schemas/ConditionGrade895Enum'
+        damage_found:
+          type: boolean
+        damage_estimate_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        inspection_notes:
+          type: string
+        condition_photo_urls: {}
+    StayDeposit:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/StayDepositStatusEnum'
+        authorized_amount_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        consumed_amount_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        refunded_amount_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        dispute_reason:
+          type: string
+          maxLength: 240
+      required:
+      - id
+    StayDepositRequest:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/StayDepositStatusEnum'
+        authorized_amount_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        consumed_amount_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        refunded_amount_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        dispute_reason:
+          type: string
+          maxLength: 240
+    StayDepositStatusEnum:
+      enum:
+      - REQUIRED
+      - NOT_REQUIRED
+      - AUTHORIZED
+      - HELD
+      - PARTIALLY_CONSUMED
+      - FULLY_CONSUMED
+      - RELEASED
+      - DISPUTED
+      - RESOLVED
+      type: string
+      description: |-
+        * `REQUIRED` - Required
+        * `NOT_REQUIRED` - Not required
+        * `AUTHORIZED` - Authorized
+        * `HELD` - Held
+        * `PARTIALLY_CONSUMED` - Partially consumed
+        * `FULLY_CONSUMED` - Fully consumed
+        * `RELEASED` - Released
+        * `DISPUTED` - Disputed
+        * `RESOLVED` - Resolved
+    StayDispute:
+      type: object
+      properties:
+        dispute_reason:
+          type: string
+          minLength: 5
+      required:
+      - dispute_reason
+    StayDisputeRequest:
+      type: object
+      properties:
+        dispute_reason:
+          type: string
+          minLength: 5
+      required:
+      - dispute_reason
+    StayEarlyCheckout:
+      type: object
+      properties:
+        early_checkout_date:
+          type: string
+          format: date
+          nullable: true
+        reason:
+          type: string
+          default: Early departure
+    StayEarlyCheckoutRequest:
+      type: object
+      properties:
+        early_checkout_date:
+          type: string
+          format: date
+          nullable: true
+        reason:
+          type: string
+          minLength: 1
+          default: Early departure
+    StayExtensionRequest:
+      type: object
+      properties:
+        additional_nights:
+          type: integer
+          minimum: 0
+          default: 0
+        additional_months:
+          type: integer
+          minimum: 0
+          default: 0
+        additional_deposit_paise:
+          type: integer
+          minimum: 0
+          nullable: true
+    StayExtensionRequestRequest:
+      type: object
+      properties:
+        additional_nights:
+          type: integer
+          minimum: 0
+          default: 0
+        additional_months:
+          type: integer
+          minimum: 0
+          default: 0
+        additional_deposit_paise:
+          type: integer
+          minimum: 0
+          nullable: true
+    StayHoldCreateRequest:
+      type: object
+      properties:
+        unit_type_id:
+          type: string
+          format: uuid
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        duration_mode:
+          allOf:
+          - $ref: '#/components/schemas/DurationModeEnum'
+          default: MONTHLY
+        guest_count:
+          type: integer
+          maximum: 20
+          minimum: 1
+          default: 1
+        lease_duration_months:
+          type: integer
+          maximum: 36
+          minimum: 1
+          default: 11
+      required:
+      - end_date
+      - start_date
+      - unit_type_id
+    StayPaymentAttempts:
+      type: object
+      properties:
+        payment_attempts:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentAttempt'
+      required:
+      - payment_attempts
+    StayReservationDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/StayReservationDetailStatusEnum'
+        duration_mode:
+          $ref: '#/components/schemas/DurationModeEnum'
+        lease_duration_months:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          description: Lease duration in months (e.g. 11, 12, 24, 36) for monthly
+            rentals.
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        guest_count:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        total_nights:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        base_amount_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        maintenance_amount_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        deposit_amount_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        one_time_charges_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        tax_amount_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        total_amount_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        policy_snapshot: {}
+        property_id:
+          type: string
+          format: uuid
+          readOnly: true
+        unit_type_id:
+          type: string
+          format: uuid
+          readOnly: true
+        unit_id:
+          type: string
+          format: uuid
+          readOnly: true
+        customer_id:
+          type: string
+          format: uuid
+          readOnly: true
+        guest_name:
+          type: string
+          readOnly: true
+        guest_phone:
+          type: string
+          readOnly: true
+        guest_email:
+          type: string
+          readOnly: true
+        property_title:
+          type: string
+          readOnly: true
+        property_type:
+          type: string
+          readOnly: true
+        property_locality:
+          type: string
+          readOnly: true
+        unit_name:
+          type: string
+          readOnly: true
+        unit_code:
+          type: string
+          readOnly: true
+        image_url:
+          type: string
+          readOnly: true
+        host_name:
+          type: string
+          readOnly: true
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/StayReservationLine'
+          readOnly: true
+        deposit:
+          allOf:
+          - $ref: '#/components/schemas/StayDeposit'
+          readOnly: true
+        check_in:
+          allOf:
+          - $ref: '#/components/schemas/StayCheckInRecord'
+          readOnly: true
+        check_out:
+          allOf:
+          - $ref: '#/components/schemas/StayCheckOutRecord'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - check_in
+      - check_out
+      - created_at
+      - customer_id
+      - deposit
+      - end_date
+      - guest_email
+      - guest_name
+      - guest_phone
+      - host_name
+      - id
+      - image_url
+      - lines
+      - property_id
+      - property_locality
+      - property_title
+      - property_type
+      - start_date
+      - unit_code
+      - unit_id
+      - unit_name
+      - unit_type_id
+    StayReservationDetailRequest:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/StayReservationDetailStatusEnum'
+        duration_mode:
+          $ref: '#/components/schemas/DurationModeEnum'
+        lease_duration_months:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          description: Lease duration in months (e.g. 11, 12, 24, 36) for monthly
+            rentals.
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        guest_count:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        total_nights:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        base_amount_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        maintenance_amount_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        deposit_amount_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        one_time_charges_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        tax_amount_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        total_amount_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        policy_snapshot: {}
+      required:
+      - end_date
+      - start_date
+    StayReservationDetailStatusEnum:
+      enum:
+      - HELD
+      - PAYMENT_PENDING
+      - CONFIRMED
+      - CHECKED_IN
+      - IN_STAY
+      - CHECKED_OUT
+      - INSPECTED
+      - SETTLED
+      - COMPLETED
+      - CANCELLED
+      - NO_SHOW
+      - EARLY_CHECKOUT
+      - DISPUTED
+      - RECOVERY_REQUIRED
+      - FAILED
+      - EXPIRED
+      type: string
+      description: |-
+        * `HELD` - Held
+        * `PAYMENT_PENDING` - Payment pending
+        * `CONFIRMED` - Confirmed
+        * `CHECKED_IN` - Checked in
+        * `IN_STAY` - In stay
+        * `CHECKED_OUT` - Checked out
+        * `INSPECTED` - Inspected
+        * `SETTLED` - Settled
+        * `COMPLETED` - Completed
+        * `CANCELLED` - Cancelled
+        * `NO_SHOW` - No show
+        * `EARLY_CHECKOUT` - Early checkout
+        * `DISPUTED` - Disputed
+        * `RECOVERY_REQUIRED` - Recovery required
+        * `FAILED` - Failed
+        * `EXPIRED` - Expired
+    StayReservationLine:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        kind:
+          $ref: '#/components/schemas/StayReservationLineKindEnum'
+        description:
+          type: string
+          maxLength: 160
+        amount_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+      required:
+      - amount_paise
+      - description
+      - id
+    StayReservationLineKindEnum:
+      enum:
+      - ROOM_CHARGE
+      - MAINTENANCE_FEE
+      - SECURITY_DEPOSIT
+      - ONE_TIME_CHARGE
+      - TAX
+      - DISCOUNT
+      - DAMAGE_SETTLEMENT
+      type: string
+      description: |-
+        * `ROOM_CHARGE` - Room charge
+        * `MAINTENANCE_FEE` - Maintenance fee
+        * `SECURITY_DEPOSIT` - Refundable security deposit
+        * `ONE_TIME_CHARGE` - One-time agreement / verification fee
+        * `TAX` - Tax
+        * `DISCOUNT` - Discount
+        * `DAMAGE_SETTLEMENT` - Damage settlement recovery
+    StayReservationLineRequest:
+      type: object
+      properties:
+        kind:
+          $ref: '#/components/schemas/StayReservationLineKindEnum'
+        description:
+          type: string
+          minLength: 1
+          maxLength: 160
+        amount_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+      required:
+      - amount_paise
+      - description
     StepUpSession:
       type: object
       properties:
@@ -31720,12 +35971,16 @@ components:
       - A1_TASK_VISIT
       - A3_TIME_BLOCK
       - A5_CUSTOM_PROJECT
+      - A7_RENTAL
+      - A9_STAY
       type: string
       description: |-
         * `LEGACY` - Legacy
         * `A1_TASK_VISIT` - A1 task visit
         * `A3_TIME_BLOCK` - A3 time block
         * `A5_CUSTOM_PROJECT` - A5 custom project
+        * `A7_RENTAL` - A7 rental
+        * `A9_STAY` - A9 stay
   securitySchemes:
     cookieAuth:
       type: apiKey

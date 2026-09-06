@@ -179,6 +179,17 @@ M2_CAPTURE_PURPOSES = (
     PaymentAttempt.Purpose.M2_BOOKING_FEE,
 )
 
+NEW_CATEGORY_CAPTURE_PURPOSES = (
+    PaymentAttempt.Purpose.A7_RENTAL_BOOKING,
+    PaymentAttempt.Purpose.A7_DEPOSIT_HOLD,
+    PaymentAttempt.Purpose.A7_DAMAGE_SETTLEMENT,
+    PaymentAttempt.Purpose.A7_EXTENSION,
+    PaymentAttempt.Purpose.A9_STAY_RESERVATION,
+    PaymentAttempt.Purpose.A9_DEPOSIT_HOLD,
+    PaymentAttempt.Purpose.A9_DAMAGE_SETTLEMENT,
+    PaymentAttempt.Purpose.A9_EXTENSION,
+)
+
 
 def _apply_m2_capture(*, attempt: PaymentAttempt) -> None:
     """Hand a captured M2 charge to the domain that sold it.
@@ -212,6 +223,40 @@ def _apply_m2_capture(*, attempt: PaymentAttempt) -> None:
         from apps.requirements import booking_fees  # noqa: PLC0415 - same cycle
 
         booking_fees.complete_booking_fee(payment_attempt_id=attempt.id)
+
+
+def _apply_new_category_capture(*, attempt: PaymentAttempt) -> None:
+    """Complete the A7/A9 aggregate linked through its immutable allocation."""
+    if attempt.purpose in (
+        PaymentAttempt.Purpose.A7_RENTAL_BOOKING,
+        PaymentAttempt.Purpose.A7_DEPOSIT_HOLD,
+    ):
+        from apps.rentals.services import complete_rental_checkout  # noqa: PLC0415
+
+        complete_rental_checkout(payment_attempt_id=attempt.id)
+    elif attempt.purpose == PaymentAttempt.Purpose.A7_EXTENSION:
+        from apps.rentals.services import complete_rental_extension  # noqa: PLC0415
+
+        complete_rental_extension(payment_attempt_id=attempt.id)
+    elif attempt.purpose == PaymentAttempt.Purpose.A7_DAMAGE_SETTLEMENT:
+        from apps.rentals.services import complete_rental_damage_settlement  # noqa: PLC0415
+
+        complete_rental_damage_settlement(payment_attempt_id=attempt.id)
+    elif attempt.purpose in (
+        PaymentAttempt.Purpose.A9_STAY_RESERVATION,
+        PaymentAttempt.Purpose.A9_DEPOSIT_HOLD,
+    ):
+        from apps.stays.services import complete_stay_checkout  # noqa: PLC0415
+
+        complete_stay_checkout(payment_attempt_id=attempt.id)
+    elif attempt.purpose == PaymentAttempt.Purpose.A9_EXTENSION:
+        from apps.stays.services import complete_stay_extension  # noqa: PLC0415
+
+        complete_stay_extension(payment_attempt_id=attempt.id)
+    elif attempt.purpose == PaymentAttempt.Purpose.A9_DAMAGE_SETTLEMENT:
+        from apps.stays.services import complete_stay_damage_settlement  # noqa: PLC0415
+
+        complete_stay_damage_settlement(payment_attempt_id=attempt.id)
 
 
 def _validate_payment_amount(*, attempt: PaymentAttempt, payment: ProviderPayment) -> bool:
@@ -273,7 +318,14 @@ def apply_provider_payment(
             )
         if attempt.purpose == PaymentAttempt.Purpose.BOOKING_GROUP:
             return _materialize_captured_group(attempt=attempt)
-        _apply_m2_capture(attempt=attempt)
+        if attempt.purpose in M2_CAPTURE_PURPOSES:
+            _apply_m2_capture(attempt=attempt)
+        elif attempt.purpose in NEW_CATEGORY_CAPTURE_PURPOSES:
+            _apply_new_category_capture(attempt=attempt)
+        else:
+            raise ValueError(
+                f"Captured payment purpose {attempt.purpose} has no completion handler."
+            )
         return None
     if payment.status == "authorized" and attempt.status in (
         PaymentAttempt.Status.PROVIDER_PENDING,
@@ -295,4 +347,18 @@ def apply_provider_payment(
             "updated_at",
         )
     )
+    if payment.status == "failed" and attempt.purpose in (
+        PaymentAttempt.Purpose.A7_RENTAL_BOOKING,
+        PaymentAttempt.Purpose.A7_DEPOSIT_HOLD,
+    ):
+        from apps.rentals.services import handle_rental_checkout_failure  # noqa: PLC0415
+
+        handle_rental_checkout_failure(payment_attempt_id=attempt.id)
+    elif payment.status == "failed" and attempt.purpose in (
+        PaymentAttempt.Purpose.A9_STAY_RESERVATION,
+        PaymentAttempt.Purpose.A9_DEPOSIT_HOLD,
+    ):
+        from apps.stays.services import handle_stay_checkout_failure  # noqa: PLC0415
+
+        handle_stay_checkout_failure(payment_attempt_id=attempt.id)
     return None

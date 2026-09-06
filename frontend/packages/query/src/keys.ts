@@ -458,6 +458,22 @@ export const queryKeys = {
     dispatchExplanation: (unitId: string) =>
       [...queryKeys.operations.all, "dispatch-explanation", unitId] as const,
   },
+
+  /**
+   * A7_RENTAL — the Partner's own inventory, bookings and rental-scoped ledger.
+   *
+   * Not nested under `partnerMoney`: rental earnings live in the same
+   * `PartnerLedgerEntry` table (see `partnerMoney.ledger`), but this key is a
+   * *filtered view* of it (`?source=rental`) rather than a different resource,
+   * so it gets its own cache entry to avoid two screens fighting over one key
+   * with two different query params.
+   */
+  rentals: {
+    all: ["rentals"] as const,
+    assets: () => [...queryKeys.rentals.all, "assets"] as const,
+    bookings: () => [...queryKeys.rentals.all, "bookings"] as const,
+    ledger: () => [...queryKeys.rentals.all, "ledger"] as const,
+  },
 } as const;
 
 /** Every key this factory can produce. */

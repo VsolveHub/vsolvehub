@@ -22,6 +22,7 @@ import {
 } from "../model/draft";
 import { previousStep } from "../model/progress";
 import { isEditable } from "../model/readiness";
+import { isRentalPartner } from "../model/rental";
 import { nextStep } from "../model/steps";
 import { useApplyDockTarget } from "./apply-shell";
 import { isVersionConflict, usePartnerApplication, useUpdateApplication } from "../queries";
@@ -186,9 +187,13 @@ function Editor({
   const router = useRouter();
   const pathname = usePathname();
 
+  const isRental = isRentalPartner(
+    draft.skillCodes.length > 0 ? draft.skillCodes : (application?.skill_codes ?? []),
+  );
+
   // Resolved from the shared sequence rather than passed in per page, so the
   // navigation and this button cannot disagree about what comes next.
-  const following = continueOnSave ? nextStep(pathname) : null;
+  const following = continueOnSave ? nextStep(pathname, isRental) : null;
 
   const isReadOnly = application !== null && !isEditable(application);
   const dirty = isDirty(draft, application);

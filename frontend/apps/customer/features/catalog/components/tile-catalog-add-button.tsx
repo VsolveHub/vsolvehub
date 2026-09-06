@@ -13,6 +13,18 @@ import {
 import type { ServiceCard } from "../client-queries";
 import { serviceHref } from "../service-href";
 
+export interface RentalListingGroupBrief {
+  asset_id: string;
+  partner_id?: string;
+  vendor_name?: string;
+  variant_id?: string;
+  title?: string;
+  daily_price_paise?: number;
+  deposit_paise?: number;
+  condition_grade?: string;
+  image_url?: string;
+}
+
 export function TileCatalogAddButton({
   service,
   categorySlug,
@@ -20,6 +32,7 @@ export function TileCatalogAddButton({
   size = "card",
   variantId,
   onNeedChoice,
+  rentalListing,
 }: {
   service: ServiceCard;
   categorySlug: string;
@@ -29,6 +42,8 @@ export function TileCatalogAddButton({
   variantId?: string | null;
   /** Opens the right-docked panel instead of adding from the catalog card. */
   onNeedChoice?: () => void;
+  /** Pass rental asset metadata when available in rental services */
+  rentalListing?: RentalListingGroupBrief | null;
 }) {
   const router = useRouter();
   const cartQuery = useCart();
@@ -39,6 +54,12 @@ export function TileCatalogAddButton({
   /** Catalog-row Add always opens the panel; the panel footer still adds a specific variant. */
   const opensPanel = Boolean(onNeedChoice) && variantId == null;
 
+  const isRental =
+    service.request_archetypes.includes("A7_RENTAL") ||
+    categorySlug === "rental-services";
+
+  const isPanel = size === "panel";
+
   const resolvedVariantId = variantId ?? service.bookable_variant_id;
   const cart = cartQuery.data;
   const cartItem = cart?.items.find((item) => item.variant_id === resolvedVariantId);
@@ -46,8 +67,6 @@ export function TileCatalogAddButton({
   const isAdding = addItem.isPending;
   const isUpdating = updateItem.isPending;
   const isRemoving = removeItem.isPending;
-
-  const isPanel = size === "panel";
 
   const handleAdd = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
@@ -74,6 +93,7 @@ export function TileCatalogAddButton({
   const handleIncrement = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
+
     if (cart && cartItem && !isUpdating) {
       updateItem.mutate({
         expectedCartVersion: cart.version,
@@ -87,6 +107,7 @@ export function TileCatalogAddButton({
   const handleDecrement = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
+
     if (cart && cartItem && !isUpdating && !isRemoving) {
       if (cartItem.quantity > 1) {
         updateItem.mutate({
@@ -105,6 +126,7 @@ export function TileCatalogAddButton({
     }
   };
 
+  // Render stepper for regular cart item
   if (cartItem && !opensPanel) {
     return (
       <div
@@ -112,7 +134,7 @@ export function TileCatalogAddButton({
         aria-label="Quantity in cart"
         className={cn(
           "inline-flex shrink-0 items-center justify-between gap-3 border border-line bg-white shadow-2xs",
-          isPanel ? "h-11 rounded-xl px-3.5 min-w-[10rem]" : "h-9 rounded-lg px-2.5",
+          isPanel ? "h-11 rounded-xl px-3.5 min-w-[10rem]" : "h-9 rounded-lg px-2.5"
         )}
       >
         <Link
@@ -138,7 +160,7 @@ export function TileCatalogAddButton({
             aria-live="polite"
             className={cn(
               "min-w-[18px] text-center font-black text-navy-900 tabular-nums",
-              isPanel ? "text-sm" : "text-xs",
+              isPanel ? "text-sm" : "text-xs"
             )}
           >
             {cartItem.quantity}
@@ -164,7 +186,7 @@ export function TileCatalogAddButton({
       disabled={!opensPanel && Boolean(resolvedVariantId) && (isAdding || cartUnavailable)}
       className={cn(
         "inline-flex shrink-0 items-center justify-center bg-navy-900 font-bold text-white shadow-xs transition-colors hover:bg-navy-800 disabled:opacity-50 cursor-pointer",
-        isPanel ? "h-11 min-w-[8.5rem] rounded-xl px-5 text-sm" : "h-9 rounded-lg px-4 text-[13px]",
+        isPanel ? "h-11 min-w-[8.5rem] rounded-xl px-5 text-sm" : "h-9 rounded-lg px-4 text-[13px]"
       )}
     >
       {isAdding ? "Adding..." : label}

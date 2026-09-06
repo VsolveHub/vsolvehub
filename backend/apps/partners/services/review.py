@@ -193,6 +193,24 @@ def transition_partner_application(
         reason_code=f"application_{target_status.lower()}",
         reason=reason,
     )
+    if target_status == PartnerApplication.Status.APPROVED:
+        from apps.catalog.models import ServiceVariant
+        from apps.partners.models import PartnerCapability, PartnerService
+
+        rental_services = PartnerService.objects.filter(
+            partner=application.partner,
+            is_active=True,
+            variant__booking_archetype=ServiceVariant.BookingArchetype.A7_RENTAL,
+        ).select_related("variant")
+        for ps in rental_services:
+            PartnerCapability.objects.update_or_create(
+                partner=application.partner,
+                variant=ps.variant,
+                defaults={
+                    "archetype": ServiceVariant.BookingArchetype.A7_RENTAL,
+                    "status": PartnerCapability.Status.APPROVED,
+                },
+            )
     if target_status in {
         PartnerApplication.Status.SUSPENDED,
         PartnerApplication.Status.OFFBOARDED,

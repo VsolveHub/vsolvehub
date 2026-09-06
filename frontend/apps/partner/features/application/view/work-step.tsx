@@ -125,6 +125,10 @@ export function WorkStep({ mainCategories, services }: WorkStepProps) {
                           <button
                             type="button"
                             onClick={() => {
+                              const allCategorySkills = categoryServices
+                                .map((s) => s.requiredSkillCode)
+                                .filter((code): code is string => Boolean(code && code.length > 0));
+
                               if (allServicesSelected) {
                                 update({
                                   serviceVariantIds: draft.serviceVariantIds.filter(
@@ -135,6 +139,9 @@ export function WorkStep({ mainCategories, services }: WorkStepProps) {
                                 update({
                                   serviceVariantIds: Array.from(
                                     new Set([...draft.serviceVariantIds, ...allCategoryIds]),
+                                  ),
+                                  skillCodes: Array.from(
+                                    new Set([...draft.skillCodes, ...allCategorySkills]),
                                   ),
                                 });
                               }
@@ -157,14 +164,25 @@ export function WorkStep({ mainCategories, services }: WorkStepProps) {
                               <SelectableRow
                                 checked={draft.serviceVariantIds.includes(service.variantId)}
                                 disabled={isReadOnly}
-                                onChange={() =>
+                                onChange={() => {
+                                  const isSelected = draft.serviceVariantIds.includes(service.variantId);
+                                  const nextVariantIds = toggle(
+                                    draft.serviceVariantIds,
+                                    service.variantId,
+                                  );
+                                  let nextSkillCodes = draft.skillCodes;
+                                  if (
+                                    !isSelected &&
+                                    service.requiredSkillCode &&
+                                    !draft.skillCodes.includes(service.requiredSkillCode)
+                                  ) {
+                                    nextSkillCodes = [...draft.skillCodes, service.requiredSkillCode];
+                                  }
                                   update({
-                                    serviceVariantIds: toggle(
-                                      draft.serviceVariantIds,
-                                      service.variantId,
-                                    ),
-                                  })
-                                }
+                                    serviceVariantIds: nextVariantIds,
+                                    skillCodes: nextSkillCodes,
+                                  });
+                                }}
                                 label={service.variantName}
                                 caption={service.serviceName}
                               />

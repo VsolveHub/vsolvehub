@@ -128,3 +128,9 @@ disable_error_code = ["untyped-decorator"]
 # `@signal.connect` handlers, so without this every function in it is reported untyped.
 module = "common.observability.tasks"
 disable_error_code = ["untyped-decorator", "import-untyped"]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+reportIncompatibleVariableOverride = "none"
+

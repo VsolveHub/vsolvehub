@@ -1,0 +1,215 @@
+"""URL routes for Stays & Accommodations (A9_STAY)."""
+
+from django.urls import path
+
+from apps.stays.views import (
+    OpsStayReassignUnitView,
+    OpsStayReservationsView,
+    OpsStayResolveDisputeView,
+    PartnerAddUnitView,
+    PartnerBlockUnitView,
+    PartnerCheckInView,
+    PartnerCheckOutView,
+    PartnerPricingOverrideDetailView,
+    PartnerPricingOverridesView,
+    PartnerPropertiesView,
+    PartnerPropertyDetailView,
+    PartnerPropertyPolicyView,
+    PartnerPropertyUnitsView,
+    PartnerPropertyUnitTypesView,
+    PartnerPropertyVisitListView,
+    PartnerReassignUnitView,
+    PartnerReservationDetailView,
+    PartnerReservationsView,
+    PartnerStayMoneyView,
+    PartnerUnitPricingRuleDetailView,
+    PartnerUnitTypeDetailView,
+    PartnerUnitTypePricingRulesView,
+    PropertyVisitCreateView,
+    StayBrowseView,
+    StayCancelView,
+    StayConfirmView,
+    StayCustomerReservationsView,
+    StayDisputeView,
+    StayEarlyCheckoutView,
+    StayExtensionConfirmView,
+    StayExtensionRequestView,
+    StayFilterDefinitionsView,
+    StayHoldCreateView,
+    StayHoldReleaseView,
+    StayPaymentStartView,
+    StayPropertyDetailView,
+    StayReservationDetailView,
+    StayReservationReceiptView,
+)
+
+urlpatterns = [
+    # Customer browse, checkout & reservation management
+    path("browse/", StayBrowseView.as_view(), name="stays-browse"),
+    path(
+        "filter-definitions/", StayFilterDefinitionsView.as_view(), name="stays-filter-definitions"
+    ),
+    path(
+        "properties/<uuid:property_id>/",
+        StayPropertyDetailView.as_view(),
+        name="stays-property-detail",
+    ),
+    path(
+        "properties/<uuid:property_id>/visits/",
+        PropertyVisitCreateView.as_view(),
+        name="stays-property-visit-create",
+    ),
+    path("holds/", StayHoldCreateView.as_view(), name="stays-hold-create"),
+    path(
+        "holds/<uuid:reservation_id>/release/",
+        StayHoldReleaseView.as_view(),
+        name="stays-hold-release",
+    ),
+    path(
+        "reservations/<uuid:reservation_id>/",
+        StayReservationDetailView.as_view(),
+        name="stays-reservation-detail",
+    ),
+    path(
+        "reservations/<uuid:reservation_id>/receipt/",
+        StayReservationReceiptView.as_view(),
+        name="stays-reservation-receipt",
+    ),
+    path(
+        "reservations/<uuid:reservation_id>/confirm/",
+        StayConfirmView.as_view(),
+        name="stays-reservation-confirm",
+    ),
+    path(
+        "reservations/<uuid:reservation_id>/payment/",
+        StayPaymentStartView.as_view(),
+        name="stays-reservation-payment",
+    ),
+    path(
+        "reservations/<uuid:reservation_id>/cancel/",
+        StayCancelView.as_view(),
+        name="stays-reservation-cancel",
+    ),
+    path(
+        "reservations/<uuid:reservation_id>/extensions/",
+        StayExtensionRequestView.as_view(),
+        name="stays-reservation-extension-request",
+    ),
+    path(
+        "extensions/<uuid:extension_id>/confirm/",
+        StayExtensionConfirmView.as_view(),
+        name="stays-reservation-extension-confirm",
+    ),
+    path(
+        "reservations/<uuid:reservation_id>/early-checkout/",
+        StayEarlyCheckoutView.as_view(),
+        name="stays-reservation-early-checkout",
+    ),
+    path(
+        "reservations/<uuid:reservation_id>/dispute/",
+        StayDisputeView.as_view(),
+        name="stays-reservation-dispute",
+    ),
+    path("my-reservations/", StayCustomerReservationsView.as_view(), name="stays-my-reservations"),
+    # Partner host workspace endpoints
+    path("partner/visits/", PartnerPropertyVisitListView.as_view(), name="stays-partner-visits"),
+    path("partner/properties/", PartnerPropertiesView.as_view(), name="stays-partner-properties"),
+    path(
+        "partner/properties/<uuid:property_id>/",
+        PartnerPropertyDetailView.as_view(),
+        name="stays-partner-property-detail",
+    ),
+    path(
+        "partner/properties/<uuid:property_id>/policy/",
+        PartnerPropertyPolicyView.as_view(),
+        name="stays-partner-property-policy",
+    ),
+    path(
+        "partner/properties/<uuid:property_id>/unit-types/",
+        PartnerPropertyUnitTypesView.as_view(),
+        name="stays-partner-unit-types",
+    ),
+    path(
+        "partner/properties/<uuid:property_id>/units/",
+        PartnerPropertyUnitsView.as_view(),
+        name="stays-partner-units",
+    ),
+    path(
+        "partner/properties/<uuid:property_id>/add-unit/",
+        PartnerAddUnitView.as_view(),
+        name="stays-partner-add-unit",
+    ),
+    path(
+        "partner/unit-types/<uuid:unit_type_id>/",
+        PartnerUnitTypeDetailView.as_view(),
+        name="stays-partner-unit-type-detail",
+    ),
+    path(
+        "partner/unit-types/<uuid:unit_type_id>/pricing-rules/",
+        PartnerUnitTypePricingRulesView.as_view(),
+        name="stays-partner-unit-type-pricing-rules",
+    ),
+    path(
+        "partner/pricing-rules/<uuid:rule_id>/",
+        PartnerUnitPricingRuleDetailView.as_view(),
+        name="stays-partner-pricing-rule-detail",
+    ),
+    path(
+        "partner/pricing-rules/<uuid:rule_id>/overrides/",
+        PartnerPricingOverridesView.as_view(),
+        name="stays-partner-pricing-overrides",
+    ),
+    path(
+        "partner/pricing-overrides/<uuid:override_id>/",
+        PartnerPricingOverrideDetailView.as_view(),
+        name="stays-partner-pricing-override-detail",
+    ),
+    path(
+        "partner/reservations/",
+        PartnerReservationsView.as_view(),
+        name="stays-partner-reservations",
+    ),
+    path("partner/money/", PartnerStayMoneyView.as_view(), name="stays-partner-money"),
+    path(
+        "partner/reservations/<uuid:reservation_id>/",
+        PartnerReservationDetailView.as_view(),
+        name="stays-partner-reservation-detail",
+    ),
+    path(
+        "partner/reservations/<uuid:reservation_id>/check-in/",
+        PartnerCheckInView.as_view(),
+        name="stays-partner-check-in",
+    ),
+    path(
+        "partner/reservations/<uuid:reservation_id>/check-out/",
+        PartnerCheckOutView.as_view(),
+        name="stays-partner-check-out",
+    ),
+    path(
+        "partner/reservations/<uuid:reservation_id>/reassign-unit/",
+        PartnerReassignUnitView.as_view(),
+        name="stays-partner-reassign-unit",
+    ),
+    path(
+        "partner/units/<uuid:unit_id>/block/",
+        PartnerBlockUnitView.as_view(),
+        name="stays-partner-block-unit",
+    ),
+    # Operations staff workspace endpoints
+    path("ops/reservations/", OpsStayReservationsView.as_view(), name="stays-ops-reservations"),
+    path(
+        "ops/properties/<uuid:property_id>/units/",
+        PartnerPropertyUnitsView.as_view(),
+        name="stays-ops-property-units",
+    ),
+    path(
+        "ops/reservations/<uuid:reservation_id>/reassign/",
+        OpsStayReassignUnitView.as_view(),
+        name="stays-ops-reassign",
+    ),
+    path(
+        "ops/reservations/<uuid:reservation_id>/resolve-dispute/",
+        OpsStayResolveDisputeView.as_view(),
+        name="stays-ops-resolve-dispute",
+    ),
+]

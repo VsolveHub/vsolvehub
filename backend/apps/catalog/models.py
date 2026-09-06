@@ -1,7 +1,7 @@
 """Marketable services and their configurable booking questions."""
 
 import uuid
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 from django.conf import settings
 from django.db import models
@@ -73,6 +73,9 @@ class Service(models.Model):
         RETIRED = "RETIRED", "Retired"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    if TYPE_CHECKING:
+        media: models.Manager["ServiceMedia"]
+        variants: models.Manager["ServiceVariant"]
     subcategory = models.ForeignKey(
         Subcategory,
         on_delete=models.PROTECT,
@@ -111,6 +114,8 @@ class ServiceVariant(models.Model):
         A1_TASK_VISIT = "A1_TASK_VISIT", "A1 task visit"
         A3_TIME_BLOCK = "A3_TIME_BLOCK", "A3 time block"
         A5_CUSTOM_PROJECT = "A5_CUSTOM_PROJECT", "A5 custom project"
+        A7_RENTAL = "A7_RENTAL", "A7 rental"
+        A9_STAY = "A9_STAY", "A9 stay"
 
     class PricingStrategy(models.TextChoices):
         FIXED = "FIXED", "Fixed"
@@ -218,6 +223,100 @@ class A1VariantConfiguration(models.Model):
                 fields=("variant",),
                 condition=models.Q(status="ACTIVE"),
                 name="catalog_unique_active_a1_variant_configuration",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.variant_id}:v{self.version}:{self.status}"
+
+
+class A7VariantConfiguration(models.Model):
+    """Versioned scope and policy configuration for an A7_RENTAL variant."""
+
+    class Status(models.TextChoices):
+        DRAFT = "DRAFT", "Draft"
+        ACTIVE = "ACTIVE", "Active"
+        RETIRED = "RETIRED", "Retired"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    variant = models.ForeignKey(
+        ServiceVariant,
+        on_delete=models.PROTECT,
+        related_name="a7_configurations",
+    )
+    version = models.PositiveIntegerField(default=1)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.ACTIVE)
+    deposit_required = models.BooleanField(default=True)
+    default_deposit_paise = models.PositiveBigIntegerField(default=0)
+    pickup_allowed = models.BooleanField(default=True)
+    delivery_allowed = models.BooleanField(default=True)
+    min_rental_days = models.PositiveSmallIntegerField(default=1)
+    max_rental_days = models.PositiveSmallIntegerField(default=30)
+    late_fee_per_day_paise = models.PositiveBigIntegerField(default=0)
+    minor_damage_cap_paise = models.PositiveBigIntegerField(default=500000)  # INR 5,000
+    damage_policy_schema = models.JSONField(default=dict, blank=True)
+    asset_profile_schema = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="JSON Schema for category-specific rental asset attributes.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("variant", "-version")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("variant", "version"),
+                name="catalog_unique_a7_variant_configuration_version",
+            ),
+            models.UniqueConstraint(
+                fields=("variant",),
+                condition=models.Q(status="ACTIVE"),
+                name="catalog_unique_active_a7_variant_configuration",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.variant_id}:v{self.version}:{self.status}"
+
+
+class A9VariantConfiguration(models.Model):
+    """Versioned scope and policy configuration for an A9_STAY variant."""
+
+    class Status(models.TextChoices):
+        DRAFT = "DRAFT", "Draft"
+        ACTIVE = "ACTIVE", "Active"
+        RETIRED = "RETIRED", "Retired"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    variant = models.ForeignKey(
+        ServiceVariant,
+        on_delete=models.PROTECT,
+        related_name="a9_configurations",
+    )
+    version = models.PositiveIntegerField(default=1)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.ACTIVE)
+    deposit_required = models.BooleanField(default=True)
+    default_deposit_paise = models.PositiveBigIntegerField(default=0)
+    min_stay_nights = models.PositiveSmallIntegerField(default=1)
+    max_stay_nights = models.PositiveSmallIntegerField(default=365)
+    id_verification_required = models.BooleanField(default=True)
+    house_rules_schema = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("variant", "-version")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("variant", "version"),
+                name="catalog_unique_a9_variant_configuration_version",
+            ),
+            models.UniqueConstraint(
+                fields=("variant",),
+                condition=models.Q(status="ACTIVE"),
+                name="catalog_unique_active_a9_variant_configuration",
             ),
         ]
 

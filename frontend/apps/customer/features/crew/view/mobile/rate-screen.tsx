@@ -34,6 +34,8 @@ export interface RateScreenProps {
   unavailable?: ReactNode;
   /** What is being priced — the event card — between the rate and the money. */
   summary?: ReactNode;
+  city?: string | null;
+  crewLabel?: string;
 }
 
 export function RateScreen({

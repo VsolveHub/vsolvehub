@@ -49,6 +49,8 @@ CASE_SUBJECT_FIELDS: tuple[str, ...] = (
     "partner",
     "requirement",
     "engagement",
+    "rental_booking",
+    "stay_reservation",
 )
 
 
@@ -90,6 +92,12 @@ class OperationsCase(models.Model):
         #: widening the M1 kind would change what an A1 payment-ambiguity case does to a
         #: technician's earnings, which is not this wave's decision to take.
         CHARGEBACK = "CHARGEBACK", "Chargeback on a platform fee"
+        #: A7 Rental operational recovery and deposit dispute kinds:
+        RENTAL_ASSET_RECOVERY = "RENTAL_ASSET_RECOVERY", "Rental asset recovery"
+        RENTAL_DEPOSIT_DISPUTE = "RENTAL_DEPOSIT_DISPUTE", "Rental deposit dispute"
+        #: A9 Stay operational recovery and damage dispute kinds:
+        STAY_UNIT_RECOVERY = "STAY_UNIT_RECOVERY", "Stay unit recovery"
+        STAY_DAMAGE_DISPUTE = "STAY_DAMAGE_DISPUTE", "Stay damage dispute"
 
     class Severity(models.TextChoices):
         LOW = "LOW", "Low"
@@ -150,6 +158,20 @@ class OperationsCase(models.Model):
     )
     engagement = models.ForeignKey(
         "requirements.Engagement",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="operations_cases",
+    )
+    rental_booking = models.ForeignKey(
+        "rentals.RentalBooking",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="operations_cases",
+    )
+    stay_reservation = models.ForeignKey(
+        "stays.StayReservation",
         null=True,
         blank=True,
         on_delete=models.PROTECT,
@@ -277,6 +299,8 @@ DEFAULT_TEAM: dict[str, str] = {
     OperationsCase.Kind.STAGE: OperationsCase.Team.QUALITY_SUPPORT,
     OperationsCase.Kind.OFF_PLATFORM: OperationsCase.Team.BOOKING_SUPPORT,
     OperationsCase.Kind.CHARGEBACK: OperationsCase.Team.FINANCE,
+    OperationsCase.Kind.RENTAL_ASSET_RECOVERY: OperationsCase.Team.DISPATCH,
+    OperationsCase.Kind.RENTAL_DEPOSIT_DISPUTE: OperationsCase.Team.FINANCE,
 }
 
 #: Response SLA per severity. A due time is what makes "cases may not close merely because a
@@ -321,6 +345,12 @@ ALLOWED_RESOLUTIONS: dict[str, frozenset[str]] = {
     # Three real endings for a chargeback and no fourth: the bank gave it back, we defended it
     # successfully, or we wrote it off. "Responded to the bank" is not an ending.
     OperationsCase.Kind.CHARGEBACK: frozenset({"RECOVERED", "REPRESENTED", "WRITTEN_OFF"}),
+    OperationsCase.Kind.RENTAL_ASSET_RECOVERY: frozenset(
+        {"REASSIGNED", "CANCELLED_REFUNDED", "SETTLED"}
+    ),
+    OperationsCase.Kind.RENTAL_DEPOSIT_DISPUTE: frozenset(
+        {"FORFEITED", "REFUNDED", "SPLIT_SETTLED"}
+    ),
 }
 
 
@@ -378,6 +408,49 @@ class OperationsCaseEvent(models.Model):
         if not self._state.adding:
             raise ValueError("Operations case events are immutable.")
         super().save(*args, **kwargs)
+
+
+class OperationsSettlementApproval(models.Model):
+    """Two-person approval for a high-value A7/A9 manual settlement."""
+
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending second approver"
+        APPROVED = "APPROVED", "Approved"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    case = models.OneToOneField(
+        OperationsCase, on_delete=models.PROTECT, related_name="settlement_approval"
+    )
+    proposal = models.JSONField()
+    proposed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="settlements_proposed"
+    )
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="settlements_approved",
+    )
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
+    proposed_at = models.DateTimeField(auto_now_add=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(status="PENDING", approved_by__isnull=True, approved_at__isnull=True)
+                    | models.Q(
+                        status="APPROVED", approved_by__isnull=False, approved_at__isnull=False
+                    )
+                ),
+                name="cases_settlement_approval_state_complete",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.case_id}:{self.status}"
 
 
 class OperationsCaseEvidence(models.Model):

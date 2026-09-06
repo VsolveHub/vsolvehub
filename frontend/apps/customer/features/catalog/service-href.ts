@@ -40,7 +40,14 @@ import type { ServiceCard } from "./queries";
  */
 const A3_TIME_BLOCK = "A3_TIME_BLOCK";
 
-export function serviceHref(service: ServiceCard, categorySlug: string): string {
+export function serviceHref(service: ServiceCard, categorySlug: string, tileSlug?: string): string {
+  // Direct shortcut for Stays (A9_STAY / rooms-pg-hostel):
+  // Route into the unified split-pane catalog page under the appropriate tile
+  if (service.request_archetypes.includes("A9_STAY") || categorySlug === "rooms-pg-hostel") {
+    const tile = tileSlug || service.subcategory_slug || "rooms";
+    return `/catalog/rooms-pg-hostel?tile=${encodeURIComponent(tile)}`;
+  }
+
   // A hybrid — a fixed price AND a quote path — goes to the service page, which
   // is the only screen that can offer both. Routing it straight into the brief
   // (the pre-2026-08-26 behaviour) hid the fixed price entirely: the customer

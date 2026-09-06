@@ -338,7 +338,9 @@ export function CheckoutWorkspace() {
         // routing to `/bookings/undefined` keeps that impossible case honest.
         const groupId = result.booking_group?.id;
         router.push(
-          groupId === undefined ? "/bookings" : `/bookings/${groupId}`,
+          groupId === undefined
+            ? "/bookings"
+            : `/bookings?category=services&booked=${groupId}`,
         );
       },
       onError: (error) => {

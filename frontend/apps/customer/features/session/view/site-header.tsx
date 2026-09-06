@@ -27,7 +27,8 @@ export function SiteHeader() {
   const router = useRouter();
 
   const cartQuery = useCart();
-  const cartCount = cartQuery.data?.items.reduce((sum, item) => sum + item.quantity, 0) ?? 0;
+  const cartCount =
+    cartQuery.data?.items.reduce((sum, item) => sum + item.quantity, 0) ?? 0;
 
   // Global login dialog state
   const [isLoginOpen, setIsLoginOpen] = useState(false);
@@ -267,8 +268,8 @@ export const NAV_TARGETS: readonly NavTarget[] = [
  * nothing there has stopped answering "where am I".
  */
 const OWNED: Record<string, readonly string[]> = {
-  "/catalog": ["/catalog", "/book", "/cart", "/checkout"],
-  "/activity": ["/activity", "/bookings", "/requests", "/projects", "/engagements"],
+  "/catalog": ["/catalog", "/book", "/cart", "/checkout", "/stays", "/rentals"],
+  "/activity": ["/activity", "/bookings", "/requests", "/projects", "/engagements", "/stays/bookings", "/rentals/bookings"],
 };
 
 /**

@@ -148,7 +148,22 @@ export default async function ServiceDetailPage({ params }: PageProps) {
                   <FitOutServicePicker serviceSlug={service.slug} />
                 ) : (
                   <div className="flex flex-col gap-3">
-                    {service.request_archetypes.includes(A3_TIME_BLOCK) ? (
+                    {service.request_archetypes.includes("A9_STAY") ? (
+                      <>
+                        <Link
+                          href={`/catalog/rooms-pg-hostel?tile=${service.subcategory_slug || "rooms"}`}
+                          className="flex h-[3.25rem] w-full items-center justify-center rounded-md bg-[#f87000] px-6 text-[0.95rem] font-bold text-white shadow-sm transition-all hover:bg-[#d65f1a] active:scale-[0.98]"
+                        >
+                          Browse Available Stays & Rooms <span aria-hidden="true" className="ml-2">&rarr;</span>
+                        </Link>
+                        <Link
+                          href={`/catalog/${categorySlug}?tile=${service.subcategory_slug}`}
+                          className="flex h-[3.25rem] w-full items-center justify-center rounded-md border-2 border-line bg-transparent px-6 text-[0.95rem] font-bold text-navy-900 transition-all hover:border-navy-900 active:scale-[0.98]"
+                        >
+                          View all in this subcategory
+                        </Link>
+                      </>
+                    ) : service.request_archetypes.includes(A3_TIME_BLOCK) ? (
                       <>
                         <Link href={bookCrewHref(service.slug)} className="flex h-[3.25rem] w-full items-center justify-center rounded-md bg-action px-6 text-[0.95rem] font-bold text-white shadow-sm transition-all hover:bg-[#d65f1a] active:scale-[0.98]">
                           Book a crew <span aria-hidden="true" className="ml-2">&rarr;</span>
@@ -212,6 +227,62 @@ export default async function ServiceDetailPage({ params }: PageProps) {
                   What you can book
                 </h2>
                 <VariantList variants={service.variants} serviceSlug={service.slug} />
+              </section>
+            ) : service.requirement_variants && service.requirement_variants.length > 0 ? (
+              <section className="rounded-[1rem] bg-white p-7 sm:p-8 shadow-sm">
+                <h2 className="inline-flex items-center gap-2.5 text-[1.05rem] font-medium text-navy-900 mb-2">
+                  <svg className="size-[1.125rem] text-[#f87000]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                  </svg>
+                  What you can book
+                </h2>
+                <ul className="mt-4 space-y-4">
+                  {service.requirement_variants.map((variant) => (
+                    <li key={variant.id} className="p-5 rounded-[0.75rem] bg-[#F4F2EE] border border-line/40">
+                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[1.05rem] font-bold text-navy-900">{variant.name}</p>
+                          {variant.description ? (
+                            <p className="mt-1 text-[0.9rem] leading-relaxed text-text-secondary">{variant.description}</p>
+                          ) : null}
+                        </div>
+                        {service.request_archetypes.includes("A9_STAY") && (
+                          <Link
+                            href={`/catalog/rooms-pg-hostel?tile=${service.subcategory_slug || "rooms"}`}
+                            className="inline-flex items-center justify-center rounded-md bg-[#f87000] px-4 py-2 text-xs font-bold text-white hover:bg-[#d65f1a] transition-colors shrink-0"
+                          >
+                            Browse Stays
+                          </Link>
+                        )}
+                      </div>
+                      {variant.questions && variant.questions.length > 0 && (
+                        <div className="mt-3.5 pt-3 border-t border-line/40">
+                          <span className="text-[11px] font-bold text-text-muted uppercase tracking-wider block mb-2">
+                            Configurable Options & Specifications:
+                          </span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {variant.questions.map((q) => (
+                              <div key={q.id} className="rounded-lg bg-white p-2.5 border border-line/50 text-xs">
+                                <span className="font-bold text-navy-900 block">{q.prompt}</span>
+                                {q.options && q.options.length > 0 ? (
+                                  <div className="mt-1 flex flex-wrap gap-1">
+                                    {q.options.map((opt) => (
+                                      <span key={opt.id} className="rounded bg-warm-100 text-gray-700 px-1.5 py-0.5 text-[10px] font-medium">
+                                        {opt.label}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className="text-[11px] text-gray-500">Available</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
               </section>
             ) : service.description ? (
               <section className="rounded-[1rem] bg-white p-7 sm:p-8 shadow-sm h-full">

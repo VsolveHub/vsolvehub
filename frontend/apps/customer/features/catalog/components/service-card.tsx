@@ -137,6 +137,17 @@ export function ServiceCard({
       );
     }
 
+    const isStay = service.request_archetypes.includes("A9_STAY") || categorySlug === "rooms-pg-hostel";
+    if (isStay) {
+      return (
+        <span
+          className={`inline-flex ${buttonSizeClass} items-center justify-center rounded-full bg-navy-900 px-5 ${textClass} font-bold text-white shadow-sm transition-transform duration-200 hover:scale-105 hover:bg-navy-800 cursor-pointer relative z-20`}
+        >
+          View details
+        </span>
+      );
+    }
+
     if (service.bookable_variant_id) {
       return (
         <button

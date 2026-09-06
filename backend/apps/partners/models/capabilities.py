@@ -10,6 +10,7 @@ The boundary: this module answers "may they?". The roster they field once approv
 """
 
 import uuid
+from typing import TYPE_CHECKING
 
 from django.conf import settings
 from django.db import models
@@ -29,10 +30,14 @@ from apps.locations.models import ServiceArea
 
 
 def commercial_mode_for_archetype(archetype: str) -> str:
-    """Derive the commercial mode. A3 is always lead-only; A5 always managed."""
+    """Derive the commercial mode. A3 is always lead-only; A5 and A7 always managed."""
     if archetype == ServiceVariant.BookingArchetype.A3_TIME_BLOCK:
         return PartnerCapability.CommercialMode.LEAD_ONLY
-    if archetype == ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT:
+    if archetype in (
+        ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT,
+        ServiceVariant.BookingArchetype.A7_RENTAL,
+        ServiceVariant.BookingArchetype.A9_STAY,
+    ):
         return PartnerCapability.CommercialMode.MANAGED_PAYMENT_REQUIRED
     return PartnerCapability.CommercialMode.NOT_APPLICABLE
 
@@ -46,6 +51,7 @@ class PartnerBusinessProfile(models.Model):
         PROJECT_VENDOR = "PROJECT_VENDOR", "Project vendor"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    partner_id: uuid.UUID
     partner = models.OneToOneField(
         "partners.PartnerProfile",
         on_delete=models.PROTECT,
@@ -137,6 +143,10 @@ class PartnerCapability(models.Model):
     REVIEW_STATUSES_NEEDING_NOTES = (Status.CHANGES_REQUIRED, Status.REJECTED)
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    partner_id: uuid.UUID
+    variant_id: uuid.UUID
+    if TYPE_CHECKING:
+        transitions: models.Manager["PartnerCapabilityTransition"]
     partner = models.ForeignKey(
         "partners.PartnerProfile",
         on_delete=models.PROTECT,
@@ -274,6 +284,7 @@ class PartnerInsuranceDeclaration(models.Model):
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    partner_id: uuid.UUID
     partner = models.ForeignKey(
         "partners.PartnerProfile",
         on_delete=models.PROTECT,

@@ -101,7 +101,6 @@ export function LeadOnlyHub({ view, onRefresh }: LeadOnlyHubProps) {
           <div className="min-w-0">
             <p className="text-sm text-text">
               {terms.leadDayReceiptLabel} a day to the crew
-              {view.accessReceipt !== null ? ` · ${view.accessReceipt.amountLabel} fee paid ✓` : ""}
             </p>
           </div>
           <RateTermsLink terms={terms} />

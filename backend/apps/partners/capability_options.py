@@ -28,6 +28,8 @@ from apps.partners.models import (
 M2_ARCHETYPES: Final = (
     ServiceVariant.BookingArchetype.A3_TIME_BLOCK,
     ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT,
+    ServiceVariant.BookingArchetype.A7_RENTAL,
+    ServiceVariant.BookingArchetype.A9_STAY,
 )
 
 #: The three business types, in the words a Partner reads, with the consequence stated. The
@@ -61,6 +63,12 @@ LIFECYCLE_EXPLANATIONS: Final[dict[str, str]] = {
     ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT: (
         "You quote for a finished result. Vsolve funds each stage and releases it when the "
         "customer approves that stage."
+    ),
+    ServiceVariant.BookingArchetype.A7_RENTAL: (
+        "You list equipment and tools for rent. Vsolve collects rental fees and deposits."
+    ),
+    ServiceVariant.BookingArchetype.A9_STAY: (
+        "You list rooms, PG, hostels, or rental properties. Vsolve collects booking fees and deposits."
     ),
 }
 

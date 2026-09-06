@@ -1,5 +1,32 @@
 # API Contract Changelog
 
+## 1.54.0 - Stay unit maintenance blocks, extension deposit deltas, and filter definitions
+
+- Published `POST /api/v1/stays/partner/units/{id}/block/` enabling hosts to place a physical unit into `MAINTENANCE`, transitioning affected reservations to `RECOVERY_REQUIRED` and emitting `stay.recovery_required`.
+- Published `GET /api/v1/stays/filter-definitions/` exposing canonical filter questions and choices sourced from `ServiceQuestion` and `ServiceQuestionOption`.
+- Updated `POST /api/v1/stays/reservations/{id}/extend/` to support independent `additional_deposit_paise` calculation and collection alongside duration extension tariffs.
+- Enhanced `PropertyPolicy` with effective-dating fields (`version`, `effective_from`, `effective_to`, `is_active`) and snapshot isolation at booking creation.
+- Published frontend contract proposals `0017-a7-rentals-frontend-contract.md` and `0018-a9-stays-frontend-contract.md`.
+- Removed: none.
+
+## 1.53.0 - Rental custody and stay occupancy engines
+
+- Published the complete A7 rental surface for grouped vendor inventory, idempotent holds and
+  two-part provider checkout, booking lifecycle, evidence-backed handover/return, extensions,
+  Partner asset management, and Operations reassignment/deposit resolution.
+- Published the complete A9 stay surface for property-first and filter-first room-type discovery,
+  atomic physical-unit assignment, idempotent two-part checkout, cancellation/no-show/early
+  checkout/extension lifecycle, privacy-preserving check-in, Host inventory/reassignment, and
+  Operations recovery.
+- Host inventory now includes owned-property and policy updates, A9-approved room-type creation,
+  effective-dated duration pricing, and NIGHTLY date overrides. Public browse never substitutes a
+  rate from another duration mode.
+- A7/A9 hold and payment-start operations declare the required `Idempotency-Key` header. Checkout
+  responses expose the separate booking/stay and deposit `PaymentAttempt` records.
+- Added A7 category-specific asset attributes and A9 booking-time policy snapshots without adding
+  either archetype to Booking Group or Fulfilment Unit flows.
+- Removed: none.
+
 ## 1.52.0 - Offers that interrupt, waves that refill, and the visit-day contact rung
 
 - `EnquiryDetailSerializer` gains `customer_name` and `customer_phone`, both nullable. The name —

@@ -190,6 +190,23 @@ def initiate_standalone_payment_attempt(
     return attempt
 
 
+def _release_new_category_checkout_after_order_failure(attempt: PaymentAttempt) -> None:
+    if attempt.purpose in (
+        PaymentAttempt.Purpose.A7_RENTAL_BOOKING,
+        PaymentAttempt.Purpose.A7_DEPOSIT_HOLD,
+    ):
+        from apps.rentals.services import handle_rental_checkout_failure  # noqa: PLC0415
+
+        handle_rental_checkout_failure(payment_attempt_id=attempt.id)
+    elif attempt.purpose in (
+        PaymentAttempt.Purpose.A9_STAY_RESERVATION,
+        PaymentAttempt.Purpose.A9_DEPOSIT_HOLD,
+    ):
+        from apps.stays.services import handle_stay_checkout_failure  # noqa: PLC0415
+
+        handle_stay_checkout_failure(payment_attempt_id=attempt.id)
+
+
 def create_provider_order(*, attempt_id: UUID) -> PaymentAttempt:
     attempt = PaymentAttempt.objects.get(id=attempt_id)
     if attempt.status != PaymentAttempt.Status.PROVIDER_PENDING:
@@ -233,6 +250,7 @@ def create_provider_order(*, attempt_id: UUID) -> PaymentAttempt:
                     "updated_at",
                 )
             )
+            _release_new_category_checkout_after_order_failure(locked)
             return locked
     if (
         provider_order.amount_paise != attempt.amount_paise
@@ -258,6 +276,7 @@ def create_provider_order(*, attempt_id: UUID) -> PaymentAttempt:
                 code="provider_order_amount_mismatch",
                 attempt=locked,
             )
+            _release_new_category_checkout_after_order_failure(locked)
             return locked
     with transaction.atomic():
         locked = PaymentAttempt.objects.select_for_update().get(id=attempt.id)

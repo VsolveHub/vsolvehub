@@ -246,6 +246,25 @@ def submit_refund(*, refund_id: UUID) -> Refund:
     return _apply_refund_provider_result(provider_refund, refund_id=refund.id)
 
 
+def _apply_archetype_refund_allocations(*, attempt: PaymentAttempt, amount_paise: int) -> None:
+    """Apply a succeeded standalone refund to A7/A9 immutable allocations."""
+    remaining = amount_paise
+    for related_name in ("rental_allocations", "stay_allocations"):
+        manager = getattr(attempt, related_name, None)
+        if manager is None:
+            continue
+        for allocation in manager.select_for_update().order_by("created_at", "id"):
+            available = allocation.amount_paise - allocation.refunded_paise
+            applied = min(available, remaining)
+            if applied <= 0:
+                continue
+            allocation.refunded_paise += applied
+            allocation.save(update_fields=("refunded_paise",))
+            remaining -= applied
+            if remaining == 0:
+                return
+
+
 @transaction.atomic
 def _apply_refund_provider_result(
     provider_refund: ProviderRefund, *, refund_id: UUID | None = None
@@ -273,6 +292,9 @@ def _apply_refund_provider_result(
     normalized = provider_refund.status.lower()
     if normalized in ("processed", "succeeded"):
         if refund.status != Refund.Status.SUCCEEDED:
+            attempt = refund.payment_attempt
+            if attempt is None:
+                raise ValueError("The provider refund has no payment attempt.")
             allocations = list(
                 refund.allocations.select_for_update().select_related("payment_allocation")
             )
@@ -283,13 +305,11 @@ def _apply_refund_provider_result(
                     raise ValueError("The provider refund exceeds its immutable allocation.")
                 payment_allocation.refunded_paise = next_refunded
                 payment_allocation.save(update_fields=("refunded_paise",))
+            _apply_archetype_refund_allocations(attempt=attempt, amount_paise=refund.amount_paise)
             refund.status = Refund.Status.SUCCEEDED
             refund.reconciliation_state = PaymentAttempt.ReconciliationState.IN_SYNC
             refund.failure_code = ""
             refund.completed_at = timezone.now()
-            attempt = refund.payment_attempt
-            if attempt is None:
-                raise ValueError("The provider refund has no payment attempt.")
             # A cart payment owns `PaymentAllocation` rows and its refunded total is their sum.
             # A standalone charge — a scope-amendment revision, an M2 unlock, a visit plan, a
             # stage — has none, because an allocation points at a `FulfilmentUnitLine` that does

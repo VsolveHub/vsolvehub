@@ -11,6 +11,8 @@ from django.utils import timezone
 from rest_framework.exceptions import NotFound
 
 from apps.catalog.models import (
+    A7VariantConfiguration,
+    A9VariantConfiguration,
     Category,
     M2VariantConfiguration,
     Service,
@@ -84,8 +86,16 @@ def _requirement_variants() -> QuerySet[ServiceVariant]:
     )
     return (
         ServiceVariant.objects.filter(
+            models.Q(m2_configurations__status=M2VariantConfiguration.Status.ACTIVE)
+            | models.Q(
+                booking_archetype=ServiceVariant.BookingArchetype.A7_RENTAL,
+                a7_configurations__status=A7VariantConfiguration.Status.ACTIVE,
+            )
+            | models.Q(
+                booking_archetype=ServiceVariant.BookingArchetype.A9_STAY,
+                a9_configurations__status=A9VariantConfiguration.Status.ACTIVE,
+            ),
             is_active=True,
-            m2_configurations__status=M2VariantConfiguration.Status.ACTIVE,
         )
         # Screen 1 of the requirement flow renders these, and `submit_requirement` validates the
         # answers against the same authored schema. A variant published without them is a first
@@ -96,22 +106,17 @@ def _requirement_variants() -> QuerySet[ServiceVariant]:
 
 
 def _offerable_service_base() -> QuerySet[Service]:
-    """Every service a Customer may be shown, under one rule for both lifecycles.
+    """Every service a Customer may be shown, under one rule for all lifecycles.
 
-    **A service is offerable when it can be priced *or* when it can be asked about.** Until this
-    existed the only gate was `has_current_rate`, which is the M1 rule — an A1 task cannot be
+    **A service is offerable when it can be priced, when it can be asked about, or when it can be rented.**
+    Until this existed the only gate was `has_current_rate`, which is the M1 rule — an A1 task cannot be
     booked without a price — and it silently excluded every M2 service from the catalog, because
-    an A3 or A5 service has no rate by design. The seeded `workforce-and-projects` category
-    listed zero services and its two service pages answered `404`, with nothing wrong in the data:
-    both services were `ACTIVE`, both variants active, both configurations `ACTIVE`.
+    an A3 or A5 service has no rate by design. Similarly, A7 Rental services are priced per-vendor-inventory
+    via A7VariantConfiguration policies.
 
     `README.md` §"Customer, Partner and Operations surfaces" is explicit that this is one catalog
     and the *archetype* chooses the action — "Check price and availability" against "Tell us what
-    you need" — so the fix belongs here rather than in a second M2-only listing.
-
-    Both annotations are published downstream: `has_current_rate` still decides whether a
-    `starting_price` exists, and `accepts_requirements` is what tells a client which action to
-    render. Neither is inferred from the other, because a service may genuinely have both.
+    you need" or "Rent Equipment" — so the fix belongs here rather than in a separate listing.
     """
     now = timezone.now()
     current_rate = ServiceRate.objects.filter(
@@ -121,9 +126,17 @@ def _offerable_service_base() -> QuerySet[Service]:
         effective_from__lte=now,
     ).filter(models.Q(effective_to__isnull=True) | models.Q(effective_to__gt=now))
     requirement_variant = ServiceVariant.objects.filter(
+        models.Q(m2_configurations__status=M2VariantConfiguration.Status.ACTIVE)
+        | models.Q(
+            booking_archetype=ServiceVariant.BookingArchetype.A7_RENTAL,
+            a7_configurations__status=A7VariantConfiguration.Status.ACTIVE,
+        )
+        | models.Q(
+            booking_archetype=ServiceVariant.BookingArchetype.A9_STAY,
+            a9_configurations__status=A9VariantConfiguration.Status.ACTIVE,
+        ),
         service_id=OuterRef("pk"),
         is_active=True,
-        m2_configurations__status=M2VariantConfiguration.Status.ACTIVE,
     )
     return (
         Service.objects.annotate(

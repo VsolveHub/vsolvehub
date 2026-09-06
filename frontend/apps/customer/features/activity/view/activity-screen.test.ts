@@ -7,8 +7,10 @@ import type { RequirementSummary } from "@/features/requirement/queries";
 import {
   engagementSection,
   groupSection,
+  rentalSection,
   requestBelongsInBookings,
   requestSection,
+  staySection,
 } from "./activity-screen";
 import { ACTIVITY_TABS, activityTabHref, toActivityTab } from "../model/routes";
 
@@ -48,5 +50,25 @@ describe("Bookings lifecycle sections", () => {
     expect(groupSection({ status: "PAYMENT_PENDING" } as BookingGroup)).toBe("needs_you");
     expect(groupSection({ status: "BOOKED" } as BookingGroup)).toBe("active");
     expect(groupSection({ status: "COMPLETED" } as BookingGroup)).toBe("past");
+  });
+
+  it("classifies rental booking statuses correctly", () => {
+    expect(rentalSection("RETURN_PENDING")).toBe("needs_you");
+    expect(rentalSection("DISPUTED")).toBe("needs_you");
+    expect(rentalSection("CONFIRMED")).toBe("active");
+    expect(rentalSection("ACTIVE")).toBe("active");
+    expect(rentalSection("COMPLETED")).toBe("past");
+    expect(rentalSection("SETTLED")).toBe("past");
+    expect(rentalSection("CANCELLED")).toBe("past");
+  });
+
+  it("classifies stay reservation statuses correctly", () => {
+    expect(staySection("HELD")).toBe("needs_you");
+    expect(staySection("DISPUTED")).toBe("needs_you");
+    expect(staySection("CONFIRMED")).toBe("active");
+    expect(staySection("CHECKED_IN")).toBe("active");
+    expect(staySection("CHECKED_OUT")).toBe("past");
+    expect(staySection("COMPLETED")).toBe("past");
+    expect(staySection("CANCELLED")).toBe("past");
   });
 });

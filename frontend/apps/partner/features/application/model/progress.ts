@@ -1,7 +1,8 @@
 import type { Schemas } from "@vsolve/api-client";
 
 import { requirements, type Requirement } from "./readiness";
-import { APPLICATION_STEPS, type ApplicationStep } from "./steps";
+import { getApplicationSteps, type ApplicationStep } from "./steps";
+import { isRentalPartner } from "./rental";
 
 /**
  * How far through the application somebody actually is.
@@ -77,8 +78,10 @@ export function stepProgress(application: Application | null): StepProgress[] {
     *has*, removes that whole class of mistake.
   */
   const met = requirements(application);
+  const isRental = isRentalPartner(application?.skill_codes ?? []);
+  const steps = getApplicationSteps(isRental);
 
-  return APPLICATION_STEPS.map((step) => {
+  return steps.map((step) => {
     const mine = met.filter((requirement) => requirement.href === step.href);
     const outstanding = mine.filter((requirement) => !requirement.isMet).length;
 
@@ -134,10 +137,11 @@ export function progressSummary(application: Application | null): ProgressSummar
  * they mistyped something on the previous screen was the one gesture the flow
  * did not offer.
  */
-export function previousStep(pathname: string): ApplicationStep | null {
+export function previousStep(pathname: string, isRentalOnly: boolean = false): ApplicationStep | null {
   const normalised =
     pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
-  const index = APPLICATION_STEPS.findIndex((step) => step.href === normalised);
+  const steps = getApplicationSteps(isRentalOnly);
+  const index = steps.findIndex((step) => step.href === normalised);
   if (index <= 0) return null;
-  return APPLICATION_STEPS[index - 1] ?? null;
+  return steps[index - 1] ?? null;
 }

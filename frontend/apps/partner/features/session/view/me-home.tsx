@@ -2,7 +2,7 @@
 
 import { hasWorkspaceAction, useLogout } from "@vsolve/query";
 import { Button } from "@vsolve/ui";
-import { ChevronRight, Globe, Phone, Power, ShieldCheck, User, Users, Wallet, type LucideIcon } from "lucide-react";
+import { ChevronRight, Globe, Package, Phone, Power, ShieldCheck, User, Users, Wallet, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 
 import { PartnerPresence } from "@/features/presence/view/partner-presence";
@@ -69,14 +69,22 @@ export function MeHome() {
               colorClass="bg-emerald-50 border-emerald-100/80"
               iconClass="text-emerald-600"
             />
+            <SettingsRow
+              href="/rentals"
+              icon={Package}
+              title="Rental Equipment & Assets"
+              subtitle="Manage inventory, active bookings & returns"
+              colorClass="bg-amber-50 border-amber-100/80"
+              iconClass="text-amber-600"
+            />
             {canManageCrew ? (
               <SettingsRow
                 href="/me/crew"
                 icon={Users}
                 title="Contractor Crew"
                 subtitle="Manage team roster & crew dispatch"
-                colorClass="bg-amber-50 border-amber-100/80"
-                iconClass="text-amber-600"
+                colorClass="bg-blue-50 border-blue-100/80"
+                iconClass="text-blue-600"
               />
             ) : null}
           </div>

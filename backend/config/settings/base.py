@@ -54,6 +54,8 @@ INSTALLED_APPS = [
     "apps.partners",
     "apps.requirements",
     "apps.ratings",
+    "apps.rentals",
+    "apps.stays",
 ]
 
 MIDDLEWARE = [
@@ -309,7 +311,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.52.0",
+    "VERSION": "1.53.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -1024,6 +1026,14 @@ CELERY_BEAT_SCHEDULE = {
         # Wave C7 gave it a per-product keyset cursor bounded by `M2_RECONCILIATION_BATCH_SIZE`, so
         # a tick is now bounded and the whole book is covered over a few laps instead.
         "schedule": 60.0 * 60,
+    },
+    "sweep-expired-stay-holds": {
+        "task": "apps.stays.tasks.sweep_expired_tentative_holds",
+        "schedule": 60.0,
+    },
+    "sweep-stay-no-shows": {
+        "task": "apps.stays.tasks.sweep_no_show_reservations",
+        "schedule": 60.0 * 5,
     },
 }
 

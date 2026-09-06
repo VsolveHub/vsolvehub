@@ -12,6 +12,8 @@ from apps.catalog.models import ServiceVariant
 M2_ARCHETYPES = (
     ServiceVariant.BookingArchetype.A3_TIME_BLOCK,
     ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT,
+    ServiceVariant.BookingArchetype.A7_RENTAL,
+    ServiceVariant.BookingArchetype.A9_STAY,
 )
 
 #: Actions the backend authorises per workspace. The frontend maps these to controls;
@@ -45,6 +47,21 @@ WORKSPACE_ACTIONS: dict[str, tuple[str, ...]] = {
         "stage.submit_evidence",
         "amendment.propose",
         "deliverable.hand_over",
+    ),
+    ServiceVariant.BookingArchetype.A7_RENTAL: (
+        "rental.manage_inventory",
+        "rental.manage_bookings",
+        "rental.handover",
+        "rental.inspection",
+        "rental.extension_review",
+    ),
+    ServiceVariant.BookingArchetype.A9_STAY: (
+        "stay.manage_properties",
+        "stay.manage_units",
+        "stay.manage_reservations",
+        "stay.check_in",
+        "stay.check_out",
+        "stay.escrow_review",
     ),
 }
 

@@ -18,7 +18,8 @@ import {
   useUpdateCartItem,
   type Cart,
   type CartItem,
-  useAddCartItem,} from "@/features/checkout/queries";
+  useAddCartItem,
+} from "@/features/checkout/queries";
 import { CartItems, CartVersionNote } from "@/features/checkout/view/cart-items";
 import { MergeDialog } from "@/features/checkout/view/merge-dialog";
 import { RemoveCartItemDialog } from "@/features/checkout/view/remove-dialog";
@@ -138,7 +139,7 @@ export function CartWorkspace() {
         />
       ) : null}
 
-      {cart && !isEmpty ? (
+      {cart && cart.items.length > 0 ? (
         <>
           <div className="mt-1">
             <CartVersionNote cart={cart} />

@@ -57,6 +57,9 @@ TRANSACTIONAL_PURPOSES = frozenset(
         "booking.completed",
         "payment.receipt",
         "refund.issued",
+        "rental.asset_reassigned",
+        "stay.unit_reassigned",
+        "stay.no_show",
         "partner.offer",
         # A Partner who is online is telling us they want same-day work. Letting a
         # preference silently mute the only signal that work arrived would leave

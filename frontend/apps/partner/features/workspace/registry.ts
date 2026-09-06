@@ -1,11 +1,14 @@
 import {
   Bell,
   Briefcase,
+  Building2,
   CalendarCheck,
+  ClipboardCheck,
   ClipboardList,
   FolderKanban,
   HardHat,
   Home,
+  Package,
   UserCircle,
   UserCircle2,
   Users,
@@ -60,6 +63,8 @@ import type { WorkspaceGrant } from "@vsolve/query";
 /** Server keys this build has screens for. Mirrors `partners.capabilities.WORKSPACE_ACTIONS`. */
 export const WORKFORCE_WORKSPACE = "A3_TIME_BLOCK";
 export const PROJECT_WORKSPACE = "A5_CUSTOM_PROJECT";
+export const RENTAL_WORKSPACE = "A7_RENTAL";
+export const STAY_WORKSPACE = "A9_STAY";
 
 export interface WorkspaceNavItem {
   href: string;
@@ -182,6 +187,31 @@ export const TAP_FIRST_NAV: readonly WorkspaceNavItem[] = [
 ];
 
 /**
+ * Dedicated navigation for rental partners (A7_RENTAL).
+ * Focuses on inventory, active bookings, return inspections, and rental earnings.
+ */
+export const RENTAL_NAV: readonly WorkspaceNavItem[] = [
+  { href: "/home", label: "Home", icon: Home },
+  { href: "/rentals", label: "Inventory", icon: Package, activePrefix: "/rentals" },
+  { href: "/rentals/bookings", label: "Bookings", icon: CalendarCheck, activePrefix: "/rentals/bookings" },
+  { href: "/rentals/inspections", label: "Inspections", icon: ClipboardCheck, activePrefix: "/rentals/inspections" },
+  { href: "/rentals/money", label: "Money", icon: Wallet, activePrefix: "/rentals/money" },
+  { href: "/me", label: "Me", icon: UserCircle2, activePrefix: "/me" },
+];
+
+/**
+ * Dedicated navigation for property hosts / stays partners (A9_STAY).
+ * Focuses on properties, rooms, reservations, check-ins, and stay earnings.
+ */
+export const STAY_NAV: readonly WorkspaceNavItem[] = [
+  { href: "/home", label: "Home", icon: Home },
+  { href: "/stays/properties", label: "Properties", icon: Building2, activePrefix: "/stays/properties" },
+  { href: "/stays/reservations", label: "Bookings", icon: CalendarCheck, activePrefix: "/stays/reservations" },
+  { href: "/stays/money", label: "Money", icon: Wallet, activePrefix: "/stays/money" },
+  { href: "/me", label: "Me", icon: UserCircle2, activePrefix: "/me" },
+];
+
+/**
  * Routes and labels per known workspace.
  *
  * Records stay in their own lifecycle vocabulary. An A3 shift-day is a shift and
@@ -219,6 +249,33 @@ export const WORKSPACE_REGISTRY: Record<string, WorkspaceDefinition> = {
       { href: "/projects", label: "Projects", icon: FolderKanban },
       { href: "/projects/enquiries", label: "Enquiries", icon: ClipboardList, action: "enquiry.view" },
       { href: "/projects/stages", label: "Stages", icon: CalendarCheck, action: "stage.submit_evidence" },
+    ],
+  },
+  [RENTAL_WORKSPACE]: {
+    key: RENTAL_WORKSPACE,
+    label: "Rentals",
+    description: "Manage equipment inventory, active rentals, handovers, and return inspections.",
+    icon: Package,
+    home: "/rentals/home",
+    nav: [
+      { href: "/rentals/home", label: "Home", icon: Home },
+      { href: "/rentals", label: "Inventory", icon: Package },
+      { href: "/rentals/bookings", label: "Bookings", icon: CalendarCheck },
+      { href: "/rentals/inspections", label: "Inspections", icon: ClipboardCheck },
+      { href: "/rentals/money", label: "Money", icon: Wallet },
+    ],
+  },
+  [STAY_WORKSPACE]: {
+    key: STAY_WORKSPACE,
+    label: "Stays & Hostels",
+    description: "Manage properties, room configurations, guest reservations, and check-ins.",
+    icon: Building2,
+    home: "/stays/home",
+    nav: [
+      { href: "/stays/home", label: "Home", icon: Home },
+      { href: "/stays/properties", label: "Properties", icon: Building2 },
+      { href: "/stays/reservations", label: "Bookings", icon: CalendarCheck },
+      { href: "/stays/money", label: "Money", icon: Wallet },
     ],
   },
 };

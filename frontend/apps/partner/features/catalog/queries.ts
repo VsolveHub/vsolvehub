@@ -42,9 +42,6 @@ export interface MainCategory {
   imageUrl: string;
 }
 
-/** Partner onboarding only surfaces main categories when the catalog publishes fewer than ten. */
-const MAX_MAIN_CATEGORIES = 10;
-
 export function visibleMainCategories(
   categories: readonly {
     id: string;
@@ -54,18 +51,13 @@ export function visibleMainCategories(
     image_url: string;
   }[],
 ): MainCategory[] {
-  const ordered = categories.map((category) => ({
+  return categories.map((category) => ({
     id: category.id,
     slug: category.slug,
     name: category.name,
     iconKey: category.icon_key,
     imageUrl: category.image_url,
   }));
-
-  if (ordered.length >= MAX_MAIN_CATEGORIES) {
-    return ordered.slice(0, MAX_MAIN_CATEGORIES - 1);
-  }
-  return ordered;
 }
 
 export interface WorkCatalog {
@@ -104,16 +96,25 @@ export const getWorkCatalog = cache(async (): Promise<WorkCatalog> => {
   const mainCategories = visibleMainCategories(categories);
   const allowedCategoryNames = new Set(mainCategories.map((category) => category.name));
 
-  const services: OfferableService[] = details.flatMap(({ categoryName, detail }) =>
-    detail.variants.map((variant) => ({
+  const services: OfferableService[] = details.flatMap(({ categoryName, detail }) => {
+    const taskVariants = (detail.variants ?? []).map((variant) => ({
       variantId: variant.id,
       variantCode: variant.code,
       variantName: variant.name,
       serviceName: detail.name,
       categoryName,
       requiredSkillCode: variant.required_skill_code,
-    })),
-  );
+    }));
+    const reqVariants = ((detail as any).requirement_variants ?? []).map((variant: any) => ({
+      variantId: variant.id,
+      variantCode: variant.code,
+      variantName: variant.name && variant.name !== "Daily Rental" ? `${detail.name} (${variant.name})` : detail.name,
+      serviceName: detail.name,
+      categoryName,
+      requiredSkillCode: variant.required_skill_code ?? "",
+    }));
+    return [...taskVariants, ...reqVariants];
+  });
 
   return {
     mainCategories,

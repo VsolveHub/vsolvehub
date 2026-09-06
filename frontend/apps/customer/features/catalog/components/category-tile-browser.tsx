@@ -13,6 +13,7 @@ import { ChevronRight, ClipboardList, X } from "lucide-react";
 import { ServicePhoto } from "./category-artwork";
 import { AddToCartButton } from "./add-to-cart-button";
 import { TileDesktopSplitPane } from "./tile-desktop-split-pane";
+import { StayCatalogListingPane } from "@/features/stays/components/stay-catalog-listing-pane";
 import { useServiceDetail } from "../client-queries";
 import { serviceHref } from "../service-href";
 import type { Category, ServiceCard } from "../queries";
@@ -82,6 +83,9 @@ export function groupByTile(category: Category, services: readonly ServiceCard[]
 export function priceLine(service: ServiceCard): string {
   if (service.starting_price !== null) {
     return `Starts at ${formatMoney(service.starting_price.amount_paise)}`;
+  }
+  if (service.request_archetypes.includes("A7_RENTAL")) {
+    return "Check availability & daily rates";
   }
   if (service.request_archetypes.includes(A3_TIME_BLOCK)) {
     return "Booked by the day, at the published rate";
@@ -350,94 +354,106 @@ export function CategoryTileBrowser({
           </ul>
         </nav>
 
-        {/* Right Column: Independently scrollable sub-services list */}
-        <section
-          aria-labelledby={`category-tile-${activeTile.slug}`}
-          className="flex-1 min-w-0 h-full overflow-y-auto no-scrollbar pl-1 sm:pl-2 pb-16 flex flex-col gap-3"
-        >
-          {/* Header with Title and Service Count */}
-          <div className="flex items-baseline justify-between gap-3 pb-1 border-b border-line/60 shrink-0">
-            <h2
-              id={`category-tile-${activeTile.slug}`}
-              className="text-lg sm:text-2xl font-extrabold tracking-tight text-navy-900"
-            >
-              {activeTile.name}
-            </h2>
-            <span className="text-xs sm:text-sm font-semibold text-text-secondary shrink-0">
-              {activeTile.services.length === 1
-                ? "1 service"
-                : `${activeTile.services.length} services`}
-            </span>
-          </div>
+        {/* Right Column: Stays listing pane OR sub-services list */}
+        {category.slug === "rooms-pg-hostel" ? (
+          <section className="flex-1 min-w-0 h-full overflow-y-auto no-scrollbar pl-1 sm:pl-2 pb-16">
+            <StayCatalogListingPane
+              categorySlug={category.slug}
+              categoryName={category.name}
+              activeTile={activeTile}
+            />
+          </section>
+        ) : (
+          <section
+            aria-labelledby={`category-tile-${activeTile.slug}`}
+            className="flex-1 min-w-0 h-full overflow-y-auto no-scrollbar pl-1 sm:pl-2 pb-16 flex flex-col gap-3"
+          >
+            {/* Header with Title and Service Count */}
+            <div className="flex items-baseline justify-between gap-3 pb-1 border-b border-line/60 shrink-0">
+              <h2
+                id={`category-tile-${activeTile.slug}`}
+                className="text-lg sm:text-2xl font-extrabold tracking-tight text-navy-900"
+              >
+                {activeTile.name}
+              </h2>
+              <span className="text-xs sm:text-sm font-semibold text-text-secondary shrink-0">
+                {activeTile.services.length === 1
+                  ? "1 service"
+                  : `${activeTile.services.length} services`}
+              </span>
+            </div>
 
-          {/* Sub-services Cards List */}
-          <ul className="flex flex-col gap-2.5 sm:gap-3 list-none p-0 m-0">
-            {activeTile.services.map((service) => {
-              const imgUrl = service.cover?.url ?? activeTile.imageUrl;
-              return (
-                <li key={service.id}>
-                  <Link
-                    href={serviceHref(service, category.slug)}
-                    className="group flex items-start sm:items-center justify-between gap-3 sm:gap-4 rounded-2xl border border-line/80 bg-white p-3 sm:p-4 shadow-xs transition-all duration-150 hover:shadow-md hover:border-line-strong active:scale-[0.99]"
-                  >
-                    {/* Image on Left */}
-                    <span className="size-16 sm:size-20 shrink-0 rounded-2xl overflow-hidden bg-[#F4F1EC] grid place-items-center">
-                      {imgUrl ? (
-                        <img
-                          src={imgUrl}
-                          alt=""
-                          loading="lazy"
-                          className={
-                            imgUrl.includes("/Service%20Cover/") || imgUrl.includes("/Service Cover/")
-                              ? "size-[80%] object-contain"
-                              : "size-full object-cover"
-                          }
-                        />
-                      ) : (
-                        <ServicePhoto imageUrl="" iconKey={service.icon_key} />
-                      )}
-                    </span>
-
-                    {/* Details in Center */}
-                    <div className="min-w-0 flex-1 flex flex-col justify-between">
-                      <div>
-                        <h3 className="text-sm sm:text-base font-bold text-navy-900 leading-snug group-hover:text-signal-700 transition-colors">
-                          {service.name}
-                        </h3>
-                        <p className="mt-1 line-clamp-2 text-xs text-text-secondary leading-relaxed">
-                          {service.short_description}
-                        </p>
-                      </div>
-                      <div className="mt-2.5 flex items-center justify-between gap-2">
-                        <p className="text-xs sm:text-sm font-bold text-navy-900">
-                          {priceLine(service)}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            if (service.request_archetypes.length > 0) {
-                              router.push(serviceHref(service, category.slug));
-                              return;
+            {/* Sub-services Cards List */}
+            <ul className="flex flex-col gap-2.5 sm:gap-3 list-none p-0 m-0">
+              {activeTile.services.map((service) => {
+                const imgUrl = service.cover?.url ?? activeTile.imageUrl;
+                return (
+                  <li key={service.id}>
+                    <Link
+                      href={serviceHref(service, category.slug, activeTile.slug)}
+                      className="group flex items-start sm:items-center justify-between gap-3 sm:gap-4 rounded-2xl border border-line/80 bg-white p-3 sm:p-4 shadow-xs transition-all duration-150 hover:shadow-md hover:border-line-strong active:scale-[0.99]"
+                    >
+                      {/* Image on Left */}
+                      <span className="size-16 sm:size-20 shrink-0 rounded-2xl overflow-hidden bg-[#F4F1EC] grid place-items-center">
+                        {imgUrl ? (
+                          <img
+                            src={imgUrl}
+                            alt=""
+                            loading="lazy"
+                            className={
+                              imgUrl.includes("/Service%20Cover/") || imgUrl.includes("/Service Cover/")
+                                ? "size-[80%] object-contain"
+                                : "size-full object-cover"
                             }
-                            setSelectedServiceForModal(service);
-                          }}
-                          className="inline-flex shrink-0 items-center justify-center font-bold shadow-xs transition-colors rounded-lg px-3.5 h-8 text-xs bg-navy-900 text-white hover:bg-navy-800 active:scale-95 cursor-pointer"
-                        >
-                          Add
-                        </button>
-                      </div>
-                    </div>
+                          />
+                        ) : (
+                          <ServicePhoto imageUrl="" iconKey={service.icon_key} />
+                        )}
+                      </span>
 
-                    {/* Arrow on Right */}
-                    <ChevronRight className="size-5 shrink-0 text-text-muted group-hover:text-navy-900 group-hover:translate-x-0.5 transition-all self-center hidden min-[400px]:block" />
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
+                      {/* Details in Center */}
+                      <div className="min-w-0 flex-1 flex flex-col justify-between">
+                        <div>
+                          <h3 className="text-sm sm:text-base font-bold text-navy-900 leading-snug group-hover:text-signal-700 transition-colors">
+                            {service.name}
+                          </h3>
+                          <p className="mt-1 line-clamp-2 text-xs text-text-secondary leading-relaxed">
+                            {service.short_description}
+                          </p>
+                        </div>
+                        <div className="mt-2.5 flex items-center justify-between gap-2">
+                          <p className="text-xs sm:text-sm font-bold text-navy-900">
+                            {priceLine(service)}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              if (service.request_archetypes.length > 0) {
+                                router.push(serviceHref(service, category.slug, activeTile.slug));
+                                return;
+                              }
+                              setSelectedServiceForModal(service);
+                            }}
+                            className="inline-flex shrink-0 items-center justify-center font-bold shadow-xs transition-colors rounded-lg px-3.5 h-8 text-xs bg-navy-900 text-white hover:bg-navy-800 active:scale-95 cursor-pointer"
+                          >
+                            {service.request_archetypes.length > 0
+                              ? "Ask"
+                              : "Add"}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Arrow on Right */}
+                      <ChevronRight className="size-5 shrink-0 text-text-muted group-hover:text-navy-900 group-hover:translate-x-0.5 transition-all self-center hidden min-[400px]:block" />
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
       </div>
 
       {/* Pop-up Dialog for "What you can book" */}
