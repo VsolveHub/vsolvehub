@@ -78,6 +78,34 @@ def _standalone_attempt_belongs_to(*, attempt: PaymentAttempt, customer_id: UUID
         return EngagementAmendment.objects.filter(
             payment_attempt=attempt, engagement__customer_id=customer_id
         ).exists()
+    if purpose in (
+        PaymentAttempt.Purpose.A7_RENTAL_BOOKING,
+        PaymentAttempt.Purpose.A7_DEPOSIT_HOLD,
+        PaymentAttempt.Purpose.A7_EXTENSION,
+        PaymentAttempt.Purpose.A7_DAMAGE_SETTLEMENT,
+    ):
+        return attempt.rental_allocations.filter(
+            rental_booking_line__rental_booking__customer_id=customer_id
+        ).exists()
+    if purpose in (
+        PaymentAttempt.Purpose.A9_STAY_RESERVATION,
+        PaymentAttempt.Purpose.A9_DEPOSIT_HOLD,
+        PaymentAttempt.Purpose.A9_EXTENSION,
+        PaymentAttempt.Purpose.A9_DAMAGE_SETTLEMENT,
+    ):
+        return attempt.stay_allocations.filter(
+            stay_reservation_line__stay_reservation__customer_id=customer_id
+        ).exists()
+    if purpose == PaymentAttempt.Purpose.A10_VENDOR_SUBSCRIPTION:
+        from apps.listings.models import VendorSubscription  # noqa: PLC0415
+        return VendorSubscription.objects.filter(
+            payment_attempt=attempt, poster__user_id=customer_id
+        ).exists()
+    if purpose == PaymentAttempt.Purpose.A10_PREMIUM_LISTING:
+        from apps.listings.models import Listing  # noqa: PLC0415
+        return Listing.objects.filter(
+            payment_attempt=attempt, poster__user_id=customer_id
+        ).exists()
     # `SCOPE_AMENDMENT_REVISION` and `M2_SITE_VISIT_FEE` are not resolvable here yet, and a
     # permissive default on a money endpoint is the wrong direction to guess in.
     return False

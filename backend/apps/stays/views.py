@@ -1218,7 +1218,7 @@ class PartnerPropertyUnitTypesView(APIView):
 
         serializer = PartnerUnitTypeCreateSerializer(
             data=request.data,
-            context={"partner": partner},
+            context={"partner": partner, "property": prop},
         )
         serializer.is_valid(raise_exception=True)
         ut = serializer.save(property=prop)
@@ -1251,7 +1251,7 @@ class PartnerUnitTypeDetailView(APIView):
             unit_type,
             data=request.data,
             partial=True,
-            context={"partner": request.user.partner_profile},
+            context={"partner": request.user.partner_profile, "property": unit_type.property},
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()

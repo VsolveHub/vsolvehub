@@ -8,7 +8,7 @@ from apps.cases.models import OperationsCase, OperationsSettlementApproval
 
 @transaction.atomic
 def propose_or_approve_settlement(
-    *, case: OperationsCase, operator: Any, proposal: dict[str, object]
+    *, case: OperationsCase, operator: Any, proposal: dict[str, Any]
 ) -> bool:
     """Return true only when a different operator approves the unchanged proposal."""
     approval, created = OperationsSettlementApproval.objects.select_for_update().get_or_create(

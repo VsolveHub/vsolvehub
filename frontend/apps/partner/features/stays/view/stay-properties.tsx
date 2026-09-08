@@ -455,6 +455,12 @@ export function StayProperties() {
                       <span className="rounded-full bg-teal-50 border border-teal-200/60 px-2.5 py-0.5 text-[11px] font-semibold text-teal-700">
                         Active
                       </span>
+                      {prop.total_units > 0 && prop.has_pricing === false && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-300 px-2.5 py-0.5 text-[11px] font-bold text-amber-800 animate-pulse">
+                          <AlertCircle className="h-3 w-3 text-amber-600" />
+                          <span>Pricing Setup Required</span>
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -527,9 +533,13 @@ export function StayProperties() {
                         setActiveManagementTab("unit_types");
                         if (existing) setSelectedPropertyForUnits(existing);
                       }}
-                      className="rounded-xl border border-neutral-200 bg-white px-3 py-1.5 text-xs font-bold text-neutral-700 hover:bg-neutral-50 transition-colors flex items-center justify-center gap-1.5"
+                      className={
+                        prop.total_units > 0 && prop.has_pricing === false
+                          ? "rounded-xl border border-amber-400 bg-amber-50 px-3 py-1.5 text-xs font-black text-amber-900 hover:bg-amber-100 transition-colors flex items-center justify-center gap-1.5 shadow-xs"
+                          : "rounded-xl border border-neutral-200 bg-white px-3 py-1.5 text-xs font-bold text-neutral-700 hover:bg-neutral-50 transition-colors flex items-center justify-center gap-1.5"
+                      }
                     >
-                      <Sliders className="h-3.5 w-3.5 text-neutral-500" />
+                      <Sliders className={`h-3.5 w-3.5 ${prop.total_units > 0 && prop.has_pricing === false ? "text-amber-700" : "text-neutral-500"}`} />
                       <span>Setup &amp; Pricing</span>
                     </button>
 
@@ -682,14 +692,18 @@ function CreatePropertyModal({ onClose }: { onClose: () => void }) {
                 onChange={(e) => setPropertyType(e.target.value)}
                 className="mt-1 w-full rounded-xl border border-neutral-200 p-2.5 text-xs font-semibold text-neutral-800 focus:border-indigo-500 focus:outline-none"
               >
+                <option value="ROOMS">Rooms</option>
                 <option value="PG">PG Accommodation</option>
-                <option value="HOSTEL">Hostel</option>
-                <option value="CO_LIVING">Co-Living Space</option>
-                <option value="STUDIO_APT">Studio Apartment</option>
-                <option value="APARTMENT">Apartment Complex</option>
-                <option value="INDEPENDENT_HOUSE">Independent House</option>
-                <option value="VILLA">Villa</option>
-                <option value="COMMERCIAL">Commercial / Office</option>
+                <option value="HOSTEL">Hostels</option>
+                <option value="BED_SPACE">Bed Space</option>
+                <option value="CO_LIVING">Co-Living Spaces</option>
+                <option value="APARTMENT">Apartments</option>
+                <option value="RENTAL_PROPERTY">Rental Properties</option>
+                <option value="SHORT_STAY">Short Stay</option>
+                <option value="STUDENT_ACCOMMODATION">Student Accommodation</option>
+                <option value="WORKER_ACCOMMODATION">Worker Accommodation</option>
+                <option value="PROPERTY_LISTING">Property Listing</option>
+                <option value="PREMIUM_STAYS">Premium Stays</option>
               </select>
             </div>
 

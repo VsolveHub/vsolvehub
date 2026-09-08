@@ -188,6 +188,8 @@ NEW_CATEGORY_CAPTURE_PURPOSES = (
     PaymentAttempt.Purpose.A9_DEPOSIT_HOLD,
     PaymentAttempt.Purpose.A9_DAMAGE_SETTLEMENT,
     PaymentAttempt.Purpose.A9_EXTENSION,
+    PaymentAttempt.Purpose.A10_VENDOR_SUBSCRIPTION,
+    PaymentAttempt.Purpose.A10_PREMIUM_LISTING,
 )
 
 
@@ -257,6 +259,13 @@ def _apply_new_category_capture(*, attempt: PaymentAttempt) -> None:
         from apps.stays.services import complete_stay_damage_settlement  # noqa: PLC0415
 
         complete_stay_damage_settlement(payment_attempt_id=attempt.id)
+    elif attempt.purpose in (
+        PaymentAttempt.Purpose.A10_VENDOR_SUBSCRIPTION,
+        PaymentAttempt.Purpose.A10_PREMIUM_LISTING,
+    ):
+        from apps.listings.services import complete_subscription_payment  # noqa: PLC0415
+
+        complete_subscription_payment(payment_attempt_id=attempt.id)
 
 
 def _validate_payment_amount(*, attempt: PaymentAttempt, payment: ProviderPayment) -> bool:

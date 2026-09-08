@@ -1,4 +1,5 @@
 import uuid
+from typing import Any
 
 from django.conf import settings
 from django.db import models
@@ -22,6 +23,8 @@ class Order(models.Model):
         REFUNDED = "REFUNDED", "Refunded"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    refunds: Any
+    tax_documents: Any
     checkout = models.OneToOneField(CheckoutSession, on_delete=models.PROTECT, related_name="order")
     booking_group = models.OneToOneField(
         BookingGroup,
@@ -146,6 +149,8 @@ CHECKOUT_FREE_PURPOSES = (
     "A9_DEPOSIT_HOLD",
     "A9_DAMAGE_SETTLEMENT",
     "A9_EXTENSION",
+    "A10_VENDOR_SUBSCRIPTION",
+    "A10_PREMIUM_LISTING",
 )
 
 
@@ -194,6 +199,9 @@ class PaymentAttempt(models.Model):
         A9_DEPOSIT_HOLD = "A9_DEPOSIT_HOLD", "A9 deposit hold"
         A9_DAMAGE_SETTLEMENT = "A9_DAMAGE_SETTLEMENT", "A9 damage settlement"
         A9_EXTENSION = "A9_EXTENSION", "A9 extension"
+        #: A10 Listing B2B poster charges:
+        A10_VENDOR_SUBSCRIPTION = "A10_VENDOR_SUBSCRIPTION", "A10 vendor subscription"
+        A10_PREMIUM_LISTING = "A10_PREMIUM_LISTING", "A10 premium listing"
 
     #: Purposes that are charged outside a cart and therefore carry no `CheckoutSession`. Bound
     #: from the module-level tuple, which the check constraint below reads from the same name, so
@@ -216,6 +224,13 @@ class PaymentAttempt(models.Model):
         NEEDS_ATTENTION = "NEEDS_ATTENTION", "Needs attention"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    allocations: Any
+    refunds: Any
+    rental_allocations: Any
+    stay_allocations: Any
+    fulfilment_price_revisions: Any
+    tax_documents: Any
+    financial_exceptions: Any
     # Nullable for every purpose in `CHECKOUT_FREE_PURPOSES` — a post-booking charge for
     # additional catalog work, and every M2 access or stage charge, has no `CheckoutSession`.
     # `BOOKING_GROUP` still requires one, and the check constraint below enforces both halves.
@@ -389,6 +404,8 @@ class Refund(models.Model):
         UNDER_REVIEW = "UNDER_REVIEW", "Under review"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    allocations: Any
+    financial_exceptions: Any
     order = models.ForeignKey(
         Order, null=True, blank=True, on_delete=models.PROTECT, related_name="refunds"
     )

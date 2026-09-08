@@ -474,6 +474,10 @@ def get_partner_properties(partner: Any) -> list[dict[str, Any]]:
         ).count()
 
         primary_photo = prop.media.filter(is_primary=True).first()
+        has_pricing = UnitPricingRule.objects.filter(
+            unit_type__property=prop,
+            is_active=True,
+        ).exists()
 
         data.append(
             {
@@ -487,6 +491,7 @@ def get_partner_properties(partner: Any) -> list[dict[str, Any]]:
                 "active_guests": active_res_count,
                 "image_url": primary_photo.url if primary_photo else "",
                 "is_active": prop.is_active,
+                "has_pricing": has_pricing,
             }
         )
     return data

@@ -18,7 +18,7 @@ import {
   Info,
 } from "lucide-react";
 import { PUBLIC_API_BASE_URL } from "@/lib/api/config";
-import { apiFetch } from "@vsolve/api-client";
+import { apiFetch, getStableIdempotencyKey } from "@vsolve/api-client";
 
 interface AssetDetails {
   asset_id: string;
@@ -92,27 +92,37 @@ export default function RentalCheckoutPage() {
   const endMs = new Date(endDate).getTime();
   const rentalDays = Math.max(1, Math.round((endMs - startMs) / (1000 * 3600 * 24)) + 1);
 
-  // Financial calculations
+  // Financial calculations (GAP-CP-01: clear escrow pre-auth separation)
   const dailyRateRupees = (asset?.daily_price_paise ?? 60000) / 100;
   const depositRupees = (asset?.deposit_paise ?? 150000) / 100;
   const baseRentalSubtotal = dailyRateRupees * rentalDays;
   const gstRupees = Math.round(baseRentalSubtotal * 0.18);
-  const totalPayableNow = baseRentalSubtotal + gstRupees + depositRupees;
+  const totalRentalFee = baseRentalSubtotal + gstRupees;
+  const totalPayableNow = totalRentalFee;
 
   async function handleConfirmAndPay() {
     setSubmitting(true);
     setError(null);
     try {
-      // 1. Create tentative hold with selected rental window
+      // 1. Create tentative hold with selected rental window & Idempotency-Key
+      const holdKey = getStableIdempotencyKey(
+        "rental-hold",
+        assetId as string,
+        startDate,
+        endDate,
+        deliveryMode
+      );
       const holdRes = await apiFetch(`${PUBLIC_API_BASE_URL}/api/v1/rentals/holds/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Idempotency-Key": holdKey,
         },
         body: JSON.stringify({
           asset_id: assetId,
           start_date: startDate,
           end_date: endDate,
+          quantity: 1,
           delivery_mode: deliveryMode,
         }),
       });
@@ -132,7 +142,57 @@ export default function RentalCheckoutPage() {
       const holdData = await holdRes.json();
       const bookingId = holdData.id;
 
-      // 2. Confirm booking and simulate captured payment attempt
+      // 2. Initiate provider payment attempts (A7_RENTAL_BOOKING + A7_DEPOSIT_HOLD)
+      const payStartKey = getStableIdempotencyKey("rental-pay", bookingId);
+      const payStartRes = await apiFetch(
+        `${PUBLIC_API_BASE_URL}/api/v1/rentals/bookings/${bookingId}/payment/`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Idempotency-Key": payStartKey,
+          },
+          body: JSON.stringify({}),
+        }
+      );
+
+      if (!payStartRes.ok) {
+        const payData = await payStartRes.json().catch(() => ({}));
+        const payErr =
+          typeof payData.error === "string"
+            ? payData.error
+            : payData.error?.message ||
+              payData.error?.details?.message ||
+              payData.detail ||
+              "Failed to start payment processing.";
+        throw new Error(payErr);
+      }
+
+      const payData = await payStartRes.json();
+      const attempts: Array<{ id: string; simulated_capture_available?: boolean }> =
+        payData.payment_attempts || [];
+
+      // 3. Simulate capture for development / fake payment provider attempts
+      for (const attempt of attempts) {
+        if (attempt.simulated_capture_available || process.env.NODE_ENV !== "production") {
+          try {
+            await apiFetch(
+              `${PUBLIC_API_BASE_URL}/api/v1/payment-attempts/${attempt.id}/simulate-capture/`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({}),
+              }
+            );
+          } catch {
+            // Simulated capture error is non-fatal here if confirm completes
+          }
+        }
+      }
+
+      // 4. Finalize confirmation
       const confirmRes = await apiFetch(
         `${PUBLIC_API_BASE_URL}/api/v1/rentals/bookings/${bookingId}/confirm/`,
         {
@@ -156,10 +216,11 @@ export default function RentalCheckoutPage() {
         throw new Error(confirmErr);
       }
 
-      // Redirect to main unified bookings page
-      router.push(`/bookings?category=rentals&booked=${bookingId}`);
+      // 5. Redirect to dedicated rental tracking page
+      router.push(`/rentals/bookings/${bookingId}`);
     } catch (err: any) {
-      setError(err.message || "An unexpected error occurred during checkout.");
+      setError(err?.message || "An unexpected error occurred during checkout.");
+    } finally {
       setSubmitting(false);
     }
   }
@@ -401,23 +462,31 @@ export default function RentalCheckoutPage() {
                     ₹{gstRupees.toLocaleString("en-IN")}
                   </span>
                 </div>
-                <div className="flex justify-between text-emerald-700 font-bold pt-1">
-                  <span className="flex items-center gap-1">
-                    <ShieldCheck className="h-3.5 w-3.5" /> Refundable Security Deposit Hold
-                  </span>
-                  <span>₹{depositRupees.toLocaleString("en-IN")}</span>
+                <div className="flex justify-between text-navy-800 font-medium pt-1">
+                  <span>Subtotal Rental Fee</span>
+                  <span className="font-bold">₹{totalRentalFee.toLocaleString("en-IN")}</span>
                 </div>
               </div>
 
               <div className="mt-4 flex items-center justify-between text-sm font-bold text-navy-900">
-                <span>Total Payable Now:</span>
+                <span>Rental Fee Payable Now:</span>
                 <span className="text-xl font-black text-action">
                   ₹{totalPayableNow.toLocaleString("en-IN")}
                 </span>
               </div>
-              <p className="mt-1 text-[11px] text-text-muted">
-                Includes ₹{depositRupees.toLocaleString("en-IN")} refundable deposit held safely in escrow.
-              </p>
+
+              <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 text-xs">
+                <div className="flex items-center justify-between font-bold text-emerald-800">
+                  <span className="flex items-center gap-1.5">
+                    <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+                    Security Deposit Hold:
+                  </span>
+                  <span>₹{depositRupees.toLocaleString("en-IN")}</span>
+                </div>
+                <p className="mt-1 text-[11px] text-emerald-700 leading-normal">
+                  Pre-authorized separately via escrow hold. 100% released upon clean return inspection.
+                </p>
+              </div>
 
               <button
                 disabled={submitting || loadingAsset}

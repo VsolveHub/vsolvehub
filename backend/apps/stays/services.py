@@ -1639,7 +1639,7 @@ def operations_resolve_stay_dispute(  # noqa: PLR0912, PLR0915
     )
     if case is None:
         raise InvalidStayStateTransitionError("No open stay damage case exists.")
-    proposal = {
+    proposal: dict[str, Any] = {
         "final_consumed_amount_paise": final_consumed_amount_paise,
         "refund_deposit": refund_deposit,
         "resolution_notes": resolution_notes,

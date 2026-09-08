@@ -48,6 +48,19 @@ export function serviceHref(service: ServiceCard, categorySlug: string, tileSlug
     return `/catalog/rooms-pg-hostel?tile=${encodeURIComponent(tile)}`;
   }
 
+  // Direct shortcut for Rentals (A7_RENTAL / rental-services):
+  if (service.request_archetypes.includes("A7_RENTAL") || categorySlug === "rental-services") {
+    const tile = tileSlug || service.subcategory_slug || "";
+    return tile
+      ? `/catalog/rental-services?tile=${encodeURIComponent(tile)}`
+      : `/catalog/rental-services/${service.slug}`;
+  }
+
+  // Direct shortcut for Job Listings (A10_LISTING / career-jobs):
+  if (service.request_archetypes.includes("A10_LISTING") || categorySlug === "career-jobs") {
+    return `/listings?service=${encodeURIComponent(service.slug)}`;
+  }
+
   // A hybrid — a fixed price AND a quote path — goes to the service page, which
   // is the only screen that can offer both. Routing it straight into the brief
   // (the pre-2026-08-26 behaviour) hid the fixed price entirely: the customer

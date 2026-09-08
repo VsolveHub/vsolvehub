@@ -137,6 +137,10 @@ export default async function ServiceDetailPage({ params }: PageProps) {
                     The exact price is confirmed before you pay, once you have told us what the job involves.
                   </p>
                 </>
+              ) : service.request_archetypes.includes("A10_LISTING") || categorySlug === "career-jobs" ? (
+                <p className="text-[0.9rem] leading-relaxed text-text-secondary">
+                  Explore verified job vacancies and career openings. Apply directly with your resume and contact details — applying is completely free.
+                </p>
               ) : (
                 <p className="text-[0.9rem] leading-relaxed text-text-secondary">
                   This work is priced per job. Tell us what you need and verified professionals will send you their own quotes — describing the job costs nothing.
@@ -148,7 +152,22 @@ export default async function ServiceDetailPage({ params }: PageProps) {
                   <FitOutServicePicker serviceSlug={service.slug} />
                 ) : (
                   <div className="flex flex-col gap-3">
-                    {service.request_archetypes.includes("A9_STAY") ? (
+                    {service.request_archetypes.includes("A7_RENTAL") || categorySlug === "rental-services" ? (
+                      <>
+                        <Link
+                          href={`/catalog/rental-services?tile=${service.subcategory_slug || ""}`}
+                          className="flex h-[3.25rem] w-full items-center justify-center rounded-md bg-[#f87000] px-6 text-[0.95rem] font-bold text-white shadow-sm transition-all hover:bg-[#d65f1a] active:scale-[0.98]"
+                        >
+                          Browse Rental Equipment <span aria-hidden="true" className="ml-2">&rarr;</span>
+                        </Link>
+                        <Link
+                          href={`/catalog/${categorySlug}?tile=${service.subcategory_slug || ""}`}
+                          className="flex h-[3.25rem] w-full items-center justify-center rounded-md border-2 border-line bg-transparent px-6 text-[0.95rem] font-bold text-navy-900 transition-all hover:border-navy-900 active:scale-[0.98]"
+                        >
+                          View all in this subcategory
+                        </Link>
+                      </>
+                    ) : service.request_archetypes.includes("A9_STAY") ? (
                       <>
                         <Link
                           href={`/catalog/rooms-pg-hostel?tile=${service.subcategory_slug || "rooms"}`}
@@ -161,6 +180,21 @@ export default async function ServiceDetailPage({ params }: PageProps) {
                           className="flex h-[3.25rem] w-full items-center justify-center rounded-md border-2 border-line bg-transparent px-6 text-[0.95rem] font-bold text-navy-900 transition-all hover:border-navy-900 active:scale-[0.98]"
                         >
                           View all in this subcategory
+                        </Link>
+                      </>
+                    ) : service.request_archetypes.includes("A10_LISTING") || categorySlug === "career-jobs" ? (
+                      <>
+                        <Link
+                          href={`/listings?service=${encodeURIComponent(service.slug)}`}
+                          className="flex h-[3.25rem] w-full items-center justify-center rounded-md bg-[#f87000] px-6 text-[0.95rem] font-bold text-white shadow-sm transition-all hover:bg-[#d65f1a] active:scale-[0.98]"
+                        >
+                          Browse Job Openings <span aria-hidden="true" className="ml-2">&rarr;</span>
+                        </Link>
+                        <Link
+                          href={`/listings`}
+                          className="flex h-[3.25rem] w-full items-center justify-center rounded-md border-2 border-line bg-transparent px-6 text-[0.95rem] font-bold text-navy-900 transition-all hover:border-navy-900 active:scale-[0.98]"
+                        >
+                          All Job Listings
                         </Link>
                       </>
                     ) : service.request_archetypes.includes(A3_TIME_BLOCK) ? (

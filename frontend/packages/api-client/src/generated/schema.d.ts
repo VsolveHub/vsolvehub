@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.53.0)
- * Checksum: 6cef8aa1b3b0175f
+ * Checksum: c0a479483b0a32de
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -37,6 +37,22 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["addresses_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/applications/{application_id}/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["applications_reports_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/auth/csrf/": {
@@ -1744,6 +1760,102 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/listings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listings_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/listings/{listing_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listings_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/listings/{listing_id}/applications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["listings_applications_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/listings/{listing_id}/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["listings_reports_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/my/listing-applications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["my_listing_applications_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/my/listing-applications/{application_id}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["my_listing_applications_withdraw_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/notifications/": {
         parameters: {
             query?: never;
@@ -3105,6 +3217,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ops/listings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ops_listings_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/listings/{listing_id}/moderate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ops_listings_moderate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/listings/{listing_id}/reinstate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ops_listings_reinstate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/listings/{listing_id}/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ops_listings_remove_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/orders/{order_id}/": {
         parameters: {
             query?: never;
@@ -3927,6 +4103,150 @@ export interface paths {
             cookie?: never;
         };
         get: operations["partner_ledger_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/listing-applications/{application_id}/{action}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["partner_listing_application_action"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/listing-subscription-plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["partner_listing_subscription_plans_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/listing-subscription-plans/{plan_id}/purchase": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["partner_listing_subscription_purchase"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/listings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["partner_listings_list"];
+        put?: never;
+        post: operations["partner_listings_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/listings/{listing_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["partner_listings_retrieve"];
+        put: operations["partner_listings_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/listings/{listing_id}/{action}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["partner_listing_action"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/listings/{listing_id}/applications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["partner_listings_applications_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/listings/home": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["partner_listings_home_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/listings/roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["partner_listings_roles_retrieve"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5844,6 +6164,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/stays/holds/{reservation_id}/release/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Release an unpaid tentative stay hold immediately. */
+        post: operations["stays_holds_release_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/stays/my-reservations/": {
         parameters: {
             query?: never;
@@ -5923,6 +6260,23 @@ export interface paths {
         put?: never;
         /** @description Operations adjudicates damage dispute with maker-checker override (§8.2, M3-A9-06). */
         post: operations["stays_ops_reservations_resolve_dispute_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/stays/partner/money/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Return the host's immutable A9 ledger and live deposit custody totals. */
+        get: operations["stays_partner_money_retrieve"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -6228,6 +6582,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/stays/partner/visits/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description List visit requests for partner's properties. */
+        get: operations["stays_partner_visits_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/stays/properties/{property_id}/": {
         parameters: {
             query?: never;
@@ -6239,6 +6610,23 @@ export interface paths {
         get: operations["stays_properties_retrieve"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/stays/properties/{property_id}/visits/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Schedule an in-person property visit (Step 10 inquiry flow). */
+        post: operations["stays_properties_visits_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6364,6 +6752,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/stays/reservations/{reservation_id}/receipt/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Download a payment receipt for a non-pending stay reservation. */
+        get: operations["stays_reservations_receipt_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tax-documents/{document_id}/": {
         parameters: {
             query?: never;
@@ -6462,6 +6867,9 @@ export interface components {
          * @enum {string}
          */
         ActionEnum: "KEEP_CUSTOMER" | "KEEP_SESSION" | "KEEP_BOTH";
+        ActionReasonRequest: {
+            reason?: string;
+        };
         ActiveRole: {
             readonly active_role: string | null;
         };
@@ -6543,6 +6951,68 @@ export interface components {
             readonly details: unknown;
             readonly retryable: boolean;
             readonly request_id: string | null;
+        };
+        Application: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            listing: string;
+            readonly listing_title: string;
+            readonly status: components["schemas"]["Status26eEnum"];
+            applicant_snapshot?: unknown;
+            readonly applicant_name: string;
+            readonly applicant_phone: string;
+            readonly applicant_email: string;
+            cover_note?: string;
+            /** Format: uri */
+            resume_url?: string;
+            readonly attachments: components["schemas"]["ApplicationAttachment"][];
+            readonly status_events: components["schemas"]["ApplicationStatusEvent"][];
+            /** Format: date-time */
+            readonly contact_revealed_at: string | null;
+            /** Format: uuid */
+            readonly duplicate_of: string | null;
+            /** Format: date-time */
+            readonly withdrawn_at: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        ApplicationAttachment: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uri */
+            file_url: string;
+            file_name?: string;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        ApplicationReport: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            application: string;
+            reason: string;
+            detail?: string;
+            status?: components["schemas"]["StatusD1aEnum"];
+            /** Format: uuid */
+            operations_case?: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        ApplicationStatusEvent: {
+            /** Format: uuid */
+            readonly id: string;
+            from_status?: string;
+            to_status: string;
+            kind?: string;
+            note?: string;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        ApplicationStatusRequest: {
+            status: components["schemas"]["Status26eEnum"];
         };
         /**
          * @description The person coming, as the Customer may see them.
@@ -8833,6 +9303,62 @@ export interface components {
          * @enum {string}
          */
         LineTypeEnum: "BASE_RENTAL" | "DELIVERY_FEE" | "DEPOSIT_HOLD" | "TAX" | "EXTENSION" | "DAMAGE_SETTLEMENT";
+        ListingDetail: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly poster_name: string;
+            readonly service_name: string;
+            readonly variant_name: string;
+            title: string;
+            description: string;
+            structured_fields?: unknown;
+            status?: components["schemas"]["StatusC74Enum"];
+            moderation_status?: components["schemas"]["ModerationStatusEnum"];
+            location_text?: string;
+            is_premium?: boolean;
+            /** Format: date-time */
+            published_at?: string | null;
+            /** Format: date-time */
+            expires_at?: string | null;
+            /** @default 0 */
+            readonly application_count: number;
+            readonly contact_masked: {
+                [key: string]: string;
+            };
+        };
+        ListingReport: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            listing: string;
+            reason: string;
+            detail?: string;
+            status?: components["schemas"]["StatusD1aEnum"];
+            /** Format: uuid */
+            operations_case?: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        ListingSummary: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly poster_name: string;
+            readonly service_name: string;
+            readonly variant_name: string;
+            title: string;
+            description: string;
+            structured_fields?: unknown;
+            status?: components["schemas"]["StatusC74Enum"];
+            moderation_status?: components["schemas"]["ModerationStatusEnum"];
+            location_text?: string;
+            is_premium?: boolean;
+            /** Format: date-time */
+            published_at?: string | null;
+            /** Format: date-time */
+            expires_at?: string | null;
+            /** @default 0 */
+            readonly application_count: number;
+        };
         ManualOfferRequest: {
             /** Format: uuid */
             partner_id: string;
@@ -8881,6 +9407,19 @@ export interface components {
          * @enum {string}
          */
         ModeEnum: "SAME_PARTNER_SEQUENTIAL" | "PARALLEL_ALLOWED" | "MUST_BE_SEPARATE";
+        ModerationRequest: {
+            approved: boolean;
+            reason?: string;
+        };
+        /**
+         * @description * `DRAFT` - Draft
+         *     * `PENDING` - Pending review
+         *     * `APPROVED` - Approved
+         *     * `REJECTED` - Rejected
+         *     * `REMOVED` - Removed
+         * @enum {string}
+         */
+        ModerationStatusEnum: "DRAFT" | "PENDING" | "APPROVED" | "REJECTED" | "REMOVED";
         Money: {
             readonly amount_paise: number;
             readonly currency: string;
@@ -9202,9 +9741,11 @@ export interface components {
          *     * `RENTAL_DEPOSIT_DISPUTE` - Rental deposit dispute
          *     * `STAY_UNIT_RECOVERY` - Stay unit recovery
          *     * `STAY_DAMAGE_DISPUTE` - Stay damage dispute
+         *     * `LISTING_ABUSE` - Listing abuse
+         *     * `APPLICATION_ABUSE` - Application abuse
          * @enum {string}
          */
-        OperationsCaseKindEnum: "ASSIGNMENT" | "LATE_NO_SHOW" | "CUSTOMER_UNAVAILABLE" | "PARTIAL_WORK" | "QUALITY" | "SAFETY" | "PAYMENT" | "REFUND" | "PAYOUT" | "CANCELLATION_CONFLICT" | "ATTENDANCE" | "STAGE" | "OFF_PLATFORM" | "CHARGEBACK" | "RENTAL_ASSET_RECOVERY" | "RENTAL_DEPOSIT_DISPUTE" | "STAY_UNIT_RECOVERY" | "STAY_DAMAGE_DISPUTE";
+        OperationsCaseKindEnum: "ASSIGNMENT" | "LATE_NO_SHOW" | "CUSTOMER_UNAVAILABLE" | "PARTIAL_WORK" | "QUALITY" | "SAFETY" | "PAYMENT" | "REFUND" | "PAYOUT" | "CANCELLATION_CONFLICT" | "ATTENDANCE" | "STAGE" | "OFF_PLATFORM" | "CHARGEBACK" | "RENTAL_ASSET_RECOVERY" | "RENTAL_DEPOSIT_DISPUTE" | "STAY_UNIT_RECOVERY" | "STAY_DAMAGE_DISPUTE" | "LISTING_ABUSE" | "APPLICATION_ABUSE";
         /**
          * @description The queue row. No events and no detail — a list of two hundred cases should not carry
          *     two hundred audit trails, and the body of a safety report is not queue-scanning material.
@@ -9988,6 +10529,60 @@ export interface components {
             previous: string | null;
             results: components["schemas"]["PartnerLedgerEntry"][];
         };
+        PartnerListing: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly poster_name: string;
+            readonly service_name: string;
+            readonly variant_name: string;
+            title: string;
+            description: string;
+            structured_fields?: unknown;
+            readonly status: components["schemas"]["StatusC74Enum"];
+            readonly moderation_status: components["schemas"]["ModerationStatusEnum"];
+            location_text?: string;
+            /** @default false */
+            is_premium: boolean;
+            /** Format: date-time */
+            published_at?: string | null;
+            /** Format: date-time */
+            expires_at?: string | null;
+            /** @default 0 */
+            readonly application_count: number;
+            /** Format: uuid */
+            variant?: string;
+            contact_phone?: string;
+            /** Format: email */
+            contact_email?: string;
+            readonly moderation_reason: string;
+            /** Format: date-time */
+            readonly closed_at: string | null;
+            /** Format: date-time */
+            readonly removed_at: string | null;
+            readonly version: number;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        PartnerListingRequest: {
+            title: string;
+            description: string;
+            structured_fields?: unknown;
+            location_text?: string;
+            /** @default false */
+            is_premium: boolean;
+            /** Format: date-time */
+            published_at?: string | null;
+            /** Format: date-time */
+            expires_at?: string | null;
+            /** Format: uuid */
+            variant?: string;
+            /** Format: uuid */
+            service_id?: string;
+            service_slug?: string;
+            contact_phone?: string;
+            /** Format: email */
+            contact_email?: string;
+        };
         /**
          * @description The account, masked, plus when it becomes usable.
          *
@@ -10103,6 +10698,12 @@ export interface components {
             is_active?: boolean;
         };
         PartnerPropertyPolicy: {
+            readonly version: number;
+            /** Format: date */
+            readonly effective_from: string;
+            /** Format: date */
+            readonly effective_to: string | null;
+            readonly is_active: boolean;
             /** Format: time */
             check_in_time?: string;
             /** Format: time */
@@ -10304,7 +10905,7 @@ export interface components {
             /** Format: uuid */
             readonly id: string;
             /** Format: uuid */
-            variant_id: string;
+            variant_id?: string | null;
             name: string;
             description?: string;
             sharing_type?: components["schemas"]["SharingTypeEnum"];
@@ -10325,7 +10926,7 @@ export interface components {
         };
         PartnerUnitTypeCreateRequest: {
             /** Format: uuid */
-            variant_id: string;
+            variant_id?: string | null;
             name: string;
             description?: string;
             sharing_type?: components["schemas"]["SharingTypeEnum"];
@@ -11030,6 +11631,41 @@ export interface components {
          * @enum {string}
          */
         PropertyTypeEnum: "INDEPENDENT_HOUSE" | "VILLA" | "STUDIO_APT" | "APARTMENT" | "PG" | "HOSTEL" | "CO_LIVING" | "COMMERCIAL";
+        PropertyVisitRequest: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly property: string;
+            visitor_name: string;
+            visitor_phone: string;
+            /** Format: email */
+            visitor_email?: string;
+            /** Format: date */
+            preferred_date: string;
+            time_slot: string;
+            notes?: string;
+            readonly status: components["schemas"]["PropertyVisitStatusEnum"];
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        PropertyVisitRequestRequest: {
+            visitor_name: string;
+            visitor_phone: string;
+            /** Format: email */
+            visitor_email?: string;
+            /** Format: date */
+            preferred_date: string;
+            time_slot: string;
+            notes?: string;
+        };
+        /**
+         * @description * `REQUESTED` - Requested
+         *     * `CONFIRMED` - Confirmed
+         *     * `COMPLETED` - Completed
+         *     * `CANCELLED` - Cancelled
+         * @enum {string}
+         */
+        PropertyVisitStatusEnum: "REQUESTED" | "CONFIRMED" | "COMPLETED" | "CANCELLED";
         /** @description A vendor's own quote, read back to that vendor. */
         Proposal: {
             /** Format: uuid */
@@ -11516,9 +12152,11 @@ export interface components {
          *     * `A9_DEPOSIT_HOLD` - A9 deposit hold
          *     * `A9_DAMAGE_SETTLEMENT` - A9 damage settlement
          *     * `A9_EXTENSION` - A9 extension
+         *     * `A10_VENDOR_SUBSCRIPTION` - A10 vendor subscription
+         *     * `A10_PREMIUM_LISTING` - A10 premium listing
          * @enum {string}
          */
-        PurposeEnum: "BOOKING_GROUP" | "SCOPE_AMENDMENT_REVISION" | "M2_QUOTE_UNLOCK" | "M2_VISIT_PLAN" | "M2_SITE_VISIT_FEE" | "M2_STAGE_FUNDING" | "M2_MATERIAL_ADVANCE" | "M2_SCOPE_AMENDMENT" | "M2_BOOKING_FEE" | "A7_RENTAL_BOOKING" | "A7_DEPOSIT_HOLD" | "A7_DAMAGE_SETTLEMENT" | "A7_EXTENSION" | "A9_STAY_RESERVATION" | "A9_DEPOSIT_HOLD" | "A9_DAMAGE_SETTLEMENT" | "A9_EXTENSION";
+        PurposeEnum: "BOOKING_GROUP" | "SCOPE_AMENDMENT_REVISION" | "M2_QUOTE_UNLOCK" | "M2_VISIT_PLAN" | "M2_SITE_VISIT_FEE" | "M2_STAGE_FUNDING" | "M2_MATERIAL_ADVANCE" | "M2_SCOPE_AMENDMENT" | "M2_BOOKING_FEE" | "A7_RENTAL_BOOKING" | "A7_DEPOSIT_HOLD" | "A7_DAMAGE_SETTLEMENT" | "A7_EXTENSION" | "A9_STAY_RESERVATION" | "A9_DEPOSIT_HOLD" | "A9_DAMAGE_SETTLEMENT" | "A9_EXTENSION" | "A10_VENDOR_SUBSCRIPTION" | "A10_PREMIUM_LISTING";
         QuestionAnswerRequest: {
             answer: string;
         };
@@ -12440,6 +13078,10 @@ export interface components {
             service_name: string;
             subcategory_name: string;
             category_name: string;
+        };
+        ReportRequest: {
+            reason: string;
+            detail?: string;
         };
         RequestExtensionInput: {
             /** Format: date */
@@ -13500,11 +14142,38 @@ export interface components {
          */
         Status24aEnum: "DRAFT" | "ACTIVE" | "RETIRED";
         /**
+         * @description * `SUBMITTED` - Submitted
+         *     * `UNDER_REVIEW` - Under review
+         *     * `SHORTLISTED` - Shortlisted
+         *     * `CONTACTED` - Contacted
+         *     * `REJECTED` - Rejected
+         *     * `WITHDRAWN` - Withdrawn
+         *     * `EXPIRED` - Expired
+         * @enum {string}
+         */
+        Status26eEnum: "SUBMITTED" | "UNDER_REVIEW" | "SHORTLISTED" | "CONTACTED" | "REJECTED" | "WITHDRAWN" | "EXPIRED";
+        /**
          * @description * `ACTIVE` - Active
          *     * `RETIRED` - Retired
          * @enum {string}
          */
         Status423Enum: "ACTIVE" | "RETIRED";
+        /**
+         * @description * `DRAFT` - Draft
+         *     * `PUBLISHED` - Published
+         *     * `CLOSED` - Closed
+         *     * `EXPIRED` - Expired
+         *     * `REMOVED` - Removed
+         *     * `ARCHIVED` - Archived
+         * @enum {string}
+         */
+        StatusC74Enum: "DRAFT" | "PUBLISHED" | "CLOSED" | "EXPIRED" | "REMOVED" | "ARCHIVED";
+        /**
+         * @description * `OPEN` - Open
+         *     * `RESOLVED` - Resolved
+         * @enum {string}
+         */
+        StatusD1aEnum: "OPEN" | "RESOLVED";
         StayCancel: {
             /** @default Customer requested cancellation */
             reason: string;
@@ -13637,6 +14306,16 @@ export interface components {
             guest_count: number;
             /** @default 11 */
             lease_duration_months: number;
+            primary_tenant_name: string;
+            guest_phone: string;
+            /** Format: email */
+            guest_email: string;
+            emergency_contact_name: string;
+            emergency_contact_phone: string;
+            agreement_version: string;
+            agreement_accepted: boolean;
+            /** Format: binary */
+            kyc_document?: string;
         };
         StayPaymentAttempts: {
             payment_attempts: components["schemas"]["PaymentAttempt"][];
@@ -13653,6 +14332,12 @@ export interface components {
             /** Format: date */
             end_date: string;
             guest_count?: number;
+            primary_tenant_name?: string;
+            emergency_contact_name?: string;
+            emergency_contact_phone?: string;
+            agreement_version?: string;
+            /** Format: date-time */
+            agreement_accepted_at?: string | null;
             total_nights?: number;
             /** Format: int64 */
             base_amount_paise?: number;
@@ -13685,6 +14370,14 @@ export interface components {
             readonly unit_code: string;
             readonly image_url: string;
             readonly host_name: string;
+            readonly host_phone: string;
+            readonly host_verified: boolean;
+            readonly property_address: {
+                [key: string]: unknown;
+            } | null;
+            readonly check_in_time: string;
+            readonly check_out_time: string;
+            readonly receipt_url: string | null;
             readonly lines: components["schemas"]["StayReservationLine"][];
             readonly deposit: components["schemas"]["StayDeposit"];
             readonly check_in: components["schemas"]["StayCheckInRecord"];
@@ -13702,6 +14395,12 @@ export interface components {
             /** Format: date */
             end_date: string;
             guest_count?: number;
+            primary_tenant_name?: string;
+            emergency_contact_name?: string;
+            emergency_contact_phone?: string;
+            agreement_version?: string;
+            /** Format: date-time */
+            agreement_accepted_at?: string | null;
             total_nights?: number;
             /** Format: int64 */
             base_amount_paise?: number;
@@ -13805,6 +14504,16 @@ export interface components {
          * @enum {string}
          */
         SubjectKindEnum: "CATALOG_BOOKING" | "ENGAGEMENT";
+        SubmitApplicationRequest: {
+            name: string;
+            phone: string;
+            /** Format: email */
+            email?: string;
+            experience?: string;
+            cover_note?: string;
+            /** Format: uri */
+            resume_url?: string;
+        };
         /**
          * @description The floor every state-changing fulfilment command sits on.
          *
@@ -14044,6 +14753,39 @@ export interface components {
          * @enum {string}
          */
         VendorInvitationStatusEnum: "INVITED" | "ACCEPTED" | "QUOTED" | "DECLINED" | "EXPIRED" | "WITHDRAWN";
+        VendorSubscription: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly plan: components["schemas"]["VendorSubscriptionPlan"];
+            /** Format: uuid */
+            readonly payment_attempt_id: string;
+            status?: components["schemas"]["VendorSubscriptionStatusEnum"];
+            /** Format: date-time */
+            starts_at?: string | null;
+            /** Format: date-time */
+            ends_at?: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        VendorSubscriptionPlan: {
+            /** Format: uuid */
+            readonly id: string;
+            code: string;
+            name: string;
+            /** Format: int64 */
+            price_paise: number;
+            duration_days?: number;
+            max_active_listings?: number;
+            premium_capabilities?: unknown;
+        };
+        /**
+         * @description * `PENDING_ACTIVATION` - Pending activation
+         *     * `ACTIVE` - Active
+         *     * `EXPIRED` - Expired
+         *     * `CANCELLED` - Cancelled
+         * @enum {string}
+         */
+        VendorSubscriptionStatusEnum: "PENDING_ACTIVATION" | "ACTIVE" | "EXPIRED" | "CANCELLED";
         VersionedBatchCommandRequest: {
             expected_version: number;
         };
@@ -14435,9 +15177,10 @@ export interface components {
          *     * `A5_CUSTOM_PROJECT` - A5 custom project
          *     * `A7_RENTAL` - A7 rental
          *     * `A9_STAY` - A9 stay
+         *     * `A10_LISTING` - A10 listing
          * @enum {string}
          */
-        WorkspaceKeyEnum: "LEGACY" | "A1_TASK_VISIT" | "A3_TIME_BLOCK" | "A5_CUSTOM_PROJECT" | "A7_RENTAL" | "A9_STAY";
+        WorkspaceKeyEnum: "LEGACY" | "A1_TASK_VISIT" | "A3_TIME_BLOCK" | "A5_CUSTOM_PROJECT" | "A7_RENTAL" | "A9_STAY" | "A10_LISTING";
     };
     responses: never;
     parameters: never;
@@ -14603,6 +15346,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    applications_reports_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ReportRequest"];
+                "multipart/form-data": components["schemas"]["ReportRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplicationReport"];
                 };
             };
         };
@@ -18510,6 +19280,144 @@ export interface operations {
             };
         };
     };
+    listings_list: {
+        parameters: {
+            query?: {
+                location?: string;
+                q?: string;
+                service?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListingSummary"][];
+                };
+            };
+        };
+    };
+    listings_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listing_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListingDetail"];
+                };
+            };
+        };
+    };
+    listings_applications_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listing_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitApplicationRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SubmitApplicationRequest"];
+                "multipart/form-data": components["schemas"]["SubmitApplicationRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Application"];
+                };
+            };
+        };
+    };
+    listings_reports_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listing_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ReportRequest"];
+                "multipart/form-data": components["schemas"]["ReportRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListingReport"];
+                };
+            };
+        };
+    };
+    my_listing_applications_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Application"][];
+                };
+            };
+        };
+    };
+    my_listing_applications_withdraw_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Application"];
+                };
+            };
+        };
+    };
     notification_feed_list: {
         parameters: {
             query?: {
@@ -22178,6 +23086,106 @@ export interface operations {
             };
         };
     };
+    ops_listings_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerListing"][];
+                };
+            };
+        };
+    };
+    ops_listings_moderate_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listing_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModerationRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ModerationRequest"];
+                "multipart/form-data": components["schemas"]["ModerationRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerListing"];
+                };
+            };
+        };
+    };
+    ops_listings_reinstate_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listing_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ActionReasonRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ActionReasonRequest"];
+                "multipart/form-data": components["schemas"]["ActionReasonRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerListing"];
+                };
+            };
+        };
+    };
+    ops_listings_remove_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listing_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ActionReasonRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ActionReasonRequest"];
+                "multipart/form-data": components["schemas"]["ActionReasonRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerListing"];
+                };
+            };
+        };
+    };
     orders_retrieve: {
         parameters: {
             query?: never;
@@ -24476,6 +25484,257 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_listing_application_action: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                action: string;
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplicationStatusRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ApplicationStatusRequest"];
+                "multipart/form-data": components["schemas"]["ApplicationStatusRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Application"];
+                };
+            };
+        };
+    };
+    partner_listing_subscription_plans_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VendorSubscriptionPlan"][];
+                };
+            };
+        };
+    };
+    partner_listing_subscription_purchase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VendorSubscription"];
+                };
+            };
+        };
+    };
+    partner_listings_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerListing"][];
+                };
+            };
+        };
+    };
+    partner_listings_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PartnerListingRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PartnerListingRequest"];
+                "multipart/form-data": components["schemas"]["PartnerListingRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerListing"];
+                };
+            };
+        };
+    };
+    partner_listings_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listing_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerListing"];
+                };
+            };
+        };
+    };
+    partner_listings_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listing_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PartnerListingRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PartnerListingRequest"];
+                "multipart/form-data": components["schemas"]["PartnerListingRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerListing"];
+                };
+            };
+        };
+    };
+    partner_listing_action: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                action: string;
+                listing_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ActionReasonRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ActionReasonRequest"];
+                "multipart/form-data": components["schemas"]["ActionReasonRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerListing"];
+                };
+            };
+        };
+    };
+    partner_listings_applications_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listing_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Application"][];
+                };
+            };
+        };
+    };
+    partner_listings_home_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    partner_listings_roles_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };
@@ -28816,6 +30075,30 @@ export interface operations {
             };
         };
     };
+    stays_holds_release_create: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable unique key for safe command replay. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                reservation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StayReservationDetail"];
+                };
+            };
+        };
+    };
     stays_my_reservations_retrieve: {
         parameters: {
             query?: never;
@@ -28926,6 +30209,24 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["OpsStayResolveDispute"];
                 };
+            };
+        };
+    };
+    stays_partner_money_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -29510,6 +30811,24 @@ export interface operations {
             };
         };
     };
+    stays_partner_visits_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     stays_properties_retrieve: {
         parameters: {
             query?: never;
@@ -29529,6 +30848,33 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+        };
+    };
+    stays_properties_visits_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                property_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PropertyVisitRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PropertyVisitRequestRequest"];
+                "multipart/form-data": components["schemas"]["PropertyVisitRequestRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PropertyVisitRequest"];
                 };
             };
         };
@@ -29709,6 +31055,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StayPaymentAttempts"];
+                };
+            };
+        };
+    };
+    stays_reservations_receipt_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reservation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
                 };
             };
         };

@@ -72,6 +72,19 @@ export function TileCatalogAddButton({
     event.preventDefault();
     event.stopPropagation();
 
+    if (isRental) {
+      if (rentalListing?.asset_id) {
+        router.push(`/rentals/checkout/${rentalListing.asset_id}`);
+        return;
+      }
+      if (opensPanel && onNeedChoice) {
+        onNeedChoice();
+        return;
+      }
+      router.push(serviceHref(service, categorySlug));
+      return;
+    }
+
     if (opensPanel && onNeedChoice) {
       onNeedChoice();
       return;
@@ -126,8 +139,8 @@ export function TileCatalogAddButton({
     }
   };
 
-  // Render stepper for regular cart item
-  if (cartItem && !opensPanel) {
+  // Render stepper for regular cart item (Rentals never use universal cart)
+  if (!isRental && cartItem && !opensPanel) {
     return (
       <div
         role="group"
@@ -179,6 +192,8 @@ export function TileCatalogAddButton({
     );
   }
 
+  const buttonLabel = isRental && label === "Add" ? "Rent Now" : label;
+
   return (
     <button
       type="button"
@@ -189,7 +204,7 @@ export function TileCatalogAddButton({
         isPanel ? "h-11 min-w-[8.5rem] rounded-xl px-5 text-sm" : "h-9 rounded-lg px-4 text-[13px]"
       )}
     >
-      {isAdding ? "Adding..." : label}
+      {isAdding ? "Adding..." : buttonLabel}
     </button>
   );
 }

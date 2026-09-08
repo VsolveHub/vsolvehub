@@ -116,6 +116,7 @@ class ServiceVariant(models.Model):
         A5_CUSTOM_PROJECT = "A5_CUSTOM_PROJECT", "A5 custom project"
         A7_RENTAL = "A7_RENTAL", "A7 rental"
         A9_STAY = "A9_STAY", "A9 stay"
+        A10_LISTING = "A10_LISTING", "A10 listing"
 
     class PricingStrategy(models.TextChoices):
         FIXED = "FIXED", "Fixed"
@@ -317,6 +318,46 @@ class A9VariantConfiguration(models.Model):
                 fields=("variant",),
                 condition=models.Q(status="ACTIVE"),
                 name="catalog_unique_active_a9_variant_configuration",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.variant_id}:v{self.version}:{self.status}"
+
+
+class A10VariantConfiguration(models.Model):
+    """Versioned schema configuration for an A10_LISTING variant."""
+
+    class Status(models.TextChoices):
+        DRAFT = "DRAFT", "Draft"
+        ACTIVE = "ACTIVE", "Active"
+        RETIRED = "RETIRED", "Retired"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    variant = models.ForeignKey(
+        ServiceVariant,
+        on_delete=models.PROTECT,
+        related_name="a10_configurations",
+    )
+    version = models.PositiveIntegerField(default=1)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.ACTIVE)
+    listing_type_schema = models.JSONField(default=dict, blank=True)
+    application_schema = models.JSONField(default=dict, blank=True)
+    application_cooldown_hours = models.PositiveSmallIntegerField(default=24)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("variant", "-version")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("variant", "version"),
+                name="catalog_unique_a10_variant_configuration_version",
+            ),
+            models.UniqueConstraint(
+                fields=("variant",),
+                condition=models.Q(status="ACTIVE"),
+                name="catalog_unique_active_a10_variant_configuration",
             ),
         ]
 

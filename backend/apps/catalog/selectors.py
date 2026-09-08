@@ -13,6 +13,7 @@ from rest_framework.exceptions import NotFound
 from apps.catalog.models import (
     A7VariantConfiguration,
     A9VariantConfiguration,
+    A10VariantConfiguration,
     Category,
     M2VariantConfiguration,
     Service,
@@ -94,6 +95,10 @@ def _requirement_variants() -> QuerySet[ServiceVariant]:
             | models.Q(
                 booking_archetype=ServiceVariant.BookingArchetype.A9_STAY,
                 a9_configurations__status=A9VariantConfiguration.Status.ACTIVE,
+            )
+            | models.Q(
+                booking_archetype=ServiceVariant.BookingArchetype.A10_LISTING,
+                a10_configurations__status=A10VariantConfiguration.Status.ACTIVE,
             ),
             is_active=True,
         )
@@ -134,6 +139,10 @@ def _offerable_service_base() -> QuerySet[Service]:
         | models.Q(
             booking_archetype=ServiceVariant.BookingArchetype.A9_STAY,
             a9_configurations__status=A9VariantConfiguration.Status.ACTIVE,
+        )
+        | models.Q(
+            booking_archetype=ServiceVariant.BookingArchetype.A10_LISTING,
+            a10_configurations__status=A10VariantConfiguration.Status.ACTIVE,
         ),
         service_id=OuterRef("pk"),
         is_active=True,

@@ -35,6 +35,7 @@ export interface PartnerPropertyOverview {
   active_guests: number;
   image_url: string;
   is_active: boolean;
+  has_pricing?: boolean;
 }
 
 export type StayReservationStatus =

@@ -379,19 +379,85 @@ class PartnerUnitTypeCreateSerializer(serializers.ModelSerializer):
             "is_active",
         )
 
+    PROPERTY_TYPE_SUBCATEGORY_MAP = {
+        # 12 Canonical Stay Categories
+        Property.PropertyType.ROOMS: "rooms",
+        Property.PropertyType.PG: "pg-accommodation",
+        Property.PropertyType.HOSTEL: "hostels",
+        Property.PropertyType.BED_SPACE: "bed-space",
+        Property.PropertyType.CO_LIVING: "co-living-spaces",
+        Property.PropertyType.APARTMENT: "apartments",
+        Property.PropertyType.RENTAL_PROPERTY: "rental-properties",
+        Property.PropertyType.SHORT_STAY: "short-stay",
+        Property.PropertyType.STUDENT_ACCOMMODATION: "student-accommodation",
+        Property.PropertyType.WORKER_ACCOMMODATION: "worker-accommodation",
+        Property.PropertyType.PROPERTY_LISTING: "property-listing",
+        Property.PropertyType.PREMIUM_STAYS: "premium-stays",
+
+        # Legacy building aliases
+        Property.PropertyType.STUDIO_APT: "apartments",
+        Property.PropertyType.INDEPENDENT_HOUSE: "rental-properties",
+        Property.PropertyType.VILLA: "rental-properties",
+        Property.PropertyType.COMMERCIAL: "property-listing",
+    }
+
     def validate(self, attrs: dict) -> dict:
         variant = attrs.get("variant") or getattr(self.instance, "variant", None)
         partner = self.context.get("partner")
+        prop = self.context.get("property") or getattr(self.instance, "property", None)
+
         if variant is None and partner is not None:
-            cap = (
+            base_caps = (
                 PartnerCapability.objects.filter(
                     partner=partner,
                     archetype=ServiceVariant.BookingArchetype.A9_STAY,
                     status=PartnerCapability.Status.APPROVED,
                 )
                 .filter(Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()))
-                .first()
+                .select_related("variant", "variant__service", "variant__service__subcategory")
             )
+
+            cap = None
+            if prop is not None and getattr(prop, "property_type", None):
+                target_sub = self.PROPERTY_TYPE_SUBCATEGORY_MAP.get(prop.property_type, "rooms")
+                sub_caps = base_caps.filter(variant__service__subcategory__slug=target_sub)
+
+                is_ac = attrs.get("is_ac")
+                sharing_count = attrs.get("sharing_count")
+                food_included = attrs.get("food_included")
+
+                if is_ac is not None:
+                    if is_ac:
+                        ac_cap = sub_caps.filter(variant__name__icontains="AC").exclude(variant__name__icontains="Non").first()
+                    else:
+                        ac_cap = sub_caps.filter(variant__name__icontains="Non AC").first()
+                    if ac_cap:
+                        cap = ac_cap
+
+                if cap is None and sharing_count:
+                    if sharing_count == 1:
+                        share_cap = sub_caps.filter(variant__name__icontains="Single").first()
+                    elif sharing_count == 2:
+                        share_cap = sub_caps.filter(variant__name__icontains="Double").first()
+                    elif sharing_count == 3:
+                        share_cap = sub_caps.filter(variant__name__icontains="Triple").first()
+                    elif sharing_count >= 4:
+                        share_cap = sub_caps.filter(variant__name__icontains="Four").first()
+                    if share_cap:
+                        cap = share_cap
+
+                if cap is None and food_included is not None:
+                    food_keyword = "Food Included" if food_included else "Without Food"
+                    food_cap = sub_caps.filter(variant__name__icontains=food_keyword).first()
+                    if food_cap:
+                        cap = food_cap
+
+                if cap is None:
+                    cap = sub_caps.first()
+
+            if cap is None:
+                cap = base_caps.first()
+
             if cap:
                 variant = cap.variant
                 attrs["variant"] = variant

@@ -329,19 +329,16 @@ export function RentalHome() {
     (b) => b.status === "CONFIRMED" || b.status === "HELD"
   );
 
-  const displayHandovers =
-    realHandovers.length > 0
-      ? realHandovers.map((b) => {
-          const parsed = parseItemTitleAndGrade(b.asset_title);
-          return {
-            id: b.id,
-            shortId: `#${b.id.slice(0, 8)}`,
-            title: parsed.title,
-            grade: parsed.grade,
-            isProfessional: parsed.grade === "Professional Grade",
-          };
-        })
-      : CANONICAL_HANDOVERS;
+  const displayHandovers = realHandovers.map((b) => {
+    const parsed = parseItemTitleAndGrade(b.asset_title);
+    return {
+      id: b.id,
+      shortId: `#${b.id.slice(0, 8)}`,
+      title: parsed.title,
+      grade: parsed.grade,
+      isProfessional: parsed.grade === "Professional Grade",
+    };
+  });
 
   const handoversCount = displayHandovers.length;
   const returnsCount = allBookings.filter(
@@ -349,15 +346,15 @@ export function RentalHome() {
   ).length;
 
   // Inventory stats
-  const totalAssetsCount = allAssets.length > 0 ? allAssets.length : 48;
-  const onRentCount = activeBookings.length > 0 ? activeBookings.length : 12;
-  const inInspectionCount = 4;
+  const totalAssetsCount = allAssets.length;
+  const onRentCount = activeBookings.length;
+  const inInspectionCount = allBookings.filter((b) => b.status === "RETURN_PENDING").length;
   const availableCount = Math.max(0, totalAssetsCount - onRentCount - inInspectionCount);
 
   // Percentages for bar
-  const availPct = Math.round((availableCount / totalAssetsCount) * 100);
-  const onRentPct = Math.round((onRentCount / totalAssetsCount) * 100);
-  const inspectPct = Math.max(4, 100 - availPct - onRentPct);
+  const availPct = totalAssetsCount > 0 ? Math.round((availableCount / totalAssetsCount) * 100) : 0;
+  const onRentPct = totalAssetsCount > 0 ? Math.round((onRentCount / totalAssetsCount) * 100) : 0;
+  const inspectPct = totalAssetsCount > 0 ? Math.max(0, 100 - availPct - onRentPct) : 0;
 
   return (
     <div className="w-full bg-[#f8fafc] min-h-[calc(100vh-4rem)] pb-20 pt-7">
@@ -541,52 +538,60 @@ export function RentalHome() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100">
-                  {displayHandovers.map((item) => (
-                    <tr
-                      key={item.id}
-                      className="group transition-colors hover:bg-neutral-50/50"
-                    >
-                      {/* ITEM */}
-                      <td className="py-3.5 pr-3">
-                        <div className="flex items-center gap-3.5">
-                          <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border border-neutral-200/70 bg-neutral-100/60 p-1">
-                            {getItemThumbnail(item.title)}
-                          </div>
-                          <div className="min-w-0">
-                            <span className="block truncate font-bold text-sm text-neutral-900">
-                              {item.title}
-                            </span>
-                            <span className="block text-xs font-mono text-neutral-400 mt-0.5">
-                              {item.shortId}
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* GRADE */}
-                      <td className="py-3.5 px-3 text-center">
-                        {item.isProfessional ? (
-                          <span className="inline-block rounded-full border border-[#d6e2fb] bg-[#eff4fe] px-3 py-0.5 text-xs font-semibold text-[#3563e9] whitespace-nowrap">
-                            Professional Grade
-                          </span>
-                        ) : (
-                          <span className="inline-block rounded-full border border-[#e2e8f0] bg-[#f1f5f9] px-3 py-0.5 text-xs font-semibold text-[#475569] whitespace-nowrap">
-                            Standard Grade
-                          </span>
-                        )}
-                      </td>
-
-                      {/* ACTION */}
-                      <td className="py-3.5 pl-3 text-right">
-                        <Link
-                          href={`/rentals/bookings`}
-                          className="inline-flex items-center gap-1.5 rounded-xl border border-[#f97316] bg-white px-3.5 py-1.5 text-xs font-bold text-[#ea580c] shadow-2xs transition-all hover:bg-[#fff7ed] hover:border-[#ea580c] whitespace-nowrap"
-                        >
-                          Record handover <ArrowRight className="h-3.5 w-3.5" />
-                        </Link>
+                  {displayHandovers.length === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="py-8 text-center text-xs text-neutral-400">
+                        No pending handovers scheduled for today.
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    displayHandovers.map((item) => (
+                      <tr
+                        key={item.id}
+                        className="group transition-colors hover:bg-neutral-50/50"
+                      >
+                        {/* ITEM */}
+                        <td className="py-3.5 pr-3">
+                          <div className="flex items-center gap-3.5">
+                            <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border border-neutral-200/70 bg-neutral-100/60 p-1">
+                              {getItemThumbnail(item.title)}
+                            </div>
+                            <div className="min-w-0">
+                              <span className="block truncate font-bold text-sm text-neutral-900">
+                                {item.title}
+                              </span>
+                              <span className="block text-xs font-mono text-neutral-400 mt-0.5">
+                                {item.shortId}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* GRADE */}
+                        <td className="py-3.5 px-3 text-center">
+                          {item.isProfessional ? (
+                            <span className="inline-block rounded-full border border-[#d6e2fb] bg-[#eff4fe] px-3 py-0.5 text-xs font-semibold text-[#3563e9] whitespace-nowrap">
+                              Professional Grade
+                            </span>
+                          ) : (
+                            <span className="inline-block rounded-full border border-[#e2e8f0] bg-[#f1f5f9] px-3 py-0.5 text-xs font-semibold text-[#475569] whitespace-nowrap">
+                              Standard Grade
+                            </span>
+                          )}
+                        </td>
+
+                        {/* ACTION */}
+                        <td className="py-3.5 pl-3 text-right">
+                          <Link
+                            href={`/rentals/bookings`}
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-[#f97316] bg-white px-3.5 py-1.5 text-xs font-bold text-[#ea580c] shadow-2xs transition-all hover:bg-[#fff7ed] hover:border-[#ea580c] whitespace-nowrap"
+                          >
+                            Record handover <ArrowRight className="h-3.5 w-3.5" />
+                          </Link>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>

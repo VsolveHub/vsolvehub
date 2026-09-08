@@ -146,24 +146,24 @@ Single task; do not jump to wallet/coin models.
 
 ### D1 — A7 rental engine
 
-- [ ] `M3-BE-311` Models: `RentalAsset`, `RentalMaintenancePeriod`, `A7VariantConfiguration`
-- [ ] `M3-BE-312` `AssetReservation` + `ExclusionConstraint` (serialized-asset path)
-- [ ] `M3-BE-313` Fungible pooled-asset capacity path (`select_for_update` + quantity check)
-- [ ] `M3-BE-314` `RentalBooking`, `RentalBookingLine` + status machine
-- [ ] `M3-BE-315` `RentalDeposit`, `RentalDepositTransaction` + status machine
-- [ ] `M3-BE-316` `RentalHandover`, `RentalReturnInspection` (evidence-required)
-- [ ] `M3-BE-317` `RentalExtension` command + conflict detection
-- [ ] `M3-BE-318` Settlement matrix (auto-approval tiers + Operations-required tier)
-- [ ] `M3-BE-319` `RentalPaymentAllocation` + checkout-free `PaymentAttempt.Purpose` values
-- [ ] `M3-BE-320` Availability selector (asset calendar grid)
-- [ ] `M3-BE-321` Operations commands: reassign asset, resolve deposit dispute, damage settlement override
-- [ ] `M3-BE-322` Expiry sweeps: `AssetReservation` TENTATIVE expiry, maintenance-driven auto-block
-- [ ] `M3-BE-323` PartnerCapability onboarding path for rental vendors
-- [ ] `M3-BE-324` `RentalListingGroup` browse/search selector — query-time rollup over `RentalAsset` with `quantity_available` (design doc §4.1a, §11)
-- [ ] `M3-BE-325` Customer-facing vendor-list endpoint for a selected product type — product-type-first, then owner-list browse (design doc §4.1a)
-- [ ] `M3-FE-311` Partner Assets/Bookings/Money workspace
-- [ ] `M3-FE-312` Customer rental browse/checkout/active-rental tracking
-- [ ] `M3-FE-313` Product-type browse -> vendor-list -> listing-group card UI, including de-duplicated quantity display (design doc §4.1a)
+- [~] `M3-BE-311` Models: `RentalAsset`, `RentalMaintenancePeriod`, `A7VariantConfiguration`
+- [~] `M3-BE-312` `AssetReservation` + `ExclusionConstraint` (serialized-asset path)
+- [~] `M3-BE-313` Fungible pooled-asset capacity path (`select_for_update` + quantity check)
+- [~] `M3-BE-314` `RentalBooking`, `RentalBookingLine` + status machine
+- [~] `M3-BE-315` `RentalDeposit`, `RentalDepositTransaction` + status machine
+- [~] `M3-BE-316` `RentalHandover`, `RentalReturnInspection` (evidence-required)
+- [~] `M3-BE-317` `RentalExtension` command + conflict detection
+- [~] `M3-BE-318` Settlement matrix (auto-approval tiers + Operations-required tier)
+- [~] `M3-BE-319` `RentalPaymentAllocation` + checkout-free `PaymentAttempt.Purpose` values
+- [~] `M3-BE-320` Availability selector (asset calendar grid)
+- [~] `M3-BE-321` Operations commands: reassign asset, resolve deposit dispute, damage settlement override
+- [~] `M3-BE-322` Expiry sweeps: `AssetReservation` TENTATIVE expiry, maintenance-driven auto-block
+- [~] `M3-BE-323` PartnerCapability onboarding path for rental vendors
+- [~] `M3-BE-324` `RentalListingGroup` browse/search selector — query-time rollup over `RentalAsset` with `quantity_available` (design doc §4.1a, §11)
+- [~] `M3-BE-325` Customer-facing vendor-list endpoint for a selected product type — product-type-first, then owner-list browse (design doc §4.1a)
+- [~] `M3-FE-311` Partner Assets/Bookings/Money workspace
+- [~] `M3-FE-312` Customer rental browse/checkout/active-rental tracking
+- [~] `M3-FE-313` Product-type browse -> vendor-list -> listing-group card UI, including de-duplicated quantity display (design doc §4.1a)
 
 **Exit gate:** `M3-A7-01` through `M3-A7-17` (see plan doc §12.1) pass on staging.
 

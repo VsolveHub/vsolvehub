@@ -101,14 +101,13 @@ export default function PartnerRentalsBookingsPage() {
         .split(",")
         .map((p) => p.trim())
         .filter(Boolean);
+      if (photos.length === 0) {
+        alert("At least one photo URL is required for outbound handover verification evidence.");
+        return;
+      }
       await recordHandover.mutateAsync({
         bookingId: handoverBooking.id,
-        photo_urls:
-          photos.length > 0
-            ? photos
-            : [
-                "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=600&auto=format&fit=crop&q=80",
-              ],
+        photo_urls: photos,
         condition_notes: handoverNotes || "Handover condition verified and tested working.",
         assigned_serial: assignedSerial || handoverBooking.assigned_serial || "SERIAL-VERIFIED",
       });
@@ -137,14 +136,13 @@ export default function PartnerRentalsBookingsPage() {
         .split(",")
         .map((p) => p.trim())
         .filter(Boolean);
+      if (photos.length === 0) {
+        alert("At least one inspection photo URL is required for return inspection evidence.");
+        return;
+      }
       await recordInspection.mutateAsync({
         bookingId: inspectionBooking.id,
-        photo_urls:
-          photos.length > 0
-            ? photos
-            : [
-                "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=600&auto=format&fit=crop&q=80",
-              ],
+        photo_urls: photos,
         condition_notes:
           inspectionNotes || (damageFound ? "Damage noted during return inspection." : "Clean return in original condition."),
         damage_found: damageFound,
@@ -599,12 +597,15 @@ export default function PartnerRentalsBookingsPage() {
               </div>
 
               <div>
-                <label className="block font-semibold text-neutral-700">Verification Photo URL</label>
+                <label className="block font-semibold text-neutral-700">
+                  Verification Photo URL <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="text"
+                  required
                   value={handoverPhotos}
                   onChange={(e) => setHandoverPhotos(e.target.value)}
-                  placeholder="Paste photo URL (or leave blank to use verified sample image)"
+                  placeholder="Paste outbound equipment photo URL (e.g. https://example.com/handover.jpg)"
                   className="mt-1 w-full rounded-lg border border-neutral-300 p-2.5 text-xs focus:border-action focus:outline-none"
                 />
               </div>
@@ -735,12 +736,15 @@ export default function PartnerRentalsBookingsPage() {
               </div>
 
               <div>
-                <label className="block font-semibold text-neutral-700">Inspection Proof Photo URL</label>
+                <label className="block font-semibold text-neutral-700">
+                  Inspection Proof Photo URL <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="text"
+                  required
                   value={inspectionPhotos}
                   onChange={(e) => setInspectionPhotos(e.target.value)}
-                  placeholder="Paste inspection photo URL (or leave blank for sample photo)"
+                  placeholder="Paste return inspection photo URL (e.g. https://example.com/return-inspection.jpg)"
                   className="mt-1 w-full rounded-lg border border-neutral-300 p-2.5 text-xs focus:border-neutral-900 focus:outline-none"
                 />
               </div>

@@ -290,7 +290,7 @@ export default function StayCheckoutPage() {
           <h2 className="text-base font-bold text-red-800">Checkout Error</h2>
           <p className="mt-1 text-xs text-red-600">{error || "Could not retrieve room details."}</p>
           <Link
-            href="/stays"
+            href="/catalog/rooms-pg-hostel"
             className="mt-4 inline-flex items-center gap-1 text-xs font-bold text-signal-700 hover:text-action"
           >
             ← Back to Stays

@@ -30,6 +30,7 @@ M2_ARCHETYPES: Final = (
     ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT,
     ServiceVariant.BookingArchetype.A7_RENTAL,
     ServiceVariant.BookingArchetype.A9_STAY,
+    ServiceVariant.BookingArchetype.A10_LISTING,
 )
 
 #: The three business types, in the words a Partner reads, with the consequence stated. The
@@ -69,6 +70,9 @@ LIFECYCLE_EXPLANATIONS: Final[dict[str, str]] = {
     ),
     ServiceVariant.BookingArchetype.A9_STAY: (
         "You list rooms, PG, hostels, or rental properties. Vsolve collects booking fees and deposits."
+    ),
+    ServiceVariant.BookingArchetype.A10_LISTING: (
+        "You post job and career opportunities. Candidates apply and you review submissions."
     ),
 }
 

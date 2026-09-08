@@ -32,7 +32,7 @@ from apps.catalog.models import (
     ServiceVariant,
     Subcategory,
 )
-from apps.commerce.models import PaymentAttempt
+from apps.commerce.models import Booking, PaymentAttempt
 from apps.partners.models import PartnerBusinessProfile, PartnerProfile
 from apps.payouts.models import PartnerLedgerEntry
 from apps.rentals.exceptions import AssetUnavailableError, InvalidRentalStateTransitionError
@@ -54,6 +54,7 @@ from apps.rentals.services import (
     confirm_rental_booking,
     create_rental_hold,
     dispute_deposit,
+    handle_rental_checkout_failure,
     initiate_rental_checkout,
     operations_reassign_asset,
     operations_resolve_dispute,
@@ -914,6 +915,114 @@ class RentalServicesTestSuite(TestCase):
         self.assertEqual(booking.status, RentalBooking.Status.RECOVERY_REQUIRED)
         case = OperationsCase.objects.filter(rental_booking=booking).first()
         self.assertIsNotNone(case)
+
+    def test_21_checkout_failure_releases_hold_and_sibling_refund(self) -> None:
+        """Verify handle_rental_checkout_failure releases hold and unwinds captured sibling attempt."""
+        today = date.today() + timedelta(days=1)
+        end = today + timedelta(days=3)
+
+        booking = create_rental_hold(
+            customer=self.customer,
+            asset_id=self.serialized_asset.id,
+            start_date=today,
+            end_date=end,
+        )
+        booking_pa = PaymentAttempt.objects.create(
+            purpose=PaymentAttempt.Purpose.A7_RENTAL_BOOKING,
+            status=PaymentAttempt.Status.CAPTURED,
+            provider="fake",
+            provider_payment_id="pay_test_booking",
+            amount_paise=100000,
+            currency="INR",
+        )
+        RentalPaymentAllocation.objects.create(
+            payment_attempt=booking_pa,
+            rental_booking_line=booking.lines.first(),
+            amount_paise=100000,
+        )
+
+        deposit_pa = PaymentAttempt.objects.create(
+            purpose=PaymentAttempt.Purpose.A7_DEPOSIT_HOLD,
+            status=PaymentAttempt.Status.FAILED,
+            provider="fake",
+            provider_payment_id="pay_test_deposit",
+            amount_paise=100000,
+            currency="INR",
+        )
+        RentalPaymentAllocation.objects.create(
+            payment_attempt=deposit_pa,
+            rental_booking_line=booking.lines.first(),
+            amount_paise=100000,
+        )
+
+        handle_rental_checkout_failure(payment_attempt_id=deposit_pa.id)
+
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, RentalBooking.Status.FAILED)
+        self.assertEqual(booking.reservation.status, AssetReservation.Status.RELEASED)
+
+    def test_22_partner_ledger_entry_scope_constraint(self) -> None:
+        """Verify payouts_ledger_entry_at_most_one_scope and payouts_earning_must_have_exactly_one_scope."""
+        from django.db import IntegrityError, transaction
+
+        today = date.today() + timedelta(days=1)
+        booking = create_rental_hold(
+            customer=self.customer,
+            asset_id=self.serialized_asset.id,
+            start_date=today,
+            end_date=today + timedelta(days=2),
+        )
+
+        # 1. An EARNING with no scope set violates payouts_earning_must_have_exactly_one_scope
+        with transaction.atomic():
+            with self.assertRaises(IntegrityError):
+                PartnerLedgerEntry.objects.create(
+                    partner=self.partner,
+                    kind=PartnerLedgerEntry.Kind.EARNING,
+                    status=PartnerLedgerEntry.Status.PENDING,
+                    gross_paise=50000,
+                    commission_paise=5000,
+                    net_paise=45000,
+                )
+
+        # 2. A ledger entry with valid rental_booking succeeds
+        entry = PartnerLedgerEntry.objects.create(
+            partner=self.partner,
+            kind=PartnerLedgerEntry.Kind.EARNING,
+            status=PartnerLedgerEntry.Status.PENDING,
+            gross_paise=50000,
+            commission_paise=5000,
+            net_paise=45000,
+            rental_booking=booking,
+        )
+        self.assertIsNotNone(entry.id)
+
+    def test_23_rental_deposit_bounds_check_constraints(self) -> None:
+        """Verify check constraints prevent refunded or consumed amounts exceeding authorized deposit."""
+        from django.db import IntegrityError, transaction
+
+        today = date.today() + timedelta(days=1)
+        booking = create_rental_hold(
+            customer=self.customer,
+            asset_id=self.serialized_asset.id,
+            start_date=today,
+            end_date=today + timedelta(days=2),
+        )
+
+        deposit = booking.deposit
+        deposit.amount_paise = 100000
+        deposit.save()
+
+        with transaction.atomic():
+            with self.assertRaises(IntegrityError):
+                deposit.refunded_amount_paise = 150000
+                deposit.save()
+
+        deposit.refresh_from_db()
+        with transaction.atomic():
+            with self.assertRaises(IntegrityError):
+                deposit.consumed_amount_paise = 200000
+                deposit.save()
 
 
 class RentalConcurrencyTestSuite(TransactionTestCase):

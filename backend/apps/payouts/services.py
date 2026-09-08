@@ -164,6 +164,10 @@ def settle_booking_earning(
         booking=booking, kind=PartnerLedgerEntry.Kind.EARNING
     ).first()
     if existing is not None:
+        held = booking.payout_hold or booking.status == Booking.Status.DISPUTED
+        if held and existing.status == PartnerLedgerEntry.Status.AVAILABLE:
+            existing.status = PartnerLedgerEntry.Status.PENDING
+            existing.save(update_fields=("status", "updated_at"))
         return existing
 
     unit = booking.fulfilment_unit
@@ -198,6 +202,22 @@ def settle_booking_earning(
         created_by=actor,
         idempotency_key=f"earning:{booking.id}",
     )
+
+
+@transaction.atomic
+def apply_payout_hold(*, booking_id: UUID) -> PartnerLedgerEntry | None:
+    """Move an available earning to `PENDING` while an investigation/case runs."""
+
+    entry = (
+        PartnerLedgerEntry.objects.select_for_update()
+        .filter(booking_id=booking_id, kind=PartnerLedgerEntry.Kind.EARNING)
+        .first()
+    )
+    if entry is None or entry.status != PartnerLedgerEntry.Status.AVAILABLE:
+        return entry
+    entry.status = PartnerLedgerEntry.Status.PENDING
+    entry.save(update_fields=("status", "updated_at"))
+    return entry
 
 
 @transaction.atomic

@@ -3,22 +3,25 @@
 import React, { useState } from "react";
 import { describeError } from "@vsolve/query";
 import { Button, EmptyState, ErrorState, Skeleton, buttonStyles } from "@vsolve/ui";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
-  Building2,
-  Package,
-  Wrench,
-  Calendar,
-  MapPin,
-  Clock,
-  ShieldCheck,
-  CheckCircle2,
   ArrowRight,
+  BriefcaseBusiness,
+  Building2,
+  Calendar,
+  CheckCircle2,
+  Clock,
+  MapPin,
+  Package,
+  ShieldCheck,
   Sparkles,
-  X,
-  Truck,
   Store,
+  Truck,
+  User,
+  Wrench,
+  X,
 } from "lucide-react";
 
 import { BookingGroupRow } from "@/features/bookings/view/group-list";
@@ -31,10 +34,11 @@ import { useMyRequests, type RequirementSummary } from "@/features/requirement/q
 import { RequestRow } from "@/features/requirement/view/requests-list";
 import { useRentalBookings, type RentalBookingItem } from "@/features/rentals/queries";
 import { useStayReservations, type StayReservationDetail } from "@/features/stays/queries";
+import { fetchMyApplications, type ListingApplication } from "@/features/listings/queries";
 import { requestHref } from "@/lib/routes";
 
 export type BookingSection = "needs_you" | "active" | "past";
-export type BookingCategory = "all" | "services" | "rentals" | "stays";
+export type BookingCategory = "all" | "services" | "rentals" | "stays" | "applications";
 
 const CLOSED_REQUESTS: ReadonlySet<RequirementSummary["status"]> = new Set([
   "CLOSED_NO_SUPPLY",
@@ -117,6 +121,21 @@ export function staySection(status: string): BookingSection {
   return "active";
 }
 
+export function applicationSection(status: string): BookingSection {
+  if (status === "SHORTLISTED" || status === "CONTACTED") {
+    return "needs_you";
+  }
+  if (
+    status === "HIRED" ||
+    status === "REJECTED" ||
+    status === "WITHDRAWN" ||
+    status === "EXPIRED"
+  ) {
+    return "past";
+  }
+  return "active";
+}
+
 export function requestBelongsInBookings(requirement: RequirementSummary): boolean {
   return requirement.engagement_id === null;
 }
@@ -126,7 +145,8 @@ export type BookingItem =
   | { kind: "engagement"; key: string; category: "services"; section: BookingSection; sortAt: string; row: EngagementRowView }
   | { kind: "group"; key: string; category: "services"; section: BookingSection; sortAt: string; group: BookingGroup }
   | { kind: "rental"; key: string; category: "rentals"; section: BookingSection; sortAt: string; rental: RentalBookingItem }
-  | { kind: "stay"; key: string; category: "stays"; section: BookingSection; sortAt: string; stay: StayReservationDetail };
+  | { kind: "stay"; key: string; category: "stays"; section: BookingSection; sortAt: string; stay: StayReservationDetail }
+  | { kind: "application"; key: string; category: "applications"; section: BookingSection; sortAt: string; application: ListingApplication };
 
 function byNewest(a: BookingItem, b: BookingItem): number {
   const dateA = a.sortAt ? Date.parse(a.sortAt) : 0;
@@ -140,6 +160,7 @@ function itemsFrom(
   groups: readonly BookingGroup[],
   rentals: readonly RentalBookingItem[],
   stays: readonly StayReservationDetail[],
+  applications: readonly ListingApplication[] = [],
 ): { items: BookingItem[]; unknownEngagements: number } {
   const requestRows = toRequestRows(
     requirements.filter(requestBelongsInBookings),
@@ -202,6 +223,16 @@ function itemsFrom(
           stay,
         }),
       ),
+      ...applications.map(
+        (app): BookingItem => ({
+          kind: "application",
+          key: `application:${app.id}`,
+          category: "applications",
+          section: applicationSection(app.status),
+          sortAt: app.updated_at ?? app.created_at ?? "",
+          application: app,
+        }),
+      ),
     ].sort(byNewest),
     unknownEngagements: engagementLists.undescribable.length,
   };
@@ -241,14 +272,26 @@ export function ActivityScreen() {
   const groupsQuery = useBookingGroups();
   const rentalsQuery = useRentalBookings();
   const staysQuery = useStayReservations();
+  const applicationsQuery = useQuery({
+    queryKey: ["my-listing-applications"],
+    queryFn: fetchMyApplications,
+  });
 
   const requirements = requirementsQuery.data ?? [];
   const engagements = (engagementsQuery.data?.pages ?? []).flatMap((page) => page.results);
   const groups = (groupsQuery.data?.pages ?? []).flatMap((page) => page.results);
   const rentals = rentalsQuery.data ?? [];
   const stays = staysQuery.data ?? [];
+  const applications = applicationsQuery.data ?? [];
 
-  const { items, unknownEngagements } = itemsFrom(requirements, engagements, groups, rentals, stays);
+  const { items, unknownEngagements } = itemsFrom(
+    requirements,
+    engagements,
+    groups,
+    rentals,
+    stays,
+    applications,
+  );
 
   const isFirstLoad =
     items.length === 0 &&
@@ -256,7 +299,8 @@ export function ActivityScreen() {
       engagementsQuery.isPending ||
       groupsQuery.isPending ||
       rentalsQuery.isPending ||
-      staysQuery.isPending);
+      staysQuery.isPending ||
+      applicationsQuery.isPending);
 
   const errors = [
     requirementsQuery.error,
@@ -264,6 +308,7 @@ export function ActivityScreen() {
     groupsQuery.error,
     rentalsQuery.error,
     staysQuery.error,
+    applicationsQuery.error,
   ].filter((error): error is Error => error instanceof Error);
 
   const hasDirectPay = items.some(
@@ -273,6 +318,7 @@ export function ActivityScreen() {
   const servicesCount = items.filter((i) => i.category === "services").length;
   const rentalsCount = items.filter((i) => i.category === "rentals").length;
   const staysCount = items.filter((i) => i.category === "stays").length;
+  const applicationsCount = items.filter((i) => i.category === "applications").length;
 
   const filteredItems = items.filter((item) => {
     if (selectedCategory === "all") return true;
@@ -292,7 +338,7 @@ export function ActivityScreen() {
             Bookings & Activity
           </h1>
           <p className="mt-1 max-w-xl text-sm leading-relaxed text-text-secondary">
-            All your Services, Equipment Rentals, and Stay accommodations in one unified place.
+            All your Services, Equipment Rentals, Stays, and Job Applications in one unified place.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -302,8 +348,11 @@ export function ActivityScreen() {
           <Link href="/catalog/rental-services" className={buttonStyles({ variant: "outline", size: "sm" })}>
             Rent Tools
           </Link>
-          <Link href="/stays" className={buttonStyles({ variant: "outline", size: "sm" })}>
+          <Link href="/catalog/rooms-pg-hostel" className={buttonStyles({ variant: "outline", size: "sm" })}>
             Find Stays
+          </Link>
+          <Link href="/listings" className={buttonStyles({ variant: "outline", size: "sm" })}>
+            Careers & Jobs
           </Link>
         </div>
       </div>
@@ -428,6 +477,25 @@ export function ActivityScreen() {
             {staysCount}
           </span>
         </button>
+
+        <button
+          onClick={() => setSelectedCategory("applications")}
+          className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-bold transition-all ${
+            selectedCategory === "applications"
+              ? "bg-navy-900 text-white shadow-sm"
+              : "bg-surface border border-line text-text-secondary hover:text-navy-900 hover:border-navy-300"
+          }`}
+        >
+          <BriefcaseBusiness className="h-3.5 w-3.5" />
+          <span>Job Applications</span>
+          <span
+            className={`rounded-full px-1.5 py-0.2 text-[10px] ${
+              selectedCategory === "applications" ? "bg-navy-800 text-white" : "bg-neutral-100 text-text-muted"
+            }`}
+          >
+            {applicationsCount}
+          </span>
+        </button>
       </div>
 
       {hasDirectPay ? (
@@ -462,6 +530,7 @@ export function ActivityScreen() {
               void groupsQuery.refetch();
               void rentalsQuery.refetch();
               void staysQuery.refetch();
+              void applicationsQuery.refetch();
             }}
           />
         </div>
@@ -473,8 +542,8 @@ export function ActivityScreen() {
             title={selectedCategory === "all" ? "No bookings yet" : `No ${selectedCategory} found`}
             description={
               selectedCategory === "all"
-                ? "Everything you book across Services, Equipment Rentals, and Stays will show up right here."
-                : `You don't have any bookings under ${selectedCategory} at the moment.`
+                ? "Everything you book across Services, Equipment Rentals, Stays, and Job Applications will show up right here."
+                : `You don't have any entries under ${selectedCategory} at the moment.`
             }
             action={
               <div className="flex flex-wrap gap-2">
@@ -484,8 +553,11 @@ export function ActivityScreen() {
                 <Link href="/catalog/rental-services" className={buttonStyles({ variant: "outline", size: "sm" })}>
                   Rent Equipment
                 </Link>
-                <Link href="/stays" className={buttonStyles({ variant: "outline", size: "sm" })}>
+                <Link href="/catalog/rooms-pg-hostel" className={buttonStyles({ variant: "outline", size: "sm" })}>
                   Explore Stays
+                </Link>
+                <Link href="/listings" className={buttonStyles({ variant: "outline", size: "sm" })}>
+                  Find Jobs
                 </Link>
               </div>
             }
@@ -559,6 +631,7 @@ function BookingTimelineRow({ item }: { item: BookingItem }) {
   if (item.kind === "engagement") return <EngagementListRow row={item.row} />;
   if (item.kind === "rental") return <RentalTimelineCard rental={item.rental} />;
   if (item.kind === "stay") return <StayTimelineCard stay={item.stay} />;
+  if (item.kind === "application") return <ApplicationTimelineCard application={item.application} />;
   return (
     <RequestRow
       request={item.row}
@@ -721,3 +794,76 @@ function StayTimelineCard({ stay }: { stay: StayReservationDetail }) {
     </li>
   );
 }
+
+function ApplicationTimelineCard({ application }: { application: ListingApplication }) {
+  const isPast = ["HIRED", "REJECTED", "WITHDRAWN", "EXPIRED"].includes(application.status);
+  const isNeedsYou = ["SHORTLISTED", "CONTACTED"].includes(application.status);
+
+  return (
+    <li>
+      <Link
+        href="/listings/my-applications"
+        className="group block rounded-card border border-line bg-surface p-4 hover:border-warm-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action shadow-card transition-all"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 px-2 py-0.5 text-xs font-bold text-indigo-700">
+              <BriefcaseBusiness className="h-3 w-3" /> Job Application
+            </span>
+            {application.created_at ? (
+              <>
+                <span className="text-xs text-text-muted">•</span>
+                <span className="text-xs text-text-muted">
+                  Applied on{" "}
+                  {new Date(application.created_at).toLocaleDateString("en-IN", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })}
+                </span>
+              </>
+            ) : null}
+          </div>
+
+          <span
+            className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${
+              isNeedsYou
+                ? "bg-purple-50 text-purple-800 border border-purple-200"
+                : isPast
+                  ? "bg-neutral-100 text-neutral-700 border border-neutral-200"
+                  : "bg-blue-50 text-blue-700 border border-blue-200"
+            }`}
+          >
+            {application.status.replace(/_/g, " ")}
+          </span>
+        </div>
+
+        <div className="mt-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h3 className="text-base font-bold text-navy-900 group-hover:text-action transition-colors">
+              {application.listing_title || "Career Opportunity"}
+            </h3>
+            <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-text-secondary">
+              <span className="flex items-center gap-1 font-medium">
+                <User className="h-3.5 w-3.5 text-text-muted" />
+                {application.applicant_name || "Applicant"}
+              </span>
+              {application.cover_note ? (
+                <span className="line-clamp-1 max-w-md text-text-muted italic">
+                  &ldquo;{application.cover_note}&rdquo;
+                </span>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 self-end sm:self-center">
+            <span className="text-xs font-bold text-action group-hover:translate-x-0.5 transition-transform">
+              View Status &rarr;
+            </span>
+          </div>
+        </div>
+      </Link>
+    </li>
+  );
+}
+

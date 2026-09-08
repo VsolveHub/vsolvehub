@@ -1,12 +1,14 @@
 """API views for Rental Services (A7_RENTAL)."""
 
 from datetime import date
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
+from typing import Any
 from django.utils import timezone
-from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -160,12 +162,7 @@ class RentalHoldCreateView(APIView):
         parameters=[IDEMPOTENCY_HEADER],
     )
     def post(self, request: Request) -> Response:
-        key = request.headers.get("Idempotency-Key", "").strip()
-        if not key:
-            return Response(
-                {"error": "Idempotency-Key header is required."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        key = request.headers.get("Idempotency-Key", "").strip() or f"rental-hold:{uuid4()}"
         serializer = RentalHoldCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
@@ -185,7 +182,7 @@ class RentalHoldCreateView(APIView):
             return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
     @staticmethod
-    def _create_hold(*, customer: User, data: dict) -> tuple[int, dict]:
+    def _create_hold(*, customer: User, data: dict[str, Any]) -> tuple[int, dict[str, Any]]:
         booking = create_rental_hold(
             customer=customer,
             asset_id=data["asset_id"],
@@ -277,6 +274,9 @@ class RentalConfirmView(APIView):
     def post(self, request: Request, booking_id: UUID) -> Response:
         customer = _resolve_customer(request)
         booking = get_object_or_404(RentalBooking, id=booking_id, customer=customer)
+        if booking.status == RentalBooking.Status.CONFIRMED:
+            detail = get_booking_detail(booking.id)
+            return Response(RentalBookingDetailSerializer(detail).data)
         payment_attempt_id = request.data.get("payment_attempt_id")
         payment_attempt = (
             get_object_or_404(PaymentAttempt, id=payment_attempt_id) if payment_attempt_id else None
@@ -306,12 +306,7 @@ class RentalPaymentStartView(APIView):
         parameters=[IDEMPOTENCY_HEADER],
     )
     def post(self, request: Request, booking_id: UUID) -> Response:
-        key = request.headers.get("Idempotency-Key", "").strip()
-        if not key:
-            return Response(
-                {"error": "Idempotency-Key header is required."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        key = request.headers.get("Idempotency-Key", "").strip() or f"rental-pay:{booking_id}:{uuid4()}"
         try:
             attempts = initiate_rental_checkout(
                 booking_id=booking_id,
@@ -419,12 +414,7 @@ class RentalExtensionPayView(APIView):
         serializer.is_valid(raise_exception=True)
 
         try:
-            key = request.headers.get("Idempotency-Key", "").strip()
-            if not key:
-                return Response(
-                    {"error": "Idempotency-Key header is required."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+            key = request.headers.get("Idempotency-Key", "").strip() or f"rental-ext-pay:{extension_id}:{uuid4()}"
             payment_attempt = initiate_rental_extension_payment(
                 extension_id=extension_id,
                 customer=customer,

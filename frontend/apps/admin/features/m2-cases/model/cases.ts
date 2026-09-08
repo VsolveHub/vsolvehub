@@ -148,6 +148,16 @@ export const CASE_KIND_COPY: Record<CaseKind, CaseKindCopy> = {
     claim: "Guest disputes host damage assessment and security deposit deduction.",
     isM2: false,
   },
+  LISTING_ABUSE: {
+    label: "Listing policy violation or abuse",
+    claim: "A job listing was reported for fraudulent recruiting, misleading pay, or policy breach.",
+    isM2: false,
+  },
+  APPLICATION_ABUSE: {
+    label: "Application misconduct or abuse",
+    claim: "An application was reported for spam, fraudulent credentials, or applicant harassment.",
+    isM2: false,
+  },
 };
 
 /** Every kind, in queue order — the M2 kinds last so the M1 queue reads unchanged. */

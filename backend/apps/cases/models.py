@@ -51,6 +51,8 @@ CASE_SUBJECT_FIELDS: tuple[str, ...] = (
     "engagement",
     "rental_booking",
     "stay_reservation",
+    "listing",
+    "application",
 )
 
 
@@ -98,6 +100,9 @@ class OperationsCase(models.Model):
         #: A9 Stay operational recovery and damage dispute kinds:
         STAY_UNIT_RECOVERY = "STAY_UNIT_RECOVERY", "Stay unit recovery"
         STAY_DAMAGE_DISPUTE = "STAY_DAMAGE_DISPUTE", "Stay damage dispute"
+        #: A10 Listing abuse queues:
+        LISTING_ABUSE = "LISTING_ABUSE", "Listing abuse"
+        APPLICATION_ABUSE = "APPLICATION_ABUSE", "Application abuse"
 
     class Severity(models.TextChoices):
         LOW = "LOW", "Low"
@@ -172,6 +177,20 @@ class OperationsCase(models.Model):
     )
     stay_reservation = models.ForeignKey(
         "stays.StayReservation",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="operations_cases",
+    )
+    listing = models.ForeignKey(
+        "listings.Listing",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="operations_cases",
+    )
+    application = models.ForeignKey(
+        "listings.Application",
         null=True,
         blank=True,
         on_delete=models.PROTECT,
@@ -301,6 +320,10 @@ DEFAULT_TEAM: dict[str, str] = {
     OperationsCase.Kind.CHARGEBACK: OperationsCase.Team.FINANCE,
     OperationsCase.Kind.RENTAL_ASSET_RECOVERY: OperationsCase.Team.DISPATCH,
     OperationsCase.Kind.RENTAL_DEPOSIT_DISPUTE: OperationsCase.Team.FINANCE,
+    OperationsCase.Kind.STAY_UNIT_RECOVERY: OperationsCase.Team.DISPATCH,
+    OperationsCase.Kind.STAY_DAMAGE_DISPUTE: OperationsCase.Team.FINANCE,
+    OperationsCase.Kind.LISTING_ABUSE: OperationsCase.Team.SAFETY,
+    OperationsCase.Kind.APPLICATION_ABUSE: OperationsCase.Team.SAFETY,
 }
 
 #: Response SLA per severity. A due time is what makes "cases may not close merely because a
@@ -350,6 +373,18 @@ ALLOWED_RESOLUTIONS: dict[str, frozenset[str]] = {
     ),
     OperationsCase.Kind.RENTAL_DEPOSIT_DISPUTE: frozenset(
         {"FORFEITED", "REFUNDED", "SPLIT_SETTLED"}
+    ),
+    OperationsCase.Kind.STAY_UNIT_RECOVERY: frozenset(
+        {"REASSIGNED", "CANCELLED_REFUNDED", "SETTLED"}
+    ),
+    OperationsCase.Kind.STAY_DAMAGE_DISPUTE: frozenset(
+        {"FORFEITED", "REFUNDED", "SPLIT_SETTLED"}
+    ),
+    OperationsCase.Kind.LISTING_ABUSE: frozenset(
+        {"LISTING_REMOVED", "REPORT_DISMISSED", "POSTER_WARNED"}
+    ),
+    OperationsCase.Kind.APPLICATION_ABUSE: frozenset(
+        {"APPLICATION_REMOVED", "REPORT_DISMISSED", "APPLICANT_WARNED"}
     ),
 }
 

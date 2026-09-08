@@ -20,13 +20,24 @@ class Property(models.Model):
     """Physical building, hostel, PG compound, or apartment complex owned by a host."""
 
     class PropertyType(models.TextChoices):
+        # 12 Canonical Stay Categories matching catalog
+        ROOMS = "ROOMS", "Rooms"
+        PG = "PG", "PG Accommodation"
+        HOSTEL = "HOSTEL", "Hostel"
+        BED_SPACE = "BED_SPACE", "Bed Space"
+        CO_LIVING = "CO_LIVING", "Co-Living Space"
+        APARTMENT = "APARTMENT", "Apartments"
+        RENTAL_PROPERTY = "RENTAL_PROPERTY", "Rental Properties"
+        SHORT_STAY = "SHORT_STAY", "Short Stay"
+        STUDENT_ACCOMMODATION = "STUDENT_ACCOMMODATION", "Student Accommodation"
+        WORKER_ACCOMMODATION = "WORKER_ACCOMMODATION", "Worker Accommodation"
+        PROPERTY_LISTING = "PROPERTY_LISTING", "Property Listing"
+        PREMIUM_STAYS = "PREMIUM_STAYS", "Premium Stays"
+
+        # Legacy building aliases for existing database records
         INDEPENDENT_HOUSE = "INDEPENDENT_HOUSE", "Independent House"
         VILLA = "VILLA", "Villa"
         STUDIO_APT = "STUDIO_APT", "Studio Apartment"
-        APARTMENT = "APARTMENT", "Apartment"
-        PG = "PG", "PG Accommodation"
-        HOSTEL = "HOSTEL", "Hostel"
-        CO_LIVING = "CO_LIVING", "Co-Living Space"
         COMMERCIAL = "COMMERCIAL", "Commercial / Office"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

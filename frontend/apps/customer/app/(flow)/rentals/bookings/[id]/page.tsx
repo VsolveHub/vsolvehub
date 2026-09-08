@@ -26,7 +26,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { PUBLIC_API_BASE_URL } from "@/lib/api/config";
-import { apiFetch } from "@vsolve/api-client";
+import { apiFetch, getStableIdempotencyKey } from "@vsolve/api-client";
 
 interface BookingDetail {
   id: string;
@@ -213,15 +213,37 @@ export default function RentalBookingTrackingPage() {
 
   async function handlePayExtension(extensionId: string) {
     try {
+      const payKey = getStableIdempotencyKey("rental-ext-pay", extensionId);
       const res = await apiFetch(`${PUBLIC_API_BASE_URL}/api/v1/rentals/extensions/${extensionId}/pay/`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": payKey,
+        },
         body: JSON.stringify({}),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         const errMsg = d?.error?.message || d?.error || "Failed to pay for extension.";
         throw new Error(errMsg);
+      }
+      const data = await res.json().catch(() => ({}));
+      const attempts = data.payment_attempts || [];
+      for (const attempt of attempts) {
+        if (attempt.simulated_capture_available || process.env.NODE_ENV !== "production") {
+          try {
+            await apiFetch(
+              `${PUBLIC_API_BASE_URL}/api/v1/payment-attempts/${attempt.id}/simulate-capture/`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({}),
+              }
+            );
+          } catch {
+            // Simulated capture error is non-fatal
+          }
+        }
       }
       await loadBooking();
     } catch (err: any) {

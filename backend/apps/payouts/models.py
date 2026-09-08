@@ -193,6 +193,24 @@ class PartnerLedgerEntry(models.Model):
                 ),
                 name="payouts_only_corrections_reference_an_entry",
             ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(booking__isnull=False, rental_booking__isnull=True, stay_reservation__isnull=True)
+                    | models.Q(booking__isnull=True, rental_booking__isnull=False, stay_reservation__isnull=True)
+                    | models.Q(booking__isnull=True, rental_booking__isnull=True, stay_reservation__isnull=False)
+                    | models.Q(booking__isnull=True, rental_booking__isnull=True, stay_reservation__isnull=True)
+                ),
+                name="payouts_ledger_entry_at_most_one_scope",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    ~models.Q(kind="EARNING")
+                    | models.Q(booking__isnull=False, rental_booking__isnull=True, stay_reservation__isnull=True)
+                    | models.Q(booking__isnull=True, rental_booking__isnull=False, stay_reservation__isnull=True)
+                    | models.Q(booking__isnull=True, rental_booking__isnull=True, stay_reservation__isnull=False)
+                ),
+                name="payouts_earning_must_have_exactly_one_scope",
+            ),
         ]
 
     def __str__(self) -> str:

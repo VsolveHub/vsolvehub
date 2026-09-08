@@ -80,7 +80,12 @@ class RentalAsset(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ("variant", "partner", "title")
+        indexes = [
+            models.Index(
+                fields=("variant", "partner", "daily_price_paise", "condition_grade"),
+                name="rentals_asset_browse_idx",
+            ),
+        ]
         constraints = [
             models.UniqueConstraint(
                 fields=("partner", "asset_identifier"),
@@ -175,7 +180,8 @@ class AssetReservation(models.Model):
     is_serialized = models.BooleanField(
         default=True,
         help_text=(
-            "Copied from asset to enforce PostgreSQL exclusion constraint only on serialized assets."
+            "Copied from asset to enforce PostgreSQL exclusion constraint only on "
+            "serialized assets."
         ),
     )
     reserved_quantity = models.PositiveIntegerField(
@@ -242,6 +248,7 @@ class RentalBooking(models.Model):
     deposit: Any
     handover: Any
     return_inspection: Any
+    extensions: Any
     customer = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
@@ -308,6 +315,8 @@ class RentalBookingLine(models.Model):
         DAMAGE_SETTLEMENT = "DAMAGE_SETTLEMENT", "Damage settlement recovery"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    rental_booking_id: uuid.UUID
+    allocations: Any
     rental_booking = models.ForeignKey(
         RentalBooking,
         on_delete=models.CASCADE,
@@ -398,6 +407,7 @@ class RentalDeposit(models.Model):
         IMMEDIATE_CAPTURE = "IMMEDIATE_CAPTURE", "Immediate capture and partial refund"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    transactions: Any
     rental_booking = models.OneToOneField(
         RentalBooking,
         on_delete=models.PROTECT,
@@ -420,6 +430,19 @@ class RentalDeposit(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at", "id")
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(refunded_amount_paise__lte=models.F("amount_paise")),
+                name="rentals_deposit_refund_lte_amount",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(consumed_amount_paise__lte=models.F("amount_paise")),
+                name="rentals_deposit_consumed_lte_amount",
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"Deposit for {self.rental_booking_id} ({self.status})"

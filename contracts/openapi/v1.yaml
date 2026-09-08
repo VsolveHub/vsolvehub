@@ -149,6 +149,39 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/applications/{application_id}/reports:
+    post:
+      operationId: applications_reports_create
+      parameters:
+      - in: path
+        name: application_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - applications
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReportRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReportRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationReport'
+          description: ''
   /api/v1/auth/csrf/:
     get:
       operationId: auth_csrf_retrieve
@@ -4453,6 +4486,161 @@ paths:
           description: Required dependencies are reachable.
         '503':
           description: One or more required dependencies are unavailable.
+  /api/v1/listings:
+    get:
+      operationId: listings_list
+      parameters:
+      - in: query
+        name: location
+        schema:
+          type: string
+      - in: query
+        name: q
+        schema:
+          type: string
+      - in: query
+        name: service
+        schema:
+          type: string
+      tags:
+      - listings
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ListingSummary'
+          description: ''
+  /api/v1/listings/{listing_id}:
+    get:
+      operationId: listings_retrieve
+      parameters:
+      - in: path
+        name: listing_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - listings
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListingDetail'
+          description: ''
+  /api/v1/listings/{listing_id}/applications:
+    post:
+      operationId: listings_applications_create
+      parameters:
+      - in: path
+        name: listing_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - listings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitApplicationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SubmitApplicationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SubmitApplicationRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+          description: ''
+  /api/v1/listings/{listing_id}/reports:
+    post:
+      operationId: listings_reports_create
+      parameters:
+      - in: path
+        name: listing_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - listings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReportRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReportRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListingReport'
+          description: ''
+  /api/v1/my/listing-applications:
+    get:
+      operationId: my_listing_applications_list
+      tags:
+      - my
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Application'
+          description: ''
+  /api/v1/my/listing-applications/{application_id}/withdraw:
+    post:
+      operationId: my_listing_applications_withdraw_create
+      parameters:
+      - in: path
+        name: application_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - my
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+          description: ''
   /api/v1/notifications/:
     get:
       operationId: notification_feed_list
@@ -8293,6 +8481,119 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/ops/listings:
+    get:
+      operationId: ops_listings_list
+      tags:
+      - ops
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PartnerListing'
+          description: ''
+  /api/v1/ops/listings/{listing_id}/moderate:
+    post:
+      operationId: ops_listings_moderate_create
+      parameters:
+      - in: path
+        name: listing_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - ops
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModerationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ModerationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ModerationRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerListing'
+          description: ''
+  /api/v1/ops/listings/{listing_id}/reinstate:
+    post:
+      operationId: ops_listings_reinstate_create
+      parameters:
+      - in: path
+        name: listing_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - ops
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionReasonRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ActionReasonRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ActionReasonRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerListing'
+          description: ''
+  /api/v1/ops/listings/{listing_id}/remove:
+    post:
+      operationId: ops_listings_remove_create
+      parameters:
+      - in: path
+        name: listing_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - ops
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionReasonRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ActionReasonRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ActionReasonRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerListing'
+          description: ''
   /api/v1/orders/{order_id}/:
     get:
       operationId: orders_retrieve
@@ -10687,6 +10988,265 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/listing-applications/{application_id}/{action}:
+    post:
+      operationId: partner_listing_application_action
+      parameters:
+      - in: path
+        name: action
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: application_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplicationStatusRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ApplicationStatusRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ApplicationStatusRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+          description: ''
+  /api/v1/partner/listing-subscription-plans:
+    get:
+      operationId: partner_listing_subscription_plans_list
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VendorSubscriptionPlan'
+          description: ''
+  /api/v1/partner/listing-subscription-plans/{plan_id}/purchase:
+    post:
+      operationId: partner_listing_subscription_purchase
+      parameters:
+      - in: path
+        name: plan_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorSubscription'
+          description: ''
+  /api/v1/partner/listings:
+    get:
+      operationId: partner_listings_list
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PartnerListing'
+          description: ''
+    post:
+      operationId: partner_listings_create
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerListingRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PartnerListingRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PartnerListingRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerListing'
+          description: ''
+  /api/v1/partner/listings/{listing_id}:
+    get:
+      operationId: partner_listings_retrieve
+      parameters:
+      - in: path
+        name: listing_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerListing'
+          description: ''
+    put:
+      operationId: partner_listings_update
+      parameters:
+      - in: path
+        name: listing_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerListingRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PartnerListingRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PartnerListingRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerListing'
+          description: ''
+  /api/v1/partner/listings/{listing_id}/{action}:
+    post:
+      operationId: partner_listing_action
+      parameters:
+      - in: path
+        name: action
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: listing_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionReasonRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ActionReasonRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ActionReasonRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerListing'
+          description: ''
+  /api/v1/partner/listings/{listing_id}/applications:
+    get:
+      operationId: partner_listings_applications_list
+      parameters:
+      - in: path
+        name: listing_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Application'
+          description: ''
+  /api/v1/partner/listings/home:
+    get:
+      operationId: partner_listings_home_retrieve
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/partner/listings/roles:
+    get:
+      operationId: partner_listings_roles_retrieve
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
           description: ''
   /api/v1/partner/me/:
     get:
@@ -15448,6 +16008,34 @@ paths:
               schema:
                 $ref: '#/components/schemas/StayReservationDetail'
           description: ''
+  /api/v1/stays/holds/{reservation_id}/release/:
+    post:
+      operationId: stays_holds_release_create
+      description: Release an unpaid tentative stay hold immediately.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable unique key for safe command replay.
+        required: true
+      - in: path
+        name: reservation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StayReservationDetail'
+          description: ''
   /api/v1/stays/my-reservations/:
     get:
       operationId: stays_my_reservations_retrieve
@@ -15570,6 +16158,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/OpsStayResolveDispute'
           description: ''
+  /api/v1/stays/partner/money/:
+    get:
+      operationId: stays_partner_money_retrieve
+      description: Return the host's immutable A9 ledger and live deposit custody
+        totals.
+      tags:
+      - stays
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
   /api/v1/stays/partner/pricing-overrides/{override_id}/:
     put:
       operationId: stays_partner_pricing_overrides_update
@@ -16233,6 +16833,17 @@ paths:
       responses:
         '200':
           description: Unit marked under maintenance
+  /api/v1/stays/partner/visits/:
+    get:
+      operationId: stays_partner_visits_retrieve
+      description: List visit requests for partner's properties.
+      tags:
+      - stays
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
   /api/v1/stays/properties/{property_id}/:
     get:
       operationId: stays_properties_retrieve
@@ -16256,6 +16867,41 @@ paths:
               schema:
                 type: object
                 additionalProperties: {}
+          description: ''
+  /api/v1/stays/properties/{property_id}/visits/:
+    post:
+      operationId: stays_properties_visits_create
+      description: Schedule an in-person property visit (Step 10 inquiry flow).
+      parameters:
+      - in: path
+        name: property_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PropertyVisitRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PropertyVisitRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PropertyVisitRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PropertyVisitRequest'
           description: ''
   /api/v1/stays/reservations/{reservation_id}/:
     get:
@@ -16477,6 +17123,29 @@ paths:
               schema:
                 $ref: '#/components/schemas/StayPaymentAttempts'
           description: ''
+  /api/v1/stays/reservations/{reservation_id}/receipt/:
+    get:
+      operationId: stays_reservations_receipt_retrieve
+      description: Download a payment receipt for a non-pending stay reservation.
+      parameters:
+      - in: path
+        name: reservation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+          description: ''
   /api/v1/tax-documents/{document_id}/:
     get:
       operationId: tax_documents_retrieve
@@ -16654,6 +17323,11 @@ components:
         * `KEEP_CUSTOMER` - KEEP_CUSTOMER
         * `KEEP_SESSION` - KEEP_SESSION
         * `KEEP_BOTH` - KEEP_BOTH
+    ActionReasonRequest:
+      type: object
+      properties:
+        reason:
+          type: string
     ActiveRole:
       type: object
       properties:
@@ -16891,6 +17565,173 @@ components:
       - message
       - request_id
       - retryable
+    Application:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        listing:
+          type: string
+          format: uuid
+        listing_title:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/Status26eEnum'
+          readOnly: true
+        applicant_snapshot: {}
+        applicant_name:
+          type: string
+          readOnly: true
+        applicant_phone:
+          type: string
+          readOnly: true
+        applicant_email:
+          type: string
+          readOnly: true
+        cover_note:
+          type: string
+        resume_url:
+          type: string
+          format: uri
+          maxLength: 500
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApplicationAttachment'
+          readOnly: true
+        status_events:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApplicationStatusEvent'
+          readOnly: true
+        contact_revealed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        duplicate_of:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        withdrawn_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - applicant_email
+      - applicant_name
+      - applicant_phone
+      - attachments
+      - contact_revealed_at
+      - created_at
+      - duplicate_of
+      - id
+      - listing
+      - listing_title
+      - status
+      - status_events
+      - updated_at
+      - withdrawn_at
+    ApplicationAttachment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        file_url:
+          type: string
+          format: uri
+          maxLength: 500
+        file_name:
+          type: string
+          maxLength: 200
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - file_url
+      - id
+    ApplicationReport:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        application:
+          type: string
+          format: uuid
+        reason:
+          type: string
+          maxLength: 80
+        detail:
+          type: string
+        status:
+          $ref: '#/components/schemas/StatusD1aEnum'
+        operations_case:
+          type: string
+          format: uuid
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - application
+      - created_at
+      - id
+      - reason
+    ApplicationStatusEvent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        from_status:
+          type: string
+          maxLength: 20
+        to_status:
+          type: string
+          maxLength: 20
+        kind:
+          type: string
+          maxLength: 32
+        note:
+          type: string
+          maxLength: 480
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - to_status
+    ApplicationStatusRequest:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/Status26eEnum'
+      required:
+      - status
     AssignedProfessional:
       type: object
       description: |-
@@ -22523,6 +23364,144 @@ components:
         * `TAX` - Tax
         * `EXTENSION` - Extension fee
         * `DAMAGE_SETTLEMENT` - Damage settlement recovery
+    ListingDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        poster_name:
+          type: string
+          readOnly: true
+        service_name:
+          type: string
+          readOnly: true
+        variant_name:
+          type: string
+          readOnly: true
+        title:
+          type: string
+          maxLength: 180
+        description:
+          type: string
+        structured_fields: {}
+        status:
+          $ref: '#/components/schemas/StatusC74Enum'
+        moderation_status:
+          $ref: '#/components/schemas/ModerationStatusEnum'
+        location_text:
+          type: string
+          maxLength: 180
+        is_premium:
+          type: boolean
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        application_count:
+          type: integer
+          readOnly: true
+          default: 0
+        contact_masked:
+          type: object
+          additionalProperties:
+            type: string
+          readOnly: true
+      required:
+      - application_count
+      - contact_masked
+      - description
+      - id
+      - poster_name
+      - service_name
+      - title
+      - variant_name
+    ListingReport:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        listing:
+          type: string
+          format: uuid
+        reason:
+          type: string
+          maxLength: 80
+        detail:
+          type: string
+        status:
+          $ref: '#/components/schemas/StatusD1aEnum'
+        operations_case:
+          type: string
+          format: uuid
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - listing
+      - reason
+    ListingSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        poster_name:
+          type: string
+          readOnly: true
+        service_name:
+          type: string
+          readOnly: true
+        variant_name:
+          type: string
+          readOnly: true
+        title:
+          type: string
+          maxLength: 180
+        description:
+          type: string
+        structured_fields: {}
+        status:
+          $ref: '#/components/schemas/StatusC74Enum'
+        moderation_status:
+          $ref: '#/components/schemas/ModerationStatusEnum'
+        location_text:
+          type: string
+          maxLength: 180
+        is_premium:
+          type: boolean
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        application_count:
+          type: integer
+          readOnly: true
+          default: 0
+      required:
+      - application_count
+      - description
+      - id
+      - poster_name
+      - service_name
+      - title
+      - variant_name
     ManualOfferRequest:
       type: object
       properties:
@@ -22593,6 +23572,29 @@ components:
         * `SAME_PARTNER_SEQUENTIAL` - Same Partner sequential
         * `PARALLEL_ALLOWED` - Parallel allowed
         * `MUST_BE_SEPARATE` - Must be separate
+    ModerationRequest:
+      type: object
+      properties:
+        approved:
+          type: boolean
+        reason:
+          type: string
+      required:
+      - approved
+    ModerationStatusEnum:
+      enum:
+      - DRAFT
+      - PENDING
+      - APPROVED
+      - REJECTED
+      - REMOVED
+      type: string
+      description: |-
+        * `DRAFT` - Draft
+        * `PENDING` - Pending review
+        * `APPROVED` - Approved
+        * `REJECTED` - Rejected
+        * `REMOVED` - Removed
     Money:
       type: object
       properties:
@@ -23404,6 +24406,8 @@ components:
       - RENTAL_DEPOSIT_DISPUTE
       - STAY_UNIT_RECOVERY
       - STAY_DAMAGE_DISPUTE
+      - LISTING_ABUSE
+      - APPLICATION_ABUSE
       type: string
       description: |-
         * `ASSIGNMENT` - Assignment or recovery
@@ -23424,6 +24428,8 @@ components:
         * `RENTAL_DEPOSIT_DISPUTE` - Rental deposit dispute
         * `STAY_UNIT_RECOVERY` - Stay unit recovery
         * `STAY_DAMAGE_DISPUTE` - Stay damage dispute
+        * `LISTING_ABUSE` - Listing abuse
+        * `APPLICATION_ABUSE` - Application abuse
     OperationsCaseList:
       type: object
       description: |-
@@ -25491,6 +26497,141 @@ components:
       - next
       - previous
       - results
+    PartnerListing:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        poster_name:
+          type: string
+          readOnly: true
+        service_name:
+          type: string
+          readOnly: true
+        variant_name:
+          type: string
+          readOnly: true
+        title:
+          type: string
+          maxLength: 180
+        description:
+          type: string
+        structured_fields: {}
+        status:
+          allOf:
+          - $ref: '#/components/schemas/StatusC74Enum'
+          readOnly: true
+        moderation_status:
+          allOf:
+          - $ref: '#/components/schemas/ModerationStatusEnum'
+          readOnly: true
+        location_text:
+          type: string
+          maxLength: 180
+        is_premium:
+          type: boolean
+          default: false
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        application_count:
+          type: integer
+          readOnly: true
+          default: 0
+        variant:
+          type: string
+          format: uuid
+        contact_phone:
+          type: string
+        contact_email:
+          type: string
+          format: email
+        moderation_reason:
+          type: string
+          readOnly: true
+        closed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        removed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        version:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - application_count
+      - closed_at
+      - created_at
+      - description
+      - id
+      - moderation_reason
+      - moderation_status
+      - poster_name
+      - removed_at
+      - service_name
+      - status
+      - title
+      - variant_name
+      - version
+    PartnerListingRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 180
+        description:
+          type: string
+          minLength: 1
+        structured_fields: {}
+        location_text:
+          type: string
+          maxLength: 180
+        is_premium:
+          type: boolean
+          default: false
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        variant:
+          type: string
+          format: uuid
+        service_id:
+          type: string
+          format: uuid
+          writeOnly: true
+        service_slug:
+          type: string
+          writeOnly: true
+          minLength: 1
+        contact_phone:
+          type: string
+        contact_email:
+          type: string
+          format: email
+      required:
+      - description
+      - title
     PartnerPayoutAccount:
       type: object
       description: |-
@@ -25756,6 +26897,21 @@ components:
     PartnerPropertyPolicy:
       type: object
       properties:
+        version:
+          type: integer
+          readOnly: true
+        effective_from:
+          type: string
+          format: date
+          readOnly: true
+        effective_to:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+        is_active:
+          type: boolean
+          readOnly: true
         check_in_time:
           type: string
           format: time
@@ -25788,6 +26944,11 @@ components:
           maximum: 32767
           minimum: 0
         house_rules: {}
+      required:
+      - effective_from
+      - effective_to
+      - is_active
+      - version
     PartnerPropertyPolicyRequest:
       type: object
       properties:
@@ -26188,6 +27349,7 @@ components:
         variant_id:
           type: string
           format: uuid
+          nullable: true
         name:
           type: string
           maxLength: 160
@@ -26234,13 +27396,13 @@ components:
       required:
       - id
       - name
-      - variant_id
     PartnerUnitTypeCreateRequest:
       type: object
       properties:
         variant_id:
           type: string
           format: uuid
+          nullable: true
         name:
           type: string
           minLength: 1
@@ -26287,7 +27449,6 @@ components:
           type: boolean
       required:
       - name
-      - variant_id
     PartyCase:
       type: object
       description: |-
@@ -27935,6 +29096,93 @@ components:
         * `HOSTEL` - Hostel
         * `CO_LIVING` - Co-Living Space
         * `COMMERCIAL` - Commercial / Office
+    PropertyVisitRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        property:
+          type: string
+          format: uuid
+          readOnly: true
+        visitor_name:
+          type: string
+          maxLength: 120
+        visitor_phone:
+          type: string
+          maxLength: 20
+        visitor_email:
+          type: string
+          format: email
+          maxLength: 254
+        preferred_date:
+          type: string
+          format: date
+        time_slot:
+          type: string
+          maxLength: 60
+        notes:
+          type: string
+        status:
+          allOf:
+          - $ref: '#/components/schemas/PropertyVisitStatusEnum'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - preferred_date
+      - property
+      - status
+      - time_slot
+      - visitor_name
+      - visitor_phone
+    PropertyVisitRequestRequest:
+      type: object
+      properties:
+        visitor_name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        visitor_phone:
+          type: string
+          minLength: 1
+          maxLength: 20
+        visitor_email:
+          type: string
+          format: email
+          maxLength: 254
+        preferred_date:
+          type: string
+          format: date
+        time_slot:
+          type: string
+          minLength: 1
+          maxLength: 60
+        notes:
+          type: string
+      required:
+      - preferred_date
+      - time_slot
+      - visitor_name
+      - visitor_phone
+    PropertyVisitStatusEnum:
+      enum:
+      - REQUESTED
+      - CONFIRMED
+      - COMPLETED
+      - CANCELLED
+      type: string
+      description: |-
+        * `REQUESTED` - Requested
+        * `CONFIRMED` - Confirmed
+        * `COMPLETED` - Completed
+        * `CANCELLED` - Cancelled
     Proposal:
       type: object
       description: A vendor's own quote, read back to that vendor.
@@ -29104,6 +30352,8 @@ components:
       - A9_DEPOSIT_HOLD
       - A9_DAMAGE_SETTLEMENT
       - A9_EXTENSION
+      - A10_VENDOR_SUBSCRIPTION
+      - A10_PREMIUM_LISTING
       type: string
       description: |-
         * `BOOKING_GROUP` - Booking group
@@ -29123,6 +30373,8 @@ components:
         * `A9_DEPOSIT_HOLD` - A9 deposit hold
         * `A9_DAMAGE_SETTLEMENT` - A9 damage settlement
         * `A9_EXTENSION` - A9 extension
+        * `A10_VENDOR_SUBSCRIPTION` - A10 vendor subscription
+        * `A10_PREMIUM_LISTING` - A10 premium listing
     QuestionAnswerRequest:
       type: object
       properties:
@@ -31325,6 +32577,17 @@ components:
       - subcategory_name
       - variant_id
       - variant_name
+    ReportRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 80
+        detail:
+          type: string
+      required:
+      - reason
     RequestExtensionInput:
       type: object
       properties:
@@ -33879,6 +35142,24 @@ components:
         * `DRAFT` - Draft
         * `ACTIVE` - Active
         * `RETIRED` - Retired
+    Status26eEnum:
+      enum:
+      - SUBMITTED
+      - UNDER_REVIEW
+      - SHORTLISTED
+      - CONTACTED
+      - REJECTED
+      - WITHDRAWN
+      - EXPIRED
+      type: string
+      description: |-
+        * `SUBMITTED` - Submitted
+        * `UNDER_REVIEW` - Under review
+        * `SHORTLISTED` - Shortlisted
+        * `CONTACTED` - Contacted
+        * `REJECTED` - Rejected
+        * `WITHDRAWN` - Withdrawn
+        * `EXPIRED` - Expired
     Status423Enum:
       enum:
       - ACTIVE
@@ -33887,6 +35168,30 @@ components:
       description: |-
         * `ACTIVE` - Active
         * `RETIRED` - Retired
+    StatusC74Enum:
+      enum:
+      - DRAFT
+      - PUBLISHED
+      - CLOSED
+      - EXPIRED
+      - REMOVED
+      - ARCHIVED
+      type: string
+      description: |-
+        * `DRAFT` - Draft
+        * `PUBLISHED` - Published
+        * `CLOSED` - Closed
+        * `EXPIRED` - Expired
+        * `REMOVED` - Removed
+        * `ARCHIVED` - Archived
+    StatusD1aEnum:
+      enum:
+      - OPEN
+      - RESOLVED
+      type: string
+      description: |-
+        * `OPEN` - Open
+        * `RESOLVED` - Resolved
     StayCancel:
       type: object
       properties:
@@ -34151,8 +35456,45 @@ components:
           maximum: 36
           minimum: 1
           default: 11
+        primary_tenant_name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        guest_phone:
+          type: string
+          minLength: 1
+          maxLength: 32
+        guest_email:
+          type: string
+          format: email
+          minLength: 1
+        emergency_contact_name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        emergency_contact_phone:
+          type: string
+          minLength: 1
+          maxLength: 32
+        agreement_version:
+          type: string
+          minLength: 1
+          maxLength: 40
+        agreement_accepted:
+          type: boolean
+        kyc_document:
+          type: string
+          format: binary
+          writeOnly: true
       required:
+      - agreement_accepted
+      - agreement_version
+      - emergency_contact_name
+      - emergency_contact_phone
       - end_date
+      - guest_email
+      - guest_phone
+      - primary_tenant_name
       - start_date
       - unit_type_id
     StayPaymentAttempts:
@@ -34191,6 +35533,22 @@ components:
           type: integer
           maximum: 32767
           minimum: 0
+        primary_tenant_name:
+          type: string
+          maxLength: 160
+        emergency_contact_name:
+          type: string
+          maxLength: 160
+        emergency_contact_phone:
+          type: string
+          maxLength: 32
+        agreement_version:
+          type: string
+          maxLength: 40
+        agreement_accepted_at:
+          type: string
+          format: date-time
+          nullable: true
         total_nights:
           type: integer
           maximum: 2147483647
@@ -34272,6 +35630,27 @@ components:
         host_name:
           type: string
           readOnly: true
+        host_phone:
+          type: string
+          readOnly: true
+        host_verified:
+          type: boolean
+          readOnly: true
+        property_address:
+          type: object
+          additionalProperties: {}
+          nullable: true
+          readOnly: true
+        check_in_time:
+          type: string
+          readOnly: true
+        check_out_time:
+          type: string
+          readOnly: true
+        receipt_url:
+          type: string
+          nullable: true
+          readOnly: true
         lines:
           type: array
           items:
@@ -34295,7 +35674,9 @@ components:
           readOnly: true
       required:
       - check_in
+      - check_in_time
       - check_out
+      - check_out_time
       - created_at
       - customer_id
       - deposit
@@ -34304,13 +35685,17 @@ components:
       - guest_name
       - guest_phone
       - host_name
+      - host_phone
+      - host_verified
       - id
       - image_url
       - lines
+      - property_address
       - property_id
       - property_locality
       - property_title
       - property_type
+      - receipt_url
       - start_date
       - unit_code
       - unit_id
@@ -34339,6 +35724,22 @@ components:
           type: integer
           maximum: 32767
           minimum: 0
+        primary_tenant_name:
+          type: string
+          maxLength: 160
+        emergency_contact_name:
+          type: string
+          maxLength: 160
+        emergency_contact_phone:
+          type: string
+          maxLength: 32
+        agreement_version:
+          type: string
+          maxLength: 40
+        agreement_accepted_at:
+          type: string
+          format: date-time
+          nullable: true
         total_nights:
           type: integer
           maximum: 2147483647
@@ -34569,6 +35970,31 @@ components:
       description: |-
         * `CATALOG_BOOKING` - CATALOG_BOOKING
         * `ENGAGEMENT` - ENGAGEMENT
+    SubmitApplicationRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        phone:
+          type: string
+          minLength: 1
+          maxLength: 32
+        email:
+          type: string
+          format: email
+        experience:
+          type: string
+          maxLength: 120
+        cover_note:
+          type: string
+        resume_url:
+          type: string
+          format: uri
+      required:
+      - name
+      - phone
     SubmitCompletionRequestRequest:
       type: object
       description: |-
@@ -35114,6 +36540,85 @@ components:
         * `DECLINED` - Declined
         * `EXPIRED` - Expired
         * `WITHDRAWN` - Withdrawn
+    VendorSubscription:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        plan:
+          allOf:
+          - $ref: '#/components/schemas/VendorSubscriptionPlan'
+          readOnly: true
+        payment_attempt_id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/VendorSubscriptionStatusEnum'
+        starts_at:
+          type: string
+          format: date-time
+          nullable: true
+        ends_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - payment_attempt_id
+      - plan
+    VendorSubscriptionPlan:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        code:
+          type: string
+          maxLength: 80
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          maxLength: 120
+        price_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        duration_days:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        max_active_listings:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        premium_capabilities: {}
+      required:
+      - code
+      - id
+      - name
+      - price_paise
+    VendorSubscriptionStatusEnum:
+      enum:
+      - PENDING_ACTIVATION
+      - ACTIVE
+      - EXPIRED
+      - CANCELLED
+      type: string
+      description: |-
+        * `PENDING_ACTIVATION` - Pending activation
+        * `ACTIVE` - Active
+        * `EXPIRED` - Expired
+        * `CANCELLED` - Cancelled
     VersionedBatchCommandRequest:
       type: object
       properties:
@@ -35973,6 +37478,7 @@ components:
       - A5_CUSTOM_PROJECT
       - A7_RENTAL
       - A9_STAY
+      - A10_LISTING
       type: string
       description: |-
         * `LEGACY` - Legacy
@@ -35981,6 +37487,7 @@ components:
         * `A5_CUSTOM_PROJECT` - A5 custom project
         * `A7_RENTAL` - A7 rental
         * `A9_STAY` - A9 stay
+        * `A10_LISTING` - A10 listing
   securitySchemes:
     cookieAuth:
       type: apiKey

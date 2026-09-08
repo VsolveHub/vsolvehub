@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     "apps.ratings",
     "apps.rentals",
     "apps.stays",
+    "apps.listings",
 ]
 
 MIDDLEWARE = [
@@ -1034,6 +1035,14 @@ CELERY_BEAT_SCHEDULE = {
     "sweep-stay-no-shows": {
         "task": "apps.stays.tasks.sweep_no_show_reservations",
         "schedule": 60.0 * 5,
+    },
+    "sweep-expired-listings": {
+        "task": "apps.listings.tasks.expire_published_listings",
+        "schedule": 60.0 * 15,
+    },
+    "sweep-expired-subscriptions": {
+        "task": "apps.listings.tasks.expire_vendor_subscriptions",
+        "schedule": 60.0 * 15,
     },
 }
 

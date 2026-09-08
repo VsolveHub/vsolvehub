@@ -65,6 +65,7 @@ export const WORKFORCE_WORKSPACE = "A3_TIME_BLOCK";
 export const PROJECT_WORKSPACE = "A5_CUSTOM_PROJECT";
 export const RENTAL_WORKSPACE = "A7_RENTAL";
 export const STAY_WORKSPACE = "A9_STAY";
+export const LISTING_WORKSPACE = "A10_LISTING";
 
 export interface WorkspaceNavItem {
   href: string;
@@ -212,6 +213,16 @@ export const STAY_NAV: readonly WorkspaceNavItem[] = [
 ];
 
 /**
+ * Dedicated navigation for career & hiring partners (A10_LISTING).
+ * Focuses on Home, Job Listings, and Account.
+ */
+export const LISTING_NAV: readonly WorkspaceNavItem[] = [
+  { href: "/home", label: "Home", icon: Home },
+  { href: "/listings", label: "Job Listings", icon: Briefcase, activePrefix: "/listings" },
+  { href: "/me", label: "Me", icon: UserCircle2, activePrefix: "/me" },
+];
+
+/**
  * Routes and labels per known workspace.
  *
  * Records stay in their own lifecycle vocabulary. An A3 shift-day is a shift and
@@ -277,6 +288,14 @@ export const WORKSPACE_REGISTRY: Record<string, WorkspaceDefinition> = {
       { href: "/stays/reservations", label: "Bookings", icon: CalendarCheck },
       { href: "/stays/money", label: "Money", icon: Wallet },
     ],
+  },
+  [LISTING_WORKSPACE]: {
+    key: LISTING_WORKSPACE,
+    label: "Job Listings",
+    description: "Post job opportunities, review applications, and manage hiring.",
+    icon: Briefcase,
+    home: "/listings",
+    nav: [...LISTING_NAV],
   },
 };
 

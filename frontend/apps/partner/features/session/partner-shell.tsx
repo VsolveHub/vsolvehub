@@ -24,6 +24,8 @@ import {
   RENTAL_WORKSPACE,
   STAY_NAV,
   STAY_WORKSPACE,
+  LISTING_NAV,
+  LISTING_WORKSPACE,
   type WorkspaceNavItem,
 } from "@/features/workspace/registry";
 import { usePartnerWorkspaceGrants } from "@/features/workspace/queries";
@@ -51,7 +53,9 @@ export function getPartnerChromeMode(pathname: string): PartnerChromeMode {
     pathname === "/rentals" ||
     pathname.startsWith("/rentals/") ||
     pathname === "/stays" ||
-    pathname.startsWith("/stays/")
+    pathname.startsWith("/stays/") ||
+    pathname === "/listings" ||
+    pathname.startsWith("/listings/")
   ) {
     return "full";
   }
@@ -145,6 +149,8 @@ function FocusedHeader({ pathname }: { pathname: string }) {
     title = "Enquiry";
   } else if (pathname.startsWith("/work/jobs")) {
     title = "Job Details";
+  } else if (pathname.startsWith("/listings/")) {
+    title = "Listing Candidates";
   } else if (pathname.startsWith("/account") || pathname.startsWith("/me")) {
     title = "Account";
   }
@@ -360,21 +366,33 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
 
   const workspaces = resolveWorkspaces(workspaceGrants.grants ?? []);
   const workspaceKeys = workspaces.map((item) => item.key);
+
+  const hasListingWorkspace = workspaceKeys.includes(LISTING_WORKSPACE);
+  const isListingRoute = pathname === "/listings" || pathname.startsWith("/listings/");
+  const isListing = isListingRoute || (hasListingWorkspace && !workspaceKeys.includes(RENTAL_WORKSPACE) && !workspaceKeys.includes(STAY_WORKSPACE));
+
   const hasRentalWorkspace = workspaceKeys.includes(RENTAL_WORKSPACE);
   const isRentalRoute = pathname === "/rentals" || pathname.startsWith("/rentals/");
-  const isRental = hasRentalWorkspace || isRentalRoute;
+  const isRental = isRentalRoute || (hasRentalWorkspace && !isListingRoute && !pathname.startsWith("/stays"));
 
   const hasStayWorkspace = workspaceKeys.includes(STAY_WORKSPACE);
   const isStayRoute = pathname === "/stays" || pathname.startsWith("/stays/");
-  const isStay = hasStayWorkspace || isStayRoute;
+  const isStay = isStayRoute || (hasStayWorkspace && !isListingRoute && !isRentalRoute);
 
-  const navItems = isStay ? STAY_NAV : isRental ? RENTAL_NAV : TAP_FIRST_NAV;
-  const isDarkHero = (pathname === "/home" && !isRental && !isStay) || pathname === "/work";
+  const navItems = isListing
+    ? LISTING_NAV
+    : isStay
+    ? STAY_NAV
+    : isRental
+    ? RENTAL_NAV
+    : TAP_FIRST_NAV;
+
+  const isDarkHero = (pathname === "/home" && !isRental && !isStay && !isListing) || pathname === "/work";
 
   const user = session.data?.user;
-  const defaultName = isStay ? "Host" : isRental ? "Rental Partner" : "Partner";
+  const defaultName = isListing ? "Hiring Partner" : isStay ? "Host" : isRental ? "Rental Partner" : "Partner";
   const userName = user?.display_name || user?.full_name?.split(" ")[0] || defaultName;
-  const fallbackInitial = isStay ? "H" : isRental ? "R" : "P";
+  const fallbackInitial = isListing ? "H" : isStay ? "H" : isRental ? "R" : "P";
   const userInitial = (user?.display_name?.[0] || user?.full_name?.[0] || fallbackInitial).toUpperCase();
 
   return (
@@ -441,9 +459,9 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
                     userInitial={userInitial}
                     onSignOut={() => logout.mutate()}
                     isPending={logout.isPending}
-                    roleLabel={isStay ? "Host" : isRental ? "Rental" : "Partner"}
-                    workspaceLabel={isStay ? "A9 Property Host Workspace" : isRental ? "Rental Partner Workspace" : "Partner Workspace"}
-                    moneyHref={isStay ? "/stays/money" : isRental ? "/rentals/money" : "/money"}
+                    roleLabel={isListing ? "Hiring Partner" : isStay ? "Host" : isRental ? "Rental" : "Partner"}
+                    workspaceLabel={isListing ? "Job Listings Workspace" : isStay ? "A9 Property Host Workspace" : isRental ? "Rental Partner Workspace" : "Partner Workspace"}
+                    moneyHref={isListing ? "/listings" : isStay ? "/stays/money" : isRental ? "/rentals/money" : "/money"}
                   />
                 </div>
               </div>

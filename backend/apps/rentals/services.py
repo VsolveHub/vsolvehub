@@ -21,23 +21,6 @@ from apps.catalog.models import A7VariantConfiguration
 from apps.commerce.models import PaymentAttempt, Refund
 from apps.commerce.services.payments import initiate_standalone_payment_attempt
 from apps.commerce.services.refunds import request_standalone_refund
-
-
-def _payment_attempt_refunded_paise(attempt: PaymentAttempt) -> int:
-    refunds_sum = (
-        attempt.refunds.exclude(status=Refund.Status.FAILED).aggregate(
-            Sum("amount_paise")
-        )["amount_paise__sum"]
-        or 0
-    )
-    alloc_sum = 0
-    if hasattr(attempt, "rental_allocations"):
-        alloc_sum = (
-            attempt.rental_allocations.aggregate(Sum("refunded_paise"))["refunded_paise__sum"]
-            or 0
-        )
-    return max(int(refunds_sum), int(alloc_sum))
-
 from apps.foundation.services import enqueue_outbox_event, request_fingerprint
 from apps.notifications.models import NotificationIntent
 from apps.notifications.services import request_notification
@@ -63,6 +46,22 @@ from apps.rentals.models import (
 from apps.rentals.selectors import get_occupied_datetime_range
 
 
+def _payment_attempt_refunded_paise(attempt: PaymentAttempt) -> int:
+    refunds_sum = (
+        attempt.refunds.exclude(status=Refund.Status.FAILED).aggregate(
+            Sum("amount_paise")
+        )["amount_paise__sum"]
+        or 0
+    )
+    alloc_sum = 0
+    if hasattr(attempt, "rental_allocations"):
+        alloc_sum = (
+            attempt.rental_allocations.aggregate(Sum("refunded_paise"))["refunded_paise__sum"]
+            or 0
+        )
+    return max(int(refunds_sum), int(alloc_sum))
+
+
 def _emit_rental_event(
     booking_id: UUID | str, event_type: str, payload: dict[str, Any] | None = None
 ) -> bool:
@@ -75,6 +74,7 @@ def _emit_rental_event(
         idempotency_key=f"{booking_id}:{request_fingerprint(event_payload)[:32]}",
         payload=event_payload,
     )
+    return True
 
 
 @transaction.atomic
@@ -119,7 +119,7 @@ def handle_rental_checkout_failure(*, payment_attempt_id: UUID | str) -> None:
     _emit_rental_event(booking.id, "rental.checkout_failed", {"booking_id": str(booking.id)})
 
 
-def create_rental_hold(
+def create_rental_hold(  # noqa: PLR0912, PLR0915
     *,
     customer: Any,
     asset_id: UUID | str,
@@ -947,7 +947,7 @@ def record_return_inspection(
         return inspection
 
 
-def _apply_settlement_matrix(
+def _apply_settlement_matrix(  # noqa: PLR0915
     booking: RentalBooking,
     inspection: RentalReturnInspection,
     config: Any,
@@ -987,8 +987,9 @@ def _apply_settlement_matrix(
                 summary=f"Damage claim on Rental #{str(booking.id)[:8]} lacks photo evidence",
                 detail=(
                     f"Vendor reported ₹{inspection.damage_estimated_paise / 100:.2f} damage, but "
-                    f"handover photos ({len(handover_photos)}) or return photos ({len(inspection_photos)}) "
-                    f"are missing. Photo evidence is strictly required for damage claims."
+                    f"handover photos ({len(handover_photos)}) or "
+                    f"return photos ({len(inspection_photos)}) are missing. "
+                    f"Photo evidence is strictly required for damage claims."
                 ),
                 due_at=timezone.now() + timedelta(hours=24),
             )
@@ -1443,7 +1444,7 @@ def operations_resolve_dispute(
             raise InvalidRentalStateTransitionError(
                 "Vendor deposit consumption requires handover and return photo evidence."
             )
-        proposal = {
+        proposal: dict[str, Any] = {
             "refund_customer_paise": refund_customer_paise,
             "vendor_payout_paise": vendor_payout_paise,
             "resolution_note": resolution_note,

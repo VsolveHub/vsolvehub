@@ -14,6 +14,7 @@ M2_ARCHETYPES = (
     ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT,
     ServiceVariant.BookingArchetype.A7_RENTAL,
     ServiceVariant.BookingArchetype.A9_STAY,
+    ServiceVariant.BookingArchetype.A10_LISTING,
 )
 
 #: Actions the backend authorises per workspace. The frontend maps these to controls;
@@ -62,6 +63,17 @@ WORKSPACE_ACTIONS: dict[str, tuple[str, ...]] = {
         "stay.check_in",
         "stay.check_out",
         "stay.escrow_review",
+    ),
+    ServiceVariant.BookingArchetype.A10_LISTING: (
+        "listing.view",
+        "listing.manage",
+        "listing.create",
+        "listing.publish",
+        "listing.close",
+        "application.view",
+        "application.manage",
+        "application.reveal_contact",
+        "subscription.manage",
     ),
 }
 

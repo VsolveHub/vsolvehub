@@ -23,7 +23,7 @@ from apps.cases.models import (
 )
 from apps.identity.models import User
 from apps.payouts.exceptions import CaseConflictApiError, CaseInvalidApiError
-from apps.payouts.services import release_payout_hold
+from apps.payouts.services import apply_payout_hold, release_payout_hold
 
 #: Case types that hold a Partner's money until somebody decides. A dispute or a safety
 #: investigation must not be paid out from under.
@@ -119,6 +119,8 @@ def open_case(
             context={"response_due_at": response_due_at.isoformat()},
         )
     if case.holds_payout:
+        if case.booking_id is not None:
+            apply_payout_hold(booking_id=case.booking_id)
         _hold_m2_payouts(case)
     return case
 

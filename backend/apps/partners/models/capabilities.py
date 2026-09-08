@@ -37,6 +37,7 @@ def commercial_mode_for_archetype(archetype: str) -> str:
         ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT,
         ServiceVariant.BookingArchetype.A7_RENTAL,
         ServiceVariant.BookingArchetype.A9_STAY,
+        ServiceVariant.BookingArchetype.A10_LISTING,
     ):
         return PartnerCapability.CommercialMode.MANAGED_PAYMENT_REQUIRED
     return PartnerCapability.CommercialMode.NOT_APPLICABLE
