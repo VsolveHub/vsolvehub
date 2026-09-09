@@ -125,6 +125,7 @@ export function ServiceGrid({ categories, hrefs }: ServiceGridProps) {
                   <li key={service.id} className="min-w-0">
                     <Link
                       href={href}
+                      prefetch={false}
                       className={[
                         "flex h-full min-h-24 flex-col items-center gap-2",
                         "rounded-card border border-line bg-surface px-1.5 py-3 text-center",

@@ -200,9 +200,13 @@ function Editor({
 
   const fieldErrors =
     save.error instanceof ApiRequestError ? save.error.fieldErrors : {};
-  const fieldMessages = Object.entries(fieldErrors).flatMap(([field, messages]) =>
-    messages.map((message) => `${field}: ${message}`),
-  );
+  const fieldMessages =
+    save.error instanceof ApiRequestError &&
+    save.error.code === "partner_application_incomplete"
+      ? [save.error.message]
+      : Object.entries(fieldErrors).flatMap(([field, messages]) =>
+          messages.map((message) => `${field}: ${message}`),
+        );
 
   function update(patch: Partial<ApplicationDraft>) {
     setDraft((current) => ({ ...current, ...patch }));

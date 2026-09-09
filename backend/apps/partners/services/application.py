@@ -130,6 +130,14 @@ def _validate_service_configuration(
 
     area_ids = {area.id for area in service_areas}
     for variant in variants if service_areas or require_complete else ():
+        # Stay (and rental) inventory is located on the property/asset, not by
+        # turning a catalog SKU on in ServiceAreaService. Hosts still name the
+        # cities they work in; listings are serviceable from those records later.
+        if variant.booking_archetype in {
+            ServiceVariant.BookingArchetype.A7_RENTAL,
+            ServiceVariant.BookingArchetype.A9_STAY,
+        }:
+            continue
         if not ServiceAreaService.objects.filter(
             variant=variant,
             service_area_id__in=area_ids,

@@ -57,9 +57,10 @@ Response `200 OK`:
       "label": "Sharing Type",
       "question_type": "SINGLE_SELECT",
       "options": [
-        {"value": "PRIVATE", "label": "Private Room"},
-        {"value": "DOUBLE_SHARING", "label": "2 Sharing"},
-        {"value": "TRIPLE_SHARING", "label": "3 Sharing"}
+        {"value": "PRIVATE", "label": "Private Room / 1-Sharing"},
+        {"value": "DOUBLE", "label": "2-Sharing"},
+        {"value": "TRIPLE", "label": "3-Sharing"},
+        {"value": "FOUR_PLUS", "label": "4+ Sharing / Dormitory"}
       ]
     },
     {

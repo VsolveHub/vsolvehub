@@ -282,10 +282,15 @@ class PartnerPropertyCreateSerializer(serializers.ModelSerializer):
             "id",
             "title",
             "property_type",
+            "occupancy_model",
             "description",
             "locality",
             "is_active",
         )
+        # occupancy_model is derived server-side from property_type (Property.save()) --
+        # never a host-writable field, so a host can only change it by re-selecting
+        # property_type. See plan SS3.1.
+        read_only_fields = ("occupancy_model",)
 
 
 class PartnerPropertyPolicySerializer(serializers.ModelSerializer):
@@ -370,6 +375,8 @@ class PartnerUnitTypeCreateSerializer(serializers.ModelSerializer):
             "furnishing_status",
             "food_included",
             "bhk",
+            "occupancy_capacity",
+            "room_class",
             "bathrooms",
             "built_up_sqft",
             "facing",
@@ -380,6 +387,40 @@ class PartnerUnitTypeCreateSerializer(serializers.ModelSerializer):
         )
 
     def validate(self, attrs: dict) -> dict:
+        # SS3.2 pairing rule (mirrors UnitType.clean(), which plain ModelSerializer.save()
+        # never calls) -- enforce it here too so the API rejects a mismatched payload
+        # instead of silently persisting a UnitType that only a manual full_clean() would
+        # catch. Uses the property passed in via context (create) or the existing
+        # instance's property (partial update).
+        property_obj = self.context.get("property") or getattr(self.instance, "property", None)
+        if property_obj is not None:
+            sharing_type = attrs.get("sharing_type", getattr(self.instance, "sharing_type", ""))
+            occupancy_capacity = attrs.get(
+                "occupancy_capacity", getattr(self.instance, "occupancy_capacity", None)
+            )
+            room_class = attrs.get("room_class", getattr(self.instance, "room_class", None))
+            if property_obj.occupancy_model == Property.OccupancyModel.SHARED and not sharing_type:
+                raise serializers.ValidationError(
+                    {"sharing_type": "sharing_type is required for shared-occupancy properties"}
+                )
+            if (
+                property_obj.occupancy_model
+                in (Property.OccupancyModel.ENTIRE_UNIT, Property.OccupancyModel.HOTEL_ROOM)
+                and not occupancy_capacity
+            ):
+                raise serializers.ValidationError(
+                    {
+                        "occupancy_capacity": (
+                            "occupancy_capacity is required for entire-unit and hotel-room "
+                            "properties"
+                        )
+                    }
+                )
+            if property_obj.occupancy_model == Property.OccupancyModel.HOTEL_ROOM and not room_class:
+                raise serializers.ValidationError(
+                    {"room_class": "room_class is required for hotel-room properties"}
+                )
+
         variant = attrs.get("variant") or getattr(self.instance, "variant", None)
         partner = self.context.get("partner")
         if variant is None and partner is not None:

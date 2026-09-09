@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { cn } from "@vsolve/ui";
+import type { Schemas } from "@vsolve/api-client";
 
 import {
   useAddCartItem,
@@ -13,17 +14,8 @@ import {
 import type { ServiceCard } from "../client-queries";
 import { serviceHref } from "../service-href";
 
-export interface RentalListingGroupBrief {
-  asset_id: string;
-  partner_id?: string;
-  vendor_name?: string;
-  variant_id?: string;
-  title?: string;
-  daily_price_paise?: number;
-  deposit_paise?: number;
-  condition_grade?: string;
-  image_url?: string;
-}
+/** Real backend shape for an A7 rental vendor storefront card (§4.1a). */
+export type RentalListingGroupBrief = Schemas["RentalListingGroup"];
 
 export function TileCatalogAddButton({
   service,
@@ -73,7 +65,23 @@ export function TileCatalogAddButton({
     event.stopPropagation();
 
     if (opensPanel && onNeedChoice) {
+      // Catalog-row tap: for a rental this still opens the detail panel, which
+      // renders the real vendor list (§4.1a) instead of a single hidden vendor.
       onNeedChoice();
+      return;
+    }
+
+    if (isRental) {
+      // A7 rentals are a marketplace-of-sellers, not A1's single-dispatch
+      // model: there is no generic "add to cart" here. `rentalListing` is the
+      // vendor card the customer is looking at (panel footer selection); with
+      // no listing resolved yet, send them to the service page where the
+      // vendor list lives.
+      if (rentalListing) {
+        router.push(`/rentals/checkout/${rentalListing.asset_id}`);
+      } else {
+        router.push(serviceHref(service, categorySlug));
+      }
       return;
     }
 
@@ -127,7 +135,7 @@ export function TileCatalogAddButton({
   };
 
   // Render stepper for regular cart item
-  if (cartItem && !opensPanel) {
+  if (cartItem && !opensPanel && !isRental) {
     return (
       <div
         role="group"
@@ -179,17 +187,23 @@ export function TileCatalogAddButton({
     );
   }
 
+  const rentalLabel = rentalListing ? "Reserve" : "View vendors";
+  const buttonLabel = isRental ? rentalLabel : isAdding ? "Adding..." : label;
+  const buttonDisabled = isRental
+    ? false
+    : !opensPanel && Boolean(resolvedVariantId) && (isAdding || cartUnavailable);
+
   return (
     <button
       type="button"
       onClick={handleAdd}
-      disabled={!opensPanel && Boolean(resolvedVariantId) && (isAdding || cartUnavailable)}
+      disabled={buttonDisabled}
       className={cn(
         "inline-flex shrink-0 items-center justify-center bg-navy-900 font-bold text-white shadow-xs transition-colors hover:bg-navy-800 disabled:opacity-50 cursor-pointer",
         isPanel ? "h-11 min-w-[8.5rem] rounded-xl px-5 text-sm" : "h-9 rounded-lg px-4 text-[13px]"
       )}
     >
-      {isAdding ? "Adding..." : label}
+      {buttonLabel}
     </button>
   );
 }

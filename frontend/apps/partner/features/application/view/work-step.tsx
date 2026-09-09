@@ -1,14 +1,18 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Badge, ErrorState, Spinner } from "@vsolve/ui";
 
 import { useApplicationEditor, useProceedDisabled } from "./application-editor";
 import type { MainCategory, OfferableService } from "@/features/catalog/queries";
 import { toggle } from "../model/draft";
 import {
+  isStayOfferingSelected,
+  isStayTradeCategory,
   isTradeCategorySelected,
   selectedTradeCategories,
+  stayOfferingGroups,
+  toggleStayOffering,
   toggleTradeCategorySelection,
   variantIdsForCategory,
 } from "../model/main-categories";
@@ -30,10 +34,18 @@ function servicesForCategory(
 export function WorkStep({ mainCategories, services }: WorkStepProps) {
   const { draft, update, isReadOnly } = useApplicationEditor();
   const reference = useApplicationReference();
+  const [openedCategoryIds, setOpenedCategoryIds] = useState<string[]>([]);
 
   const selectedCategories = useMemo(
-    () => selectedTradeCategories(mainCategories, reference.skills, draft.skillCodes),
-    [draft.skillCodes, mainCategories, reference.skills],
+    () =>
+      selectedTradeCategories(
+        mainCategories,
+        reference.skills,
+        draft.skillCodes,
+        services,
+        draft.serviceVariantIds,
+      ),
+    [draft.skillCodes, draft.serviceVariantIds, mainCategories, reference.skills, services],
   );
 
   const selectableServices = useMemo(() => {
@@ -88,9 +100,19 @@ export function WorkStep({ mainCategories, services }: WorkStepProps) {
               category,
               reference.skills,
               draft.skillCodes,
+              services,
+              draft.serviceVariantIds,
             );
+            const opened = openedCategoryIds.includes(category.id);
+            const showOfferings = checked || opened;
+            const stayCategory = isStayTradeCategory(category);
             const categoryServices = servicesForCategory(category, services);
-            const allCategoryIds = variantIdsForCategory(category.name, services);
+            const stayGroups = stayCategory
+              ? stayOfferingGroups(category.name, categoryServices)
+              : [];
+            const allCategoryIds = stayCategory
+              ? stayGroups.flatMap((group) => group.variantIds)
+              : variantIdsForCategory(category.name, services);
             const allServicesSelected =
               allCategoryIds.length > 0 &&
               allCategoryIds.every((id) => draft.serviceVariantIds.includes(id));
@@ -98,28 +120,32 @@ export function WorkStep({ mainCategories, services }: WorkStepProps) {
             return (
               <div key={category.id} className="flex flex-col gap-2.5">
                 <SelectableRow
-                  checked={checked}
+                  checked={showOfferings}
                   disabled={isReadOnly}
-                  onChange={() =>
-                    update(
-                      toggleTradeCategorySelection(
-                        category,
-                        reference.skills,
-                        services,
-                        draft.skillCodes,
-                        draft.serviceVariantIds,
-                      ),
-                    )
-                  }
+                  onChange={() => {
+                    const next = toggleTradeCategorySelection(
+                      category,
+                      reference.skills,
+                      services,
+                      draft.skillCodes,
+                      draft.serviceVariantIds,
+                    );
+                    update(next);
+                    setOpenedCategoryIds((current) =>
+                      showOfferings
+                        ? current.filter((id) => id !== category.id)
+                        : Array.from(new Set([...current, category.id])),
+                    );
+                  }}
                   label={category.name}
                 />
 
-                {checked ? (
+                {showOfferings ? (
                   categoryServices.length > 0 ? (
                     <div className="ml-1 flex flex-col gap-2 border-l-2 border-line pl-3 sm:ml-2 sm:pl-4">
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                          Job types
+                          {stayCategory ? "Stay types" : "Job types"}
                         </p>
                         {!isReadOnly ? (
                           <button
@@ -153,49 +179,79 @@ export function WorkStep({ mainCategories, services }: WorkStepProps) {
                         ) : null}
                       </div>
 
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        {categoryServices.map((service) => {
-                          const needsSkill =
-                            service.requiredSkillCode.length > 0 &&
-                            !draft.skillCodes.includes(service.requiredSkillCode);
-
-                          return (
-                            <div key={service.variantId} className="flex flex-col gap-1">
-                              <SelectableRow
-                                checked={draft.serviceVariantIds.includes(service.variantId)}
-                                disabled={isReadOnly}
-                                onChange={() => {
-                                  const isSelected = draft.serviceVariantIds.includes(service.variantId);
-                                  const nextVariantIds = toggle(
+                      {stayCategory ? (
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {stayGroups.map((group) => (
+                            <SelectableRow
+                              key={group.key}
+                              checked={isStayOfferingSelected(group, draft.serviceVariantIds)}
+                              disabled={isReadOnly}
+                              onChange={() =>
+                                update(
+                                  toggleStayOffering(
+                                    group,
                                     draft.serviceVariantIds,
-                                    service.variantId,
-                                  );
-                                  let nextSkillCodes = draft.skillCodes;
-                                  if (
-                                    !isSelected &&
-                                    service.requiredSkillCode &&
-                                    !draft.skillCodes.includes(service.requiredSkillCode)
-                                  ) {
-                                    nextSkillCodes = [...draft.skillCodes, service.requiredSkillCode];
-                                  }
-                                  update({
-                                    serviceVariantIds: nextVariantIds,
-                                    skillCodes: nextSkillCodes,
-                                  });
-                                }}
-                                label={service.variantName}
-                                caption={service.serviceName}
-                              />
-                              {needsSkill &&
-                              draft.serviceVariantIds.includes(service.variantId) ? (
-                                <Badge tone="warning">
-                                  Requires {service.requiredSkillCode.replace(/-/g, " ")} trade
-                                </Badge>
-                              ) : null}
-                            </div>
-                          );
-                        })}
-                      </div>
+                                    draft.skillCodes,
+                                  ),
+                                )
+                              }
+                              label={group.name}
+                              caption={`${group.variantIds.length} listing type${
+                                group.variantIds.length === 1 ? "" : "s"
+                              }`}
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {categoryServices.map((service) => {
+                            const needsSkill =
+                              service.requiredSkillCode.length > 0 &&
+                              !draft.skillCodes.includes(service.requiredSkillCode);
+
+                            return (
+                              <div key={service.variantId} className="flex flex-col gap-1">
+                                <SelectableRow
+                                  checked={draft.serviceVariantIds.includes(service.variantId)}
+                                  disabled={isReadOnly}
+                                  onChange={() => {
+                                    const isSelected = draft.serviceVariantIds.includes(
+                                      service.variantId,
+                                    );
+                                    const nextVariantIds = toggle(
+                                      draft.serviceVariantIds,
+                                      service.variantId,
+                                    );
+                                    let nextSkillCodes = draft.skillCodes;
+                                    if (
+                                      !isSelected &&
+                                      service.requiredSkillCode &&
+                                      !draft.skillCodes.includes(service.requiredSkillCode)
+                                    ) {
+                                      nextSkillCodes = [
+                                        ...draft.skillCodes,
+                                        service.requiredSkillCode,
+                                      ];
+                                    }
+                                    update({
+                                      serviceVariantIds: nextVariantIds,
+                                      skillCodes: nextSkillCodes,
+                                    });
+                                  }}
+                                  label={service.variantName}
+                                  caption={service.serviceName}
+                                />
+                                {needsSkill &&
+                                draft.serviceVariantIds.includes(service.variantId) ? (
+                                  <Badge tone="warning">
+                                    Requires {service.requiredSkillCode.replace(/-/g, " ")} trade
+                                  </Badge>
+                                ) : null}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <p className="ml-1 border-l-2 border-line pl-3 text-xs leading-5 text-text-secondary sm:ml-2 sm:pl-4">

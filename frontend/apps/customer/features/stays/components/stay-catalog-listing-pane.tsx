@@ -16,8 +16,18 @@ import {
   Tag,
   X,
 } from "lucide-react";
-import { fetchStayBrowse, type StayBrowseUnitCard } from "../queries";
+import {
+  fetchStayBrowse,
+  fetchStayFilterDefinitions,
+  type StayBrowseUnitCard,
+  type StayFilterDefinition,
+} from "../queries";
 import { StayPropertyGridCard } from "./stay-property-grid-card";
+import {
+  defaultStayEndDate,
+  defaultStayStartDate,
+  hideSoldOutStayCards,
+} from "../stay-checkout-rules";
 
 interface StayCatalogListingPaneProps {
   categorySlug: string;
@@ -56,13 +66,27 @@ export function StayCatalogListingPane({
   const [filterDrawerOpen, setFilterDrawerOpen] = useState<boolean>(false);
 
   // Date selection state
-  const [startDate, setStartDate] = useState<string>(searchParams.get("start_date") || "");
-  const [endDate, setEndDate] = useState<string>(searchParams.get("end_date") || "");
+  const [startDate, setStartDate] = useState<string>(
+    searchParams.get("start_date") || defaultStayStartDate(),
+  );
+  const [endDate, setEndDate] = useState<string>(
+    searchParams.get("end_date") || defaultStayEndDate(),
+  );
 
   // Advanced drawer filter state
   const [drawerLocality, setDrawerLocality] = useState<string>(searchParams.get("locality") || "");
   const [drawerMaxPrice, setDrawerMaxPrice] = useState<number>(100000);
   const [drawerSharing, setDrawerSharing] = useState<string>("");
+  const [drawerRoomClass, setDrawerRoomClass] = useState<string>("");
+  const [drawerMinCapacity, setDrawerMinCapacity] = useState<number>(0);
+
+  // Backend-driven filter set (plan Django_Next.js_Plan/M3/05-a9-stay-property-type-remediation.md
+  // SS5 Wave 2 item 5): replaces the old hardcoded pill/drawer lists, which offered "1 Sharing" /
+  // "2 Sharing" on every subcategory including whole-unit ones (villas, apartments) where sharing
+  // doesn't apply. get_stay_filter_definitions(service_slug=...) already returns the right shape
+  // per-subcategory because seed_stay_catalog.py only seeds sharing_type/food_included ServiceQuestions
+  // for SHARED subcategories and occupancy_capacity for ENTIRE_UNIT ones.
+  const [filterDefinitions, setFilterDefinitions] = useState<StayFilterDefinition[]>([]);
 
   // Data state
   const [units, setUnits] = useState<StayBrowseUnitCard[]>([]);
@@ -75,8 +99,10 @@ export function StayCatalogListingPane({
     setDrawerLocality("");
     setDrawerMaxPrice(100000);
     setDrawerSharing("");
-    setStartDate("");
-    setEndDate("");
+    setDrawerRoomClass("");
+    setDrawerMinCapacity(0);
+    setStartDate(defaultStayStartDate());
+    setEndDate(defaultStayEndDate({ hotel: isHotelTile }));
     setSortBy("relevant");
     setCurrentPage(1);
     setFilterDrawerOpen(false);
@@ -87,7 +113,46 @@ export function StayCatalogListingPane({
   useEffect(() => {
     setCurrentPage(1);
     setActivePill("all");
+    setDrawerSharing("");
+    setDrawerRoomClass("");
+    setDrawerMinCapacity(0);
   }, [activeTile.slug]);
+
+  // Fetch the backend-driven filter set for this subcategory/service.
+  useEffect(() => {
+    let isCurrent = true;
+    fetchStayFilterDefinitions(activeTile.slug)
+      .then((defs) => {
+        if (isCurrent) setFilterDefinitions(defs);
+      })
+      .catch(() => {
+        if (isCurrent) setFilterDefinitions([]);
+      });
+    return () => {
+      isCurrent = false;
+    };
+  }, [activeTile.slug]);
+
+  const sharingFilterDef = filterDefinitions.find((d) => d.code === "sharing_type");
+  const capacityFilterDef = filterDefinitions.find((d) => d.code === "occupancy_capacity");
+  const roomClassFilterDef = filterDefinitions.find((d) => d.code === "room_class");
+  const foodFilterDef = filterDefinitions.find((d) => d.code === "food_included");
+  const isHotelTile = Boolean(roomClassFilterDef);
+  const isSharedTile = Boolean(sharingFilterDef);
+  const isEntireUnitTile = Boolean(capacityFilterDef) && !sharingFilterDef && !isHotelTile;
+  const usesCapacityFilter = Boolean(capacityFilterDef) && !sharingFilterDef;
+
+  const endDateFromQuery = searchParams.get("end_date");
+  useEffect(() => {
+    if (endDateFromQuery) return;
+    setEndDate((current) => {
+      const hotelEnd = defaultStayEndDate({ hotel: true });
+      const monthlyEnd = defaultStayEndDate();
+      if (isHotelTile) return hotelEnd;
+      if (current === hotelEnd || current === monthlyEnd || !current) return monthlyEnd;
+      return current;
+    });
+  }, [isHotelTile, endDateFromQuery]);
 
   // Fetch stay units from backend
   useEffect(() => {
@@ -95,21 +160,34 @@ export function StayCatalogListingPane({
     setLoading(true);
     setError(null);
 
-    // Derive query params based on active filter pill
+    // Derive query params based on active filter pill. Sharing-based pills only apply
+    // when this subcategory is actually a shared-occupancy one (isSharedTile) -- on an
+    // entire-unit tile (villas, apartments) they simply don't render (see filterPills
+    // below), so activePill can never carry a sharing value there.
     const isAc = activePill === "ac" ? true : activePill === "non_ac" ? false : undefined;
     const foodIncluded = activePill === "food" ? true : undefined;
-    const sharingType = activePill === "1_sharing"
-      ? "PRIVATE"
-      : activePill === "2_sharing"
-      ? "DOUBLE"
-      : drawerSharing || undefined;
+    const sharingType = isSharedTile
+      ? activePill === "1_sharing"
+        ? "PRIVATE"
+        : activePill === "2_sharing"
+        ? "DOUBLE"
+        : drawerSharing || undefined
+      : undefined;
+    const occupancyCapacityGte = usesCapacityFilter && drawerMinCapacity > 0 ? drawerMinCapacity : undefined;
     const furnishingStatus = activePill === "furnished" ? "FULLY_FURNISHED" : undefined;
+    const roomClass = isHotelTile
+      ? activePill.startsWith("roomclass_")
+        ? activePill.slice("roomclass_".length)
+        : drawerRoomClass || undefined
+      : undefined;
 
     fetchStayBrowse({
       subcategory: activeTile.slug,
       is_ac: isAc,
       food_included: foodIncluded,
       sharing_type: sharingType,
+      occupancy_capacity_gte: occupancyCapacityGte,
+      room_class: roomClass,
       furnishing_status: furnishingStatus,
       locality: drawerLocality || undefined,
       max_price: drawerMaxPrice < 100000 ? drawerMaxPrice * 100 : undefined,
@@ -132,11 +210,25 @@ export function StayCatalogListingPane({
     return () => {
       isCurrent = false;
     };
-  }, [activeTile.slug, activePill, drawerLocality, drawerMaxPrice, drawerSharing, startDate, endDate]);
+  }, [
+    activeTile.slug,
+    activePill,
+    drawerLocality,
+    drawerMaxPrice,
+    drawerSharing,
+    drawerRoomClass,
+    drawerMinCapacity,
+    isSharedTile,
+    isEntireUnitTile,
+    isHotelTile,
+    usesCapacityFilter,
+    startDate,
+    endDate,
+  ]);
 
   // Filter client-side pills (e.g. attached bathroom, near metro) & sort
   const filteredAndSorted = useMemo(() => {
-    let list = [...units];
+    let list = hideSoldOutStayCards(units, Boolean(startDate && endDate));
 
     if (activePill === "attached_bath") {
       list = list.filter((u) => u.bathroom_type === "ATTACHED" || u.unit_name.toLowerCase().includes("attached"));
@@ -159,7 +251,7 @@ export function StayCatalogListingPane({
     }
 
     return list;
-  }, [units, activePill, sortBy]);
+  }, [units, activePill, sortBy, startDate, endDate]);
 
   // Pagination
   const totalItems = filteredAndSorted.length;
@@ -169,15 +261,27 @@ export function StayCatalogListingPane({
     currentPage * ITEMS_PER_PAGE,
   );
 
+  // Sharing pills only make sense for shared-occupancy subcategories (PG/Hostel/Co-Living);
+  // showing "1 Sharing" / "2 Sharing" on a villa or apartment tile was exactly the bug this
+  // remediation fixes. Food pill likewise only applies where food_included is a real,
+  // seeded concept for this tile (see foodFilterDef above).
   const filterPills = [
     { id: "all", label: `All ${activeTile.name}` },
     { id: "ac", label: "AC" },
     { id: "non_ac", label: "Non-AC" },
-    { id: "1_sharing", label: "1 Sharing" },
-    { id: "2_sharing", label: "2 Sharing" },
+    ...(isSharedTile ? [
+      { id: "1_sharing", label: "1 Sharing" },
+      { id: "2_sharing", label: "2 Sharing" },
+    ] : []),
+    ...(isHotelTile && roomClassFilterDef
+      ? roomClassFilterDef.options.map((o) => ({
+          id: `roomclass_${o.code}`,
+          label: o.label,
+        }))
+      : []),
     { id: "attached_bath", label: "Attached Bathroom" },
     { id: "furnished", label: "Furnished" },
-    { id: "food", label: "With Food" },
+    ...(foodFilterDef ? [{ id: "food", label: "With Food" }] : []),
     { id: "metro", label: "Near Metro" },
   ];
 
@@ -314,22 +418,22 @@ export function StayCatalogListingPane({
               </label>
             </div>
 
-            {(startDate || endDate) && (
+            {startDate && endDate && (
               <button
                 type="button"
                 onClick={() => {
-                  setStartDate("");
-                  setEndDate("");
+                  setStartDate(defaultStayStartDate());
+                  setEndDate(defaultStayEndDate({ hotel: isHotelTile }));
                   setCurrentPage(1);
                 }}
                 className="text-[11px] font-bold text-red-600 hover:text-red-700 underline cursor-pointer ml-1"
               >
-                Clear Dates
+                Reset Dates
               </button>
             )}
           </div>
 
-          {(activePill !== "all" || drawerLocality || drawerMaxPrice < 100000 || drawerSharing || startDate || endDate) && (
+          {(activePill !== "all" || drawerLocality || drawerMaxPrice < 100000 || drawerSharing || drawerMinCapacity > 0 || startDate || endDate) && (
             <button
               type="button"
               onClick={handleResetAllFilters}
@@ -414,6 +518,8 @@ export function StayCatalogListingPane({
                 key={card.unit_type_id}
                 card={card}
                 activeTileSlug={activeTile.slug}
+                startDate={startDate}
+                endDate={endDate}
               />
             ))}
           </div>
@@ -504,33 +610,95 @@ export function StayCatalogListingPane({
                 />
               </div>
 
-              {/* Sharing Type */}
-              <div className="mt-5">
-                <label className="block text-xs font-bold text-navy-900 uppercase tracking-wider">
-                  Sharing Option
-                </label>
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  {[
-                    { label: "All Sharing", value: "" },
-                    { label: "Private Single", value: "PRIVATE" },
-                    { label: "Double (2)", value: "DOUBLE" },
-                    { label: "Triple (3)", value: "TRIPLE" },
-                  ].map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setDrawerSharing(opt.value)}
-                      className={`rounded-xl py-2 px-3 text-xs font-bold border transition-colors ${
-                        drawerSharing === opt.value
-                          ? "bg-orange-50 border-[#f87000] text-[#b84814]"
-                          : "bg-white border-gray-200 text-gray-700 hover:border-gray-300"
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
+              {/* Sharing Type (shared-occupancy subcategories only) or Sleeps-Up-To
+                  (entire-unit subcategories only) -- driven by what the backend actually
+                  seeded for this service, never a hardcoded list that could offer sharing
+                  options on a villa/apartment tile. */}
+              {isSharedTile && sharingFilterDef && (
+                <div className="mt-5">
+                  <label className="block text-xs font-bold text-navy-900 uppercase tracking-wider">
+                    {sharingFilterDef.prompt}
+                  </label>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    {[{ label: "All Sharing", value: "" }, ...sharingFilterDef.options.map((o) => ({
+                      label: o.label,
+                      value: o.code,
+                    }))].map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setDrawerSharing(opt.value)}
+                        className={`rounded-xl py-2 px-3 text-xs font-bold border transition-colors ${
+                          drawerSharing === opt.value
+                            ? "bg-orange-50 border-[#f87000] text-[#b84814]"
+                            : "bg-white border-gray-200 text-gray-700 hover:border-gray-300"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {isHotelTile && roomClassFilterDef && (
+                <div className="mt-5">
+                  <label className="block text-xs font-bold text-navy-900 uppercase tracking-wider">
+                    {roomClassFilterDef.prompt}
+                  </label>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    {[{ label: "All classes", value: "" }, ...roomClassFilterDef.options.map((o) => ({
+                      label: o.label,
+                      value: o.code,
+                    }))].map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setDrawerRoomClass(opt.value)}
+                        className={`rounded-xl py-2 px-3 text-xs font-bold border transition-colors ${
+                          drawerRoomClass === opt.value
+                            ? "bg-orange-50 border-[#f87000] text-[#b84814]"
+                            : "bg-white border-gray-200 text-gray-700 hover:border-gray-300"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {usesCapacityFilter && capacityFilterDef && (
+                <div className="mt-5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-navy-900 uppercase tracking-wider">
+                      {capacityFilterDef.prompt}
+                    </span>
+                    <span className="font-black text-[#f87000]">
+                      {drawerMinCapacity > 0 ? `Sleeps ${drawerMinCapacity}+` : "Any Size"}
+                    </span>
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    {[{ label: "Any Size", value: 0 }, ...capacityFilterDef.options.map((o) => ({
+                      label: o.label,
+                      value: Number(o.code),
+                    }))].map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setDrawerMinCapacity(opt.value)}
+                        className={`rounded-xl py-2 px-3 text-xs font-bold border transition-colors ${
+                          drawerMinCapacity === opt.value
+                            ? "bg-orange-50 border-[#f87000] text-[#b84814]"
+                            : "bg-white border-gray-200 text-gray-700 hover:border-gray-300"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Max Budget Slider */}
               <div className="mt-5">

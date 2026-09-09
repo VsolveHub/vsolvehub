@@ -32,7 +32,8 @@ from apps.catalog.models import (
 )
 from apps.commerce.models import PaymentAttempt
 from apps.foundation.models import OutboxEvent
-from apps.partners.models import PartnerBusinessProfile, PartnerProfile
+from apps.identity.models import Role, UserRole
+from apps.partners.models import PartnerBusinessProfile, PartnerCapability, PartnerProfile
 from apps.payouts.models import PartnerLedgerEntry
 from apps.stays.exceptions import (
     GuestPolicyViolationError,
@@ -62,6 +63,7 @@ from apps.stays.services import (
     create_stay_hold,
     dispute_stay_damage,
     host_block_unit,
+    host_reactivate_unit,
     host_reassign_unit,
     initiate_stay_checkout,
     initiate_stay_extension_payment,
@@ -73,6 +75,7 @@ from apps.stays.services import (
     request_stay_extension,
 )
 from apps.stays.tasks import sweep_expired_tentative_holds, sweep_no_show_reservations
+from tests.helpers import force_role_client
 
 User = get_user_model()
 
@@ -842,6 +845,39 @@ class StayLifecycleTests(TestCase):
         self.assertEqual(reassigned.status, StayReservation.Status.CONFIRMED)
         self.assertEqual(reassigned.unit.id, other_unit.id)
 
+    def test_host_block_excludes_unit_from_browse_and_reactivate_restores(self) -> None:
+        start = date.today() + timedelta(days=40)
+        end = start + timedelta(days=5)
+        before = browse_stays(locality="Kondapur", start_date=start, end_date=end)
+        self.assertEqual(before[0]["units_available"], 2)
+
+        host_block_unit(partner_user=self.host_user, unit_id=self.unit_1.id)
+        after_block = browse_stays(locality="Kondapur", start_date=start, end_date=end)
+        self.assertEqual(after_block[0]["units_available"], 1)
+
+        reopened = host_reactivate_unit(partner_user=self.host_user, unit_id=self.unit_1.id)
+        self.assertEqual(reopened.current_status, Unit.Status.ACTIVE)
+        restored = browse_stays(locality="Kondapur", start_date=start, end_date=end)
+        self.assertEqual(restored[0]["units_available"], 2)
+
+    def test_browse_with_dates_counts_held_units_as_unavailable(self) -> None:
+        start = date.today() + timedelta(days=50)
+        end = start + timedelta(days=4)
+        create_stay_hold(
+            customer=self.customer,
+            unit_type_id=self.unit_type.id,
+            start_date=start,
+            end_date=end,
+        )
+        create_stay_hold(
+            customer=self.customer,
+            unit_type_id=self.unit_type.id,
+            start_date=start,
+            end_date=end,
+        )
+        cards = browse_stays(locality="Kondapur", start_date=start, end_date=end)
+        self.assertEqual(cards[0]["units_available"], 0)
+
     def test_stay_extension_independent_deposit_delta(self) -> None:
         """Verify extension records and captures independent deposit delta."""
         start = date.today() + timedelta(days=18)
@@ -1042,3 +1078,78 @@ class StayConcurrencyTestSuite(TransactionTestCase):
 
         self.assertEqual(outcomes.count("SUCCESS"), 1)
         self.assertEqual(outcomes.count("UNAVAILABLE"), 2)
+
+
+class HostPricingRuleUpdateTests(TestCase):
+    def setUp(self) -> None:
+        self.host_user = User.objects.create(
+            phone_number="+919888800088",
+            full_name="Stay Host",
+        )
+        role = Role.objects.create(code="partner", name="Partner", is_system=True)
+        UserRole.objects.create(user=self.host_user, role=role)
+        partner = PartnerProfile.objects.create(
+            user=self.host_user,
+            display_name="Host Stays",
+        )
+        PartnerBusinessProfile.objects.create(partner=partner, legal_name="Host Stays")
+        category = Category.objects.create(slug="stays-price-edit", name="Stays")
+        subcategory = Subcategory.objects.create(
+            category=category, slug="pg-price-edit", name="PG"
+        )
+        service = Service.objects.create(
+            subcategory=subcategory,
+            slug="ac-hostel-price-edit",
+            name="AC Hostel",
+            status=Service.Status.ACTIVE,
+        )
+        variant = ServiceVariant.objects.create(
+            service=service,
+            code="std",
+            name="AC Hostel (Standard)",
+            booking_archetype=ServiceVariant.BookingArchetype.A9_STAY,
+        )
+        PartnerCapability.objects.create(
+            partner=partner,
+            variant=variant,
+            archetype=ServiceVariant.BookingArchetype.A9_STAY,
+            status=PartnerCapability.Status.APPROVED,
+        )
+        property_row = Property.objects.create(
+            partner=partner,
+            title="Editable Rate PG",
+            locality="Kondapur",
+            property_type=Property.PropertyType.PG,
+        )
+        unit_type = UnitType.objects.create(
+            property=property_row,
+            variant=variant,
+            name="Double Sharing",
+            sharing_type=UnitType.SharingType.DOUBLE,
+        )
+        self.rule = UnitPricingRule.objects.create(
+            unit_type=unit_type,
+            duration_mode=UnitPricingRule.DurationMode.MONTHLY,
+            base_rate_paise=1500000,
+            deposit_paise=3000000,
+            maintenance_paise=200000,
+            effective_from=date(2020, 1, 1),
+        )
+
+    def test_host_can_patch_existing_pricing_rates(self) -> None:
+        client = force_role_client(user=self.host_user, role_code="partner")
+        response = client.patch(
+            f"/api/v1/stays/partner/pricing-rules/{self.rule.id}/",
+            {
+                "base_rate_paise": 1800000,
+                "deposit_paise": 4000000,
+                "maintenance_paise": 150000,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.rule.refresh_from_db()
+        self.assertEqual(self.rule.base_rate_paise, 1800000)
+        self.assertEqual(self.rule.deposit_paise, 4000000)
+        self.assertEqual(self.rule.maintenance_paise, 150000)

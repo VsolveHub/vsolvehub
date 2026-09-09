@@ -19,6 +19,7 @@ from apps.stays.views import (
     PartnerPropertyUnitTypesView,
     PartnerPropertyVisitListView,
     PartnerReassignUnitView,
+    PartnerReactivateUnitView,
     PartnerReservationDetailView,
     PartnerReservationsView,
     PartnerStayMoneyView,
@@ -194,6 +195,11 @@ urlpatterns = [
         "partner/units/<uuid:unit_id>/block/",
         PartnerBlockUnitView.as_view(),
         name="stays-partner-block-unit",
+    ),
+    path(
+        "partner/units/<uuid:unit_id>/reactivate/",
+        PartnerReactivateUnitView.as_view(),
+        name="stays-partner-reactivate-unit",
     ),
     # Operations staff workspace endpoints
     path("ops/reservations/", OpsStayReservationsView.as_view(), name="stays-ops-reservations"),

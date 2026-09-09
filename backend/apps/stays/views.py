@@ -74,6 +74,7 @@ from apps.stays.services import (
     create_stay_hold,
     dispute_stay_damage,
     host_block_unit,
+    host_reactivate_unit,
     host_reassign_unit,
     initiate_stay_checkout,
     initiate_stay_extension_payment,
@@ -118,6 +119,14 @@ class StayBrowseView(APIView):
         food_raw = request.query_params.get("food_included")
         food_included = food_raw.lower() in ("true", "1") if food_raw else None
         bhk = request.query_params.get("bhk", "")
+        room_class = request.query_params.get("room_class", "")
+        occupancy_capacity_gte_raw = request.query_params.get(
+            "occupancy_capacity__gte"
+        ) or request.query_params.get("occupancy_capacity_gte")
+        occupancy_capacity_gte = None
+        if occupancy_capacity_gte_raw:
+            with contextlib.suppress(ValueError):
+                occupancy_capacity_gte = int(occupancy_capacity_gte_raw)
         min_price_raw = request.query_params.get("min_price_paise") or request.query_params.get(
             "min_price"
         )
@@ -190,6 +199,8 @@ class StayBrowseView(APIView):
             unit_type_id=unit_type_id,
             subcategory_slug=subcategory_slug,
             service_slug=service_slug,
+            occupancy_capacity_gte=occupancy_capacity_gte,
+            room_class=room_class,
         )
         return Response(results)
 
@@ -214,12 +225,25 @@ class StayFilterDefinitionsView(APIView):
                 required=False,
                 description="Optional service slug filter (e.g. rooms, pg-accommodation).",
             ),
+            OpenApiParameter(
+                name="occupancy_model",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description=(
+                    "Optional occupancy_model filter (SHARED or ENTIRE_UNIT) steering the "
+                    "fallback filter set used when no ServiceQuestion rows exist yet."
+                ),
+            ),
         ],
         responses={200: OpenApiResponse(description="List of filter definitions")},
     )
     def get(self, request: Any) -> Response:
         service_slug = request.query_params.get("service_slug")
-        definitions = get_stay_filter_definitions(service_slug=service_slug)
+        occupancy_model = request.query_params.get("occupancy_model")
+        definitions = get_stay_filter_definitions(
+            service_slug=service_slug, occupancy_model=occupancy_model
+        )
         return Response(definitions)
 
 
@@ -1023,6 +1047,36 @@ class PartnerBlockUnitView(APIView):
             return Response({"detail": str(err)}, status=status.HTTP_400_BAD_REQUEST)
 
 
+class PartnerReactivateUnitView(APIView):
+    """Host returns a maintenance unit to ACTIVE so it can be booked again."""
+
+    permission_classes = (permissions.IsAuthenticated, IsPartnerUser, HasApprovedA9Capability)
+
+    @extend_schema(
+        operation_id="stays_partner_reactivate_unit",
+        summary="Host make unit available",
+        description="Sets a maintenance-blocked unit back to ACTIVE. Occupied stays stay calendar-derived.",
+        request=None,
+        responses={200: OpenApiResponse(description="Unit marked available")},
+    )
+    def post(self, request: Any, unit_id: uuid.UUID) -> Response:
+        try:
+            unit = host_reactivate_unit(partner_user=request.user, unit_id=unit_id)
+            return Response(
+                {
+                    "status": unit.current_status,
+                    "unit_code": unit.unit_code,
+                }
+            )
+        except (
+            StayAuthorizationError,
+            UnitUnavailableError,
+            InvalidStayStateTransitionError,
+            ValueError,
+        ) as err:
+            return Response({"detail": str(err)}, status=status.HTTP_400_BAD_REQUEST)
+
+
 class StayCancelView(APIView):
     """Customer self-service cancellation with policy refund bands (§5.4, §5.5, M3-A9-02)."""
 
@@ -1186,7 +1240,9 @@ class PartnerPropertyUnitTypesView(APIView):
                 {"detail": "Partner profile required"}, status=status.HTTP_403_FORBIDDEN
             )
 
-        unit_types = UnitType.objects.filter(property_id=property_id, property__partner=partner)
+        unit_types = UnitType.objects.filter(
+            property_id=property_id, property__partner=partner
+        ).select_related("property")
         data = [
             {
                 "id": str(ut.id),
@@ -1198,6 +1254,9 @@ class PartnerPropertyUnitTypesView(APIView):
                 "furnishing_status": ut.furnishing_status,
                 "food_included": ut.food_included,
                 "bhk": ut.bhk,
+                "occupancy_capacity": ut.occupancy_capacity,
+                "room_class": ut.room_class,
+                "occupancy_model": ut.property.occupancy_model,
                 "units_count": ut.units.count(),
             }
             for ut in unit_types
@@ -1218,7 +1277,7 @@ class PartnerPropertyUnitTypesView(APIView):
 
         serializer = PartnerUnitTypeCreateSerializer(
             data=request.data,
-            context={"partner": partner},
+            context={"partner": partner, "property": prop},
         )
         serializer.is_valid(raise_exception=True)
         ut = serializer.save(property=prop)
@@ -1251,7 +1310,7 @@ class PartnerUnitTypeDetailView(APIView):
             unit_type,
             data=request.data,
             partial=True,
-            context={"partner": request.user.partner_profile},
+            context={"partner": request.user.partner_profile, "property": unit_type.property},
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
@@ -1301,6 +1360,12 @@ class PartnerUnitPricingRuleDetailView(APIView):
     serializer_class = PartnerUnitPricingRuleSerializer
 
     def put(self, request: Any, rule_id: uuid.UUID) -> Response:
+        return self._update(request, rule_id)
+
+    def patch(self, request: Any, rule_id: uuid.UUID) -> Response:
+        return self._update(request, rule_id)
+
+    def _update(self, request: Any, rule_id: uuid.UUID) -> Response:
         try:
             rule = UnitPricingRule.objects.select_related("unit_type").get(
                 id=rule_id,

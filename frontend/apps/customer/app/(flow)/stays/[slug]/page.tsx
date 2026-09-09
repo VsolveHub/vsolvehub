@@ -15,6 +15,7 @@ const SUBCATEGORY_SLUGS = new Set([
   "student-accommodation",
   "worker-accommodation",
   "property-listing",
+  "hotels",
   "premium-stays",
 ]);
 

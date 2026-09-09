@@ -51,7 +51,9 @@ export function usePartnerApplication({ enabled = true }: { enabled?: boolean } 
 
 /** True when the failure was a version conflict rather than anything else. */
 export function isVersionConflict(error: unknown): boolean {
-  return error instanceof ApiRequestError && error.status === 409;
+  return (
+    error instanceof ApiRequestError && error.code === "partner_application_version_conflict"
+  );
 }
 
 /**

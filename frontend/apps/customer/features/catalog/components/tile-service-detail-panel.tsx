@@ -2,15 +2,19 @@
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { cn, formatMoney } from "@vsolve/ui";
-import { Clock, ShieldCheck, Ban, X } from "lucide-react";
+import { Clock, ShieldCheck, Ban, X, Store } from "lucide-react";
 
 import { useServiceDetail, type ServiceCard, type ServiceDetail } from "../client-queries";
 import { displayRating } from "./tile-desktop-rating";
 import { TileCatalogAddButton } from "./tile-catalog-add-button";
 import { ServicePhoto } from "./category-artwork";
 import { PUBLIC_API_BASE_URL } from "@/lib/api/config";
-import { apiFetch } from "@vsolve/api-client";
+import { apiFetch, type Schemas } from "@vsolve/api-client";
+
+/** Real backend shape for an A7 rental vendor storefront card (§4.1a). */
+export type RentalListingGroup = Schemas["RentalListingGroup"];
 
 type BookableVariant = ServiceDetail["variants"][number];
 
@@ -178,6 +182,58 @@ function PanelVariantScroller({
   );
 }
 
+function RentalVendorList({
+  listings,
+  serviceName,
+}: {
+  listings: RentalListingGroup[];
+  serviceName: string;
+}) {
+  const router = useRouter();
+
+  if (listings.length === 0) {
+    return (
+      <p className="mt-2 text-[13px] leading-relaxed text-text-secondary">
+        No vendors currently list {serviceName} for rent in your area.
+      </p>
+    );
+  }
+
+  return (
+    <ul className="mt-3 flex flex-col gap-2.5">
+      {listings.map((listing) => (
+        <li key={listing.asset_id}>
+          <button
+            type="button"
+            onClick={() => router.push(`/rentals/checkout/${listing.asset_id}`)}
+            className="flex w-full items-center gap-3 rounded-[1rem] border border-[#e7e2da] bg-white p-3 text-left transition-colors hover:border-[#EA580C] hover:bg-[#FFF8F3] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+          >
+            <span className="grid size-11 shrink-0 place-items-center rounded-full bg-[#F4F1EC] text-navy-900">
+              <Store className="size-5" strokeWidth={1.8} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[13px] font-bold text-navy-900">
+                {listing.vendor_name}
+              </span>
+              <span className="mt-0.5 block text-[11px] font-medium text-text-secondary">
+                {listing.quantity_available > 0
+                  ? `${listing.quantity_available} available · ${listing.condition_grade.toLowerCase()} condition`
+                  : "Currently unavailable"}
+              </span>
+            </span>
+            <span className="shrink-0 text-right">
+              <span data-numeric className="block text-[13px] font-extrabold tabular-nums text-navy-900">
+                {formatMoney(listing.daily_price_paise)}
+              </span>
+              <span className="block text-[10px] font-semibold text-text-secondary">/ day</span>
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function TileServiceDetailPanel({
   service,
   categorySlug,
@@ -194,18 +250,24 @@ export function TileServiceDetailPanel({
     service.request_archetypes.includes("A7_RENTAL") ||
     categorySlug === "rental-services";
 
-  const [rentalListings, setRentalListings] = useState<any[]>([]);
+  const [rentalListings, setRentalListings] = useState<RentalListingGroup[]>([]);
 
   useEffect(() => {
     if (isRental) {
       apiFetch(`${PUBLIC_API_BASE_URL}/api/v1/rentals/browse/?service_slug=${service.slug}`)
         .then((res) => (res.ok ? res.json() : []))
-        .then((data) => setRentalListings(Array.isArray(data) ? data : []))
+        .then((data: unknown) => setRentalListings(Array.isArray(data) ? (data as RentalListingGroup[]) : []))
         .catch(() => setRentalListings([]));
     }
   }, [isRental, service.slug]);
 
-  const primaryRental = isRental ? rentalListings[0] : null;
+  // §4.1a: A7 rentals surface every vendor's storefront card, not a single
+  // hidden dispatch target — the customer picks which vendor's listing to
+  // book. `primaryRental` still backs the price shown in the sticky footer
+  // (cheapest-first would need a backend sort; the browse endpoint's own
+  // ordering is used as-is here) and the "single vendor" shortcut in the add
+  // button, but the footer button itself opens the full vendor list below.
+  const primaryRental = isRental ? rentalListings[0] ?? null : null;
 
   const detailQuery = useServiceDetail(service.slug);
   const detail = detailQuery.data;
@@ -324,6 +386,17 @@ export function TileServiceDetailPanel({
             {about}
           </p>
         </section>
+
+        {isRental ? (
+          <section className="mt-5">
+            <h3 className="text-[15px] font-extrabold text-navy-900">Available from</h3>
+            <p className="mt-1 text-[12px] font-medium text-text-secondary">
+              Each vendor lists this product independently — pick a listing to see its exact price,
+              condition and availability before you book.
+            </p>
+            <RentalVendorList listings={rentalListings} serviceName={service.name} />
+          </section>
+        ) : null}
 
         <section className="mt-5">
           <h3 className="text-[15px] font-extrabold text-navy-900">What&apos;s included</h3>

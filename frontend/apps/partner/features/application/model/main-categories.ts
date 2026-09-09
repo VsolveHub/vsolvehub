@@ -85,7 +85,13 @@ export function isTradeCategorySelected(
   category: MainCategory,
   skills: readonly PartnerSkill[],
   selectedSkillCodes: readonly string[],
+  services: readonly { categoryName: string; variantId: string }[] = [],
+  selectedVariantIds: readonly string[] = [],
 ): boolean {
+  const variantIds = variantIdsForCategory(category.name, services);
+  if (variantIds.some((id) => selectedVariantIds.includes(id))) {
+    return true;
+  }
   const skill = findSkillForCategory(skills, category);
   return skill !== undefined && selectedSkillCodes.includes(skill.code);
 }
@@ -103,7 +109,13 @@ export function toggleTradeCategorySelection(
     .map((s) => s.requiredSkillCode)
     .filter((code): code is string => Boolean(code && code.length > 0));
   const skill = findSkillForCategory(skills, category);
-  const selected = isTradeCategorySelected(category, skills, selectedSkillCodes);
+  const selected = isTradeCategorySelected(
+    category,
+    skills,
+    selectedSkillCodes,
+    services,
+    selectedVariantIds,
+  );
 
   if (selected) {
     return {
@@ -130,10 +142,96 @@ export function selectedTradeCategories(
   mainCategories: readonly MainCategory[],
   skills: readonly PartnerSkill[],
   selectedSkillCodes: readonly string[],
+  services: readonly { categoryName: string; variantId: string }[] = [],
+  selectedVariantIds: readonly string[] = [],
 ): MainCategory[] {
   return mainCategories.filter((category) =>
-    isTradeCategorySelected(category, skills, selectedSkillCodes),
+    isTradeCategorySelected(
+      category,
+      skills,
+      selectedSkillCodes,
+      services,
+      selectedVariantIds,
+    ),
   );
+}
+
+export function isStayTradeCategory(category: { slug: string; name: string }): boolean {
+  const slug = category.slug.toLowerCase();
+  const name = category.name.toLowerCase();
+  return (
+    slug.includes("stay") ||
+    slug.includes("room") ||
+    slug.includes("hostel") ||
+    slug.includes("pg") ||
+    name.includes("stay") ||
+    name.includes("hostel") ||
+    name.includes("pg")
+  );
+}
+
+export interface StayOfferingGroup {
+  key: string;
+  name: string;
+  variantIds: string[];
+  requiredSkillCodes: string[];
+}
+
+export function stayOfferingGroups(
+  categoryName: string,
+  services: readonly {
+    categoryName: string;
+    variantId: string;
+    subcategorySlug?: string;
+    subcategoryName?: string;
+    requiredSkillCode?: string;
+  }[],
+): StayOfferingGroup[] {
+  const groups = new Map<string, StayOfferingGroup>();
+  for (const service of services) {
+    if (service.categoryName !== categoryName) continue;
+    const key = service.subcategorySlug || service.subcategoryName || service.variantId;
+    const existing = groups.get(key);
+    if (existing) {
+      existing.variantIds.push(service.variantId);
+      if (service.requiredSkillCode) {
+        existing.requiredSkillCodes.push(service.requiredSkillCode);
+      }
+      continue;
+    }
+    groups.set(key, {
+      key,
+      name: service.subcategoryName || service.subcategorySlug || service.categoryName,
+      variantIds: [service.variantId],
+      requiredSkillCodes: service.requiredSkillCode ? [service.requiredSkillCode] : [],
+    });
+  }
+  return Array.from(groups.values());
+}
+
+export function isStayOfferingSelected(
+  group: StayOfferingGroup,
+  selectedVariantIds: readonly string[],
+): boolean {
+  return group.variantIds.some((id) => selectedVariantIds.includes(id));
+}
+
+export function toggleStayOffering(
+  group: StayOfferingGroup,
+  selectedVariantIds: readonly string[],
+  selectedSkillCodes: readonly string[],
+): { skillCodes: string[]; serviceVariantIds: string[] } {
+  const selected = isStayOfferingSelected(group, selectedVariantIds);
+  if (selected) {
+    return {
+      skillCodes: selectedSkillCodes,
+      serviceVariantIds: selectedVariantIds.filter((id) => !group.variantIds.includes(id)),
+    };
+  }
+  return {
+    skillCodes: Array.from(new Set([...selectedSkillCodes, ...group.requiredSkillCodes])),
+    serviceVariantIds: Array.from(new Set([...selectedVariantIds, ...group.variantIds])),
+  };
 }
 
 export function isCategorySelected(
@@ -182,6 +280,6 @@ export function toggleCategorySelection(
     skillCodes: skill
       ? Array.from(new Set([...selectedSkillCodes, skill.code]))
       : [...selectedSkillCodes],
-    serviceVariantIds: Array.from(new Set([...selectedVariantIds, ...variantIds])),
+    serviceVariantIds: [...selectedVariantIds],
   };
 }

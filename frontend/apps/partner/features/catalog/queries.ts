@@ -30,6 +30,8 @@ export interface OfferableService {
   variantName: string;
   serviceName: string;
   categoryName: string;
+  subcategorySlug: string;
+  subcategoryName: string;
   requiredSkillCode: string;
 }
 
@@ -65,6 +67,31 @@ export interface WorkCatalog {
   services: OfferableService[];
 }
 
+function labelFromSubcategorySlug(slug: string): string {
+  if (!slug) return "";
+  return slug
+    .split("-")
+    .map((part) => (part.length <= 2 ? part.toUpperCase() : part[0].toUpperCase() + part.slice(1)))
+    .join(" ");
+}
+
+const CATALOG_DETAIL_CONCURRENCY = 6;
+
+async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const index = next;
+      next += 1;
+      results[index] = await fn(items[index]);
+    }
+  }
+  const workers = Array.from({ length: Math.min(limit, items.length) }, () => worker());
+  await Promise.all(workers);
+  return results;
+}
+
 export const getWorkCatalog = cache(async (): Promise<WorkCatalog> => {
   const api = createPublicApi(policy);
   const categories = await request(() => api.GET("/api/v1/categories/"));
@@ -80,41 +107,68 @@ export const getWorkCatalog = cache(async (): Promise<WorkCatalog> => {
     })),
   );
 
-  const details = await Promise.all(
-    cards.flatMap(({ category, services }) =>
-      services.map(async (service: Schemas["ServiceCard"]) => ({
-        categoryName: category.name,
-        detail: await request(() =>
-          api.GET("/api/v1/services/{service_slug}/configuration/", {
-            params: { path: { service_slug: service.slug } },
-          }),
-        ),
-      })),
-    ),
+  const jobs = cards.flatMap(({ category, services }) =>
+    services.map((service: Schemas["ServiceCard"]) => ({
+      categoryName: category.name,
+      subcategorySlug: service.subcategory_slug ?? "",
+      slug: service.slug,
+    })),
   );
+
+  const details = await mapPool(jobs, CATALOG_DETAIL_CONCURRENCY, async (job) => {
+    try {
+      const detail = await request(() =>
+        api.GET("/api/v1/services/{service_slug}/", {
+          params: { path: { service_slug: job.slug } },
+        }),
+      );
+      return {
+        categoryName: job.categoryName,
+        subcategorySlug: job.subcategorySlug,
+        detail,
+      };
+    } catch {
+      return {
+        categoryName: job.categoryName,
+        subcategorySlug: job.subcategorySlug,
+        detail: null,
+      };
+    }
+  });
 
   const mainCategories = visibleMainCategories(categories);
   const allowedCategoryNames = new Set(mainCategories.map((category) => category.name));
 
-  const services: OfferableService[] = details.flatMap(({ categoryName, detail }) => {
-    const taskVariants = (detail.variants ?? []).map((variant) => ({
-      variantId: variant.id,
-      variantCode: variant.code,
-      variantName: variant.name,
-      serviceName: detail.name,
-      categoryName,
-      requiredSkillCode: variant.required_skill_code,
-    }));
-    const reqVariants = ((detail as any).requirement_variants ?? []).map((variant: any) => ({
-      variantId: variant.id,
-      variantCode: variant.code,
-      variantName: variant.name && variant.name !== "Daily Rental" ? `${detail.name} (${variant.name})` : detail.name,
-      serviceName: detail.name,
-      categoryName,
-      requiredSkillCode: variant.required_skill_code ?? "",
-    }));
-    return [...taskVariants, ...reqVariants];
-  });
+  const services: OfferableService[] = details.flatMap(
+    ({ categoryName, subcategorySlug, detail }) => {
+      if (!detail) return [];
+      const subcategoryName = labelFromSubcategorySlug(subcategorySlug);
+      const taskVariants = (detail.variants ?? []).map((variant) => ({
+        variantId: variant.id,
+        variantCode: variant.code,
+        variantName: variant.name,
+        serviceName: detail.name,
+        categoryName,
+        subcategorySlug,
+        subcategoryName,
+        requiredSkillCode: variant.required_skill_code ?? "",
+      }));
+      const reqVariants = ((detail as any).requirement_variants ?? []).map((variant: any) => ({
+        variantId: variant.id,
+        variantCode: variant.code,
+        variantName:
+          variant.name && variant.name !== "Daily Rental"
+            ? `${detail.name} (${variant.name})`
+            : detail.name,
+        serviceName: detail.name,
+        categoryName,
+        subcategorySlug,
+        subcategoryName,
+        requiredSkillCode: variant.required_skill_code ?? "",
+      }));
+      return [...taskVariants, ...reqVariants];
+    },
+  );
 
   return {
     mainCategories,

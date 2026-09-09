@@ -12,8 +12,42 @@ from typing import Any
 from django.conf import settings
 from django.contrib.postgres.constraints import ExclusionConstraint
 from django.contrib.postgres.fields import DateRangeField, DateTimeRangeField, RangeOperators
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
+
+
+def _occupancy_model_for_property_type(property_type: str) -> str:
+    """Map `Property.PropertyType` -> `Property.OccupancyModel` (see plan SS3.1).
+
+    This is the single place that mapping table lives -- every other consumer
+    (filter seeding, forms, deposit floor, pricing) reads `property.occupancy_model`
+    instead of re-deriving "is this PG-like" from `property_type` strings again.
+    """
+    shared_types = {
+        Property.PropertyType.PG,
+        Property.PropertyType.HOSTEL,
+        Property.PropertyType.CO_LIVING,
+    }
+    entire_unit_types = {
+        Property.PropertyType.VILLA,
+        Property.PropertyType.APARTMENT,
+        Property.PropertyType.STUDIO_APT,
+        Property.PropertyType.INDEPENDENT_HOUSE,
+        Property.PropertyType.COMMERCIAL,
+    }
+    hotel_types = {
+        Property.PropertyType.HOTEL,
+    }
+    if property_type in shared_types:
+        return Property.OccupancyModel.SHARED
+    if property_type in entire_unit_types:
+        return Property.OccupancyModel.ENTIRE_UNIT
+    if property_type in hotel_types:
+        return Property.OccupancyModel.HOTEL_ROOM
+    # Fallback for any future/unmapped property_type: treat as entire-unit, the more
+    # conservative default (does not require the SHARED-only sharing_type field).
+    return Property.OccupancyModel.ENTIRE_UNIT
 
 
 class Property(models.Model):
@@ -28,6 +62,20 @@ class Property(models.Model):
         HOSTEL = "HOSTEL", "Hostel"
         CO_LIVING = "CO_LIVING", "Co-Living Space"
         COMMERCIAL = "COMMERCIAL", "Commercial / Office"
+        HOTEL = "HOTEL", "Hotel"
+
+    class OccupancyModel(models.TextChoices):
+        """One authoritative classification the rest of the system reads from.
+
+        Derived, stored (not computed on the fly) -- set once from `property_type`
+        at create time via `OCCUPANCY_MODEL_BY_PROPERTY_TYPE` and editable by the
+        host only through re-selecting property type, not a free-standing toggle.
+        See Django_Next.js_Plan/M3/05-a9-stay-property-type-remediation.md SS3.1.
+        """
+
+        SHARED = "SHARED", "Shared occupancy (PG / Hostel / Co-Living)"
+        ENTIRE_UNIT = "ENTIRE_UNIT", "Entire unit (Apartment / Villa / etc.)"
+        HOTEL_ROOM = "HOTEL_ROOM", "Hotel room (Executive Suite / Corporate Stay / Serviced Residence)"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     partner_id: uuid.UUID
@@ -56,6 +104,15 @@ class Property(models.Model):
         choices=PropertyType.choices,
         default=PropertyType.INDEPENDENT_HOUSE,
     )
+    occupancy_model = models.CharField(
+        max_length=16,
+        choices=OccupancyModel.choices,
+        help_text=(
+            "Derived from property_type at create/update time -- SHARED for PG/Hostel/"
+            "Co-Living, ENTIRE_UNIT for Apartment/Villa/Studio/Independent House/Commercial. "
+            "Every filter, form, and seed consumer reads this instead of re-deriving it."
+        ),
+    )
     description = models.TextField(blank=True)
     locality = models.CharField(max_length=100, blank=True, default="Kondapur, Hyderabad")
     rating = models.DecimalField(max_digits=3, decimal_places=1, default=0)
@@ -74,6 +131,13 @@ class Property(models.Model):
 
     def __str__(self) -> str:
         return f"{self.title} ({self.locality})"
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        # occupancy_model is derived from property_type, not a free-standing toggle --
+        # re-derive it whenever property_type changes (including on create) so a host
+        # can only change it by re-selecting property type. See plan SS3.1.
+        self.occupancy_model = _occupancy_model_for_property_type(self.property_type)
+        super().save(*args, **kwargs)
 
     def get_active_policy(self, on_date: Any = None) -> Any:
         target_date = on_date or timezone.localdate()
@@ -191,6 +255,19 @@ class UnitType(models.Model):
         FOUR_PLUS = "FOUR_PLUS", "4+ Sharing / Dormitory"
         ENTIRE_PLACE = "ENTIRE_PLACE", "Entire House / Apartment"
 
+    class RoomClass(models.TextChoices):
+        """Hotel room-class vocabulary -- meaningless for SHARED (sharing_type) or
+        ENTIRE_UNIT (bhk/occupancy_capacity) properties. See plan
+        Django_Next.js_Plan/M3/06-a9-hotels-integration-plan.md SS4.2.
+        """
+
+        SINGLE = "SINGLE", "Single"
+        DOUBLE = "DOUBLE", "Double"
+        TWIN = "TWIN", "Twin"
+        DELUXE = "DELUXE", "Deluxe"
+        SUITE = "SUITE", "Suite"
+        EXECUTIVE = "EXECUTIVE", "Executive"
+
     class BathroomType(models.TextChoices):
         ATTACHED = "ATTACHED", "Attached"
         SHARED = "SHARED", "Shared"
@@ -239,7 +316,38 @@ class UnitType(models.Model):
         default=FurnishingStatus.SEMI_FURNISHED,
     )
     food_included = models.BooleanField(default=False)
-    bhk = models.CharField(max_length=20, blank=True, default="1 BHK")
+    occupancy_capacity = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        help_text=(
+            "'Sleeps up to N' -- required for ENTIRE_UNIT and HOTEL_ROOM properties, left "
+            "null for SHARED (a PG bed always sleeps 1 occupant of that bed, not a "
+            "customer-facing concept). See plan SS3.2 / 06-...hotels-integration-plan SS4.2."
+        ),
+    )
+    room_class = models.CharField(
+        max_length=16,
+        choices=RoomClass.choices,
+        null=True,
+        blank=True,
+        default=None,
+        help_text=(
+            "Hotel room-class label (Single/Double/Twin/Deluxe/Suite/Executive). Required "
+            "for HOTEL_ROOM properties, null otherwise -- see occupancy-model pairing rule "
+            "in UnitType.clean(). See plan Django_Next.js_Plan/M3/06-a9-hotels-integration-plan.md SS4.2."
+        ),
+    )
+    bhk = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        default=None,
+        help_text=(
+            "BHK/layout label for ENTIRE_UNIT properties (e.g. '2 BHK'). Meaningless "
+            "for SHARED (PG/Hostel) rooms -- leave unset there; card display falls "
+            "back to the sharing_type label instead of the old 'Studio' default."
+        ),
+    )
     bathrooms = models.PositiveSmallIntegerField(default=1)
     built_up_sqft = models.PositiveIntegerField(default=250)
     facing = models.CharField(max_length=30, blank=True, default="East")
@@ -264,6 +372,39 @@ class UnitType(models.Model):
     def __str__(self) -> str:
         return f"{self.property.title} — {self.name}"
 
+    def clean(self) -> None:
+        """Model-level validation (not just serializer-level) so a bad row can't enter
+        through Django admin or a script either. See plan SS3.2 and
+        Django_Next.js_Plan/M3/06-a9-hotels-integration-plan.md SS4.2.
+
+        - sharing_type is required when property.occupancy_model == SHARED
+        - occupancy_capacity is required when property.occupancy_model in (ENTIRE_UNIT, HOTEL_ROOM)
+        - room_class is required when property.occupancy_model == HOTEL_ROOM
+        """
+        super().clean()
+        property_obj = self.property
+        if property_obj is None:
+            return
+        errors: dict[str, list[str]] = {}
+        if property_obj.occupancy_model == Property.OccupancyModel.SHARED and not self.sharing_type:
+            errors.setdefault("sharing_type", []).append(
+                "sharing_type is required for shared-occupancy properties"
+            )
+        if (
+            property_obj.occupancy_model
+            in (Property.OccupancyModel.ENTIRE_UNIT, Property.OccupancyModel.HOTEL_ROOM)
+            and not self.occupancy_capacity
+        ):
+            errors.setdefault("occupancy_capacity", []).append(
+                "occupancy_capacity is required for entire-unit and hotel-room properties"
+            )
+        if property_obj.occupancy_model == Property.OccupancyModel.HOTEL_ROOM and not self.room_class:
+            errors.setdefault("room_class", []).append(
+                "room_class is required for hotel-room properties"
+            )
+        if errors:
+            raise ValidationError(errors)
+
     def save(self, *args: Any, **kwargs: Any) -> None:
         raw = "|".join(
             str(value)
@@ -277,6 +418,8 @@ class UnitType(models.Model):
                 self.bhk,
                 self.bathrooms,
                 self.built_up_sqft,
+                self.occupancy_capacity,
+                self.room_class,
             )
         )
         self.config_hash = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]

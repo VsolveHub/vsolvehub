@@ -62,6 +62,8 @@ def browse_stays(  # noqa: PLR0912, PLR0915, PLR0917
     unit_type_id: uuid.UUID | str | None = None,
     subcategory_slug: str = "",
     service_slug: str = "",
+    occupancy_capacity_gte: int | None = None,
+    room_class: str = "",
 ) -> list[dict[str, Any]]:
     """Return flat list of de-duplicated UnitType cards across properties with
     available counts (§5.1a).
@@ -106,7 +108,34 @@ def browse_stays(  # noqa: PLR0912, PLR0915, PLR0917
         queryset = queryset.filter(service_q)
 
     if sharing_type:
-        queryset = queryset.filter(sharing_type=sharing_type)
+        # SS5 Wave 2 item 4: sharing_type is a SHARED-occupancy concept only -- scope the
+        # filter to SHARED results so it can never silently no-op-filter ENTIRE_UNIT rows
+        # (e.g. villas) into "no results" or, worse, wrongly match on a stale/legacy
+        # ENTIRE_PLACE sharing_type value.
+        queryset = queryset.filter(
+            sharing_type=sharing_type,
+            property__occupancy_model=Property.OccupancyModel.SHARED,
+        )
+
+    if occupancy_capacity_gte is not None:
+        # SS5 Wave 2 item 4: occupancy_capacity is an ENTIRE_UNIT/HOTEL_ROOM-occupancy
+        # concept, not a SHARED one (see 06-...hotels-integration-plan SS4.5 -- hotel rooms
+        # reuse this same field rather than adding a second capacity field).
+        queryset = queryset.filter(
+            occupancy_capacity__gte=occupancy_capacity_gte,
+            property__occupancy_model__in=(
+                Property.OccupancyModel.ENTIRE_UNIT,
+                Property.OccupancyModel.HOTEL_ROOM,
+            ),
+        )
+
+    if room_class:
+        # 06-...hotels-integration-plan SS4.5: room_class is a HOTEL_ROOM-occupancy concept
+        # only -- scope it the same way sharing_type is scoped to SHARED above.
+        queryset = queryset.filter(
+            room_class=room_class,
+            property__occupancy_model=Property.OccupancyModel.HOTEL_ROOM,
+        )
 
     if furnishing_status:
         queryset = queryset.filter(furnishing_status=furnishing_status)
@@ -242,6 +271,7 @@ def browse_stays(  # noqa: PLR0912, PLR0915, PLR0917
                 "property_title": ut.property.title,
                 "property_type": ut.property.property_type,
                 "property_type_display": ut.property.get_property_type_display(),
+                "occupancy_model": ut.property.occupancy_model,
                 "locality": ut.property.locality,
                 "rating": float(ut.property.rating),
                 "reviews_count": ut.property.reviews_count,
@@ -255,6 +285,8 @@ def browse_stays(  # noqa: PLR0912, PLR0915, PLR0917
                 "furnishing_display": ut.get_furnishing_status_display(),
                 "food_included": ut.food_included,
                 "bhk": ut.bhk,
+                "occupancy_capacity": ut.occupancy_capacity,
+                "room_class": ut.room_class,
                 "bathrooms": ut.bathrooms,
                 "built_up_sqft": ut.built_up_sqft,
                 "facing": ut.facing,
@@ -388,6 +420,8 @@ def get_property_detail(
                 "furnishing_display": ut.get_furnishing_status_display(),
                 "food_included": ut.food_included,
                 "bhk": ut.bhk,
+                "occupancy_capacity": ut.occupancy_capacity,
+                "room_class": ut.room_class,
                 "bathrooms": ut.bathrooms,
                 "built_up_sqft": ut.built_up_sqft,
                 "facing": ut.facing,
@@ -415,6 +449,7 @@ def get_property_detail(
         "title": prop.title,
         "property_type": prop.property_type,
         "property_type_display": prop.get_property_type_display(),
+        "occupancy_model": prop.occupancy_model,
         "description": prop.description,
         "locality": prop.locality,
         "address": {
@@ -481,6 +516,7 @@ def get_partner_properties(partner: Any) -> list[dict[str, Any]]:
                 "title": prop.title,
                 "property_type": prop.property_type,
                 "property_type_display": prop.get_property_type_display(),
+                "occupancy_model": prop.occupancy_model,
                 "locality": prop.locality,
                 "rating": float(prop.rating),
                 "total_units": getattr(prop, "computed_units_count", 0),
@@ -492,15 +528,29 @@ def get_partner_properties(partner: Any) -> list[dict[str, Any]]:
     return data
 
 
-def get_stay_filter_definitions(service_slug: str | None = None) -> list[dict[str, Any]]:
-    """Return filter definitions driven by catalog.ServiceQuestion metadata (§5.1)."""
+def get_stay_filter_definitions(
+    service_slug: str | None = None,
+    occupancy_model: str | None = None,
+) -> list[dict[str, Any]]:
+    """Return filter definitions driven by catalog.ServiceQuestion metadata (§5.1).
+
+    The real (non-fallback) path is occupancy-model-aware by construction: seed_stay_catalog.py
+    (SS5 Wave 2 item 3) only seeds sharing_type/food_included ServiceQuestions for SHARED
+    subcategories/services and occupancy_capacity for ENTIRE_UNIT ones, so filtering by
+    `service_slug` already returns the right filter set without this selector re-deriving
+    occupancy_model itself. `occupancy_model` is accepted here only to steer the *fallback*
+    list below, used when no ServiceQuestion rows exist yet for the given service/variant.
+    """
     questions_qs = ServiceQuestion.objects.filter(
         variant__booking_archetype=ServiceVariant.BookingArchetype.A9_STAY,
         is_active=True,
     ).prefetch_related("options")
 
     if service_slug:
-        questions_qs = questions_qs.filter(variant__service__slug=service_slug)
+        questions_qs = questions_qs.filter(
+            Q(variant__service__slug=service_slug)
+            | Q(variant__service__subcategory__slug=service_slug)
+        )
 
     seen_codes: set[str] = set()
     filters: list[dict[str, Any]] = []
@@ -529,18 +579,8 @@ def get_stay_filter_definitions(service_slug: str | None = None) -> list[dict[st
         )
 
     if not filters:
-        filters = [
-            {
-                "code": "sharing_type",
-                "prompt": "Sharing Type",
-                "kind": "SINGLE_CHOICE",
-                "is_required": False,
-                "display_order": 1,
-                "options": [
-                    {"code": c[0], "label": c[1], "description": ""}
-                    for c in UnitType.SharingType.choices
-                ],
-            },
+        # Property-type-agnostic filters apply regardless of occupancy_model.
+        agnostic_filters: list[dict[str, Any]] = [
             {
                 "code": "furnishing_status",
                 "prompt": "Furnishing Status",
@@ -571,14 +611,99 @@ def get_stay_filter_definitions(service_slug: str | None = None) -> list[dict[st
                 "display_order": 4,
                 "options": [],
             },
-            {
-                "code": "food_included",
-                "prompt": "Food Included",
-                "kind": "BOOLEAN",
-                "is_required": False,
-                "display_order": 5,
-                "options": [],
-            },
         ]
+
+        if occupancy_model == Property.OccupancyModel.ENTIRE_UNIT:
+            filters = [
+                {
+                    "code": "occupancy_capacity",
+                    "prompt": "Sleeps Up To",
+                    "kind": "NUMBER",
+                    "is_required": False,
+                    "display_order": 1,
+                    "options": [
+                        {"code": "2", "label": "Sleeps 2+", "description": ""},
+                        {"code": "4", "label": "Sleeps 4+", "description": ""},
+                        {"code": "6", "label": "Sleeps 6+", "description": ""},
+                    ],
+                },
+                *agnostic_filters,
+            ]
+        elif occupancy_model == Property.OccupancyModel.SHARED:
+            filters = [
+                {
+                    "code": "sharing_type",
+                    "prompt": "Sharing Type",
+                    "kind": "SINGLE_CHOICE",
+                    "is_required": False,
+                    "display_order": 1,
+                    "options": [
+                        {"code": c[0], "label": c[1], "description": ""}
+                        for c in UnitType.SharingType.choices
+                        if c[0] != UnitType.SharingType.ENTIRE_PLACE
+                    ],
+                },
+                *agnostic_filters,
+                {
+                    "code": "food_included",
+                    "prompt": "Food Included",
+                    "kind": "BOOLEAN",
+                    "is_required": False,
+                    "display_order": 5,
+                    "options": [],
+                },
+            ]
+        elif occupancy_model == Property.OccupancyModel.HOTEL_ROOM:
+            filters = [
+                {
+                    "code": "room_class",
+                    "prompt": "Room Class",
+                    "kind": "SINGLE_CHOICE",
+                    "is_required": False,
+                    "display_order": 1,
+                    "options": [
+                        {"code": c[0], "label": c[1], "description": ""}
+                        for c in UnitType.RoomClass.choices
+                    ],
+                },
+                {
+                    "code": "occupancy_capacity",
+                    "prompt": "Sleeps Up To",
+                    "kind": "NUMBER",
+                    "is_required": False,
+                    "display_order": 2,
+                    "options": [
+                        {"code": "2", "label": "Sleeps 2+", "description": ""},
+                        {"code": "4", "label": "Sleeps 4+", "description": ""},
+                        {"code": "6", "label": "Sleeps 6+", "description": ""},
+                    ],
+                },
+                *agnostic_filters,
+            ]
+        else:
+            # Unknown/unspecified occupancy_model: keep the pre-Wave-2 full list as a
+            # last-resort default so an un-seeded, un-scoped call still returns something.
+            filters = [
+                {
+                    "code": "sharing_type",
+                    "prompt": "Sharing Type",
+                    "kind": "SINGLE_CHOICE",
+                    "is_required": False,
+                    "display_order": 1,
+                    "options": [
+                        {"code": c[0], "label": c[1], "description": ""}
+                        for c in UnitType.SharingType.choices
+                    ],
+                },
+                *agnostic_filters,
+                {
+                    "code": "food_included",
+                    "prompt": "Food Included",
+                    "kind": "BOOLEAN",
+                    "is_required": False,
+                    "display_order": 5,
+                    "options": [],
+                },
+            ]
 
     return filters

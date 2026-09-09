@@ -30,6 +30,7 @@ export interface StayBrowseUnitCard {
   property_title: string;
   property_type: string;
   property_type_display: string;
+  occupancy_model?: "SHARED" | "ENTIRE_UNIT" | "HOTEL_ROOM";
   locality: string;
   rating: number;
   reviews_count: number;
@@ -43,6 +44,8 @@ export interface StayBrowseUnitCard {
   furnishing_display: string;
   food_included: boolean;
   bhk: string;
+  occupancy_capacity?: number | null;
+  room_class?: string | null;
   bathrooms: number;
   built_up_sqft: number;
   facing: string;
@@ -100,6 +103,8 @@ export interface PropertyUnitTypeDetail {
   furnishing_display: string;
   food_included: boolean;
   bhk: string;
+  occupancy_capacity?: number | null;
+  room_class?: string | null;
   bathrooms: number;
   built_up_sqft: number;
   facing: string;
@@ -115,6 +120,7 @@ export interface PropertyDetailResponse {
   title: string;
   property_type: string;
   property_type_display: string;
+  occupancy_model?: "SHARED" | "ENTIRE_UNIT" | "HOTEL_ROOM";
   description: string;
   locality: string;
   address: {
@@ -212,6 +218,8 @@ export async function fetchStayBrowse(filters?: {
   locality?: string;
   property_type?: string;
   sharing_type?: string;
+  occupancy_capacity_gte?: number;
+  room_class?: string;
   max_price?: number;
   bhk?: string;
   service_slug?: string;
@@ -228,6 +236,10 @@ export async function fetchStayBrowse(filters?: {
   if (filters?.locality) params.set("locality", filters.locality);
   if (filters?.property_type) params.set("property_type", filters.property_type);
   if (filters?.sharing_type) params.set("sharing_type", filters.sharing_type);
+  if (filters?.occupancy_capacity_gte !== undefined) {
+    params.set("occupancy_capacity__gte", String(filters.occupancy_capacity_gte));
+  }
+  if (filters?.room_class) params.set("room_class", filters.room_class);
   if (filters?.max_price) params.set("max_price", filters.max_price.toString());
   if (filters?.bhk) params.set("bhk", filters.bhk);
   if (filters?.service_slug) params.set("service", filters.service_slug);
@@ -396,8 +408,14 @@ export interface StayFilterDefinition {
   options: StayFilterOption[];
 }
 
-export async function fetchStayFilterDefinitions(serviceSlug?: string): Promise<StayFilterDefinition[]> {
-  const query = serviceSlug ? `?service_slug=${encodeURIComponent(serviceSlug)}` : "";
+export async function fetchStayFilterDefinitions(
+  serviceSlug?: string,
+  occupancyModel?: "SHARED" | "ENTIRE_UNIT" | "HOTEL_ROOM",
+): Promise<StayFilterDefinition[]> {
+  const params = new URLSearchParams();
+  if (serviceSlug) params.set("service_slug", serviceSlug);
+  if (occupancyModel) params.set("occupancy_model", occupancyModel);
+  const query = params.toString() ? `?${params.toString()}` : "";
   return stayRequest<StayFilterDefinition[]>(`/api/v1/stays/filter-definitions/${query}`);
 }
 

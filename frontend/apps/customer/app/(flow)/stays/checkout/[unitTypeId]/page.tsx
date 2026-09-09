@@ -5,23 +5,14 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   AlertCircle,
-  ArrowRight,
   Building2,
-  Calendar,
-  Check,
-  CheckCircle2,
   ChevronLeft,
   Clock,
   CreditCard,
-  HelpCircle,
   Lock,
   MapPin,
-  QrCode,
   ShieldCheck,
   Smartphone,
-  Sparkles,
-  Users,
-  Wallet,
 } from "lucide-react";
 
 import {
@@ -36,6 +27,20 @@ import {
   type StayReservationDetail,
 } from "@/features/stays/queries";
 import { handoffTarget, openProviderCheckout } from "@/features/payment/model/provider-handoff";
+import { useCustomerProfile } from "@/features/account/queries";
+import { useCustomerSession } from "@/features/session/queries";
+import {
+  durationModeLabel,
+  holdGuestCount,
+  isoDatePlusDays,
+  leaseMonthsFromDates,
+  occupancyGuestCap,
+  publishedDurationModes,
+  shouldShowDurationToggle,
+  shouldShowOccupantPicker,
+  stayNights,
+  type StayDurationMode,
+} from "@/features/stays/stay-checkout-rules";
 
 function formatPaise(paise: number): string {
   return "₹" + (paise / 100).toLocaleString("en-IN");
@@ -46,23 +51,28 @@ export default function StayCheckoutPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const unitTypeId = params?.unitTypeId as string;
+  const session = useCustomerSession();
+  const profile = useCustomerProfile(session.isAuthenticated);
 
   const [unitCard, setUnitCard] = useState<StayBrowseUnitCard | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Booking Parameters (Step 11)
-  const tomorrowStr = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
-  const dayAfterTomorrowStr = new Date(Date.now() + 172800000).toISOString().slice(0, 10);
+  const tomorrowStr = isoDatePlusDays(new Date().toISOString().slice(0, 10), 1);
   const requestedParam = searchParams.get("duration_mode")?.toUpperCase();
-  const requestedMode: "MONTHLY" | "WEEKLY" | "NIGHTLY" =
-    requestedParam === "WEEKLY" ? "WEEKLY" : requestedParam === "NIGHTLY" ? "NIGHTLY" : "MONTHLY";
-  const [durationMode, setDurationMode] = useState<"MONTHLY" | "WEEKLY" | "NIGHTLY">(requestedMode);
+  const requestedMode: StayDurationMode | null =
+    requestedParam === "WEEKLY" || requestedParam === "NIGHTLY" || requestedParam === "MONTHLY"
+      ? requestedParam
+      : requestedParam === "DAILY"
+        ? "NIGHTLY"
+        : null;
+  const [durationMode, setDurationMode] = useState<StayDurationMode | null>(requestedMode);
   const [startDate, setStartDate] = useState<string>(searchParams.get("start_date") || tomorrowStr);
-  const [checkoutDate, setCheckoutDate] = useState<string>(searchParams.get("end_date") || dayAfterTomorrowStr);
-  const [leaseMonths, setLeaseMonths] = useState<number>(11);
-  const [leaseWeeks, setLeaseWeeks] = useState<number>(1);
+  const [checkoutDate, setCheckoutDate] = useState<string>(
+    searchParams.get("end_date") || isoDatePlusDays(searchParams.get("start_date") || tomorrowStr, 1),
+  );
   const [guestCount, setGuestCount] = useState<number>(1);
+  const [editingGuest, setEditingGuest] = useState(false);
 
   // Payment Method Selection (Step 12)
   const [paymentMethod, setPaymentMethod] = useState<"UPI" | "CARD" | "NETBANKING">("UPI");
@@ -77,30 +87,9 @@ export default function StayCheckoutPage() {
   const [kycDocument, setKycDocument] = useState<File | null>(null);
   const [agreementAccepted, setAgreementAccepted] = useState(false);
 
-  const calculateEndDate = (start: string, months: number): string => {
-    const d = new Date(start || Date.now());
-    d.setMonth(d.getMonth() + months);
-    return d.toISOString().slice(0, 10);
-  };
-
-  const calculateWeeklyEndDate = (start: string, weeks: number): string => {
-    const d = new Date(start || Date.now());
-    d.setDate(d.getDate() + weeks * 7);
-    return d.toISOString().slice(0, 10);
-  };
-
-  const effectiveEndDate =
-    durationMode === "MONTHLY"
-      ? calculateEndDate(startDate, leaseMonths)
-      : durationMode === "WEEKLY"
-      ? calculateWeeklyEndDate(startDate, leaseWeeks)
-      : checkoutDate;
-
-  // Compute Nights
-  const nights = Math.max(
-    1,
-    Math.round((new Date(checkoutDate).getTime() - new Date(startDate).getTime()) / 86400000) || 1
-  );
+  const effectiveEndDate = checkoutDate;
+  const nights = stayNights(startDate, checkoutDate);
+  const leaseMonths = leaseMonthsFromDates(startDate, checkoutDate);
 
   useEffect(() => {
     if (!unitTypeId) return;
@@ -110,7 +99,7 @@ export default function StayCheckoutPage() {
       unit_type_id: unitTypeId,
       start_date: startDate,
       end_date: effectiveEndDate,
-      duration_mode: durationMode,
+      duration_mode: durationMode ?? undefined,
     })
       .then((items) => {
         if (items.length > 0) {
@@ -135,56 +124,54 @@ export default function StayCheckoutPage() {
       });
   }, [unitTypeId, startDate, effectiveEndDate, durationMode]);
 
-  const supportedModes = useMemo(() => {
-    if (!unitCard) return ["MONTHLY", "WEEKLY", "NIGHTLY"];
-    if (unitCard.supported_duration_modes && unitCard.supported_duration_modes.length > 0) {
-      return unitCard.supported_duration_modes;
-    }
-    return [unitCard.duration_mode || "MONTHLY"];
-  }, [unitCard]);
-
-  const hasMonthly = supportedModes.includes("MONTHLY");
-  const hasWeekly = supportedModes.includes("WEEKLY");
-  const hasNightly = supportedModes.includes("NIGHTLY") || supportedModes.includes("DAILY");
+  const supportedModes = useMemo(
+    () => publishedDurationModes(unitCard?.supported_duration_modes, unitCard?.duration_mode),
+    [unitCard],
+  );
 
   useEffect(() => {
-    if (!unitCard) return;
-    const modes = unitCard.supported_duration_modes || [unitCard.duration_mode || "MONTHLY"];
-    if (durationMode === "WEEKLY" && !modes.includes("WEEKLY")) {
-      const fallback = modes.includes("MONTHLY") ? "MONTHLY" : modes.includes("NIGHTLY") ? "NIGHTLY" : "MONTHLY";
-      setDurationMode(fallback);
-      setProcessError(
-        "Weekly duration is not configured for this room; defaulted to " +
-          (fallback === "MONTHLY" ? "Monthly lease." : "Short stay.")
-      );
-    }
-  }, [unitCard, durationMode]);
+    if (supportedModes.length === 0) return;
+    setDurationMode((current) => {
+      if (current && supportedModes.includes(current)) return current;
+      return supportedModes[0];
+    });
+  }, [supportedModes]);
 
-  // Compute Line Items & Totals
-  const monthlyRentPaise = unitCard?.monthly_rate_paise || unitCard?.price_paise || 0;
-  const dailyRatePaise =
-    unitCard?.daily_rate_paise || Math.max(50000, Math.round(monthlyRentPaise / 30));
-  const weeklyRatePaise = dailyRatePaise * 7;
+  const resolvedDurationMode: StayDurationMode = durationMode ?? supportedModes[0] ?? "MONTHLY";
+  const showOccupants = shouldShowOccupantPicker(unitCard?.occupancy_model);
 
-  const monthlyPeriods = durationMode === "MONTHLY" ? leaseMonths : Math.max(1, Math.ceil(nights / 30));
-  const estimatedTariff =
-    durationMode === "MONTHLY"
-      ? monthlyRentPaise * monthlyPeriods
-      : durationMode === "WEEKLY"
-      ? weeklyRatePaise * leaseWeeks
-      : dailyRatePaise * nights;
-  const estimatedMaintenance = durationMode === "MONTHLY" ? (unitCard?.maintenance_paise || 0) * monthlyPeriods : 0;
-  const estimatedDeposit = unitCard?.deposit_paise || 0;
-  const estimatedTax = durationMode === "MONTHLY"
-    ? Math.floor(estimatedMaintenance * 0.18)
-    : Math.floor(estimatedTariff * 0.12);
-  const stayTariffPaise = heldReservation?.base_amount_paise ?? estimatedTariff;
-  const maintenancePaise = heldReservation?.maintenance_amount_paise ?? estimatedMaintenance;
-  const depositPaise = heldReservation?.deposit_amount_paise ?? estimatedDeposit;
-  const oneTimeChargesPaise = heldReservation?.one_time_charges_paise ?? 0;
-  const taxPaise = heldReservation?.tax_amount_paise ?? estimatedTax;
-  const totalPayableNowPaise = heldReservation?.total_amount_paise ??
-    stayTariffPaise + maintenancePaise + depositPaise + oneTimeChargesPaise + taxPaise;
+  const maxGuests = useMemo(
+    () => occupancyGuestCap(unitCard ?? {}),
+    [unitCard],
+  );
+
+  useEffect(() => {
+    if (!session.isAuthenticated) return;
+    setTenantName(
+      (current) =>
+        current || profile.data?.full_name || session.fullName || session.displayName || "",
+    );
+    setTenantPhone((current) => current || session.phoneNumber || profile.data?.phone_number || "");
+    setTenantEmail((current) => current || profile.data?.email || session.email || "");
+  }, [
+    session.isAuthenticated,
+    session.fullName,
+    session.displayName,
+    session.phoneNumber,
+    session.email,
+    profile.data,
+  ]);
+
+  useEffect(() => {
+    setGuestCount((current) => Math.min(Math.max(1, current), maxGuests));
+  }, [maxGuests]);
+
+  const stayTariffPaise = heldReservation?.base_amount_paise ?? null;
+  const maintenancePaise = heldReservation?.maintenance_amount_paise ?? null;
+  const depositPaise = heldReservation?.deposit_amount_paise ?? null;
+  const oneTimeChargesPaise = heldReservation?.one_time_charges_paise ?? null;
+  const taxPaise = heldReservation?.tax_amount_paise ?? null;
+  const totalPayableNowPaise = heldReservation?.total_amount_paise ?? null;
 
   const waitForCapture = async (initial: Awaited<ReturnType<typeof fetchPaymentAttempt>>) => {
     let current = initial;
@@ -221,8 +208,8 @@ export default function StayCheckoutPage() {
       if (!agreementAccepted) throw new Error("Accept the house rules and tenant agreement.");
       if (!kycDocument) throw new Error("Upload a government-issued ID document.");
 
-      if (durationMode === "WEEKLY" && !hasWeekly) {
-        setProcessError("Weekly stay pricing is not configured for this room. Please choose an available duration mode.");
+      if (supportedModes.length > 0 && !supportedModes.includes(resolvedDurationMode)) {
+        setProcessError("That stay duration is not offered for this room.");
         setProcessing(false);
         return;
       }
@@ -233,9 +220,9 @@ export default function StayCheckoutPage() {
           unit_type_id: unitCard.unit_type_id,
           start_date: startDate,
           end_date: effectiveEndDate,
-          duration_mode: durationMode,
-          guest_count: guestCount,
-          lease_duration_months: durationMode === "MONTHLY" ? leaseMonths : 1,
+          duration_mode: resolvedDurationMode,
+          guest_count: holdGuestCount(unitCard.occupancy_model, guestCount),
+          lease_duration_months: resolvedDurationMode === "MONTHLY" ? leaseMonths : 1,
           primary_tenant_name: tenantName,
           guest_phone: tenantPhone,
           guest_email: tenantEmail,
@@ -269,7 +256,7 @@ export default function StayCheckoutPage() {
       await releaseStayHold(heldReservation.id);
       setHeldReservation(null);
     } catch (err) {
-      setProcessError(err instanceof Error ? err.message : "Could not release the hold.");
+      setProcessError(err instanceof Error ? err.message : "Could not unlock these dates. Please try again.");
     }
   };
 
@@ -346,205 +333,90 @@ export default function StayCheckoutPage() {
                 <h2 className="text-base font-black text-navy-900">Move-In Details & Duration</h2>
               </div>
 
-              {/* Segmented Duration Mode Toggle */}
-              <div className="mt-4 flex items-center gap-2 p-1 bg-warm-50 rounded-xl border border-line">
-                <button
-                  type="button"
-                  disabled={!!heldReservation || !hasMonthly}
-                  onClick={() => setDurationMode("MONTHLY")}
-                  className={`flex-1 py-2 text-xs font-black rounded-lg transition-all ${
-                    durationMode === "MONTHLY"
-                      ? "bg-navy-900 text-white shadow-xs"
-                      : !hasMonthly
-                      ? "opacity-40 cursor-not-allowed text-neutral-400"
-                      : "text-text-secondary hover:text-navy-900"
-                  }`}
-                  title={!hasMonthly ? "Monthly lease is not offered for this unit" : undefined}
+              {shouldShowDurationToggle(supportedModes) ? (
+                <div
+                  data-testid="stay-duration-toggle"
+                  className="mt-4 flex items-center gap-2 p-1 bg-warm-50 rounded-xl border border-line"
                 >
-                  Monthly Lease {!hasMonthly && <span className="text-[10px] font-normal block text-neutral-400">(Unavailable)</span>}
-                </button>
-                <button
-                  type="button"
-                  disabled={!!heldReservation || !hasWeekly}
-                  onClick={() => setDurationMode("WEEKLY")}
-                  className={`flex-1 py-2 text-xs font-black rounded-lg transition-all ${
-                    durationMode === "WEEKLY"
-                      ? "bg-navy-900 text-white shadow-xs"
-                      : !hasWeekly
-                      ? "opacity-40 cursor-not-allowed text-neutral-400"
-                      : "text-text-secondary hover:text-navy-900"
-                  }`}
-                  title={!hasWeekly ? "Weekly stay is not offered for this unit" : undefined}
-                >
-                  Weekly Stay {!hasWeekly && <span className="text-[10px] font-normal block text-neutral-400">(Unavailable)</span>}
-                </button>
-                <button
-                  type="button"
-                  disabled={!!heldReservation || !hasNightly}
-                  onClick={() => setDurationMode("NIGHTLY")}
-                  className={`flex-1 py-2 text-xs font-black rounded-lg transition-all ${
-                    durationMode === "NIGHTLY"
-                      ? "bg-navy-900 text-white shadow-xs"
-                      : !hasNightly
-                      ? "opacity-40 cursor-not-allowed text-neutral-400"
-                      : "text-text-secondary hover:text-navy-900"
-                  }`}
-                  title={!hasNightly ? "Daily short stays are not offered for this unit" : undefined}
-                >
-                  Short Stay {!hasNightly && <span className="text-[10px] font-normal block text-neutral-400">(Unavailable)</span>}
-                </button>
+                  {supportedModes.map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      disabled={!!heldReservation}
+                      onClick={() => setDurationMode(mode)}
+                      className={`flex-1 py-2 text-xs font-black rounded-lg transition-all ${
+                        resolvedDurationMode === mode
+                          ? "bg-navy-900 text-white shadow-xs"
+                          : "text-text-secondary hover:text-navy-900"
+                      }`}
+                    >
+                      {durationModeLabel(mode)}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+
+              <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-navy-900">From</label>
+                  <input
+                    type="date"
+                    required
+                    disabled={!!heldReservation}
+                    min={tomorrowStr}
+                    value={startDate}
+                    onChange={(e) => {
+                      setStartDate(e.target.value);
+                      if (e.target.value >= checkoutDate) {
+                        setCheckoutDate(isoDatePlusDays(e.target.value, 1));
+                      }
+                    }}
+                    className="mt-1.5 w-full rounded-xl border border-line bg-warm-50/50 p-2.5 text-xs font-semibold text-navy-900 focus:bg-white focus:border-action focus:ring-1 focus:ring-action focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-navy-900">To</label>
+                  <input
+                    type="date"
+                    required
+                    disabled={!!heldReservation}
+                    min={isoDatePlusDays(startDate, 1)}
+                    value={checkoutDate}
+                    onChange={(e) => setCheckoutDate(e.target.value)}
+                    className="mt-1.5 w-full rounded-xl border border-line bg-warm-50/50 p-2.5 text-xs font-semibold text-navy-900 focus:bg-white focus:border-action focus:ring-1 focus:ring-action focus:outline-none"
+                  />
+                </div>
+                {showOccupants ? (
+                  <div>
+                    <label className="block text-xs font-bold text-navy-900">
+                      Occupants{unitCard.occupancy_capacity ? ` (sleeps ${maxGuests})` : ""}
+                    </label>
+                    <select
+                      data-testid="stay-occupant-select"
+                      disabled={!!heldReservation}
+                      value={guestCount}
+                      onChange={(e) => setGuestCount(parseInt(e.target.value, 10))}
+                      className="mt-1.5 w-full rounded-xl border border-line bg-warm-50/50 p-2.5 text-xs font-semibold text-navy-900 focus:bg-white focus:border-action focus:ring-1 focus:ring-action focus:outline-none"
+                    >
+                      {Array.from({ length: maxGuests }, (_, index) => index + 1).map((count) => (
+                        <option key={count} value={count}>
+                          {count} Guest{count > 1 ? "s" : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <p className="self-end rounded-xl bg-neutral-50 p-2.5 text-[11px] text-neutral-600">
+                    One bed, one booking.
+                  </p>
+                )}
               </div>
 
-              {durationMode === "MONTHLY" ? (
-                <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-navy-900">Move-In Date</label>
-                    <input
-                      type="date"
-                      required
-                      disabled={!!heldReservation}
-                      min={tomorrowStr}
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                      className="mt-1.5 w-full rounded-xl border border-line bg-warm-50/50 p-2.5 text-xs font-semibold text-navy-900 focus:bg-white focus:border-action focus:ring-1 focus:ring-action focus:outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-navy-900">Lease Duration</label>
-                    <select
-                      disabled={!!heldReservation}
-                      value={leaseMonths}
-                      onChange={(e) => setLeaseMonths(parseInt(e.target.value))}
-                      className="mt-1.5 w-full rounded-xl border border-line bg-warm-50/50 p-2.5 text-xs font-semibold text-navy-900 focus:bg-white focus:border-action focus:ring-1 focus:ring-action focus:outline-none"
-                    >
-                      <option value={1}>1 Month (Flexible)</option>
-                      <option value={3}>3 Months</option>
-                      <option value={6}>6 Months</option>
-                      <option value={11}>11 Months (Standard Lease)</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-navy-900">Total Occupants</label>
-                    <select
-                      disabled={!!heldReservation}
-                      value={guestCount}
-                      onChange={(e) => setGuestCount(parseInt(e.target.value))}
-                      className="mt-1.5 w-full rounded-xl border border-line bg-warm-50/50 p-2.5 text-xs font-semibold text-navy-900 focus:bg-white focus:border-action focus:ring-1 focus:ring-action focus:outline-none"
-                    >
-                      <option value={1}>1 Guest</option>
-                      <option value={2}>2 Guests</option>
-                      <option value={3}>3 Guests</option>
-                      <option value={4}>4 Guests</option>
-                      <option value={5}>5+ Guests</option>
-                    </select>
-                  </div>
-                </div>
-              ) : durationMode === "WEEKLY" ? (
-                <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-navy-900">Move-In Date</label>
-                    <input
-                      type="date"
-                      required
-                      disabled={!!heldReservation}
-                      min={tomorrowStr}
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                      className="mt-1.5 w-full rounded-xl border border-line bg-warm-50/50 p-2.5 text-xs font-semibold text-navy-900 focus:bg-white focus:border-action focus:ring-1 focus:ring-action focus:outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-navy-900">Weeks Duration</label>
-                    <select
-                      disabled={!!heldReservation}
-                      value={leaseWeeks}
-                      onChange={(e) => setLeaseWeeks(parseInt(e.target.value))}
-                      className="mt-1.5 w-full rounded-xl border border-line bg-warm-50/50 p-2.5 text-xs font-semibold text-navy-900 focus:bg-white focus:border-action focus:ring-1 focus:ring-action focus:outline-none"
-                    >
-                      <option value={1}>1 Week (7 Days)</option>
-                      <option value={2}>2 Weeks (14 Days)</option>
-                      <option value={3}>3 Weeks (21 Days)</option>
-                      <option value={4}>4 Weeks (28 Days)</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-navy-900">Total Occupants</label>
-                    <select
-                      disabled={!!heldReservation}
-                      value={guestCount}
-                      onChange={(e) => setGuestCount(parseInt(e.target.value))}
-                      className="mt-1.5 w-full rounded-xl border border-line bg-warm-50/50 p-2.5 text-xs font-semibold text-navy-900 focus:bg-white focus:border-action focus:ring-1 focus:ring-action focus:outline-none"
-                    >
-                      <option value={1}>1 Guest</option>
-                      <option value={2}>2 Guests</option>
-                      <option value={3}>3 Guests</option>
-                      <option value={4}>4 Guests</option>
-                      <option value={5}>5+ Guests</option>
-                    </select>
-                  </div>
-                </div>
-              ) : (
-                <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-navy-900">Check-In Date</label>
-                    <input
-                      type="date"
-                      required
-                      disabled={!!heldReservation}
-                      min={tomorrowStr}
-                      value={startDate}
-                      onChange={(e) => {
-                        setStartDate(e.target.value);
-                        if (e.target.value >= checkoutDate) {
-                          const nextD = new Date(new Date(e.target.value).getTime() + 86400000)
-                            .toISOString()
-                            .slice(0, 10);
-                          setCheckoutDate(nextD);
-                        }
-                      }}
-                      className="mt-1.5 w-full rounded-xl border border-line bg-warm-50/50 p-2.5 text-xs font-semibold text-navy-900 focus:bg-white focus:border-action focus:ring-1 focus:ring-action focus:outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-navy-900">Check-Out Date</label>
-                    <input
-                      type="date"
-                      required
-                      disabled={!!heldReservation}
-                      min={startDate}
-                      value={checkoutDate}
-                      onChange={(e) => setCheckoutDate(e.target.value)}
-                      className="mt-1.5 w-full rounded-xl border border-line bg-warm-50/50 p-2.5 text-xs font-semibold text-navy-900 focus:bg-white focus:border-action focus:ring-1 focus:ring-action focus:outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-navy-900">Total Occupants</label>
-                    <select
-                      disabled={!!heldReservation}
-                      value={guestCount}
-                      onChange={(e) => setGuestCount(parseInt(e.target.value))}
-                      className="mt-1.5 w-full rounded-xl border border-line bg-warm-50/50 p-2.5 text-xs font-semibold text-navy-900 focus:bg-white focus:border-action focus:ring-1 focus:ring-action focus:outline-none"
-                    >
-                      <option value={1}>1 Guest</option>
-                      <option value={2}>2 Guests</option>
-                      <option value={3}>3 Guests</option>
-                      <option value={4}>4 Guests</option>
-                      <option value={5}>5+ Guests</option>
-                    </select>
-                  </div>
-                </div>
-              )}
-
               <div className="mt-4 rounded-xl bg-neutral-50 p-3 text-xs text-neutral-600 flex items-center justify-between">
-                <span>{durationMode === "MONTHLY" ? "Lease Period:" : durationMode === "WEEKLY" ? "Weekly Period:" : "Stay Duration:"}</span>
+                <span>Stay:</span>
                 <strong className="text-neutral-900">
-                  {startDate} → {effectiveEndDate} ({durationMode === "MONTHLY" ? `${leaseMonths} month${leaseMonths > 1 ? "s" : ""}` : durationMode === "WEEKLY" ? `${leaseWeeks} week${leaseWeeks > 1 ? "s" : ""}` : `${nights} night${nights > 1 ? "s" : ""}`})
+                  {startDate} → {effectiveEndDate} ({nights} night{nights > 1 ? "s" : ""}
+                  {resolvedDurationMode === "MONTHLY" ? `, ~${leaseMonths} month${leaseMonths > 1 ? "s" : ""}` : ""})
                 </strong>
               </div>
             </div>
@@ -554,16 +426,35 @@ export default function StayCheckoutPage() {
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-action text-white font-black text-xs">2</span>
                 <h2 className="text-base font-black text-navy-900">Tenant, Emergency Contact &amp; Verification</h2>
               </div>
+              {session.isAuthenticated && tenantName && tenantPhone && tenantEmail && !editingGuest && !heldReservation ? (
+                <div className="mt-4 flex items-start justify-between gap-3 rounded-xl border border-line bg-neutral-50 p-3">
+                  <div className="text-xs text-neutral-700">
+                    <p className="font-bold text-navy-900">{tenantName}</p>
+                    <p>{tenantPhone}</p>
+                    <p>{tenantEmail}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditingGuest(true)}
+                    className="text-xs font-bold text-action underline"
+                  >
+                    Edit
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <label className="text-xs font-bold text-navy-900">Primary tenant name
+                    <input disabled={!!heldReservation} value={tenantName} onChange={(e) => setTenantName(e.target.value)} className="mt-1.5 w-full rounded-xl border border-line p-2.5 text-xs disabled:bg-neutral-100" />
+                  </label>
+                  <label className="text-xs font-bold text-navy-900">Tenant phone
+                    <input disabled={!!heldReservation} type="tel" value={tenantPhone} onChange={(e) => setTenantPhone(e.target.value)} className="mt-1.5 w-full rounded-xl border border-line p-2.5 text-xs disabled:bg-neutral-100" />
+                  </label>
+                  <label className="text-xs font-bold text-navy-900">Tenant email
+                    <input disabled={!!heldReservation} type="email" value={tenantEmail} onChange={(e) => setTenantEmail(e.target.value)} className="mt-1.5 w-full rounded-xl border border-line p-2.5 text-xs disabled:bg-neutral-100" />
+                  </label>
+                </div>
+              )}
               <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <label className="text-xs font-bold text-navy-900">Primary tenant name
-                  <input disabled={!!heldReservation} value={tenantName} onChange={(e) => setTenantName(e.target.value)} className="mt-1.5 w-full rounded-xl border border-line p-2.5 text-xs disabled:bg-neutral-100" />
-                </label>
-                <label className="text-xs font-bold text-navy-900">Tenant phone
-                  <input disabled={!!heldReservation} type="tel" value={tenantPhone} onChange={(e) => setTenantPhone(e.target.value)} className="mt-1.5 w-full rounded-xl border border-line p-2.5 text-xs disabled:bg-neutral-100" />
-                </label>
-                <label className="text-xs font-bold text-navy-900">Tenant email
-                  <input disabled={!!heldReservation} type="email" value={tenantEmail} onChange={(e) => setTenantEmail(e.target.value)} className="mt-1.5 w-full rounded-xl border border-line p-2.5 text-xs disabled:bg-neutral-100" />
-                </label>
                 <label className="text-xs font-bold text-navy-900">Emergency contact name
                   <input disabled={!!heldReservation} value={emergencyName} onChange={(e) => setEmergencyName(e.target.value)} className="mt-1.5 w-full rounded-xl border border-line p-2.5 text-xs disabled:bg-neutral-100" />
                 </label>
@@ -580,8 +471,8 @@ export default function StayCheckoutPage() {
               </label>
               {heldReservation && (
                 <div className="mt-4 flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">
-                  <span><strong>Price locked.</strong> Hold {heldReservation.id.slice(0, 8)} is active; the breakdown now comes directly from Django.</span>
-                  <button type="button" onClick={handleReleaseHold} className="font-bold underline">Release hold</button>
+                  <span><strong>Price locked</strong> for these dates. The totals on the right are confirmed.</span>
+                  <button type="button" onClick={handleReleaseHold} className="font-bold underline">Change dates</button>
                 </div>
               )}
             </div>
@@ -684,7 +575,9 @@ export default function StayCheckoutPage() {
               <div>
                 <strong className="font-bold block text-neutral-900">Vsolve Deposit Escrow Guarantee</strong>
                 <span>
-                  Your refundable security deposit ({formatPaise(depositPaise)}) is held securely in platform escrow. It is only released or deducted upon formal checkout inspection approval.
+                  {heldReservation
+                    ? `Your refundable security deposit (${formatPaise(depositPaise ?? 0)}) is held in platform escrow and only released or deducted after checkout inspection.`
+                    : "Any refundable deposit is included when you lock this stay. Nothing is charged until you confirm payment."}
                 </span>
               </div>
             </div>
@@ -720,64 +613,60 @@ export default function StayCheckoutPage() {
                 </div>
               </div>
 
-              {/* Price Breakdown */}
+              {/* Price Breakdown — server totals only after a hold exists */}
               <div className="mt-5 border-t border-line pt-4 space-y-2.5 text-xs">
-                <div className="flex items-center justify-between text-text-secondary">
-                  <span>
-                    {durationMode === "MONTHLY"
-                      ? `Lease Rent (${leaseMonths} month${leaseMonths > 1 ? "s" : ""} @ ${formatPaise(monthlyRentPaise)}/mo)`
-                      : durationMode === "WEEKLY"
-                      ? `Room Tariff (${leaseWeeks} week${leaseWeeks > 1 ? "s" : ""} @ ${formatPaise(weeklyRatePaise)}/wk)`
-                      : `Room Tariff (${nights} night${nights > 1 ? "s" : ""} @ ${formatPaise(dailyRatePaise)}/nt)`}
-                  </span>
-                  <span className="font-bold text-navy-900">{formatPaise(stayTariffPaise)}</span>
-                </div>
+                {heldReservation && stayTariffPaise !== null && totalPayableNowPaise !== null ? (
+                  <>
+                    <div className="flex items-center justify-between text-text-secondary">
+                      <span>
+                        {resolvedDurationMode === "MONTHLY"
+                          ? `Lease rent (~${leaseMonths} month${leaseMonths > 1 ? "s" : ""})`
+                          : `Room tariff (${nights} night${nights > 1 ? "s" : ""})`}
+                      </span>
+                      <span className="font-bold text-navy-900">{formatPaise(stayTariffPaise)}</span>
+                    </div>
 
-                {maintenancePaise > 0 && (
-                  <div className="flex items-center justify-between text-text-secondary">
-                    <span>
-                      {durationMode === "MONTHLY"
-                        ? `Maintenance (${leaseMonths} month${leaseMonths > 1 ? "s" : ""})`
-                        : "Maintenance"}
-                    </span>
-                    <span className="font-bold text-navy-900">{formatPaise(maintenancePaise)}</span>
-                  </div>
+                    {(maintenancePaise ?? 0) > 0 && (
+                      <div className="flex items-center justify-between text-text-secondary">
+                        <span>Maintenance</span>
+                        <span className="font-bold text-navy-900">{formatPaise(maintenancePaise ?? 0)}</span>
+                      </div>
+                    )}
+
+                    {(depositPaise ?? 0) > 0 && (
+                      <div className="flex items-center justify-between text-signal-700 bg-signal-50/50 p-2 rounded-lg border border-signal-200">
+                        <span className="font-semibold">Refundable security deposit</span>
+                        <span className="font-extrabold">{formatPaise(depositPaise ?? 0)}</span>
+                      </div>
+                    )}
+
+                    {(oneTimeChargesPaise ?? 0) > 0 && (
+                      <div className="flex items-center justify-between text-text-secondary">
+                        <span>One-time charges</span>
+                        <span className="font-bold text-navy-900">{formatPaise(oneTimeChargesPaise ?? 0)}</span>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between text-text-secondary">
+                      <span>Taxes calculated by Vsolve</span>
+                      <span className="font-bold text-navy-900">{formatPaise(taxPaise ?? 0)}</span>
+                    </div>
+
+                    <div className="border-t border-line pt-3 flex items-center justify-between text-sm">
+                      <div>
+                        <span className="font-black text-navy-900 block">Total due now</span>
+                        <span className="text-[10px] text-text-muted">Confirmed for these dates</span>
+                      </div>
+                      <span className="text-xl font-black text-action">
+                        {formatPaise(totalPayableNowPaise)}
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <p className="rounded-xl bg-neutral-50 p-3 text-text-secondary leading-relaxed">
+                    Totals appear after you lock this stay. Rent, tax, and deposit are confirmed then — nothing is charged until you pay.
+                  </p>
                 )}
-
-                {depositPaise > 0 && (
-                  <div className="flex items-center justify-between text-signal-700 bg-signal-50/50 p-2 rounded-lg border border-signal-200">
-                    <span className="font-semibold">Refundable Security Deposit</span>
-                    <span className="font-extrabold">{formatPaise(depositPaise)}</span>
-                  </div>
-                )}
-
-                {oneTimeChargesPaise > 0 && (
-                  <div className="flex items-center justify-between text-text-secondary">
-                    <span>One-time charges</span>
-                    <span className="font-bold text-navy-900">{formatPaise(oneTimeChargesPaise)}</span>
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between text-text-secondary">
-                  <span>Taxes calculated by Vsolve</span>
-                  <span className="font-bold text-navy-900">{formatPaise(taxPaise)}</span>
-                </div>
-
-                <div className="border-t border-line pt-3 flex items-center justify-between text-sm">
-                  <div>
-                    <span className="font-black text-navy-900 block">Total Due Now</span>
-                    <span className="text-[10px] text-text-muted">
-                      {durationMode === "MONTHLY"
-                        ? "Includes 1st month + deposit"
-                        : durationMode === "WEEKLY"
-                        ? `Total for ${leaseWeeks} week stay`
-                        : `Total for ${nights} night stay`}
-                    </span>
-                  </div>
-                  <span className="text-xl font-black text-action">
-                    {formatPaise(totalPayableNowPaise)}
-                  </span>
-                </div>
               </div>
 
               {/* Pay Button */}
@@ -790,14 +679,14 @@ export default function StayCheckoutPage() {
                   {processing ? (
                     <>
                       <Clock className="h-4 w-4 animate-spin" />
-                      Capturing Payment & Reserving…
+                      {heldReservation ? "Capturing payment…" : "Locking price…"}
                     </>
                   ) : (
                     <>
                       <Lock className="h-4 w-4" />
-                      {heldReservation
+                      {heldReservation && totalPayableNowPaise !== null
                         ? `Pay ${formatPaise(totalPayableNowPaise)} & Confirm`
-                        : "Lock price & review"}
+                        : "Lock price"}
                     </>
                   )}
                 </button>

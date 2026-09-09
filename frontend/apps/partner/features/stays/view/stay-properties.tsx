@@ -21,6 +21,7 @@ import {
   Sparkles,
   Sliders,
   DollarSign,
+  Pencil,
   FileText,
   ShieldAlert,
   Star,
@@ -35,10 +36,12 @@ import {
   usePartnerPropertyUnitTypes,
   usePartnerAddUnit,
   usePartnerBlockUnit,
+  usePartnerReactivateUnit,
   usePartnerUnitTypes,
   usePartnerCreateUnitType,
   usePartnerPricingRules,
   usePartnerCreatePricingRule,
+  usePartnerUpdatePricingRule,
   usePartnerPropertyPolicy,
   usePartnerUpdatePropertyPolicy,
   type PartnerPropertyOverview,
@@ -130,7 +133,6 @@ export function StayProperties() {
 
   const allProps = properties ?? [];
 
-  // Build the list combining API data with canonical metadata matching Image 3
   const displayProperties: PropertyCardData[] = useMemo(() => {
     return allProps.map((p) => {
       const total = p.total_units;
@@ -294,9 +296,11 @@ export function StayProperties() {
             >
               <option value="ALL">All Types</option>
               <option value="STUDIO_APT">Studio Apartment</option>
+              <option value="APARTMENT">Apartment Complex</option>
               <option value="INDEPENDENT_HOUSE">Independent House</option>
               <option value="VILLA">Villa</option>
               <option value="COMMERCIAL">Commercial / Office</option>
+              <option value="HOTEL">Hotel</option>
               <option value="PG">PG Accommodation</option>
               <option value="HOSTEL">Hostel</option>
               <option value="CO_LIVING">Co-Living Space</option>
@@ -505,6 +509,7 @@ export function StayProperties() {
                             title: prop.title,
                             property_type: prop.property_type,
                             property_type_display: prop.property_type_display,
+                            occupancy_model: undefined,
                             locality: prop.locality,
                             rating: prop.rating,
                             total_units: prop.total_units,
@@ -687,6 +692,7 @@ function CreatePropertyModal({ onClose }: { onClose: () => void }) {
                 <option value="CO_LIVING">Co-Living Space</option>
                 <option value="STUDIO_APT">Studio Apartment</option>
                 <option value="APARTMENT">Apartment Complex</option>
+                <option value="HOTEL">Hotel</option>
                 <option value="INDEPENDENT_HOUSE">Independent House</option>
                 <option value="VILLA">Villa</option>
                 <option value="COMMERCIAL">Commercial / Office</option>
@@ -739,6 +745,189 @@ function CreatePropertyModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+function rupeesFromPaise(paise: number): string {
+  return String(Math.round(paise / 100));
+}
+
+function PricingRuleEditor({
+  rule,
+  onSave,
+  isSaving,
+}: {
+  rule: PartnerPricingRuleItem;
+  onSave: (payload: {
+    base_rate_paise: number;
+    deposit_paise: number;
+    maintenance_paise: number;
+    effective_from: string;
+  }) => Promise<void>;
+  isSaving: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [baseRupees, setBaseRupees] = useState(rupeesFromPaise(rule.base_rate_paise));
+  const [depositRupees, setDepositRupees] = useState(rupeesFromPaise(rule.deposit_paise));
+  const [maintenanceRupees, setMaintenanceRupees] = useState(
+    rupeesFromPaise(rule.maintenance_paise),
+  );
+  const [effectiveFrom, setEffectiveFrom] = useState(rule.effective_from);
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    setBaseRupees(rupeesFromPaise(rule.base_rate_paise));
+    setDepositRupees(rupeesFromPaise(rule.deposit_paise));
+    setMaintenanceRupees(rupeesFromPaise(rule.maintenance_paise));
+    setEffectiveFrom(rule.effective_from);
+    setLocalError(null);
+  }, [rule.id, rule.base_rate_paise, rule.deposit_paise, rule.maintenance_paise, rule.effective_from]);
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const basePaise = Math.round(Number(baseRupees) * 100);
+    const depositPaise = Math.round(Number(depositRupees) * 100);
+    const maintPaise = Math.round(Number(maintenanceRupees) * 100);
+    if (Number.isNaN(basePaise) || basePaise <= 0) {
+      setLocalError("Enter a valid rent greater than zero.");
+      return;
+    }
+    if (Number.isNaN(depositPaise) || depositPaise < 0 || Number.isNaN(maintPaise) || maintPaise < 0) {
+      setLocalError("Deposit and maintenance cannot be negative.");
+      return;
+    }
+    setLocalError(null);
+    await onSave({
+      base_rate_paise: basePaise,
+      deposit_paise: depositPaise || 0,
+      maintenance_paise: maintPaise || 0,
+      effective_from: effectiveFrom,
+    });
+    setEditing(false);
+  };
+
+  if (!editing) {
+    return (
+      <div className="rounded-xl border border-neutral-200 bg-white p-3.5 shadow-2xs flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <span className="rounded-lg bg-indigo-50 border border-indigo-200 px-2.5 py-1 text-xs font-black text-indigo-700">
+            {rule.duration_mode}
+          </span>
+          <div>
+            <strong className="text-sm font-black text-neutral-900">
+              ₹{(rule.base_rate_paise / 100).toLocaleString("en-IN")}
+            </strong>
+            <span className="text-xs text-neutral-500">
+              {" "}
+              • Deposit: ₹{(rule.deposit_paise / 100).toLocaleString("en-IN")}
+              {rule.maintenance_paise > 0 &&
+                ` • Maint: ₹${(rule.maintenance_paise / 100).toLocaleString("en-IN")}`}
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 text-xs text-neutral-500">
+          <span>From: {rule.effective_from}</span>
+          {rule.is_active ? (
+            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">
+              Active
+            </span>
+          ) : (
+            <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-bold text-neutral-600 border border-neutral-200">
+              Inactive
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="inline-flex items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700 hover:bg-indigo-100"
+          >
+            <Pencil className="h-3 w-3" />
+            Edit
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <form
+      onSubmit={handleSave}
+      className="rounded-xl border border-indigo-200 bg-indigo-50/40 p-3.5 space-y-3"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="rounded-lg bg-indigo-50 border border-indigo-200 px-2.5 py-1 text-xs font-black text-indigo-700">
+          {rule.duration_mode}
+        </span>
+        <span className="text-[11px] font-bold text-indigo-800">Edit this rate</span>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <label className="block text-[11px] font-bold text-neutral-700">
+          Base tariff (₹)
+          <input
+            type="number"
+            required
+            min="1"
+            value={baseRupees}
+            onChange={(e) => setBaseRupees(e.target.value)}
+            className="mt-1 w-full rounded-xl border border-neutral-300 bg-white p-2 text-xs text-neutral-900 focus:border-indigo-500 focus:outline-none"
+          />
+        </label>
+        <label className="block text-[11px] font-bold text-neutral-700">
+          Effective from
+          <input
+            type="date"
+            required
+            value={effectiveFrom}
+            onChange={(e) => setEffectiveFrom(e.target.value)}
+            className="mt-1 w-full rounded-xl border border-neutral-300 bg-white p-2 text-xs text-neutral-900 focus:border-indigo-500 focus:outline-none"
+          />
+        </label>
+        <label className="block text-[11px] font-bold text-neutral-700">
+          Refundable deposit (₹)
+          <input
+            type="number"
+            min="0"
+            value={depositRupees}
+            onChange={(e) => setDepositRupees(e.target.value)}
+            className="mt-1 w-full rounded-xl border border-neutral-300 bg-white p-2 text-xs text-neutral-900 focus:border-indigo-500 focus:outline-none"
+          />
+        </label>
+        <label className="block text-[11px] font-bold text-neutral-700">
+          Maintenance (₹)
+          <input
+            type="number"
+            min="0"
+            value={maintenanceRupees}
+            onChange={(e) => setMaintenanceRupees(e.target.value)}
+            className="mt-1 w-full rounded-xl border border-neutral-300 bg-white p-2 text-xs text-neutral-900 focus:border-indigo-500 focus:outline-none"
+          />
+        </label>
+      </div>
+      {localError ? <p className="text-xs font-semibold text-red-700">{localError}</p> : null}
+      <div className="flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            setEditing(false);
+            setLocalError(null);
+            setBaseRupees(rupeesFromPaise(rule.base_rate_paise));
+            setDepositRupees(rupeesFromPaise(rule.deposit_paise));
+            setMaintenanceRupees(rupeesFromPaise(rule.maintenance_paise));
+            setEffectiveFrom(rule.effective_from);
+          }}
+          className="rounded-xl border border-neutral-200 bg-white px-3 py-1.5 text-xs font-bold text-neutral-700 hover:bg-neutral-50"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={isSaving}
+          className="rounded-xl bg-indigo-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
+        >
+          {isSaving ? "Saving…" : "Save rates"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 /* =========================================================================
    MANAGE PROPERTY MODAL (UNITS, CONFIGURATIONS, PRICING & POLICIES)
    ========================================================================= */
@@ -761,8 +950,10 @@ function ManagePropertyModal({
   // Mutations
   const addUnitMutation = usePartnerAddUnit();
   const blockUnitMutation = usePartnerBlockUnit();
+  const reactivateUnitMutation = usePartnerReactivateUnit();
   const createUnitTypeMutation = usePartnerCreateUnitType();
   const createPricingRuleMutation = usePartnerCreatePricingRule();
+  const updatePricingRuleMutation = usePartnerUpdatePricingRule();
   const updatePolicyMutation = usePartnerUpdatePropertyPolicy();
 
   // Unit State
@@ -770,12 +961,15 @@ function ManagePropertyModal({
   const [selectedUnitTypeForUnit, setSelectedUnitTypeForUnit] = useState("");
   const [floor, setFloor] = useState("1st Floor");
   const [blockingUnitId, setBlockingUnitId] = useState<string | null>(null);
+  const [reactivatingUnitId, setReactivatingUnitId] = useState<string | null>(null);
 
   // Unit Type State
   const [typeName, setTypeName] = useState("");
   const [typeBhk, setTypeBhk] = useState("1_BHK");
   const [typeSharing, setTypeSharing] = useState("PRIVATE");
   const [typeSharingCount, setTypeSharingCount] = useState(1);
+  const [typeOccupancyCapacity, setTypeOccupancyCapacity] = useState(2);
+  const [typeRoomClass, setTypeRoomClass] = useState("DOUBLE");
   const [typeIsAc, setTypeIsAc] = useState(true);
   const [typeBathroom, setTypeBathroom] = useState("ATTACHED");
   const [typeFurnishing, setTypeFurnishing] = useState("FULLY_FURNISHED");
@@ -809,6 +1003,9 @@ function ManagePropertyModal({
   const availableTypes = unitTypes ?? [];
   const currentUnits = units ?? [];
   const currentPricingRules = pricingRules ?? [];
+  const isHotelOccupancy = property.occupancy_model === "HOTEL_ROOM";
+  const isEntireUnitOccupancy = property.occupancy_model === "ENTIRE_UNIT";
+  const isSharedOccupancy = !isEntireUnitOccupancy && !isHotelOccupancy;
 
   // Sync initial dropdown selections
   React.useEffect(() => {
@@ -857,6 +1054,19 @@ function ManagePropertyModal({
     }
   };
 
+  const handleReactivateUnit = async (uId: string, uCode: string) => {
+    setReactivatingUnitId(uId);
+    clearAlerts();
+    try {
+      await reactivateUnitMutation.mutateAsync(uId);
+      setSuccessMsg(`Room ${uCode} is available again.`);
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Failed to make this unit available.");
+    } finally {
+      setReactivatingUnitId(null);
+    }
+  };
+
   const handleAddUnit = async (e: React.FormEvent) => {
     e.preventDefault();
     clearAlerts();
@@ -889,13 +1099,16 @@ function ManagePropertyModal({
       const res = await createUnitTypeMutation.mutateAsync({
         propertyId: property.id,
         name: typeName,
-        bhk: typeBhk,
-        sharing_type: typeSharing,
+        bhk: isEntireUnitOccupancy ? typeBhk : undefined,
+        sharing_type: isSharedOccupancy ? typeSharing : "ENTIRE_PLACE",
         sharing_count: Number(typeSharingCount) || 1,
         is_ac: typeIsAc,
         bathroom_type: typeBathroom,
         furnishing_status: typeFurnishing,
-        food_included: typeFoodIncluded,
+        food_included: isSharedOccupancy ? typeFoodIncluded : false,
+        occupancy_capacity:
+          isEntireUnitOccupancy || isHotelOccupancy ? Number(typeOccupancyCapacity) || 2 : undefined,
+        room_class: isHotelOccupancy ? typeRoomClass : undefined,
       });
       setSuccessMsg(`Configuration "${res.name}" created successfully!`);
       setTypeName("");
@@ -935,6 +1148,25 @@ function ManagePropertyModal({
       setShowAddPricingForm(false);
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Failed to save pricing rule.");
+    }
+  };
+
+  const handleUpdatePricingRule = async (
+    ruleId: string,
+    payload: {
+      base_rate_paise: number;
+      deposit_paise: number;
+      maintenance_paise: number;
+      effective_from: string;
+    },
+  ) => {
+    clearAlerts();
+    try {
+      await updatePricingRuleMutation.mutateAsync({ ruleId, ...payload });
+      setSuccessMsg("Pricing updated.");
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Failed to update pricing.");
+      throw err;
     }
   };
 
@@ -1169,8 +1401,10 @@ function ManagePropertyModal({
                         </div>
                         <p className="mt-1 text-[11px] text-neutral-600 line-clamp-1">{u.unit_type_name}</p>
                         <div className="mt-2 flex items-center justify-between border-t border-neutral-200/50 pt-1.5">
-                          <span className="text-[10px] text-neutral-400">{u.floor || "Standard"}</span>
-                          {u.status === "ACTIVE" && (
+                          <span className="text-[10px] text-neutral-400">
+                            Occupied stays come from the reservation calendar
+                          </span>
+                          {u.status === "ACTIVE" ? (
                             <button
                               type="button"
                               disabled={blockingUnitId === u.id}
@@ -1179,7 +1413,16 @@ function ManagePropertyModal({
                             >
                               {blockingUnitId === u.id ? "Blocking…" : "Block"}
                             </button>
-                          )}
+                          ) : u.status === "MAINTENANCE" ? (
+                            <button
+                              type="button"
+                              disabled={reactivatingUnitId === u.id}
+                              onClick={() => handleReactivateUnit(u.id, u.unit_code)}
+                              className="rounded px-2 py-0.5 text-[10px] font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 disabled:opacity-50 transition-colors"
+                            >
+                              {reactivatingUnitId === u.id ? "Opening…" : "Make available"}
+                            </button>
+                          ) : null}
                         </div>
                       </div>
                     ))}
@@ -1229,38 +1472,72 @@ function ManagePropertyModal({
                         />
                       </div>
 
-                      <div>
-                        <label className="block text-[11px] font-bold text-neutral-700">BHK / Layout</label>
-                        <select
-                          value={typeBhk}
-                          onChange={(e) => setTypeBhk(e.target.value)}
-                          className="mt-1 w-full rounded-xl border border-neutral-300 bg-white p-2 text-xs text-neutral-900 focus:border-indigo-500 focus:outline-none"
-                        >
-                          <option value="1_RK">1 RK</option>
-                          <option value="1_BHK">1 BHK</option>
-                          <option value="2_BHK">2 BHK</option>
-                          <option value="3_BHK">3 BHK</option>
-                          <option value="STUDIO">Studio</option>
-                          <option value="COMMERCIAL">Commercial</option>
-                        </select>
-                      </div>
+                      {isEntireUnitOccupancy && (
+                        <div>
+                          <label className="block text-[11px] font-bold text-neutral-700">BHK / Layout</label>
+                          <select
+                            value={typeBhk}
+                            onChange={(e) => setTypeBhk(e.target.value)}
+                            className="mt-1 w-full rounded-xl border border-neutral-300 bg-white p-2 text-xs text-neutral-900 focus:border-indigo-500 focus:outline-none"
+                          >
+                            <option value="1_RK">1 RK</option>
+                            <option value="1_BHK">1 BHK</option>
+                            <option value="2_BHK">2 BHK</option>
+                            <option value="3_BHK">3 BHK</option>
+                            <option value="STUDIO">Studio</option>
+                            <option value="COMMERCIAL">Commercial</option>
+                          </select>
+                        </div>
+                      )}
+                      {isHotelOccupancy && (
+                        <div>
+                          <label className="block text-[11px] font-bold text-neutral-700">Room Class</label>
+                          <select
+                            value={typeRoomClass}
+                            onChange={(e) => setTypeRoomClass(e.target.value)}
+                            className="mt-1 w-full rounded-xl border border-neutral-300 bg-white p-2 text-xs text-neutral-900 focus:border-indigo-500 focus:outline-none"
+                          >
+                            <option value="SINGLE">Single</option>
+                            <option value="DOUBLE">Double</option>
+                            <option value="TWIN">Twin</option>
+                            <option value="DELUXE">Deluxe</option>
+                            <option value="SUITE">Suite</option>
+                            <option value="EXECUTIVE">Executive</option>
+                          </select>
+                        </div>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div>
-                        <label className="block text-[11px] font-bold text-neutral-700">Sharing Type</label>
-                        <select
-                          value={typeSharing}
-                          onChange={(e) => setTypeSharing(e.target.value)}
-                          className="mt-1 w-full rounded-xl border border-neutral-300 bg-white p-2 text-xs text-neutral-900 focus:border-indigo-500 focus:outline-none"
-                        >
-                          <option value="PRIVATE">Private (Single)</option>
-                          <option value="DOUBLE_SHARING">Double Sharing</option>
-                          <option value="TRIPLE_SHARING">Triple Sharing</option>
-                          <option value="FOUR_SHARING">Four Sharing</option>
-                          <option value="DORMITORY">Dormitory</option>
-                        </select>
-                      </div>
+                      {isSharedOccupancy ? (
+                        <div>
+                          <label className="block text-[11px] font-bold text-neutral-700">Sharing Type</label>
+                          <select
+                            value={typeSharing}
+                            onChange={(e) => setTypeSharing(e.target.value)}
+                            className="mt-1 w-full rounded-xl border border-neutral-300 bg-white p-2 text-xs text-neutral-900 focus:border-indigo-500 focus:outline-none"
+                          >
+                            <option value="PRIVATE">Private (Single)</option>
+                            <option value="DOUBLE">Double Sharing</option>
+                            <option value="TRIPLE">Triple Sharing</option>
+                            <option value="FOUR_PLUS">Four+ Sharing</option>
+                          </select>
+                        </div>
+                      ) : (
+                        <div>
+                          <label className="block text-[11px] font-bold text-neutral-700">Sleeps Up To</label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={20}
+                            required
+                            value={typeOccupancyCapacity}
+                            onChange={(e) => setTypeOccupancyCapacity(Number(e.target.value) || 1)}
+                            className="mt-1 w-full rounded-xl border border-neutral-300 bg-white p-2 text-xs text-neutral-900 focus:border-indigo-500 focus:outline-none"
+                          />
+                          <p className="mt-0.5 text-[10px] text-neutral-400">Maximum guests this unit can accommodate.</p>
+                        </div>
+                      )}
 
                       <div>
                         <label className="block text-[11px] font-bold text-neutral-700">Bathroom</label>
@@ -1299,15 +1576,17 @@ function ManagePropertyModal({
                         <span>Air Conditioned (AC)</span>
                       </label>
 
-                      <label className="inline-flex items-center gap-2 text-xs font-bold text-neutral-700 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={typeFoodIncluded}
-                          onChange={(e) => setTypeFoodIncluded(e.target.checked)}
-                          className="rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
-                        />
-                        <span>Food / Meals Included</span>
-                      </label>
+                      {isSharedOccupancy && (
+                        <label className="inline-flex items-center gap-2 text-xs font-bold text-neutral-700 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={typeFoodIncluded}
+                            onChange={(e) => setTypeFoodIncluded(e.target.checked)}
+                            className="rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+                          />
+                          <span>Food / Meals Included</span>
+                        </label>
+                      )}
                     </div>
 
                     <div className="flex justify-end pt-2">
@@ -1340,13 +1619,38 @@ function ManagePropertyModal({
                       <div className="flex items-start justify-between">
                         <h5 className="font-extrabold text-xs text-neutral-900">{t.name}</h5>
                         <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700 border border-indigo-200">
-                          {t.bhk || "Studio"}
+                          {t.occupancy_model === "HOTEL_ROOM"
+                            ? t.room_class || (t.occupancy_capacity ? `Sleeps ${t.occupancy_capacity}` : "Hotel room")
+                            : t.occupancy_model === "ENTIRE_UNIT"
+                              ? t.bhk || (t.occupancy_capacity ? `Sleeps ${t.occupancy_capacity}` : "Studio")
+                              : t.sharing_display || t.sharing_type}
                         </span>
                       </div>
                       <div className="flex flex-wrap gap-1.5 text-[10px]">
-                        <span className="rounded bg-neutral-100 px-2 py-0.5 font-medium text-neutral-700">
-                          {t.sharing_display || t.sharing_type}
-                        </span>
+                        {t.occupancy_model === "HOTEL_ROOM" ? (
+                          <>
+                            {t.room_class && (
+                              <span className="rounded bg-neutral-100 px-2 py-0.5 font-medium text-neutral-700">
+                                {t.room_class}
+                              </span>
+                            )}
+                            {t.occupancy_capacity ? (
+                              <span className="rounded bg-neutral-100 px-2 py-0.5 font-medium text-neutral-700">
+                                Sleeps up to {t.occupancy_capacity}
+                              </span>
+                            ) : null}
+                          </>
+                        ) : t.occupancy_model === "ENTIRE_UNIT" ? (
+                          t.occupancy_capacity && (
+                            <span className="rounded bg-neutral-100 px-2 py-0.5 font-medium text-neutral-700">
+                              Sleeps up to {t.occupancy_capacity}
+                            </span>
+                          )
+                        ) : (
+                          <span className="rounded bg-neutral-100 px-2 py-0.5 font-medium text-neutral-700">
+                            {t.sharing_display || t.sharing_type}
+                          </span>
+                        )}
                         <span className="rounded bg-neutral-100 px-2 py-0.5 font-medium text-neutral-700">
                           {t.is_ac ? "AC Room" : "Non-AC"}
                         </span>
@@ -1508,31 +1812,15 @@ function ManagePropertyModal({
               ) : (
                 <div className="space-y-2.5">
                   {currentPricingRules.map((rule) => (
-                    <div
+                    <PricingRuleEditor
                       key={rule.id}
-                      className="rounded-xl border border-neutral-200 bg-white p-3.5 shadow-2xs flex items-center justify-between flex-wrap gap-3"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="rounded-lg bg-indigo-50 border border-indigo-200 px-2.5 py-1 text-xs font-black text-indigo-700">
-                          {rule.duration_mode}
-                        </span>
-                        <div>
-                          <strong className="text-sm font-black text-neutral-900">
-                            ₹{(rule.base_rate_paise / 100).toLocaleString("en-IN")}
-                          </strong>
-                          <span className="text-xs text-neutral-500">
-                            {" "}• Deposit: ₹{(rule.deposit_paise / 100).toLocaleString("en-IN")}
-                            {rule.maintenance_paise > 0 && ` • Maint: ₹${(rule.maintenance_paise / 100).toLocaleString("en-IN")}`}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 text-xs text-neutral-500">
-                        <span>From: {rule.effective_from}</span>
-                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">
-                          Active
-                        </span>
-                      </div>
-                    </div>
+                      rule={rule}
+                      isSaving={
+                        updatePricingRuleMutation.isPending &&
+                        updatePricingRuleMutation.variables?.ruleId === rule.id
+                      }
+                      onSave={(payload) => handleUpdatePricingRule(rule.id, payload)}
+                    />
                   ))}
                 </div>
               )}

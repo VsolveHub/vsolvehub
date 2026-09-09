@@ -16,8 +16,42 @@ import {
 } from "lucide-react";
 import type { StayBrowseUnitCard } from "../queries";
 
+const ROOM_CLASS_LABELS: Record<string, string> = {
+  SINGLE: "Single",
+  DOUBLE: "Double",
+  TWIN: "Twin",
+  DELUXE: "Deluxe",
+  SUITE: "Suite",
+  EXECUTIVE: "Executive",
+};
+
 function formatPaise(paise: number): string {
   return "₹" + (paise / 100).toLocaleString("en-IN");
+}
+
+function pricePeriodSuffix(mode?: string): string {
+  switch (mode) {
+    case "NIGHTLY":
+    case "DAILY":
+      return "/night";
+    case "WEEKLY":
+      return "/wk";
+    case "HOURLY":
+      return "/hr";
+    default:
+      return "/mo";
+  }
+}
+
+function occupancyLabel(card: StayBrowseUnitCard): string | null {
+  if (card.occupancy_model === "HOTEL_ROOM") {
+    const code = card.room_class || "";
+    return ROOM_CLASS_LABELS[code] || card.room_class || null;
+  }
+  if (card.occupancy_model === "ENTIRE_UNIT") {
+    return card.occupancy_capacity ? `Sleeps ${card.occupancy_capacity}` : null;
+  }
+  return card.sharing_display || null;
 }
 
 function getAmenityIcon(name: string) {
@@ -43,35 +77,36 @@ function getAmenityIcon(name: string) {
   return <Sparkles className="size-3 text-gray-500 shrink-0" />;
 }
 
-// Deterministic distance calculation based on property id hash for demo fidelity
-function getSimulatedDistance(id: string): string {
-  let hash = 0;
-  for (let i = 0; i < id.length; i++) {
-    hash = (hash << 5) - hash + id.charCodeAt(i);
-    hash |= 0;
-  }
-  const dist = (Math.abs(hash % 35) + 10) / 10;
-  return `${dist.toFixed(1)} km`;
-}
-
 export function StayPropertyGridCard({
   card,
   activeTileSlug,
+  startDate,
+  endDate,
 }: {
   card: StayBrowseUnitCard;
   activeTileSlug?: string;
+  startDate?: string;
+  endDate?: string;
 }) {
   const [isSaved, setIsSaved] = useState(false);
-  const distance = getSimulatedDistance(card.property_id || card.unit_type_id);
+  const occupancyChip = occupancyLabel(card);
+  const isHotel = card.occupancy_model === "HOTEL_ROOM";
 
-  const propertyHref = activeTileSlug
-    ? `/stays/property/${card.property_id}?tile=${encodeURIComponent(activeTileSlug)}`
-    : `/stays/property/${card.property_id}`;
+  const query = new URLSearchParams();
+  if (activeTileSlug) query.set("tile", activeTileSlug);
+  if (startDate) query.set("start_date", startDate);
+  if (endDate) query.set("end_date", endDate);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  const propertyHref = `/stays/property/${card.property_id}${suffix}`;
 
-  // Available units text
-  const unitsText = card.units_available > 0
-    ? `${card.units_available} unit${card.units_available > 1 ? "s" : ""} available`
-    : "Units available";
+  const unitsText =
+    card.units_available > 0
+      ? isHotel
+        ? `${card.units_available} room${card.units_available > 1 ? "s" : ""} left`
+        : `${card.units_available} unit${card.units_available > 1 ? "s" : ""} available`
+      : isHotel
+        ? "No rooms left"
+        : "No units available";
 
   const isGreenBadge = card.units_available >= 3;
 
@@ -120,13 +155,14 @@ export function StayPropertyGridCard({
             />
           </button>
 
-          {/* Rating Badge (Bottom Right or overlay) */}
-          <div className="absolute bottom-3 right-3">
-            <span className="inline-flex items-center gap-1 rounded-lg bg-white/95 px-2 py-0.5 text-xs font-black text-navy-900 shadow-xs backdrop-blur-xs">
-              <span className="text-[#F5A524]" aria-hidden>★</span>
-              <span>{card.rating ? card.rating.toFixed(1) : "4.8"}</span>
-            </span>
-          </div>
+          {card.rating > 0 ? (
+            <div className="absolute bottom-3 right-3">
+              <span className="inline-flex items-center gap-1 rounded-lg bg-white/95 px-2 py-0.5 text-xs font-black text-navy-900 shadow-xs backdrop-blur-xs">
+                <span className="text-[#F5A524]" aria-hidden>★</span>
+                <span>{card.rating.toFixed(1)}</span>
+              </span>
+            </div>
+          ) : null}
         </div>
 
         {/* Card Body */}
@@ -137,15 +173,11 @@ export function StayPropertyGridCard({
             </h3>
           </Link>
 
-          {/* Location & Distance */}
-          <div className="mt-1 flex items-center justify-between text-xs text-gray-500">
+          <div className="mt-1 flex items-center text-xs text-gray-500">
             <p className="flex items-center gap-1 line-clamp-1 min-w-0">
               <MapPin className="size-3.5 text-[#f87000] shrink-0" />
               <span className="truncate">{card.locality}</span>
             </p>
-            <span className="shrink-0 text-[11px] text-gray-400 font-medium pl-2">
-              📍 {distance}
-            </span>
           </div>
 
           {/* Tag Chips Row */}
@@ -160,9 +192,9 @@ export function StayPropertyGridCard({
               </span>
             )}
 
-            {card.sharing_display ? (
+            {occupancyChip ? (
               <span className="rounded-md bg-gray-100/90 px-2 py-0.5 text-[11px] font-medium text-navy-800">
-                {card.sharing_display}
+                {occupancyChip}
               </span>
             ) : null}
 
@@ -203,7 +235,7 @@ export function StayPropertyGridCard({
         <div>
           <div className="text-base sm:text-lg font-black text-navy-900 tracking-tight">
             ₹{card.price_per_month.toLocaleString("en-IN")}
-            <span className="text-xs font-semibold text-gray-500"> /mo</span>
+            <span className="text-xs font-semibold text-gray-500"> {pricePeriodSuffix(card.duration_mode)}</span>
           </div>
           <div className="text-[11px] text-gray-500 font-medium mt-0.5">
             Deposit: {formatPaise(card.deposit_paise)}

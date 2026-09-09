@@ -261,7 +261,7 @@ function HomepageServiceCard({
   return (
     <div className="group flex w-[280px] shrink-0 flex-col rounded-2xl border border-[#e7e2da] bg-white shadow-xs transition-shadow hover:shadow-md md:w-full">
       <div className="flex flex-1 flex-col justify-between gap-4 p-4">
-        <Link href={href} className="flex cursor-pointer flex-col gap-1.5">
+        <Link href={href} prefetch={false} className="flex cursor-pointer flex-col gap-1.5">
           <h3 className="font-extrabold text-base text-navy-900 transition-colors group-hover:text-action">
             {item.name}
           </h3>

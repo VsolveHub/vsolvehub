@@ -148,7 +148,7 @@ async function CategoryServices({ categorySlug }: { categorySlug: string }) {
         <ul className="mt-3 flex list-none flex-col gap-3 p-0">
           {services.map((service) => (
             <li key={service.slug}>
-              <Link href={`/requests/new/${service.slug}`} className={CARD}>
+              <Link href={`/requests/new/${service.slug}`} prefetch={false} className={CARD}>
                 <span className="font-semibold text-text">{service.name}</span>
                 {service.short_description ? (
                   <span className="mt-1 block text-sm text-text-secondary">

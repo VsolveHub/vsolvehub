@@ -391,6 +391,7 @@ export function CategoryTileBrowser({
                   <li key={service.id}>
                     <Link
                       href={serviceHref(service, category.slug, activeTile.slug)}
+                      prefetch={false}
                       className="group flex items-start sm:items-center justify-between gap-3 sm:gap-4 rounded-2xl border border-line/80 bg-white p-3 sm:p-4 shadow-xs transition-all duration-150 hover:shadow-md hover:border-line-strong active:scale-[0.99]"
                     >
                       {/* Image on Left */}

@@ -8,6 +8,7 @@ Seeds:
 - UnitTypes, physical Units, UnitPricingRules, and PropertyPolicies matching flow mock
 """
 
+import datetime
 from datetime import time
 from decimal import Decimal
 from typing import Any
@@ -28,7 +29,7 @@ from apps.catalog.models import (
     Subcategory,
 )
 from apps.identity.models import Role, UserRole
-from apps.locations.models import Address, ServiceArea
+from apps.locations.models import Address, ServiceArea, ServiceAreaService
 from apps.partners.models import (
     PartnerBusinessProfile,
     PartnerCapability,
@@ -41,6 +42,7 @@ from apps.stays.models import (
     PropertyMedia,
     PropertyPolicy,
     Unit,
+    UnitPricingOverride,
     UnitPricingRule,
     UnitType,
 )
@@ -103,10 +105,15 @@ SUBCATEGORY_METADATA: dict[str, dict[str, str]] = {
         "image_url": "https://images.unsplash.com/photo-1497366216548-37526070297c?w=600&auto=format&fit=crop&q=80",
         "description": "Direct owner listings for rent: rooms, flats, houses & commercial.",
     },
+    "Hotels": {
+        "icon_key": "building-2",
+        "image_url": "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=600&auto=format&fit=crop&q=80",
+        "description": "Hotel rooms and serviced suites: single, double, deluxe, suite and executive.",
+    },
     "Premium Stays": {
         "icon_key": "crown",
         "image_url": "https://images.unsplash.com/photo-1613977257363-707ba9348227?w=600&auto=format&fit=crop&q=80",
-        "description": "Ultra luxury apartments, premium villas and executive corporate stays.",
+        "description": "Ultra luxury apartments and premium villas.",
     },
 }
 
@@ -221,14 +228,97 @@ STAY_TAXONOMY: dict[str, list[str]] = {
         "Office Space for Rent",
         "Godown / Warehouse for Rent",
     ],
-    "Premium Stays": [
-        "Luxury Apartment",
-        "Premium Villa",
+    "Hotels": [
         "Executive Suite",
         "Corporate Stay",
         "Serviced Residence",
     ],
+    "Premium Stays": [
+        "Luxury Apartment",
+        "Premium Villa",
+    ],
 }
+
+# Sensible per-subcategory default deposit fallback (paise), used only when a host has not set a
+# deposit on their own UnitPricingRule — never a floor that overrides an explicit, lower host value
+# (see Django_Next.js_Plan/M3/05-a9-stay-property-type-remediation.md, Wave 0).
+SUBCATEGORY_DEFAULT_DEPOSIT_PAISE: dict[str, int] = {
+    "Rooms": 500000,                    # ~Rs 5,000
+    "PG Accommodation": 500000,         # ~Rs 5,000
+    "Hostels": 300000,                  # ~Rs 3,000
+    "Bed Space": 200000,                # ~Rs 2,000
+    "Co-Living Spaces": 800000,         # ~Rs 8,000
+    "Apartments": 2500000,              # ~Rs 25,000
+    "Rental Properties": 7500000,       # ~Rs 75,000 (villas, independent houses, commercial)
+    "Short Stay": 500000,               # ~Rs 5,000
+    "Student Accommodation": 300000,    # ~Rs 3,000
+    "Worker Accommodation": 200000,     # ~Rs 2,000
+    "Property Listing": 2500000,        # ~Rs 25,000
+    "Hotels": 0,
+    "Premium Stays": 10000000,          # ~Rs 1,00,000
+}
+
+# Wave 2 item 3 (plan Django_Next.js_Plan/M3/05-a9-stay-property-type-remediation.md SS5):
+# occupancy-model-aware ServiceQuestion seeding. Subcategories map to SHARED (PG/Hostel/
+# Co-Living-flavored) or ENTIRE_UNIT (Apartment/Villa/Rental-flavored) -- mirrors
+# Property.OccupancyModel / _occupancy_model_for_property_type in apps/stays/models.py.
+SHARED_SUBCATEGORIES: set[str] = {
+    "Rooms",
+    "PG Accommodation",
+    "Hostels",
+    "Bed Space",
+    "Co-Living Spaces",
+    "Student Accommodation",
+    "Worker Accommodation",
+}
+ENTIRE_UNIT_SUBCATEGORIES: set[str] = {
+    "Apartments",
+    "Rental Properties",
+    "Short Stay",
+    "Property Listing",
+    "Premium Stays",
+}
+
+# Within Rental Properties / Property Listing, these specific services are commercial-
+# flavored: they should get neither sharing_type/food_included (SHARED) nor
+# occupancy_capacity (ENTIRE_UNIT) -- only the property-type-agnostic filters
+# (furnishing, AC, bathroom type) genuinely still apply. See plan SS5 Wave 2 item 3,
+# last sentence.
+COMMERCIAL_SERVICE_NAMES: set[str] = {
+    "Commercial Space",
+    "Office Space",
+    "Shop Space",
+    "Godown / Warehouse",
+    "Commercial Space for Rent",
+    "Office Space for Rent",
+    "Godown / Warehouse for Rent",
+}
+
+HOTEL_SUBCATEGORIES: set[str] = {"Hotels"}
+HOTEL_SERVICE_NAMES: set[str] = {
+    "Executive Suite",
+    "Corporate Stay",
+    "Serviced Residence",
+}
+
+
+def _resolve_stay_variant(variant_name: str, subcategory_name: str) -> ServiceVariant | None:
+    """Bind a demo UnitType to the A9 variant under the intended subcategory.
+
+    Name-only lookup used to attach unmatched rows to the first Rooms variant,
+    so Apartments/Hotels tiles showed Rooms listings.
+    """
+    subcat_slug = slugify(subcategory_name)
+    clean = variant_name.replace(" (Standard)", "").strip()
+    scoped = ServiceVariant.objects.filter(
+        booking_archetype=ServiceVariant.BookingArchetype.A9_STAY,
+        service__subcategory__slug=subcat_slug,
+        service__subcategory__category__slug="rooms-pg-hostel",
+    )
+    match = scoped.filter(name__iexact=variant_name).first()
+    if match is not None:
+        return match
+    return scoped.filter(service__name__iexact=clean).first()
 
 
 class Command(BaseCommand):
@@ -299,6 +389,8 @@ class Command(BaseCommand):
                         "description": f"Verified standard booking for {service_name}",
                         "pricing_strategy": ServiceVariant.PricingStrategy.DURATION,
                         "booking_archetype": ServiceVariant.BookingArchetype.A9_STAY,
+                        "required_skill_code": "property-host",
+                        "tax_category_code": "accommodation",
                         "minimum_duration_minutes": 1440,
                         "recommended_duration_minutes": 1440,
                         "duration_increment_minutes": 1440,
@@ -307,42 +399,38 @@ class Command(BaseCommand):
                 )
                 all_variants.append(variant)
 
-                A9VariantConfiguration.objects.get_or_create(
+                is_commercial_service = service_name in COMMERCIAL_SERVICE_NAMES
+                is_hotel_service = (
+                    subcat_name in HOTEL_SUBCATEGORIES or service_name in HOTEL_SERVICE_NAMES
+                )
+                is_shared_subcat = subcat_name in SHARED_SUBCATEGORIES
+                is_entire_unit_subcat = subcat_name in ENTIRE_UNIT_SUBCATEGORIES and not is_hotel_service
+
+                A9VariantConfiguration.objects.update_or_create(
                     variant=variant,
                     version=1,
                     defaults={
                         "status": A9VariantConfiguration.Status.ACTIVE,
-                        "deposit_required": True,
-                        "default_deposit_paise": 6400000,
+                        "deposit_required": not is_hotel_service,
+                        "default_deposit_paise": (
+                            0
+                            if is_hotel_service
+                            else SUBCATEGORY_DEFAULT_DEPOSIT_PAISE.get(subcat_name, 500000)
+                        ),
                         "min_stay_nights": 1,
-                        "max_stay_nights": 365,
+                        "max_stay_nights": 30 if is_hotel_service else 365,
                         "id_verification_required": True,
                     },
                 )
 
-                # Seed ServiceQuestion metadata for stay filters
-                q_sharing, _ = ServiceQuestion.objects.get_or_create(
-                    variant=variant,
-                    code="sharing_type",
-                    defaults={
-                        "prompt": "Sharing Type",
-                        "kind": ServiceQuestion.Kind.SINGLE_CHOICE,
-                        "display_order": 1,
-                        "is_active": True,
-                    },
-                )
-                for s_code, s_label in [
-                    ("PRIVATE", "Private Room / 1-Sharing"),
-                    ("DOUBLE", "2-Sharing"),
-                    ("TRIPLE", "3-Sharing"),
-                    ("FOUR_PLUS", "4+ Sharing / Dormitory"),
-                    ("ENTIRE_PLACE", "Entire House / Apartment"),
-                ]:
-                    ServiceQuestionOption.objects.get_or_create(
-                        question=q_sharing,
-                        code=s_code,
-                        defaults={"label": s_label, "display_order": 1},
-                    )
+                # Seed ServiceQuestion metadata for stay filters -- occupancy-model-aware
+                # split (plan SS5 Wave 2 item 3). Property-type-agnostic filters
+                # (furnishing, AC, bathroom type) apply to every service; sharing_type/
+                # food_included only to SHARED subcategories, occupancy_capacity only to
+                # ENTIRE_UNIT ones. Hotels seed room_class + occupancy_capacity.
+                # Commercial-flavored services within Rental Properties /
+                # Property Listing (Godown, Office Space, Commercial Space, Shop Space) get
+                # neither -- only the agnostic filters.
 
                 q_furnishing, _ = ServiceQuestion.objects.get_or_create(
                     variant=variant,
@@ -378,23 +466,161 @@ class Command(BaseCommand):
 
                 ServiceQuestion.objects.get_or_create(
                     variant=variant,
-                    code="food_included",
+                    code="bathroom_type",
                     defaults={
-                        "prompt": "Food Included",
-                        "kind": ServiceQuestion.Kind.BOOLEAN,
-                        "display_order": 4,
+                        "prompt": "Bathroom Type",
+                        "kind": ServiceQuestion.Kind.SINGLE_CHOICE,
+                        "display_order": 6,
                         "is_active": True,
                     },
                 )
 
+                # Idempotent re-runs: remove any wrongly-scoped question left over from
+                # before this occupancy-model split (e.g. sharing_type seeded onto an
+                # ENTIRE_UNIT service in a prior run).
+                if is_commercial_service or not is_shared_subcat:
+                    ServiceQuestion.objects.filter(
+                        variant=variant, code__in=("sharing_type", "food_included")
+                    ).delete()
+                if is_commercial_service or not (is_entire_unit_subcat or is_hotel_service):
+                    ServiceQuestion.objects.filter(
+                        variant=variant, code="occupancy_capacity"
+                    ).delete()
+                if is_commercial_service or not is_hotel_service:
+                    ServiceQuestion.objects.filter(
+                        variant=variant, code="room_class"
+                    ).delete()
+
+                if is_shared_subcat and not is_commercial_service:
+                    q_sharing, _ = ServiceQuestion.objects.get_or_create(
+                        variant=variant,
+                        code="sharing_type",
+                        defaults={
+                            "prompt": "Sharing Type",
+                            "kind": ServiceQuestion.Kind.SINGLE_CHOICE,
+                            "display_order": 1,
+                            "is_active": True,
+                        },
+                    )
+                    for s_code, s_label in [
+                        ("PRIVATE", "Private Room / 1-Sharing"),
+                        ("DOUBLE", "2-Sharing"),
+                        ("TRIPLE", "3-Sharing"),
+                        ("FOUR_PLUS", "4+ Sharing / Dormitory"),
+                    ]:
+                        ServiceQuestionOption.objects.get_or_create(
+                            question=q_sharing,
+                            code=s_code,
+                            defaults={"label": s_label, "display_order": 1},
+                        )
+
+                    ServiceQuestion.objects.get_or_create(
+                        variant=variant,
+                        code="food_included",
+                        defaults={
+                            "prompt": "Food Included",
+                            "kind": ServiceQuestion.Kind.BOOLEAN,
+                            "display_order": 4,
+                            "is_active": True,
+                        },
+                    )
+                elif is_hotel_service and not is_commercial_service:
+                    q_room_class, _ = ServiceQuestion.objects.get_or_create(
+                        variant=variant,
+                        code="room_class",
+                        defaults={
+                            "prompt": "Room Class",
+                            "kind": ServiceQuestion.Kind.SINGLE_CHOICE,
+                            "display_order": 1,
+                            "is_active": True,
+                        },
+                    )
+                    for r_code, r_label in [
+                        ("SINGLE", "Single"),
+                        ("DOUBLE", "Double"),
+                        ("TWIN", "Twin"),
+                        ("DELUXE", "Deluxe"),
+                        ("SUITE", "Suite"),
+                        ("EXECUTIVE", "Executive"),
+                    ]:
+                        ServiceQuestionOption.objects.get_or_create(
+                            question=q_room_class,
+                            code=r_code,
+                            defaults={"label": r_label, "display_order": 1},
+                        )
+
+                    q_capacity, _ = ServiceQuestion.objects.get_or_create(
+                        variant=variant,
+                        code="occupancy_capacity",
+                        defaults={
+                            "prompt": "Sleeps Up To",
+                            "kind": ServiceQuestion.Kind.NUMBER,
+                            "display_order": 2,
+                            "is_active": True,
+                        },
+                    )
+                    for c_code, c_label in [
+                        ("2", "Sleeps 2+"),
+                        ("4", "Sleeps 4+"),
+                        ("6", "Sleeps 6+"),
+                    ]:
+                        ServiceQuestionOption.objects.get_or_create(
+                            question=q_capacity,
+                            code=c_code,
+                            defaults={"label": c_label, "display_order": 1},
+                        )
+                elif is_entire_unit_subcat and not is_commercial_service:
+                    q_capacity, _ = ServiceQuestion.objects.get_or_create(
+                        variant=variant,
+                        code="occupancy_capacity",
+                        defaults={
+                            "prompt": "Sleeps Up To",
+                            "kind": ServiceQuestion.Kind.NUMBER,
+                            "display_order": 1,
+                            "is_active": True,
+                        },
+                    )
+                    for c_code, c_label in [
+                        ("2", "Sleeps 2+"),
+                        ("4", "Sleeps 4+"),
+                        ("6", "Sleeps 6+"),
+                    ]:
+                        ServiceQuestionOption.objects.get_or_create(
+                            question=q_capacity,
+                            code=c_code,
+                            defaults={"label": c_label, "display_order": 1},
+                        )
+                # Commercial-flavored services (Godown/Warehouse, Office Space, Commercial
+                # Space, Shop Space) fall through to neither branch -- agnostic filters only.
+
             # Clean up any legacy services under this subcategory not in the taxonomy
             for extra_s in subcat.services.exclude(name__in=service_list):
                 for v in extra_s.variants.all():
+                    replacement = (
+                        ServiceVariant.objects.filter(
+                            booking_archetype=ServiceVariant.BookingArchetype.A9_STAY,
+                            service__name=extra_s.name,
+                            service__subcategory__category__slug="rooms-pg-hostel",
+                        )
+                        .exclude(pk=v.pk)
+                        .first()
+                    )
+                    if replacement is not None:
+                        UnitType.objects.filter(variant=v).update(variant=replacement)
+                    elif UnitType.objects.filter(variant=v).exists():
+                        self.stdout.write(
+                            self.style.WARNING(
+                                f"Keeping leftover service {extra_s.name!r} under {subcat_name}: "
+                                "unit types still reference it."
+                            )
+                        )
+                        continue
                     PartnerCapability.objects.filter(variant=v).delete()
                     A9VariantConfiguration.objects.filter(variant=v).delete()
                     ServiceQuestion.objects.filter(variant=v).delete()
                     v.delete()
-                extra_s.delete()
+                if not extra_s.variants.exists():
+                    extra_s.delete()
 
         self.stdout.write(f"Created {len(STAY_TAXONOMY)} subcategories and {len(all_variants)} stay variants.")
 
@@ -460,10 +686,22 @@ class Command(BaseCommand):
                 state_code="TG",
             )
 
+        offer_areas = {hyderabad_area.id: hyderabad_area}
+        for area in ServiceArea.objects.filter(is_active=True):
+            offer_areas[area.id] = area
+        for area in offer_areas.values():
+            for variant in all_variants:
+                ServiceAreaService.objects.update_or_create(
+                    service_area=area,
+                    variant=variant,
+                    defaults={"is_active": True},
+                )
+
         # 5. Seed Properties covering EVERY PropertyType subcategory
         demo_properties_data: list[dict[str, Any]] = [
             {
                 "title": "Independent House, Kondapur",
+                "catalog_subcategory": "Rental Properties",
                 "property_type": Property.PropertyType.INDEPENDENT_HOUSE,
                 "locality": "Kondapur, Hyderabad",
                 "address_line": "Plot 42, Raghavendra Colony, Kondapur",
@@ -490,6 +728,7 @@ class Command(BaseCommand):
                         "sharing_type": UnitType.SharingType.ENTIRE_PLACE,
                         "sharing_count": 1,
                         "bhk": "3 BHK",
+                        "occupancy_capacity": 6,
                         "bathrooms": 3,
                         "built_up_sqft": 1800,
                         "facing": "East",
@@ -507,6 +746,7 @@ class Command(BaseCommand):
             },
             {
                 "title": "Villa for Rent, Gachibowli",
+                "catalog_subcategory": "Premium Stays",
                 "property_type": Property.PropertyType.VILLA,
                 "locality": "Gachibowli, Hyderabad",
                 "address_line": "Gachibowli Financial District Road",
@@ -528,10 +768,11 @@ class Command(BaseCommand):
                 "unit_types": [
                     {
                         "name": "4 BHK Luxury Villa",
-                        "variant_name": "Villa (Standard)",
+                        "variant_name": "Premium Villa (Standard)",
                         "sharing_type": UnitType.SharingType.ENTIRE_PLACE,
                         "sharing_count": 1,
                         "bhk": "4 BHK",
+                        "occupancy_capacity": 8,
                         "bathrooms": 4,
                         "built_up_sqft": 2500,
                         "facing": "North-East",
@@ -549,6 +790,7 @@ class Command(BaseCommand):
             },
             {
                 "title": "Zolo Stay Luxury PG, Hitech City",
+                "catalog_subcategory": "PG Accommodation",
                 "property_type": Property.PropertyType.PG,
                 "locality": "Hitech City, Hyderabad",
                 "address_line": "Near Cyber Towers, Hitech City",
@@ -592,6 +834,7 @@ class Command(BaseCommand):
             },
             {
                 "title": "Youth Space Student & Professional Hostel, Ameerpet",
+                "catalog_subcategory": "Hostels",
                 "property_type": Property.PropertyType.HOSTEL,
                 "locality": "Ameerpet, Hyderabad",
                 "address_line": "Near Ameerpet Metro Station, SR Nagar Main Road",
@@ -636,6 +879,7 @@ class Command(BaseCommand):
             },
             {
                 "title": "Isthara Co-Living Executive Suites, Gachibowli",
+                "catalog_subcategory": "Co-Living Spaces",
                 "property_type": Property.PropertyType.CO_LIVING,
                 "locality": "Gachibowli, Hyderabad",
                 "address_line": "Near DLF Cyber City, Gachibowli",
@@ -679,6 +923,7 @@ class Command(BaseCommand):
             },
             {
                 "title": "Prestige Heights 2 BHK Gated Flat, Madhapur",
+                "catalog_subcategory": "Apartments",
                 "property_type": Property.PropertyType.APARTMENT,
                 "locality": "Madhapur, Hyderabad",
                 "address_line": "Near Durgam Cheruvu, Madhapur",
@@ -704,6 +949,7 @@ class Command(BaseCommand):
                         "sharing_type": UnitType.SharingType.ENTIRE_PLACE,
                         "sharing_count": 1,
                         "bhk": "2 BHK",
+                        "occupancy_capacity": 4,
                         "bathrooms": 2,
                         "built_up_sqft": 1250,
                         "facing": "North",
@@ -722,6 +968,7 @@ class Command(BaseCommand):
             },
             {
                 "title": "Urban Nest Studio Apartment, Madhapur",
+                "catalog_subcategory": "Apartments",
                 "property_type": Property.PropertyType.STUDIO_APT,
                 "locality": "Madhapur, Hyderabad",
                 "address_line": "100 Feet Road, Ayyappa Society, Madhapur",
@@ -747,6 +994,7 @@ class Command(BaseCommand):
                         "sharing_type": UnitType.SharingType.PRIVATE,
                         "sharing_count": 1,
                         "bhk": "1 RK",
+                        "occupancy_capacity": 2,
                         "bathrooms": 1,
                         "built_up_sqft": 450,
                         "facing": "North",
@@ -764,6 +1012,7 @@ class Command(BaseCommand):
             },
             {
                 "title": "Prime Commercial Shop Space, Ameerpet",
+                "catalog_subcategory": "Rental Properties",
                 "property_type": Property.PropertyType.COMMERCIAL,
                 "locality": "Ameerpet, Hyderabad",
                 "address_line": "Main Road, Near Metro Station, Ameerpet",
@@ -806,6 +1055,7 @@ class Command(BaseCommand):
             },
             {
                 "title": "Comfort Living Executive Rooms, Ameerpet",
+                "catalog_subcategory": "Rooms",
                 "property_type": Property.PropertyType.PG,
                 "locality": "Ameerpet, Hyderabad",
                 "address_line": "Near Mythrivanam, Ameerpet Main Road",
@@ -909,6 +1159,7 @@ class Command(BaseCommand):
             },
             {
                 "title": "Urban Nest Executive Stays, Madhapur",
+                "catalog_subcategory": "Co-Living Spaces",
                 "property_type": Property.PropertyType.CO_LIVING,
                 "locality": "Madhapur, Hyderabad",
                 "address_line": "Near Durgam Cheruvu Metro, Madhapur",
@@ -930,7 +1181,7 @@ class Command(BaseCommand):
                 "unit_types": [
                     {
                         "name": "Deluxe AC Room with Balcony",
-                        "variant_name": "AC Room (Standard)",
+                        "variant_name": "Co-Living Room (Standard)",
                         "sharing_type": UnitType.SharingType.PRIVATE,
                         "sharing_count": 1,
                         "bhk": "1 Room",
@@ -950,7 +1201,7 @@ class Command(BaseCommand):
                     },
                     {
                         "name": "Studio AC Room",
-                        "variant_name": "AC Room (Standard)",
+                        "variant_name": "Premium Co-Living (Standard)",
                         "sharing_type": UnitType.SharingType.PRIVATE,
                         "sharing_count": 1,
                         "bhk": "1 RK",
@@ -972,6 +1223,7 @@ class Command(BaseCommand):
             },
             {
                 "title": "Metro Hub Budget Bed Space, Kukatpally",
+                "catalog_subcategory": "Bed Space",
                 "property_type": Property.PropertyType.HOSTEL,
                 "locality": "Kukatpally, Hyderabad",
                 "address_line": "Near KPHB Colony Metro Station",
@@ -1014,6 +1266,7 @@ class Command(BaseCommand):
             },
             {
                 "title": "Transit Inn Flexi Short Stays, Hitech City",
+                "catalog_subcategory": "Short Stay",
                 "property_type": Property.PropertyType.STUDIO_APT,
                 "locality": "Hitech City, Hyderabad",
                 "address_line": "Near Mindspace IT Park, Madhapur Road",
@@ -1038,6 +1291,7 @@ class Command(BaseCommand):
                         "sharing_type": UnitType.SharingType.ENTIRE_PLACE,
                         "sharing_count": 1,
                         "bhk": "1 RK",
+                        "occupancy_capacity": 2,
                         "bathrooms": 1,
                         "built_up_sqft": 280,
                         "facing": "North",
@@ -1057,6 +1311,7 @@ class Command(BaseCommand):
             },
             {
                 "title": "Campus Edge Student PG & Hostel, SR Nagar",
+                "catalog_subcategory": "Student Accommodation",
                 "property_type": Property.PropertyType.HOSTEL,
                 "locality": "SR Nagar, Hyderabad",
                 "address_line": "Near Coaching Centers, SR Nagar Metro",
@@ -1099,6 +1354,7 @@ class Command(BaseCommand):
             },
             {
                 "title": "Industrial Workforce Quarters, Balanagar",
+                "catalog_subcategory": "Worker Accommodation",
                 "property_type": Property.PropertyType.HOSTEL,
                 "locality": "Balanagar, Hyderabad",
                 "address_line": "Phase 2, Industrial Development Area, Balanagar",
@@ -1140,14 +1396,20 @@ class Command(BaseCommand):
                 ],
             },
             {
+                # HOTEL_ROOM demo property (06-a9-hotels-integration-plan.md Wave H0 step 3):
+                # was previously seeded as a VILLA/ENTIRE_UNIT "Executive Suite" -- exactly
+                # the mismatch this plan exists to fix. Now a genuine HOTEL property with a
+                # room_class UnitType, NIGHTLY pricing, and a per-date UnitPricingOverride so
+                # G4's date-aware browse pricing has real demo data to exercise.
                 "title": "The Crown Royal Suites & Penthouse, Jubilee Hills",
-                "property_type": Property.PropertyType.VILLA,
+                "catalog_subcategory": "Hotels",
+                "property_type": Property.PropertyType.HOTEL,
                 "locality": "Jubilee Hills, Hyderabad",
                 "address_line": "Road No. 36, Jubilee Hills",
                 "pincode": "500033",
                 "rating": 4.9,
                 "reviews_count": 34,
-                "description": "Bespoke ultra-luxury penthouses and executive serviced suites with private infinity terrace, butler service, and panoramic skyline views.",
+                "description": "Bespoke ultra-luxury serviced suites with private infinity terrace, butler service, and panoramic skyline views.",
                 "media_urls": [
                     "https://images.unsplash.com/photo-1613977257363-707ba9348227?w=800&auto=format&fit=crop&q=80",
                 ],
@@ -1157,26 +1419,47 @@ class Command(BaseCommand):
                     "max_guests": 4,
                     "notice_days": 30,
                     "rules": ["Concierge verification mandatory", "Valet parking included"],
+                    # Hotel-appropriate cancellation terms (24h flexible) -- see plan section 2:
+                    # PropertyPolicy.CancellationPolicy already models this, no schema change needed.
+                    "cancellation_policy": PropertyPolicy.CancellationPolicy.FLEXIBLE,
                 },
                 "unit_types": [
                     {
                         "name": "Bespoke Executive Corporate Suite",
                         "variant_name": "Executive Suite (Standard)",
-                        "sharing_type": UnitType.SharingType.ENTIRE_PLACE,
+                        # sharing_type has no null option on the model (unlike bhk); it's
+                        # simply never read for HOTEL_ROOM rows since Wave 2's sharing_type
+                        # filter is scoped to occupancy_model=SHARED only -- PRIVATE here is
+                        # an inert, never-surfaced default, not a real classification.
+                        "sharing_type": UnitType.SharingType.PRIVATE,
                         "sharing_count": 1,
-                        "bhk": "2 BHK",
+                        "bhk": None,
+                        "room_class": UnitType.RoomClass.EXECUTIVE,
+                        "occupancy_capacity": 2,
                         "bathrooms": 2,
                         "built_up_sqft": 1600,
                         "facing": "North-East",
                         "floor": "Top Floor",
                         "is_ac": True,
-                        "food_included": True,
+                        "food_included": False,
                         "furnishing_status": UnitType.FurnishingStatus.FULLY_FURNISHED,
                         "amenities": ["Private Terrace", "Valet Parking", "Concierge", "Gym Access", "Smart Automation", "Infinity Pool Access"],
                         "image_url": "https://images.unsplash.com/photo-1613977257363-707ba9348227?w=800&auto=format&fit=crop&q=80",
-                        "base_rate_paise": 7500000,      # ₹75,000 / month
-                        "maintenance_paise": 500000,     # ₹5,000
-                        "deposit_paise": 15000000,       # ₹1,50,000
+                        # HOTEL_ROOM properties are deposit_required=False at the variant-config
+                        # level (see below) -- deposit_paise kept at 0 here; base_rate_paise below
+                        # is a MONTHLY fallback rate that customers should rarely see once NIGHTLY
+                        # (daily_rate_paise) is the primary duration mode for this room.
+                        "base_rate_paise": 22500000,     # Rs 2,25,000 / month (fallback only)
+                        "maintenance_paise": 0,
+                        "deposit_paise": 0,
+                        "daily_rate_paise": 1800000,     # Rs 18,000 / night (base NIGHTLY rate)
+                        "rate_overrides": [
+                            # Demonstrates G4: a weekend/festival surge rate distinct from the
+                            # base nightly rate, so browse_stays()'s date-aware pricing path
+                            # (Wave H2) has a real override to sum against.
+                            {"days_from_today": 5, "rate_paise": 2600000, "reason": "Weekend surge"},
+                            {"days_from_today": 6, "rate_paise": 2600000, "reason": "Weekend surge"},
+                        ],
                         "units": ["Royal Suite #1", "Royal Suite #2"],
                     },
                 ],
@@ -1236,20 +1519,27 @@ class Command(BaseCommand):
                     "notice_period_days": p_pol["notice_days"],
                     "house_rules": p_pol["rules"],
                     "id_verification_required": True,
+                    "cancellation_policy": p_pol.get(
+                        "cancellation_policy", PropertyPolicy.CancellationPolicy.MODERATE
+                    ),
                 },
             )
 
             # UnitTypes and Units
+            catalog_subcategory = p_data.get("catalog_subcategory") or ""
             for ut_data in p_data["unit_types"]:
                 var_name = ut_data.get("variant_name") or p_data.get("variant_name")
                 variant_obj = None
-                if var_name:
-                    variant_obj = ServiceVariant.objects.filter(name__iexact=var_name).first()
-                    if not variant_obj:
-                        clean_name = var_name.replace(" (Standard)", "")
-                        variant_obj = ServiceVariant.objects.filter(service__name__iexact=clean_name).first()
-                if not variant_obj and all_variants:
-                    variant_obj = all_variants[0]
+                if var_name and catalog_subcategory:
+                    variant_obj = _resolve_stay_variant(str(var_name), catalog_subcategory)
+                if variant_obj is None:
+                    self.stdout.write(
+                        self.style.WARNING(
+                            f"Skipping unit type {ut_data['name']!r} on {p_data['title']}: "
+                            f"no A9 variant {var_name!r} under subcategory {catalog_subcategory!r}"
+                        )
+                    )
+                    continue
 
                 unit_type, _ = UnitType.objects.update_or_create(
                     property=prop,
@@ -1259,6 +1549,12 @@ class Command(BaseCommand):
                         "sharing_type": ut_data["sharing_type"],
                         "sharing_count": ut_data["sharing_count"],
                         "bhk": ut_data["bhk"],
+                        # Wave 2b: ENTIRE_UNIT demo rows carry a real occupancy_capacity
+                        # number now instead of relying on sharing_type=ENTIRE_PLACE --
+                        # SHARED demo rows leave this unset (None), matching the model's
+                        # clean() pairing rule. See plan SS3.2 / SS5 Wave 2 item 3.
+                        "occupancy_capacity": ut_data.get("occupancy_capacity"),
+                        "room_class": ut_data.get("room_class"),
                         "bathrooms": ut_data["bathrooms"],
                         "built_up_sqft": ut_data["built_up_sqft"],
                         "facing": ut_data["facing"],
@@ -1286,8 +1582,9 @@ class Command(BaseCommand):
                 )
 
                 # Pricing rule (DAILY / NIGHTLY if specified)
+                nightly_rule = None
                 if ut_data.get("daily_rate_paise"):
-                    UnitPricingRule.objects.update_or_create(
+                    nightly_rule, _ = UnitPricingRule.objects.update_or_create(
                         unit_type=unit_type,
                         duration_mode=UnitPricingRule.DurationMode.NIGHTLY,
                         defaults={
@@ -1307,6 +1604,24 @@ class Command(BaseCommand):
                             "is_active": True,
                         },
                     )
+
+                # Per-date rate overrides (06-a9-hotels-integration-plan.md Wave H0 step 3 /
+                # G4): demo data for hotel-style seasonal/weekend surge pricing on the
+                # NIGHTLY rule, consumed by create_stay_hold() today and by browse_stays()'s
+                # date-aware pricing path once Wave H2 lands.
+                if nightly_rule is not None and ut_data.get("rate_overrides"):
+                    for override in ut_data["rate_overrides"]:
+                        override_date = timezone.localdate() + datetime.timedelta(
+                            days=override["days_from_today"]
+                        )
+                        UnitPricingOverride.objects.update_or_create(
+                            pricing_rule=nightly_rule,
+                            date=override_date,
+                            defaults={
+                                "rate_paise": override["rate_paise"],
+                                "reason": override.get("reason", ""),
+                            },
+                        )
 
                 # Physical Units
                 for u_code in ut_data["units"]:

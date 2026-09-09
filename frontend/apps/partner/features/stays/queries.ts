@@ -29,6 +29,7 @@ export interface PartnerPropertyOverview {
   title: string;
   property_type: string;
   property_type_display: string;
+  occupancy_model?: "SHARED" | "ENTIRE_UNIT" | "HOTEL_ROOM";
   locality: string;
   rating: number;
   total_units: number;
@@ -249,6 +250,9 @@ export interface PartnerUnitTypeOverview {
   furnishing_status: string;
   food_included: boolean;
   bhk: string;
+  occupancy_capacity?: number | null;
+  occupancy_model?: "SHARED" | "ENTIRE_UNIT" | "HOTEL_ROOM";
+  room_class?: string | null;
   units_count: number;
 }
 
@@ -381,6 +385,20 @@ export function usePartnerBlockUnit() {
   });
 }
 
+export function usePartnerReactivateUnit() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (unitId: string) =>
+      stayPartnerRequest<{ status: string; unit_code: string }>(
+        `/api/v1/stays/partner/units/${unitId}/reactivate/`,
+        { method: "POST" },
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["stays", "partner"] });
+    },
+  });
+}
+
 /* ---------------------------------------------------------------------------
    Room Configurations (UnitTypes), Pricing Rules, Policies & Visits
    --------------------------------------------------------------------------- */
@@ -394,7 +412,10 @@ export interface PartnerUnitTypeItem {
   bathroom_type: string;
   furnishing_status: string;
   food_included: boolean;
-  bhk: string;
+  bhk: string | null;
+  occupancy_capacity?: number | null;
+  occupancy_model?: "SHARED" | "ENTIRE_UNIT" | "HOTEL_ROOM";
+  room_class?: string | null;
   units_count?: number;
 }
 
@@ -421,6 +442,8 @@ export interface CreateUnitTypePayload {
   furnishing_status?: string;
   food_included?: boolean;
   bhk?: string;
+  occupancy_capacity?: number;
+  room_class?: string;
   bathrooms?: number;
   built_up_sqft?: number;
   facing?: string;
@@ -488,6 +511,35 @@ export function usePartnerCreatePricingRule() {
         `/api/v1/stays/partner/unit-types/${unitTypeId}/pricing-rules/`,
         {
           method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["stays", "partner"] });
+    },
+  });
+}
+
+export interface UpdatePricingRulePayload {
+  ruleId: string;
+  duration_mode?: PartnerPricingRuleItem["duration_mode"];
+  base_rate_paise?: number;
+  deposit_paise?: number;
+  maintenance_paise?: number;
+  effective_from?: string;
+  effective_to?: string | null;
+  is_active?: boolean;
+}
+
+export function usePartnerUpdatePricingRule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ruleId, ...payload }: UpdatePricingRulePayload) =>
+      stayPartnerRequest<PartnerPricingRuleItem>(
+        `/api/v1/stays/partner/pricing-rules/${ruleId}/`,
+        {
+          method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         },

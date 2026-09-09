@@ -56,9 +56,6 @@ function formatPaise(paise: number): string {
   return "₹" + (paise / 100).toLocaleString("en-IN");
 }
 
-/* =========================================================================
-   CANONICAL FALLBACK RESERVATIONS (MATCHING IMAGE 4 PRECISELY WITH REAL PERSONAS)
-   ========================================================================= */
 interface DisplayReservation {
   id: string;
   display_id: string;
@@ -88,149 +85,6 @@ interface DisplayReservation {
   check_in?: StayCheckInInfo;
   check_out?: StayCheckOutInfo;
 }
-
-const CANONICAL_RESERVATIONS_LIST: DisplayReservation[] = [
-  {
-    id: "75a47dd0-32a1-4321-b0a1-75a47dd00001",
-    display_id: "75a47dd0",
-    property_id: "prop-zolo",
-    property_title: "Zolo Stay Co-Living, Hitech City",
-    locality: "Hitech City, Hyderabad",
-    unit_id: "unit-201b",
-    unit_type_id: "ut-2sharing",
-    unit_code: "Unit Bed 201-B",
-    unit_name: "Bed 201-B",
-    status: "CONFIRMED",
-    status_display: "Confirmed (Awaiting Arrival)",
-    start_date: "5 Sep 2026",
-    end_date: "5 Aug 2027",
-    total_nights: 334,
-    duration_mode: "Monthly",
-    guest_count: 1,
-    guest_code: "Guest ID: G-1024",
-    guest_name: "Vikram Sharma",
-    guest_phone: "+91 98765 43210",
-    guest_email: "vikram.sharma@example.com",
-    total_amount_paise: 2944000,
-    deposit_paise: 1500000,
-    deposit_status: "Held",
-    image_url: "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?w=800&auto=format&fit=crop&q=80",
-    lines: [
-      { id: "l1", kind: "ROOM_CHARGE", description: "Monthly Room Charge (11 Months)", amount_paise: 2640000 },
-      { id: "l2", kind: "MAINTENANCE_FEE", description: "Society Maintenance & High Speed Wi-Fi", amount_paise: 200000 },
-      { id: "l3", kind: "ONE_TIME_CHARGE", description: "Verification & Agreement Stamping", amount_paise: 104000 },
-    ],
-  },
-  {
-    id: "a7623acc-89b2-4912-87a2-a7623acc0002",
-    display_id: "a7623acc",
-    property_id: "prop-urban",
-    property_title: "Urban Nest Studio Apartment, Madhapur",
-    locality: "Madhapur, Hyderabad",
-    unit_id: "unit-studio302",
-    unit_type_id: "ut-studio",
-    unit_code: "Unit Studio 302",
-    unit_name: "Studio 302",
-    status: "CONFIRMED",
-    status_display: "Confirmed (Awaiting Arrival)",
-    start_date: "5 Sep 2026",
-    end_date: "5 Oct 2026",
-    total_nights: 30,
-    duration_mode: "Monthly",
-    guest_count: 2,
-    guest_code: "Guest ID: G-1025",
-    guest_name: "Priya Patel",
-    guest_phone: "+91 98450 11223",
-    guest_email: "priya.patel@example.com",
-    total_amount_paise: 7132000,
-    deposit_paise: 4400000,
-    deposit_status: "Held",
-    image_url: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800&auto=format&fit=crop&q=80",
-    lines: [
-      { id: "l4", kind: "ROOM_CHARGE", description: "Studio Apartment Base Rent", amount_paise: 6500000 },
-      { id: "l5", kind: "MAINTENANCE_FEE", description: "Power Backup & Club Maintenance", amount_paise: 400000 },
-      { id: "l6", kind: "TAX", description: "GST (12%)", amount_paise: 232000 },
-    ],
-  },
-  {
-    id: "f9a074cf-67d1-4190-b198-f9a074cf0003",
-    display_id: "f9a074cf",
-    property_id: "prop-zolo",
-    property_title: "Zolo Stay Co-Living, Hitech City",
-    locality: "Hitech City, Hyderabad",
-    unit_id: "unit-201a",
-    unit_type_id: "ut-2sharing",
-    unit_code: "Unit Bed 201-A",
-    unit_name: "Bed 201-A",
-    status: "INSPECTED",
-    status_display: "Inspected",
-    start_date: "5 Sep 2026",
-    end_date: "5 Oct 2026",
-    total_nights: 30,
-    duration_mode: "Monthly",
-    guest_count: 1,
-    guest_code: "Guest ID: G-1026",
-    guest_name: "Rohit Verma",
-    guest_phone: "+91 99887 76655",
-    guest_email: "rohit.verma@example.com",
-    total_amount_paise: 2944000,
-    deposit_paise: 1500000,
-    deposit_status: "Held",
-    image_url: "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?w=800&auto=format&fit=crop&q=80",
-    lines: [
-      { id: "l7", kind: "ROOM_CHARGE", description: "Bed Space Monthly Rent", amount_paise: 2640000 },
-      { id: "l8", kind: "MAINTENANCE_FEE", description: "Cleaning & Maintenance", amount_paise: 304000 },
-    ],
-    check_in: {
-      id: "ci-canon-3",
-      actual_check_in_time: "2026-09-05T09:30:00Z",
-      id_document_type: "AADHAAR",
-      id_document_number: "XXXX-XXXX-4821",
-      id_verified: true,
-      guest_notes: "Keys handed over, house rules and Wi-Fi credentials provided.",
-      created_at: "2026-09-05T09:30:00Z",
-    },
-    check_out: {
-      id: "co-canon-3",
-      actual_check_out_time: "2026-09-05T11:45:00Z",
-      condition_grade: "EXCELLENT",
-      damage_found: false,
-      damage_estimate_paise: 0,
-      inspection_notes: "Room inspected in pristine condition. All keys and inventory accounted for.",
-      created_at: "2026-09-05T11:45:00Z",
-    },
-  },
-  {
-    id: "91a1d007-44c3-4889-a212-91a1d0070004",
-    display_id: "91a1d007",
-    property_id: "prop-indep",
-    property_title: "Independent House, Kondapur",
-    locality: "Kondapur, Hyderabad",
-    unit_id: "unit-villa42b",
-    unit_type_id: "ut-entirehouse",
-    unit_code: "Unit Villa #42B",
-    unit_name: "Villa #42B",
-    status: "CONFIRMED",
-    status_display: "Confirmed (Awaiting Arrival)",
-    start_date: "5 Sep 2026",
-    end_date: "5 Aug 2027",
-    total_nights: 334,
-    duration_mode: "Monthly",
-    guest_count: 3,
-    guest_code: "Guest ID: G-1027",
-    guest_name: "Ananya Rao",
-    guest_phone: "+91 97112 33445",
-    guest_email: "ananya.rao@example.com",
-    total_amount_paise: 10308000,
-    deposit_paise: 6400000,
-    deposit_status: "Held",
-    image_url: "https://images.unsplash.com/photo-1580587771525-78b9dba3b914?w=800&auto=format&fit=crop&q=80",
-    lines: [
-      { id: "l9", kind: "ROOM_CHARGE", description: "Independent House Full Lease", amount_paise: 9600000 },
-      { id: "l10", kind: "MAINTENANCE_FEE", description: "Gardening & Community Fee", amount_paise: 708000 },
-    ],
-  },
-];
 
 type TabKey = "ALL" | "NEEDS_ACTION" | "ARRIVALS" | "IN_STAY" | "COMPLETED";
 
@@ -262,7 +116,6 @@ export function StayReservations() {
 
   const allRes = reservations ?? [];
 
-  // Build the list combining API data with canonical fallback matching Image 4
   const displayReservations: DisplayReservation[] = useMemo(() => {
     return allRes.map((r) => {
       const displayId = r.id.slice(0, 8);

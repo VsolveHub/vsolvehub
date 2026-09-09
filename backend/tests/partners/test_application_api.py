@@ -4,6 +4,7 @@ import pytest
 from django.utils import timezone
 from rest_framework.test import APIClient
 
+from apps.catalog.models import Category, Service, ServiceVariant, Subcategory
 from apps.identity.models import UserRole
 from apps.locations.models import ServiceArea
 from apps.partners.models import (
@@ -277,6 +278,47 @@ def test_required_skill_and_service_area_configuration_are_enforced(
     assert skill_response.status_code == HTTPStatus.CONFLICT
     assert area_response.status_code == HTTPStatus.CONFLICT
     assert PartnerApplication.objects.count() == 0
+
+
+def test_stay_variant_does_not_need_catalog_service_area_enablement(
+    partner_setup: PartnerSetup,
+) -> None:
+    category = Category.objects.create(
+        slug="rooms-pg-hostel",
+        name="Rooms / PG / Hostel / Hotels",
+    )
+    subcategory = Subcategory.objects.create(
+        category=category,
+        slug="hostels",
+        name="Hostels",
+    )
+    service = Service.objects.create(
+        subcategory=subcategory,
+        slug="ac-hostel",
+        name="AC Hostel",
+        short_description="AC hostel rooms.",
+        status=Service.Status.ACTIVE,
+    )
+    stay = ServiceVariant.objects.create(
+        service=service,
+        code="ac-hostel-std",
+        name="AC Hostel (Standard)",
+        pricing_strategy=ServiceVariant.PricingStrategy.DURATION,
+        booking_archetype=ServiceVariant.BookingArchetype.A9_STAY,
+        required_skill_code="electrician",
+        tax_category_code="accommodation",
+    )
+    payload = application_payload(partner_setup)
+    payload["service_variant_ids"] = [str(stay.id)]
+
+    response = partner_setup.client.patch(
+        "/api/v1/partner/application/",
+        payload,
+        format="json",
+    )
+
+    assert response.status_code == HTTPStatus.CREATED
+    assert response.json()["service_variant_ids"] == [str(stay.id)]
 
 
 def test_document_versions_preserve_review_history(partner_setup: PartnerSetup) -> None:

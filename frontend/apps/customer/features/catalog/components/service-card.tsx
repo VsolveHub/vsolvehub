@@ -203,6 +203,7 @@ export function ServiceCard({
         <div className="flex flex-col w-full flex-1 p-6 md:p-8">
           <Link
             href={serviceHref(service, categorySlug)}
+            prefetch={false}
             className="flex-1 flex flex-col cursor-pointer"
           >
             <div className="flex items-start justify-between gap-3 mb-2">
@@ -244,6 +245,7 @@ export function ServiceCard({
     <div className="group md:col-span-1 flex min-h-[14rem] flex-col rounded-card border border-transparent bg-white p-5 md:p-6 shadow-card transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-raised">
       <Link
         href={serviceHref(service, categorySlug)}
+        prefetch={false}
         className="flex-1 flex flex-col cursor-pointer"
       >
         <div className="flex items-start justify-between gap-3 mb-2">

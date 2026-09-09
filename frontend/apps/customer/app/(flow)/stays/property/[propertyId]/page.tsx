@@ -38,8 +38,14 @@ import {
   fetchPropertyDetail,
   schedulePropertyVisit,
   type PropertyDetailResponse,
-  type PropertyUnitTypeDetail,
 } from "@/features/stays/queries";
+import {
+  durationModeLabel,
+  hideSoldOutStayCards,
+  publishedDurationModes,
+  shouldShowDurationToggle,
+  type StayDurationMode,
+} from "@/features/stays/stay-checkout-rules";
 
 function formatPaise(paise: number): string {
   return "₹" + (paise / 100).toLocaleString("en-IN");
@@ -91,7 +97,9 @@ export default function StayPropertyDetailPage() {
   const defaultEnd = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
   const [startDate, setStartDate] = useState(searchParams.get("start_date") || today);
   const [endDate, setEndDate] = useState(searchParams.get("end_date") || defaultEnd);
-  const [durationMode, setDurationMode] = useState(searchParams.get("duration_mode") || "MONTHLY");
+  const [durationMode, setDurationMode] = useState<StayDurationMode>(
+    (searchParams.get("duration_mode") as StayDurationMode) || "MONTHLY",
+  );
 
   const [property, setProperty] = useState<PropertyDetailResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -157,6 +165,11 @@ export default function StayPropertyDetailPage() {
   }
 
   const activeTileSlug = searchParams.get("tile") || "rooms";
+  const bookableUnits = hideSoldOutStayCards(property.unit_types, Boolean(startDate && endDate));
+  const publishedModes = publishedDurationModes(
+    bookableUnits.map((unit) => unit.pricing.duration_mode),
+    durationMode,
+  );
   const fromUrl = searchParams.get("from");
   const backHref = fromUrl || `/catalog/rooms-pg-hostel?tile=${encodeURIComponent(activeTileSlug)}`;
 
@@ -341,7 +354,7 @@ export default function StayPropertyDetailPage() {
                   <p className="text-xs text-neutral-500 mt-0.5">Select a unit type and reserve your move-in date</p>
                 </div>
                 <span className="self-start sm:self-auto rounded-full bg-signal-50 border border-signal-200 px-3.5 py-1 text-xs font-bold text-signal-700 shadow-2xs">
-                  {property.unit_types.length} Types Available
+                  {bookableUnits.length} Types Available
                 </span>
               </div>
 
@@ -351,22 +364,24 @@ export default function StayPropertyDetailPage() {
                   <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-neutral-700">
                     <Calendar className="h-4 w-4 text-action" /> Check Live Availability &amp; Pricing
                   </div>
-                  <div className="inline-flex rounded-xl bg-neutral-200/70 p-1 text-xs font-bold self-start sm:self-auto">
-                    {(["MONTHLY", "WEEKLY", "NIGHTLY"] as const).map((mode) => (
-                      <button
-                        key={mode}
-                        type="button"
-                        onClick={() => setDurationMode(mode)}
-                        className={`rounded-lg px-3 py-1 text-xs font-bold transition-all cursor-pointer ${
-                          durationMode === mode
-                            ? "bg-white text-navy-900 shadow-xs"
-                            : "text-neutral-600 hover:text-neutral-900"
-                        }`}
-                      >
-                        {mode.charAt(0) + mode.slice(1).toLowerCase()}
-                      </button>
-                    ))}
-                  </div>
+                  {shouldShowDurationToggle(publishedModes) ? (
+                    <div className="inline-flex rounded-xl bg-neutral-200/70 p-1 text-xs font-bold self-start sm:self-auto">
+                      {publishedModes.map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => setDurationMode(mode)}
+                          className={`rounded-lg px-3 py-1 text-xs font-bold transition-all cursor-pointer ${
+                            durationMode === mode
+                              ? "bg-white text-navy-900 shadow-xs"
+                              : "text-neutral-600 hover:text-neutral-900"
+                          }`}
+                        >
+                          {durationModeLabel(mode)}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -399,15 +414,39 @@ export default function StayPropertyDetailPage() {
 
               {/* Room Cards List */}
               <div className="space-y-4 pt-1">
-                {property.unit_types.map((unit) => {
+                {bookableUnits.length === 0 ? (
+                  <p className="rounded-2xl border border-line bg-neutral-50 p-5 text-sm text-neutral-600">
+                    No rooms are available for these dates. Try different From–To dates.
+                  </p>
+                ) : null}
+                {bookableUnits.map((unit) => {
                   const vacantCount = unit.units_available;
                   const isSoldOut = vacantCount <= 0;
+                  const occupancyModel = property.occupancy_model;
+                  const isHotelUnit = occupancyModel === "HOTEL_ROOM";
+                  const isEntireUnit = occupancyModel === "ENTIRE_UNIT";
+                  const roomClassLabel =
+                    unit.room_class === "SINGLE"
+                      ? "Single"
+                      : unit.room_class === "DOUBLE"
+                        ? "Double"
+                        : unit.room_class === "TWIN"
+                          ? "Twin"
+                          : unit.room_class === "DELUXE"
+                            ? "Deluxe"
+                            : unit.room_class === "SUITE"
+                              ? "Suite"
+                              : unit.room_class === "EXECUTIVE"
+                                ? "Executive"
+                                : unit.room_class;
                   const unitRate =
                     durationMode === "MONTHLY"
                       ? unit.pricing.monthly_paise
                       : durationMode === "WEEKLY"
-                      ? Math.round(unit.pricing.monthly_paise / 4)
-                      : unit.pricing.daily_paise;
+                        ? unit.pricing.duration_mode === "WEEKLY"
+                          ? unit.pricing.daily_paise * 7
+                          : unit.pricing.monthly_paise
+                        : unit.pricing.daily_paise;
                   const rateSuffix =
                     durationMode === "MONTHLY" ? "mo" : durationMode === "WEEKLY" ? "wk" : "night";
 
@@ -419,12 +458,31 @@ export default function StayPropertyDetailPage() {
                       <div className="space-y-2">
                         <div className="flex items-center gap-2 flex-wrap">
                           <h3 className="font-extrabold text-base text-neutral-900">{unit.name}</h3>
-                          <span className="rounded-lg bg-neutral-100 px-2.5 py-0.5 text-xs font-bold text-neutral-700">
-                            {unit.bhk}
-                          </span>
-                          <span className="rounded-lg bg-neutral-100 px-2.5 py-0.5 text-xs text-neutral-700">
-                            {unit.sharing_display}
-                          </span>
+                          {isEntireUnit && unit.bhk ? (
+                            <span className="rounded-lg bg-neutral-100 px-2.5 py-0.5 text-xs font-bold text-neutral-700">
+                              {unit.bhk}
+                            </span>
+                          ) : null}
+                          {isHotelUnit && roomClassLabel ? (
+                            <span className="rounded-lg bg-neutral-100 px-2.5 py-0.5 text-xs font-bold text-neutral-700">
+                              {roomClassLabel}
+                            </span>
+                          ) : null}
+                          {isEntireUnit || isHotelUnit
+                            ? unit.occupancy_capacity
+                              ? (
+                                  <span className="rounded-lg bg-neutral-100 px-2.5 py-0.5 text-xs text-neutral-700">
+                                    Sleeps {unit.occupancy_capacity}
+                                  </span>
+                                )
+                              : null
+                            : unit.sharing_display
+                              ? (
+                                  <span className="rounded-lg bg-neutral-100 px-2.5 py-0.5 text-xs text-neutral-700">
+                                    {unit.sharing_display}
+                                  </span>
+                                )
+                              : null}
                           {unit.is_ac && (
                             <span className="rounded-lg bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 text-xs font-bold flex items-center gap-1">
                               <Wind className="h-3 w-3" /> AC
@@ -449,7 +507,10 @@ export default function StayPropertyDetailPage() {
                             </span>
                           ) : (
                             <span className="inline-flex items-center gap-1.5 font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full text-[11px]">
-                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> {vacantCount} vacant unit{vacantCount > 1 ? "s" : ""}
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> {vacantCount}{" "}
+                              {isHotelUnit
+                                ? `room${vacantCount > 1 ? "s" : ""} left`
+                                : `vacant unit${vacantCount > 1 ? "s" : ""}`}
                             </span>
                           )}
                         </div>

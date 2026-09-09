@@ -31,11 +31,11 @@ function ok<T>(data: T) {
   return { data, error: undefined, response: new Response(null, { status: 200 }) };
 }
 
-function refusal(status: number, code: string) {
+function refusal(status: number, code: string, message = "Refused.") {
   return {
     data: undefined,
     error: {
-      error: { code, message: "Refused.", details: null, retryable: false, request_id: "r" },
+      error: { code, message, details: null, retryable: false, request_id: "r" },
     },
     response: new Response(null, { status }),
   };
@@ -172,6 +172,25 @@ describe("save and continue", () => {
     fireEvent.click(screen.getByRole("button", { name: /save and continue/i }));
 
     await waitFor(() => expect(screen.getByText(/someone else changed/i)).toBeInTheDocument());
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("shows an incomplete-application refusal without calling it a version conflict", async () => {
+    client.GET.mockResolvedValue(ok(APPLICATION));
+    client.PATCH.mockResolvedValue(
+      refusal(409, "partner_application_incomplete", "AC Hostel (Standard) is not enabled."),
+    );
+
+    renderEditor();
+    fireEvent.change(await screen.findByLabelText(/display name/i), {
+      target: { value: "Ravi Kumar" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /save and continue/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/ac hostel \(standard\) is not enabled/i)).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/someone else changed/i)).not.toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();
   });
 

@@ -288,7 +288,9 @@ def create_stay_hold(  # noqa: PLR0912, PLR0915, PLR0917
         base_rate = rule.base_rate_paise * periods
         maintenance_rate = rule.maintenance_paise * periods
         deposit_rate = (
-            max(rule.deposit_paise, config.default_deposit_paise) if config.deposit_required else 0
+            (rule.deposit_paise if rule.deposit_paise else config.default_deposit_paise)
+            if config.deposit_required
+            else 0
         )
         one_time_charge = 0
         tax_rate = (one_time_charge + maintenance_rate) * 1800 // 10000
@@ -317,7 +319,9 @@ def create_stay_hold(  # noqa: PLR0912, PLR0915, PLR0917
             base_rate = rule.base_rate_paise * total_days
         maintenance_rate = 0
         deposit_rate = (
-            max(rule.deposit_paise, config.default_deposit_paise) if config.deposit_required else 0
+            (rule.deposit_paise if rule.deposit_paise else config.default_deposit_paise)
+            if config.deposit_required
+            else 0
         )
         one_time_charge = 0
         tax_rate = (base_rate + one_time_charge) * 1200 // 10000
@@ -1860,3 +1864,39 @@ def host_block_unit(
         )
 
     return unit, impacted_count
+
+
+@transaction.atomic
+def host_reactivate_unit(
+    partner_user: Any,
+    unit_id: uuid.UUID | str,
+) -> Unit:
+    """Host returns a maintenance-blocked unit to the available inventory pool."""
+    try:
+        unit = (
+            Unit.objects.select_for_update()
+            .select_related("property__partner__user")
+            .get(id=unit_id)
+        )
+    except Unit.DoesNotExist:
+        raise UnitUnavailableError("Unit was not found.") from None
+
+    partner = getattr(unit.property, "partner", None)
+    is_owner = partner and (
+        partner.user_id == getattr(partner_user, "id", None)
+        or partner == partner_user
+        or getattr(partner, "user", None) == partner_user
+    )
+    if not is_owner and not getattr(partner_user, "is_staff", False):
+        raise StayAuthorizationError("Only the property host can reopen this unit.")
+
+    if unit.current_status == Unit.Status.ACTIVE:
+        return unit
+    if unit.current_status != Unit.Status.MAINTENANCE:
+        raise InvalidStayStateTransitionError(
+            "Only a maintenance-blocked unit can be made available."
+        )
+
+    unit.current_status = Unit.Status.ACTIVE
+    unit.save(update_fields=["current_status", "updated_at"])
+    return unit

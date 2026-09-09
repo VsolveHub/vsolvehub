@@ -100,70 +100,19 @@ export default function AdminStaysOversightPage() {
   const [refundBalance, setRefundBalance] = useState<boolean>(true);
   const [submittingDispute, setSubmittingDispute] = useState<boolean>(false);
 
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   async function loadReservations() {
     setLoading(true);
+    setLoadError(null);
     try {
       const res = await apiFetch(`${API_BASE}/api/v1/stays/ops/reservations/`);
       if (!res.ok) throw new Error("Failed to fetch stays");
       const data = await res.json();
       setReservations(data);
-    } catch {
-      // Fallback preview
-      setReservations([
-        {
-          id: "stay-res-01",
-          status: "CONFIRMED",
-          duration_mode: "MONTHLY",
-          lease_duration_months: 6,
-          start_date: "2026-09-10",
-          end_date: "2027-03-10",
-          guest_count: 1,
-          total_nights: 181,
-          total_amount_paise: 2700000,
-          deposit_amount_paise: 1600000,
-          property_title: "Greenwood Luxury Co-living & Stays",
-          property_type: "COLIVING_PG",
-          property_locality: "HSR Layout Sector 2, Bengaluru",
-          unit_name: "Executive Single Suite",
-          unit_code: "GW-104",
-          host_name: "Ramesh Sharma",
-          deposit: {
-            id: "dep-01",
-            status: "HELD_IN_ESCROW",
-            authorized_amount_paise: 1600000,
-            consumed_amount_paise: 0,
-            refunded_amount_paise: 0,
-          },
-          created_at: "2026-09-04T12:00:00Z",
-        },
-        {
-          id: "stay-res-02",
-          status: "DISPUTED",
-          duration_mode: "DAILY",
-          lease_duration_months: 0,
-          start_date: "2026-08-25",
-          end_date: "2026-08-30",
-          guest_count: 2,
-          total_nights: 5,
-          total_amount_paise: 1250000,
-          deposit_amount_paise: 500000,
-          property_title: "Whitefield Villa Serviced Apartments",
-          property_type: "SERVICED_APARTMENT",
-          property_locality: "ITPL Road, Bengaluru",
-          unit_name: "2BHK Luxury Serviced Suite",
-          unit_code: "WV-202",
-          host_name: "Kavitha Reddy",
-          deposit: {
-            id: "dep-02",
-            status: "DISPUTED",
-            authorized_amount_paise: 500000,
-            consumed_amount_paise: 200000,
-            refunded_amount_paise: 0,
-            dispute_reason: "Pre-existing scratch on bedside table incorrectly billed as tenant damage.",
-          },
-          created_at: "2026-08-20T10:00:00Z",
-        },
-      ]);
+    } catch (err) {
+      setReservations([]);
+      setLoadError(err instanceof Error ? err.message : "Unable to load stay reservations.");
     } finally {
       setLoading(false);
     }
@@ -276,6 +225,13 @@ export default function AdminStaysOversightPage() {
         </button>
       </div>
 
+      {loadError && (
+        <div className="mb-4 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          {loadError}
+        </div>
+      )}
+
       {/* Filter Tabs & Search */}
       <div className="mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 border-b border-neutral-200 pb-3">
         <div className="flex flex-wrap gap-2">
@@ -324,7 +280,9 @@ export default function AdminStaysOversightPage() {
             {filtered.length === 0 ? (
               <tr>
                 <td colSpan={7} className="p-8 text-center text-neutral-400">
-                  No reservations found matching current filter.
+                  {loadError
+                    ? loadError
+                    : "No reservations match this filter."}
                 </td>
               </tr>
             ) : (

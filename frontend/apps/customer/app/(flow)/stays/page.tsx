@@ -137,6 +137,24 @@ const PRIMARY_CATEGORIES: StayCategoryCard[] = [
     ],
   },
   {
+    id: "hotels",
+    title: "Hotels",
+    subtitle: "Executive suites, corporate stays and serviced residences.",
+    badge: "3 Services",
+    badgeStyle: "bg-[#e8f1fd] text-[#1e5cb8] border-blue-200/50",
+    href: "/catalog/rooms-pg-hostel?tile=hotels",
+    price: "₹4,500",
+    priceSuffix: "/night",
+    image: "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&auto=format&fit=crop&q=80",
+    icon: Building2,
+    iconContainerStyle: "bg-[#eef4ff] text-[#1e50b3]",
+    services: [
+      { name: "Executive Suite", slug: "executive-suite" },
+      { name: "Corporate Stay", slug: "corporate-stay" },
+      { name: "Serviced Residence", slug: "serviced-residence" },
+    ],
+  },
+  {
     id: "bed-space",
     title: "Bed Space",
     subtitle: "Economical single, double, shared & labour bed spaces.",
@@ -311,8 +329,8 @@ const PRIMARY_CATEGORIES: StayCategoryCard[] = [
   {
     id: "premium-stays",
     title: "Premium Stays",
-    subtitle: "Luxury apartments, premium villas & executive suites.",
-    badge: "5 Services",
+    subtitle: "Luxury apartments and premium villas.",
+    badge: "2 Services",
     badgeStyle: "bg-[#fff2ea] text-[#b84814] border-orange-200/50",
     price: "₹50,000",
     priceSuffix: "/month",
@@ -323,9 +341,6 @@ const PRIMARY_CATEGORIES: StayCategoryCard[] = [
     services: [
       { name: "Luxury Apartment", slug: "luxury-apartment" },
       { name: "Premium Villa", slug: "premium-villa" },
-      { name: "Executive Suite", slug: "executive-suite" },
-      { name: "Corporate Stay", slug: "corporate-stay" },
-      { name: "Serviced Residence", slug: "serviced-residence" },
     ],
   },
 ];
@@ -367,7 +382,7 @@ export default function StaysSubCategoriesPage() {
 
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 text-[#1e824c] border border-emerald-200 text-xs font-bold mb-2">
                 <Sparkles className="h-3.5 w-3.5" />
-                <span>12 Subcategories • {totalServiceCount} Stay Services & Variants</span>
+                <span>13 Subcategories • {totalServiceCount} Stay Services & Variants</span>
               </div>
 
               <h1 className="text-3xl sm:text-4xl lg:text-[42px] font-black tracking-tight text-[#001844] leading-tight">

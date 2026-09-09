@@ -7,7 +7,14 @@ import pytest
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from apps.catalog.models import Category, Service, ServiceVariant, Subcategory
+from apps.catalog.models import (
+    A9VariantConfiguration,
+    Category,
+    Service,
+    ServiceVariant,
+    Subcategory,
+)
+from apps.partners.capability_options import capability_options
 from apps.identity.models import User
 from apps.partners import capabilities
 from apps.partners.exceptions import (
@@ -133,6 +140,18 @@ def test_a1_variant_cannot_be_requested_as_an_m2_capability() -> None:
 
     with pytest.raises(LifecycleNotSupportedError):
         capabilities.request_capability(partner=partner, variant=variant)
+
+
+def test_capability_options_include_a9_stay_variants() -> None:
+    partner = _partner()
+    stay = _variant(ServiceVariant.BookingArchetype.A9_STAY, code="pg-bed")
+    A9VariantConfiguration.objects.create(variant=stay, version=1, status=A9VariantConfiguration.Status.ACTIVE)
+
+    options = capability_options(partner)
+
+    assert [option.workspace_key for option in options] == ["A9_STAY"]
+    assert options[0].variant_id == stay.id
+    assert options[0].asks_for == ()
 
 
 def test_commercial_mode_is_fixed_by_archetype_not_configured() -> None:

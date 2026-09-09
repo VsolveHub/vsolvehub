@@ -17,7 +17,12 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Final
 
-from apps.catalog.models import M2VariantConfiguration, ServiceVariant
+from apps.catalog.models import (
+    A7VariantConfiguration,
+    A9VariantConfiguration,
+    M2VariantConfiguration,
+    ServiceVariant,
+)
 from apps.partners.models import (
     PartnerBusinessProfile,
     PartnerCapability,
@@ -122,9 +127,11 @@ def capability_options(partner: PartnerProfile) -> list[CapabilityOption]:
     A catalog read scoped to eligibility, **not a gate**: it answers for an account with no
     application, no documents and no capability, because that is the account the screen exists for.
 
-    Scoped to variants the platform has actually opened for M2 — an A3/A5 archetype *and* an active
-    `M2VariantConfiguration`. A variant with an archetype but no configuration cannot carry a
-    requirement, so offering a capability on it would be offering work that cannot arrive.
+    Scoped to variants the platform has actually opened: an A3/A5 archetype with an active
+    `M2VariantConfiguration`, an A7 rental with an active `A7VariantConfiguration`, or an A9
+    stay with an active `A9VariantConfiguration`. A variant with an archetype but no
+    configuration cannot carry work, so offering a capability on it would be offering work that
+    cannot arrive.
     """
     open_configurations = {
         row["variant_id"]: row["registration_question_schema"]
@@ -132,7 +139,19 @@ def capability_options(partner: PartnerProfile) -> list[CapabilityOption]:
             status=M2VariantConfiguration.Status.ACTIVE,
         ).values("variant_id", "registration_question_schema")
     }
-    open_variant_ids = set(open_configurations)
+    open_variant_ids = (
+        set(open_configurations)
+        | set(
+            A7VariantConfiguration.objects.filter(
+                status=A7VariantConfiguration.Status.ACTIVE,
+            ).values_list("variant_id", flat=True)
+        )
+        | set(
+            A9VariantConfiguration.objects.filter(
+                status=A9VariantConfiguration.Status.ACTIVE,
+            ).values_list("variant_id", flat=True)
+        )
+    )
     if not open_variant_ids:
         return []
 
