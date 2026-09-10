@@ -163,6 +163,18 @@ The owner explicitly authorized agents to execute tests for the milestone tracke
   operation and an ADR approves the change.
 - Razorpay collections and RazorpayX payouts use separate credentials and permissions.
 
+## Cursor Cloud specific instructions
+
+Cloud Agents clone GitHub. They do **not** see unsaved files, local `.env`, or this laptop’s Docker.
+
+- Branch to use unless the owner names another: `m3-planing`.
+- Stack: Django 5 / DRF in `backend/` (Python **3.13** only, venv at `backend/.venv`), Next.js apps in `frontend/` (pnpm 11, Node 22), Postgres 17 + Redis via `infra/compose.yaml` (`127.0.0.1:15432` and `56379`).
+- Copy `backend/.env.example` to `backend/.env` if missing. Never commit `.env`. Payments stay on the **fake** provider unless the owner supplies sandbox secrets in Cursor Secrets.
+- Linux/macOS backend: `backend/.venv/bin/python manage.py …` — do not use the Windows `.cmd` scripts as the only path.
+- Do not hand-edit `contracts/openapi/v1.yaml` or generated API clients.
+- Do not run `pytest` / `vitest` / Playwright unless the owner’s current milestone exception in this file allows it. Static checks (`ruff`, mypy, `makemigrations --check`, `pnpm lint` / `typecheck`) are allowed.
+- First session on a new VM: wait for the environment **Build** (`pnpm install` + `backend/.venv`). If compose is up, `manage.py migrate` then run the server only when the task needs a live API.
+
 ## Git and destructive operations
 
 - Do not delete `.git`.

@@ -1,7 +1,9 @@
 VSolveHub/
 
 # IDE / editor
-.cursor/
+.cursor/*
+!.cursor/environment.json
+!.cursor/install.sh
 .claude/settings.local.json
 .idea/
 .vscode/

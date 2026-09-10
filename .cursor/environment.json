@@ -1,0 +1,10 @@
+{
+  "install": "bash .cursor/install.sh",
+  "start": "sudo service docker start || true",
+  "terminals": [
+    {
+      "name": "postgres-redis",
+      "command": "docker compose -f infra/compose.yaml up -d"
+    }
+  ]
+}
