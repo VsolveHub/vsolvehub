@@ -71,7 +71,11 @@ Both sit in `CHECKOUT_FREE_PURPOSES`. Capture activates the matching command
 (`complete_subscription_payment` or premium activation) once; webhook replay must not
 double-extend. There is no applicant `PaymentAttempt`, no listing `PaymentAllocation` to a
 Fulfilment Unit, and no hidden default plan that auto-publishes. Premium is a real activation, not
-a dead success path on the subscription reducer.
+a dead success path on the subscription reducer. Publish without an active
+`VendorSubscription` is allowed when the poster still holds an approved `A10_LISTING`
+capability and the variant has an ACTIVE `A10VariantConfiguration` — that is an explicit
+free tier, not a silent default plan. `max_active_listings` caps apply only while a
+subscription is ACTIVE.
 
 **Discovery.** ORM filters over indexed columns and declared `structured_fields` keys. No search
 engine.

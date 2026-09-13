@@ -143,6 +143,8 @@ def update_listing(*, listing: Listing, actor: Any, **changes: Any) -> Listing:
 @transaction.atomic
 def submit_listing(*, listing: Listing, actor: Any) -> Listing:
     _require_poster(listing, actor)
+    _require_listing_capability(listing.poster)
+    _require_active_a10_configuration(listing.variant_id)
     if listing.status != Listing.Status.DRAFT:
         raise ListingStateError("Only draft listings can be submitted.")
     listing.moderation_status = Listing.ModerationStatus.PENDING
@@ -175,11 +177,15 @@ def moderate_listing(*, listing: Listing, actor: Any, approved: bool, reason: st
 def publish_listing(*, listing: Listing, actor: Any) -> Listing:
     _require_poster(listing, actor)
     _require_listing_capability(listing.poster)
+    _require_active_a10_configuration(listing.variant_id)
     if listing.moderation_status != Listing.ModerationStatus.APPROVED:
         raise ListingStateError("A listing must be moderation approved before publish.")
     if listing.status not in (Listing.Status.DRAFT, Listing.Status.CLOSED, Listing.Status.EXPIRED):
         raise ListingStateError("This listing cannot be published from its current state.")
     subscription = _active_subscription(listing.poster)
+    # No active subscription: publish is still allowed when capability + ACTIVE config
+    # hold (explicit free tier). Plan max_active_listings applies only with an ACTIVE
+    # VendorSubscription — not a hidden default plan that auto-publishes.
     if subscription is not None:
         active_count = (
             Listing.objects.filter(
@@ -219,6 +225,7 @@ def close_listing(*, listing: Listing, actor: Any, reason: str = "") -> Listing:
 def republish_listing(*, listing: Listing, actor: Any) -> Listing:
     _require_poster(listing, actor)
     _require_listing_capability(listing.poster)
+    _require_active_a10_configuration(listing.variant_id)
     if listing.status not in (Listing.Status.CLOSED, Listing.Status.EXPIRED):
         raise ListingStateError("Only closed or expired listings can be republished.")
     listing.status = Listing.Status.DRAFT

@@ -1,6 +1,8 @@
 # M3 — Listings, Marketplace & Money Platform
 
-**Status:** Planning — no implementation started  
+**Status:** In progress on `feature/m3-a10-listings` — Wave D3 (A10 Career/Jobs) built as
+`[~]` (owner verification pending). Wallet (Phase C), A7/A9 (D1/D2), live Razorpay/MSG91,
+and Phase E analytics are **not** started on this branch.  
 **Commercial reference:** [`milestones.md`](../../milestones.md) Milestone 3  
 **Effective date:** 2026-09-01
 

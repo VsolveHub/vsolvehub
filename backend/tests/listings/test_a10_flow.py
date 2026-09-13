@@ -816,6 +816,33 @@ def test_create_listing_fails_closed_without_active_a10_config(poster, a10_varia
 
 
 @pytest.mark.django_db
+def test_submit_listing_fails_closed_after_config_or_capability_revoked(poster, a10_variant):
+    """Revoke-after-create must not still advance moderation (Grok HOLD P2)."""
+    listing = create_listing(
+        poster=poster,
+        variant_id=a10_variant.id,
+        title="Will lose access",
+        description="Draft before revoke.",
+    )
+
+    A10VariantConfiguration.objects.filter(variant=a10_variant).delete()
+    with pytest.raises(ListingStateError, match="not open yet"):
+        submit_listing(listing=listing, actor=poster.user)
+
+    A10VariantConfiguration.objects.create(
+        variant=a10_variant,
+        version=2,
+        status=A10VariantConfiguration.Status.ACTIVE,
+        application_cooldown_hours=24,
+    )
+    PartnerCapability.objects.filter(
+        partner=poster, archetype=ServiceVariant.BookingArchetype.A10_LISTING
+    ).delete()
+    with pytest.raises(PermissionError, match="A10 listing capability"):
+        submit_listing(listing=listing, actor=poster.user)
+
+
+@pytest.mark.django_db
 def test_premium_activation_and_webhook_replay(poster, a10_variant):
     """Premium capture sets is_premium once; replay is a no-op."""
     plan = VendorSubscriptionPlan.objects.create(
