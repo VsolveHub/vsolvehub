@@ -26,6 +26,10 @@ class User(AbstractBaseUser, PermissionsMixin):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    customer_profile: Any
+    communication_preferences: Any
+    privacy_requests: Any
+
     objects: UserManager = UserManager()
 
     USERNAME_FIELD = "phone_number"
@@ -53,12 +57,28 @@ class User(AbstractBaseUser, PermissionsMixin):
         return self.phone_number
 
 
+class AdminPermission(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    code = models.SlugField(max_length=100, unique=True)
+    name = models.CharField(max_length=150)
+    category = models.CharField(max_length=50)
+    description = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("category", "code")
+
+    def __str__(self) -> str:
+        return f"{self.category}:{self.code}"
+
+
 class Role(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     code = models.SlugField(max_length=50, unique=True)
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
     is_system = models.BooleanField(default=False)
+    permissions = models.ManyToManyField(AdminPermission, blank=True, related_name="roles")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -70,6 +90,8 @@ class Role(models.Model):
 
 class UserRole(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user_id: uuid.UUID
+    role_id: uuid.UUID
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     role = models.ForeignKey(Role, on_delete=models.PROTECT)
     granted_at = models.DateTimeField(auto_now_add=True)
@@ -99,13 +121,27 @@ class UserRole(models.Model):
 
 
 class CustomerProfile(models.Model):
+    class AccountStatus(models.TextChoices):
+        ACTIVE = "ACTIVE", "Active"
+        SUSPENDED = "SUSPENDED", "Suspended"
+        BLACKLISTED = "BLACKLISTED", "Blacklisted"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user_id: uuid.UUID
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="customer_profile",
     )
     display_name = models.CharField(max_length=100, blank=True)
+    is_student_verified = models.BooleanField(default=False)
+    referral_code = models.CharField(max_length=20, blank=True)
+    v_coins_balance = models.PositiveIntegerField(default=100)
+    account_status = models.CharField(
+        max_length=20,
+        choices=AccountStatus.choices,
+        default=AccountStatus.ACTIVE,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -197,6 +233,7 @@ class Device(models.Model):
 
 class UserSession(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user_id: uuid.UUID
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -235,6 +272,7 @@ class UserSession(models.Model):
 
 class ConsentReceipt(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user_id: uuid.UUID
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -267,6 +305,7 @@ class CommunicationPreference(models.Model):
         EMAIL = "EMAIL", "Email"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user_id: uuid.UUID
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -301,6 +340,7 @@ class PrivacyRequest(models.Model):
         REJECTED = "REJECTED", "Rejected"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user_id: uuid.UUID
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
@@ -358,3 +398,316 @@ class AccessAuditEvent(models.Model):
 
     def __str__(self) -> str:
         return f"{self.action}:{self.decision}:{self.id}"
+
+
+class AdminAuditLog(models.Model):
+    class ActionType(models.TextChoices):
+        CREATE = "CREATE", "Create"
+        UPDATE = "UPDATE", "Update"
+        DELETE = "DELETE", "Delete"
+        APPROVE = "APPROVE", "Approve"
+        REJECT = "REJECT", "Reject"
+        OVERRIDE = "OVERRIDE", "Override"
+        EXPORT = "EXPORT", "Export"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="admin_audit_logs",
+    )
+    actor_phone = models.CharField(max_length=16, blank=True)
+    actor_role = models.CharField(max_length=64, blank=True)
+    target_entity_type = models.CharField(max_length=100, db_index=True)
+    target_entity_id = models.CharField(max_length=120, blank=True, db_index=True)
+    action_type = models.CharField(max_length=20, choices=ActionType.choices, default=ActionType.UPDATE)
+    summary = models.CharField(max_length=255, blank=True)
+    old_value_json = models.JSONField(default=dict, blank=True)
+    new_value_json = models.JSONField(default=dict, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    timestamp = models.DateTimeField(default=timezone.now, db_index=True)
+
+    class Meta:
+        ordering = ("-timestamp",)
+        indexes = [
+            models.Index(fields=("target_entity_type", "target_entity_id")),
+            models.Index(fields=("actor", "timestamp")),
+            models.Index(fields=("action_type", "timestamp")),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.timestamp.isoformat()}:{self.actor_role}:{self.action_type}:{self.target_entity_type}"
+
+
+class DualAuthorizationRequest(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        APPROVED = "APPROVED", "Approved"
+        REJECTED = "REJECTED", "Rejected"
+        EXPIRED = "EXPIRED", "Expired"
+        EXECUTED = "EXECUTED", "Executed"
+
+    class ActionType(models.TextChoices):
+        REFUND_OVER_LIMIT = "REFUND_OVER_LIMIT", "High-Value Refund (>₹10,000)"
+        FEE_RESTRUCTURE = "FEE_RESTRUCTURE", "Platform Fee / Commission Restructure"
+        MASS_SUSPENSION = "MASS_SUSPENSION", "Mass Account Suspension"
+        KILL_SWITCH = "KILL_SWITCH", "System Kill Switch Activation"
+        OTHER = "OTHER", "Sensitive Operational Override"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    requester = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="dual_auth_requested",
+    )
+    action_type = models.CharField(max_length=32, choices=ActionType.choices)
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    payload = models.JSONField(default=dict, blank=True)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
+    first_approver = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="dual_auth_first_approvals",
+    )
+    first_approved_at = models.DateTimeField(null=True, blank=True)
+    second_approver = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="dual_auth_second_approvals",
+    )
+    second_approved_at = models.DateTimeField(null=True, blank=True)
+    rejection_reason = models.TextField(blank=True)
+    rejected_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="dual_auth_rejections",
+    )
+    rejected_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        indexes = [
+            models.Index(fields=("status", "created_at")),
+            models.Index(fields=("action_type", "status")),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.title} ({self.status})"
+
+
+class ConfigVersionHistory(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    config_key = models.SlugField(max_length=100, db_index=True)
+    version_number = models.PositiveIntegerField()
+    schema_snapshot = models.JSONField(default=dict)
+    change_summary = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="config_versions_authored",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ("-version_number",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=("config_key", "version_number"),
+                name="identity_unique_config_version",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=("config_key", "is_active")),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.config_key}:v{self.version_number}"
+
+
+class PricingModelConfig(models.Model):
+    id = models.CharField(max_length=64, primary_key=True)
+    name = models.CharField(max_length=128)
+    formula = models.CharField(max_length=256)
+    applicable_to = models.CharField(max_length=256)
+    base_rate_inr = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
+    surge_multiplier = models.DecimalField(max_digits=5, decimal_places=2, default=1.0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("id",)
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class CommissionRule(models.Model):
+    id = models.CharField(max_length=64, primary_key=True)
+    category = models.CharField(max_length=128)
+    type = models.CharField(max_length=32, default="PERCENTAGE")
+    rate = models.CharField(max_length=64)
+    slab_notes = models.TextField(blank=True)
+    gst_applicable = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("category",)
+
+    def __str__(self) -> str:
+        return f"{self.category} ({self.rate})"
+
+
+class PartnerRankingConfig(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    weights_json = models.JSONField(default=dict)
+    decay_factor_days = models.PositiveIntegerField(default=30)
+    min_jobs_for_ranking = models.PositiveIntegerField(default=5)
+    is_active = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-updated_at",)
+
+
+class VCoinsTransaction(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    customer = models.ForeignKey(
+        CustomerProfile,
+        on_delete=models.CASCADE,
+        related_name="v_coins_ledger",
+    )
+    amount = models.IntegerField()
+    transaction_type = models.CharField(max_length=32, default="MANUAL_ADJUSTMENT")
+    balance_after = models.PositiveIntegerField()
+    reason = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+
+class MarketingCoupon(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    code = models.CharField(max_length=32, unique=True)
+    discount_type = models.CharField(max_length=16, default="PERCENTAGE")
+    discount_value = models.DecimalField(max_digits=10, decimal_places=2)
+    min_order_inr = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
+    budget_cap_inr = models.DecimalField(max_digits=12, decimal_places=2, default=50000.0)
+    used_count = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return self.code
+
+
+class NotificationTemplate(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    channel = models.CharField(max_length=16, default="PUSH")
+    name = models.CharField(max_length=128, unique=True)
+    title = models.CharField(max_length=256, blank=True)
+    body = models.TextField()
+    variables_json = models.JSONField(default=list)
+    is_active = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("channel", "name")
+
+    def __str__(self) -> str:
+        return f"[{self.channel}] {self.name}"
+
+
+class CMSBanner(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    title = models.CharField(max_length=128)
+    surface = models.CharField(max_length=32, default="CUSTOMER_APP")
+    image_url = models.CharField(max_length=512)
+    target_url = models.CharField(max_length=256, blank=True)
+    display_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("surface", "display_order", "-created_at")
+
+    def __str__(self) -> str:
+        return f"{self.surface}: {self.title}"
+
+
+class RiskAnomaly(models.Model):
+    id = models.CharField(max_length=64, primary_key=True)
+    target_type = models.CharField(max_length=32, default="CUSTOMER")
+    target_identifier = models.CharField(max_length=128)
+    anomaly_type = models.CharField(max_length=64)
+    severity = models.CharField(max_length=16, default="HIGH")
+    details = models.TextField()
+    status = models.CharField(max_length=16, default="OPEN")
+    detected_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-detected_at",)
+
+    def __str__(self) -> str:
+        return f"{self.severity}: {self.anomaly_type} ({self.target_identifier})"
+
+
+class FeatureFlagConfig(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    key = models.CharField(max_length=64, unique=True)
+    description = models.TextField()
+    is_enabled = models.BooleanField(default=True)
+    rollout_percentage = models.PositiveIntegerField(default=100)
+    target_city = models.CharField(max_length=64, default="ALL")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("key",)
+
+    def __str__(self) -> str:
+        return f"{self.key}: {'ON' if self.is_enabled else 'OFF'}"
+
+
+class AppVersionPolicy(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    client_platform = models.CharField(max_length=32, unique=True)
+    current_version = models.CharField(max_length=32)
+    min_supported_version = models.CharField(max_length=32)
+    force_update = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("client_platform",)
+
+    def __str__(self) -> str:
+        return f"{self.client_platform}: {self.current_version}"
+
+

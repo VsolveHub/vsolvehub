@@ -240,3 +240,32 @@ class Address(models.Model):
 
     def __str__(self) -> str:
         return f"{self.label}: {self.line1}, {self.postal_code}"
+
+
+class CityZone(models.Model):
+    """6-tier geographic hierarchy: Country -> State -> City -> Zone -> Area -> Pincode."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    country_code = models.CharField(max_length=4, default="IN")
+    state_name = models.CharField(max_length=80, default="Telangana")
+    city_name = models.CharField(max_length=80, db_index=True)
+    zone_name = models.CharField(max_length=80, db_index=True)
+    area_name = models.CharField(max_length=120, blank=True)
+    pincode = models.CharField(max_length=12, db_index=True)
+    service_radius_km = models.PositiveSmallIntegerField(default=15)
+    polygon_geojson = models.JSONField(default=dict, blank=True)
+    is_active = models.BooleanField(default=True)
+    is_accepting_partners = models.BooleanField(default=True)
+    pricing_multiplier = models.DecimalField(max_digits=4, decimal_places=2, default=1.0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("city_name", "zone_name")
+        indexes = [
+            models.Index(fields=("city_name", "zone_name", "is_active")),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.city_name} - {self.zone_name} ({self.pincode})"
+

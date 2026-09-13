@@ -71,3 +71,5 @@ Django_Next.js_Plan/archive/
 web/
 archive/
 .tmp-cart-verify/
+scratch/
+scratch_*

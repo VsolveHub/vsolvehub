@@ -24,7 +24,7 @@ from apps.identity.exceptions import (
     OtpUnavailableApiError,
 )
 from apps.identity.hashing import keyed_hash
-from apps.identity.models import User, UserSession
+from apps.identity.models import CommunicationPreference, PrivacyRequest, User, UserSession
 from apps.identity.serializers import (
     ActiveRoleSerializer,
     AuthenticatedSessionSerializer,
@@ -168,6 +168,7 @@ class OtpVerifyView(APIView):
         return Response(response_data)
 
 
+@method_decorator(ensure_csrf_cookie, name="dispatch")
 class CurrentSessionView(APIView):
     permission_classes = (AllowAny,)
 
@@ -389,7 +390,7 @@ class CommunicationPreferenceView(APIView):
 
     @extend_schema(tags=["Privacy"], responses={200: CommunicationPreferenceSerializer(many=True)})
     def get(self, request: Request) -> Response:
-        preferences = cast(User, request.user).communication_preferences.order_by(
+        preferences = CommunicationPreference.objects.filter(user=cast(User, request.user)).order_by(
             "channel", "purpose"
         )
         return Response(CommunicationPreferenceSerializer(preferences, many=True).data)
@@ -414,7 +415,7 @@ class PrivacyRequestView(APIView):
 
     @extend_schema(tags=["Privacy"], responses={200: PrivacyRequestSerializer(many=True)})
     def get(self, request: Request) -> Response:
-        requests = cast(User, request.user).privacy_requests.all()
+        requests = PrivacyRequest.objects.filter(user=cast(User, request.user))
         return Response(PrivacyRequestSerializer(requests, many=True).data)
 
     @extend_schema(

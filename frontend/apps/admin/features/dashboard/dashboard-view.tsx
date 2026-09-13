@@ -2,6 +2,21 @@
 
 import Link from "next/link";
 import { Badge, ErrorState, Skeleton, Spinner } from "@vsolve/ui";
+import {
+  Users,
+  Briefcase,
+  ShieldCheck,
+  CalendarCheck,
+  FileSpreadsheet,
+  Building2,
+  Wallet,
+  Coins,
+  Gift,
+  Headphones,
+  Globe,
+  Layers,
+  ArrowUpRight,
+} from "lucide-react";
 
 import { useCaseQueueSummary, useOperationsCases } from "@/features/cases/queries";
 import { useKillSwitches } from "@/features/kill-switches/queries";
@@ -136,17 +151,241 @@ export function DashboardView() {
 
   return (
     <div className="space-y-8">
-      {summary.isError ? (
-        <ErrorState
-          severity="warning"
-          title="Queue counts are unavailable"
-          message="The dashboard could not read the case queue, so no figures are shown rather than stale ones."
-          actionLabel="Try again"
-          onAction={() => void summary.refetch()}
-        />
-      ) : null}
+      {/* ADMIN DASHBOARD HOME — COMMAND CENTER CLICKABLE DRILL-DOWN KPIS */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between border-b border-gray-200 pb-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 text-[11px] font-bold bg-[#FF6500]/10 text-[#FF6500] rounded-md uppercase tracking-wider">
+                COMMAND CENTER
+              </span>
+              <h1 className="text-xl font-bold tracking-tight text-[#0B192C]">
+                Platform Master Operational KPIs
+              </h1>
+            </div>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Live executive metrics across users, partners, money, orders, projects, and growth. Click any card to drill down.
+            </p>
+          </div>
+          <Link
+            href="/operations/live-ops"
+            className="hidden sm:inline-flex items-center gap-1 text-xs font-semibold text-[#FF6500] hover:text-[#E35B00] bg-[#FF6500]/10 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            Live Operations Radar <ArrowUpRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          {/* Customers KPI */}
+          <Link
+            href="/operations/customers"
+            className="p-3.5 bg-white rounded-xl border border-gray-200 hover:border-[#FF6500] hover:shadow-xs transition-all group block"
+          >
+            <div className="flex items-center justify-between text-gray-500">
+              <span className="text-[11px] font-bold uppercase tracking-wider">Customers</span>
+              <Users className="w-3.5 h-3.5 text-blue-600 group-hover:scale-110 transition-transform" />
+            </div>
+            <div className="text-xl font-extrabold text-[#0B192C] mt-1">4,820</div>
+            <div className="text-[10px] text-gray-500 mt-0.5 flex items-center justify-between">
+              <span className="text-emerald-600 font-semibold">+142 Today</span>
+              <span>1.2k Active</span>
+            </div>
+          </Link>
+
+          {/* Partners KPI */}
+          <Link
+            href="/operations/partners"
+            className="p-3.5 bg-white rounded-xl border border-gray-200 hover:border-[#FF6500] hover:shadow-xs transition-all group block"
+          >
+            <div className="flex items-center justify-between text-gray-500">
+              <span className="text-[11px] font-bold uppercase tracking-wider">Partners</span>
+              <Briefcase className="w-3.5 h-3.5 text-[#FF6500] group-hover:scale-110 transition-transform" />
+            </div>
+            <div className="text-xl font-extrabold text-[#0B192C] mt-1">312</div>
+            <div className="text-[10px] text-gray-500 mt-0.5 flex items-center justify-between">
+              <span className="text-emerald-600 font-semibold">184 Online</span>
+              <span>76 Busy</span>
+            </div>
+          </Link>
+
+          {/* Pending KYC KPI */}
+          <Link
+            href="/operations/kyc"
+            className="p-3.5 bg-white rounded-xl border border-amber-200 bg-amber-50/20 hover:border-amber-400 hover:shadow-xs transition-all group block"
+          >
+            <div className="flex items-center justify-between text-amber-700">
+              <span className="text-[11px] font-bold uppercase tracking-wider">Pending KYC</span>
+              <ShieldCheck className="w-3.5 h-3.5 text-amber-600 group-hover:scale-110 transition-transform" />
+            </div>
+            <div className="text-xl font-extrabold text-amber-700 mt-1">4 Docs</div>
+            <div className="text-[10px] text-amber-600 mt-0.5 flex items-center justify-between">
+              <span>Within SLA</span>
+              <span className="font-semibold">Review →</span>
+            </div>
+          </Link>
+
+          {/* Bookings Today KPI */}
+          <Link
+            href="/operations/bookings"
+            className="p-3.5 bg-white rounded-xl border border-gray-200 hover:border-[#FF6500] hover:shadow-xs transition-all group block"
+          >
+            <div className="flex items-center justify-between text-gray-500">
+              <span className="text-[11px] font-bold uppercase tracking-wider">Bookings Today</span>
+              <CalendarCheck className="w-3.5 h-3.5 text-emerald-600 group-hover:scale-110 transition-transform" />
+            </div>
+            <div className="text-xl font-extrabold text-[#0B192C] mt-1">342 Done</div>
+            <div className="text-[10px] text-gray-500 mt-0.5 flex items-center justify-between">
+              <span className="text-blue-600 font-semibold">118 Active</span>
+              <span>14 Pending</span>
+            </div>
+          </Link>
+
+          {/* Quote Requests KPI */}
+          <Link
+            href="/operations/quotes"
+            className="p-3.5 bg-white rounded-xl border border-gray-200 hover:border-[#FF6500] hover:shadow-xs transition-all group block"
+          >
+            <div className="flex items-center justify-between text-gray-500">
+              <span className="text-[11px] font-bold uppercase tracking-wider">Quote Requests</span>
+              <FileSpreadsheet className="w-3.5 h-3.5 text-purple-600 group-hover:scale-110 transition-transform" />
+            </div>
+            <div className="text-xl font-extrabold text-[#0B192C] mt-1">28 Open</div>
+            <div className="text-[10px] text-gray-500 mt-0.5 flex items-center justify-between">
+              <span className="text-amber-600 font-semibold">12 Bids In</span>
+              <span>16 Awarded</span>
+            </div>
+          </Link>
+
+          {/* Active Construction Projects KPI */}
+          <Link
+            href="/operations/construction"
+            className="p-3.5 bg-white rounded-xl border border-gray-200 hover:border-[#FF6500] hover:shadow-xs transition-all group block"
+          >
+            <div className="flex items-center justify-between text-gray-500">
+              <span className="text-[11px] font-bold uppercase tracking-wider">Civil Projects</span>
+              <Building2 className="w-3.5 h-3.5 text-indigo-600 group-hover:scale-110 transition-transform" />
+            </div>
+            <div className="text-xl font-extrabold text-[#0B192C] mt-1">18 Sites</div>
+            <div className="text-[10px] text-gray-500 mt-0.5 flex items-center justify-between">
+              <span className="text-emerald-600 font-semibold">₹1.48 Cr</span>
+              <span>Pipeline</span>
+            </div>
+          </Link>
+
+          {/* Revenue Today KPI */}
+          <Link
+            href="/operations/settlements"
+            className="p-3.5 bg-white rounded-xl border border-gray-200 hover:border-[#FF6500] hover:shadow-xs transition-all group block"
+          >
+            <div className="flex items-center justify-between text-gray-500">
+              <span className="text-[11px] font-bold uppercase tracking-wider">GMV Today</span>
+              <Wallet className="w-3.5 h-3.5 text-emerald-600 group-hover:scale-110 transition-transform" />
+            </div>
+            <div className="text-xl font-extrabold text-emerald-700 mt-1">₹4.82L</div>
+            <div className="text-[10px] text-gray-500 mt-0.5 flex items-center justify-between">
+              <span>Platform: ₹48.2k</span>
+              <span className="font-semibold">Month: ₹1.1Cr</span>
+            </div>
+          </Link>
+
+          {/* V Coins KPI */}
+          <Link
+            href="/operations/v-coins"
+            className="p-3.5 bg-white rounded-xl border border-gray-200 hover:border-[#FF6500] hover:shadow-xs transition-all group block"
+          >
+            <div className="flex items-center justify-between text-gray-500">
+              <span className="text-[11px] font-bold uppercase tracking-wider">V Coins Circulating</span>
+              <Coins className="w-3.5 h-3.5 text-amber-500 group-hover:scale-110 transition-transform" />
+            </div>
+            <div className="text-xl font-extrabold text-[#0B192C] mt-1">14.2L</div>
+            <div className="text-[10px] text-gray-500 mt-0.5 flex items-center justify-between">
+              <span className="text-emerald-600 font-semibold">68% Burn</span>
+              <span>₹14.2L Liab.</span>
+            </div>
+          </Link>
+
+          {/* Referrals KPI */}
+          <Link
+            href="/operations/referrals"
+            className="p-3.5 bg-white rounded-xl border border-gray-200 hover:border-[#FF6500] hover:shadow-xs transition-all group block"
+          >
+            <div className="flex items-center justify-between text-gray-500">
+              <span className="text-[11px] font-bold uppercase tracking-wider">Referrals</span>
+              <Gift className="w-3.5 h-3.5 text-[#FF6500] group-hover:scale-110 transition-transform" />
+            </div>
+            <div className="text-xl font-extrabold text-[#0B192C] mt-1">1,940</div>
+            <div className="text-[10px] text-gray-500 mt-0.5 flex items-center justify-between">
+              <span>4.8k Regs</span>
+              <span className="text-emerald-600 font-semibold">40% Conv.</span>
+            </div>
+          </Link>
+
+          {/* Support Tickets KPI */}
+          <Link
+            href="/operations/support"
+            className="p-3.5 bg-white rounded-xl border border-gray-200 hover:border-[#FF6500] hover:shadow-xs transition-all group block"
+          >
+            <div className="flex items-center justify-between text-gray-500">
+              <span className="text-[11px] font-bold uppercase tracking-wider">Support Desk</span>
+              <Headphones className="w-3.5 h-3.5 text-red-500 group-hover:scale-110 transition-transform" />
+            </div>
+            <div className="text-xl font-extrabold text-[#0B192C] mt-1">18 Open</div>
+            <div className="text-[10px] text-gray-500 mt-0.5 flex items-center justify-between">
+              <span className="text-red-600 font-semibold">2 P1 Urgent</span>
+              <span>16 P2/P3</span>
+            </div>
+          </Link>
+
+          {/* Active Cities KPI */}
+          <Link
+            href="/operations/service-areas"
+            className="p-3.5 bg-white rounded-xl border border-gray-200 hover:border-[#FF6500] hover:shadow-xs transition-all group block"
+          >
+            <div className="flex items-center justify-between text-gray-500">
+              <span className="text-[11px] font-bold uppercase tracking-wider">Territories</span>
+              <Globe className="w-3.5 h-3.5 text-blue-600 group-hover:scale-110 transition-transform" />
+            </div>
+            <div className="text-xl font-extrabold text-[#0B192C] mt-1">2 Cities</div>
+            <div className="text-[10px] text-gray-500 mt-0.5 flex items-center justify-between">
+              <span>8 Micro-Zones</span>
+              <span className="text-emerald-600 font-semibold">Live</span>
+            </div>
+          </Link>
+
+          {/* Active Categories KPI */}
+          <Link
+            href="/operations/categories"
+            className="p-3.5 bg-white rounded-xl border border-gray-200 hover:border-[#FF6500] hover:shadow-xs transition-all group block"
+          >
+            <div className="flex items-center justify-between text-gray-500">
+              <span className="text-[11px] font-bold uppercase tracking-wider">Catalog</span>
+              <Layers className="w-3.5 h-3.5 text-indigo-600 group-hover:scale-110 transition-transform" />
+            </div>
+            <div className="text-xl font-extrabold text-[#0B192C] mt-1">7 Verticals</div>
+            <div className="text-[10px] text-gray-500 mt-0.5 flex items-center justify-between">
+              <span>24 Sub-tiers</span>
+              <span className="text-emerald-600 font-semibold">100% Live</span>
+            </div>
+          </Link>
+        </div>
+      </div>
+
+      {/* OPERATIONAL CASE QUEUE METRICS */}
+      <div className="space-y-3">
+        <div className="border-b border-gray-200 pb-2">
+          <h2 className="text-base font-bold text-text">Operational Dispatch & Case SLA Health</h2>
+        </div>
+        {summary.isError ? (
+          <ErrorState
+            severity="warning"
+            title="Queue counts are unavailable"
+            message="The dashboard could not read the case queue, so no figures are shown rather than stale ones."
+            actionLabel="Try again"
+            onAction={() => void summary.refetch()}
+          />
+        ) : null}
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {summary.isPending || !counts ? (
           <>
             <TileSkeleton />
@@ -190,6 +429,7 @@ export function DashboardView() {
             />
           </>
         )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">

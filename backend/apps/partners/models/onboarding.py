@@ -51,9 +51,9 @@ class PartnerProfile(models.Model):
     display_name = models.CharField(max_length=120)
     biography = models.TextField(blank=True)
     experience_years = models.PositiveSmallIntegerField(default=0)
-    #: The object key in private storage, not a URL. A stored URL is a stored expiry, and the
-    #: signed links this bucket issues are short-lived by design — the same reason
-    #: `PartnerDocument` stores a key and signs on read.
+    provider_type = models.CharField(max_length=40, default="TECHNICIAN", db_index=True)
+    tier = models.CharField(max_length=20, default="STANDARD")
+    is_verified = models.BooleanField(default=False, db_index=True)
     photo_object_key = models.CharField(max_length=500, blank=True)
     photo_status = models.CharField(
         max_length=12,

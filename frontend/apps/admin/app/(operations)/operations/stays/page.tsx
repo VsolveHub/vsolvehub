@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { apiFetch } from "@vsolve/api-client";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "";
 
 interface StayDeposit {
   id: string;
@@ -348,7 +348,7 @@ export default function AdminStaysOversightPage() {
                   <td className="p-4 text-neutral-600">
                     <span className="font-bold text-neutral-900 block">{r.start_date}</span>
                     <span className="text-[11px] text-neutral-500 block">to {r.end_date}</span>
-                    <span className="text-[10px] text-neutral-400">{r.lease_duration_months ? `${r.lease_duration_months} mo` : `${r.total_nights} nights`}</span>
+                    <span className="text-[10px] text-neutral-400">{r.lease_duration_months ? `${r.lease_duration_months} mo` : `${r.total_nights || 1} nights`}</span>
                   </td>
                   <td className="p-4">
                     <span className="font-bold text-amber-900 block">{formatPaise(r.deposit_amount_paise)}</span>

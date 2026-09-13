@@ -1,6 +1,7 @@
 """Settings shared by every Vsolve Hub backend environment."""
 
 from pathlib import Path
+from typing import Any
 
 import environ
 from corsheaders.defaults import default_headers
@@ -91,14 +92,18 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
-DATABASES = {
-    "default": env.db(
+_default_db: dict[str, Any] = dict(
+    env.db(
         "DATABASE_URL",
         default="postgresql://vsolve:vsolve-local-only@127.0.0.1:15432/vsolve",
-    ),
+    )
+)
+_default_db["CONN_MAX_AGE"] = 60
+_default_db["CONN_HEALTH_CHECKS"] = True
+
+DATABASES = {
+    "default": _default_db,
 }
-DATABASES["default"]["CONN_MAX_AGE"] = 60
-DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
 
 CACHES = {
     "default": {
@@ -149,6 +154,12 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_FILTER_BACKENDS": [
         "django_filters.rest_framework.DjangoFilterBackend",
+    ],
+    "DEFAULT_PARSER_CLASSES": [
+        "rest_framework.parsers.JSONParser",
+        "common.parsers.PlainTextJSONParser",
+        "rest_framework.parsers.FormParser",
+        "rest_framework.parsers.MultiPartParser",
     ],
     "DEFAULT_RENDERER_CLASSES": [
         "rest_framework.renderers.JSONRenderer",
@@ -1047,7 +1058,7 @@ CELERY_BEAT_SCHEDULE = {
 }
 
 SESSION_COOKIE_HTTPONLY = True
-CSRF_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = env.bool("CSRF_COOKIE_HTTPONLY", default=False)
 # `Lax` everywhere it can be, which is everywhere the app and the API share a site.
 #
 # It is configurable for one case and it is worth naming, because getting it wrong looks like a
