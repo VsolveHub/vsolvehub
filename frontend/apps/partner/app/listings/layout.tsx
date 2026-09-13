@@ -1,0 +1,21 @@
+import type { Metadata } from "next";
+import type { ReactNode } from "react";
+
+import { PartnerShell } from "@/features/session/partner-shell";
+
+export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Job Listings Workspace | Vsolve Partners",
+  description: "Employer and job listing management portal for Vsolve hiring partners",
+  robots: { index: false, follow: false },
+};
+
+/**
+ * A10 listings sit behind PartnerShell only. `WorkspaceRoute` wraps children in
+ * a max-w-2xl main that would crush this wide hiring surface; capability gating
+ * still happens via `LISTING_WORKSPACE` in the registry + Django on every command.
+ */
+export default function ListingsLayout({ children }: { children: ReactNode }) {
+  return <PartnerShell requirePartnerRole>{children}</PartnerShell>;
+}

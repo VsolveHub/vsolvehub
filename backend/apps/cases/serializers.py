@@ -78,6 +78,8 @@ class OperationsCaseSerializer(serializers.ModelSerializer[OperationsCase]):
     #: always answered `null` to two of the three subjects it already had.
     requirement_id = serializers.UUIDField(read_only=True, allow_null=True)
     engagement_id = serializers.UUIDField(read_only=True, allow_null=True)
+    listing_id = serializers.UUIDField(read_only=True, allow_null=True)
+    application_id = serializers.UUIDField(read_only=True, allow_null=True)
     owner_id = serializers.UUIDField(read_only=True, allow_null=True)
     appeal_requested_by_id = serializers.UUIDField(read_only=True, allow_null=True)
     appeal_decided_by_id = serializers.UUIDField(read_only=True, allow_null=True)
@@ -101,6 +103,8 @@ class OperationsCaseSerializer(serializers.ModelSerializer[OperationsCase]):
             "partner_id",
             "requirement_id",
             "engagement_id",
+            "listing_id",
+            "application_id",
             "summary",
             "detail",
             "due_at",
@@ -188,13 +192,13 @@ class OpenCaseRequestSerializer(serializers.Serializer[dict[str, Any]]):
     partner_id = serializers.UUIDField(required=False, allow_null=True)
     requirement_id = serializers.UUIDField(required=False, allow_null=True)
     engagement_id = serializers.UUIDField(required=False, allow_null=True)
+    listing_id = serializers.UUIDField(required=False, allow_null=True)
+    application_id = serializers.UUIDField(required=False, allow_null=True)
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         subjects = [attrs.get(field) for field in CASE_SUBJECT_ID_FIELDS]
         if len([value for value in subjects if value is not None]) != 1:
-            raise serializers.ValidationError(
-                "A case is about exactly one booking, order, partner, request or engagement."
-            )
+            raise serializers.ValidationError("A case is about exactly one subject.")
         return attrs
 
 

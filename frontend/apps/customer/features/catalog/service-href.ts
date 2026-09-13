@@ -39,8 +39,15 @@ import type { ServiceCard } from "./queries";
  * and nothing marked the others until this field was published.
  */
 const A3_TIME_BLOCK = "A3_TIME_BLOCK";
+const A10_LISTING = "A10_LISTING";
 
 export function serviceHref(service: ServiceCard, categorySlug: string): string {
+  // Career/Jobs (A10_LISTING) is a listing surface, not a booking or request flow.
+  // Applicants never pay and must not land in cart, /book/, or /requests/.
+  if (service.request_archetypes.includes(A10_LISTING) || categorySlug === "career-jobs") {
+    return `/listings?service=${encodeURIComponent(service.slug)}`;
+  }
+
   // A hybrid — a fixed price AND a quote path — goes to the service page, which
   // is the only screen that can offer both. Routing it straight into the brief
   // (the pre-2026-08-26 behaviour) hid the fixed price entirely: the customer

@@ -179,6 +179,11 @@ M2_CAPTURE_PURPOSES = (
     PaymentAttempt.Purpose.M2_BOOKING_FEE,
 )
 
+A10_CAPTURE_PURPOSES = (
+    PaymentAttempt.Purpose.A10_VENDOR_SUBSCRIPTION,
+    PaymentAttempt.Purpose.A10_PREMIUM_LISTING,
+)
+
 
 def _apply_m2_capture(*, attempt: PaymentAttempt) -> None:
     """Hand a captured M2 charge to the domain that sold it.
@@ -212,6 +217,25 @@ def _apply_m2_capture(*, attempt: PaymentAttempt) -> None:
         from apps.requirements import booking_fees  # noqa: PLC0415 - same cycle
 
         booking_fees.complete_booking_fee(payment_attempt_id=attempt.id)
+
+
+def _apply_a10_capture(*, attempt: PaymentAttempt) -> None:
+    """Activate the A10 product the poster paid for. Subscription and premium are distinct.
+
+    Both purposes used to call `complete_subscription_payment`, which left
+    `A10_PREMIUM_LISTING` a dead success path. Capture of premium now sets
+    `Listing.is_premium` once; replay is a no-op.
+    """
+    from apps.listings.services import (  # noqa: PLC0415 - avoids a module import cycle
+        activate_premium_feature,
+        complete_subscription_payment,
+    )
+
+    if attempt.purpose == PaymentAttempt.Purpose.A10_VENDOR_SUBSCRIPTION:
+        complete_subscription_payment(payment_attempt_id=attempt.id)
+        return
+    if attempt.purpose == PaymentAttempt.Purpose.A10_PREMIUM_LISTING:
+        activate_premium_feature(payment_attempt_id=attempt.id)
 
 
 def _validate_payment_amount(*, attempt: PaymentAttempt, payment: ProviderPayment) -> bool:
@@ -273,6 +297,9 @@ def apply_provider_payment(
             )
         if attempt.purpose == PaymentAttempt.Purpose.BOOKING_GROUP:
             return _materialize_captured_group(attempt=attempt)
+        if attempt.purpose in A10_CAPTURE_PURPOSES:
+            _apply_a10_capture(attempt=attempt)
+            return None
         _apply_m2_capture(attempt=attempt)
         return None
     if payment.status == "authorized" and attempt.status in (

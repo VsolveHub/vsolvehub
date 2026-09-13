@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Final
 
-from apps.catalog.models import M2VariantConfiguration, ServiceVariant
+from apps.catalog.models import A10VariantConfiguration, M2VariantConfiguration, ServiceVariant
 from apps.partners.models import (
     PartnerBusinessProfile,
     PartnerCapability,
@@ -49,6 +49,11 @@ BUSINESS_TYPE_OPTIONS: Final[tuple[tuple[str, str, str], ...]] = (
         "I take on whole jobs",
         "You quote for a finished outcome. Vsolve holds each stage until it is approved.",
     ),
+    (
+        PartnerBusinessProfile.BusinessType.EMPLOYER,
+        "I hire people",
+        "You post Career/Jobs listings. Applicants never pay. You buy a posting plan.",
+    ),
 )
 
 #: What a Partner is signing up to, per lifecycle. The Customer-facing equivalent lives in
@@ -62,12 +67,17 @@ LIFECYCLE_EXPLANATIONS: Final[dict[str, str]] = {
         "You quote for a finished result. Vsolve funds each stage and releases it when the "
         "customer approves that stage."
     ),
+    ServiceVariant.BookingArchetype.A10_LISTING: (
+        "You post job listings. Applicants apply for free. You pay only for a posting plan "
+        "or premium placement — never the other way around."
+    ),
 }
 
 #: The capability-request fields each archetype needs, named by the server.
 CAPABILITY_ASKS_FOR: Final[dict[str, tuple[str, ...]]] = {
     ServiceVariant.BookingArchetype.A3_TIME_BLOCK: ("max_crew_size",),
     ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT: ("max_project_value_paise",),
+    ServiceVariant.BookingArchetype.A10_LISTING: (),
 }
 
 
@@ -160,7 +170,44 @@ def capability_options(partner: PartnerProfile) -> list[CapabilityOption]:
         )
         for variant in variants
     ]
+    options.extend(_a10_capability_options(live=live))
     return options
+
+
+def _a10_capability_options(*, live: set[uuid.UUID]) -> list[CapabilityOption]:
+    """Career/Jobs variants with an ACTIVE A10 configuration. Fail closed otherwise."""
+
+    open_variant_ids = set(
+        A10VariantConfiguration.objects.filter(
+            status=A10VariantConfiguration.Status.ACTIVE,
+        ).values_list("variant_id", flat=True)
+    )
+    if not open_variant_ids:
+        return []
+    variants = (
+        ServiceVariant.objects.filter(
+            id__in=open_variant_ids,
+            is_active=True,
+            booking_archetype=ServiceVariant.BookingArchetype.A10_LISTING,
+        )
+        .select_related("service__subcategory__category")
+        .order_by("service__name", "name")
+    )
+    return [
+        CapabilityOption(
+            variant_id=variant.id,
+            variant_name=f"{variant.service.name} - {variant.name}",
+            category_name=variant.service.subcategory.category.name,
+            workspace_key=variant.booking_archetype,
+            commercial_mode=commercial_mode_for_archetype(variant.booking_archetype),
+            lifecycle_explanation=LIFECYCLE_EXPLANATIONS.get(variant.booking_archetype, ""),
+            requires_insurance=False,
+            asks_for=CAPABILITY_ASKS_FOR.get(variant.booking_archetype, ()),
+            registration_questions=(),
+            already_requested=variant.id in live,
+        )
+        for variant in variants
+    ]
 
 
 def _registration_questions(schema: object) -> tuple[dict[str, object], ...]:

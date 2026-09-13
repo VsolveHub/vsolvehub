@@ -222,6 +222,10 @@ class OperationsCaseListView(APIView):
                 booking_id=data.get("booking_id"),
                 order_id=data.get("order_id"),
                 partner_id=data.get("partner_id"),
+                requirement_id=data.get("requirement_id"),
+                engagement_id=data.get("engagement_id"),
+                listing_id=data.get("listing_id"),
+                application_id=data.get("application_id"),
                 opened_by=actor,
                 idempotency_key=key,
             )

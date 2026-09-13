@@ -28,7 +28,9 @@ from .base import (
     allocate_document_number,
 )
 from .capture import (
+    A10_CAPTURE_PURPOSES,
     M2_CAPTURE_PURPOSES,
+    _apply_a10_capture,
     _apply_m2_capture,
     _materialize_captured_group,
     _request_automatic_refund,
@@ -62,11 +64,13 @@ from .simulation import (
 )
 
 __all__ = [
+    "A10_CAPTURE_PURPOSES",
     "FINANCIAL_YEAR_START_MONTH",
     "M2_CAPTURE_PURPOSES",
     "PAYMENT_FINAL_STATES",
     "PAYMENT_START_SAFETY_SECONDS",
     "_allocate_exact",
+    "_apply_a10_capture",
     "_apply_m2_capture",
     "_apply_refund_provider_result",
     "_document_sequence",

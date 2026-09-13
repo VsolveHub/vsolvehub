@@ -48,3 +48,5 @@ The generated OpenAPI document and generated TypeScript client are never manuall
 | 0013 | M2 Partner capability, progressive-gate and crew surface | Proposed — nothing published; Wave C1 |
 | 0014 | Access receipt document fields | Proposed |
 | 0015 | M2 estimate lines, customer-supplied materials and one money truth | Proposed — blocks 22 of the 28 M2 screens |
+| 0016 | Partner active shelf hides work that has already started | Proposed |
+| 0017 | A10 Career/Jobs listing surface | Proposed — Wave D3; unpublished on `main` @ `4a08ad3` |

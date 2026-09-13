@@ -138,6 +138,8 @@ CHECKOUT_FREE_PURPOSES = (
     "M2_MATERIAL_ADVANCE",
     "M2_SCOPE_AMENDMENT",
     "M2_BOOKING_FEE",
+    "A10_VENDOR_SUBSCRIPTION",
+    "A10_PREMIUM_LISTING",
 )
 
 
@@ -176,6 +178,12 @@ class PaymentAttempt(models.Model):
         #: the demoted fallback's product and refunds on different rules, and a shared purpose
         #: would route a forfeit split into the unlock's completion.
         M2_BOOKING_FEE = "M2_BOOKING_FEE", "M2 booking fee"
+        #: A10: poster-to-platform subscription. Not a marketplace charge and never an
+        #: applicant payment. Capture activates `VendorSubscription` once.
+        A10_VENDOR_SUBSCRIPTION = "A10_VENDOR_SUBSCRIPTION", "A10 vendor subscription"
+        #: A10: premium placement on one listing. Capture sets `Listing.is_premium`; it is
+        #: not a second call into the subscription reducer.
+        A10_PREMIUM_LISTING = "A10_PREMIUM_LISTING", "A10 premium listing"
 
     #: Purposes that are charged outside a cart and therefore carry no `CheckoutSession`. Bound
     #: from the module-level tuple, which the check constraint below reads from the same name, so

@@ -43,6 +43,7 @@ export const BUSINESS_TYPES: readonly BusinessType[] = [
   "INDIVIDUAL",
   "WORKFORCE_AGENCY",
   "PROJECT_VENDOR",
+  "EMPLOYER",
 ];
 
 export function readBusinessType(value: string): BusinessType | null {

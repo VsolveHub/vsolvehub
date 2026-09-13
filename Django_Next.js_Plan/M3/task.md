@@ -131,13 +131,60 @@ Single task; do not jump to wallet/coin models.
 
 ## Phase D — Rental, Stay, Jobs
 
-*Plan doc `03-rental-stay-jobs-categories.md` not written yet.*
+**Design authority:** [03-rental-stay-jobs-categories.md](03-rental-stay-jobs-categories.md)
 
-- [ ] `M3-BE-301` Rental engine (inventory, calendar, deposits)
-- [ ] `M3-BE-302` Stay engine (listings, enquiry inbox)
-- [ ] `M3-BE-303` Careers engine (post/apply board)
-- [ ] `M3-FE-301` Customer + Partner + Operations surfaces for each
-- [ ] `M3-BE-304` Coins/wallet/referral work on new category checkouts
+Wave IDs below are from that document §12. Stub `M3-BE-303` ("Careers engine") is **dropped** —
+A10 work is Wave D3 (`M3-BE-351`…`361` / `M3-FE-331`/`332`). A7/A9 stay as D1/D2 on other
+branches; this A10 session does not implement them. Wallet/coin split on new-category checkouts
+is D4 (`M3-BE-371`), not a Careers stub.
+
+### D1 — A7 rental (out of this session)
+
+- [ ] See design doc Wave D1. Do not implement on `feature/m3-a10-listings`.
+
+### D2 — A9 stay (out of this session)
+
+- [ ] See design doc Wave D2. Do not implement on `feature/m3-a10-listings`.
+
+### D3 — A10 listing engine
+
+**Dependencies:** D0 shared catalog/archetype wiring. May run in parallel with D1/D2.
+**ADR:** [0012](../../docs/adr/0012-a10-listing-engine.md) (Proposed).
+**Proposal:** [0017](../../contracts/proposals/0017-a10-listing-careers.md).
+
+- [~] `M3-BE-351` Models: `Listing`, `ListingMedia`, `ListingModerationEvent`, `ListingReport`,
+      `A10VariantConfiguration` (with `ListingTypeSchema` for `structured_fields` validation)
+- [~] `M3-BE-352` Listing lifecycle commands (§6.3) + moderation workflow
+- [~] `M3-BE-353` Models: `Application`, `ApplicationAttachment`, `ApplicationStatusEvent`,
+      `ApplicationReport`
+- [~] `M3-BE-354` Application lifecycle commands (§6.5) + duplicate/rate-limit guards
+- [~] `M3-BE-355` Contact-reveal command + rate limiting (reuses OTP-throttle primitive)
+- [~] `M3-BE-356` Search/filter selector over `structured_fields`
+- [~] `M3-BE-357` `VendorSubscriptionPlan`, `VendorSubscription` models + purchase/activation
+      commands
+- [~] `M3-BE-358` Checkout-free `PaymentAttempt.Purpose` values for subscription/premium
+- [~] `M3-BE-359` Operations commands: `moderate_listing`, `remove_listing`, `reinstate_listing`,
+      `resolve_report`
+- [~] `M3-BE-360` Expiry sweeps: listing `expires_at`, subscription expiry
+- [~] `M3-BE-361` PartnerCapability onboarding path for job posters (Employer business type)
+- [~] `M3-FE-331` Partner Listings/Leads/Billing workspace (§6.9) — surfaces on `/listings`
+      (+ detail). Nav today is Home / Listings / Me; Leads is inbox-on-detail, Billing is a
+      subscription modal (not separate tabs). Owner UI pass still owed.
+- [~] `M3-FE-332` Customer listing browse/search/apply flow — `/listings`, detail, apply,
+      `/listings/my-applications`. Owner UI pass still owed.
+
+**Operations in D3:** listing moderate / remove / reinstate queue (`M3-OPS-331` in the design
+doc). Phase E analytics (`M3-OPS-404`) stay out of scope.
+
+**Tests:** `M3-A10-01`…`16` in `backend/tests/listings/test_a10_flow.py` — write, do not mark
+`[x]` here.
+
+**Exit gate:** M3-A10-01 through M3-A10-16 pass on staging (owner-run).
+
+### D4 — Cross-archetype checkout integration (not this session)
+
+- [ ] `M3-BE-371` Wallet/coin split on `A10_VENDOR_SUBSCRIPTION` (and later A7/A9 purposes) —
+      depends on Phase C Wave C3; do not implement in the A10-only port.
 
 ---
 
@@ -196,3 +243,5 @@ Do not mark `[x]` until owner manual pass. Agents do not run pytest; owner runs 
 | 2026-09-01 | `completed_at` = `BookingStatusHistory.created_at` for `COMPLETED` transition; never partner submit time or `timezone.now()` |
 | 2026-09-01 | `customer.fulfilment.completed` payload includes `event_version: 1`; bump on breaking schema changes |
 | 2026-09-01 | C2 `CustomerCompletion` ledger with `UNIQUE(customer_id, source_type, source_id)` — `get_or_create`; unlock only on `created=True`; M1/M2 stay separate event types |
+| 2026-09-13 | A10 Career/Jobs implements Wave D3 IDs `M3-BE-351`…`361` / `M3-FE-331`/`332` on `feature/m3-a10-listings`. Stub `M3-BE-303` dropped. ADR-0012 Proposed; proposal 0017. A7/A9 and wallet stay off this branch. |
+| 2026-09-13 | A10 Wave D3 code port marked `[~]` (BE + FE). Living handoff: `srikar-prompts/A10_CONTINUE_HERE.md`. Do not mark `[x]` until owner migrate/seed/`--no-cov` pytest + smoke. |

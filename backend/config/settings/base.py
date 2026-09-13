@@ -54,6 +54,7 @@ INSTALLED_APPS = [
     "apps.partners",
     "apps.requirements",
     "apps.ratings",
+    "apps.listings",
 ]
 
 MIDDLEWARE = [
@@ -1048,6 +1049,16 @@ CELERY_BEAT_SCHEDULE = {
         # Wave C7 gave it a per-product keyset cursor bounded by `M2_RECONCILIATION_BATCH_SIZE`, so
         # a tick is now bounded and the whole book is covered over a few laps instead.
         "schedule": 60.0 * 60,
+    },
+    # A10 Career/Jobs — listing and vendor-subscription expiry. Same family as offer/reservation
+    # sweeps; 15 minutes is enough because a listing's `expires_at` is a day-scale clock.
+    "sweep-expired-listings": {
+        "task": "apps.listings.tasks.expire_published_listings",
+        "schedule": 60.0 * 15,
+    },
+    "sweep-expired-subscriptions": {
+        "task": "apps.listings.tasks.expire_vendor_subscriptions",
+        "schedule": 60.0 * 15,
     },
 }
 

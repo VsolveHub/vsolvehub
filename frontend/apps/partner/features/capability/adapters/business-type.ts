@@ -88,6 +88,18 @@ const SHAPES: Record<BusinessType, TypeShape> = {
     ],
     expected: ["legal_name"],
   },
+  // Hiring partners (A10_LISTING). Same company fields as a project vendor;
+  // capability options gate which archetypes EMPLOYER may request.
+  EMPLOYER: {
+    fields: [
+      "legal_name",
+      "registration_number",
+      "gst_registered",
+      "gstin",
+      "years_in_operation",
+    ],
+    expected: ["legal_name"],
+  },
 };
 
 export function fieldsFor(businessType: BusinessType): readonly BusinessField[] {

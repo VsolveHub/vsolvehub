@@ -78,9 +78,20 @@ def _standalone_attempt_belongs_to(*, attempt: PaymentAttempt, customer_id: UUID
         return EngagementAmendment.objects.filter(
             payment_attempt=attempt, engagement__customer_id=customer_id
         ).exists()
-    # `SCOPE_AMENDMENT_REVISION` and `M2_SITE_VISIT_FEE` are not resolvable here yet, and a
-    # permissive default on a money endpoint is the wrong direction to guess in.
-    return False
+    owned = False
+    if purpose == PaymentAttempt.Purpose.A10_VENDOR_SUBSCRIPTION:
+        from apps.listings.models import VendorSubscription  # noqa: PLC0415
+
+        owned = VendorSubscription.objects.filter(
+            payment_attempt=attempt, poster__user_id=customer_id
+        ).exists()
+    elif purpose == PaymentAttempt.Purpose.A10_PREMIUM_LISTING:
+        from apps.listings.models import Listing  # noqa: PLC0415
+
+        owned = Listing.objects.filter(
+            payment_attempt=attempt, poster__user_id=customer_id
+        ).exists()
+    return owned
 
 
 @transaction.atomic

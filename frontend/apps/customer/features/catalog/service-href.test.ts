@@ -29,6 +29,20 @@ describe("serviceHref", () => {
     );
   });
 
+  it("routes A10 career listings to /listings, never cart or requests", () => {
+    expect(
+      serviceHref(
+        service({
+          slug: "full-time-roles",
+          request_archetypes: ["A10_LISTING"],
+          starting_price: null,
+          bookable_variant_id: null,
+        }),
+        "career-jobs",
+      ),
+    ).toBe("/listings?service=full-time-roles");
+  });
+
   it("keeps the pure route builder usable without importing a Client Component", () => {
     expect(serviceHref(service({ request_archetypes: [] }), "home-services")).toBe(
       "/catalog/home-services/electrician-crew",

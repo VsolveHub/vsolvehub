@@ -128,6 +128,16 @@ export const CASE_KIND_COPY: Record<CaseKind, CaseKindCopy> = {
       "moved, because marking it refunded would announce a decision nobody has taken.",
     isM2: true,
   },
+  LISTING_ABUSE: {
+    label: "Listing abuse",
+    claim: "Somebody reported a job listing as abusive, misleading, or otherwise unsafe.",
+    isM2: false,
+  },
+  APPLICATION_ABUSE: {
+    label: "Application abuse",
+    claim: "Somebody reported a listing application as abusive or fraudulent.",
+    isM2: false,
+  },
 };
 
 /** Every kind, in queue order — the M2 kinds last so the M1 queue reads unchanged. */
@@ -150,7 +160,9 @@ export type CaseSubjectKey =
   | "order_id"
   | "partner_id"
   | "requirement_id"
-  | "engagement_id";
+  | "engagement_id"
+  | "listing_id"
+  | "application_id";
 
 export interface CaseSubject {
   key: CaseSubjectKey;
@@ -160,16 +172,7 @@ export interface CaseSubject {
 }
 
 /**
- * All five subject fields, enumerated.
- *
- * `open_case` refuses unless exactly one is set, so exactly one comes back — but all five are
- * nullable on the wire and a reader that checked `booking_id`, then `order_id`, then `partner_id`
- * and gave up would show a case about a requirement or an engagement as a case about nothing.
- * Both of those are M2's own subjects, so that reader would be blank on precisely the cases this
- * console was built for.
- *
- * Returns every set subject rather than the first, so the impossible-but-published state (two set)
- * is visible rather than half-hidden.
+ * All subject fields, enumerated — including A10 listing / application subjects.
  */
 export function caseSubjects(item: {
   booking_id: string | null;
@@ -177,10 +180,14 @@ export function caseSubjects(item: {
   partner_id: string | null;
   requirement_id?: string | null;
   engagement_id?: string | null;
+  listing_id?: string | null;
+  application_id?: string | null;
 }): CaseSubject[] {
   const candidates: { key: CaseSubjectKey; id: string | null | undefined; label: string }[] = [
     { key: "requirement_id", id: item.requirement_id, label: "Request" },
     { key: "engagement_id", id: item.engagement_id, label: "Engagement" },
+    { key: "listing_id", id: item.listing_id, label: "Listing" },
+    { key: "application_id", id: item.application_id, label: "Application" },
     { key: "booking_id", id: item.booking_id, label: "Booking" },
     { key: "order_id", id: item.order_id, label: "Order" },
     { key: "partner_id", id: item.partner_id, label: "Partner" },

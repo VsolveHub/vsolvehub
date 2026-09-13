@@ -44,6 +44,7 @@ class PartnerBusinessProfile(models.Model):
         INDIVIDUAL = "INDIVIDUAL", "Individual"
         WORKFORCE_AGENCY = "WORKFORCE_AGENCY", "Workforce agency"
         PROJECT_VENDOR = "PROJECT_VENDOR", "Project vendor"
+        EMPLOYER = "EMPLOYER", "Employer"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     partner = models.OneToOneField(

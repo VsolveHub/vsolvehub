@@ -128,8 +128,13 @@ describe("the workspaces", () => {
     expect(hrefs).toEqual([
       "/",
       "/operations/partners",
+      "/operations/crew-documents",
+      "/operations/feedback",
       "/reviews",
+      "/operations/requests",
+      "/operations/rate-cards",
       "/operations/cases",
+      "/operations/listings",
       "/operations/payouts",
       "/finance",
       "/operations/dispatch",

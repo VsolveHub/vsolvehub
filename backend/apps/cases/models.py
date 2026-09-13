@@ -49,6 +49,8 @@ CASE_SUBJECT_FIELDS: tuple[str, ...] = (
     "partner",
     "requirement",
     "engagement",
+    "listing",
+    "application",
 )
 
 
@@ -90,6 +92,10 @@ class OperationsCase(models.Model):
         #: widening the M1 kind would change what an A1 payment-ambiguity case does to a
         #: technician's earnings, which is not this wave's decision to take.
         CHARGEBACK = "CHARGEBACK", "Chargeback on a platform fee"
+        #: A10 Career/Jobs abuse queues. Listing ≠ Booking — these kinds close with a
+        #: moderation outcome, not a fulfilment result.
+        LISTING_ABUSE = "LISTING_ABUSE", "Listing abuse"
+        APPLICATION_ABUSE = "APPLICATION_ABUSE", "Application abuse"
 
     class Severity(models.TextChoices):
         LOW = "LOW", "Low"
@@ -150,6 +156,20 @@ class OperationsCase(models.Model):
     )
     engagement = models.ForeignKey(
         "requirements.Engagement",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="operations_cases",
+    )
+    listing = models.ForeignKey(
+        "listings.Listing",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="operations_cases",
+    )
+    application = models.ForeignKey(
+        "listings.Application",
         null=True,
         blank=True,
         on_delete=models.PROTECT,
@@ -277,6 +297,8 @@ DEFAULT_TEAM: dict[str, str] = {
     OperationsCase.Kind.STAGE: OperationsCase.Team.QUALITY_SUPPORT,
     OperationsCase.Kind.OFF_PLATFORM: OperationsCase.Team.BOOKING_SUPPORT,
     OperationsCase.Kind.CHARGEBACK: OperationsCase.Team.FINANCE,
+    OperationsCase.Kind.LISTING_ABUSE: OperationsCase.Team.SAFETY,
+    OperationsCase.Kind.APPLICATION_ABUSE: OperationsCase.Team.SAFETY,
 }
 
 #: Response SLA per severity. A due time is what makes "cases may not close merely because a
@@ -321,6 +343,12 @@ ALLOWED_RESOLUTIONS: dict[str, frozenset[str]] = {
     # Three real endings for a chargeback and no fourth: the bank gave it back, we defended it
     # successfully, or we wrote it off. "Responded to the bank" is not an ending.
     OperationsCase.Kind.CHARGEBACK: frozenset({"RECOVERED", "REPRESENTED", "WRITTEN_OFF"}),
+    OperationsCase.Kind.LISTING_ABUSE: frozenset(
+        {"LISTING_REMOVED", "REPORT_DISMISSED", "POSTER_WARNED"}
+    ),
+    OperationsCase.Kind.APPLICATION_ABUSE: frozenset(
+        {"APPLICATION_REMOVED", "REPORT_DISMISSED", "APPLICANT_WARNED"}
+    ),
 }
 
 

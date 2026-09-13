@@ -26,7 +26,7 @@ work without redefining platform invariants.
 | Document | Purpose |
 | --- | --- |
 | `02-real-payments-and-otp.md` | Razorpay live + MSG91 activation across existing flows |
-| `03-rental-stay-jobs-categories.md` | A7 rental, A9 stay, A10 listing/careers engines |
+| [03-rental-stay-jobs-categories.md](03-rental-stay-jobs-categories.md) | A7 rental, A9 stay, A10 listing/careers engines (copied onto `feature/m3-a10-listings`; A10 only in this wave) |
 | `04-operations-analytics.md` | Dashboards, exports, GST/TDS, report builder |
 | `05-acceptance-and-cutover.md` | Staging gates before M4 go-live |
 

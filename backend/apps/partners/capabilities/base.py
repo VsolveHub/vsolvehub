@@ -46,6 +46,17 @@ WORKSPACE_ACTIONS: dict[str, tuple[str, ...]] = {
         "amendment.propose",
         "deliverable.hand_over",
     ),
+    ServiceVariant.BookingArchetype.A10_LISTING: (
+        "listing.view",
+        "listing.manage",
+        "listing.create",
+        "listing.publish",
+        "listing.close",
+        "application.view",
+        "application.shortlist",
+        "application.reveal",
+        "subscription.manage",
+    ),
 }
 
 

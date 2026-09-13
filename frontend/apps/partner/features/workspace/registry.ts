@@ -60,6 +60,7 @@ import type { WorkspaceGrant } from "@vsolve/query";
 /** Server keys this build has screens for. Mirrors `partners.capabilities.WORKSPACE_ACTIONS`. */
 export const WORKFORCE_WORKSPACE = "A3_TIME_BLOCK";
 export const PROJECT_WORKSPACE = "A5_CUSTOM_PROJECT";
+export const LISTING_WORKSPACE = "A10_LISTING";
 
 export interface WorkspaceNavItem {
   href: string;
@@ -189,6 +190,17 @@ export const TAP_FIRST_NAV: readonly WorkspaceNavItem[] = [
  * what a single generic workspace would force — is exactly the erasure
  * `M2-FE-111` forbids. One spine in the backend does not mean one noun in the UI.
  */
+/**
+ * Dedicated navigation for career & hiring partners (A10_LISTING).
+ * Home / Listings; Billing stays a subscription modal on the listings page.
+ * Never reuse `/jobs` or `/work/*` — those are A1 task visits.
+ */
+export const LISTING_NAV: readonly WorkspaceNavItem[] = [
+  { href: "/home", label: "Home", icon: Home },
+  { href: "/listings", label: "Listings", icon: Briefcase, activePrefix: "/listings" },
+  { href: "/me", label: "Me", icon: UserCircle2, activePrefix: "/me" },
+];
+
 export const WORKSPACE_REGISTRY: Record<string, WorkspaceDefinition> = {
   [WORKFORCE_WORKSPACE]: {
     key: WORKFORCE_WORKSPACE,
@@ -220,6 +232,14 @@ export const WORKSPACE_REGISTRY: Record<string, WorkspaceDefinition> = {
       { href: "/projects/enquiries", label: "Enquiries", icon: ClipboardList, action: "enquiry.view" },
       { href: "/projects/stages", label: "Stages", icon: CalendarCheck, action: "stage.submit_evidence" },
     ],
+  },
+  [LISTING_WORKSPACE]: {
+    key: LISTING_WORKSPACE,
+    label: "Job Listings",
+    description: "Post job opportunities, review applications, and manage hiring.",
+    icon: Briefcase,
+    home: "/listings",
+    nav: [...LISTING_NAV],
   },
 };
 

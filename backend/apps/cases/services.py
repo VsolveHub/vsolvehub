@@ -60,6 +60,8 @@ def open_case(
     partner_id: UUID | None = None,
     requirement_id: UUID | None = None,
     engagement_id: UUID | None = None,
+    listing_id: UUID | None = None,
+    application_id: UUID | None = None,
     detail: str = "",
     opened_by: User | None = None,
     response_due_at: Any | None = None,
@@ -85,12 +87,20 @@ def open_case(
         raise CaseInvalidApiError(reason="A case needs a summary.")
     subjects = [
         value
-        for value in (booking_id, order_id, partner_id, requirement_id, engagement_id)
+        for value in (
+            booking_id,
+            order_id,
+            partner_id,
+            requirement_id,
+            engagement_id,
+            listing_id,
+            application_id,
+        )
         if value is not None
     ]
     if len(subjects) != 1:
         raise CaseInvalidApiError(
-            reason="A case is about exactly one booking, order, partner, request or engagement.",
+            reason="A case is about exactly one subject.",
         )
 
     case = OperationsCase.objects.create(
@@ -102,6 +112,8 @@ def open_case(
         partner_id=partner_id,
         requirement_id=requirement_id,
         engagement_id=engagement_id,
+        listing_id=listing_id,
+        application_id=application_id,
         summary=summary.strip(),
         detail=detail,
         due_at=default_due_at(severity),
