@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { formatMoney } from "@vsolve/ui";
 
 import { getCategory, getService, getCategoryServices } from "@/features/catalog/queries";
-import { bookCrewHref } from "@/lib/routes";
+import { bookCrewHref, isCareerJobsCategory, listingsBrowseHref } from "@/lib/routes";
 import { Breadcrumbs } from "@/features/catalog/components/breadcrumbs";
 import { FitOutServicePicker } from "@/features/catalog/components/fit-out-service-picker";
 import { ServiceJsonLd } from "@/features/catalog/components/service-json-ld";
@@ -57,6 +57,14 @@ export default async function ServiceDetailPage({ params }: PageProps) {
   // A service reachable under the wrong category would be a duplicate URL for
   // the same content. 404 rather than render it twice.
   if (service.category_slug !== categorySlug) notFound();
+
+  // A10 Career/Jobs roles are listing taxonomy, not bookable service detail pages.
+  if (
+    isCareerJobsCategory(categorySlug) ||
+    service.request_archetypes.includes("A10_LISTING")
+  ) {
+    redirect(listingsBrowseHref(service.slug));
+  }
 
   // Find related services: prioritize same subcategory, exclude current service
   const relatedServices = categoryServices

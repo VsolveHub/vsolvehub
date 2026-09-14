@@ -8,6 +8,7 @@ import {
 } from "@/features/catalog/components/category-card";
 import { getCategories } from "@/features/catalog/queries";
 import { HomepageClientSections } from "@/features/catalog/components/homepage-client-sections";
+import { catalogCategoryHref } from "@/lib/routes";
 
 export const metadata: Metadata = {
   title: "V Solve Hub — Book a verified technician",
@@ -101,7 +102,7 @@ async function CategoryGrid() {
           {firstRow.map((category) => (
             <Link
               key={category.id}
-              href={`/catalog/${category.slug}`}
+              href={catalogCategoryHref(category.slug)}
               className="group flex flex-col items-center gap-2.5 text-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
             >
               <div className="relative aspect-square w-full rounded-2xl bg-[#F8F9FA] border border-line/80 overflow-hidden flex items-center justify-center p-3.5 lg:p-4 shadow-xs transition-all duration-200 group-hover:scale-105 group-hover:shadow-md group-hover:border-line-strong group-hover:bg-[#FFF8F3]">
@@ -147,7 +148,7 @@ async function CategoryGrid() {
             {secondRow.map((category) => (
               <Link
                 key={category.id}
-                href={`/catalog/${category.slug}`}
+                href={catalogCategoryHref(category.slug)}
                 className="group flex flex-col items-center gap-2.5 text-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
               >
                 <div className="relative aspect-square w-full rounded-2xl bg-[#F8F9FA] border border-line/80 overflow-hidden flex items-center justify-center p-3.5 lg:p-4 shadow-xs transition-all duration-200 group-hover:scale-105 group-hover:shadow-md group-hover:border-line-strong group-hover:bg-[#FFF8F3]">
@@ -194,7 +195,7 @@ async function CategoryGrid() {
         {categories.map((category) => (
           <li key={category.id} className="min-w-0">
             <Link
-              href={`/catalog/${category.slug}`}
+              href={catalogCategoryHref(category.slug)}
               className="flex flex-col items-center gap-2 rounded-card focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
             >
               {category.image_url !== "" ? (
@@ -408,7 +409,7 @@ export default async function HomePage() {
               {categories.map((category) => (
                 <li key={category.id} className="min-w-0">
                   <Link
-                    href={`/catalog/${category.slug}`}
+                    href={catalogCategoryHref(category.slug)}
                     className="group flex flex-col items-center gap-1.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
                   >
                     <div className="relative aspect-square w-full rounded-2xl bg-[#F8F9FA] border border-line/80 overflow-hidden flex items-center justify-center p-2.5 shadow-xs transition-all duration-200 group-hover:scale-105 group-hover:shadow-md group-hover:border-line-strong group-hover:bg-[#FFF8F3]">

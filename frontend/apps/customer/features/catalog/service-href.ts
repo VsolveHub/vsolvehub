@@ -1,4 +1,5 @@
 import type { ServiceCard } from "./queries";
+import { isCareerJobsCategory, listingsBrowseHref } from "@/lib/routes";
 
 /**
  * Where tapping a service goes.
@@ -44,8 +45,8 @@ const A10_LISTING = "A10_LISTING";
 export function serviceHref(service: ServiceCard, categorySlug: string): string {
   // Career/Jobs (A10_LISTING) is a listing surface, not a booking or request flow.
   // Applicants never pay and must not land in cart, /book/, or /requests/.
-  if (service.request_archetypes.includes(A10_LISTING) || categorySlug === "career-jobs") {
-    return `/listings?service=${encodeURIComponent(service.slug)}`;
+  if (service.request_archetypes.includes(A10_LISTING) || isCareerJobsCategory(categorySlug)) {
+    return listingsBrowseHref(service.slug);
   }
 
   // A hybrid — a fixed price AND a quote path — goes to the service page, which

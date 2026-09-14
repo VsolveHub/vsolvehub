@@ -6,7 +6,7 @@ Seeds:
 - A10VariantConfiguration for each variant
 - Starter VendorSubscriptionPlans (Starter, Growth, Enterprise)
 - Demo hiring partner with A10_LISTING capability
-- Demo published career listing
+- Demo published career listings (regular + Featured/premium)
 """
 
 from datetime import timedelta
@@ -259,36 +259,118 @@ class Command(BaseCommand):
                 defaults={"variant": first_variant, "status": PartnerCapability.Status.APPROVED},
             )
 
-            # Seed a published demo listing
+            # Seed published demo listings (regular + premium/Featured for customer browse)
             now = timezone.now()
-            listing, created = Listing.objects.get_or_create(
-                poster=profile,
-                title="Experienced Full Stack Developer",
-                defaults={
-                    "variant": first_variant,
-                    "description": "Looking for a seasoned Full Stack Developer with Python/Django and Next.js experience to join our growing product team.",
+            demo_listings = [
+                {
+                    "title": "Experienced Full Stack Developer",
+                    "description": (
+                        "Looking for a seasoned Full Stack Developer with Python/Django "
+                        "and Next.js experience to join our growing product team."
+                    ),
                     "location_text": "Hyderabad, Telangana",
-                    "contact_phone": "+919900000088",
-                    "contact_email": "careers@apexstaffing.in",
-                    "status": Listing.Status.PUBLISHED,
-                    "moderation_status": Listing.ModerationStatus.APPROVED,
-                    "published_at": now,
-                    "expires_at": now + timedelta(days=30),
+                    "is_premium": False,
                     "structured_fields": {
                         "role_type": "Full Time",
                         "salary_range": "₹8,00,000 - ₹14,00,000 / year",
                         "experience_years": "3+ years",
                         "shift": "Day Shift",
                     },
+                    "moderation_reason": "Initial demo listing seed.",
                 },
-            )
-            if created:
-                ListingModerationEvent.objects.create(
-                    listing=listing,
-                    actor=demo_user,
-                    action=ListingModerationEvent.Action.PUBLISHED,
-                    reason="Initial demo listing seed.",
+                {
+                    "title": "Lead QA Engineer — Featured",
+                    "description": (
+                        "Featured premium placement demo. Hire a Lead QA Engineer for "
+                        "automation (Playwright/pytest) and release quality ownership."
+                    ),
+                    "location_text": "Hyderabad / Hybrid",
+                    "is_premium": True,
+                    "structured_fields": {
+                        "role_type": "Full Time",
+                        "salary_range": "₹12,00,000 - ₹18,00,000 / year",
+                        "experience_years": "5+ years",
+                        "shift": "Day Shift",
+                    },
+                    "moderation_reason": "Demo premium / Featured listing seed.",
+                },
+            ]
+            for demo in demo_listings:
+                listing, created = Listing.objects.get_or_create(
+                    poster=profile,
+                    title=demo["title"],
+                    defaults={
+                        "variant": first_variant,
+                        "description": demo["description"],
+                        "location_text": demo["location_text"],
+                        "contact_phone": "+919900000088",
+                        "contact_email": "careers@apexstaffing.in",
+                        "status": Listing.Status.PUBLISHED,
+                        "moderation_status": Listing.ModerationStatus.APPROVED,
+                        "is_premium": demo["is_premium"],
+                        "published_at": now,
+                        "expires_at": now + timedelta(days=30),
+                        "structured_fields": demo["structured_fields"],
+                    },
                 )
-                self.stdout.write(self.style.SUCCESS(f"Created demo listing: {listing.title}"))
+                if not created:
+                    listing.description = demo["description"]
+                    listing.location_text = demo["location_text"]
+                    listing.status = Listing.Status.PUBLISHED
+                    listing.moderation_status = Listing.ModerationStatus.APPROVED
+                    listing.is_premium = demo["is_premium"]
+                    listing.published_at = listing.published_at or now
+                    listing.expires_at = now + timedelta(days=30)
+                    listing.structured_fields = demo["structured_fields"]
+                    listing.save(
+                        update_fields=(
+                            "description",
+                            "location_text",
+                            "status",
+                            "moderation_status",
+                            "is_premium",
+                            "published_at",
+                            "expires_at",
+                            "structured_fields",
+                            "updated_at",
+                        )
+                    )
+                if created:
+                    ListingModerationEvent.objects.create(
+                        listing=listing,
+                        actor=demo_user,
+                        action=ListingModerationEvent.Action.PUBLISHED,
+                        reason=demo["moderation_reason"],
+                    )
+                badge = " [Featured]" if listing.is_premium else ""
+                self.stdout.write(
+                    self.style.SUCCESS(
+                        f"{'Created' if created else 'Updated'} demo listing: {listing.title}{badge}"
+                    )
+                )
+
+            # Older smoke draft that was premium-but-unpublished — make it visible too.
+            smoke = Listing.objects.filter(poster=profile, title="Smoke Premium Role").first()
+            if smoke is not None and (
+                smoke.status != Listing.Status.PUBLISHED or not smoke.is_premium
+            ):
+                smoke.status = Listing.Status.PUBLISHED
+                smoke.moderation_status = Listing.ModerationStatus.APPROVED
+                smoke.is_premium = True
+                smoke.published_at = smoke.published_at or now
+                smoke.expires_at = now + timedelta(days=30)
+                smoke.save(
+                    update_fields=(
+                        "status",
+                        "moderation_status",
+                        "is_premium",
+                        "published_at",
+                        "expires_at",
+                        "updated_at",
+                    )
+                )
+                self.stdout.write(
+                    self.style.SUCCESS("Published existing smoke premium listing for demo.")
+                )
 
         self.stdout.write(self.style.SUCCESS("seed_listing_catalog completed successfully."))

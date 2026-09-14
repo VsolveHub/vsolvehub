@@ -95,6 +95,8 @@ describe("SiteHeader", () => {
     render(<SiteHeader />, { wrapper });
 
     expect(screen.getByRole("link", { name: "Services" })).toBeInTheDocument();
+    // Career/Jobs is public listing browse — not gated like Bookings.
+    expect(screen.getByRole("link", { name: "Careers" })).toHaveAttribute("href", "/listings");
     // The anonymous cart is a real product surface. Hiding it from a visitor who
     // has already put something in it would be absurd.
     expect(screen.getAllByRole("link", { name: /basket/i })[0]).toBeInTheDocument();

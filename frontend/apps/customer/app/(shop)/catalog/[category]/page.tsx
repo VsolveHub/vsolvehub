@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import { Skeleton } from "@vsolve/ui";
 import { ChevronLeft } from "lucide-react";
 
 import { CategoryTileBrowser } from "@/features/catalog/components/category-tile-browser";
 import { getCategory, getCategoryServices } from "@/features/catalog/queries";
+import { isCareerJobsCategory, LISTINGS_HREF } from "@/lib/routes";
 
 type PageProps = {
   params: Promise<{ category: string }>;
@@ -15,6 +16,7 @@ type PageProps = {
 
 /**
  * One trade, opened directly on the service list (first tile when none is selected).
+ * Career/Jobs (A10) redirects to the listing surface — not area-priced bookables.
  */
 export const revalidate = 300;
 
@@ -24,6 +26,12 @@ export function generateStaticParams(): { category: string }[] {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { category: slug } = await params;
+  if (isCareerJobsCategory(slug)) {
+    return {
+      title: "Career & job openings",
+      alternates: { canonical: LISTINGS_HREF },
+    };
+  }
   const category = await getCategory(slug);
 
   if (!category) return { title: "Category not found" };
@@ -67,6 +75,12 @@ async function CategoryServices({ slug, tile }: { slug: string; tile: string | n
 
 export default async function CategoryPage({ params, searchParams }: PageProps) {
   const [{ category: slug }, { tile }] = await Promise.all([params, searchParams]);
+
+  // A10 Career/Jobs: catalogue taxonomy entry → listing browse (plan: career-jobs → /listings).
+  if (isCareerJobsCategory(slug)) {
+    redirect(LISTINGS_HREF);
+  }
+
   const category = await getCategory(slug);
 
   if (!category) notFound();

@@ -105,6 +105,43 @@ export const REQUESTS_HREF = "/requests";
 export const BROWSE_HREF = "/catalog";
 
 /**
+ * Career/Jobs (A10_LISTING) catalog slug — taxonomy only, not an area-priced
+ * bookable category. Public discovery is the listing surface, never cart/book.
+ */
+export const CAREER_JOBS_CATEGORY_SLUG = "career-jobs";
+
+/** Customer Career/Jobs browse (published listings, apply, applications). */
+export const LISTINGS_HREF = "/listings";
+
+/** Whether a catalog category slug is the A10 Career/Jobs entry. */
+export function isCareerJobsCategory(categorySlug: string): boolean {
+  return categorySlug === CAREER_JOBS_CATEGORY_SLUG;
+}
+
+/**
+ * Public listing browse. Optional `service` slug is a soft filter hint for the
+ * listings UI when arriving from a catalog service deep-link.
+ */
+export function listingsBrowseHref(serviceSlug?: string): string {
+  if (serviceSlug === undefined || serviceSlug === "") return LISTINGS_HREF;
+  return `${LISTINGS_HREF}?service=${encodeURIComponent(serviceSlug)}`;
+}
+
+/**
+ * Where opening a catalog category goes.
+ *
+ * Career/Jobs must land on `/listings` — the catalogue tile browser only shows
+ * area-priced bookables and would otherwise empty-state A10 as "nothing on sale".
+ */
+export function catalogCategoryHref(categorySlug: string, tileSlug?: string): string {
+  if (isCareerJobsCategory(categorySlug)) return LISTINGS_HREF;
+  if (tileSlug !== undefined && tileSlug !== "") {
+    return `/catalog/${categorySlug}?tile=${encodeURIComponent(tileSlug)}`;
+  }
+  return `/catalog/${categorySlug}`;
+}
+
+/**
  * The A3 preset — `Book a crew` at the published day rate (revision 4).
  *
  * A **static** `book` segment beside the existing `new` one, deliberately: the

@@ -3,6 +3,7 @@ import { EmptyState, buttonStyles } from "@vsolve/ui";
 
 import type { CatalogSearchResults } from "../search";
 import { ServiceRow } from "./service-row";
+import { catalogCategoryHref } from "@/lib/routes";
 
 /**
  * What `/catalog?q=…` renders.
@@ -84,7 +85,7 @@ export function SearchResults({
             {categories.map((category) => (
               <li key={category.id}>
                 <Link
-                  href={`/catalog/${category.slug}`}
+                  href={catalogCategoryHref(category.slug)}
                   className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-4 py-2 text-sm font-bold text-navy-900 transition-colors duration-fast hover:border-navy-300 hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
                 >
                   {category.name}

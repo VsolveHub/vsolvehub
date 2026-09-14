@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 
 import { getCategories, getCategoryServices } from "@/features/catalog/queries";
+import { catalogCategoryHref, isCareerJobsCategory, LISTINGS_HREF } from "@/lib/routes";
 
 /**
  * Sitemap for the public catalog.
@@ -8,6 +9,8 @@ import { getCategories, getCategoryServices } from "@/features/catalog/queries";
  * Generated from the API rather than a hand-maintained list, so a service
  * published in Operations is discoverable without a code change — and a service
  * that is withdrawn stops being advertised.
+ *
+ * Career/Jobs (A10) advertises `/listings`, not area-priced catalogue URLs.
  *
  * If the API is unreachable the sitemap degrades to the static routes instead of
  * failing the request. A 500 here teaches a crawler the sitemap is unreliable;
@@ -24,13 +27,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticRoutes: MetadataRoute.Sitemap = [
     { url: `${SITE_URL}/`, lastModified: now, changeFrequency: "weekly", priority: 1 },
     { url: `${SITE_URL}/catalog`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
+    { url: `${SITE_URL}${LISTINGS_HREF}`, lastModified: now, changeFrequency: "daily", priority: 0.85 },
   ];
 
   try {
     const categories = await getCategories();
 
     const categoryRoutes: MetadataRoute.Sitemap = categories.map((category) => ({
-      url: `${SITE_URL}/catalog/${category.slug}`,
+      url: `${SITE_URL}${catalogCategoryHref(category.slug)}`,
       lastModified: now,
       changeFrequency: "weekly",
       priority: 0.8,
@@ -38,6 +42,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
     const serviceLists = await Promise.all(
       categories.map(async (category) => {
+        // A10 roles are not bookable service detail pages — one listings URL covers them.
+        if (isCareerJobsCategory(category.slug)) return [];
         const services = (await getCategoryServices(category.slug)) ?? [];
         return services.map((service) => ({
           url: `${SITE_URL}/catalog/${category.slug}/${service.slug}`,
