@@ -61,6 +61,7 @@ export default function StayReservationDetailPage() {
   const [showCancelModal, setShowCancelModal] = useState<boolean>(false);
   const [cancelReason, setCancelReason] = useState<string>("Change of plans");
   const [cancelling, setCancelling] = useState<boolean>(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
 
   const [showExtendModal, setShowExtendModal] = useState<boolean>(false);
   const [extensionNights, setExtensionNights] = useState<number>(3);
@@ -73,15 +74,18 @@ export default function StayReservationDetailPage() {
   } | null>(null);
   const [quoting, setQuoting] = useState<boolean>(false);
   const [confirmingExtension, setConfirmingExtension] = useState<boolean>(false);
+  const [extensionError, setExtensionError] = useState<string | null>(null);
 
   const [showEarlyCheckoutModal, setShowEarlyCheckoutModal] = useState<boolean>(false);
   const [earlyCheckoutDate, setEarlyCheckoutDate] = useState<string>("");
   const [earlyCheckoutReason, setEarlyCheckoutReason] = useState<string>("Schedule change");
   const [earlyCheckingOut, setEarlyCheckingOut] = useState<boolean>(false);
+  const [earlyCheckoutError, setEarlyCheckoutError] = useState<string | null>(null);
 
   const [showDisputeModal, setShowDisputeModal] = useState<boolean>(false);
   const [disputeReason, setDisputeReason] = useState<string>("");
   const [disputing, setDisputing] = useState<boolean>(false);
+  const [disputeError, setDisputeError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!reservationId) return;
@@ -123,13 +127,14 @@ export default function StayReservationDetailPage() {
   const handleCancelReservation = async () => {
     if (!reservation) return;
     setCancelling(true);
+    setCancelError(null);
     try {
       const updated = await cancelStayReservation(reservation.id, cancelReason);
       setReservation(updated);
       setShowCancelModal(false);
       showToast("Reservation successfully cancelled. Refunds initiated per policy.");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to cancel reservation.");
+      setCancelError(err instanceof Error ? err.message : "Failed to cancel reservation.");
     } finally {
       setCancelling(false);
     }
@@ -139,11 +144,12 @@ export default function StayReservationDetailPage() {
   const handleQuoteExtension = async () => {
     if (!reservation) return;
     setQuoting(true);
+    setExtensionError(null);
     try {
       const quote = await requestStayExtension(reservation.id, extensionNights, extensionMonths);
       setExtensionQuote(quote);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "No availability for requested extension period.");
+      setExtensionError(err instanceof Error ? err.message : "No availability for requested extension period.");
     } finally {
       setQuoting(false);
     }
@@ -153,6 +159,7 @@ export default function StayReservationDetailPage() {
   const handleConfirmExtension = async () => {
     if (!extensionQuote) return;
     setConfirmingExtension(true);
+    setExtensionError(null);
     try {
       const updated = await confirmStayExtension(extensionQuote.extension_id);
       setReservation(updated);
@@ -160,7 +167,7 @@ export default function StayReservationDetailPage() {
       setExtensionQuote(null);
       showToast("Stay extension confirmed! Your check-out date is updated.");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to confirm extension.");
+      setExtensionError(err instanceof Error ? err.message : "Failed to confirm extension.");
     } finally {
       setConfirmingExtension(false);
     }
@@ -170,6 +177,7 @@ export default function StayReservationDetailPage() {
   const handleEarlyCheckout = async () => {
     if (!reservation) return;
     setEarlyCheckingOut(true);
+    setEarlyCheckoutError(null);
     try {
       const dateToUse = earlyCheckoutDate || new Date().toISOString().split("T")[0];
       const updated = await earlyCheckoutStay(reservation.id, dateToUse, earlyCheckoutReason);
@@ -177,7 +185,7 @@ export default function StayReservationDetailPage() {
       setShowEarlyCheckoutModal(false);
       showToast("Early check-out recorded. Host notified for inspection.");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to record early checkout.");
+      setEarlyCheckoutError(err instanceof Error ? err.message : "Failed to record early checkout.");
     } finally {
       setEarlyCheckingOut(false);
     }
@@ -187,15 +195,29 @@ export default function StayReservationDetailPage() {
   const handleDisputeDamage = async () => {
     if (!reservation || !disputeReason.trim()) return;
     setDisputing(true);
+    setDisputeError(null);
     try {
       const updated = await disputeStayDamage(reservation.id, disputeReason);
       setReservation(updated);
       setShowDisputeModal(false);
       showToast("Dispute opened. Operations team will review and resolve within 48h.");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to dispute damage.");
+      setDisputeError(err instanceof Error ? err.message : "Failed to dispute damage.");
     } finally {
       setDisputing(false);
+    }
+  };
+
+  // Deposit status → human-readable label
+  const depositStatusLabel = (status?: string): string => {
+    switch (status) {
+      case "HELD_IN_ESCROW": return "Safely Held in Escrow";
+      case "REFUNDED": return "Refunded to Account";
+      case "PARTIALLY_REFUNDED": return "Partially Refunded";
+      case "DEDUCTED": return "Deduction Applied";
+      case "DISPUTED": return "Under Ops Review";
+      case "SETTLED": return "Settled";
+      default: return status ?? "Held in Escrow";
     }
   };
 
@@ -316,34 +338,16 @@ export default function StayReservationDetailPage() {
           </div>
         )}
 
-        {/* Action Toolbar */}
+        {/* Action Toolbar — primary CTAs first, destructive actions de-emphasized */}
         {!isCancelled && (
           <div className="mt-6 flex flex-wrap items-center gap-3">
-            {reservation.receipt_url && (
-              <a
-                href={`${PUBLIC_API_BASE_URL}${reservation.receipt_url}`}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-xl border border-line bg-white px-4 py-2 text-xs font-bold text-navy-900 shadow-2xs hover:bg-warm-50"
-              >
-                <Download className="h-3.5 w-3.5" /> Download receipt
-              </a>
-            )}
-            {isConfirmed && (
-              <button
-                onClick={() => setShowCancelModal(true)}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-red-300 bg-red-50/50 hover:bg-red-100/80 px-4 py-2 text-xs font-bold text-red-700 transition-colors shadow-2xs"
-              >
-                <XCircle className="h-3.5 w-3.5 text-red-500" /> Cancel Reservation
-              </button>
-            )}
-
+            {/* Primary actions */}
             {(isConfirmed || isInStay) && (
               <button
                 onClick={() => setShowExtendModal(true)}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-line bg-white hover:bg-warm-50 px-4 py-2 text-xs font-bold text-navy-900 transition-colors shadow-2xs"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-action px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-signal-400 transition-colors"
               >
-                <CalendarPlus className="h-3.5 w-3.5 text-action" /> Extend Stay
+                <CalendarPlus className="h-3.5 w-3.5" /> Extend Stay
               </button>
             )}
 
@@ -356,6 +360,17 @@ export default function StayReservationDetailPage() {
               </button>
             )}
 
+            {reservation.receipt_url && (
+              <a
+                href={`${PUBLIC_API_BASE_URL}${reservation.receipt_url}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-line bg-white px-4 py-2 text-xs font-bold text-navy-900 shadow-2xs hover:bg-warm-50"
+              >
+                <Download className="h-3.5 w-3.5" /> Download receipt
+              </a>
+            )}
+
             {reservation.deposit?.status === "DISPUTED" ? (
               <span className="inline-flex items-center gap-1.5 rounded-xl bg-purple-50 border border-purple-200 px-3.5 py-1.5 text-xs font-bold text-purple-800">
                 <ShieldAlert className="h-3.5 w-3.5 text-purple-600" /> Dispute Under Ops Review
@@ -366,78 +381,105 @@ export default function StayReservationDetailPage() {
                   onClick={() => setShowDisputeModal(true)}
                   className="inline-flex items-center gap-1.5 rounded-xl border border-line bg-white hover:bg-warm-50 px-4 py-2 text-xs font-bold text-neutral-700 transition-colors shadow-2xs"
                 >
-                  <ShieldAlert className="h-3.5 w-3.5 text-amber-600" /> Dispute Deposit Deductions
+                  <ShieldAlert className="h-3.5 w-3.5 text-amber-600" /> Dispute Deposit
                 </button>
               )
+            )}
+
+            {/* Destructive — visually de-emphasized, placed last */}
+            {isConfirmed && (
+              <button
+                onClick={() => setShowCancelModal(true)}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-white hover:bg-red-50 px-4 py-2 text-xs font-semibold text-red-600 transition-colors shadow-2xs ml-auto"
+              >
+                <XCircle className="h-3.5 w-3.5 text-red-400" /> Cancel
+              </button>
             )}
           </div>
         )}
 
-        {/* Step 14: Stay Lifecycle Timeline */}
+        {/* Step 14: Stay Lifecycle Timeline — connected horizontal step indicator */}
         <div className="mt-6 rounded-2xl border border-neutral-200/80 bg-white p-6 shadow-xs">
-          <h2 className="text-sm font-extrabold text-neutral-900 uppercase tracking-wider">
+          <h2 className="text-sm font-extrabold text-neutral-900 uppercase tracking-wider mb-8">
             Stay Timeline & Verification
           </h2>
-          <div className="mt-6 grid grid-cols-1 sm:grid-cols-4 gap-4 relative">
-            <div className={`rounded-xl border p-3.5 ${isCancelled ? "bg-red-50 border-red-200" : "bg-emerald-50 border-emerald-200 text-emerald-800"}`}>
-              <div className="flex items-center gap-2 text-xs font-bold">
-                {isCancelled ? <XCircle className="h-4 w-4 text-red-600" /> : <CheckCircle2 className="h-4 w-4 text-emerald-600" />}
-                {isCancelled ? "Cancelled" : "1. Confirmed"}
-              </div>
-              <p className="mt-1 text-[11px] text-neutral-600">
-                {isCancelled ? "Hold released & refunded" : "Payment captured & unit reserved"}
-              </p>
-            </div>
 
-            <div
-              className={`rounded-xl border p-3.5 ${
-                reservation.status === "CHECKED_IN" || reservation.status === "IN_STAY"
-                  ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-                  : "bg-warm-50 border-line text-text-secondary"
-              }`}
-            >
-              <div className="flex items-center gap-2 text-xs font-bold">
-                <DoorOpen className="h-4 w-4 text-action" /> 2. ID Check-In
-              </div>
-              <p className="mt-1 text-[11px] text-text-muted">
-                {reservation.status === "CHECKED_IN" || reservation.status === "IN_STAY"
-                  ? "Identity verified & keys received"
-                  : "Show Govt ID to Host at check-in"}
-              </p>
-            </div>
+          {/* Step connector row */}
+          {(() => {
+            const step1Done = !isCancelled;
+            const step2Done = reservation.status === "CHECKED_IN" || reservation.status === "IN_STAY" || isCompleted || isEarlyCheckout;
+            const step3Done = reservation.status === "IN_STAY" || isCompleted || isEarlyCheckout;
+            const step4Done = isCompleted;
+            const steps = [
+              {
+                num: 1,
+                label: isCancelled ? "Cancelled" : "Confirmed",
+                sub: isCancelled ? "Hold released & refunded" : "Payment captured & unit reserved",
+                done: step1Done,
+                icon: isCancelled ? XCircle : CheckCircle2,
+                iconColor: isCancelled ? "text-red-500" : "text-emerald-500",
+                circleClass: isCancelled ? "border-red-400 bg-red-50" : "border-emerald-500 bg-emerald-50",
+              },
+              {
+                num: 2,
+                label: "ID Check-In",
+                sub: step2Done ? "Identity verified & keys received" : "Show Govt ID to host at arrival",
+                done: step2Done,
+                icon: DoorOpen,
+                iconColor: step2Done ? "text-emerald-500" : "text-neutral-400",
+                circleClass: step2Done ? "border-emerald-500 bg-emerald-50" : "border-neutral-300 bg-neutral-50",
+              },
+              {
+                num: 3,
+                label: "In Stay",
+                sub: `${reservation.start_date} → ${reservation.end_date}`,
+                done: step3Done,
+                icon: Users,
+                iconColor: step3Done ? "text-action" : "text-neutral-400",
+                circleClass: step3Done ? "border-action bg-signal-50" : "border-neutral-300 bg-neutral-50",
+              },
+              {
+                num: 4,
+                label: "Deposit Return",
+                sub: step4Done ? "Deposit settled post-inspection" : "Inspection & return at checkout",
+                done: step4Done,
+                icon: ShieldCheck,
+                iconColor: step4Done ? "text-emerald-500" : "text-neutral-400",
+                circleClass: step4Done ? "border-emerald-500 bg-emerald-50" : "border-neutral-300 bg-neutral-50",
+              },
+            ];
+            return (
+              <div className="relative flex items-start justify-between">
+                {/* Connector line behind circles */}
+                <div className="absolute top-5 left-[calc(12.5%)] right-[calc(12.5%)] h-0.5 bg-neutral-200 z-0" />
 
-            <div
-              className={`rounded-xl border p-3.5 ${
-                reservation.status === "IN_STAY"
-                  ? "bg-signal-50 border-signal-200 text-signal-700 font-bold"
-                  : "bg-warm-50 border-line text-text-secondary"
-              }`}
-            >
-              <div className="flex items-center gap-2 text-xs font-bold">
-                <Users className="h-4 w-4 text-action" /> 3. In Stay
+                {steps.map((step, idx) => {
+                  const Icon = step.icon;
+                  return (
+                    <div key={idx} className="relative z-10 flex flex-col items-center flex-1 text-center px-1">
+                      <div
+                        className={`flex h-10 w-10 items-center justify-center rounded-full border-2 shadow-2xs ${
+                          step.circleClass
+                        }`}
+                      >
+                        <Icon className={`h-4.5 w-4.5 ${step.iconColor}`} />
+                      </div>
+                      <span
+                        className={`mt-2 text-[11px] font-extrabold ${
+                          step.done ? "text-neutral-900" : "text-neutral-400"
+                        }`}
+                      >
+                        {step.label}
+                      </span>
+                      <span className="mt-0.5 text-[10px] text-neutral-500 leading-snug max-w-[100px]">
+                        {step.sub}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
-              <p className="mt-1 text-[11px] text-neutral-500">
-                {reservation.start_date} to {reservation.end_date}
-              </p>
-            </div>
-
-            <div
-              className={`rounded-xl border p-3.5 ${
-                isCompleted
-                  ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-                  : "bg-neutral-50 border-neutral-200 text-neutral-600"
-              }`}
-            >
-              <div className="flex items-center gap-2 text-xs font-bold">
-                <ShieldCheck className="h-4 w-4 text-amber-600" /> 4. Deposit Return
-              </div>
-              <p className="mt-1 text-[11px] text-neutral-500">
-                {reservation.deposit?.status === "REFUNDED"
-                  ? "Deposit returned safely"
-                  : "Inspection & return at checkout"}
-              </p>
-            </div>
-          </div>
+            );
+          })()}
         </div>
 
         {/* Details Grid */}
@@ -576,7 +618,7 @@ export default function StayReservationDetailPage() {
                   <ShieldCheck className="h-4 w-4 text-amber-600" /> Security Deposit
                 </h3>
                 <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-extrabold text-amber-800">
-                  {reservation.deposit?.status || "HELD_IN_ESCROW"}
+                  {depositStatusLabel(reservation.deposit?.status)}
                 </span>
               </div>
               <div className="mt-3 text-xl font-black text-amber-900">
@@ -647,6 +689,13 @@ export default function StayReservationDetailPage() {
                 <option value="Other">Other</option>
               </select>
             </div>
+
+            {cancelError && (
+              <div className="mt-3 rounded-xl bg-red-50 border border-red-200 p-3 text-xs text-red-700 flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+                <span>{cancelError}</span>
+              </div>
+            )}
 
             <div className="mt-6 flex justify-end gap-2">
               <button
@@ -723,6 +772,13 @@ export default function StayReservationDetailPage() {
                 />
               </div>
             </div>
+
+            {extensionError && (
+              <div className="mt-3 rounded-xl bg-red-50 border border-red-200 p-3 text-xs text-red-700 flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+                <span>{extensionError}</span>
+              </div>
+            )}
 
             {!extensionQuote ? (
               <div className="mt-5 flex justify-end gap-2">
@@ -831,6 +887,13 @@ export default function StayReservationDetailPage() {
               />
             </div>
 
+            {earlyCheckoutError && (
+              <div className="mt-3 rounded-xl bg-red-50 border border-red-200 p-3 text-xs text-red-700 flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+                <span>{earlyCheckoutError}</span>
+              </div>
+            )}
+
             <div className="mt-6 flex justify-end gap-2">
               <button
                 type="button"
@@ -886,6 +949,13 @@ export default function StayReservationDetailPage() {
                 className="w-full rounded-xl border border-line p-2 text-xs text-neutral-800 focus:outline-action"
               />
             </div>
+
+            {disputeError && (
+              <div className="mt-3 rounded-xl bg-red-50 border border-red-200 p-3 text-xs text-red-700 flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+                <span>{disputeError}</span>
+              </div>
+            )}
 
             <div className="mt-6 flex justify-end gap-2">
               <button

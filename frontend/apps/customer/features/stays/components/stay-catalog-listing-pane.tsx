@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   BadgeCheck,
+  BedDouble,
   Calendar,
   ChevronLeft,
   ChevronRight,
@@ -15,6 +16,7 @@ import {
   SlidersHorizontal,
   Tag,
   X,
+  Zap,
 } from "lucide-react";
 import {
   fetchStayBrowse,
@@ -41,14 +43,138 @@ interface StayCatalogListingPaneProps {
 }
 
 const TRUST_BADGES = [
-  { label: "Verified Properties", icon: ShieldCheck },
-  { label: "On-time Service", icon: Clock },
-  { label: "Transparent Pricing", icon: Tag },
-  { label: "Secure & Safe", icon: Lock },
-  { label: "Satisfaction Guarantee", icon: BadgeCheck },
+  { label: "Verified Properties", icon: ShieldCheck, color: "text-emerald-600 bg-emerald-50 border-emerald-100" },
+  { label: "On-time Service", icon: Clock, color: "text-blue-600 bg-blue-50 border-blue-100" },
+  { label: "Transparent Pricing", icon: Tag, color: "text-amber-600 bg-amber-50 border-amber-100" },
+  { label: "Secure & Safe", icon: Lock, color: "text-purple-600 bg-purple-50 border-purple-100" },
+  { label: "Satisfaction Guarantee", icon: BadgeCheck, color: "text-rose-600 bg-rose-50 border-rose-100" },
 ];
 
-const ITEMS_PER_PAGE = 6;
+const ITEMS_PER_PAGE = 9;
+
+// ─── Styled date dropdowns ────────────────────────────────────────────────────
+
+const MONTHS = [
+  { short: "Jan", num: 1 }, { short: "Feb", num: 2 }, { short: "Mar", num: 3 },
+  { short: "Apr", num: 4 }, { short: "May", num: 5 }, { short: "Jun", num: 6 },
+  { short: "Jul", num: 7 }, { short: "Aug", num: 8 }, { short: "Sep", num: 9 },
+  { short: "Oct", num: 10 }, { short: "Nov", num: 11 }, { short: "Dec", num: 12 },
+];
+
+function daysInMonth(month: number, year: number): number {
+  return new Date(year, month, 0).getDate();
+}
+
+function isoToDateParts(iso: string): { day: number; month: number; year: number } | null {
+  if (!iso) return null;
+  const [yStr, mStr, dStr] = iso.split("-");
+  const y = parseInt(yStr, 10), m = parseInt(mStr, 10), d = parseInt(dStr, 10);
+  if (isNaN(y) || isNaN(m) || isNaN(d)) return null;
+  return { day: d, month: m, year: y };
+}
+
+function datePartsToIso(day: number, month: number, year: number): string {
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function StyledDateSelect({
+  label,
+  value,
+  onChange,
+  min,
+  disabled,
+}: {
+  label: string;
+  value: string;
+  onChange: (iso: string) => void;
+  min?: string;
+  disabled?: boolean;
+}) {
+  const parts = isoToDateParts(value);
+  const minParts = min ? isoToDateParts(min) : null;
+  const today = new Date();
+  const currentYear = today.getFullYear();
+  const years = Array.from({ length: 3 }, (_, i) => currentYear + i);
+
+  const day = parts?.day ?? today.getDate();
+  const month = parts?.month ?? today.getMonth() + 1;
+  const year = parts?.year ?? currentYear;
+  const maxDay = daysInMonth(month, year);
+
+  const update = (d: number, m: number, y: number) => {
+    const clamped = Math.min(d, daysInMonth(m, y));
+    onChange(datePartsToIso(clamped, m, y));
+  };
+
+  const selectClass = "appearance-none bg-transparent text-[11px] font-bold text-navy-900 focus:outline-none cursor-pointer";
+
+  return (
+    <div className={`flex flex-col gap-0.5 ${disabled ? "opacity-50 pointer-events-none" : ""}`}>
+      <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">{label}</span>
+      <div className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 shadow-2xs">
+        <select
+          value={month}
+          onChange={(e) => update(day, parseInt(e.target.value, 10), year)}
+          className={selectClass}
+          aria-label={`${label} month`}
+        >
+          {MONTHS.map(({ short, num }) => {
+            const isDisabled = minParts
+              ? year < minParts.year || (year === minParts.year && num < minParts.month)
+              : false;
+            return <option key={num} value={num} disabled={isDisabled}>{short}</option>;
+          })}
+        </select>
+        <span className="text-gray-300 font-medium text-[11px]">/</span>
+        <select
+          value={day}
+          onChange={(e) => update(parseInt(e.target.value, 10), month, year)}
+          className={selectClass}
+          aria-label={`${label} day`}
+        >
+          {Array.from({ length: maxDay }, (_, i) => i + 1).map((d) => {
+            const isDisabled = minParts
+              ? year < minParts.year ||
+                (year === minParts.year && month < minParts.month) ||
+                (year === minParts.year && month === minParts.month && d < minParts.day)
+              : false;
+            return <option key={d} value={d} disabled={isDisabled}>{String(d).padStart(2, "0")}</option>;
+          })}
+        </select>
+        <span className="text-gray-300 font-medium text-[11px]">/</span>
+        <select
+          value={year}
+          onChange={(e) => update(day, month, parseInt(e.target.value, 10))}
+          className={selectClass}
+          aria-label={`${label} year`}
+        >
+          {years.map((y) => <option key={y} value={y}>{y}</option>)}
+        </select>
+        <Calendar className="ml-1 size-3 text-gray-400 shrink-0 pointer-events-none" />
+      </div>
+    </div>
+  );
+}
+
+// ─── Night/month duration summary pill ───────────────────────────────────────
+
+function DateRangeSummary({ startDate, endDate, isHotelTile }: { startDate: string; endDate: string; isHotelTile: boolean }) {
+  if (!startDate || !endDate) return null;
+  const diffMs = new Date(`${endDate}T12:00:00`).getTime() - new Date(`${startDate}T12:00:00`).getTime();
+  if (diffMs <= 0) return null;
+  const nights = Math.round(diffMs / 86_400_000);
+  if (isHotelTile) {
+    return <span className="rounded-full bg-navy-900 px-3 py-0.5 text-[11px] font-bold text-white">{nights} night{nights !== 1 ? "s" : ""}</span>;
+  }
+  const months = Math.round(nights / 30);
+  return (
+    <span className="rounded-full bg-navy-900 px-3 py-0.5 text-[11px] font-bold text-white">
+      {months >= 1 ? `~${months} month${months !== 1 ? "s" : ""}` : `${nights} day${nights !== 1 ? "s" : ""}`}
+    </span>
+  );
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
 
 export function StayCatalogListingPane({
   categorySlug,
@@ -92,6 +218,9 @@ export function StayCatalogListingPane({
   const [units, setUnits] = useState<StayBrowseUnitCard[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Pill container ref (for overflow fade)
+  const pillsRef = useRef<HTMLDivElement>(null);
 
   // Reset all filters and clear query parameters from browser address bar
   const handleResetAllFilters = () => {
@@ -285,6 +414,9 @@ export function StayCatalogListingPane({
     { id: "metro", label: "Near Metro" },
   ];
 
+  // Dynamic result scope label
+  const localityScope = drawerLocality ? `in ${drawerLocality}` : activePill !== "all" ? "matching your filters" : null;
+
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* Scrollable Container */}
@@ -313,58 +445,71 @@ export function StayCatalogListingPane({
                 `Comfortable private and shared ${activeTile.name.toLowerCase()} with flexible stays.`}
             </p>
 
-            {/* Trust Badges */}
-            <ul className="mt-3.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 list-none p-0">
+            {/* Trust Badges — pill style with colored icon */}
+            <ul className="mt-3.5 flex flex-wrap items-center gap-2 list-none p-0">
               {TRUST_BADGES.map((b) => (
-                <li key={b.label} className="flex items-center gap-1.5 text-[11px] font-semibold text-navy-800">
-                  <b.icon className="size-3.5 text-[#1e50b3]" strokeWidth={2} />
+                <li
+                  key={b.label}
+                  className="flex items-center gap-1.5 rounded-full bg-white border border-gray-200 px-3 py-1 text-[11px] font-semibold text-navy-800 shadow-2xs"
+                >
+                  <span className={`flex items-center justify-center rounded-full w-4 h-4 border ${b.color}`}>
+                    <b.icon className="size-2.5" strokeWidth={2.5} />
+                  </span>
                   <span>{b.label}</span>
                 </li>
               ))}
             </ul>
           </div>
 
-          {/* Promotional Banner Card */}
-          <div className="relative shrink-0 overflow-hidden rounded-2xl bg-gradient-to-r from-blue-900 via-navy-900 to-indigo-900 p-4 text-white shadow-sm w-full lg:w-72 h-24 flex items-center justify-between">
-            <div className="relative z-10 min-w-0 pr-3">
-              <p className="text-xs font-black tracking-wide leading-snug">
-                Find your perfect stay
-              </p>
-              <p className="mt-1 text-[10px] text-gray-300 font-medium">
-                Safe. Affordable. Comfortable.
-              </p>
+          {/* Promotional Banner Card — pure CSS gradient, no external image */}
+          <div className="relative shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br from-navy-900 via-indigo-900 to-purple-900 p-5 text-white shadow-md w-full lg:w-72 h-28 flex items-center gap-4">
+            {/* decorative rings */}
+            <div className="absolute -right-6 -top-6 h-28 w-28 rounded-full border-[14px] border-white/10 pointer-events-none" />
+            <div className="absolute -right-10 -bottom-8 h-36 w-36 rounded-full border-[12px] border-white/5 pointer-events-none" />
+            <div className="relative z-10 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 border border-white/20 backdrop-blur-xs">
+              <BedDouble className="h-6 w-6 text-white" />
             </div>
-            <img
-              src="https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?w=300&auto=format&fit=crop&q=80"
-              alt=""
-              className="absolute inset-y-0 right-0 w-28 h-full object-cover opacity-60 mix-blend-luminosity"
-            />
+            <div className="relative z-10 min-w-0">
+              <p className="text-sm font-black leading-snug">Find your perfect stay</p>
+              <p className="mt-1 text-xs text-indigo-200 font-medium">Safe · Affordable · Comfortable</p>
+              <div className="mt-1.5 flex items-center gap-1">
+                <Zap className="h-3 w-3 text-amber-400 fill-amber-400" />
+                <span className="text-[10px] font-bold text-amber-300">Zero brokerage guaranteed</span>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* 3. Filter Pills Row */}
+        {/* 3. Filter Pills Row — with right fade overflow indicator */}
         <div className="mt-4 flex items-center justify-between gap-3 border-t border-b border-gray-100 py-3.5">
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar scroll-smooth pb-0.5">
-            {filterPills.map((pill) => {
-              const isActive = activePill === pill.id;
-              return (
-                <button
-                  key={pill.id}
-                  type="button"
-                  onClick={() => {
-                    setActivePill(pill.id);
-                    setCurrentPage(1);
-                  }}
-                  className={`inline-flex items-center justify-center rounded-full px-4 py-1.5 text-xs transition-all whitespace-nowrap cursor-pointer ${
-                    isActive
-                      ? "bg-navy-900 text-white font-bold shadow-xs"
-                      : "bg-white border border-gray-200/90 text-gray-700 hover:border-gray-300 font-medium hover:bg-gray-50"
-                  }`}
-                >
-                  {pill.label}
-                </button>
-              );
-            })}
+          <div className="relative flex-1 min-w-0">
+            {/* fade mask — signals scrollable overflow to the right */}
+            <div className="pointer-events-none absolute right-0 top-0 h-full w-10 bg-gradient-to-l from-white to-transparent z-10" />
+            <div
+              ref={pillsRef}
+              className="flex items-center gap-1.5 overflow-x-auto no-scrollbar scroll-smooth pb-0.5"
+            >
+              {filterPills.map((pill) => {
+                const isActive = activePill === pill.id;
+                return (
+                  <button
+                    key={pill.id}
+                    type="button"
+                    onClick={() => {
+                      setActivePill(pill.id);
+                      setCurrentPage(1);
+                    }}
+                    className={`inline-flex items-center justify-center rounded-full px-4 py-1.5 text-xs transition-all whitespace-nowrap cursor-pointer ${
+                      isActive
+                        ? "bg-navy-900 text-white font-bold shadow-xs"
+                        : "bg-white border border-gray-200/90 text-gray-700 hover:border-gray-300 font-medium hover:bg-gray-50"
+                    }`}
+                  >
+                    {pill.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Filters Button */}
@@ -378,45 +523,41 @@ export function StayCatalogListingPane({
           </button>
         </div>
 
-        {/* Date Selection Bar */}
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-orange-50/40 border border-orange-100 px-4 py-2.5 text-xs">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-1.5 font-bold text-navy-900">
-              <Calendar className="size-4 text-[#f87000]" />
-              <span>Stay Dates:</span>
-            </div>
+        {/* Date Selection Bar — styled month/day/year dropdowns */}
+        <div className="mt-3 flex flex-wrap items-end justify-between gap-4 rounded-xl bg-orange-50/40 border border-orange-100 px-4 py-3 text-xs">
+          <div className="flex flex-wrap items-end gap-3">
+            <StyledDateSelect
+              label="Check-in"
+              value={startDate}
+              onChange={(iso) => {
+                setStartDate(iso);
+                if (endDate <= iso) {
+                  const bumped = new Date(`${iso}T12:00:00`);
+                  bumped.setDate(bumped.getDate() + (isHotelTile ? 1 : 30));
+                  setEndDate(bumped.toISOString().slice(0, 10));
+                }
+                setCurrentPage(1);
+              }}
+              min={new Date().toISOString().slice(0, 10)}
+            />
 
-            <div className="flex items-center gap-2">
-              <label className="flex items-center gap-1 text-[11px] text-gray-600 font-medium">
-                Check-in:
-                <input
-                  type="date"
-                  min={new Date().toISOString().slice(0, 10)}
-                  value={startDate}
-                  onChange={(e) => {
-                    setStartDate(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs font-semibold text-navy-900 focus:outline-none focus:ring-1 focus:ring-navy-900"
-                />
-              </label>
+            <span className="text-gray-400 font-bold text-base mb-1">→</span>
 
-              <span className="text-gray-400">→</span>
+            <StyledDateSelect
+              label="Check-out"
+              value={endDate}
+              onChange={(iso) => {
+                setEndDate(iso);
+                setCurrentPage(1);
+              }}
+              min={startDate}
+            />
 
-              <label className="flex items-center gap-1 text-[11px] text-gray-600 font-medium">
-                Check-out:
-                <input
-                  type="date"
-                  min={startDate || new Date().toISOString().slice(0, 10)}
-                  value={endDate}
-                  onChange={(e) => {
-                    setEndDate(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs font-semibold text-navy-900 focus:outline-none focus:ring-1 focus:ring-navy-900"
-                />
-              </label>
-            </div>
+            {startDate && endDate && (
+              <div className="mb-0.5">
+                <DateRangeSummary startDate={startDate} endDate={endDate} isHotelTile={isHotelTile} />
+              </div>
+            )}
 
             {startDate && endDate && (
               <button
@@ -426,18 +567,18 @@ export function StayCatalogListingPane({
                   setEndDate(defaultStayEndDate({ hotel: isHotelTile }));
                   setCurrentPage(1);
                 }}
-                className="text-[11px] font-bold text-red-600 hover:text-red-700 underline cursor-pointer ml-1"
+                className="text-[11px] font-bold text-red-600 hover:text-red-700 underline cursor-pointer mb-0.5"
               >
                 Reset Dates
               </button>
             )}
           </div>
 
-          {(activePill !== "all" || drawerLocality || drawerMaxPrice < 100000 || drawerSharing || drawerMinCapacity > 0 || startDate || endDate) && (
+          {(activePill !== "all" || drawerLocality || drawerMaxPrice < 100000 || drawerSharing || drawerMinCapacity > 0) && (
             <button
               type="button"
               onClick={handleResetAllFilters}
-              className="inline-flex items-center gap-1 text-xs font-bold text-[#b84814] hover:text-[#f87000] cursor-pointer"
+              className="inline-flex items-center gap-1 text-xs font-bold text-[#b84814] hover:text-[#f87000] cursor-pointer mb-0.5"
             >
               <RotateCcw className="size-3" />
               <span>Reset All Filters</span>
@@ -449,7 +590,8 @@ export function StayCatalogListingPane({
         <div className="mt-4 mb-5 flex items-center justify-between text-xs text-gray-500 font-medium">
           <p>
             Showing <strong className="text-navy-900 font-bold">{totalItems}</strong>{" "}
-            {totalItems === 1 ? "property" : "properties"} in Hyderabad
+            {totalItems === 1 ? "property" : "properties"}
+            {localityScope ? ` ${localityScope}` : ""}
           </p>
 
           <div className="flex items-center gap-2">
@@ -470,7 +612,7 @@ export function StayCatalogListingPane({
         {/* 5. Main Property Listings Grid */}
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-            {Array.from({ length: 6 }).map((_, idx) => (
+            {Array.from({ length: 9 }).map((_, idx) => (
               <div
                 key={idx}
                 className="h-80 rounded-2xl border border-gray-100 bg-white p-4 shadow-xs animate-pulse flex flex-col justify-between"
@@ -719,32 +861,24 @@ export function StayCatalogListingPane({
                 />
               </div>
 
-              {/* Check-In / Check-Out Dates */}
+              {/* Check-In / Check-Out Dates in drawer — styled selects */}
               <div className="mt-5">
-                <label className="block text-xs font-bold text-navy-900 uppercase tracking-wider">
+                <label className="block text-xs font-bold text-navy-900 uppercase tracking-wider mb-3">
                   Check-in / Check-out Dates
                 </label>
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  <div>
-                    <span className="text-[10px] text-gray-500 font-medium">Move-in</span>
-                    <input
-                      type="date"
-                      min={new Date().toISOString().slice(0, 10)}
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                      className="mt-1 w-full rounded-xl border border-gray-200 p-2 text-xs text-navy-900 focus:outline-none focus:ring-1 focus:ring-navy-900"
-                    />
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-gray-500 font-medium">Move-out</span>
-                    <input
-                      type="date"
-                      min={startDate || new Date().toISOString().slice(0, 10)}
-                      value={endDate}
-                      onChange={(e) => setEndDate(e.target.value)}
-                      className="mt-1 w-full rounded-xl border border-gray-200 p-2 text-xs text-navy-900 focus:outline-none focus:ring-1 focus:ring-navy-900"
-                    />
-                  </div>
+                <div className="space-y-3">
+                  <StyledDateSelect
+                    label="Move-in"
+                    value={startDate}
+                    onChange={(iso) => setStartDate(iso)}
+                    min={new Date().toISOString().slice(0, 10)}
+                  />
+                  <StyledDateSelect
+                    label="Move-out"
+                    value={endDate}
+                    onChange={(iso) => setEndDate(iso)}
+                    min={startDate}
+                  />
                 </div>
               </div>
             </div>
