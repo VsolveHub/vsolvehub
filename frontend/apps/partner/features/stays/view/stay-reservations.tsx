@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   AlertCircle,
   ArrowRight,
@@ -24,7 +25,6 @@ import {
   Mail,
   MapPin,
   MessageSquare,
-  MoreVertical,
   Phone,
   Plane,
   Plus,
@@ -39,6 +39,7 @@ import {
   X,
 } from "lucide-react";
 
+import { formatMoney } from "@vsolve/ui";
 import {
   usePartnerStayReservations,
   usePartnerCheckIn,
@@ -52,8 +53,11 @@ import {
   type StayReservationLineItem,
 } from "@/features/stays/queries";
 
+// Thin wrapper so every call site keeps using formatPaise (paise is the
+// unit stored everywhere) while the actual currency formatting lives in one
+// place: @vsolve/ui's formatMoney (locale grouping, paise-only-when-needed).
 function formatPaise(paise: number): string {
-  return "₹" + (paise / 100).toLocaleString("en-IN");
+  return formatMoney(paise);
 }
 
 interface DisplayReservation {
@@ -86,7 +90,7 @@ interface DisplayReservation {
   check_out?: StayCheckOutInfo;
 }
 
-type TabKey = "ALL" | "NEEDS_ACTION" | "ARRIVALS" | "IN_STAY" | "COMPLETED";
+type TabKey = "ALL" | "NEEDS_ACTION" | "ARRIVALS" | "IN_STAY" | "COMPLETED" | "NEEDS_REASSIGNMENT";
 
 function toPartnerItem(res: DisplayReservation, allRes: PartnerReservationItem[]): PartnerReservationItem {
   const real = allRes.find((item) => item.id === res.id);
@@ -98,12 +102,21 @@ function toPartnerItem(res: DisplayReservation, allRes: PartnerReservationItem[]
    MAIN COMPONENT: StayReservations
    ========================================================================= */
 export function StayReservations() {
+  const searchParams = useSearchParams();
+  const propertyParam = searchParams?.get("property") ?? null;
+
   const [activeTab, setActiveTab] = useState<TabKey>("ALL");
   const { data: reservations, isLoading, isError, error } = usePartnerStayReservations();
 
   // Filter Bar state
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedProperty, setSelectedProperty] = useState("ALL");
+  const [selectedProperty, setSelectedProperty] = useState(propertyParam ?? "ALL");
+
+  // A "View Reservations" link from the Properties tab arrives with
+  // ?property=<id> — pick that filter up once the property list loads.
+  useEffect(() => {
+    if (propertyParam) setSelectedProperty(propertyParam);
+  }, [propertyParam]);
   const [selectedStatus, setSelectedStatus] = useState("ALL");
   const [sortBy, setSortBy] = useState("RECENT");
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -126,6 +139,7 @@ export function StayReservations() {
       else if (r.status === "CHECKED_IN" || r.status === "IN_STAY") statusDisplay = "In-Stay";
       else if (r.status === "INSPECTED") statusDisplay = "Inspected";
       else if (r.status === "CHECKED_OUT" || r.status === "COMPLETED") statusDisplay = "Completed";
+      else if (r.status === "RECOVERY_REQUIRED") statusDisplay = "Needs Reassignment (Ops)";
 
       return {
         id: r.id,
@@ -162,8 +176,9 @@ export function StayReservations() {
   // Counts for metric cards and tabs
   const totalCount = displayReservations.length;
   const needsActionCount = displayReservations.filter(
-    (r) => r.status === "CONFIRMED" || r.status === "INSPECTED" || r.status === "DISPUTED",
+    (r) => r.status === "CONFIRMED" || r.status === "INSPECTED" || r.status === "DISPUTED" || r.status === "RECOVERY_REQUIRED",
   ).length;
+  const recoveryCount = displayReservations.filter((r) => r.status === "RECOVERY_REQUIRED").length;
   const arrivalsCount = displayReservations.filter(
     (r) => r.status === "CONFIRMED",
   ).length;
@@ -174,13 +189,23 @@ export function StayReservations() {
     (r) => r.status === "CHECKED_OUT" || r.status === "COMPLETED" || r.status === "SETTLED",
   ).length;
 
+  const propertyOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const r of displayReservations) {
+      if (r.property_id && !seen.has(r.property_id)) seen.set(r.property_id, r.property_title);
+    }
+    return Array.from(seen.entries()).map(([id, title]) => ({ id, title }));
+  }, [displayReservations]);
+
   // Filtered reservations
   const filteredReservations = useMemo(() => {
     return displayReservations.filter((res) => {
       // Tab matching
       if (activeTab === "NEEDS_ACTION") {
-        if (!(res.status === "CONFIRMED" || res.status === "INSPECTED" || res.status === "DISPUTED"))
+        if (!(res.status === "CONFIRMED" || res.status === "INSPECTED" || res.status === "DISPUTED" || res.status === "RECOVERY_REQUIRED"))
           return false;
+      } else if (activeTab === "NEEDS_REASSIGNMENT") {
+        if (res.status !== "RECOVERY_REQUIRED") return false;
       } else if (activeTab === "ARRIVALS") {
         if (res.status !== "CONFIRMED") return false;
       } else if (activeTab === "IN_STAY") {
@@ -200,15 +225,19 @@ export function StayReservations() {
 
       // Property matching
       const matchProperty =
-        selectedProperty === "ALL" || res.property_title.includes(selectedProperty);
+        selectedProperty === "ALL" || res.property_id === selectedProperty;
 
       // Status matching
       const matchStatus =
         selectedStatus === "ALL" || res.status === selectedStatus;
 
       return matchSearch && matchProperty && matchStatus;
+    }).sort((a, b) => {
+      if (sortBy === "AMOUNT") return b.total_amount_paise - a.total_amount_paise;
+      if (sortBy === "ARRIVAL") return a.start_date.localeCompare(b.start_date);
+      return b.start_date.localeCompare(a.start_date); // RECENT
     });
-  }, [displayReservations, activeTab, searchQuery, selectedProperty, selectedStatus]);
+  }, [displayReservations, activeTab, searchQuery, selectedProperty, selectedStatus, sortBy]);
 
   const handleCopyId = (id: string, displayId: string) => {
     navigator.clipboard?.writeText(id);
@@ -453,6 +482,24 @@ export function StayReservations() {
           >
             Completed &amp; Past
           </button>
+
+          {recoveryCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setActiveTab("NEEDS_REASSIGNMENT")}
+              className={`pb-3 transition-colors flex items-center gap-1.5 shrink-0 ${
+                activeTab === "NEEDS_REASSIGNMENT"
+                  ? "border-b-2 border-red-500 text-red-700 font-black"
+                  : "text-neutral-500 hover:text-neutral-900"
+              }`}
+              title="Bookings whose room became unavailable and are waiting on Operations to reassign a replacement"
+            >
+              <span>Needs Reassignment</span>
+              <span className="rounded-full bg-red-100 text-red-800 px-2 py-0.2 text-[10px] font-black">
+                {recoveryCount}
+              </span>
+            </button>
+          )}
         </div>
 
         {/* =========================================================================
@@ -481,9 +528,11 @@ export function StayReservations() {
               className="w-full appearance-none bg-transparent pr-6 text-xs font-bold text-neutral-800 focus:outline-none cursor-pointer py-1"
             >
               <option value="ALL">All Properties</option>
-              <option value="Zolo">Zolo Stay Co-Living</option>
-              <option value="Urban Nest">Urban Nest Studio</option>
-              <option value="Independent House">Independent House</option>
+              {propertyOptions.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.title}
+                </option>
+              ))}
             </select>
             <ChevronDown className="pointer-events-none absolute top-2 right-0 h-3.5 w-3.5 text-neutral-400" />
           </div>
@@ -502,24 +551,15 @@ export function StayReservations() {
               <option value="CHECKED_IN">In-Stay</option>
               <option value="INSPECTED">Inspected</option>
               <option value="CHECKED_OUT">Checked Out</option>
+              <option value="DISPUTED">Disputed</option>
+              <option value="RECOVERY_REQUIRED">Needs Reassignment</option>
             </select>
             <ChevronDown className="pointer-events-none absolute top-2 right-0 h-3.5 w-3.5 text-neutral-400" />
           </div>
 
           <div className="h-6 w-px bg-neutral-200 hidden md:block" />
 
-          {/* Filter 3: Select Date Range */}
-          <button
-            type="button"
-            className="flex items-center gap-1.5 px-2 py-1 text-xs font-bold text-neutral-700 hover:text-neutral-900 transition-colors"
-          >
-            <Calendar className="h-3.5 w-3.5 text-neutral-500" />
-            <span>Select Date Range</span>
-          </button>
-
-          <div className="h-6 w-px bg-neutral-200 hidden md:block" />
-
-          {/* Filter 4: Sort by */}
+          {/* Sort by */}
           <div className="relative min-w-[130px] ml-auto">
             <div className="flex items-center gap-1.5">
               <span className="text-[11px] text-neutral-400">Sort by</span>
@@ -587,6 +627,8 @@ export function StayReservations() {
                             ? "bg-emerald-50 text-emerald-700 border border-emerald-200/60"
                             : res.status === "CONFIRMED"
                             ? "bg-blue-50 text-blue-700 border border-blue-200/60"
+                            : res.status === "RECOVERY_REQUIRED"
+                            ? "bg-red-50 text-red-700 border border-red-200/60"
                             : "bg-neutral-100 text-neutral-700 border border-neutral-200"
                         }`}
                       >
@@ -618,13 +660,6 @@ export function StayReservations() {
                       ) : (
                         <Copy className="h-3.5 w-3.5" />
                       )}
-                    </button>
-                    <button
-                      type="button"
-                      className="text-neutral-400 hover:text-neutral-700 transition-colors p-0.5 ml-1"
-                      title="More Options"
-                    >
-                      <MoreVertical className="h-4 w-4" />
                     </button>
                   </div>
 
@@ -771,7 +806,7 @@ export function StayReservations() {
 /* =========================================================================
    CHECK-IN MODAL
    ========================================================================= */
-function CheckInModal({
+export function CheckInModal({
   reservation,
   onClose,
 }: {
@@ -984,7 +1019,7 @@ function CheckInModal({
 /* =========================================================================
    CHECK-OUT MODAL
    ========================================================================= */
-function CheckOutModal({
+export function CheckOutModal({
   reservation,
   onClose,
 }: {
@@ -1100,6 +1135,11 @@ function CheckOutModal({
               />
               <p className="mt-1 text-[11px] text-neutral-500">
                 Amount to deduct from guest deposit (up to authorized limit).
+              </p>
+              <p className="mt-1.5 rounded-lg bg-amber-50 border border-amber-200 p-2 text-[11px] text-amber-800">
+                This deduction applies as soon as you submit check-out. If the guest disputes it,
+                Operations will review the evidence and settle it independently — that review
+                requires two different Operations reviewers to agree before anything changes.
               </p>
             </div>
           )}
@@ -1658,24 +1698,28 @@ function GuestDetailsDrawer({
             </div>
 
             <div className="mt-4 space-y-2.5 text-xs">
-              <div className="flex items-center justify-between py-1 text-neutral-600">
-                <span>Room Charges &amp; Rent</span>
-                <span className="font-bold text-neutral-900">
-                  {formatPaise(reservation.total_amount_paise - (reservation.deposit_paise || 0) * 0.2)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between py-1 text-neutral-600">
-                <span>Maintenance &amp; High-Speed Wi-Fi</span>
-                <span className="font-bold text-neutral-900">{formatPaise(200000)}</span>
-              </div>
-              <div className="flex items-center justify-between py-1 text-neutral-600">
-                <span>One-Time Agreement &amp; Verification</span>
-                <span className="font-bold text-neutral-900">{formatPaise(100000)}</span>
-              </div>
-              <div className="flex items-center justify-between py-1 text-neutral-600">
-                <span>GST (Taxes)</span>
-                <span className="font-bold text-neutral-900">{formatPaise(100000)}</span>
-              </div>
+              {/* Wave U2 (Django_Next.js_Plan/M3/07-a9-stays-ux-overhaul-plan.md):
+                  render the reservation's real itemized lines instead of the
+                  fabricated Maintenance/Agreement/GST figures that used to be
+                  hardcoded here regardless of the actual booking. Falls back to
+                  a single total row only if the API returned no line items. */}
+              {reservation.lines && reservation.lines.length > 0 ? (
+                reservation.lines
+                  .filter((line) => line.kind !== "SECURITY_DEPOSIT")
+                  .map((line) => (
+                    <div key={line.id} className="flex items-center justify-between py-1 text-neutral-600">
+                      <span>{line.description}</span>
+                      <span className="font-bold text-neutral-900">{formatPaise(line.amount_paise)}</span>
+                    </div>
+                  ))
+              ) : (
+                <div className="flex items-center justify-between py-1 text-neutral-600">
+                  <span>Booking Total</span>
+                  <span className="font-bold text-neutral-900">
+                    {formatPaise(reservation.total_amount_paise)}
+                  </span>
+                </div>
+              )}
 
               <div className="pt-2 border-t border-neutral-200/70 flex items-center justify-between text-sm">
                 <span className="font-black text-neutral-900">Total Booking Value</span>

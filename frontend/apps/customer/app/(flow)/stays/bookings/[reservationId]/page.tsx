@@ -39,12 +39,19 @@ import {
   confirmStayExtension,
   earlyCheckoutStay,
   disputeStayDamage,
+  fetchPaymentAttempt,
+  simulateStayPayment,
   type StayReservationDetail,
 } from "@/features/stays/queries";
+import { handoffTarget, openProviderCheckout } from "@/features/payment/model/provider-handoff";
 import { PUBLIC_API_BASE_URL } from "@/lib/api/config";
+import { formatMoney } from "@vsolve/ui";
 
+// Thin wrapper so every call site keeps using formatPaise (paise is the
+// unit stored everywhere) while the actual currency formatting lives in one
+// place: @vsolve/ui's formatMoney (locale grouping, paise-only-when-needed).
 function formatPaise(paise: number): string {
-  return "₹" + (paise / 100).toLocaleString("en-IN");
+  return formatMoney(paise);
 }
 
 export default function StayReservationDetailPage() {
@@ -156,12 +163,41 @@ export default function StayReservationDetailPage() {
   };
 
   // 2b. Confirm Extension Handler
+  //
+  // Wave U3: this used to call confirmStayExtension() and treat its response
+  // as the finished reservation. That endpoint only *initiates* payment
+  // (returns a PaymentAttempt) -- the extension is applied only once that
+  // payment is captured (see queries.ts's confirmStayExtension doc comment).
+  // This now runs the same capture-and-poll pattern the checkout page uses.
   const handleConfirmExtension = async () => {
-    if (!extensionQuote) return;
+    if (!extensionQuote || !reservation) return;
     setConfirmingExtension(true);
     setExtensionError(null);
     try {
-      const updated = await confirmStayExtension(extensionQuote.extension_id);
+      let attempt = await confirmStayExtension(extensionQuote.extension_id);
+      if (attempt.simulated_capture_available) {
+        attempt = await simulateStayPayment(attempt.id);
+      } else {
+        const target = handoffTarget(attempt);
+        if (!target) throw new Error("This payment cannot be opened. Please contact support.");
+        await openProviderCheckout(target, { businessName: "Vsolve Hub" });
+      }
+      let captured = false;
+      for (let i = 0; i < 20; i += 1) {
+        attempt = await fetchPaymentAttempt(attempt.id);
+        if (attempt.status === "CAPTURED" || attempt.status === "PARTIALLY_REFUNDED") {
+          captured = true;
+          break;
+        }
+        if (attempt.status === "FAILED" || attempt.status === "EXPIRED" || attempt.status === "REFUNDED") {
+          throw new Error(`Extension payment ended with status ${attempt.status}.`);
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 1500));
+      }
+      if (!captured) {
+        throw new Error("Extension payment confirmation is still pending. Reopen this booking shortly.");
+      }
+      const updated = await fetchStayReservation(reservation.id);
       setReservation(updated);
       setShowExtendModal(false);
       setExtensionQuote(null);
@@ -180,6 +216,11 @@ export default function StayReservationDetailPage() {
     setEarlyCheckoutError(null);
     try {
       const dateToUse = earlyCheckoutDate || new Date().toISOString().split("T")[0];
+      if (dateToUse < reservation.start_date || dateToUse > reservation.end_date) {
+        throw new Error(
+          `Departure date must be between your check-in (${reservation.start_date}) and your originally scheduled check-out (${reservation.end_date}).`,
+        );
+      }
       const updated = await earlyCheckoutStay(reservation.id, dateToUse, earlyCheckoutReason);
       setReservation(updated);
       setShowEarlyCheckoutModal(false);
@@ -816,6 +857,10 @@ export default function StayReservationDetailPage() {
                     </div>
                   )}
                 </div>
+                <p className="mt-2 text-[11px] text-neutral-500">
+                  You will be asked to pay this amount now to confirm the extension — nothing is
+                  charged until you complete that payment step.
+                </p>
 
                 <div className="mt-4 flex justify-end gap-2">
                   <button
@@ -831,7 +876,7 @@ export default function StayReservationDetailPage() {
                     onClick={handleConfirmExtension}
                     className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
                   >
-                    {confirmingExtension ? "Confirming..." : "Confirm & Pay Extension"}
+                    {confirmingExtension ? "Processing payment…" : "Pay & confirm extension"}
                   </button>
                 </div>
               </div>
@@ -868,10 +913,16 @@ export default function StayReservationDetailPage() {
               </label>
               <input
                 type="date"
+                min={reservation.start_date}
+                max={reservation.end_date}
                 value={earlyCheckoutDate}
                 onChange={(e) => setEarlyCheckoutDate(e.target.value)}
                 className="w-full rounded-xl border border-line p-2 text-xs text-neutral-800"
               />
+              <p className="mt-1 text-[10px] text-neutral-400">
+                Must fall between your check-in ({reservation.start_date}) and your originally
+                scheduled check-out ({reservation.end_date}).
+              </p>
             </div>
 
             <div className="mt-3">

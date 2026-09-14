@@ -17,9 +17,13 @@ import {
 } from "lucide-react";
 
 import { usePartnerStayMoney } from "@/features/stays/queries";
+import { formatMoney } from "@vsolve/ui";
 
+// Thin wrapper so every call site keeps using formatPaise (paise is the
+// unit stored everywhere) while the actual currency formatting lives in one
+// place: @vsolve/ui's formatMoney (locale grouping, paise-only-when-needed).
 function formatPaise(paise: number): string {
-  return "₹" + (paise / 100).toLocaleString("en-IN");
+  return formatMoney(paise);
 }
 
 export function StayMoney() {

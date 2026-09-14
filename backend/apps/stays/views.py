@@ -13,6 +13,7 @@ from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.cases.models import OperationsCase, OperationsSettlementApproval
 from apps.commerce.documents.render import DocumentLine, DocumentSpec, render_pdf
 from apps.commerce.serializers import PaymentAttemptSerializer
 from apps.foundation.services import execute_idempotent
@@ -33,6 +34,7 @@ from apps.stays.models import (
     Property,
     PropertyPolicy,
     PropertyVisitRequest,
+    StayDeposit,
     StayExtension,
     StayReservation,
     Unit,
@@ -786,9 +788,17 @@ class PartnerStayMoneyView(APIView):
                 filter=models.Q(status=PartnerLedgerEntry.Status.PAID),
             ),
         )
+        # NOTE (Wave U0/P8, see Django_Next.js_Plan/M3/07-a9-stays-ux-overhaul-plan.md):
+        # StayDeposit.Status.AUTHORIZED is never actually set anywhere in the
+        # deposit lifecycle (services.py only ever transitions REQUIRED -> HELD
+        # -> {PARTIALLY_CONSUMED, FULLY_CONSUMED, RELEASED} or -> DISPUTED ->
+        # RESOLVED). Querying "AUTHORIZED" made this aggregate silently always
+        # miss the live "money currently held" deposits. HELD is the correct
+        # live-escrow status; PARTIALLY_CONSUMED deposits still have a
+        # remaining held balance too.
         deposit_totals = StayReservation.objects.filter(
             unit__property__partner=partner,
-            deposit__status__in=("AUTHORIZED", "PARTIALLY_CONSUMED"),
+            deposit__status__in=(StayDeposit.Status.HELD, StayDeposit.Status.PARTIALLY_CONSUMED),
         ).aggregate(
             authorized=models.Sum("deposit__authorized_amount_paise"),
             consumed=models.Sum("deposit__consumed_amount_paise"),
@@ -1501,32 +1511,82 @@ class OpsStayReservationsView(APIView):
         if status_filter:
             qs = qs.filter(status=status_filter)
 
-        data = [
-            {
-                "id": str(r.id),
-                "property_id": str(r.unit.property.id),
-                "property_title": r.unit.property.title,
-                "property_locality": r.unit.property.locality,
-                "unit_id": str(r.unit.id),
-                "unit_code": r.unit.unit_code,
-                "unit_type_id": str(r.unit_type.id),
-                "unit_type_name": r.unit_type.name,
-                "customer_name": getattr(r.customer, "full_name", "") or "Guest",
-                "customer_phone": getattr(r.customer, "phone_number", ""),
-                "host_name": getattr(r.unit.property.partner.user, "full_name", "") or "Host",
-                "start_date": str(r.start_date),
-                "end_date": str(r.end_date),
-                "status": r.status,
-                "total_amount_paise": r.total_amount_paise,
-                "deposit_amount_paise": r.deposit_amount_paise,
-                "deposit_status": r.deposit.status if hasattr(r, "deposit") else "NONE",
-                "deposit_dispute_reason": r.deposit.dispute_reason if hasattr(r, "deposit") else "",
-                "cancellation_reason": r.cancellation_reason,
-                "notes": r.notes,
-                "created_at": r.created_at.isoformat(),
-            }
-            for r in qs
-        ]
+        # Wave U1 (Django_Next.js_Plan/M3/07-a9-stays-ux-overhaul-plan.md): surface
+        # the maker-checker approval state that already exists on OperationsCase /
+        # OperationsSettlementApproval, so the ops console can distinguish "a
+        # settlement was proposed and needs a *different* operator to approve it"
+        # from "settled" instead of treating both as the same click. This is a
+        # purely additive field on an existing list response -- no field removed
+        # or renamed, no change to the resolve-dispute endpoint's own behavior.
+        open_cases = {
+            case.stay_reservation_id: case
+            for case in OperationsCase.objects.filter(
+                stay_reservation__in=qs,
+                kind=OperationsCase.Kind.STAY_DAMAGE_DISPUTE,
+                status__in=(OperationsCase.Status.OPEN, OperationsCase.Status.IN_PROGRESS),
+            ).select_related("settlement_approval", "settlement_approval__proposed_by")
+        }
+
+        data = []
+        for r in qs:
+            deposit = getattr(r, "deposit", None)
+            case = open_cases.get(r.id)
+            pending_approval = None
+            approval = getattr(case, "settlement_approval", None) if case else None
+            if approval is not None and approval.status == OperationsSettlementApproval.Status.PENDING:
+                pending_approval = {
+                    "proposed_by_id": str(approval.proposed_by_id),
+                    "proposed_by_name": getattr(approval.proposed_by, "full_name", "")
+                    or approval.proposed_by.get_username(),
+                    "proposed_at": approval.proposed_at.isoformat(),
+                    "proposal": approval.proposal,
+                }
+            data.append(
+                {
+                    "id": str(r.id),
+                    "property_id": str(r.unit.property.id),
+                    "property_title": r.unit.property.title,
+                    "property_type": r.unit.property.property_type,
+                    "property_locality": r.unit.property.locality,
+                    "unit_id": str(r.unit.id),
+                    "unit_code": r.unit.unit_code,
+                    "unit_name": r.unit_type.name,
+                    "unit_type_id": str(r.unit_type.id),
+                    "unit_type_name": r.unit_type.name,
+                    "customer_name": getattr(r.customer, "full_name", "") or "Guest",
+                    "customer_phone": getattr(r.customer, "phone_number", ""),
+                    "host_name": getattr(r.unit.property.partner.user, "full_name", "") or "Host",
+                    "start_date": str(r.start_date),
+                    "end_date": str(r.end_date),
+                    "status": r.status,
+                    "duration_mode": r.duration_mode,
+                    "lease_duration_months": r.lease_duration_months,
+                    "guest_count": r.guest_count,
+                    "total_nights": r.total_nights,
+                    "total_amount_paise": r.total_amount_paise,
+                    "deposit_amount_paise": r.deposit_amount_paise,
+                    # Flat fields kept for backward compatibility; `deposit` below
+                    # is the nested shape the ops console's StayDeposit type expects.
+                    "deposit_status": deposit.status if deposit else "NONE",
+                    "deposit_dispute_reason": deposit.dispute_reason if deposit else "",
+                    "deposit": (
+                        {
+                            "id": str(deposit.id),
+                            "status": deposit.status,
+                            "authorized_amount_paise": deposit.authorized_amount_paise,
+                            "consumed_amount_paise": deposit.consumed_amount_paise,
+                            "refunded_amount_paise": deposit.refunded_amount_paise,
+                            "dispute_reason": deposit.dispute_reason,
+                        }
+                        if deposit
+                        else None
+                    ),
+                    "pending_settlement_approval": pending_approval,
+                    "cancellation_reason": r.cancellation_reason,
+                    "notes": r.notes,
+                    "created_at": r.created_at.isoformat(),
+                }
+            )
 
         return Response(data)
 
@@ -1581,7 +1641,15 @@ class OpsStayResolveDisputeView(APIView):
                 status=status.HTTP_200_OK if resolved else status.HTTP_202_ACCEPTED,
             )
         except (StayAuthorizationError, InvalidStayStateTransitionError, ValueError) as err:
-            return Response({"detail": str(err)}, status=status.HTTP_403_FORBIDDEN)
+            # Wave U1: give the self-approval case a stable `code`, mirroring the
+            # apps/payouts SelfApprovalDeniedApiError convention, so the ops
+            # console can show "you proposed this, ask a colleague" instead of a
+            # generic error -- rather than fragile string-matching the message.
+            message = str(err)
+            body: dict[str, Any] = {"detail": message}
+            if message == "A different Operations user must approve this settlement.":
+                body["code"] = "self_approval_denied"
+            return Response(body, status=status.HTTP_403_FORBIDDEN)
 
 
 class PropertyVisitCreateView(APIView):

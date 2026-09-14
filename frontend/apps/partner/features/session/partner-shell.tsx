@@ -442,7 +442,7 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
                     onSignOut={() => logout.mutate()}
                     isPending={logout.isPending}
                     roleLabel={isStay ? "Host" : isRental ? "Rental" : "Partner"}
-                    workspaceLabel={isStay ? "A9 Property Host Workspace" : isRental ? "Rental Partner Workspace" : "Partner Workspace"}
+                    workspaceLabel={isStay ? "Stays Host Workspace" : isRental ? "Rental Partner Workspace" : "Partner Workspace"}
                     moneyHref={isStay ? "/stays/money" : isRental ? "/rentals/money" : "/money"}
                   />
                 </div>

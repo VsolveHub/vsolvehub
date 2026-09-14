@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import Link from "next/link";
+import { ROOM_CLASS_LABELS } from "@vsolve/ui";
 import {
   Building2,
   CalendarCheck,
@@ -177,8 +178,12 @@ export function StayProperties() {
         (selectedStatus === "INACTIVE" && !prop.is_active);
 
       return matchSearch && matchType && matchLocation && matchStatus;
+    }).sort((a, b) => {
+      if (sortBy === "UNITS_HIGH") return b.total_units - a.total_units;
+      if (sortBy === "RATING") return b.rating - a.rating;
+      return 0; // "Recently Added" — keep the backend's own ordering
     });
-  }, [displayProperties, searchQuery, selectedType, selectedLocation, selectedStatus]);
+  }, [displayProperties, searchQuery, selectedType, selectedLocation, selectedStatus, sortBy]);
 
   const totalPropertiesCount = displayProperties.length;
   const totalUnitsCount = displayProperties.reduce((acc, p) => acc + p.total_units, 0);
@@ -1367,7 +1372,7 @@ function ManagePropertyModal({
                   <h4 className="text-xs font-black text-neutral-800 uppercase tracking-wider">
                     Physical Inventory ({currentUnits.length} units)
                   </h4>
-                  <span className="text-[11px] text-neutral-500">PostgreSQL exclusion-guaranteed availability</span>
+                  <span className="text-[11px] text-neutral-500">Live availability — no double-bookings</span>
                 </div>
 
                 {unitsLoading ? (
@@ -1620,7 +1625,7 @@ function ManagePropertyModal({
                         <h5 className="font-extrabold text-xs text-neutral-900">{t.name}</h5>
                         <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700 border border-indigo-200">
                           {t.occupancy_model === "HOTEL_ROOM"
-                            ? t.room_class || (t.occupancy_capacity ? `Sleeps ${t.occupancy_capacity}` : "Hotel room")
+                            ? (t.room_class && ROOM_CLASS_LABELS[t.room_class]) || t.room_class || (t.occupancy_capacity ? `Sleeps ${t.occupancy_capacity}` : "Hotel room")
                             : t.occupancy_model === "ENTIRE_UNIT"
                               ? t.bhk || (t.occupancy_capacity ? `Sleeps ${t.occupancy_capacity}` : "Studio")
                               : t.sharing_display || t.sharing_type}
@@ -1631,7 +1636,7 @@ function ManagePropertyModal({
                           <>
                             {t.room_class && (
                               <span className="rounded bg-neutral-100 px-2 py-0.5 font-medium text-neutral-700">
-                                {t.room_class}
+                                {ROOM_CLASS_LABELS[t.room_class] || t.room_class}
                               </span>
                             )}
                             {t.occupancy_capacity ? (

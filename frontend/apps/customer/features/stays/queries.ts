@@ -364,9 +364,27 @@ export async function requestStayExtension(
   });
 }
 
-export async function confirmStayExtension(extensionId: string): Promise<StayReservationDetail> {
-  return stayRequest<StayReservationDetail>(`/api/v1/stays/extensions/${extensionId}/confirm/`, {
+/**
+ * Wave U3 (Django_Next.js_Plan/M3/07-a9-stays-ux-overhaul-plan.md): this
+ * endpoint only *initiates* the extension's payment and returns a
+ * PaymentAttempt (HTTP 202) -- it does not confirm the extension itself
+ * (see backend/apps/stays/views.py::StayExtensionConfirmView and
+ * services.py::initiate_stay_extension_payment). The reservation is only
+ * actually extended once that payment is captured, which the backend
+ * dispatches automatically via apps/commerce/services/capture.py ->
+ * complete_stay_extension(). This was previously mistyped as returning a
+ * StayReservationDetail and sent no Idempotency-Key header, which the view
+ * requires -- meaning every call failed with a 400 before this fix. Callers
+ * must run the same capture-and-poll flow used at checkout
+ * (fetchPaymentAttempt / simulateStayPayment / openProviderCheckout) and
+ * only then re-fetch the reservation to see the real updated end date.
+ */
+export async function confirmStayExtension(extensionId: string): Promise<PaymentAttempt> {
+  return stayRequest<PaymentAttempt>(`/api/v1/stays/extensions/${extensionId}/confirm/`, {
     method: "POST",
+    headers: {
+      "Idempotency-Key": getStableIdempotencyKey(`stay-extension:${extensionId}`),
+    },
   });
 }
 

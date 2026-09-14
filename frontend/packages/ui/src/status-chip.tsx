@@ -11,6 +11,9 @@ export type StatusCategory =
   | "visit"
   | "privacy"
   | "document"
+  | "stay-reservation"
+  | "stay-deposit"
+  | "stay-extension"
   | "generic";
 
 export interface StatusChipProps {
@@ -155,6 +158,82 @@ const REGISTRY: Record<StatusCategory, {
       uploaded: "Uploaded",
       verified: "Verified",
       rejected: "Rejected",
+    }
+  },
+  "stay-reservation": {
+    tones: {
+      held: "warning",
+      payment_pending: "warning",
+      confirmed: "success",
+      checked_in: "info",
+      in_stay: "info",
+      checked_out: "neutral",
+      inspected: "info",
+      settled: "success",
+      completed: "success",
+      cancelled: "neutral",
+      no_show: "danger",
+      early_checkout: "warning",
+      disputed: "danger",
+      recovery_required: "danger",
+      failed: "danger",
+      expired: "neutral",
+    },
+    labels: {
+      held: "Price locked",
+      payment_pending: "Payment pending",
+      confirmed: "Confirmed",
+      checked_in: "Checked in",
+      in_stay: "In stay",
+      checked_out: "Checked out",
+      inspected: "Inspection in progress",
+      settled: "Settled",
+      completed: "Completed",
+      cancelled: "Cancelled",
+      no_show: "No show",
+      early_checkout: "Early checkout",
+      disputed: "Deposit disputed",
+      recovery_required: "Recovery required",
+      failed: "Failed",
+      expired: "Hold expired",
+    }
+  },
+  "stay-deposit": {
+    tones: {
+      required: "neutral",
+      not_required: "neutral",
+      authorized: "info",
+      held: "info",
+      partially_consumed: "warning",
+      fully_consumed: "warning",
+      released: "success",
+      disputed: "danger",
+      resolved: "success",
+    },
+    labels: {
+      required: "Deposit required",
+      not_required: "No deposit required",
+      authorized: "Deposit authorized",
+      held: "Held in escrow",
+      partially_consumed: "Partially deducted",
+      fully_consumed: "Fully deducted",
+      released: "Refunded",
+      disputed: "Under dispute",
+      resolved: "Resolved",
+    }
+  },
+  "stay-extension": {
+    tones: {
+      pending_payment: "warning",
+      approved: "success",
+      rejected: "danger",
+      cancelled: "neutral",
+    },
+    labels: {
+      pending_payment: "Pending payment",
+      approved: "Approved",
+      rejected: "Rejected",
+      cancelled: "Cancelled",
     }
   },
   generic: {

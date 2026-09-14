@@ -1,10 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import Link from "next/link";
 import {
   Building2,
-  Heart,
   MapPin,
   Wifi,
   Sparkles,
@@ -15,18 +14,13 @@ import {
   Wind,
 } from "lucide-react";
 import type { StayBrowseUnitCard } from "../queries";
+import { occupancyLabel, vacancyLabel, formatMoney } from "@vsolve/ui";
 
-const ROOM_CLASS_LABELS: Record<string, string> = {
-  SINGLE: "Single",
-  DOUBLE: "Double",
-  TWIN: "Twin",
-  DELUXE: "Deluxe",
-  SUITE: "Suite",
-  EXECUTIVE: "Executive",
-};
-
+// Thin wrapper so every call site keeps using formatPaise (paise is the
+// unit stored everywhere) while the actual currency formatting lives in one
+// place: @vsolve/ui's formatMoney (locale grouping, paise-only-when-needed).
 function formatPaise(paise: number): string {
-  return "₹" + (paise / 100).toLocaleString("en-IN");
+  return formatMoney(paise);
 }
 
 function pricePeriodSuffix(mode?: string): string {
@@ -41,17 +35,6 @@ function pricePeriodSuffix(mode?: string): string {
     default:
       return "/mo";
   }
-}
-
-function occupancyLabel(card: StayBrowseUnitCard): string | null {
-  if (card.occupancy_model === "HOTEL_ROOM") {
-    const code = card.room_class || "";
-    return ROOM_CLASS_LABELS[code] || card.room_class || null;
-  }
-  if (card.occupancy_model === "ENTIRE_UNIT") {
-    return card.occupancy_capacity ? `Sleeps ${card.occupancy_capacity}` : null;
-  }
-  return card.sharing_display || null;
 }
 
 function getAmenityIcon(name: string) {
@@ -88,7 +71,6 @@ export function StayPropertyGridCard({
   startDate?: string;
   endDate?: string;
 }) {
-  const [isSaved, setIsSaved] = useState(false);
   const occupancyChip = occupancyLabel(card);
   const isHotel = card.occupancy_model === "HOTEL_ROOM";
 
@@ -99,14 +81,7 @@ export function StayPropertyGridCard({
   const suffix = query.toString() ? `?${query.toString()}` : "";
   const propertyHref = `/stays/property/${card.property_id}${suffix}`;
 
-  const unitsText =
-    card.units_available > 0
-      ? isHotel
-        ? `${card.units_available} room${card.units_available > 1 ? "s" : ""} left`
-        : `${card.units_available} unit${card.units_available > 1 ? "s" : ""} available`
-      : isHotel
-        ? "No rooms left"
-        : "No units available";
+  const unitsText = vacancyLabel(card.units_available, card.occupancy_model);
 
   const isGreenBadge = card.units_available >= 3;
 
@@ -140,20 +115,10 @@ export function StayPropertyGridCard({
             </span>
           </div>
 
-          {/* Heart Button (Top Right) */}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.preventDefault();
-              setIsSaved(!isSaved);
-            }}
-            aria-label={isSaved ? "Remove from saved" : "Save property"}
-            className="absolute top-3 right-3 size-8 rounded-full bg-white/90 backdrop-blur-xs flex items-center justify-center text-gray-400 hover:text-red-500 hover:scale-110 active:scale-95 transition-all shadow-xs"
-          >
-            <Heart
-              className={`size-4 ${isSaved ? "fill-red-500 text-red-500" : "text-gray-600"}`}
-            />
-          </button>
+          {/* Wave U3 (C10): the save/heart toggle used to be local-only state
+              with no backing API -- it looked like a "saved properties"
+              feature that didn't actually exist and reset on every reload.
+              Removed until there's a real endpoint to wire it to. */}
 
           {card.rating > 0 ? (
             <div className="absolute bottom-3 right-3">

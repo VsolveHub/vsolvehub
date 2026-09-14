@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 
 import { getApiClient } from "@/lib/api/browser";
+import { formatMoney } from "@vsolve/ui";
 import {
   usePartnerStayProperties,
   usePartnerStayReservations,
@@ -34,8 +35,11 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+// Thin wrapper so every call site keeps using formatPaise (paise is the
+// unit stored everywhere) while the actual currency formatting lives in one
+// place: @vsolve/ui's formatMoney (locale grouping, paise-only-when-needed).
 function formatPaise(paise: number): string {
-  return "₹" + (paise / 100).toLocaleString("en-IN");
+  return formatMoney(paise);
 }
 
 interface DisplayProperty {
@@ -248,7 +252,7 @@ export function StayHome() {
           <div>
             <div className="inline-flex items-center gap-1.5 rounded-full bg-[#f3f0ff] border border-[#e9d5ff] px-3.5 py-1 text-xs font-semibold text-[#7c3aed]">
               <Building2 className="h-3.5 w-3.5" />
-              <span>A9 Property Host Portal</span>
+              <span>Stays Host Portal</span>
             </div>
             <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-neutral-900 sm:text-4xl">
               Welcome back, {userName}!

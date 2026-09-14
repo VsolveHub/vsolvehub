@@ -29,9 +29,14 @@ import {
   usePartnerStayReservations,
   type PartnerReservationItem,
 } from "@/features/stays/queries";
+import { CheckInModal, CheckOutModal } from "@/features/stays/view/stay-reservations";
+import { formatMoney } from "@vsolve/ui";
 
+// Thin wrapper so every call site keeps using formatPaise (paise is the
+// unit stored everywhere) while the actual currency formatting lives in one
+// place: @vsolve/ui's formatMoney (locale grouping, paise-only-when-needed).
 function formatPaise(paise: number): string {
-  return "₹" + (paise / 100).toLocaleString("en-IN");
+  return formatMoney(paise);
 }
 
 export default function PartnerReservationDetailPage() {
@@ -39,6 +44,8 @@ export default function PartnerReservationDetailPage() {
   const router = useRouter();
   const reservationId = (params?.reservationId as string) || "";
   const [copiedId, setCopiedId] = useState(false);
+  const [showCheckIn, setShowCheckIn] = useState(false);
+  const [showCheckOut, setShowCheckOut] = useState(false);
 
   const { data: reservation, isLoading } = usePartnerStayReservation(reservationId);
   const { data: allReservations } = usePartnerStayReservations();
@@ -196,7 +203,7 @@ export default function PartnerReservationDetailPage() {
             {isAwaitingArrival && (
               <button
                 type="button"
-                onClick={() => router.push("/stays/reservations")}
+                onClick={() => setShowCheckIn(true)}
                 className="rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-indigo-700 transition-colors flex items-center gap-1.5"
               >
                 <DoorOpen className="h-4 w-4" />
@@ -206,7 +213,7 @@ export default function PartnerReservationDetailPage() {
             {isInStay && (
               <button
                 type="button"
-                onClick={() => router.push("/stays/reservations")}
+                onClick={() => setShowCheckOut(true)}
                 className="rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 transition-colors flex items-center gap-1.5"
               >
                 <LogOut className="h-4 w-4" />
@@ -391,24 +398,26 @@ export default function PartnerReservationDetailPage() {
               </div>
 
               <div className="space-y-3 text-xs">
-                <div className="flex items-center justify-between py-1 text-neutral-600">
-                  <span>Room Charges</span>
-                  <span className="font-bold text-neutral-900">
-                    {formatPaise(displayRes.total_amount_paise - (displayRes.deposit_amount_paise || 0) * 0.2)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between py-1 text-neutral-600">
-                  <span>Maintenance &amp; Utilities</span>
-                  <span className="font-bold text-neutral-900">{formatPaise(200000)}</span>
-                </div>
-                <div className="flex items-center justify-between py-1 text-neutral-600">
-                  <span>Agreement &amp; Verification</span>
-                  <span className="font-bold text-neutral-900">{formatPaise(100000)}</span>
-                </div>
-                <div className="flex items-center justify-between py-1 text-neutral-600">
-                  <span>GST (Taxes)</span>
-                  <span className="font-bold text-neutral-900">{formatPaise(100000)}</span>
-                </div>
+                {/* Wave U2: real itemized lines instead of hardcoded Maintenance/
+                    Agreement/GST figures -- see stay-reservations.tsx's
+                    GuestDetailsDrawer for the same fix and its rationale. */}
+                {displayRes.lines && displayRes.lines.length > 0 ? (
+                  displayRes.lines
+                    .filter((line) => line.kind !== "SECURITY_DEPOSIT")
+                    .map((line) => (
+                      <div key={line.id} className="flex items-center justify-between py-1 text-neutral-600">
+                        <span>{line.description}</span>
+                        <span className="font-bold text-neutral-900">{formatPaise(line.amount_paise)}</span>
+                      </div>
+                    ))
+                ) : (
+                  <div className="flex items-center justify-between py-1 text-neutral-600">
+                    <span>Booking Total</span>
+                    <span className="font-bold text-neutral-900">
+                      {formatPaise(displayRes.total_amount_paise)}
+                    </span>
+                  </div>
+                )}
 
                 <div className="pt-3 border-t border-neutral-200 flex items-center justify-between">
                   <span className="text-sm font-black text-neutral-900">Total Booking Value</span>
@@ -441,6 +450,13 @@ export default function PartnerReservationDetailPage() {
           </div>
         </div>
       </div>
+
+      {showCheckIn && (
+        <CheckInModal reservation={displayRes} onClose={() => setShowCheckIn(false)} />
+      )}
+      {showCheckOut && (
+        <CheckOutModal reservation={displayRes} onClose={() => setShowCheckOut(false)} />
+      )}
     </div>
   );
 }

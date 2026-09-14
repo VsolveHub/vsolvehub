@@ -8,11 +8,9 @@ import {
   Building2,
   ChevronLeft,
   Clock,
-  CreditCard,
   Lock,
   MapPin,
   ShieldCheck,
-  Smartphone,
 } from "lucide-react";
 
 import {
@@ -29,6 +27,7 @@ import {
 import { handoffTarget, openProviderCheckout } from "@/features/payment/model/provider-handoff";
 import { useCustomerProfile } from "@/features/account/queries";
 import { useCustomerSession } from "@/features/session/queries";
+import { formatMoney } from "@vsolve/ui";
 import {
   durationModeLabel,
   holdGuestCount,
@@ -42,8 +41,35 @@ import {
   type StayDurationMode,
 } from "@/features/stays/stay-checkout-rules";
 
+// Thin wrapper so every call site keeps using formatPaise (paise is the
+// unit stored everywhere) while the actual currency formatting lives in one
+// place: @vsolve/ui's formatMoney (locale grouping, paise-only-when-needed).
 function formatPaise(paise: number): string {
-  return "₹" + (paise / 100).toLocaleString("en-IN");
+  return formatMoney(paise);
+}
+
+/**
+ * Wave U3 (Django_Next.js_Plan/M3/07-a9-stays-ux-overhaul-plan.md): a rough,
+ * clearly-labeled estimate shown *before* a price hold exists, so the price
+ * card is never empty while a customer is deciding whether to lock a stay
+ * (previously nothing was shown until after the hold, which read as a
+ * bait-and-switch). This is intentionally approximate -- the same
+ * daily-rate x 7 approximation for a weekly estimate already used on the
+ * property page -- and is always labeled "Estimated"; the authoritative
+ * figures still only come from the server once a hold is created below.
+ */
+function estimateTariffPaise(
+  card: StayBrowseUnitCard,
+  mode: StayDurationMode,
+  nights: number,
+): number | null {
+  if (mode === "MONTHLY" && card.monthly_rate_paise) return card.monthly_rate_paise;
+  if (mode === "NIGHTLY" && card.daily_rate_paise) return card.daily_rate_paise * nights;
+  if (mode === "WEEKLY") {
+    if (card.daily_rate_paise) return card.daily_rate_paise * nights;
+    if (card.monthly_rate_paise) return card.monthly_rate_paise;
+  }
+  return card.price_paise || null;
 }
 
 export default function StayCheckoutPage() {
@@ -75,7 +101,6 @@ export default function StayCheckoutPage() {
   const [editingGuest, setEditingGuest] = useState(false);
 
   // Payment Method Selection (Step 12)
-  const [paymentMethod, setPaymentMethod] = useState<"UPI" | "CARD" | "NETBANKING">("UPI");
   const [processing, setProcessing] = useState<boolean>(false);
   const [processError, setProcessError] = useState<string | null>(null);
   const [heldReservation, setHeldReservation] = useState<StayReservationDetail | null>(null);
@@ -172,6 +197,18 @@ export default function StayCheckoutPage() {
   const oneTimeChargesPaise = heldReservation?.one_time_charges_paise ?? null;
   const taxPaise = heldReservation?.tax_amount_paise ?? null;
   const totalPayableNowPaise = heldReservation?.total_amount_paise ?? null;
+
+  // Pre-hold estimate (Wave U3 / C1) -- only used while heldReservation is
+  // null; once a hold exists the real server figures above always win.
+  const estimatedTariffPaise = unitCard
+    ? estimateTariffPaise(unitCard, resolvedDurationMode, nights)
+    : null;
+  const estimatedDepositPaise = unitCard?.deposit_paise ?? null;
+  const estimatedMaintenancePaise = unitCard?.maintenance_paise ?? null;
+  const estimatedTotalPaise =
+    estimatedTariffPaise !== null
+      ? estimatedTariffPaise + (estimatedDepositPaise ?? 0) + (estimatedMaintenancePaise ?? 0)
+      : null;
 
   const waitForCapture = async (initial: Awaited<ReturnType<typeof fetchPaymentAttempt>>) => {
     let current = initial;
@@ -330,7 +367,7 @@ export default function StayCheckoutPage() {
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-action text-white font-black text-xs">
                   1
                 </span>
-                <h2 className="text-base font-black text-navy-900">Move-In Details & Duration</h2>
+                <h2 className="text-base font-black text-navy-900">Check-in Details & Duration</h2>
               </div>
 
               {shouldShowDurationToggle(supportedModes) ? (
@@ -358,7 +395,7 @@ export default function StayCheckoutPage() {
 
               <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-navy-900">From</label>
+                  <label className="block text-xs font-bold text-navy-900">Check-in date</label>
                   <input
                     type="date"
                     required
@@ -375,7 +412,7 @@ export default function StayCheckoutPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-navy-900">To</label>
+                  <label className="block text-xs font-bold text-navy-900">Check-out date</label>
                   <input
                     type="date"
                     required
@@ -413,10 +450,10 @@ export default function StayCheckoutPage() {
               </div>
 
               <div className="mt-4 rounded-xl bg-neutral-50 p-3 text-xs text-neutral-600 flex items-center justify-between">
-                <span>Stay:</span>
+                <span>Check-in {startDate} · Check-out {effectiveEndDate}</span>
                 <strong className="text-neutral-900">
-                  {startDate} → {effectiveEndDate} ({nights} night{nights > 1 ? "s" : ""}
-                  {resolvedDurationMode === "MONTHLY" ? `, ~${leaseMonths} month${leaseMonths > 1 ? "s" : ""}` : ""})
+                  {nights} night{nights > 1 ? "s" : ""}
+                  {resolvedDurationMode === "MONTHLY" ? ` · ~${leaseMonths} month${leaseMonths > 1 ? "s" : ""}` : ""}
                 </strong>
               </div>
             </div>
@@ -477,98 +514,6 @@ export default function StayCheckoutPage() {
               )}
             </div>
 
-            {/* Step 12: Payment Methods */}
-            <div className="rounded-2xl border border-line bg-white p-6 shadow-xs">
-              <div className="flex items-center gap-2 border-b border-line pb-3">
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-action text-white font-black text-xs">
-                  2
-                </span>
-                <h2 className="text-base font-black text-navy-900">3. Select Payment Method</h2>
-              </div>
-
-              <div className="mt-5 space-y-3">
-                {/* UPI Option */}
-                <label
-                  className={`flex items-start gap-3 p-4 rounded-xl border-2 transition-all cursor-pointer ${
-                    paymentMethod === "UPI"
-                      ? "border-action bg-signal-50/20"
-                      : "border-line hover:border-line-strong"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="payMethod"
-                    checked={paymentMethod === "UPI"}
-                    onChange={() => setPaymentMethod("UPI")}
-                    className="mt-1 h-4 w-4 text-action focus:ring-action"
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-xs text-navy-900 flex items-center gap-1.5">
-                        <Smartphone className="h-4 w-4 text-action" /> UPI Instant (GPay / PhonePe / Paytm / BHIM)
-                      </span>
-                      <span className="rounded bg-emerald-100 text-emerald-800 text-[10px] font-extrabold px-1.5 py-0.2">
-                        Fastest
-                      </span>
-                    </div>
-                    <p className="mt-1 text-[11px] text-text-secondary">
-                      Select and authorize your UPI app in the secure payment window.
-                    </p>
-                  </div>
-                </label>
-
-                {/* Credit / Debit Card */}
-                <label
-                  className={`flex items-start gap-3 p-4 rounded-xl border-2 transition-all cursor-pointer ${
-                    paymentMethod === "CARD"
-                      ? "border-action bg-signal-50/20"
-                      : "border-line hover:border-line-strong"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="payMethod"
-                    checked={paymentMethod === "CARD"}
-                    onChange={() => setPaymentMethod("CARD")}
-                    className="mt-1 h-4 w-4 text-action focus:ring-action"
-                  />
-                  <div className="flex-1">
-                    <span className="font-bold text-xs text-navy-900 flex items-center gap-1.5">
-                      <CreditCard className="h-4 w-4 text-warm-600" /> Credit / Debit Card (Visa, MasterCard, RuPay)
-                    </span>
-                    <p className="mt-0.5 text-[11px] text-text-secondary">
-                      Zero convenience fee on domestic debit cards.
-                    </p>
-                  </div>
-                </label>
-
-                {/* Net Banking */}
-                <label
-                  className={`flex items-start gap-3 p-4 rounded-xl border-2 transition-all cursor-pointer ${
-                    paymentMethod === "NETBANKING"
-                      ? "border-action bg-signal-50/20"
-                      : "border-line hover:border-line-strong"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="payMethod"
-                    checked={paymentMethod === "NETBANKING"}
-                    onChange={() => setPaymentMethod("NETBANKING")}
-                    className="mt-1 h-4 w-4 text-action focus:ring-action"
-                  />
-                  <div className="flex-1">
-                    <span className="font-bold text-xs text-navy-900 flex items-center gap-1.5">
-                      <Building2 className="h-4 w-4 text-warm-600" /> Net Banking (All Major Indian Banks)
-                    </span>
-                    <p className="mt-0.5 text-[11px] text-text-secondary">
-                      SBI, HDFC, ICICI, Axis, Kotak, and 50+ banks supported.
-                    </p>
-                  </div>
-                </label>
-              </div>
-            </div>
-
             {/* Escrow Guarantee Banner */}
             <div className="rounded-2xl border border-amber-200/80 bg-amber-50/50 p-4 flex items-start gap-3 text-xs text-amber-900">
               <ShieldCheck className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
@@ -576,8 +521,10 @@ export default function StayCheckoutPage() {
                 <strong className="font-bold block text-neutral-900">Vsolve Deposit Escrow Guarantee</strong>
                 <span>
                   {heldReservation
-                    ? `Your refundable security deposit (${formatPaise(depositPaise ?? 0)}) is held in platform escrow and only released or deducted after checkout inspection.`
-                    : "Any refundable deposit is included when you lock this stay. Nothing is charged until you confirm payment."}
+                    ? `${formatPaise(depositPaise ?? 0)} deposit — refundable after checkout, subject to the stay policy.`
+                    : (estimatedDepositPaise ?? 0) > 0
+                      ? `~${formatPaise(estimatedDepositPaise ?? 0)} deposit — refundable after checkout, subject to the stay policy. Nothing is charged until you confirm payment.`
+                      : "Nothing is charged until you confirm payment."}
                 </span>
               </div>
             </div>
@@ -662,9 +609,47 @@ export default function StayCheckoutPage() {
                       </span>
                     </div>
                   </>
+                ) : estimatedTariffPaise !== null ? (
+                  <>
+                    <p className="rounded-lg bg-warm-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-warm-400">
+                      Estimated — confirmed once you lock this price
+                    </p>
+                    <div className="flex items-center justify-between text-text-secondary">
+                      <span>
+                        {resolvedDurationMode === "MONTHLY"
+                          ? `Lease rent (~${leaseMonths} month${leaseMonths > 1 ? "s" : ""})`
+                          : `Room tariff (${nights} night${nights > 1 ? "s" : ""})`}
+                      </span>
+                      <span className="font-bold text-navy-900">{formatPaise(estimatedTariffPaise)}</span>
+                    </div>
+
+                    {(estimatedMaintenancePaise ?? 0) > 0 && (
+                      <div className="flex items-center justify-between text-text-secondary">
+                        <span>Maintenance</span>
+                        <span className="font-bold text-navy-900">{formatPaise(estimatedMaintenancePaise ?? 0)}</span>
+                      </div>
+                    )}
+
+                    {(estimatedDepositPaise ?? 0) > 0 && (
+                      <div className="flex items-center justify-between text-signal-700 bg-signal-50/50 p-2 rounded-lg border border-signal-200">
+                        <span className="font-semibold">Refundable security deposit</span>
+                        <span className="font-extrabold">{formatPaise(estimatedDepositPaise ?? 0)}</span>
+                      </div>
+                    )}
+
+                    <div className="border-t border-line pt-3 flex items-center justify-between text-sm">
+                      <div>
+                        <span className="font-black text-navy-900 block">Estimated total</span>
+                        <span className="text-[10px] text-text-muted">Taxes added when you lock this price</span>
+                      </div>
+                      <span className="text-xl font-black text-navy-400">
+                        ~{formatPaise(estimatedTotalPaise ?? 0)}
+                      </span>
+                    </div>
+                  </>
                 ) : (
                   <p className="rounded-xl bg-neutral-50 p-3 text-text-secondary leading-relaxed">
-                    Totals appear after you lock this stay. Rent, tax, and deposit are confirmed then — nothing is charged until you pay.
+                    Totals appear after you lock this stay. Nothing is charged until you pay.
                   </p>
                 )}
               </div>
@@ -679,14 +664,14 @@ export default function StayCheckoutPage() {
                   {processing ? (
                     <>
                       <Clock className="h-4 w-4 animate-spin" />
-                      {heldReservation ? "Capturing payment…" : "Locking price…"}
+                      {heldReservation ? "Confirming payment…" : "Locking this price…"}
                     </>
                   ) : (
                     <>
                       <Lock className="h-4 w-4" />
                       {heldReservation && totalPayableNowPaise !== null
-                        ? `Pay ${formatPaise(totalPayableNowPaise)} & Confirm`
-                        : "Lock price"}
+                        ? `Pay & confirm stay — ${formatPaise(totalPayableNowPaise)}`
+                        : "Lock this price"}
                     </>
                   )}
                 </button>

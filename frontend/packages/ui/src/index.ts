@@ -128,6 +128,32 @@ export { Drawer } from "./drawer";
 export type { DrawerProps } from "./drawer";
 export { StatusChip } from "./status-chip";
 export type { StatusChipProps, StatusCategory } from "./status-chip";
+
+// Stays (A9_STAY) shared occupancy-model presentation logic — single source
+// of truth for SHARED/ENTIRE_UNIT/HOTEL_ROOM UI branching across the
+// customer, partner and ops frontends. See stays-occupancy.ts for context.
+export {
+  ROOM_CLASS_LABELS,
+  isoDatePlusDays,
+  defaultStayStartDate,
+  defaultStayEndDate,
+  stayNights,
+  leaseMonthsFromDates,
+  publishedDurationModes,
+  shouldShowDurationToggle,
+  durationModeLabel,
+  shouldShowOccupantPicker,
+  holdGuestCount,
+  occupancyGuestCap,
+  occupancyLabel,
+  vacancyLabel,
+  hideSoldOutStayCards,
+} from "./stays-occupancy";
+export type {
+  StayOccupancyModel,
+  StayDurationMode,
+  OccupancyLabelInput,
+} from "./stays-occupancy";
 export { Tooltip } from "./tooltip";
 export type { TooltipProps } from "./tooltip";
 export { DataTable } from "./data-table";

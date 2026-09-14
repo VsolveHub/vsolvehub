@@ -20,6 +20,10 @@ import {
   Clock,
 } from "lucide-react";
 import { apiFetch } from "@vsolve/api-client";
+import { useCurrentSession } from "@vsolve/query";
+import { durationModeLabel, type StayDurationMode, formatMoney } from "@vsolve/ui";
+
+import { getApiClient } from "@/lib/api/browser";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
@@ -30,6 +34,17 @@ interface StayDeposit {
   consumed_amount_paise: number;
   refunded_amount_paise: number;
   dispute_reason?: string;
+}
+
+interface PendingSettlementApproval {
+  proposed_by_id: string;
+  proposed_by_name: string;
+  proposed_at: string;
+  proposal: {
+    final_consumed_amount_paise: number;
+    refund_deposit: boolean;
+    resolution_notes: string;
+  };
 }
 
 interface StayReservation {
@@ -53,18 +68,43 @@ interface StayReservation {
   unit_code: string;
   host_name: string;
   deposit?: StayDeposit;
+  // Wave U1: set only when a settlement has been proposed by one Operations
+  // user and is waiting on a *different* one to approve the identical
+  // proposal (the backend's own two-person rule -- see
+  // apps/cases/approvals.py::propose_or_approve_settlement). Null once
+  // approved or if no dispute is open.
+  pending_settlement_approval?: PendingSettlementApproval | null;
   created_at: string;
 }
 
+// Thin wrapper so every call site keeps using formatPaise (paise is the
+// unit stored everywhere) while the actual currency formatting lives in one
+// place: @vsolve/ui's formatMoney (locale grouping, paise-only-when-needed).
 function formatPaise(paise: number): string {
-  return "₹" + (paise / 100).toLocaleString("en-IN");
+  return formatMoney(paise);
+}
+
+// Plain-English label for a raw backend status/enum code (e.g. "RECOVERY_REQUIRED"
+// -> "Recovery required"). Ops staff can still infer meaning from the raw enum, but
+// there's no reason to make them -- this is purely cosmetic, the color-coding logic
+// elsewhere is untouched.
+function formatStatusLabel(raw: string): string {
+  const words = raw.toLowerCase().split("_");
+  return words.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
 }
 
 export default function AdminStaysOversightPage() {
+  const session = useCurrentSession(getApiClient());
+  const currentUserId = session.data?.user?.id ?? null;
   const [reservations, setReservations] = useState<StayReservation[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState<string>("");
+  // Wave U1: last resolve-dispute response, so we can show "proposal recorded"
+  // distinctly from "settled" instead of treating a 202 as if it were a 200.
+  const [disputeOutcome, setDisputeOutcome] = useState<
+    { kind: "proposed" } | { kind: "settled" } | { kind: "self-approval-blocked" } | null
+  >(null);
 
   // Reassignment Modal State
   const [reassignReservation, setReassignReservation] = useState<StayReservation | null>(null);
@@ -80,13 +120,22 @@ export default function AdminStaysOversightPage() {
       return;
     }
     setLoadingUnits(true);
-    apiFetch(`${API_BASE}/api/v1/stays/ops/properties/${reassignReservation.property_id}/units/`)
+    // Filter to the reservation's own unit type server-side -- without this,
+    // the picker (and its auto-selected default) could offer any unit in the
+    // property regardless of room configuration, letting Ops reassign a
+    // guest into an incompatible room by accident.
+    const unitTypeQuery = reassignReservation.unit_type_id
+      ? `?unit_type_id=${encodeURIComponent(reassignReservation.unit_type_id)}`
+      : "";
+    apiFetch(
+      `${API_BASE}/api/v1/stays/ops/properties/${reassignReservation.property_id}/units/${unitTypeQuery}`,
+    )
       .then(async (res) => {
         if (res.ok) {
           const data = await res.json();
-          setPropertyUnits(data);
-          const candidate = data.find((u: any) => u.id !== reassignReservation.unit_id);
-          if (candidate) setNewUnitId(candidate.id);
+          const compatible = data.filter((u: any) => u.id !== reassignReservation.unit_id && u.status === "ACTIVE");
+          setPropertyUnits(compatible);
+          if (compatible.length > 0) setNewUnitId(compatible[0].id);
         }
       })
       .catch(() => {})
@@ -102,7 +151,7 @@ export default function AdminStaysOversightPage() {
 
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  async function loadReservations() {
+  async function loadReservations(): Promise<StayReservation[]> {
     setLoading(true);
     setLoadError(null);
     try {
@@ -110,9 +159,11 @@ export default function AdminStaysOversightPage() {
       if (!res.ok) throw new Error("Failed to fetch stays");
       const data = await res.json();
       setReservations(data);
+      return data;
     } catch (err) {
       setReservations([]);
       setLoadError(err instanceof Error ? err.message : "Unable to load stay reservations.");
+      return [];
     } finally {
       setLoading(false);
     }
@@ -154,6 +205,7 @@ export default function AdminStaysOversightPage() {
   async function handleResolveDispute() {
     if (!disputeReservation || !resolutionNotes.trim()) return;
     setSubmittingDispute(true);
+    setDisputeOutcome(null);
     try {
       const res = await apiFetch(
         `${API_BASE}/api/v1/stays/ops/reservations/${disputeReservation.id}/resolve-dispute/`,
@@ -167,10 +219,27 @@ export default function AdminStaysOversightPage() {
           }),
         }
       );
+      const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.detail || "Failed to resolve dispute.");
+        if (body.code === "self_approval_denied") {
+          setDisputeOutcome({ kind: "self-approval-blocked" });
+          return;
+        }
+        throw new Error(body.detail || "Failed to resolve dispute.");
       }
+      // Wave U1: the backend returns 202 + PENDING_SECOND_APPROVAL on the first
+      // ("proposing") call and only 200 with a real deposit status once a
+      // *different* Operations user submits the identical proposal. Treating
+      // both the same (as this used to) silently hid that the deposit was not
+      // actually settled yet.
+      if (res.status === 202 || body.status === "PENDING_SECOND_APPROVAL") {
+        setDisputeOutcome({ kind: "proposed" });
+        const refreshed = await loadReservations();
+        const updated = refreshed.find((item) => item.id === disputeReservation.id);
+        if (updated) setDisputeReservation(updated);
+        return;
+      }
+      setDisputeOutcome({ kind: "settled" });
       setDisputeReservation(null);
       setFinalDeductionInr(0);
       setResolutionNotes("");
@@ -290,7 +359,9 @@ export default function AdminStaysOversightPage() {
                 <tr key={r.id} className="hover:bg-neutral-50/60 transition-colors">
                   <td className="p-4">
                     <span className="font-mono font-bold text-neutral-900 block">#{r.id.slice(0, 8)}</span>
-                    <span className="text-[10px] text-neutral-400">{r.duration_mode}</span>
+                    <span className="text-[10px] text-neutral-400">
+                      {durationModeLabel(r.duration_mode as StayDurationMode)}
+                    </span>
                   </td>
                   <td className="p-4">
                     <span className="font-bold text-neutral-900 block">{r.property_title}</span>
@@ -319,7 +390,7 @@ export default function AdminStaysOversightPage() {
                           : "bg-amber-100 text-amber-800"
                       }`}
                     >
-                      {r.deposit?.status || "ESCROW"}
+                      {r.deposit?.status ? formatStatusLabel(r.deposit.status) : "No deposit"}
                     </span>
                   </td>
                   <td className="p-4">
@@ -336,8 +407,16 @@ export default function AdminStaysOversightPage() {
                           : "bg-blue-100 text-blue-800"
                       }`}
                     >
-                      ● {r.status}
+                      ● {formatStatusLabel(r.status)}
                     </span>
+                    {r.pending_settlement_approval && (
+                      <span
+                        title={`Proposed by ${r.pending_settlement_approval.proposed_by_name} — needs a different Operations user to approve`}
+                        className="mt-1 flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-black uppercase text-amber-800 w-fit"
+                      >
+                        <ShieldAlert className="h-2.5 w-2.5" /> Pending 2nd approval
+                      </span>
+                    )}
                   </td>
                   <td className="p-4 space-x-2">
                     {(r.status === "RECOVERY_REQUIRED" || r.status === "CONFIRMED") && (
@@ -352,12 +431,26 @@ export default function AdminStaysOversightPage() {
                       <button
                         onClick={() => {
                           setDisputeReservation(r);
-                          setFinalDeductionInr(0);
-                          setResolutionNotes(r.deposit?.dispute_reason || "");
+                          setDisputeOutcome(null);
+                          const pending = r.pending_settlement_approval;
+                          // Pre-fill with the standing proposal so a second
+                          // approver reviews the same numbers instead of
+                          // re-typing them from scratch (the backend requires
+                          // an exact match to approve -- see
+                          // apps/cases/approvals.py::propose_or_approve_settlement).
+                          if (pending) {
+                            setFinalDeductionInr(pending.proposal.final_consumed_amount_paise / 100);
+                            setResolutionNotes(pending.proposal.resolution_notes);
+                            setRefundBalance(pending.proposal.refund_deposit);
+                          } else {
+                            setFinalDeductionInr(0);
+                            setResolutionNotes(r.deposit?.dispute_reason || "");
+                            setRefundBalance(true);
+                          }
                         }}
                         className="rounded bg-purple-100 px-2.5 py-1 text-[11px] font-bold text-purple-800 hover:bg-purple-200"
                       >
-                        Resolve Dispute
+                        {r.pending_settlement_approval ? "Review Proposed Settlement" : "Resolve Dispute"}
                       </button>
                     )}
                   </td>
@@ -415,22 +508,19 @@ export default function AdminStaysOversightPage() {
                 >
                   <option value="">-- Select a replacement room --</option>
                   {propertyUnits.map((u) => (
-                    <option key={u.id} value={u.id} disabled={u.id === reassignReservation.unit_id}>
-                      {u.unit_code} — {u.unit_type_name} ({u.floor || "Standard Floor"}) {u.id === reassignReservation.unit_id ? "(Current Unit)" : `[${u.status}]`}
+                    <option key={u.id} value={u.id}>
+                      {u.unit_code} — {u.unit_type_name} ({u.floor || "Standard Floor"})
                     </option>
                   ))}
                 </select>
               ) : (
-                <input
-                  type="text"
-                  value={newUnitId}
-                  onChange={(e) => setNewUnitId(e.target.value)}
-                  placeholder="Paste target unit UUID"
-                  className="mt-1 w-full rounded-lg border border-neutral-300 p-2 text-xs focus:border-action focus:outline-none"
-                />
+                <div className="mt-1 rounded-lg bg-amber-50 border border-amber-200 p-2.5 text-xs text-amber-800">
+                  No other vacant unit of this room configuration is available at this property right now.
+                </div>
               )}
               <span className="mt-1 text-[10px] text-neutral-400 block">
-                The database exclusion constraint will prevent overlapping reservations for the replacement room.
+                Overlapping bookings on the replacement room are blocked automatically -- it will only show as
+                available here if it's genuinely free for these dates.
               </span>
             </div>
 
@@ -474,7 +564,7 @@ export default function AdminStaysOversightPage() {
                 <ShieldAlert className="h-5 w-5 text-purple-600" /> Maker-Checker Dispute Resolution
               </h3>
               <button
-                onClick={() => setDisputeReservation(null)}
+                onClick={() => { setDisputeReservation(null); setDisputeOutcome(null); }}
                 className="rounded-lg p-1 text-neutral-400 hover:bg-neutral-100"
               >
                 <X className="h-4 w-4" />
@@ -484,6 +574,41 @@ export default function AdminStaysOversightPage() {
             <p className="mt-2 text-neutral-500">
               Operations override for deposit dispute on Reservation #{disputeReservation.id.slice(0, 8)} ({disputeReservation.property_title}).
             </p>
+
+            {disputeReservation.pending_settlement_approval && (
+              <div className="mt-3 rounded-xl bg-amber-50 p-3 border border-amber-200 text-amber-900">
+                <div className="flex items-center gap-1.5 font-bold">
+                  <ShieldAlert className="h-3.5 w-3.5" /> Awaiting a second approver
+                </div>
+                <p className="mt-1">
+                  <strong>{disputeReservation.pending_settlement_approval.proposed_by_name}</strong>{" "}
+                  proposed this settlement on{" "}
+                  {new Date(disputeReservation.pending_settlement_approval.proposed_at).toLocaleString()}.
+                  A <em>different</em> Operations user must submit the same figures below to approve
+                  it — the amounts are pre-filled from the proposal and cannot be changed here.
+                </p>
+                {currentUserId === disputeReservation.pending_settlement_approval.proposed_by_id && (
+                  <p className="mt-2 rounded-lg bg-white/70 p-2 font-semibold">
+                    You proposed this settlement. Ask a different Operations teammate to review and
+                    approve it — the system will not let you approve your own proposal.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {disputeOutcome?.kind === "proposed" && (
+              <div className="mt-3 rounded-xl bg-emerald-50 p-3 border border-emerald-200 text-emerald-900 font-semibold">
+                Proposal recorded. This settlement is not final yet — a different Operations user
+                needs to open this dispute and submit the same figures to approve it.
+              </div>
+            )}
+
+            {disputeOutcome?.kind === "self-approval-blocked" && (
+              <div className="mt-3 rounded-xl bg-red-50 p-3 border border-red-200 text-red-900 font-semibold">
+                You already proposed this settlement. A different Operations user must approve it —
+                this action was not applied.
+              </div>
+            )}
 
             <div className="mt-3 rounded-xl bg-purple-50 p-3 border border-purple-200">
               <div className="flex justify-between font-bold text-purple-900">
@@ -541,17 +666,27 @@ export default function AdminStaysOversightPage() {
 
             <div className="mt-6 flex justify-end gap-2">
               <button
-                onClick={() => setDisputeReservation(null)}
+                onClick={() => { setDisputeReservation(null); setDisputeOutcome(null); }}
                 className="rounded-lg px-3 py-1.5 font-semibold text-neutral-600 hover:bg-neutral-100"
               >
                 Cancel
               </button>
               <button
-                disabled={submittingDispute || !resolutionNotes.trim()}
+                disabled={
+                  submittingDispute ||
+                  !resolutionNotes.trim() ||
+                  currentUserId === disputeReservation.pending_settlement_approval?.proposed_by_id
+                }
                 onClick={handleResolveDispute}
                 className="rounded-lg bg-purple-600 px-4 py-1.5 font-bold text-white hover:bg-purple-700 disabled:opacity-50"
               >
-                {submittingDispute ? "Settling..." : "Authorize & Settle Deposit"}
+                {submittingDispute
+                  ? disputeReservation.pending_settlement_approval
+                    ? "Approving..."
+                    : "Proposing..."
+                  : disputeReservation.pending_settlement_approval
+                  ? "Approve & Settle Deposit"
+                  : "Propose Settlement"}
               </button>
             </div>
           </div>

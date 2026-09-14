@@ -39,16 +39,19 @@ import {
   schedulePropertyVisit,
   type PropertyDetailResponse,
 } from "@/features/stays/queries";
+import { formatMoney } from "@vsolve/ui";
 import {
   durationModeLabel,
-  hideSoldOutStayCards,
   publishedDurationModes,
   shouldShowDurationToggle,
   type StayDurationMode,
 } from "@/features/stays/stay-checkout-rules";
 
+// Thin wrapper so every call site keeps using formatPaise (paise is the
+// unit stored everywhere) while the actual currency formatting lives in one
+// place: @vsolve/ui's formatMoney (locale grouping, paise-only-when-needed).
 function formatPaise(paise: number): string {
-  return "₹" + (paise / 100).toLocaleString("en-IN");
+  return formatMoney(paise);
 }
 
 function formatTime(timeStr?: string): string {
@@ -165,7 +168,12 @@ export default function StayPropertyDetailPage() {
   }
 
   const activeTileSlug = searchParams.get("tile") || "rooms";
-  const bookableUnits = hideSoldOutStayCards(property.unit_types, Boolean(startDate && endDate));
+  // Wave U3 (C8): show every room configuration, sold-out included, rather
+  // than silently removing sold-out cards once dates are chosen -- the card
+  // below already renders a clear "Sold Out" badge and disables its CTA, so
+  // hiding the card entirely just made a unit type look like it doesn't
+  // exist instead of "not available for these dates."
+  const bookableUnits = property.unit_types;
   const publishedModes = publishedDurationModes(
     bookableUnits.map((unit) => unit.pricing.duration_mode),
     durationMode,
@@ -416,7 +424,7 @@ export default function StayPropertyDetailPage() {
               <div className="space-y-4 pt-1">
                 {bookableUnits.length === 0 ? (
                   <p className="rounded-2xl border border-line bg-neutral-50 p-5 text-sm text-neutral-600">
-                    No rooms are available for these dates. Try different From–To dates.
+                    This property has no room configurations set up yet.
                   </p>
                 ) : null}
                 {bookableUnits.map((unit) => {
@@ -530,9 +538,10 @@ export default function StayPropertyDetailPage() {
                         {isSoldOut ? (
                           <button
                             disabled
+                            title="No vacant units for these dates"
                             className="rounded-xl bg-neutral-100 px-5 py-2.5 text-xs font-bold text-neutral-400 cursor-not-allowed shadow-none"
                           >
-                            Sold Out
+                            Not available for these dates
                           </button>
                         ) : (
                           <Link
