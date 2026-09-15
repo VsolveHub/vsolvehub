@@ -1,0 +1,196 @@
+"""A7 rental domain — temporary possession of assets. Not Booking / FulfilmentUnit."""
+
+from __future__ import annotations
+
+import uuid
+
+from django.conf import settings
+from django.db import models
+from django.db.models import Q
+
+
+class RentalAsset(models.Model):
+    class Status(models.TextChoices):
+        ACTIVE = "ACTIVE", "Active"
+        UNDER_MAINTENANCE = "UNDER_MAINTENANCE", "Under maintenance"
+        RETIRED = "RETIRED", "Retired"
+
+    class ConditionGrade(models.TextChoices):
+        NEW = "NEW", "New"
+        GOOD = "GOOD", "Good"
+        FAIR = "FAIR", "Fair"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    partner = models.ForeignKey(
+        "partners.PartnerProfile", on_delete=models.PROTECT, related_name="rental_assets"
+    )
+    variant = models.ForeignKey(
+        "catalog.ServiceVariant", on_delete=models.PROTECT, related_name="rental_assets"
+    )
+    title = models.CharField(max_length=180)
+    description = models.TextField(blank=True)
+    asset_identifier = models.CharField(max_length=80, blank=True)
+    is_serialized = models.BooleanField(default=True)
+    quantity_available = models.PositiveIntegerField(default=1)
+    condition_grade = models.CharField(
+        max_length=16, choices=ConditionGrade.choices, default=ConditionGrade.GOOD
+    )
+    current_status = models.CharField(
+        max_length=24, choices=Status.choices, default=Status.ACTIVE
+    )
+    daily_rate_paise = models.PositiveIntegerField()
+    deposit_paise = models.PositiveIntegerField(default=0)
+    location_text = models.CharField(max_length=180, blank=True)
+    moderation_status = models.CharField(
+        max_length=16,
+        choices=[
+            ("DRAFT", "Draft"),
+            ("PENDING", "Pending"),
+            ("APPROVED", "Approved"),
+            ("REJECTED", "Rejected"),
+            ("REMOVED", "Removed"),
+        ],
+        default="DRAFT",
+    )
+    moderation_reason = models.CharField(max_length=480, blank=True)
+    structured_fields = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        indexes = [
+            models.Index(fields=("partner", "current_status"), name="rental_asset_partner_idx"),
+            models.Index(
+                fields=("moderation_status", "current_status"), name="rental_asset_public_idx"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return self.title
+
+    @property
+    def public_state(self) -> str:
+        if self.current_status == self.Status.RETIRED:
+            return "RETIRED"
+        if self.moderation_status == "PENDING":
+            return "PENDING_REVIEW"
+        if self.moderation_status == "REJECTED":
+            return "REJECTED"
+        if self.moderation_status == "REMOVED":
+            return "REMOVED"
+        if self.moderation_status == "APPROVED" and self.current_status == self.Status.ACTIVE:
+            return "PUBLISHED"
+        return "DRAFT"
+
+
+class AssetReservation(models.Model):
+    """Day-granular hold on an asset. MVP overlap enforced in services (select_for_update)."""
+
+    class Status(models.TextChoices):
+        TENTATIVE = "TENTATIVE", "Tentative"
+        CONFIRMED = "CONFIRMED", "Confirmed"
+        RELEASED = "RELEASED", "Released"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    asset = models.ForeignKey(RentalAsset, on_delete=models.PROTECT, related_name="reservations")
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.TENTATIVE)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        indexes = [
+            models.Index(fields=("asset", "status", "start_date", "end_date")),
+        ]
+
+
+class RentalDeposit(models.Model):
+    class Status(models.TextChoices):
+        REQUESTED = "REQUESTED", "Requested"
+        AUTHORIZED = "AUTHORIZED", "Authorized"
+        HELD = "HELD", "Held"
+        RELEASED = "RELEASED", "Released"
+        PARTIALLY_CONSUMED = "PARTIALLY_CONSUMED", "Partially consumed"
+        FULLY_CONSUMED = "FULLY_CONSUMED", "Fully consumed"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    amount_paise = models.PositiveIntegerField()
+    status = models.CharField(max_length=24, choices=Status.choices, default=Status.REQUESTED)
+    consumed_paise = models.PositiveIntegerField(default=0)
+    provider_note = models.CharField(
+        max_length=240,
+        blank=True,
+        help_text="PARTIAL money path: test/seed hold without live Razorpay.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class RentalBooking(models.Model):
+    class Status(models.TextChoices):
+        PENDING_PAYMENT = "PENDING_PAYMENT", "Pending payment"
+        CONFIRMED = "CONFIRMED", "Confirmed"
+        HANDOVER = "HANDOVER", "Handed over"
+        RETURNED = "RETURNED", "Returned"
+        CANCELLED = "CANCELLED", "Cancelled"
+        DISPUTED = "DISPUTED", "Disputed"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    customer = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="rental_bookings"
+    )
+    asset = models.ForeignKey(RentalAsset, on_delete=models.PROTECT, related_name="bookings")
+    reservation = models.OneToOneField(
+        AssetReservation, on_delete=models.PROTECT, related_name="booking"
+    )
+    deposit = models.OneToOneField(
+        RentalDeposit, on_delete=models.PROTECT, related_name="booking"
+    )
+    status = models.CharField(max_length=24, choices=Status.choices, default=Status.CONFIRMED)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    price_paise = models.PositiveIntegerField()
+    pickup_or_delivery_mode = models.CharField(max_length=32, default="PICKUP")
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+
+class RentalBookingLine(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    booking = models.ForeignKey(RentalBooking, on_delete=models.CASCADE, related_name="lines")
+    asset = models.ForeignKey(RentalAsset, on_delete=models.PROTECT, related_name="booking_lines")
+    quantity = models.PositiveIntegerField(default=1)
+    unit_price_paise = models.PositiveIntegerField()
+    deposit_paise = models.PositiveIntegerField(default=0)
+
+
+class RentalModerationEvent(models.Model):
+    class Action(models.TextChoices):
+        SUBMITTED = "SUBMITTED", "Submitted"
+        APPROVED = "APPROVED", "Approved"
+        REJECTED = "REJECTED", "Rejected"
+        REMOVED = "REMOVED", "Removed"
+        REINSTATED = "REINSTATED", "Reinstated"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    asset = models.ForeignKey(RentalAsset, on_delete=models.PROTECT, related_name="moderation_events")
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT
+    )
+    action = models.CharField(max_length=20, choices=Action.choices)
+    reason = models.CharField(max_length=480, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+def overlapping_reservations(asset_id: uuid.UUID, start, end):
+    return AssetReservation.objects.filter(
+        asset_id=asset_id,
+        status__in=(AssetReservation.Status.TENTATIVE, AssetReservation.Status.CONFIRMED),
+    ).filter(Q(start_date__lt=end) & Q(end_date__gt=start))

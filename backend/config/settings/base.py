@@ -55,6 +55,8 @@ INSTALLED_APPS = [
     "apps.requirements",
     "apps.ratings",
     "apps.listings",
+    "apps.rental",
+    "apps.stay",
 ]
 
 MIDDLEWARE = [
