@@ -7,7 +7,7 @@ import { ChevronLeft } from "lucide-react";
 
 import { CategoryTileBrowser } from "@/features/catalog/components/category-tile-browser";
 import { getCategory, getCategoryServices } from "@/features/catalog/queries";
-import { isCareerJobsCategory, LISTINGS_HREF } from "@/lib/routes";
+import { isCareerJobsCategory, isRentalCategory, isStayCategory, LISTINGS_HREF, RENTALS_HREF, STAYS_HREF } from "@/lib/routes";
 
 type PageProps = {
   params: Promise<{ category: string }>;
@@ -31,6 +31,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       title: "Career & job openings",
       alternates: { canonical: LISTINGS_HREF },
     };
+  }
+  if (isRentalCategory(slug)) {
+    return { title: "Rentals", alternates: { canonical: RENTALS_HREF } };
+  }
+  if (isStayCategory(slug)) {
+    return { title: "Stays", alternates: { canonical: STAYS_HREF } };
   }
   const category = await getCategory(slug);
 
@@ -79,6 +85,12 @@ export default async function CategoryPage({ params, searchParams }: PageProps) 
   // A10 Career/Jobs: catalogue taxonomy entry → listing browse (plan: career-jobs → /listings).
   if (isCareerJobsCategory(slug)) {
     redirect(LISTINGS_HREF);
+  }
+  if (isRentalCategory(slug)) {
+    redirect(RENTALS_HREF);
+  }
+  if (isStayCategory(slug)) {
+    redirect(STAYS_HREF);
   }
 
   const category = await getCategory(slug);

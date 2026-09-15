@@ -61,6 +61,8 @@ import type { WorkspaceGrant } from "@vsolve/query";
 export const WORKFORCE_WORKSPACE = "A3_TIME_BLOCK";
 export const PROJECT_WORKSPACE = "A5_CUSTOM_PROJECT";
 export const LISTING_WORKSPACE = "A10_LISTING";
+export const RENTAL_WORKSPACE = "A7_RENTAL";
+export const STAY_WORKSPACE = "A9_STAY";
 
 export interface WorkspaceNavItem {
   href: string;
@@ -203,6 +205,22 @@ export const LISTING_TAP_FIRST_NAV: readonly WorkspaceNavItem[] = [
   { href: "/me", label: "Me", icon: UserCircle2 },
 ];
 
+export const RENTAL_TAP_FIRST_NAV: readonly WorkspaceNavItem[] = [
+  { href: "/home", label: "Home", icon: Home },
+  { href: "/rentals", label: "Rentals", icon: HardHat, activePrefix: "/rentals" },
+  { href: "/money", label: "Money", icon: Wallet },
+  { href: "#notifications", label: "Alerts", icon: Bell, kind: "notifications" },
+  { href: "/me", label: "Me", icon: UserCircle2 },
+];
+
+export const STAY_TAP_FIRST_NAV: readonly WorkspaceNavItem[] = [
+  { href: "/home", label: "Home", icon: Home },
+  { href: "/stays", label: "Stays", icon: FolderKanban, activePrefix: "/stays" },
+  { href: "/money", label: "Money", icon: Wallet },
+  { href: "#notifications", label: "Alerts", icon: Bell, kind: "notifications" },
+  { href: "/me", label: "Me", icon: UserCircle2 },
+];
+
 /**
  * Routes and labels per known workspace.
  *
@@ -223,29 +241,42 @@ export const LISTING_NAV: readonly WorkspaceNavItem[] = [
 ];
 
 /**
- * Whether resolved workspaces are exclusively A10_LISTING (hiring-only employer).
+ * Whether resolved workspaces are a single specialty surface (A10/A7/A9 only).
  *
- * Empty list is *not* listing-only — that is the M1 A1 floor (no M2 grants yet).
- * Mixed A10 + A3/A5 keeps Work chrome via `TAP_FIRST_NAV`.
+ * Empty list is *not* specialty — that is the M1 A1 floor (no M2 grants yet).
+ * Mixed specialty + A3/A5 keeps Work chrome via `TAP_FIRST_NAV`.
  */
+export function specialtyShellHome(
+  workspaces: readonly { readonly key: string }[],
+): "listings" | "rentals" | "stays" | null {
+  if (workspaces.length !== 1) return null;
+  const key = workspaces[0]?.key;
+  if (key === LISTING_WORKSPACE) return "listings";
+  if (key === RENTAL_WORKSPACE) return "rentals";
+  if (key === STAY_WORKSPACE) return "stays";
+  return null;
+}
+
 export function isListingOnlyShell(
   workspaces: readonly { readonly key: string }[],
 ): boolean {
-  return (
-    workspaces.length > 0 && workspaces.every((workspace) => workspace.key === LISTING_WORKSPACE)
-  );
+  return specialtyShellHome(workspaces) === "listings";
 }
 
 /**
  * Primary dock / desktop nav for `PartnerShell`.
  *
- * A10-only → `LISTING_TAP_FIRST_NAV` (Listings, never Work/Jobs).
+ * A10/A7/A9-only → specialty tap-first (never Work/Jobs).
  * Otherwise → `TAP_FIRST_NAV` (including empty grants = legacy A1 Work).
  */
 export function primaryShellNavFor(
   workspaces: readonly { readonly key: string }[],
 ): readonly WorkspaceNavItem[] {
-  return isListingOnlyShell(workspaces) ? LISTING_TAP_FIRST_NAV : TAP_FIRST_NAV;
+  const home = specialtyShellHome(workspaces);
+  if (home === "listings") return LISTING_TAP_FIRST_NAV;
+  if (home === "rentals") return RENTAL_TAP_FIRST_NAV;
+  if (home === "stays") return STAY_TAP_FIRST_NAV;
+  return TAP_FIRST_NAV;
 }
 
 export const WORKSPACE_REGISTRY: Record<string, WorkspaceDefinition> = {
@@ -287,6 +318,30 @@ export const WORKSPACE_REGISTRY: Record<string, WorkspaceDefinition> = {
     icon: Briefcase,
     home: "/listings",
     nav: [...LISTING_NAV],
+  },
+  [RENTAL_WORKSPACE]: {
+    key: RENTAL_WORKSPACE,
+    label: "Rentals",
+    description: "List rental assets, manage bookings, handover and deposit release.",
+    icon: HardHat,
+    home: "/rentals",
+    nav: [
+      { href: "/home", label: "Home", icon: Home },
+      { href: "/rentals", label: "Rentals", icon: HardHat, activePrefix: "/rentals" },
+      { href: "/me", label: "Me", icon: UserCircle2, activePrefix: "/me" },
+    ],
+  },
+  [STAY_WORKSPACE]: {
+    key: STAY_WORKSPACE,
+    label: "Stays",
+    description: "Host properties and respond to guest enquiries.",
+    icon: FolderKanban,
+    home: "/stays",
+    nav: [
+      { href: "/home", label: "Home", icon: Home },
+      { href: "/stays", label: "Stays", icon: FolderKanban, activePrefix: "/stays" },
+      { href: "/me", label: "Me", icon: UserCircle2, activePrefix: "/me" },
+    ],
   },
 };
 

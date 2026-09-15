@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.66.0)
- * Checksum: bb6bd00293b7e4fe
+ * Checksum: a58b594a5d3fa5e0
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -1886,6 +1886,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/rentals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["me_rentals_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/stay-enquiries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["me_stay_enquiries_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/my/listing-applications": {
         parameters: {
             query?: never;
@@ -3479,6 +3511,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ops/rentals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ops_rentals_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/rentals/{asset_id}/moderate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ops_rentals_moderate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/stays": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ops_stays_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/stays/{property_id}/moderate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ops_stays_moderate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/orders/{order_id}/": {
         parameters: {
             query?: never;
@@ -4727,6 +4823,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/partner/rentals/assets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["partner_rentals_assets_list"];
+        put?: never;
+        post: operations["partner_rentals_assets_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/rentals/assets/{asset_id}/{action}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["partner_rentals_assets_create_2"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/rentals/bookings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["partner_rentals_bookings_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/rentals/bookings/{booking_id}/{action}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["partner_rentals_bookings_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/partner/required-consents/": {
         parameters: {
             query?: never;
@@ -4770,6 +4930,70 @@ export interface paths {
         get: operations["partner_skills_list"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/stays/enquiries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["partner_stays_enquiries_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/stays/enquiries/{enquiry_id}/respond": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["partner_stays_enquiries_respond_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/stays/properties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["partner_stays_properties_list"];
+        put?: never;
+        post: operations["partner_stays_properties_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/stays/properties/{property_id}/{action}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["partner_stays_properties_create_2"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5109,6 +5333,54 @@ export interface paths {
         get: operations["refunds_retrieve"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rentals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["rentals_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rentals/{asset_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["rentals_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rentals/book": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["rentals_book_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5959,6 +6231,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/stays": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["stays_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/stays/{property_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["stays_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/stays/enquire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["stays_enquire_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tax-documents/{document_id}/": {
         parameters: {
             query?: never;
@@ -6051,12 +6371,13 @@ export interface components {
             readonly paid_at: string | null;
         };
         /**
-         * @description * `KEEP_CUSTOMER` - KEEP_CUSTOMER
-         *     * `KEEP_SESSION` - KEEP_SESSION
-         *     * `KEEP_BOTH` - KEEP_BOTH
+         * @description * `APPROVE` - APPROVE
+         *     * `REJECT` - REJECT
+         *     * `REMOVE` - REMOVE
+         *     * `REINSTATE` - REINSTATE
          * @enum {string}
          */
-        ActionEnum: "KEEP_CUSTOMER" | "KEEP_SESSION" | "KEEP_BOTH";
+        Action68eEnum: "APPROVE" | "REJECT" | "REMOVE" | "REINSTATE";
         ActionReasonRequest: {
             reason?: string;
         };
@@ -6621,10 +6942,17 @@ export interface components {
             expected_cart_version: number;
             expected_item_version: number;
         };
+        /**
+         * @description * `KEEP_CUSTOMER` - KEEP_CUSTOMER
+         *     * `KEEP_SESSION` - KEEP_SESSION
+         *     * `KEEP_BOTH` - KEEP_BOTH
+         * @enum {string}
+         */
+        CartMergeDecisionActionEnum: "KEEP_CUSTOMER" | "KEEP_SESSION" | "KEEP_BOTH";
         CartMergeDecisionRequest: {
             /** Format: uuid */
             session_item_id: string;
-            action: components["schemas"]["ActionEnum"];
+            action: components["schemas"]["CartMergeDecisionActionEnum"];
         };
         CartMergeRequest: {
             expected_customer_cart_version: number;
@@ -7016,6 +7344,13 @@ export interface components {
             readonly response: components["schemas"]["CompletionResponse"] | null;
         };
         /**
+         * @description * `NEW` - New
+         *     * `GOOD` - Good
+         *     * `FAIR` - Fair
+         * @enum {string}
+         */
+        ConditionGradeEnum: "NEW" | "GOOD" | "FAIR";
+        /**
          * @description * `ALL_OR_NOTHING` - All or nothing
          * @enum {string}
          */
@@ -7041,6 +7376,61 @@ export interface components {
          * @enum {string}
          */
         ContentTypeEnum: "image/jpeg" | "image/png" | "application/pdf";
+        CreateAssetRequest: {
+            /** Format: uuid */
+            variant_id: string;
+            title: string;
+            /** @default  */
+            description: string;
+            /** @default  */
+            location_text: string;
+            daily_rate_paise: number;
+            /** @default 0 */
+            deposit_paise: number;
+            /** @default  */
+            asset_identifier: string;
+        };
+        CreateBookingRequest: {
+            /** Format: uuid */
+            asset_id: string;
+            /** Format: date */
+            start_date: string;
+            /** Format: date */
+            end_date: string;
+            /** @default PICKUP */
+            pickup_or_delivery_mode: string;
+            /** @default  */
+            notes: string;
+        };
+        CreateEnquiryRequest: {
+            /** Format: uuid */
+            property_id: string;
+            /** Format: uuid */
+            unit_id?: string | null;
+            /** Format: date */
+            check_in: string;
+            /** Format: date */
+            check_out: string;
+            /** @default 1 */
+            guest_count: number;
+            /** @default  */
+            message: string;
+        };
+        CreatePropertyRequest: {
+            /** Format: uuid */
+            variant_id: string;
+            title: string;
+            /** @default  */
+            description: string;
+            /** @default  */
+            location_text: string;
+            /** @default Standard room */
+            unit_name: string;
+            /** @default 100000 */
+            nightly_rate_paise: number;
+            /** @default 1 */
+            sharing_count: number;
+        };
         /**
          * @description The **whole** crew for this shift-day, every time (`M2-BE-522`, `528`).
          *
@@ -7414,6 +7804,13 @@ export interface components {
         CsrfToken: {
             readonly csrf_token: string;
         };
+        /**
+         * @description * `ACTIVE` - Active
+         *     * `UNDER_MAINTENANCE` - Under maintenance
+         *     * `RETIRED` - Retired
+         * @enum {string}
+         */
+        CurrentStatusEnum: "ACTIVE" | "UNDER_MAINTENANCE" | "RETIRED";
         CustomWorkItemReview: {
             /** Format: uuid */
             readonly id: string;
@@ -8581,7 +8978,7 @@ export interface components {
             description: string;
             structured_fields?: unknown;
             status?: components["schemas"]["StatusC74Enum"];
-            moderation_status?: components["schemas"]["ModerationStatusEnum"];
+            moderation_status?: components["schemas"]["ModerationStatus8dcEnum"];
             readonly public_state: string;
             location_text?: string;
             is_premium?: boolean;
@@ -8618,7 +9015,7 @@ export interface components {
             description: string;
             structured_fields?: unknown;
             status?: components["schemas"]["StatusC74Enum"];
-            moderation_status?: components["schemas"]["ModerationStatusEnum"];
+            moderation_status?: components["schemas"]["ModerationStatus8dcEnum"];
             readonly public_state: string;
             location_text?: string;
             is_premium?: boolean;
@@ -8683,13 +9080,22 @@ export interface components {
         };
         /**
          * @description * `DRAFT` - Draft
+         *     * `PENDING` - Pending
+         *     * `APPROVED` - Approved
+         *     * `REJECTED` - Rejected
+         *     * `REMOVED` - Removed
+         * @enum {string}
+         */
+        ModerationStatus384Enum: "DRAFT" | "PENDING" | "APPROVED" | "REJECTED" | "REMOVED";
+        /**
+         * @description * `DRAFT` - Draft
          *     * `PENDING` - Pending review
          *     * `APPROVED` - Approved
          *     * `REJECTED` - Rejected
          *     * `REMOVED` - Removed
          * @enum {string}
          */
-        ModerationStatusEnum: "DRAFT" | "PENDING" | "APPROVED" | "REJECTED" | "REMOVED";
+        ModerationStatus8dcEnum: "DRAFT" | "PENDING" | "APPROVED" | "REJECTED" | "REMOVED";
         Money: {
             readonly amount_paise: number;
             readonly currency: string;
@@ -9511,9 +9917,11 @@ export interface components {
          *     * `WORKFORCE_AGENCY` - Workforce agency
          *     * `PROJECT_VENDOR` - Project vendor
          *     * `EMPLOYER` - Employer
+         *     * `RENTAL_OWNER` - Rental owner
+         *     * `PROPERTY_HOST` - Property host
          * @enum {string}
          */
-        PartnerBusinessTypeEnum: "INDIVIDUAL" | "WORKFORCE_AGENCY" | "PROJECT_VENDOR" | "EMPLOYER";
+        PartnerBusinessTypeEnum: "INDIVIDUAL" | "WORKFORCE_AGENCY" | "PROJECT_VENDOR" | "EMPLOYER" | "RENTAL_OWNER" | "PROPERTY_HOST";
         /**
          * @description One capability in any status. The read that distinguishes the navigation states.
          *
@@ -9737,7 +10145,7 @@ export interface components {
             description: string;
             structured_fields?: unknown;
             readonly status: components["schemas"]["StatusC74Enum"];
-            readonly moderation_status: components["schemas"]["ModerationStatusEnum"];
+            readonly moderation_status: components["schemas"]["ModerationStatus8dcEnum"];
             readonly public_state: string;
             location_text?: string;
             /** @default false */
@@ -10688,6 +11096,21 @@ export interface components {
          * @enum {string}
          */
         ProjectTransferStatusEnum: "PROPOSED" | "ACCEPTED" | "DECLINED" | "EXPIRED";
+        Property: {
+            /** Format: uuid */
+            readonly id: string;
+            title: string;
+            description?: string;
+            location_text?: string;
+            moderation_status?: components["schemas"]["ModerationStatus384Enum"];
+            readonly public_state: string;
+            readonly host_name: string;
+            /** Format: uuid */
+            variant: string;
+            readonly units: components["schemas"]["Unit"][];
+            /** Format: date-time */
+            readonly created_at: string;
+        };
         /** @description A vendor's own quote, read back to that vendor. */
         Proposal: {
             /** Format: uuid */
@@ -11724,6 +12147,73 @@ export interface components {
             /** @default  */
             target: string;
         };
+        RentalAsset: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly title: string;
+            readonly description: string;
+            readonly location_text: string;
+            readonly daily_rate_paise: number;
+            readonly deposit_paise: number;
+            readonly condition_grade: components["schemas"]["ConditionGradeEnum"];
+            readonly current_status: components["schemas"]["CurrentStatusEnum"];
+            readonly moderation_status: components["schemas"]["ModerationStatus384Enum"];
+            readonly public_state: string;
+            readonly partner_name: string;
+            /** Format: uuid */
+            readonly variant: string;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        RentalBooking: {
+            /** Format: uuid */
+            readonly id: string;
+            status?: components["schemas"]["RentalBookingStatusEnum"];
+            /** Format: date */
+            start_date: string;
+            /** Format: date */
+            end_date: string;
+            price_paise: number;
+            pickup_or_delivery_mode?: string;
+            notes?: string;
+            readonly asset: components["schemas"]["RentalAsset"];
+            readonly deposit: components["schemas"]["RentalDeposit"];
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        /**
+         * @description * `PENDING_PAYMENT` - Pending payment
+         *     * `CONFIRMED` - Confirmed
+         *     * `HANDOVER` - Handed over
+         *     * `RETURNED` - Returned
+         *     * `CANCELLED` - Cancelled
+         *     * `DISPUTED` - Disputed
+         * @enum {string}
+         */
+        RentalBookingStatusEnum: "PENDING_PAYMENT" | "CONFIRMED" | "HANDOVER" | "RETURNED" | "CANCELLED" | "DISPUTED";
+        RentalDeposit: {
+            /** Format: uuid */
+            readonly id: string;
+            amount_paise: number;
+            status?: components["schemas"]["RentalDepositStatusEnum"];
+            consumed_paise?: number;
+            /** @description PARTIAL money path: test/seed hold without live Razorpay. */
+            provider_note?: string;
+        };
+        /**
+         * @description * `REQUESTED` - Requested
+         *     * `AUTHORIZED` - Authorized
+         *     * `HELD` - Held
+         *     * `RELEASED` - Released
+         *     * `PARTIALLY_CONSUMED` - Partially consumed
+         *     * `FULLY_CONSUMED` - Fully consumed
+         * @enum {string}
+         */
+        RentalDepositStatusEnum: "REQUESTED" | "AUTHORIZED" | "HELD" | "RELEASED" | "PARTIALLY_CONSUMED" | "FULLY_CONSUMED";
+        RentalModerationRequest: {
+            action: components["schemas"]["Action68eEnum"];
+            reason: string;
+        };
         ReportRequest: {
             reason: string;
             detail?: string;
@@ -12013,6 +12503,11 @@ export interface components {
             expected_version: number;
             resolution: string;
             note: string;
+        };
+        RespondEnquiryRequest: {
+            response: string;
+            /** @default false */
+            decline: boolean;
         };
         ReverseGeocodeRequestRequest: {
             /** Format: decimal */
@@ -12886,6 +13381,40 @@ export interface components {
          * @enum {string}
          */
         StatusD1aEnum: "OPEN" | "RESOLVED";
+        StayEnquiry: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            property: string;
+            readonly property_title: string;
+            /** Format: uuid */
+            unit?: string | null;
+            status?: components["schemas"]["StayEnquiryStatusEnum"];
+            /** Format: date */
+            check_in: string;
+            /** Format: date */
+            check_out: string;
+            guest_count?: number;
+            message?: string;
+            host_response?: string;
+            /** Format: date-time */
+            responded_at?: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        /**
+         * @description * `SUBMITTED` - Submitted
+         *     * `RESPONDED` - Responded
+         *     * `DECLINED` - Declined
+         *     * `WITHDRAWN` - Withdrawn
+         *     * `EXPIRED` - Expired
+         * @enum {string}
+         */
+        StayEnquiryStatusEnum: "SUBMITTED" | "RESPONDED" | "DECLINED" | "WITHDRAWN" | "EXPIRED";
+        StayModerationRequest: {
+            action: components["schemas"]["Action68eEnum"];
+            reason: string;
+        };
         StepUpSession: {
             /** Format: date-time */
             readonly stepped_up_at: string;
@@ -13057,6 +13586,15 @@ export interface components {
          * @enum {string}
          */
         UnavailableReasonEnum: "PAST" | "TOO_SOON" | "OUTSIDE_OPERATING_WINDOW" | "NO_CAPACITY";
+        Unit: {
+            /** Format: uuid */
+            readonly id: string;
+            name: string;
+            sharing_count?: number;
+            nightly_rate_paise: number;
+            is_active?: boolean;
+            attributes?: unknown;
+        };
         UnitCancellationOutcome: {
             /** Format: uuid */
             fulfilment_unit_id: string;
@@ -13616,10 +14154,12 @@ export interface components {
          *     * `A1_TASK_VISIT` - A1 task visit
          *     * `A3_TIME_BLOCK` - A3 time block
          *     * `A5_CUSTOM_PROJECT` - A5 custom project
+         *     * `A7_RENTAL` - A7 rental
+         *     * `A9_STAY` - A9 stay
          *     * `A10_LISTING` - A10 listing
          * @enum {string}
          */
-        WorkspaceKeyEnum: "LEGACY" | "A1_TASK_VISIT" | "A3_TIME_BLOCK" | "A5_CUSTOM_PROJECT" | "A10_LISTING";
+        WorkspaceKeyEnum: "LEGACY" | "A1_TASK_VISIT" | "A3_TIME_BLOCK" | "A5_CUSTOM_PROJECT" | "A7_RENTAL" | "A9_STAY" | "A10_LISTING";
     };
     responses: never;
     parameters: never;
@@ -17977,6 +18517,44 @@ export interface operations {
             };
         };
     };
+    me_rentals_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RentalBooking"][];
+                };
+            };
+        };
+    };
+    me_stay_enquiries_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StayEnquiry"][];
+                };
+            };
+        };
+    };
     my_listing_applications_list: {
         parameters: {
             query?: never;
@@ -22032,6 +22610,98 @@ export interface operations {
             };
         };
     };
+    ops_rentals_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RentalAsset"][];
+                };
+            };
+        };
+    };
+    ops_rentals_moderate_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RentalModerationRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["RentalModerationRequest"];
+                "multipart/form-data": components["schemas"]["RentalModerationRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RentalAsset"];
+                };
+            };
+        };
+    };
+    ops_stays_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Property"][];
+                };
+            };
+        };
+    };
+    ops_stays_moderate_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                property_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StayModerationRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["StayModerationRequest"];
+                "multipart/form-data": components["schemas"]["StayModerationRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Property"];
+                };
+            };
+        };
+    };
     orders_retrieve: {
         parameters: {
             query?: never;
@@ -25222,6 +25892,113 @@ export interface operations {
             };
         };
     };
+    partner_rentals_assets_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RentalAsset"][];
+                };
+            };
+        };
+    };
+    partner_rentals_assets_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAssetRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CreateAssetRequest"];
+                "multipart/form-data": components["schemas"]["CreateAssetRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RentalAsset"];
+                };
+            };
+        };
+    };
+    partner_rentals_assets_create_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                action: string;
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RentalAsset"];
+                };
+            };
+        };
+    };
+    partner_rentals_bookings_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RentalBooking"][];
+                };
+            };
+        };
+    };
+    partner_rentals_bookings_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                action: string;
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RentalBooking"];
+                };
+            };
+        };
+    };
     partner_required_consents_list: {
         parameters: {
             query?: never;
@@ -25311,6 +26088,118 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PartnerSkillOption"][];
+                };
+            };
+        };
+    };
+    partner_stays_enquiries_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StayEnquiry"][];
+                };
+            };
+        };
+    };
+    partner_stays_enquiries_respond_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                enquiry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RespondEnquiryRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["RespondEnquiryRequest"];
+                "multipart/form-data": components["schemas"]["RespondEnquiryRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StayEnquiry"];
+                };
+            };
+        };
+    };
+    partner_stays_properties_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Property"][];
+                };
+            };
+        };
+    };
+    partner_stays_properties_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePropertyRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CreatePropertyRequest"];
+                "multipart/form-data": components["schemas"]["CreatePropertyRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Property"];
+                };
+            };
+        };
+    };
+    partner_stays_properties_create_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                action: string;
+                property_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Property"];
                 };
             };
         };
@@ -26129,6 +27018,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Refund"];
+                };
+            };
+        };
+    };
+    rentals_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RentalAsset"][];
+                };
+            };
+        };
+    };
+    rentals_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RentalAsset"];
+                };
+            };
+        };
+    };
+    rentals_book_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateBookingRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CreateBookingRequest"];
+                "multipart/form-data": components["schemas"]["CreateBookingRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RentalBooking"];
                 };
             };
         };
@@ -28420,6 +29374,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    stays_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Property"][];
+                };
+            };
+        };
+    };
+    stays_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                property_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Property"];
+                };
+            };
+        };
+    };
+    stays_enquire_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateEnquiryRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CreateEnquiryRequest"];
+                "multipart/form-data": components["schemas"]["CreateEnquiryRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StayEnquiry"];
                 };
             };
         };

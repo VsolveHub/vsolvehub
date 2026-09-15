@@ -4782,6 +4782,38 @@ paths:
               schema:
                 $ref: '#/components/schemas/ListingReport'
           description: ''
+  /api/v1/me/rentals:
+    get:
+      operationId: me_rentals_list
+      tags:
+      - me
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RentalBooking'
+          description: ''
+  /api/v1/me/stay-enquiries:
+    get:
+      operationId: me_stay_enquiries_list
+      tags:
+      - me
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StayEnquiry'
+          description: ''
   /api/v1/my/listing-applications:
     get:
       operationId: my_listing_applications_list
@@ -9059,6 +9091,104 @@ paths:
               schema:
                 $ref: '#/components/schemas/PartnerListing'
           description: ''
+  /api/v1/ops/rentals:
+    get:
+      operationId: ops_rentals_list
+      tags:
+      - ops
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RentalAsset'
+          description: ''
+  /api/v1/ops/rentals/{asset_id}/moderate:
+    post:
+      operationId: ops_rentals_moderate_create
+      parameters:
+      - in: path
+        name: asset_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - ops
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RentalModerationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RentalModerationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RentalModerationRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RentalAsset'
+          description: ''
+  /api/v1/ops/stays:
+    get:
+      operationId: ops_stays_list
+      tags:
+      - ops
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Property'
+          description: ''
+  /api/v1/ops/stays/{property_id}/moderate:
+    post:
+      operationId: ops_stays_moderate_create
+      parameters:
+      - in: path
+        name: property_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - ops
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StayModerationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StayModerationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StayModerationRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Property'
+          description: ''
   /api/v1/orders/{order_id}/:
     get:
       operationId: orders_retrieve
@@ -12362,6 +12492,115 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/partner/rentals/assets:
+    get:
+      operationId: partner_rentals_assets_list
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RentalAsset'
+          description: ''
+    post:
+      operationId: partner_rentals_assets_create
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAssetRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CreateAssetRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CreateAssetRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RentalAsset'
+          description: ''
+  /api/v1/partner/rentals/assets/{asset_id}/{action}:
+    post:
+      operationId: partner_rentals_assets_create_2
+      parameters:
+      - in: path
+        name: action
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: asset_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RentalAsset'
+          description: ''
+  /api/v1/partner/rentals/bookings:
+    get:
+      operationId: partner_rentals_bookings_list
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RentalBooking'
+          description: ''
+  /api/v1/partner/rentals/bookings/{booking_id}/{action}:
+    post:
+      operationId: partner_rentals_bookings_create
+      parameters:
+      - in: path
+        name: action
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RentalBooking'
+          description: ''
   /api/v1/partner/required-consents/:
     get:
       operationId: partner_required_consents_list
@@ -12459,6 +12698,122 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/PartnerSkillOption'
+          description: ''
+  /api/v1/partner/stays/enquiries:
+    get:
+      operationId: partner_stays_enquiries_list
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StayEnquiry'
+          description: ''
+  /api/v1/partner/stays/enquiries/{enquiry_id}/respond:
+    post:
+      operationId: partner_stays_enquiries_respond_create
+      parameters:
+      - in: path
+        name: enquiry_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RespondEnquiryRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RespondEnquiryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RespondEnquiryRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StayEnquiry'
+          description: ''
+  /api/v1/partner/stays/properties:
+    get:
+      operationId: partner_stays_properties_list
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Property'
+          description: ''
+    post:
+      operationId: partner_stays_properties_create
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePropertyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CreatePropertyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CreatePropertyRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Property'
+          description: ''
+  /api/v1/partner/stays/properties/{property_id}/{action}:
+    post:
+      operationId: partner_stays_properties_create_2
+      parameters:
+      - in: path
+        name: action
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: property_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Property'
           description: ''
   /api/v1/partner/workspaces/:
     get:
@@ -13358,6 +13713,71 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Refund'
+          description: ''
+  /api/v1/rentals:
+    get:
+      operationId: rentals_list
+      tags:
+      - rentals
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RentalAsset'
+          description: ''
+  /api/v1/rentals/{asset_id}:
+    get:
+      operationId: rentals_retrieve
+      parameters:
+      - in: path
+        name: asset_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - rentals
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RentalAsset'
+          description: ''
+  /api/v1/rentals/book:
+    post:
+      operationId: rentals_book_create
+      tags:
+      - rentals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBookingRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CreateBookingRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CreateBookingRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RentalBooking'
           description: ''
   /api/v1/requirements/:
     get:
@@ -15916,6 +16336,71 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: '`m2_requirement_transition_not_allowed` once the visit is
             completed or cancelled.'
+  /api/v1/stays:
+    get:
+      operationId: stays_list
+      tags:
+      - stays
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Property'
+          description: ''
+  /api/v1/stays/{property_id}:
+    get:
+      operationId: stays_retrieve
+      parameters:
+      - in: path
+        name: property_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Property'
+          description: ''
+  /api/v1/stays/enquire:
+    post:
+      operationId: stays_enquire_create
+      tags:
+      - stays
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEnquiryRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CreateEnquiryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CreateEnquiryRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StayEnquiry'
+          description: ''
   /api/v1/tax-documents/{document_id}/:
     get:
       operationId: tax_documents_retrieve
@@ -16083,16 +16568,18 @@ components:
       - paid_at
       - sequence
       - series
-    ActionEnum:
+    Action68eEnum:
       enum:
-      - KEEP_CUSTOMER
-      - KEEP_SESSION
-      - KEEP_BOTH
+      - APPROVE
+      - REJECT
+      - REMOVE
+      - REINSTATE
       type: string
       description: |-
-        * `KEEP_CUSTOMER` - KEEP_CUSTOMER
-        * `KEEP_SESSION` - KEEP_SESSION
-        * `KEEP_BOTH` - KEEP_BOTH
+        * `APPROVE` - APPROVE
+        * `REJECT` - REJECT
+        * `REMOVE` - REMOVE
+        * `REINSTATE` - REINSTATE
     ActionReasonRequest:
       type: object
       properties:
@@ -17546,6 +18033,16 @@ components:
       required:
       - expected_cart_version
       - expected_item_version
+    CartMergeDecisionActionEnum:
+      enum:
+      - KEEP_CUSTOMER
+      - KEEP_SESSION
+      - KEEP_BOTH
+      type: string
+      description: |-
+        * `KEEP_CUSTOMER` - KEEP_CUSTOMER
+        * `KEEP_SESSION` - KEEP_SESSION
+        * `KEEP_BOTH` - KEEP_BOTH
     CartMergeDecisionRequest:
       type: object
       properties:
@@ -17553,7 +18050,7 @@ components:
           type: string
           format: uuid
         action:
-          $ref: '#/components/schemas/ActionEnum'
+          $ref: '#/components/schemas/CartMergeDecisionActionEnum'
       required:
       - action
       - session_item_id
@@ -18516,6 +19013,16 @@ components:
       - response
       - safety_damage_declared
       - submitted_at
+    ConditionGradeEnum:
+      enum:
+      - NEW
+      - GOOD
+      - FAIR
+      type: string
+      description: |-
+        * `NEW` - New
+        * `GOOD` - Good
+        * `FAIR` - Fair
     ConfirmationPolicyEnum:
       enum:
       - ALL_OR_NOTHING
@@ -18575,6 +19082,117 @@ components:
         * `image/jpeg` - image/jpeg
         * `image/png` - image/png
         * `application/pdf` - application/pdf
+    CreateAssetRequest:
+      type: object
+      properties:
+        variant_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          minLength: 1
+          maxLength: 180
+        description:
+          type: string
+          default: ''
+        location_text:
+          type: string
+          default: ''
+        daily_rate_paise:
+          type: integer
+          minimum: 1
+        deposit_paise:
+          type: integer
+          minimum: 0
+          default: 0
+        asset_identifier:
+          type: string
+          default: ''
+      required:
+      - daily_rate_paise
+      - title
+      - variant_id
+    CreateBookingRequest:
+      type: object
+      properties:
+        asset_id:
+          type: string
+          format: uuid
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        pickup_or_delivery_mode:
+          type: string
+          minLength: 1
+          default: PICKUP
+        notes:
+          type: string
+          default: ''
+      required:
+      - asset_id
+      - end_date
+      - start_date
+    CreateEnquiryRequest:
+      type: object
+      properties:
+        property_id:
+          type: string
+          format: uuid
+        unit_id:
+          type: string
+          format: uuid
+          nullable: true
+        check_in:
+          type: string
+          format: date
+        check_out:
+          type: string
+          format: date
+        guest_count:
+          type: integer
+          minimum: 1
+          default: 1
+        message:
+          type: string
+          default: ''
+      required:
+      - check_in
+      - check_out
+      - property_id
+    CreatePropertyRequest:
+      type: object
+      properties:
+        variant_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          minLength: 1
+          maxLength: 180
+        description:
+          type: string
+          default: ''
+        location_text:
+          type: string
+          default: ''
+        unit_name:
+          type: string
+          minLength: 1
+          default: Standard room
+        nightly_rate_paise:
+          type: integer
+          minimum: 1
+          default: 100000
+        sharing_count:
+          type: integer
+          minimum: 1
+          default: 1
+      required:
+      - title
+      - variant_id
     CrewAssignRequest:
       type: object
       description: |-
@@ -19439,6 +20057,16 @@ components:
           readOnly: true
       required:
       - csrf_token
+    CurrentStatusEnum:
+      enum:
+      - ACTIVE
+      - UNDER_MAINTENANCE
+      - RETIRED
+      type: string
+      description: |-
+        * `ACTIVE` - Active
+        * `UNDER_MAINTENANCE` - Under maintenance
+        * `RETIRED` - Retired
     CustomWorkItemReview:
       type: object
       properties:
@@ -22404,7 +23032,7 @@ components:
         status:
           $ref: '#/components/schemas/StatusC74Enum'
         moderation_status:
-          $ref: '#/components/schemas/ModerationStatusEnum'
+          $ref: '#/components/schemas/ModerationStatus8dcEnum'
         public_state:
           type: string
           readOnly: true
@@ -22495,7 +23123,7 @@ components:
         status:
           $ref: '#/components/schemas/StatusC74Enum'
         moderation_status:
-          $ref: '#/components/schemas/ModerationStatusEnum'
+          $ref: '#/components/schemas/ModerationStatus8dcEnum'
         public_state:
           type: string
           readOnly: true
@@ -22604,7 +23232,21 @@ components:
           type: string
       required:
       - approved
-    ModerationStatusEnum:
+    ModerationStatus384Enum:
+      enum:
+      - DRAFT
+      - PENDING
+      - APPROVED
+      - REJECTED
+      - REMOVED
+      type: string
+      description: |-
+        * `DRAFT` - Draft
+        * `PENDING` - Pending
+        * `APPROVED` - Approved
+        * `REJECTED` - Rejected
+        * `REMOVED` - Removed
+    ModerationStatus8dcEnum:
       enum:
       - DRAFT
       - PENDING
@@ -24747,12 +25389,16 @@ components:
       - WORKFORCE_AGENCY
       - PROJECT_VENDOR
       - EMPLOYER
+      - RENTAL_OWNER
+      - PROPERTY_HOST
       type: string
       description: |-
         * `INDIVIDUAL` - Individual
         * `WORKFORCE_AGENCY` - Workforce agency
         * `PROJECT_VENDOR` - Project vendor
         * `EMPLOYER` - Employer
+        * `RENTAL_OWNER` - Rental owner
+        * `PROPERTY_HOST` - Property host
     PartnerCapability:
       type: object
       description: |-
@@ -25378,7 +26024,7 @@ components:
           readOnly: true
         moderation_status:
           allOf:
-          - $ref: '#/components/schemas/ModerationStatusEnum'
+          - $ref: '#/components/schemas/ModerationStatus8dcEnum'
           readOnly: true
         public_state:
           type: string
@@ -27648,6 +28294,49 @@ components:
         * `ACCEPTED` - Accepted and applied
         * `DECLINED` - Declined by the Customer
         * `EXPIRED` - Not answered in time
+    Property:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        title:
+          type: string
+          maxLength: 180
+        description:
+          type: string
+        location_text:
+          type: string
+          maxLength: 180
+        moderation_status:
+          $ref: '#/components/schemas/ModerationStatus384Enum'
+        public_state:
+          type: string
+          readOnly: true
+        host_name:
+          type: string
+          readOnly: true
+        variant:
+          type: string
+          format: uuid
+        units:
+          type: array
+          items:
+            $ref: '#/components/schemas/Unit'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - host_name
+      - id
+      - public_state
+      - title
+      - units
+      - variant
     Proposal:
       type: object
       description: A vendor's own quote, read back to that vendor.
@@ -30234,6 +30923,180 @@ components:
           maxLength: 140
       required:
       - scope
+    RentalAsset:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+        description:
+          type: string
+          readOnly: true
+        location_text:
+          type: string
+          readOnly: true
+        daily_rate_paise:
+          type: integer
+          readOnly: true
+        deposit_paise:
+          type: integer
+          readOnly: true
+        condition_grade:
+          allOf:
+          - $ref: '#/components/schemas/ConditionGradeEnum'
+          readOnly: true
+        current_status:
+          allOf:
+          - $ref: '#/components/schemas/CurrentStatusEnum'
+          readOnly: true
+        moderation_status:
+          allOf:
+          - $ref: '#/components/schemas/ModerationStatus384Enum'
+          readOnly: true
+        public_state:
+          type: string
+          readOnly: true
+        partner_name:
+          type: string
+          readOnly: true
+        variant:
+          type: string
+          format: uuid
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - condition_grade
+      - created_at
+      - current_status
+      - daily_rate_paise
+      - deposit_paise
+      - description
+      - id
+      - location_text
+      - moderation_status
+      - partner_name
+      - public_state
+      - title
+      - variant
+    RentalBooking:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/RentalBookingStatusEnum'
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        price_paise:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        pickup_or_delivery_mode:
+          type: string
+          maxLength: 32
+        notes:
+          type: string
+        asset:
+          allOf:
+          - $ref: '#/components/schemas/RentalAsset'
+          readOnly: true
+        deposit:
+          allOf:
+          - $ref: '#/components/schemas/RentalDeposit'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - asset
+      - created_at
+      - deposit
+      - end_date
+      - id
+      - price_paise
+      - start_date
+    RentalBookingStatusEnum:
+      enum:
+      - PENDING_PAYMENT
+      - CONFIRMED
+      - HANDOVER
+      - RETURNED
+      - CANCELLED
+      - DISPUTED
+      type: string
+      description: |-
+        * `PENDING_PAYMENT` - Pending payment
+        * `CONFIRMED` - Confirmed
+        * `HANDOVER` - Handed over
+        * `RETURNED` - Returned
+        * `CANCELLED` - Cancelled
+        * `DISPUTED` - Disputed
+    RentalDeposit:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        amount_paise:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        status:
+          $ref: '#/components/schemas/RentalDepositStatusEnum'
+        consumed_paise:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        provider_note:
+          type: string
+          description: 'PARTIAL money path: test/seed hold without live Razorpay.'
+          maxLength: 240
+      required:
+      - amount_paise
+      - id
+    RentalDepositStatusEnum:
+      enum:
+      - REQUESTED
+      - AUTHORIZED
+      - HELD
+      - RELEASED
+      - PARTIALLY_CONSUMED
+      - FULLY_CONSUMED
+      type: string
+      description: |-
+        * `REQUESTED` - Requested
+        * `AUTHORIZED` - Authorized
+        * `HELD` - Held
+        * `RELEASED` - Released
+        * `PARTIALLY_CONSUMED` - Partially consumed
+        * `FULLY_CONSUMED` - Fully consumed
+    RentalModerationRequest:
+      type: object
+      properties:
+        action:
+          $ref: '#/components/schemas/Action68eEnum'
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 480
+      required:
+      - action
+      - reason
     ReportRequest:
       type: object
       properties:
@@ -30908,6 +31771,18 @@ components:
       - expected_version
       - note
       - resolution
+    RespondEnquiryRequest:
+      type: object
+      properties:
+        response:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        decline:
+          type: boolean
+          default: false
+      required:
+      - response
     ReverseGeocodeRequestRequest:
       type: object
       properties:
@@ -33030,6 +33905,80 @@ components:
       description: |-
         * `OPEN` - Open
         * `RESOLVED` - Resolved
+    StayEnquiry:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        property:
+          type: string
+          format: uuid
+        property_title:
+          type: string
+          readOnly: true
+        unit:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          $ref: '#/components/schemas/StayEnquiryStatusEnum'
+        check_in:
+          type: string
+          format: date
+        check_out:
+          type: string
+          format: date
+        guest_count:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        message:
+          type: string
+        host_response:
+          type: string
+        responded_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - check_in
+      - check_out
+      - created_at
+      - id
+      - property
+      - property_title
+    StayEnquiryStatusEnum:
+      enum:
+      - SUBMITTED
+      - RESPONDED
+      - DECLINED
+      - WITHDRAWN
+      - EXPIRED
+      type: string
+      description: |-
+        * `SUBMITTED` - Submitted
+        * `RESPONDED` - Responded
+        * `DECLINED` - Declined
+        * `WITHDRAWN` - Withdrawn
+        * `EXPIRED` - Expired
+    StayModerationRequest:
+      type: object
+      properties:
+        action:
+          $ref: '#/components/schemas/Action68eEnum'
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 480
+      required:
+      - action
+      - reason
     StepUpSession:
       type: object
       properties:
@@ -33425,6 +34374,31 @@ components:
         * `TOO_SOON` - TOO_SOON
         * `OUTSIDE_OPERATING_WINDOW` - OUTSIDE_OPERATING_WINDOW
         * `NO_CAPACITY` - NO_CAPACITY
+    Unit:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 120
+        sharing_count:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        nightly_rate_paise:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        is_active:
+          type: boolean
+        attributes: {}
+      required:
+      - id
+      - name
+      - nightly_rate_paise
     UnitCancellationOutcome:
       type: object
       properties:
@@ -34656,6 +35630,8 @@ components:
       - A1_TASK_VISIT
       - A3_TIME_BLOCK
       - A5_CUSTOM_PROJECT
+      - A7_RENTAL
+      - A9_STAY
       - A10_LISTING
       type: string
       description: |-
@@ -34663,6 +35639,8 @@ components:
         * `A1_TASK_VISIT` - A1 task visit
         * `A3_TIME_BLOCK` - A3 time block
         * `A5_CUSTOM_PROJECT` - A5 custom project
+        * `A7_RENTAL` - A7 rental
+        * `A9_STAY` - A9 stay
         * `A10_LISTING` - A10 listing
   securitySchemes:
     cookieAuth:

@@ -43,6 +43,34 @@ describe("serviceHref", () => {
     ).toBe("/listings?service=full-time-roles");
   });
 
+  it("routes A7 rentals to /rentals", () => {
+    expect(
+      serviceHref(
+        service({
+          slug: "drill-machine",
+          request_archetypes: ["A7_RENTAL"],
+          starting_price: null,
+          bookable_variant_id: null,
+        }),
+        "rental-services",
+      ),
+    ).toBe("/rentals?service=drill-machine");
+  });
+
+  it("routes A9 stays to /stays", () => {
+    expect(
+      serviceHref(
+        service({
+          slug: "double-pg",
+          request_archetypes: ["A9_STAY"],
+          starting_price: null,
+          bookable_variant_id: null,
+        }),
+        "rooms-pg-hostel-hotels",
+      ),
+    ).toBe("/stays?service=double-pg");
+  });
+
   it("keeps the pure route builder usable without importing a Client Component", () => {
     expect(serviceHref(service({ request_archetypes: [] }), "home-services")).toBe(
       "/catalog/home-services/electrician-crew",

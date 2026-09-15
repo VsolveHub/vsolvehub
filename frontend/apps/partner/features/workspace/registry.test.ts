@@ -7,6 +7,8 @@ import {
   LISTING_WORKSPACE,
   MAX_TAB_ITEMS,
   PROJECT_WORKSPACE,
+  RENTAL_WORKSPACE,
+  STAY_WORKSPACE,
   TAP_FIRST_NAV,
   WORKFORCE_WORKSPACE,
   activeWorkspace,
@@ -209,6 +211,20 @@ describe("primaryShellNavFor — live PartnerShell chrome", () => {
 
     expect(hrefs).toContain("/work/all");
     expect(hrefs).not.toContain("/listings");
+  });
+
+  it("gives A7-only partners Rentals instead of Work", () => {
+    const workspaces = resolveWorkspaces([grant(RENTAL_WORKSPACE, [])]);
+    const hrefs = primaryShellNavFor(workspaces).map((item) => item.href);
+    expect(hrefs).toContain("/rentals");
+    expect(hrefs).not.toContain("/work/all");
+  });
+
+  it("gives A9-only partners Stays instead of Work", () => {
+    const workspaces = resolveWorkspaces([grant(STAY_WORKSPACE, [])]);
+    const hrefs = primaryShellNavFor(workspaces).map((item) => item.href);
+    expect(hrefs).toContain("/stays");
+    expect(hrefs).not.toContain("/work/all");
   });
 });
 

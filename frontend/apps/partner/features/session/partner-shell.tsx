@@ -43,6 +43,8 @@ export function getPartnerChromeMode(pathname: string): PartnerChromeMode {
     pathname === "/home" ||
     pathname === "/work/all" ||
     pathname === "/listings" ||
+    pathname === "/rentals" ||
+    pathname === "/stays" ||
     pathname === "/money" ||
     pathname === "/me" ||
     pathname.startsWith("/me/")

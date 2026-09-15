@@ -109,13 +109,25 @@ export const BROWSE_HREF = "/catalog";
  * bookable category. Public discovery is the listing surface, never cart/book.
  */
 export const CAREER_JOBS_CATEGORY_SLUG = "career-jobs";
+export const RENTAL_SERVICES_CATEGORY_SLUG = "rental-services";
+export const STAY_CATEGORY_SLUG = "rooms-pg-hostel-hotels";
 
 /** Customer Career/Jobs browse (published listings, apply, applications). */
 export const LISTINGS_HREF = "/listings";
+export const RENTALS_HREF = "/rentals";
+export const STAYS_HREF = "/stays";
 
 /** Whether a catalog category slug is the A10 Career/Jobs entry. */
 export function isCareerJobsCategory(categorySlug: string): boolean {
   return categorySlug === CAREER_JOBS_CATEGORY_SLUG;
+}
+
+export function isRentalCategory(categorySlug: string): boolean {
+  return categorySlug === RENTAL_SERVICES_CATEGORY_SLUG;
+}
+
+export function isStayCategory(categorySlug: string): boolean {
+  return categorySlug === STAY_CATEGORY_SLUG;
 }
 
 /**
@@ -127,14 +139,27 @@ export function listingsBrowseHref(serviceSlug?: string): string {
   return `${LISTINGS_HREF}?service=${encodeURIComponent(serviceSlug)}`;
 }
 
+export function rentalsBrowseHref(serviceSlug?: string): string {
+  if (serviceSlug === undefined || serviceSlug === "") return RENTALS_HREF;
+  return `${RENTALS_HREF}?service=${encodeURIComponent(serviceSlug)}`;
+}
+
+export function staysBrowseHref(serviceSlug?: string): string {
+  if (serviceSlug === undefined || serviceSlug === "") return STAYS_HREF;
+  return `${STAYS_HREF}?service=${encodeURIComponent(serviceSlug)}`;
+}
+
 /**
  * Where opening a catalog category goes.
  *
  * Career/Jobs must land on `/listings` — the catalogue tile browser only shows
  * area-priced bookables and would otherwise empty-state A10 as "nothing on sale".
+ * Rental and Stay land on their native surfaces — never cart / book / requests.
  */
 export function catalogCategoryHref(categorySlug: string, tileSlug?: string): string {
   if (isCareerJobsCategory(categorySlug)) return LISTINGS_HREF;
+  if (isRentalCategory(categorySlug)) return RENTALS_HREF;
+  if (isStayCategory(categorySlug)) return STAYS_HREF;
   if (tileSlug !== undefined && tileSlug !== "") {
     return `/catalog/${categorySlug}?tile=${encodeURIComponent(tileSlug)}`;
   }
