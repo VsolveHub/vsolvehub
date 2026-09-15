@@ -7,14 +7,19 @@ import {
   LISTING_WORKSPACE,
   MAX_TAB_ITEMS,
   PROJECT_WORKSPACE,
+  RENTAL_TAP_FIRST_NAV,
   RENTAL_WORKSPACE,
+  STAY_TAP_FIRST_NAV,
   STAY_WORKSPACE,
   TAP_FIRST_NAV,
   WORKFORCE_WORKSPACE,
   activeWorkspace,
+  isListingOnlyShell,
   navigationFor,
   primaryShellNavFor,
   resolveWorkspaces,
+  specialtyShellHome,
+  type WorkspaceNavItem,
 } from "./registry";
 
 /**
@@ -30,8 +35,13 @@ import {
  * a well-meaning fallback offering it as a generic tab that 404s.
  */
 
-function grant(workspaceKey: string, actions: string[]): WorkspaceGrant {
+function grant(workspaceKey: string, actions: string[] = []): WorkspaceGrant {
   return { workspaceKey, commercialMode: null, actions };
+}
+
+/** The dock's own hrefs, with the panel-opening Alerts item dropped. */
+function navHrefs(items: readonly WorkspaceNavItem[]): string[] {
+  return items.filter((item) => item.kind !== "notifications").map((item) => item.href);
 }
 
 const A3_ACTIONS = ["enquiry.view", "attendance.confirm", "crew.manage"];
@@ -225,6 +235,96 @@ describe("primaryShellNavFor — live PartnerShell chrome", () => {
     const hrefs = primaryShellNavFor(workspaces).map((item) => item.href);
     expect(hrefs).toContain("/stays");
     expect(hrefs).not.toContain("/work/all");
+  });
+
+  it("hands an A10-only employer the exact Listings dock, labels included", () => {
+    const items = primaryShellNavFor(resolveWorkspaces([grant(LISTING_WORKSPACE, [])]));
+
+    expect(items).toBe(LISTING_TAP_FIRST_NAV);
+    expect(items.map((item) => item.label)).toEqual([
+      "Home",
+      "Listings",
+      "Money",
+      "Alerts",
+      "Me",
+    ]);
+    expect(navHrefs(items)).toEqual(["/home", "/listings", "/money", "/me"]);
+  });
+
+  it("keeps Listings when the only other grant is one this build does not know", () => {
+    // An unknown key is dropped by `resolveWorkspaces`, so the A10 grant is
+    // still the sole workspace and the specialty dock must survive — partial
+    // ignorance must not push an employer back onto Work chrome.
+    const workspaces = resolveWorkspaces([
+      grant(LISTING_WORKSPACE, []),
+      grant("A9_SOMETHING_NEW", ["enquiry.view"]),
+    ]);
+    const hrefs = primaryShellNavFor(workspaces).map((item) => item.href);
+
+    expect(hrefs).toContain("/listings");
+    expect(hrefs).not.toContain("/work/all");
+  });
+
+  it("keeps Work chrome when A10 is mixed with an A5 project grant", () => {
+    const hrefs = primaryShellNavFor(
+      resolveWorkspaces([
+        grant(LISTING_WORKSPACE, []),
+        grant(PROJECT_WORKSPACE, A5_ACTIONS),
+      ]),
+    ).map((item) => item.href);
+
+    expect(hrefs).toContain("/work/all");
+    expect(hrefs).not.toContain("/listings");
+  });
+
+  it("falls back to Work when two specialty grants are held together", () => {
+    // `specialtyShellHome` only names a surface when there is exactly one. Two
+    // specialty workspaces cannot share one dock, so neither is offered rather
+    // than one being silently preferred.
+    const hrefs = primaryShellNavFor(
+      resolveWorkspaces([grant(LISTING_WORKSPACE, []), grant(RENTAL_WORKSPACE, [])]),
+    ).map((item) => item.href);
+
+    expect(hrefs).toContain("/work/all");
+    expect(hrefs).not.toContain("/listings");
+    expect(hrefs).not.toContain("/rentals");
+  });
+});
+
+describe("specialtyShellHome / isListingOnlyShell", () => {
+  const resolved = (grants: WorkspaceGrant[]) => resolveWorkspaces(grants);
+
+  it("names the single specialty surface of each dock", () => {
+    expect(specialtyShellHome(resolved([grant(LISTING_WORKSPACE)]))).toBe("listings");
+    expect(specialtyShellHome(resolved([grant(RENTAL_WORKSPACE)]))).toBe("rentals");
+    expect(specialtyShellHome(resolved([grant(STAY_WORKSPACE)]))).toBe("stays");
+  });
+
+  it("is not specialty for the M1 A1 floor of empty grants", () => {
+    expect(specialtyShellHome([])).toBeNull();
+    expect(isListingOnlyShell([])).toBe(false);
+  });
+
+  it("is not specialty once a specialty grant is mixed with A3 or A5", () => {
+    const mixed = resolved([grant(LISTING_WORKSPACE), grant(WORKFORCE_WORKSPACE, A3_ACTIONS)]);
+    expect(specialtyShellHome(mixed)).toBeNull();
+    expect(isListingOnlyShell(mixed)).toBe(false);
+  });
+
+  it("is Listing-only only for an A10 grant on its own", () => {
+    expect(isListingOnlyShell(resolved([grant(LISTING_WORKSPACE)]))).toBe(true);
+    expect(
+      isListingOnlyShell(resolved([grant(LISTING_WORKSPACE), grant(RENTAL_WORKSPACE)])),
+    ).toBe(false);
+  });
+
+  it("keeps the specialty tap-first arrays distinct from Work", () => {
+    // Each specialty dock is the shared shape with its own second destination.
+    expect(RENTAL_TAP_FIRST_NAV.map((item) => item.href)).toContain("/rentals");
+    expect(STAY_TAP_FIRST_NAV.map((item) => item.href)).toContain("/stays");
+    for (const dock of [LISTING_TAP_FIRST_NAV, RENTAL_TAP_FIRST_NAV, STAY_TAP_FIRST_NAV]) {
+      expect(dock.map((item) => item.href)).not.toContain("/work/all");
+    }
   });
 });
 

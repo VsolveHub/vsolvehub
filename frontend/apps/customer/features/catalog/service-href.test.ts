@@ -43,6 +43,54 @@ describe("serviceHref", () => {
     ).toBe("/listings?service=full-time-roles");
   });
 
+  it("routes A10 by the Career/Jobs category slug even when no listing archetype is published", () => {
+    // The taxonomy branch: a service filed under `career-jobs` is a listing
+    // surface whatever its `request_archetypes` say, so a stale or empty
+    // archetype list cannot send a job tile into the cart.
+    expect(
+      serviceHref(service({ slug: "warehouse-picker", request_archetypes: [] }), "career-jobs"),
+    ).toBe("/listings?service=warehouse-picker");
+  });
+
+  it("keeps A10 precedence over a fixed price and a bookable variant", () => {
+    // A priced listing must still open the listing surface — never the catalog
+    // service page, cart, `/book/` or `/requests/`.
+    const href = serviceHref(
+      service({
+        slug: "full-time-roles",
+        request_archetypes: ["A10_LISTING"],
+        starting_price: { amount_paise: 99900, currency: "INR" },
+        bookable_variant_id: "variant-1",
+      }),
+      "career-jobs",
+    );
+
+    expect(href).toBe("/listings?service=full-time-roles");
+    expect(href).not.toMatch(/^\/(catalog|requests|book)\b/);
+  });
+
+  it("keeps A10 precedence when the archetype list also carries A3", () => {
+    expect(
+      serviceHref(
+        service({
+          slug: "site-supervisor",
+          request_archetypes: ["A3_TIME_BLOCK", "A10_LISTING"],
+        }),
+        "career-jobs",
+      ),
+    ).toBe("/listings?service=site-supervisor");
+  });
+
+  it("carries the A10 archetype past a non-Career category slug", () => {
+    // The archetype decides the surface, not where merchandising filed it.
+    expect(
+      serviceHref(
+        service({ slug: "full-time-roles", request_archetypes: ["A10_LISTING"] }),
+        "home-services",
+      ),
+    ).toBe("/listings?service=full-time-roles");
+  });
+
   it("routes A7 rentals to /rentals", () => {
     expect(
       serviceHref(

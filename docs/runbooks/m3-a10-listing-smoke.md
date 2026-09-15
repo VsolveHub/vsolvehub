@@ -24,7 +24,7 @@ OTP is printed on screen in local/dev for these phones.
 | Role | Phone | App | Entry |
 |------|-------|-----|-------|
 | Customer applicant | `9900000077` | `:3000` | `/listings`, `/listings/my-applications` |
-| Partner employer (Apex) | `9900000088` | `:3001` | `/listings` (role code `partner` + APPROVED application) |
+| Partner employer (Apex) | `9900000088` | `:3001` | `/listings` (role code `partner` + APPROVED application); A10-only chrome — see below |
 | Operations | `8019013032` | `:3002` | `/operations/listings` |
 
 Seed includes:
@@ -34,6 +34,37 @@ Seed includes:
 - PUBLISHED+APPROVED listings (including Featured/premium demos)
 - Ops-queue listing: **Office Coordinator — Pending Ops Review**
 - Sample applications (SUBMITTED + SHORTLISTED) for customer My Applications and partner leads
+
+## Expected Partner dock chrome — `9900000088` (A10-only employer)
+
+The employer holds exactly one workspace grant, `A10_LISTING`. `specialtyShellHome`
+returns `"listings"`, so `primaryShellNavFor` hands the shell `LISTING_TAP_FIRST_NAV`.
+**The dock must say Listings, not Work.** Check both, because they are two
+components reading one array and only one is on screen at a time:
+
+| Viewport | Surface | Second destination | Never shown |
+|----------|---------|--------------------|-------------|
+| Phone (`< lg`) | bottom dock (`BottomTabBar`) | **Listings** → `/listings` | `/work/all`, `/jobs` |
+| Desktop (`≥ lg`) | header nav (`DesktopPrimaryNav`) | **Listings** → `/listings` | `/work/all`, `/jobs` |
+
+Both docks keep the shared shape around that slot:
+
+```text
+Home (/home) · Listings (/listings) · Money (/money) · Alerts (#notifications) · Me (/me)
+```
+
+`getPartnerChromeMode`: `/listings` is **full** (dock visible); `/listings/{id}` is
+**focused** (back header, no dock) so the applications inbox is not covered by a
+tab bar.
+
+Contrast cases the same seeding must keep honest — walk them if the account is
+re-granted:
+
+- **Empty grants** (a legacy M1/A1 Partner) → Work dock, `/work/all`, never Listings.
+- **A10 mixed with A3/A5** (a Partner who also does workforce or projects) → the
+  Work dock wins; Listings is not in the primary dock.
+- **Two specialty grants together** (e.g. A10 + A7) → neither specialty dock is
+  shown; the shell falls back to Work.
 
 ## Click path
 
@@ -45,20 +76,22 @@ Seed includes:
 
 ## Owner test commands
 
-Focused A10 slice (repo default `fail_under=85` covers all of `apps` — use `--no-cov`):
+Backend A10 slice (the repo default `fail_under=85` covers all of `apps/`, so pass
+`--no-cov` for a focused run):
 
 ```bash
 cd backend
 ./.venv/bin/python -m pytest tests/listings/ -q --no-cov
 ```
 
-Optional single-file focus:
+Single test — the cross-poster API scope case added for M3-A10-17:
 
 ```bash
-./.venv/bin/python -m pytest tests/listings/test_a10_flow.py -q --no-cov
+./.venv/bin/python -m pytest tests/listings/test_a10_flow.py -q --no-cov \
+  -k test_m3_a10_17_cross_poster_partner_api_is_not_found
 ```
 
-Frontend routing/registry/shell regressions (owner may run):
+Frontend routing/registry/shell regressions:
 
 ```bash
 cd frontend
@@ -68,6 +101,26 @@ pnpm exec vitest run \
   apps/partner/features/workspace/registry.test.ts \
   apps/partner/features/session/partner-shell-nav.test.tsx
 ```
+
+What that frontend pack asserts (node project for the `.ts` files, jsdom for the
+`.tsx` one):
+
+- **`serviceHref`** — A10 wins over the A7/A9 branches, a fixed price and a
+  `bookable_variant_id`; the `career-jobs` category slug routes a service that
+  publishes no listing archetype; an A10 archetype survives a non-Career
+  category. A listing never resolves to `/catalog/…`, `/requests/…` or `/book/…`.
+- **`catalogCategoryHref` / `listingsBrowseHref`** — Career, Rental and Stay
+  taxonomy land on their own surfaces; the listing service hint is URL-encoded.
+- **`primaryShellNavFor`** — A10-only → `LISTING_TAP_FIRST_NAV` (exact labels and
+  hrefs); empty grants → `TAP_FIRST_NAV` (Work); A10 mixed with A3 or A5 → Work;
+  two specialty grants → Work; plus `specialtyShellHome` / `isListingOnlyShell`.
+- **`BottomTabBar` / `DesktopPrimaryNav` / `getPartnerChromeMode`** — the rendered
+  A10 dock carries Listings + Money + Alerts + Me and never `/work/all` or
+  `/jobs`; `/listings` is full chrome and `/listings/{id}` focused.
+
+These tests are written for the owner to run. Report work as **built — owner
+verification pending**, and never report a run as passing until the command above
+has actually been executed.
 
 ## Product law reminders
 

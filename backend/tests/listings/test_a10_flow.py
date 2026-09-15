@@ -677,6 +677,41 @@ def test_m3_a10_16_public_search_leak_prevention(poster, a10_variant):
 
 
 @pytest.mark.django_db
+def test_m3_a10_17_cross_poster_partner_api_is_not_found(poster, a10_variant):
+    """M3-A10-17: The partner API scopes every listing read and action by poster, so a rival employer gets 404 — never another poster's record."""
+    rival_user = _create_user(f"+9199{uuid.uuid4().int % 10**8:08d}")
+    rival = PartnerProfile.objects.create(user=rival_user, display_name="Rival Hiring")
+    PartnerCapability.objects.create(
+        partner=rival,
+        variant=a10_variant,
+        archetype=ServiceVariant.BookingArchetype.A10_LISTING,
+        status=PartnerCapability.Status.APPROVED,
+    )
+
+    listing = create_listing(
+        poster=poster, variant_id=a10_variant.id, title="Owner only", description="desc"
+    )
+    rival_client = _client_for(rival_user, role="partner")
+
+    # The read, the applications inbox and a state-changing action all resolve
+    # through `poster=`, so a non-owner must get 404 rather than the record. This
+    # is the view-level guard that stands in front of `reveal_contact` /
+    # `update_application_status`, which themselves take no poster argument.
+    assert rival_client.get(f"/api/v1/partner/listings/{listing.id}").status_code == 404
+    assert (
+        rival_client.get(f"/api/v1/partner/listings/{listing.id}/applications").status_code == 404
+    )
+    assert (
+        rival_client.post(
+            f"/api/v1/partner/listings/{listing.id}/close",
+            {"reason": "not mine"},
+            format="json",
+        ).status_code
+        == 404
+    )
+
+
+@pytest.mark.django_db
 def test_partner_roles_and_create_by_service(poster, a10_variant):
     """Verify partner roles catalog endpoint and creating listing by service_id / service_slug."""
     client = _client_for(poster.user, role="partner")
