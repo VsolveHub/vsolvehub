@@ -11,6 +11,7 @@ from django.utils import timezone
 from rest_framework.exceptions import NotFound
 
 from apps.catalog.models import (
+    A10VariantConfiguration,
     Category,
     M2VariantConfiguration,
     Service,
@@ -28,6 +29,7 @@ from apps.pricing.selectors import variants_with_current_rate
 class _PublicService(Protocol):
     public_variants: list[ServiceVariant]
     requirement_variants: list[ServiceVariant]
+    listing_variants: list[ServiceVariant]
 
 
 def _public_variants() -> QuerySet[ServiceVariant]:
@@ -95,23 +97,31 @@ def _requirement_variants() -> QuerySet[ServiceVariant]:
     )
 
 
+def _listing_apply_variants() -> QuerySet[ServiceVariant]:
+    """A10 hiring-partner apply row(s) — not the full Career role taxonomy.
+
+    Partner onboarding "Your trades" needs at least one selectable service under
+    Career/Jobs. Those variants are not A1-priced and not M2-askable, so they
+    were invisible to `_offerable_services`. Only the apply-facing skill code
+    `career-jobs` is published here; the hundreds of role taxonomy listings stay
+    out of the public catalog.
+    """
+    return ServiceVariant.objects.filter(
+        is_active=True,
+        booking_archetype=ServiceVariant.BookingArchetype.A10_LISTING,
+        required_skill_code="career-jobs",
+        a10_configurations__status=A10VariantConfiguration.Status.ACTIVE,
+    ).distinct()
+
+
 def _offerable_service_base() -> QuerySet[Service]:
     """Every service a Customer may be shown, under one rule for both lifecycles.
 
-    **A service is offerable when it can be priced *or* when it can be asked about.** Until this
-    existed the only gate was `has_current_rate`, which is the M1 rule — an A1 task cannot be
-    booked without a price — and it silently excluded every M2 service from the catalog, because
-    an A3 or A5 service has no rate by design. The seeded `workforce-and-projects` category
-    listed zero services and its two service pages answered `404`, with nothing wrong in the data:
-    both services were `ACTIVE`, both variants active, both configurations `ACTIVE`.
-
-    `README.md` §"Customer, Partner and Operations surfaces" is explicit that this is one catalog
-    and the *archetype* chooses the action — "Check price and availability" against "Tell us what
-    you need" — so the fix belongs here rather than in a second M2-only listing.
-
-    Both annotations are published downstream: `has_current_rate` still decides whether a
-    `starting_price` exists, and `accepts_requirements` is what tells a client which action to
-    render. Neither is inferred from the other, because a service may genuinely have both.
+    **A service is offerable when it can be priced *or* when it can be asked about
+    *or* when it is the A10 hiring-partner apply row.** Until M2, the only gate was
+    `has_current_rate`. M2 added `accepts_requirements`. A10 Career/Jobs has neither
+    a rate nor an M2 configuration — without `accepts_listings`, Partner apply showed
+    Career with "No bookable job types" despite an ACTIVE hiring variant.
     """
     now = timezone.now()
     current_rate = ServiceRate.objects.filter(
@@ -125,13 +135,23 @@ def _offerable_service_base() -> QuerySet[Service]:
         is_active=True,
         m2_configurations__status=M2VariantConfiguration.Status.ACTIVE,
     )
+    listing_variant = ServiceVariant.objects.filter(
+        service_id=OuterRef("pk"),
+        is_active=True,
+        booking_archetype=ServiceVariant.BookingArchetype.A10_LISTING,
+        required_skill_code="career-jobs",
+        a10_configurations__status=A10VariantConfiguration.Status.ACTIVE,
+    )
     return (
         Service.objects.annotate(
             has_current_rate=Exists(current_rate),
             accepts_requirements=Exists(requirement_variant),
+            accepts_listings=Exists(listing_variant),
         )
         .filter(
-            models.Q(has_current_rate=True) | models.Q(accepts_requirements=True),
+            models.Q(has_current_rate=True)
+            | models.Q(accepts_requirements=True)
+            | models.Q(accepts_listings=True),
             status=Service.Status.ACTIVE,
             subcategory__is_active=True,
             subcategory__category__is_active=True,
@@ -152,6 +172,11 @@ def _offerable_services() -> QuerySet[Service]:
                 "variants",
                 queryset=_requirement_variants(),
                 to_attr="requirement_variants",
+            ),
+            Prefetch(
+                "variants",
+                queryset=_listing_apply_variants(),
+                to_attr="listing_variants",
             ),
             Prefetch("media", queryset=ServiceMedia.objects.filter(is_active=True)),
         )
@@ -266,15 +291,24 @@ def public_service_by_slug(service_slug: str) -> Service:
                 queryset=_requirement_variants(),
                 to_attr="requirement_variants",
             ),
+            Prefetch(
+                "variants",
+                queryset=_listing_apply_variants(),
+                to_attr="listing_variants",
+            ),
             Prefetch("policies", queryset=ServicePolicy.objects.filter(is_active=True)),
             Prefetch("media", queryset=ServiceMedia.objects.filter(is_active=True)),
         )
     )
     service = get_object_or_404(services, slug=service_slug)
     public = cast(_PublicService, cast(object, service))
-    if not public.public_variants and not public.requirement_variants:
-        # Neither priceable nor askable. The original rule was `not public_variants` alone, which
-        # is right for A1 — an active service without an effective rate must not appear bookable —
-        # and made every M2 service page a `404`, because an A3 or A5 service has no rate at all.
+    if (
+        not public.public_variants
+        and not public.requirement_variants
+        and not getattr(public, "listing_variants", None)
+    ):
+        # Neither priceable, askable, nor A10 hiring-apply. The original rule was
+        # `not public_variants` alone; M2 added requirement_variants; A10 hiring apply
+        # needs listing_variants or Partner "Your trades" stays empty under Career.
         raise NotFound("Service is not currently bookable.")
     return service

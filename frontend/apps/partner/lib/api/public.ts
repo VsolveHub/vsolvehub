@@ -25,6 +25,9 @@ export interface CachePolicy {
 export function createPublicApi(cache: CachePolicy): ApiClient {
   return createApiClient({
     baseUrl: SERVER_API_BASE_URL,
+    // Work-catalog walks many services; keep headroom above the default 30s when
+    // the local API is under concurrent load from this same page.
+    timeoutMs: 60_000,
     fetch: (request) =>
       fetch(request, {
         next:

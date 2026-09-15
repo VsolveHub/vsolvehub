@@ -213,7 +213,10 @@ class ServiceCardSerializer(serializers.ModelSerializer[Service]):
         serializers.ListField(child=serializers.CharField(), allow_empty=True),
     )
     def get_request_archetypes(service: Service) -> list[str]:
-        variants = getattr(service, "requirement_variants", [])
+        variants = [
+            *getattr(service, "requirement_variants", []),
+            *getattr(service, "listing_variants", []),
+        ]
         # Ordered rather than a set, so the same service publishes the same list every read.
         return sorted({variant.booking_archetype for variant in variants})
 
@@ -351,6 +354,22 @@ class RequirementVariantSerializer(serializers.ModelSerializer[ServiceVariant]):
         read_only_fields = fields
 
 
+class ListingApplyVariantSerializer(serializers.ModelSerializer[ServiceVariant]):
+    """A10 hiring-partner apply variant — no invented price, skill code published for trades UI."""
+
+    class Meta:
+        model = ServiceVariant
+        fields = (
+            "id",
+            "code",
+            "name",
+            "description",
+            "image_url",
+            "required_skill_code",
+        )
+        read_only_fields = fields
+
+
 class ServiceDetailSerializer(ServiceCardSerializer):
     variants = serializers.SerializerMethodField()
     requirement_variants = serializers.SerializerMethodField()
@@ -373,8 +392,15 @@ class ServiceDetailSerializer(ServiceCardSerializer):
     @staticmethod
     @extend_schema_field(ServiceVariantConfigurationSerializer(many=True))
     def get_variants(service: Service) -> list[dict[str, object]]:
-        serializer = ServiceVariantConfigurationSerializer(_public_variants(service), many=True)
-        return list(serializer.data)
+        priced = list(
+            ServiceVariantConfigurationSerializer(_public_variants(service), many=True).data,
+        )
+        # Partner apply walks `variants` for Career/Jobs hiring rows (A10). Those have no
+        # ServiceRate, so they cannot use ServiceVariantConfigurationSerializer.
+        listing = getattr(service, "listing_variants", [])
+        if listing:
+            priced.extend(list(ListingApplyVariantSerializer(listing, many=True).data))
+        return priced
 
     @staticmethod
     @extend_schema_field(RequirementVariantSerializer(many=True))

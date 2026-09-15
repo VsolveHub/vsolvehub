@@ -5,8 +5,10 @@ Seeds:
 - 30 Subcategories and 222 Services/Variants from the authoritative CSV
 - A10VariantConfiguration for each variant
 - Starter VendorSubscriptionPlans (Starter, Growth, Enterprise)
+- Career apply Skill + hiring-partner variant (Partner "Your trades")
 - Demo hiring partner with A10_LISTING capability
 - Demo published career listings (regular + Featured/premium)
+- End-to-end mock flow for customer / partner / operations surfaces
 """
 
 from datetime import timedelta
@@ -28,11 +30,20 @@ from apps.catalog.models import (
     Subcategory,
 )
 from apps.identity.models import Role, UserRole
-from apps.listings.models import Listing, ListingModerationEvent, VendorSubscriptionPlan
+from apps.listings.models import (
+    Application,
+    ApplicationStatusEvent,
+    Listing,
+    ListingModerationEvent,
+    VendorSubscription,
+    VendorSubscriptionPlan,
+)
+from apps.locations.models import ServiceArea, ServiceAreaService
 from apps.partners.models import (
     PartnerApplication,
     PartnerCapability,
     PartnerProfile,
+    Skill,
 )
 
 User = get_user_model()
@@ -226,6 +237,85 @@ class Command(BaseCommand):
             )
         self.stdout.write(self.style.SUCCESS("Seeded 3 VendorSubscriptionPlans."))
 
+        # Partner apply "Your trades" maps categories → Skill codes. Without this
+        # row, Career/Jobs is listed but the checkbox is a no-op (no skill to toggle).
+        Skill.objects.update_or_create(
+            code="career-jobs",
+            defaults={
+                "name": "Career Opportunity or Job Opportunities",
+                "description": (
+                    "Hiring / employer partners who post Career & Jobs listings "
+                    "(A10_LISTING). Not a field-visit trade skill."
+                ),
+                "is_active": True,
+            },
+        )
+        # One apply-facing variant under Career so registration can attach a
+        # service (submit requires skills + variants). Role taxonomy variants keep
+        # their own required_skill_code and are hidden from the trades picker.
+        hiring_subcat, _ = Subcategory.objects.get_or_create(
+            category=category,
+            slug="hiring-partners",
+            defaults={
+                "name": "Hiring Partners",
+                "description": "Employer partners who post job openings on V Solve Hub.",
+            },
+        )
+        hiring_service, _ = Service.objects.get_or_create(
+            subcategory=hiring_subcat,
+            slug="hiring-partner-job-listings",
+            defaults={
+                "name": "Job listings (hiring partner)",
+                "short_description": "Post and manage Career & Jobs openings.",
+                "status": Service.Status.ACTIVE,
+            },
+        )
+        hiring_variant, _ = ServiceVariant.objects.update_or_create(
+            service=hiring_service,
+            code="career-jobs-hiring-listing",
+            defaults={
+                "name": "Career & Jobs listing access",
+                "pricing_strategy": ServiceVariant.PricingStrategy.FIXED,
+                "booking_archetype": ServiceVariant.BookingArchetype.A10_LISTING,
+                "required_skill_code": "career-jobs",
+                "tax_category_code": "listing",
+                "is_active": True,
+            },
+        )
+        A10VariantConfiguration.objects.get_or_create(
+            variant=hiring_variant,
+            version=1,
+            defaults={
+                "status": A10VariantConfiguration.Status.ACTIVE,
+                "application_cooldown_hours": 24,
+                "listing_type_schema": {
+                    "type": "object",
+                    "properties": {
+                        "role_type": {"type": "string"},
+                        "salary_range": {"type": "string"},
+                    },
+                },
+                "application_schema": {
+                    "type": "object",
+                    "properties": {"experience": {"type": "string"}},
+                },
+            },
+        )
+        area = ServiceArea.objects.filter(slug="hyderabad-500032").first()
+        if area is not None:
+            ServiceAreaService.objects.update_or_create(
+                service_area=area,
+                variant=hiring_variant,
+                defaults={"is_active": True},
+            )
+        if first_variant is None:
+            first_variant = hiring_variant
+        self.stdout.write(
+            self.style.SUCCESS(
+                "Seeded career-jobs Skill + hiring-partner apply variant for Your trades."
+            )
+        )
+
         # Seed demo employer partner
         demo_user, _ = User.objects.get_or_create(
             phone_number="+919900000088",
@@ -373,4 +463,171 @@ class Command(BaseCommand):
                     self.style.SUCCESS("Published existing smoke premium listing for demo.")
                 )
 
+            self._seed_complete_demo_flow(
+                profile=profile,
+                demo_user=demo_user,
+                variant=first_variant,
+                now=now,
+            )
+
         self.stdout.write(self.style.SUCCESS("seed_listing_catalog completed successfully."))
+        self.stdout.write(
+            "Demo logins — Customer :3000 /listings  phone 9900000077 | "
+            "Partner :3001 /listings  phone 9900000088 | "
+            "Operations :3002 /operations/listings  phone 8019013032 (OTP on screen)."
+        )
+
+    def _seed_complete_demo_flow(
+        self,
+        *,
+        profile: PartnerProfile,
+        demo_user: Any,
+        variant: ServiceVariant,
+        now: Any,
+    ) -> None:
+        """Customer applicant + pending ops listing + applications for a full UI walkthrough."""
+
+        enterprise = VendorSubscriptionPlan.objects.filter(code="enterprise").first()
+        if enterprise is not None:
+            VendorSubscription.objects.update_or_create(
+                poster=profile,
+                plan=enterprise,
+                defaults={
+                    "status": VendorSubscription.Status.ACTIVE,
+                    "starts_at": now - timedelta(days=1),
+                    "ends_at": now + timedelta(days=89),
+                },
+            )
+            self.stdout.write(self.style.SUCCESS("Ensured ACTIVE Enterprise subscription for Apex."))
+
+        # Ops moderation queue — submitted, not yet live.
+        pending, pending_created = Listing.objects.get_or_create(
+            poster=profile,
+            title="Office Coordinator — Pending Ops Review",
+            defaults={
+                "variant": variant,
+                "description": (
+                    "Demo listing waiting in Operations Job Listings. Approve with a reason "
+                    "to publish it for customers."
+                ),
+                "location_text": "Hyderabad, Telangana",
+                "contact_phone": "+919900000088",
+                "contact_email": "careers@apexstaffing.in",
+                "status": Listing.Status.DRAFT,
+                "moderation_status": Listing.ModerationStatus.PENDING,
+                "structured_fields": {
+                    "role_type": "Full Time",
+                    "salary_range": "₹3,50,000 - ₹5,00,000 / year",
+                    "experience_years": "1-2 years",
+                    "shift": "Day Shift",
+                },
+            },
+        )
+        if not pending_created:
+            pending.status = Listing.Status.DRAFT
+            pending.moderation_status = Listing.ModerationStatus.PENDING
+            pending.variant = variant
+            pending.save(
+                update_fields=("status", "moderation_status", "variant", "updated_at"),
+            )
+        if pending_created:
+            ListingModerationEvent.objects.create(
+                listing=pending,
+                actor=demo_user,
+                action=ListingModerationEvent.Action.SUBMITTED,
+                reason="Demo seed — awaiting Operations review.",
+            )
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"{'Created' if pending_created else 'Updated'} ops-queue listing: {pending.title}"
+            )
+        )
+
+        # Customer applicant (browse + My Applications on :3000).
+        applicant, _ = User.objects.get_or_create(
+            phone_number="+919900000077",
+            defaults={"full_name": "Demo Career Applicant"},
+        )
+        customer_role, _ = Role.objects.get_or_create(
+            code="customer", defaults={"name": "Customer", "is_system": True}
+        )
+        UserRole.objects.update_or_create(
+            user=applicant, role=customer_role, defaults={"revoked_at": None}
+        )
+
+        published = list(
+            Listing.objects.filter(
+                poster=profile,
+                status=Listing.Status.PUBLISHED,
+                moderation_status=Listing.ModerationStatus.APPROVED,
+            ).order_by("title")
+        )
+        if not published:
+            self.stdout.write(self.style.WARNING("No published listings — skipped applicant apps."))
+            return
+
+        primary = next(
+            (row for row in published if row.title.startswith("Experienced Full Stack")),
+            published[0],
+        )
+        featured = next(
+            (row for row in published if "Featured" in row.title or row.is_premium),
+            published[-1],
+        )
+
+        submitted, created_submitted = Application.objects.get_or_create(
+            listing=primary,
+            applicant=applicant,
+            defaults={
+                "status": Application.Status.SUBMITTED,
+                "applicant_snapshot": {
+                    "full_name": "Demo Career Applicant",
+                    "phone_number": "+919900000077",
+                },
+                "cover_note": (
+                    "Demo application — visible on customer My Applications and partner leads."
+                ),
+                "resume_url": "https://example.test/demo-applicant-resume.pdf",
+            },
+        )
+        if created_submitted:
+            ApplicationStatusEvent.objects.create(
+                application=submitted,
+                actor=applicant,
+                from_status="",
+                to_status=Application.Status.SUBMITTED,
+                kind="SUBMITTED",
+                note="Demo seed application.",
+            )
+
+        shortlisted, created_shortlisted = Application.objects.get_or_create(
+            listing=featured,
+            applicant=applicant,
+            defaults={
+                "status": Application.Status.SHORTLISTED,
+                "applicant_snapshot": {
+                    "full_name": "Demo Career Applicant",
+                    "phone_number": "+919900000077",
+                },
+                "cover_note": "Demo shortlisted application for partner inbox.",
+                "resume_url": "https://example.test/demo-applicant-resume.pdf",
+            },
+        )
+        if not created_shortlisted and shortlisted.status != Application.Status.SHORTLISTED:
+            shortlisted.status = Application.Status.SHORTLISTED
+            shortlisted.save(update_fields=("status", "updated_at"))
+        if created_shortlisted:
+            ApplicationStatusEvent.objects.create(
+                application=shortlisted,
+                actor=demo_user,
+                from_status=Application.Status.SUBMITTED,
+                to_status=Application.Status.SHORTLISTED,
+                kind="SHORTLISTED",
+                note="Demo seed shortlist.",
+            )
+
+        self.stdout.write(
+            self.style.SUCCESS(
+                "Seeded customer applicant 9900000077 with submitted + shortlisted applications."
+            )
+        )
