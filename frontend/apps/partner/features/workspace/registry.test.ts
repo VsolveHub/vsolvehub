@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   BASE_NAV,
+  LISTING_TAP_FIRST_NAV,
   LISTING_WORKSPACE,
   MAX_TAB_ITEMS,
   PROJECT_WORKSPACE,
@@ -10,6 +11,7 @@ import {
   WORKFORCE_WORKSPACE,
   activeWorkspace,
   navigationFor,
+  primaryShellNavFor,
   resolveWorkspaces,
 } from "./registry";
 
@@ -178,6 +180,35 @@ describe("A10 listing navigation", () => {
       "/listings",
       "/me",
     ]);
+  });
+});
+
+describe("primaryShellNavFor — live PartnerShell chrome", () => {
+  it("gives A10-only employers Listings instead of Work/Jobs", () => {
+    const workspaces = resolveWorkspaces([grant(LISTING_WORKSPACE, [])]);
+    const hrefs = primaryShellNavFor(workspaces).map((item) => item.href);
+
+    expect(hrefs).toEqual(LISTING_TAP_FIRST_NAV.map((item) => item.href));
+    expect(hrefs).toContain("/listings");
+    expect(hrefs).not.toContain("/work/all");
+    expect(hrefs).not.toContain("/jobs");
+  });
+
+  it("keeps TAP_FIRST Work for empty grants (A1 floor)", () => {
+    const hrefs = primaryShellNavFor([]).map((item) => item.href);
+    expect(hrefs).toEqual(TAP_FIRST_NAV.map((item) => item.href));
+    expect(hrefs).toContain("/work/all");
+  });
+
+  it("keeps TAP_FIRST Work when A10 is mixed with workforce", () => {
+    const workspaces = resolveWorkspaces([
+      grant(LISTING_WORKSPACE, []),
+      grant(WORKFORCE_WORKSPACE, A3_ACTIONS),
+    ]);
+    const hrefs = primaryShellNavFor(workspaces).map((item) => item.href);
+
+    expect(hrefs).toContain("/work/all");
+    expect(hrefs).not.toContain("/listings");
   });
 });
 

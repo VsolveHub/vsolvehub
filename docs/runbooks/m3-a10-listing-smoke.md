@@ -38,7 +38,7 @@ Seed includes:
 ## Click path
 
 1. **Customer** `:3000` — Careers / `career-jobs` → `/listings` (not `/book/`, cart, or `/requests/`). Open a live listing → apply → `/listings/my-applications` → withdraw if offered. Drafts must not appear in public browse. Seeded apps for `9900000077` should already show.
-2. **Partner** `:3001` as `9900000088` — Listings workspace only (`public_state` badges: LIVE / PENDING_REVIEW / etc.). Create and submit a listing; it stays `PENDING_REVIEW`, not live. Open a published listing → applications inbox → shortlist / reveal contact as implemented. A1 Jobs/Work tabs stay absent for this grant.
+2. **Partner** `:3001` as `9900000088` — A10-only shell chrome: dock/desktop nav shows **Listings** (`/listings`), not Work (`/work/all`) or Jobs. `public_state` badges: LIVE / PENDING_REVIEW / etc. Create and submit a listing; it stays `PENDING_REVIEW`, not live. Open a published listing → applications inbox → shortlist / reveal contact as implemented. Mixed A3/A5 + A10 partners still keep the Work tab.
 3. **Operations** `:3002` — `/operations/listings` → filter Pending → open **Office Coordinator — Pending Ops Review** → approve or reject **with a required reason** → listing public state updates. Remove/reinstate with reason if exercised.
 4. Partner shortlist + reveal contact. A second reveal past the daily cap shows the server error (not a fake success).
 5. Subscription / premium purchase paths: use **fake** Razorpay locally only. Publish beyond plan max is blocked server-side. Premium capture sets `is_premium`; replay must not double-activate.
@@ -58,12 +58,15 @@ Optional single-file focus:
 ./.venv/bin/python -m pytest tests/listings/test_a10_flow.py -q --no-cov
 ```
 
-Frontend routing/registry regressions (owner may run):
+Frontend routing/registry/shell regressions (owner may run):
 
 ```bash
 cd frontend
-pnpm --filter @vsolve/customer exec vitest run features/catalog/service-href.test.ts lib/routes.test.ts
-pnpm --filter @vsolve/partner exec vitest run features/workspace/registry.test.ts
+pnpm exec vitest run \
+  apps/customer/features/catalog/service-href.test.ts \
+  apps/customer/lib/routes.test.ts \
+  apps/partner/features/workspace/registry.test.ts \
+  apps/partner/features/session/partner-shell-nav.test.tsx
 ```
 
 ## Product law reminders

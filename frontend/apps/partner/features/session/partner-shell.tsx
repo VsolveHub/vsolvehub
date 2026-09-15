@@ -16,8 +16,8 @@ import { NotificationNavTab } from "@/features/notifications/view/notification-b
 import { usePartnerApplication } from "@/features/application/queries";
 import { homeForApplication } from "@/features/session/model/redirect";
 import {
+  primaryShellNavFor,
   resolveWorkspaces,
-  TAP_FIRST_NAV,
   type WorkspaceNavItem,
 } from "@/features/workspace/registry";
 import { usePartnerWorkspaceGrants } from "@/features/workspace/queries";
@@ -30,7 +30,8 @@ export type PartnerChromeMode = "full" | "focused" | "onboarding";
 
 /**
  * Route chrome policy for Partner application:
- * - "full": persistent header + BottomTabBar on /home, /work/all, /money, /me, /me/*
+ * - "full": persistent header + BottomTabBar on /home, /work/all, /listings,
+ *   /money, /me, /me/*
  * - "onboarding": onboarding shell on /apply/* (no top/bottom navbar)
  * - "focused": compact Back button header, NO bottom tabs on detail/action routes
  */
@@ -41,6 +42,7 @@ export function getPartnerChromeMode(pathname: string): PartnerChromeMode {
   if (
     pathname === "/home" ||
     pathname === "/work/all" ||
+    pathname === "/listings" ||
     pathname === "/money" ||
     pathname === "/me" ||
     pathname.startsWith("/me/")
@@ -359,6 +361,7 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
 
   const workspaces = resolveWorkspaces(workspaceGrants.grants ?? []);
   const workspaceKeys = workspaces.map((item) => item.key);
+  const primaryNav = primaryShellNavFor(workspaces);
   const isDarkHero = pathname === "/home" || pathname === "/work";
 
   return (
@@ -417,7 +420,7 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
                 </Link>
 
                 {isApprovedPartner ? (
-                  <DesktopPrimaryNav items={TAP_FIRST_NAV} workspaceKeys={workspaceKeys} />
+                  <DesktopPrimaryNav items={primaryNav} workspaceKeys={workspaceKeys} />
                 ) : null}
 
                 <Button
@@ -439,7 +442,7 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
           The dock is drawn only for an approved Partner. `/home` is the one
           "full"-chrome route an unapproved applicant still belongs on — it
           renders their application overview — and every destination in
-          `TAP_FIRST_NAV` is now gated against them, so drawing it there would
+          the primary shell nav is gated against them, so drawing it there would
           be four taps that bounce straight back.
 
           This is the reasoning `ApplyGuard` already gives for why `/apply` does
@@ -461,7 +464,7 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
         </ShellContent>
 
         {chromeMode === "full" && isApprovedPartner ? (
-          <BottomTabBar items={TAP_FIRST_NAV} workspaceKeys={workspaceKeys} />
+          <BottomTabBar items={primaryNav} workspaceKeys={workspaceKeys} />
         ) : null}
 
         {/*
@@ -490,7 +493,7 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
  * dark tabs. Every one of those choices is right for a thumb and wrong for a
  * pointer, and re-deriving them behind `lg:` variants would mean editing the
  * classes the phone depends on — which is the one thing this change must not do.
- * Two components reading the same `TAP_FIRST_NAV` array cannot drift on *which*
+ * Two components reading the same `primaryShellNavFor` array cannot drift on *which*
  * destinations exist; only on how they are drawn, which is the point.
  *
  * `NotificationNavTab` is reused exactly as-is, styling included. It paints
@@ -499,7 +502,7 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
  * prop would have been the tidier seam, but that is a shared component the phone
  * renders too, and this task does not get to touch it.
  */
-function DesktopPrimaryNav({
+export function DesktopPrimaryNav({
   items,
   workspaceKeys,
 }: {
@@ -563,7 +566,7 @@ function DesktopPrimaryNav({
   );
 }
 
-function BottomTabBar({
+export function BottomTabBar({
   items,
   workspaceKeys,
 }: {

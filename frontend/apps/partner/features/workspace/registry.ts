@@ -116,14 +116,17 @@ export const BASE_NAV: WorkspaceNavItem[] = [
 ];
 
 /**
- * The tap-first navigation: three destinations, unconditionally, for
- * every signed-in Partner regardless of which capabilities they hold.
+ * The tap-first navigation for Partners who hold A1 Work (or mixed A3/A5
+ * workspaces that still live in the Work stack). Home / Work / Money / Alerts / Me.
  *
- * Used by `partner-shell.tsx`'s bottom tab bar in place of
- * `navigationFor(activeWorkspace(...))`. This supersedes `BASE_NAV` and
- * `WorkspaceSwitcher` for that one call site only — everything else in
- * this file stays in place, because it still has live consumers outside
- * the tab bar:
+ * Used by `partner-shell.tsx` via `primaryShellNavFor` — not unconditionally.
+ * A10_LISTING-only employers get `LISTING_TAP_FIRST_NAV` instead so they never
+ * see `/work/all` or `/jobs`. Empty grants keep this array (M1 A1 floor —
+ * inventing A1 from an empty grant list would hide Work from every legacy Partner).
+ *
+ * This supersedes `BASE_NAV` and `WorkspaceSwitcher` for that one call site
+ * only — everything else in this file stays in place, because it still has
+ * live consumers outside the tab bar:
  *
  *  - `WORKSPACE_REGISTRY` / `resolveWorkspaces` / `ResolvedWorkspace` gate
  *    every M2 workspace route (`features/workspace/view/workspace-route.tsx`,
@@ -183,6 +186,24 @@ export const TAP_FIRST_NAV: readonly WorkspaceNavItem[] = [
 ];
 
 /**
+ * Shell chrome for A10_LISTING-only employers: same dock shape as
+ * `TAP_FIRST_NAV`, with Listings in place of Work. Never `/work/all` or `/jobs`.
+ *
+ * Money and Alerts stay — billing/subscription UI still lives on listings, but
+ * Money is a shared ledger surface and Alerts is shared notification chrome.
+ * `LISTING_NAV` below stays the shorter workspace-registry shape for
+ * `navigationFor` / authorizedNav; the live shell uses this array via
+ * `primaryShellNavFor`.
+ */
+export const LISTING_TAP_FIRST_NAV: readonly WorkspaceNavItem[] = [
+  { href: "/home", label: "Home", icon: Home },
+  { href: "/listings", label: "Listings", icon: Briefcase, activePrefix: "/listings" },
+  { href: "/money", label: "Money", icon: Wallet },
+  { href: "#notifications", label: "Alerts", icon: Bell, kind: "notifications" },
+  { href: "/me", label: "Me", icon: UserCircle2 },
+];
+
+/**
  * Routes and labels per known workspace.
  *
  * Records stay in their own lifecycle vocabulary. An A3 shift-day is a shift and
@@ -200,6 +221,32 @@ export const LISTING_NAV: readonly WorkspaceNavItem[] = [
   { href: "/listings", label: "Listings", icon: Briefcase, activePrefix: "/listings" },
   { href: "/me", label: "Me", icon: UserCircle2, activePrefix: "/me" },
 ];
+
+/**
+ * Whether resolved workspaces are exclusively A10_LISTING (hiring-only employer).
+ *
+ * Empty list is *not* listing-only — that is the M1 A1 floor (no M2 grants yet).
+ * Mixed A10 + A3/A5 keeps Work chrome via `TAP_FIRST_NAV`.
+ */
+export function isListingOnlyShell(
+  workspaces: readonly { readonly key: string }[],
+): boolean {
+  return (
+    workspaces.length > 0 && workspaces.every((workspace) => workspace.key === LISTING_WORKSPACE)
+  );
+}
+
+/**
+ * Primary dock / desktop nav for `PartnerShell`.
+ *
+ * A10-only → `LISTING_TAP_FIRST_NAV` (Listings, never Work/Jobs).
+ * Otherwise → `TAP_FIRST_NAV` (including empty grants = legacy A1 Work).
+ */
+export function primaryShellNavFor(
+  workspaces: readonly { readonly key: string }[],
+): readonly WorkspaceNavItem[] {
+  return isListingOnlyShell(workspaces) ? LISTING_TAP_FIRST_NAV : TAP_FIRST_NAV;
+}
 
 export const WORKSPACE_REGISTRY: Record<string, WorkspaceDefinition> = {
   [WORKFORCE_WORKSPACE]: {
