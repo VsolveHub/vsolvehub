@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   BASE_NAV,
+  LISTING_WORKSPACE,
   MAX_TAB_ITEMS,
   PROJECT_WORKSPACE,
   TAP_FIRST_NAV,
@@ -154,6 +155,29 @@ describe("A5 project navigation", () => {
 
     expect(projects?.home).toBe("/projects");
     expect(projects?.authorizedNav.map((item) => item.label)).toContain("Stages");
+  });
+});
+
+describe("A10 listing navigation", () => {
+  it("resolves Career/Jobs partners to /listings, not /jobs", () => {
+    const [listing] = resolveWorkspaces([
+      grant(LISTING_WORKSPACE, ["listing.create", "listing.moderate"]),
+    ]);
+
+    expect(listing?.key).toBe(LISTING_WORKSPACE);
+    expect(listing?.home).toBe("/listings");
+    expect(listing?.authorizedNav.map((item) => item.href)).toContain("/listings");
+    expect(navigationFor(listing ?? null).map((item) => item.href)).not.toContain("/jobs");
+  });
+
+  it("keeps Listings reachable when listing actions are empty", () => {
+    // LISTING_NAV items carry no action gate — suspension must not blank the workspace.
+    const [listing] = resolveWorkspaces([grant(LISTING_WORKSPACE, [])]);
+    expect(listing?.authorizedNav.map((item) => item.href)).toEqual([
+      "/home",
+      "/listings",
+      "/me",
+    ]);
   });
 });
 
