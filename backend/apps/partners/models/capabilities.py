@@ -29,10 +29,14 @@ from apps.locations.models import ServiceArea
 
 
 def commercial_mode_for_archetype(archetype: str) -> str:
-    """Derive the commercial mode. A3 is always lead-only; A5 always managed."""
+    """Derive the commercial mode. A3 is always lead-only; A5/A7/A9 managed; A10 N/A."""
     if archetype == ServiceVariant.BookingArchetype.A3_TIME_BLOCK:
         return PartnerCapability.CommercialMode.LEAD_ONLY
-    if archetype == ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT:
+    if archetype in (
+        ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT,
+        ServiceVariant.BookingArchetype.A7_RENTAL,
+        ServiceVariant.BookingArchetype.A9_STAY,
+    ):
         return PartnerCapability.CommercialMode.MANAGED_PAYMENT_REQUIRED
     return PartnerCapability.CommercialMode.NOT_APPLICABLE
 
@@ -45,6 +49,8 @@ class PartnerBusinessProfile(models.Model):
         WORKFORCE_AGENCY = "WORKFORCE_AGENCY", "Workforce agency"
         PROJECT_VENDOR = "PROJECT_VENDOR", "Project vendor"
         EMPLOYER = "EMPLOYER", "Employer"
+        RENTAL_OWNER = "RENTAL_OWNER", "Rental owner"
+        PROPERTY_HOST = "PROPERTY_HOST", "Property host"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     partner = models.OneToOneField(

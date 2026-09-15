@@ -111,6 +111,8 @@ class ServiceVariant(models.Model):
         A1_TASK_VISIT = "A1_TASK_VISIT", "A1 task visit"
         A3_TIME_BLOCK = "A3_TIME_BLOCK", "A3 time block"
         A5_CUSTOM_PROJECT = "A5_CUSTOM_PROJECT", "A5 custom project"
+        A7_RENTAL = "A7_RENTAL", "A7 rental"
+        A9_STAY = "A9_STAY", "A9 stay"
         A10_LISTING = "A10_LISTING", "A10 listing"
 
     class PricingStrategy(models.TextChoices):
@@ -740,3 +742,83 @@ class A10VariantConfiguration(models.Model):
 
     def __str__(self) -> str:
         return f"{self.variant_id}:v{self.version}:{self.status}"
+
+
+class A7VariantConfiguration(models.Model):
+    """Versioned policy for an A7_RENTAL variant. Commands fail closed without ACTIVE."""
+
+    class Status(models.TextChoices):
+        DRAFT = "DRAFT", "Draft"
+        ACTIVE = "ACTIVE", "Active"
+        RETIRED = "RETIRED", "Retired"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    variant = models.ForeignKey(
+        ServiceVariant,
+        on_delete=models.PROTECT,
+        related_name="a7_configurations",
+    )
+    version = models.PositiveIntegerField(default=1)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.ACTIVE)
+    asset_schema = models.JSONField(default=dict, blank=True)
+    deposit_required = models.BooleanField(default=True)
+    default_deposit_paise = models.PositiveIntegerField(default=0)
+    min_rental_days = models.PositiveSmallIntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("variant", "-version")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("variant", "version"),
+                name="catalog_unique_a7_variant_configuration_version",
+            ),
+            models.UniqueConstraint(
+                fields=("variant",),
+                condition=models.Q(status="ACTIVE"),
+                name="catalog_unique_active_a7_variant_configuration",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"a7:{self.variant_id}:v{self.version}:{self.status}"
+
+
+class A9VariantConfiguration(models.Model):
+    """Versioned policy for an A9_STAY variant. Commands fail closed without ACTIVE."""
+
+    class Status(models.TextChoices):
+        DRAFT = "DRAFT", "Draft"
+        ACTIVE = "ACTIVE", "Active"
+        RETIRED = "RETIRED", "Retired"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    variant = models.ForeignKey(
+        ServiceVariant,
+        on_delete=models.PROTECT,
+        related_name="a9_configurations",
+    )
+    version = models.PositiveIntegerField(default=1)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.ACTIVE)
+    property_schema = models.JSONField(default=dict, blank=True)
+    enquiry_schema = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("variant", "-version")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("variant", "version"),
+                name="catalog_unique_a9_variant_configuration_version",
+            ),
+            models.UniqueConstraint(
+                fields=("variant",),
+                condition=models.Q(status="ACTIVE"),
+                name="catalog_unique_active_a9_variant_configuration",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"a9:{self.variant_id}:v{self.version}:{self.status}"

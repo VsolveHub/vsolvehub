@@ -57,6 +57,20 @@ WORKSPACE_ACTIONS: dict[str, tuple[str, ...]] = {
         "application.reveal",
         "subscription.manage",
     ),
+    ServiceVariant.BookingArchetype.A7_RENTAL: (
+        "rental.view",
+        "rental.manage",
+        "rental.create",
+        "rental.handover",
+        "rental.return",
+        "rental.deposit",
+    ),
+    ServiceVariant.BookingArchetype.A9_STAY: (
+        "stay.view",
+        "stay.manage",
+        "stay.create",
+        "stay.enquiry.respond",
+    ),
 }
 
 

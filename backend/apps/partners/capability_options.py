@@ -17,7 +17,13 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Final
 
-from apps.catalog.models import A10VariantConfiguration, M2VariantConfiguration, ServiceVariant
+from apps.catalog.models import (
+    A7VariantConfiguration,
+    A9VariantConfiguration,
+    A10VariantConfiguration,
+    M2VariantConfiguration,
+    ServiceVariant,
+)
 from apps.partners.models import (
     PartnerBusinessProfile,
     PartnerCapability,
@@ -54,6 +60,16 @@ BUSINESS_TYPE_OPTIONS: Final[tuple[tuple[str, str, str], ...]] = (
         "I hire people",
         "You post Career/Jobs listings. Applicants never pay. You buy a posting plan.",
     ),
+    (
+        PartnerBusinessProfile.BusinessType.RENTAL_OWNER,
+        "I rent equipment",
+        "You list rental assets. Customers book date ranges. Platform holds deposit (managed payment).",
+    ),
+    (
+        PartnerBusinessProfile.BusinessType.PROPERTY_HOST,
+        "I host stays",
+        "You list rooms/PG/hostel units. Guests enquire first; you respond in your inbox.",
+    ),
 )
 
 #: What a Partner is signing up to, per lifecycle. The Customer-facing equivalent lives in
@@ -71,6 +87,13 @@ LIFECYCLE_EXPLANATIONS: Final[dict[str, str]] = {
         "You post job listings. Applicants apply for free. You pay only for a posting plan "
         "or premium placement — never the other way around."
     ),
+    ServiceVariant.BookingArchetype.A7_RENTAL: (
+        "You rent physical assets by the day. Customers pay through the platform; deposits "
+        "are held and released after return."
+    ),
+    ServiceVariant.BookingArchetype.A9_STAY: (
+        "You host rooms or units. Guests send enquiries; you respond. Stay is not a visit booking."
+    ),
 }
 
 #: The capability-request fields each archetype needs, named by the server.
@@ -78,6 +101,8 @@ CAPABILITY_ASKS_FOR: Final[dict[str, tuple[str, ...]]] = {
     ServiceVariant.BookingArchetype.A3_TIME_BLOCK: ("max_crew_size",),
     ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT: ("max_project_value_paise",),
     ServiceVariant.BookingArchetype.A10_LISTING: (),
+    ServiceVariant.BookingArchetype.A7_RENTAL: (),
+    ServiceVariant.BookingArchetype.A9_STAY: (),
 }
 
 
@@ -171,15 +196,42 @@ def capability_options(partner: PartnerProfile) -> list[CapabilityOption]:
         for variant in variants
     ]
     options.extend(_a10_capability_options(live=live))
+    options.extend(
+        _archetype_capability_options(
+            live=live,
+            archetype=ServiceVariant.BookingArchetype.A7_RENTAL,
+            config_model=A7VariantConfiguration,
+        )
+    )
+    options.extend(
+        _archetype_capability_options(
+            live=live,
+            archetype=ServiceVariant.BookingArchetype.A9_STAY,
+            config_model=A9VariantConfiguration,
+        )
+    )
     return options
 
 
 def _a10_capability_options(*, live: set[uuid.UUID]) -> list[CapabilityOption]:
     """Career/Jobs variants with an ACTIVE A10 configuration. Fail closed otherwise."""
 
+    return _archetype_capability_options(
+        live=live,
+        archetype=ServiceVariant.BookingArchetype.A10_LISTING,
+        config_model=A10VariantConfiguration,
+    )
+
+
+def _archetype_capability_options(
+    *,
+    live: set[uuid.UUID],
+    archetype: str,
+    config_model: type,
+) -> list[CapabilityOption]:
     open_variant_ids = set(
-        A10VariantConfiguration.objects.filter(
-            status=A10VariantConfiguration.Status.ACTIVE,
+        config_model.objects.filter(
+            status=config_model.Status.ACTIVE,
         ).values_list("variant_id", flat=True)
     )
     if not open_variant_ids:
@@ -188,7 +240,7 @@ def _a10_capability_options(*, live: set[uuid.UUID]) -> list[CapabilityOption]:
         ServiceVariant.objects.filter(
             id__in=open_variant_ids,
             is_active=True,
-            booking_archetype=ServiceVariant.BookingArchetype.A10_LISTING,
+            booking_archetype=archetype,
         )
         .select_related("service__subcategory__category")
         .order_by("service__name", "name")
