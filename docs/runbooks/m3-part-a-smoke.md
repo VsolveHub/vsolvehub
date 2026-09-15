@@ -35,7 +35,7 @@ OTP prints on screen in local/dev.
 ## Click paths
 
 1. **Career (A10)** — browse → apply → my-applications; partner listings chrome without Work; ops moderate with reason. See `m3-a10-listing-smoke.md`.
-2. **Rental (A7)** — customer book seeded Bosch Drill; partner sees booking; ops approve pending Angle Grinder with reason. Deposit may show PARTIAL demo hold note.
+2. **Rental (A7)** — Partner `9900000066` on `:3001/rentals`: create asset (title + paise rates + approved variant) → Submit for review → (ops approve if needed) → on seeded/customer booking: Handover (CONFIRMED) → Return (HANDOVER) → Release deposit (RETURNED). Deposit may show PARTIAL demo hold note (HELD OK; not live Razorpay). Customer book seeded Bosch Drill; ops approve pending Angle Grinder with reason.
 3. **Stay (A9 enquiry-first)** — customer enquire on Lakeview PG; partner respond; ops approve pending hostel with reason.
 
 ## Tests
@@ -48,7 +48,8 @@ cd ../frontend
 pnpm exec vitest run \
   apps/customer/features/catalog/service-href.test.ts \
   apps/partner/features/workspace/registry.test.ts \
-  apps/partner/features/session/partner-shell-nav.test.tsx
+  apps/partner/features/session/partner-shell-nav.test.tsx \
+  apps/partner/features/rentals/booking-actions.test.ts
 ```
 
 ## PARTIAL
