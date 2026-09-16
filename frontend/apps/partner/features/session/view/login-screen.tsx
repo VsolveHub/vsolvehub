@@ -1,12 +1,12 @@
 "use client";
 
 import { ApiRequestError } from "@vsolve/api-client";
-import { useAuthGuard, useOtpFlow } from "@vsolve/query";
+import { useAuthGuard, useLogout, useOtpFlow } from "@vsolve/query";
 import { Card, ErrorState, Logo, OtpForm, Spinner, useHydrated } from "@vsolve/ui";
 import { HelpCircle } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 import { MarketingMobileNav } from "@/components/marketing-mobile-nav";
 import { MarketingNavCta } from "@/components/marketing-nav-cta";
@@ -60,10 +60,14 @@ export function LoginScreen() {
   const hydrated = useHydrated();
   const guard = useAuthGuard(getApiClient());
   const isAuthenticated = guard.status === "authenticated";
+  const logout = useLogout(getApiClient());
+  const switchAccount = searchParams.get("switch") === "1";
 
   // Only once there is a session. Asking Django for an application while nobody
   // is signed in spends a guaranteed refusal on every visit to this screen.
-  const application = usePartnerApplication({ enabled: isAuthenticated });
+  const application = usePartnerApplication({
+    enabled: isAuthenticated && !switchAccount,
+  });
   const flow = useOtpFlow(getApiClient());
   const flowWithAudio = {
     ...flow,
@@ -83,18 +87,49 @@ export function LoginScreen() {
   const isMissing =
     application.error instanceof ApiRequestError && application.error.status === 404;
   const knowsWhereToGo = !application.isPending || isMissing;
+  const continueHref = next ?? homeForApplication(application.data?.status ?? null);
+
+  /*
+    Sign In must not skip the OTP form. A leftover customer/partner cookie used
+    to auto-replace `/login` with `/apply` (DRAFT or no application), so tapping
+    Sign In opened the application instead of a phone number field.
+
+    `?switch=1` is the explicit "different number" path: end this session, then
+    stay on login. `?next=` from a deep link still auto-enters after auth —
+    Become a Partner (`/apply` → `/login?next=/apply`) must keep working.
+  */
+  const switchStarted = useRef(false);
 
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || !switchAccount || switchStarted.current) return;
+    switchStarted.current = true;
+    logout.mutate(undefined, {
+      onSettled: () => router.replace("/login"),
+    });
+  }, [isAuthenticated, logout, router, switchAccount]);
 
+  const justVerified = flow.phase === "authenticated";
+
+  useEffect(() => {
+    if (!isAuthenticated || switchAccount) return;
     if (next) {
       router.replace(next);
       return;
     }
-
+    // Existing session: stay on this page so Sign In can switch numbers.
+    // Fresh OTP: enter the app once we know whether onboarding is still open.
+    if (!justVerified) return;
     if (!knowsWhereToGo) return;
     router.replace(homeForApplication(application.data?.status ?? null));
-  }, [application.data?.status, isAuthenticated, knowsWhereToGo, next, router]);
+  }, [
+    application.data?.status,
+    isAuthenticated,
+    justVerified,
+    knowsWhereToGo,
+    next,
+    router,
+    switchAccount,
+  ]);
 
   if (!hydrated || guard.status === "checking") {
     return (
@@ -119,10 +154,54 @@ export function LoginScreen() {
     );
   }
 
-  if (isAuthenticated) {
+  if (isAuthenticated && switchAccount) {
+    return (
+      <LoginShell>
+        <LoginWait message="Signing you out so you can use a different number…" />
+      </LoginShell>
+    );
+  }
+
+  if (isAuthenticated && (next || justVerified)) {
     return (
       <LoginShell>
         <LoginWait message="Taking you to your account…" />
+      </LoginShell>
+    );
+  }
+
+  if (isAuthenticated) {
+    return (
+      <LoginShell>
+        <main className="mx-auto w-full max-w-md px-4 pt-24 sm:pt-28 pb-16">
+          <Card className="overflow-hidden p-0 shadow-xl border border-line-strong rounded-3xl bg-surface">
+            <div className="bg-[#00112e] px-6 py-7 text-white">
+              <span className="inline-flex items-center rounded-full bg-white/10 px-2.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wider text-amber-300 border border-white/10 mb-3">
+                Already signed in
+              </span>
+              <h1 className="text-2xl font-extrabold tracking-tight text-white">
+                This browser already has a session
+              </h1>
+              <p className="mt-1.5 text-xs sm:text-sm text-slate-300 leading-relaxed">
+                Continue with this account, or sign in with a different mobile number.
+              </p>
+            </div>
+            <div className="flex flex-col gap-3 p-6 sm:p-7">
+              <Link
+                href={knowsWhereToGo ? continueHref : "/apply"}
+                className="inline-flex min-h-11 items-center justify-center rounded-full bg-gradient-to-r from-signal-500 via-amber-500 to-signal-400 px-4 text-sm font-extrabold text-[#00112e]"
+              >
+                Continue
+              </Link>
+              <Link
+                href="/login?switch=1"
+                className="inline-flex min-h-11 items-center justify-center rounded-full border border-line-strong bg-surface px-4 text-sm font-bold text-navy-900"
+              >
+                Sign in with a different number
+              </Link>
+            </div>
+          </Card>
+        </main>
       </LoginShell>
     );
   }

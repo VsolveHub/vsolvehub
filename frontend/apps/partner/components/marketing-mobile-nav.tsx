@@ -126,6 +126,14 @@ export function MarketingMobileNav({
                   My Profile & Settings
                 </button>
               </Link>
+              <Link href="/login?switch=1" onClick={close} className="block">
+                <button
+                  type="button"
+                  className="w-full rounded-full bg-surface py-2.5 text-sm font-bold text-navy-900 hover:bg-surface-sunken border border-line-strong transition-colors"
+                >
+                  Sign In with a different number
+                </button>
+              </Link>
             </>
           ) : isLoggedIn ? (
             <>
@@ -137,12 +145,12 @@ export function MarketingMobileNav({
                   <span>Application Dashboard</span>
                 </button>
               </Link>
-              <Link href="/login" onClick={close} className="block">
+              <Link href="/login?switch=1" onClick={close} className="block">
                 <button
                   type="button"
                   className="w-full rounded-full bg-surface py-2.5 text-sm font-bold text-navy-900 hover:bg-surface-sunken border border-line-strong transition-colors"
                 >
-                  Switch Account
+                  Sign In with a different number
                 </button>
               </Link>
             </>

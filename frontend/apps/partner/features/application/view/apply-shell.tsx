@@ -215,6 +215,13 @@ function ApplyHeader({
                 Overview
               </Link>
 
+              <Link
+                href="/login?switch=1"
+                className="hidden sm:inline-flex min-h-8 items-center text-xs font-bold text-navy-900 hover:text-signal-700 px-3 py-1.5 rounded-full hover:bg-surface-sunken transition-colors"
+              >
+                Sign In
+              </Link>
+
               <MarketingMobileNav items={NAV} />
             </div>
           </div>
