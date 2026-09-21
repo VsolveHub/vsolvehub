@@ -1,0 +1,17 @@
+A10 domain smoke — 2026-09-13 (local, feature/m3-a10-listings @ 4b71df0)
+
+SMOKE_OK
+ - listing=48fa784a-f54d-4a83-bd51-5b2f79d09597 public=PUBLISHED
+ - apply=SUBMITTED
+ - withdraw=WITHDRAWN
+ - reapply=SUBMITTED
+ - shortlist=SHORTLISTED
+ - reveal=CONTACTED revealed_at=True
+ - sub_active=ACTIVE plan=enterprise caps=['FEATURED_PLACEMENT', 'PRIORITY_MODERATION']
+ - premium=True
+ - premium_replay=True
+ - submit=PENDING_REVIEW/PENDING
+ - moderate=DRAFT/APPROVED
+ - publish=PUBLISHED/PUBLISHED
+
+Also: pytest tests/listings/test_a10_flow.py -q --no-cov → 22 passed

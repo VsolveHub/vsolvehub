@@ -1,14 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  BadgeCheck,
   BriefcaseBusiness,
   Building,
-  Calendar,
-  CheckCircle2,
   Clock,
   Coins,
   FileCheck2,
@@ -33,15 +30,49 @@ const POPULAR_CATEGORIES = [
 ];
 
 export default function ListingsBrowsePage() {
-  const [q, setQ] = useState("");
-  const [location, setLocation] = useState("");
+  // Two pairs on purpose: the drafts are what the boxes show, the applied values
+  // are what the request uses. Nothing reaches the server until Search, Enter or
+  // a category pill commits them. Typing "software developer" used to be 18
+  // requests; it is now zero.
+  const [draftQuery, setDraftQuery] = useState("");
+  const [draftLocation, setDraftLocation] = useState("");
+  const [appliedQuery, setAppliedQuery] = useState("");
+  const [appliedLocation, setAppliedLocation] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
 
-  const effectiveQuery = selectedCategory ? `${q} ${selectedCategory}`.trim() : q;
+  const commitDrafts = useCallback(() => {
+    setAppliedQuery(draftQuery);
+    setAppliedLocation(draftLocation);
+  }, [draftQuery, draftLocation]);
 
-  const { data: listings = [], isLoading, error } = useQuery({
-    queryKey: ["listings", effectiveQuery, location],
-    queryFn: () => fetchListings({ q: effectiveQuery, location }),
+  // A pill is itself a search action, so it commits the boxes as well. Otherwise
+  // tapping a category while text sat uncommitted would return results that
+  // disagree with what the user can see typed in front of them.
+  const selectCategory = (value: string) => {
+    commitDrafts();
+    setSelectedCategory(value);
+  };
+
+  const {
+    data: listings = [],
+    isLoading,
+    isFetching,
+    error,
+  } = useQuery({
+    queryKey: ["listings", appliedQuery, appliedLocation, selectedCategory],
+    queryFn: () =>
+      fetchListings({
+        q: appliedQuery,
+        location: appliedLocation,
+        // The API filters on `service` directly. This is what the category used
+        // to do by being concatenated onto the free-text query as one string.
+        service: selectedCategory,
+      }),
+    staleTime: 30_000,
+    // Hold the previous page on screen while the next one loads, matching
+    // features/crew/queries.ts. Without it, committing a search blanks the list.
+    placeholderData: (previous) => previous,
+    refetchOnWindowFocus: false,
   });
 
   return (
@@ -79,8 +110,11 @@ export default function ListingsBrowsePage() {
           <label className="flex items-center gap-3 rounded-lg border border-slate-100 bg-slate-50 px-3.5">
             <Search className="h-4 w-4 shrink-0 text-slate-400" />
             <input
-              value={q}
-              onChange={(event) => setQ(event.target.value)}
+              value={draftQuery}
+              onChange={(event) => setDraftQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") commitDrafts();
+              }}
               className="h-11 flex-1 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
               placeholder="Job title, keyword, skill, or employer..."
             />
@@ -89,21 +123,22 @@ export default function ListingsBrowsePage() {
           <label className="flex items-center gap-3 rounded-lg border border-slate-100 bg-slate-50 px-3.5">
             <MapPin className="h-4 w-4 shrink-0 text-slate-400" />
             <input
-              value={location}
-              onChange={(event) => setLocation(event.target.value)}
+              value={draftLocation}
+              onChange={(event) => setDraftLocation(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") commitDrafts();
+              }}
               className="h-11 flex-1 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
               placeholder="City, area, or remote..."
             />
           </label>
 
           <button
-            onClick={() => {
-              /* Query auto updates via state */
-            }}
+            onClick={commitDrafts}
             className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-6 text-sm font-semibold text-white transition hover:bg-indigo-700"
           >
             <Search className="h-4 w-4" />
-            Search
+            {isFetching ? "Searching..." : "Search"}
           </button>
         </div>
       </section>
@@ -116,7 +151,7 @@ export default function ListingsBrowsePage() {
         {POPULAR_CATEGORIES.map((cat) => (
           <button
             key={cat.label}
-            onClick={() => setSelectedCategory(cat.value)}
+            onClick={() => selectCategory(cat.value)}
             className={`rounded-full px-4 py-1.5 text-xs font-medium transition ${
               selectedCategory === cat.value
                 ? "bg-slate-950 text-white shadow-sm"
@@ -126,18 +161,20 @@ export default function ListingsBrowsePage() {
             {cat.label}
           </button>
         ))}
-        {(q || location || selectedCategory) && (
+        {draftQuery || draftLocation || selectedCategory ? (
           <button
             onClick={() => {
-              setQ("");
-              setLocation("");
+              setDraftQuery("");
+              setDraftLocation("");
+              setAppliedQuery("");
+              setAppliedLocation("");
               setSelectedCategory("");
             }}
             className="ml-auto text-xs font-medium text-indigo-600 hover:underline"
           >
             Clear all filters
           </button>
-        )}
+        ) : null}
       </section>
 
       {/* Error Notice */}
@@ -170,8 +207,10 @@ export default function ListingsBrowsePage() {
           </p>
           <button
             onClick={() => {
-              setQ("");
-              setLocation("");
+              setDraftQuery("");
+              setDraftLocation("");
+              setAppliedQuery("");
+              setAppliedLocation("");
               setSelectedCategory("");
             }}
             className="mt-5 inline-flex items-center gap-2 rounded-lg bg-slate-950 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"

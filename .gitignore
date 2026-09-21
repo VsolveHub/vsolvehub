@@ -70,3 +70,8 @@ Django_Next.js_Plan/archive/
 web/
 archive/
 .tmp-cart-verify/
+
+# Generated A10 demo artifacts — heavy (≈92MB) and regenerable.
+# The screenshots in docs/demo/a10/ are committed; these are not.
+docs/demo/*.zip
+docs/demo/a10-replay/

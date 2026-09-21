@@ -6,13 +6,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   BriefcaseBusiness,
-  Building2,
   Calendar,
   CheckCircle2,
   Clock,
   ExternalLink,
   FileText,
-  User,
   XCircle,
 } from "lucide-react";
 
@@ -51,12 +49,6 @@ const STATUS_CONFIG: Record<
     text: "text-purple-700",
     border: "border-purple-200",
   },
-  HIRED: {
-    label: "Hired",
-    bg: "bg-green-50",
-    text: "text-green-800",
-    border: "border-green-200",
-  },
   REJECTED: {
     label: "Not Selected",
     bg: "bg-rose-50",
@@ -81,6 +73,9 @@ export default function MyApplicationsPage() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<string>("ALL");
   const [withdrawingId, setWithdrawingId] = useState<string | null>(null);
+  const [withdrawNotice, setWithdrawNotice] = useState<
+    { kind: "success" | "error"; message: string } | null
+  >(null);
 
   const { data: applications = [], isLoading, error } = useQuery({
     queryKey: ["my-listing-applications"],
@@ -91,10 +86,21 @@ export default function MyApplicationsPage() {
     mutationFn: (applicationId: string) => withdrawApplication(applicationId),
     onSuccess: () => {
       setWithdrawingId(null);
+      setWithdrawNotice({
+        kind: "success",
+        message: "Application withdrawn. You can apply again after the 24-hour cooldown.",
+      });
       queryClient.invalidateQueries({ queryKey: ["my-listing-applications"] });
     },
-    onError: () => {
+    onError: (err) => {
       setWithdrawingId(null);
+      setWithdrawNotice({
+        kind: "error",
+        message:
+          err instanceof Error && err.message
+            ? err.message
+            : "Could not withdraw your application. Please try again.",
+      });
     },
   });
 
@@ -103,7 +109,7 @@ export default function MyApplicationsPage() {
     if (activeTab === "ACTIVE")
       return ["SUBMITTED", "UNDER_REVIEW", "SHORTLISTED", "CONTACTED"].includes(app.status);
     if (activeTab === "CLOSED")
-      return ["HIRED", "REJECTED", "WITHDRAWN", "EXPIRED"].includes(app.status);
+      return ["REJECTED", "WITHDRAWN", "EXPIRED"].includes(app.status);
     return app.status === activeTab;
   });
 
@@ -160,6 +166,19 @@ export default function MyApplicationsPage() {
       {error ? (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
           {(error as Error).message}
+        </div>
+      ) : null}
+
+      {withdrawNotice ? (
+        <div
+          role={withdrawNotice.kind === "error" ? "alert" : "status"}
+          className={`rounded-lg border p-4 text-sm ${
+            withdrawNotice.kind === "error"
+              ? "border-red-200 bg-red-50 text-red-700"
+              : "border-emerald-200 bg-emerald-50 text-emerald-800"
+          }`}
+        >
+          {withdrawNotice.message}
         </div>
       ) : null}
 

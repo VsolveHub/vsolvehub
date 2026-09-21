@@ -10,6 +10,11 @@ export { Field, useFieldContext, controlChrome } from "./field";
 export type { FieldProps } from "./field";
 export { Input, Textarea } from "./input";
 export type { InputProps, TextareaProps } from "./input";
+// A phone number for a country whose code we already know, so Indian users never
+// type `+91`. The country is a prop rather than a constant because this package
+// is shared by three apps.
+export { PhoneField, PHONE_COUNTRIES, toE164, toNationalDigits } from "./phone-field";
+export type { PhoneCountry, PhoneFieldProps } from "./phone-field";
 export { Select } from "./select";
 export type { SelectProps } from "./select";
 export { QuantityStepper } from "./quantity-stepper";

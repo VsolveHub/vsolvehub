@@ -238,5 +238,36 @@ export default defineConfig({
         baseURL: "http://localhost:3001",
       },
     },
+    {
+      /**
+       * Careers (A10) end-to-end across all three portals.
+       *
+       * Its own project for the same reason as `django-acceptance`: it is the
+       * only Careers spec that talks to Django, and it must not inherit the
+       * contract-shaped route stubs the other projects install. It skips itself
+       * when the backend or the minted sessions are missing.
+       *
+       * `trace: "on"` rather than the global `on-first-retry`, because here the
+       * trace *is* the deliverable — a replayable record of the whole lifecycle.
+       */
+      name: "a10-careers",
+      testMatch: /a10-careers\.e2e\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: "http://localhost:3000",
+        trace: "on",
+        /**
+         * `A10_SLOW_MO=5000` makes every action take five seconds of wall clock,
+         * for a recording a human can follow. It is a *launch* option, not a CLI
+         * flag, and it slows the run itself — the trace viewer's own playback
+         * stays capped at 0.5x, so slow pacing is a video property, not a trace
+         * one. Left at 0 the run is unaffected.
+         */
+        launchOptions: {
+          slowMo: Number(process.env.A10_SLOW_MO ?? 0),
+        },
+        video: process.env.A10_VIDEO === "1" ? "on" : "retain-on-failure",
+      },
+    },
   ],
 });

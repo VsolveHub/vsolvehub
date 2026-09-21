@@ -2,6 +2,7 @@ from typing import Any
 
 from rest_framework import serializers
 
+from apps.identity.phone import InvalidPhoneNumberError, normalize_phone_number
 from apps.listings.models import (
     Application,
     ApplicationAttachment,
@@ -12,6 +13,30 @@ from apps.listings.models import (
     VendorSubscription,
     VendorSubscriptionPlan,
 )
+
+
+class PhoneNumberField(serializers.CharField):
+    """Accept a local or E.164 number; an optional blank contact stays blank.
+
+    ``apps.identity.phone.normalize_phone_number`` is the one canonical parser, so
+    an application phone and a listing contact phone are stored identically.
+    """
+
+    def to_internal_value(self, data: Any) -> str:
+        value = super().to_internal_value(data)
+        if value == "":
+            return ""
+        try:
+            return normalize_phone_number(value)
+        except InvalidPhoneNumberError as exc:
+            raise serializers.ValidationError(str(exc), code="invalid_phone_number") from exc
+
+
+#: ``structured_fields`` is a JSON column that every browse response carries, so
+#: its shape is bounded: a flat map of a few short, human-sized entries.
+MAX_STRUCTURED_FIELD_COUNT = 20
+MAX_STRUCTURED_FIELD_NAME_LENGTH = 60
+MAX_STRUCTURED_FIELD_VALUE_LENGTH = 300
 
 
 class ListingSummarySerializer(serializers.ModelSerializer[Listing]):
@@ -58,8 +83,11 @@ class ListingDetailSerializer(ListingSummarySerializer):
 
 
 class PartnerListingSerializer(ListingSummarySerializer):
-    contact_phone = serializers.CharField(required=False, allow_blank=True)
-    contact_email = serializers.EmailField(required=False, allow_blank=True)
+    title = serializers.CharField(min_length=5, max_length=180, trim_whitespace=True)
+    description = serializers.CharField(min_length=20, max_length=5000, trim_whitespace=True)
+    structured_fields = serializers.DictField(required=False)
+    contact_phone = PhoneNumberField(max_length=32, required=False, allow_blank=True)
+    contact_email = serializers.EmailField(required=False, allow_blank=True, max_length=254)
     variant = serializers.UUIDField(source="variant_id", required=False)
     service_id = serializers.UUIDField(required=False, write_only=True)
     service_slug = serializers.CharField(required=False, write_only=True)
@@ -91,6 +119,41 @@ class PartnerListingSerializer(ListingSummarySerializer):
             "created_at",
             "payment_attempt_id",
         )
+
+    def validate_structured_fields(self, value: dict[str, Any]) -> dict[str, Any]:
+        """Keep role details to a small, flat, human-sized map.
+
+        The column is JSON, so without this a poster could store a nested object of
+        unbounded size that every browse response then carries to every reader.
+        """
+
+        if len(value) > MAX_STRUCTURED_FIELD_COUNT:
+            raise serializers.ValidationError(
+                f"At most {MAX_STRUCTURED_FIELD_COUNT} role details may be provided."
+            )
+        cleaned: dict[str, Any] = {}
+        for key, item in value.items():
+            name = str(key).strip()
+            if not name:
+                raise serializers.ValidationError("Each role detail needs a name.")
+            if len(name) > MAX_STRUCTURED_FIELD_NAME_LENGTH:
+                raise serializers.ValidationError(
+                    f"Role detail names must be {MAX_STRUCTURED_FIELD_NAME_LENGTH} "
+                    "characters or fewer."
+                )
+            if item is None or item == "":
+                continue
+            if isinstance(item, (dict, list)):
+                raise serializers.ValidationError(
+                    f"'{name}' must be a single value, not a nested object or list."
+                )
+            text = str(item).strip()
+            if len(text) > MAX_STRUCTURED_FIELD_VALUE_LENGTH:
+                raise serializers.ValidationError(
+                    f"'{name}' must be {MAX_STRUCTURED_FIELD_VALUE_LENGTH} characters or fewer."
+                )
+            cleaned[name] = text
+        return cleaned
 
 
 class ApplicationAttachmentSerializer(serializers.ModelSerializer[ApplicationAttachment]):
@@ -159,16 +222,29 @@ class ApplicationSerializer(serializers.ModelSerializer[Application]):
 
 
 class SubmitApplicationSerializer(serializers.Serializer[dict[str, Any]]):
-    name = serializers.CharField(max_length=120)
-    phone = serializers.CharField(max_length=32)
-    email = serializers.EmailField(required=False, allow_blank=True)
-    experience = serializers.CharField(max_length=120, required=False, allow_blank=True)
-    cover_note = serializers.CharField(required=False, allow_blank=True)
-    resume_url = serializers.URLField(required=False, allow_blank=True)
+    """Customer application. The server is the authority; the form mirrors these rules."""
+
+    name = serializers.CharField(min_length=2, max_length=120, trim_whitespace=True)
+    phone = PhoneNumberField(max_length=32, trim_whitespace=True)
+    email = serializers.EmailField(required=False, allow_blank=True, max_length=254)
+    experience = serializers.CharField(
+        max_length=120, required=False, allow_blank=True, trim_whitespace=True
+    )
+    cover_note = serializers.CharField(
+        max_length=2000, required=False, allow_blank=True, trim_whitespace=True
+    )
+    resume_url = serializers.URLField(max_length=500, required=False, allow_blank=True)
+
+    def validate_name(self, value: str) -> str:
+        if not any(character.isalpha() for character in value):
+            raise serializers.ValidationError("Enter your full name.", code="invalid_name")
+        return value
 
 
 class ActionReasonSerializer(serializers.Serializer[dict[str, Any]]):
-    reason = serializers.CharField(required=False, allow_blank=True)
+    reason = serializers.CharField(
+        max_length=480, required=False, allow_blank=True, trim_whitespace=True
+    )
 
 
 class ModerationSerializer(serializers.Serializer[dict[str, Any]]):
@@ -181,8 +257,10 @@ class ApplicationStatusSerializer(serializers.Serializer[dict[str, Any]]):
 
 
 class ReportSerializer(serializers.Serializer[dict[str, Any]]):
-    reason = serializers.CharField(max_length=80)
-    detail = serializers.CharField(required=False, allow_blank=True)
+    reason = serializers.CharField(max_length=80, trim_whitespace=True)
+    detail = serializers.CharField(
+        max_length=2000, required=False, allow_blank=True, trim_whitespace=True
+    )
 
 
 class ListingReportSerializer(serializers.ModelSerializer[ListingReport]):

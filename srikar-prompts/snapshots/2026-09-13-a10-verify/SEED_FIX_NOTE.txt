@@ -1,0 +1,1 @@
+Seed fix: backend/apps/catalog/management/commands/seed_listing_catalog.py — partner role + APPROVED PartnerApplication

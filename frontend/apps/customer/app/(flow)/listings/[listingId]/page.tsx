@@ -7,35 +7,107 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
   ArrowLeft,
-  BriefcaseBusiness,
   Building,
   CheckCircle2,
   Clock,
-  Coins,
   FileCheck2,
-  FileText,
   Flag,
   Flame,
-  Globe,
-  Info,
-  Lock,
   LogIn,
-  Mail,
   MapPin,
-  Phone,
   Send,
   ShieldCheck,
-  Sparkles,
   User,
   X,
 } from "lucide-react";
 
+import { ApiRequestError } from "@vsolve/api-client";
+import { PHONE_COUNTRIES, PhoneField, toNationalDigits } from "@vsolve/ui";
+import { z } from "zod";
+
 import {
   fetchListing,
+  fetchMyApplications,
   reportListing,
   submitListingApplication,
 } from "@/features/listings/queries";
 import { useCustomerSession } from "@/features/session/queries";
+
+/**
+ * Mirrors `SubmitApplicationSerializer` on the server, which stays the authority.
+ * Validating here means the demo shows a precise message under the field instead
+ * of a round-trip 400.
+ */
+const applySchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(2, "Enter your full name (at least 2 characters).")
+    .max(120, "Name must be 120 characters or fewer.")
+    .refine((value) => /[a-zA-Z]/.test(value), "Enter your full name."),
+  // PhoneField holds national digits only (the +91 is a fixture of the control),
+  // so the rule is an exact length rather than "at least". The server normalises
+  // to E.164 with an IN default region either way.
+  phone: z
+    .string()
+    .trim()
+    .min(1, "Enter your contact phone number.")
+    .refine(
+      (value) => /^\d{10}$/.test(value.replace(/\D/g, "")),
+      "Enter a 10-digit mobile number.",
+    ),
+  email: z
+    .string()
+    .trim()
+    .max(254, "Email must be 254 characters or fewer.")
+    .refine(
+      (value) => value === "" || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value),
+      "Enter a valid email address.",
+    ),
+  experience: z.string().trim().max(120, "Keep this to 120 characters or fewer."),
+  resume_url: z
+    .string()
+    .trim()
+    .max(500, "Keep the link to 500 characters or fewer.")
+    .refine(
+      (value) => value === "" || /^https?:\/\/\S+$/i.test(value),
+      "Enter a link starting with http:// or https://",
+    ),
+  cover_note: z.string().trim().max(2000, "Keep your note to 2000 characters or fewer."),
+});
+
+function issuesToFieldErrors(error: z.ZodError): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const issue of error.issues) {
+    const key = String(issue.path[0] ?? "");
+    if (key && !out[key]) out[key] = issue.message;
+  }
+  return out;
+}
+
+function serverFieldErrors(error: unknown): Record<string, string> {
+  if (!(error instanceof ApiRequestError)) return {};
+  const out: Record<string, string> = {};
+  for (const [field, messages] of Object.entries(error.fieldErrors)) {
+    const first = messages[0];
+    if (first) out[field] = first;
+  }
+  return out;
+}
+
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return <p className="mt-1 text-[11px] font-medium text-rose-600">{message}</p>;
+}
+
+/** Applicant-facing labels. The API's own vocabulary is not shown to customers. */
+const APPLICATION_STATUS_LABELS: Record<string, string> = {
+  SUBMITTED: "Submitted",
+  UNDER_REVIEW: "Under review",
+  SHORTLISTED: "Shortlisted",
+  CONTACTED: "Contacted",
+  REJECTED: "Not selected",
+};
 
 export default function ListingDetailPage() {
   const params = useParams<{ listingId: string }>();
@@ -47,6 +119,30 @@ export default function ListingDetailPage() {
     queryKey: ["listing", listingId],
     queryFn: () => fetchListing(listingId),
   });
+
+  const myApplicationsQuery = useQuery({
+    queryKey: ["my-listing-applications"],
+    queryFn: fetchMyApplications,
+    enabled: session.isAuthenticated,
+  });
+
+  /**
+   * Whether this applicant already has a live application on this listing.
+   *
+   * The server is still the authority — it refuses a second active application
+   * (scenario M3-A10-05). This only stops us handing a customer a form that is
+   * guaranteed to be rejected, and points them at the status instead.
+   */
+  const activeApplication = (() => {
+    const rows = (myApplicationsQuery.data ?? []) as Array<{
+      listing?: string;
+      status?: string;
+      created_at?: string;
+    }>;
+    return rows.find(
+      (row) => row.listing === listingId && row.status !== "WITHDRAWN" && row.status !== "EXPIRED",
+    );
+  })();
 
   const [form, setForm] = useState({
     name: "",
@@ -63,7 +159,13 @@ export default function ListingDetailPage() {
       setForm((prev) => ({
         ...prev,
         name: prev.name || session.fullName || session.displayName || "",
-        phone: prev.phone || session.phoneNumber || "",
+        // The session carries E.164 (`+919876543210`) while this control holds
+        // national digits, so strip the dial code on the way in. Without this the
+        // field arrives pre-filled with a value its own validation rejects, and
+        // the applicant sees an error on a field they never touched.
+        phone:
+          prev.phone ||
+          toNationalDigits(session.phoneNumber ?? "", PHONE_COUNTRIES.IN),
         email: prev.email || session.email || "",
       }));
     }
@@ -73,13 +175,32 @@ export default function ListingDetailPage() {
   const [reportReason, setReportReason] = useState("spam_or_abuse");
   const [reportDetail, setReportDetail] = useState("");
 
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
   const apply = useMutation({
     mutationFn: () => submitListingApplication(listingId, form),
     onSuccess: () => {
+      setFieldErrors({});
       queryClient.invalidateQueries({ queryKey: ["listing", listingId] });
       queryClient.invalidateQueries({ queryKey: ["my-listing-applications"] });
     },
+    onError: (error) => setFieldErrors(serverFieldErrors(error)),
   });
+
+  function updateField(key: keyof typeof form, value: string) {
+    setForm((current) => ({ ...current, [key]: value }));
+    setFieldErrors((current) => (current[key] ? { ...current, [key]: "" } : current));
+  }
+
+  function handleApply() {
+    const parsed = applySchema.safeParse(form);
+    if (!parsed.success) {
+      setFieldErrors(issuesToFieldErrors(parsed.error));
+      return;
+    }
+    setFieldErrors({});
+    apply.mutate();
+  }
 
   const report = useMutation({
     mutationFn: () => reportListing(listingId, reportReason, reportDetail),
@@ -266,6 +387,32 @@ export default function ListingDetailPage() {
                 View in My Applications &rarr;
               </Link>
             </div>
+          ) : activeApplication ? (
+            <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-5 text-center">
+              <CheckCircle2 className="mx-auto h-8 w-8 text-amber-600" />
+              <h3 className="mt-2 text-sm font-semibold text-amber-900">
+                You have already applied
+              </h3>
+              <p className="mt-1 text-xs leading-relaxed text-amber-800">
+                Your application for this role is{" "}
+                <span className="font-semibold">
+                  {APPLICATION_STATUS_LABELS[activeApplication.status ?? ""] ??
+                    activeApplication.status ??
+                    "in progress"}
+                </span>
+                . {listing.poster_name} can now review it.
+              </p>
+              <Link
+                href="/listings/my-applications"
+                className="mt-4 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-amber-700 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-amber-800"
+              >
+                <FileCheck2 className="h-4 w-4" />
+                Track it in My Applications
+              </Link>
+              <p className="mt-2 text-[11px] text-amber-700">
+                One application per listing. You can withdraw it from My Applications.
+              </p>
+            </div>
           ) : !session.isAuthenticated ? (
             <div className="mt-5 rounded-xl border border-indigo-100 bg-indigo-50/50 p-6 text-center">
               <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-indigo-100 text-indigo-600">
@@ -287,9 +434,10 @@ export default function ListingDetailPage() {
           ) : (
             <form
               className="mt-5 space-y-3.5"
+              noValidate
               onSubmit={(event) => {
                 event.preventDefault();
-                apply.mutate();
+                handleApply();
               }}
             >
               <div>
@@ -298,36 +446,41 @@ export default function ListingDetailPage() {
                 </label>
                 <input
                   value={form.name}
-                  onChange={(e) => setForm((c) => ({ ...c, name: e.target.value }))}
-                  required
+                  onChange={(e) => updateField("name", e.target.value)}
                   placeholder="e.g. Sarah Jenkins"
-                  className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                  aria-invalid={Boolean(fieldErrors.name)}
+                  className={`mt-1 h-10 w-full rounded-lg border px-3 text-sm outline-none transition focus:ring-1 ${fieldErrors.name ? "border-rose-300 focus:border-rose-500 focus:ring-rose-500" : "border-slate-200 focus:border-indigo-500 focus:ring-indigo-500"}`}
                 />
+                <FieldError message={fieldErrors.name} />
               </div>
 
               <div>
                 <label className="block text-xs font-medium text-slate-700">
                   Contact Phone <span className="text-rose-500">*</span>
                 </label>
-                <input
+                <PhoneField
+                  chrome={false}
                   value={form.phone}
-                  onChange={(e) => setForm((c) => ({ ...c, phone: e.target.value }))}
-                  required
-                  type="tel"
-                  placeholder="e.g. +91 98765 43210"
-                  className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                  onValueChange={(next) => updateField("phone", next)}
+                  placeholder="98765 43210"
+                  aria-label="Contact phone"
+                  aria-invalid={Boolean(fieldErrors.phone)}
+                  className={`mt-1 h-10 w-full rounded-lg border px-3 text-sm outline-none transition focus:ring-1 ${fieldErrors.phone ? "border-rose-300 focus:border-rose-500 focus:ring-rose-500" : "border-slate-200 focus:border-indigo-500 focus:ring-indigo-500"}`}
                 />
+                <FieldError message={fieldErrors.phone} />
               </div>
 
               <div>
                 <label className="block text-xs font-medium text-slate-700">Email Address</label>
                 <input
                   value={form.email}
-                  onChange={(e) => setForm((c) => ({ ...c, email: e.target.value }))}
+                  onChange={(e) => updateField("email", e.target.value)}
                   type="email"
                   placeholder="e.g. sarah@example.com"
-                  className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                  aria-invalid={Boolean(fieldErrors.email)}
+                  className={`mt-1 h-10 w-full rounded-lg border px-3 text-sm outline-none transition focus:ring-1 ${fieldErrors.email ? "border-rose-300 focus:border-rose-500 focus:ring-rose-500" : "border-slate-200 focus:border-indigo-500 focus:ring-indigo-500"}`}
                 />
+                <FieldError message={fieldErrors.email} />
               </div>
 
               <div>
@@ -336,10 +489,12 @@ export default function ListingDetailPage() {
                 </label>
                 <input
                   value={form.experience}
-                  onChange={(e) => setForm((c) => ({ ...c, experience: e.target.value }))}
+                  onChange={(e) => updateField("experience", e.target.value)}
                   placeholder="e.g. 4 years in Frontend React / Python"
-                  className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                  aria-invalid={Boolean(fieldErrors.experience)}
+                  className={`mt-1 h-10 w-full rounded-lg border px-3 text-sm outline-none transition focus:ring-1 ${fieldErrors.experience ? "border-rose-300 focus:border-rose-500 focus:ring-rose-500" : "border-slate-200 focus:border-indigo-500 focus:ring-indigo-500"}`}
                 />
+                <FieldError message={fieldErrors.experience} />
               </div>
 
               <div>
@@ -348,11 +503,13 @@ export default function ListingDetailPage() {
                 </label>
                 <input
                   value={form.resume_url}
-                  onChange={(e) => setForm((c) => ({ ...c, resume_url: e.target.value }))}
+                  onChange={(e) => updateField("resume_url", e.target.value)}
                   type="url"
                   placeholder="https://drive.google.com/... or linkedin"
-                  className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                  aria-invalid={Boolean(fieldErrors.resume_url)}
+                  className={`mt-1 h-10 w-full rounded-lg border px-3 text-sm outline-none transition focus:ring-1 ${fieldErrors.resume_url ? "border-rose-300 focus:border-rose-500 focus:ring-rose-500" : "border-slate-200 focus:border-indigo-500 focus:ring-indigo-500"}`}
                 />
+                <FieldError message={fieldErrors.resume_url} />
               </div>
 
               <div>
@@ -361,15 +518,20 @@ export default function ListingDetailPage() {
                 </label>
                 <textarea
                   value={form.cover_note}
-                  onChange={(e) => setForm((c) => ({ ...c, cover_note: e.target.value }))}
+                  onChange={(e) => updateField("cover_note", e.target.value)}
                   rows={3}
                   placeholder="Briefly introduce yourself and your availability..."
-                  className="mt-1 w-full rounded-lg border border-slate-200 p-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                  aria-invalid={Boolean(fieldErrors.cover_note)}
+                  className={`mt-1 w-full rounded-lg border p-3 text-sm outline-none transition focus:ring-1 ${fieldErrors.cover_note ? "border-rose-300 focus:border-rose-500 focus:ring-rose-500" : "border-slate-200 focus:border-indigo-500 focus:ring-indigo-500"}`}
                 />
+                <FieldError message={fieldErrors.cover_note} />
               </div>
 
-              {apply.error && (
-                <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+              {apply.error && Object.keys(fieldErrors).length === 0 && (
+                <div
+                  role="alert"
+                  className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700"
+                >
                   <p className="font-semibold">Application couldn&apos;t be submitted</p>
                   <p className="mt-0.5">{(apply.error as Error).message}</p>
                 </div>

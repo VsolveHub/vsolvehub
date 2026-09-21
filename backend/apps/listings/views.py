@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, NoReturn
 from uuid import UUID
 
 from django.shortcuts import get_object_or_404
@@ -10,6 +10,16 @@ from rest_framework.views import APIView
 
 from apps.catalog.models import ServiceVariant
 from apps.foundation.services import execute_idempotent
+from apps.listings.exceptions import (
+    ApplicationDuplicateApiError,
+    ApplicationRateLimitApiError,
+    ListingCapabilityRequiredApiError,
+    ListingIdempotencyKeyRequiredApiError,
+    ListingNotAcceptingApplicationsApiError,
+    ListingStateConflictApiError,
+    ListingVariantRequiredApiError,
+    UnsupportedListingActionApiError,
+)
 from apps.listings.models import Application, Listing, VendorSubscriptionPlan
 from apps.listings.selectors import public_listings
 from apps.listings.serializers import (
@@ -55,7 +65,7 @@ from apps.partners.permissions import IsOperationsUser, IsPartnerUser
 def _idempotency_key(request: Any) -> str:
     key = request.headers.get("Idempotency-Key", "").strip()
     if not key:
-        raise ListingStateError("Idempotency-Key header is required.")
+        raise ListingIdempotencyKeyRequiredApiError
     return str(key)
 
 
@@ -63,11 +73,25 @@ def _partner_profile(user: Any) -> PartnerProfile:
     return get_object_or_404(PartnerProfile, user=user)
 
 
-def _error(exc: Exception) -> Response:
-    code: int = status.HTTP_400_BAD_REQUEST
+def _raise_listing_error(exc: Exception) -> NoReturn:
+    """Translate a domain refusal into the platform error envelope.
+
+    A bare ``{"detail": ...}`` body is not the published error contract, so the
+    client cannot parse it and reports an opaque contract failure. Raising an
+    ``APIException`` lets ``common.errors.handler`` render the envelope with a
+    stable code and a safe message.
+    """
+
     if isinstance(exc, PermissionError):
-        code = status.HTTP_403_FORBIDDEN
-    return Response({"detail": str(exc)}, status=code)
+        raise ListingCapabilityRequiredApiError from exc
+    message = str(exc)
+    if message == "APPLICATION_DUPLICATE":
+        raise ApplicationDuplicateApiError from exc
+    if message.startswith("Application rate limit reached"):
+        raise ApplicationRateLimitApiError from exc
+    if message.startswith("This listing is not accepting applications"):
+        raise ListingNotAcceptingApplicationsApiError from exc
+    raise ListingStateConflictApiError(message) from exc
 
 
 class ListingBrowseView(APIView):
@@ -124,7 +148,7 @@ class ListingApplicationView(APIView):
                     resume_url=serializer.validated_data.get("resume_url", ""),
                 )
             except (ListingStateError, PermissionError) as exc:
-                return status.HTTP_400_BAD_REQUEST, {"detail": str(exc)}
+                _raise_listing_error(exc)
             return status.HTTP_201_CREATED, ApplicationSerializer(application).data
 
         result = execute_idempotent(
@@ -252,10 +276,7 @@ class PartnerListingCollectionView(APIView):
                         service__slug=service_slug, is_active=True
                     ).first()
             if not variant:
-                return Response(
-                    {"detail": "A valid variant or service is required to create a listing."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+                raise ListingVariantRequiredApiError
             variant_id = variant.id
 
         try:
@@ -275,8 +296,8 @@ class PartnerListingCollectionView(APIView):
                     actor=request.user,
                     idempotency_key=_idempotency_key(request),
                 )
-        except Exception as exc:
-            return _error(exc)
+        except (ListingStateError, PermissionError) as exc:
+            _raise_listing_error(exc)
         return Response(PartnerListingSerializer(listing).data, status=status.HTTP_201_CREATED)
 
 
@@ -308,8 +329,8 @@ class PartnerListingDetailView(APIView):
                     actor=request.user,
                     idempotency_key=_idempotency_key(request),
                 )
-        except Exception as exc:
-            return _error(exc)
+        except (ListingStateError, PermissionError) as exc:
+            _raise_listing_error(exc)
         return Response(PartnerListingSerializer(listing).data)
 
 
@@ -345,9 +366,9 @@ class PartnerListingActionView(APIView):
                     idempotency_key=_idempotency_key(request),
                 )
             else:
-                return Response({"detail": "Unsupported action."}, status=status.HTTP_404_NOT_FOUND)
-        except Exception as exc:
-            return _error(exc)
+                raise UnsupportedListingActionApiError
+        except (ListingStateError, PermissionError) as exc:
+            _raise_listing_error(exc)
         return Response(PartnerListingSerializer(listing).data)
 
 
@@ -387,9 +408,9 @@ class PartnerApplicationActionView(APIView):
                     status=serializer.validated_data["status"],
                 )
             else:
-                return Response({"detail": "Unsupported action."}, status=status.HTTP_404_NOT_FOUND)
-        except Exception as exc:
-            return _error(exc)
+                raise UnsupportedListingActionApiError
+        except (ListingStateError, PermissionError) as exc:
+            _raise_listing_error(exc)
         return Response(ApplicationSerializer(application).data)
 
 
@@ -427,8 +448,8 @@ class VendorSubscriptionPurchaseView(APIView):
                 plan=plan,
                 idempotency_key=key,
             )
-        except Exception as exc:
-            return _error(exc)
+        except (ListingStateError, PermissionError) as exc:
+            _raise_listing_error(exc)
         return Response(
             VendorSubscriptionSerializer(subscription).data, status=status.HTTP_201_CREATED
         )
@@ -458,8 +479,8 @@ class OpsListingModerateView(APIView):
                 approved=serializer.validated_data["approved"],
                 reason=serializer.validated_data.get("reason", ""),
             )
-        except Exception as exc:
-            return _error(exc)
+        except (ListingStateError, PermissionError) as exc:
+            _raise_listing_error(exc)
         return Response(PartnerListingSerializer(listing).data)
 
 
@@ -476,8 +497,8 @@ class OpsListingRemoveView(APIView):
                 actor=request.user,
                 reason=serializer.validated_data.get("reason", ""),
             )
-        except Exception as exc:
-            return _error(exc)
+        except (ListingStateError, PermissionError) as exc:
+            _raise_listing_error(exc)
         return Response(PartnerListingSerializer(listing).data)
 
 
@@ -494,6 +515,6 @@ class OpsListingReinstateView(APIView):
                 actor=request.user,
                 reason=serializer.validated_data.get("reason", ""),
             )
-        except Exception as exc:
-            return _error(exc)
+        except (ListingStateError, PermissionError) as exc:
+            _raise_listing_error(exc)
         return Response(PartnerListingSerializer(listing).data)

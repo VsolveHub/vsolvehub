@@ -100,6 +100,38 @@ const SHAPES: Record<BusinessType, TypeShape> = {
     ],
     expected: ["legal_name"],
   },
+  // The two M3 archetypes (A7_RENTAL, A9_STAY). `03-rental-stay-jobs-categories.md`
+  // explicitly defers which fields these need to Wave D1 ("default position is
+  // reuse INDIVIDUAL/WORKFORCE_AGENCY unchanged unless a concrete field needs the
+  // new type"). So this is the non-blocking superset, not a guess at final
+  // requirements: every field is offered and none is marked expected.
+  //
+  // The asymmetry matters. `partners_individual_has_no_registration_number` covers
+  // `INDIVIDUAL` only — verified in `models/capabilities.py` and
+  // `capabilities/registration.py`, both of which test for `INDIVIDUAL` alone — so
+  // the wider shape cannot provoke a constraint. The narrower INDIVIDUAL shape
+  // would permanently deny a registration number to a legitimately registered
+  // rental owner, which is a product decision this file must not make by omission.
+  RENTAL_OWNER: {
+    fields: [
+      "legal_name",
+      "registration_number",
+      "gst_registered",
+      "gstin",
+      "years_in_operation",
+    ],
+    expected: [],
+  },
+  PROPERTY_HOST: {
+    fields: [
+      "legal_name",
+      "registration_number",
+      "gst_registered",
+      "gstin",
+      "years_in_operation",
+    ],
+    expected: [],
+  },
 };
 
 export function fieldsFor(businessType: BusinessType): readonly BusinessField[] {

@@ -19,6 +19,11 @@ dist/
 .env.local
 .env.*.local
 
+# playwright: minted storage states hold live session cookies
+e2e/.auth/
+playwright-report/
+test-results/
+
 # os/editor
 .DS_Store
 *.log

@@ -49,14 +49,17 @@ urlpatterns = [
         name="partner-listing-detail",
     ),
     path(
-        "partner/listings/<uuid:listing_id>/<slug:action>",
-        views.PartnerListingActionView.as_view(),
-        name="partner-listing-action",
-    ),
-    path(
         "partner/listings/<uuid:listing_id>/applications",
         views.PartnerListingApplicationsView.as_view(),
         name="partner-listing-applications",
+    ),
+    # Keep the catch-all action route LAST. Registered before "applications" it
+    # captured that literal segment as `action` and answered GET with 405, so the
+    # partner leads list could never load.
+    path(
+        "partner/listings/<uuid:listing_id>/<slug:action>",
+        views.PartnerListingActionView.as_view(),
+        name="partner-listing-action",
     ),
     path(
         "partner/listing-applications/<uuid:application_id>/<slug:action>",

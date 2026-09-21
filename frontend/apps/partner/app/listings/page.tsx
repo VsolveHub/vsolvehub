@@ -19,6 +19,10 @@ import {
   XCircle,
 } from "lucide-react";
 
+import { ApiRequestError } from "@vsolve/api-client";
+import { PhoneField, useToast } from "@vsolve/ui";
+import { z } from "zod";
+
 import {
   completePaymentAttempt,
   createPartnerListing,
@@ -33,6 +37,111 @@ import {
   type PartnerListing,
   type VendorSubscriptionPlan,
 } from "@/features/listings/queries";
+
+/**
+ * Mirrors `PartnerListingSerializer` on the server, which stays the authority.
+ * Catching these in the form keeps a demo on the happy path: no round-trip 400s.
+ */
+// PhoneField holds national digits only (the +91 is a fixture of the control), so
+// this is an exact-length rule. Still required here, matching the field's asterisk
+// and the serializer's trim rule; the server treats it as optional, so the two
+// disagree only for an empty value, which the form does not allow.
+const phoneRule = z
+  .string()
+  .trim()
+  .refine(
+    (value) => /^\d{10}$/.test(value.replace(/\D/g, "")),
+    "Enter a 10-digit mobile number.",
+  );
+
+const emailRule = z
+  .string()
+  .trim()
+  .max(254, "Email must be 254 characters or fewer.")
+  .refine(
+    (value) => value === "" || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value),
+    "Enter a valid email address.",
+  );
+
+const listingShape = {
+  title: z
+    .string()
+    .trim()
+    .min(5, "Title must be at least 5 characters.")
+    .max(180, "Title must be 180 characters or fewer."),
+  description: z
+    .string()
+    .trim()
+    .min(20, "Describe the role in at least 20 characters.")
+    .max(5000, "Description must be 5000 characters or fewer."),
+  contact_phone: phoneRule,
+  contact_email: emailRule,
+  pay_range: z.string().trim().max(300, "Keep the pay range to 300 characters or fewer."),
+  experience_years: z.string().trim().max(300, "Keep experience to 300 characters or fewer."),
+};
+
+const createListingSchema = z.object({
+  ...listingShape,
+  location_text: z
+    .string()
+    .trim()
+    .min(3, "Enter a work location, or write 'Remote'.")
+    .max(180, "Location must be 180 characters or fewer."),
+});
+
+const editListingSchema = z.object({
+  ...listingShape,
+  location_text: z.string().trim().max(180, "Location must be 180 characters or fewer."),
+});
+
+function issuesToFieldErrors(error: z.ZodError): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const issue of error.issues) {
+    const key = String(issue.path[0] ?? "");
+    if (key && !out[key]) out[key] = issue.message;
+  }
+  return out;
+}
+
+function serverFieldErrors(error: unknown): Record<string, string> {
+  if (!(error instanceof ApiRequestError)) return {};
+  const out: Record<string, string> = {};
+  for (const [field, messages] of Object.entries(error.fieldErrors)) {
+    const first = messages[0];
+    if (first) out[field] = first;
+  }
+  return out;
+}
+
+function serverErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
+/**
+ * One place for what the user is told after an action succeeds.
+ *
+ * All six of these mutations used to say nothing at all, which is the client's
+ * first complaint. Keying the wording here rather than at each call site is what
+ * stops the same confirmation being phrased six different ways.
+ *
+ * Deliberately success-only. `toast.tsx` documents the rule: a toast confirms
+ * something the user just did, and a failure they have to act on belongs inline
+ * where it stays put. Failures go to the banner below instead.
+ */
+const SUCCESS_MESSAGES = {
+  create: "Opening saved as a draft.",
+  update: "Opening updated.",
+  submit: "Sent for review. You will see it under In Review until it is approved.",
+  publish: "Opening is live and visible to applicants.",
+  republish: "Opening is live again.",
+  close: "Opening closed. It no longer accepts applications.",
+  subscribe: "Subscription active.",
+} as const;
+
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return <p className="mt-1 text-[11px] font-medium text-rose-600">{message}</p>;
+}
 
 const STATUS_BADGES: Record<string, { label: string; bg: string; text: string; border: string }> = {
   DRAFT: { label: "Draft", bg: "bg-slate-100", text: "text-slate-700", border: "border-slate-200" },
@@ -62,7 +171,11 @@ const STATUS_BADGES: Record<string, { label: string; bg: string; text: string; b
 
 export default function PartnerListingsPage() {
   const queryClient = useQueryClient();
+  const { notify } = useToast();
   const [activeTab, setActiveTab] = useState<string>("ALL");
+  // Submit, publish, close and subscribe have no per-field error surface, and the
+  // two that failed silently had no handler at all. One banner covers them.
+  const [actionError, setActionError] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingListing, setEditingListing] = useState<PartnerListing | null>(null);
   const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
@@ -113,6 +226,19 @@ export default function PartnerListingsPage() {
     experience_years: "1-3 years",
   });
 
+  const [createErrors, setCreateErrors] = useState<Record<string, string>>({});
+  const [editErrors, setEditErrors] = useState<Record<string, string>>({});
+
+  function createField(key: string, value: string) {
+    setForm((current) => ({ ...current, [key]: value }));
+    setCreateErrors((current) => (current[key] ? { ...current, [key]: "" } : current));
+  }
+
+  function editField(key: string, value: string) {
+    setEditForm((current) => ({ ...current, [key]: value }));
+    setEditErrors((current) => (current[key] ? { ...current, [key]: "" } : current));
+  }
+
   const handleStartEdit = (listing: PartnerListing) => {
     setEditingListing(listing);
     setEditForm({
@@ -146,10 +272,13 @@ export default function PartnerListingsPage() {
       });
     },
     onSuccess: () => {
+      setEditErrors({});
       setEditingListing(null);
+      notify(SUCCESS_MESSAGES.update);
       queryClient.invalidateQueries({ queryKey: ["partner-listings"] });
       queryClient.invalidateQueries({ queryKey: ["partner-listing-home"] });
     },
+    onError: (error) => setEditErrors(serverFieldErrors(error)),
   });
 
   const handleServiceChange = (serviceId: string) => {
@@ -182,6 +311,7 @@ export default function PartnerListingsPage() {
       }),
     onSuccess: () => {
       setIsCreateOpen(false);
+      setCreateErrors({});
       setForm({
         service_id: "",
         variant: "",
@@ -195,10 +325,33 @@ export default function PartnerListingsPage() {
         work_mode: "On-site",
         experience_years: "1-3 years",
       });
+      notify(SUCCESS_MESSAGES.create);
       queryClient.invalidateQueries({ queryKey: ["partner-listings"] });
       queryClient.invalidateQueries({ queryKey: ["partner-listing-home"] });
     },
+    onError: (error) => setCreateErrors(serverFieldErrors(error)),
   });
+
+  /** Validate before the request so the demo shows a field, not a round-trip 400. */
+  function handleCreate() {
+    const parsed = createListingSchema.safeParse(form);
+    if (!parsed.success) {
+      setCreateErrors(issuesToFieldErrors(parsed.error));
+      return;
+    }
+    setCreateErrors({});
+    create.mutate();
+  }
+
+  function handleEdit() {
+    const parsed = editListingSchema.safeParse(editForm);
+    if (!parsed.success) {
+      setEditErrors(issuesToFieldErrors(parsed.error));
+      return;
+    }
+    setEditErrors({});
+    update.mutate();
+  }
 
   const action = useMutation({
     mutationFn: ({
@@ -210,10 +363,18 @@ export default function PartnerListingsPage() {
       next: "submit" | "publish" | "republish" | "close";
       reason?: string;
     }) => runListingAction(id, next, reason),
-    onSuccess: () => {
+    onSuccess: (_result, { next }) => {
+      setActionError(null);
+      notify(SUCCESS_MESSAGES[next]);
       queryClient.invalidateQueries({ queryKey: ["partner-listings"] });
       queryClient.invalidateQueries({ queryKey: ["partner-listing-home"] });
     },
+    // This mutation had no error handler at all, so a rejected submit, publish or
+    // close left the page looking as though the click had done nothing.
+    onError: (error, { next }) =>
+      setActionError(
+        serverErrorMessage(error, `Could not ${next} this opening. Please try again.`),
+      ),
   });
 
   const subscribe = useMutation({
@@ -230,9 +391,17 @@ export default function PartnerListingsPage() {
     },
     onSuccess: () => {
       setIsSubscriptionModalOpen(false);
+      setActionError(null);
+      notify(SUCCESS_MESSAGES.subscribe);
       queryClient.invalidateQueries({ queryKey: ["partner-listing-home"] });
       queryClient.invalidateQueries({ queryKey: ["partner-listings"] });
     },
+    // Also had no error handler: a failed payment attempt closed nothing and
+    // reported nothing, so the modal just sat there.
+    onError: (error) =>
+      setActionError(
+        serverErrorMessage(error, "Could not activate the subscription. Please try again."),
+      ),
   });
 
   const filteredListings = listings.filter((item) => {
@@ -247,6 +416,24 @@ export default function PartnerListingsPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-8">
+      {/* Failures from submit, publish, close and subscribe. Deliberately not a
+          toast: a toast disappears, and this is a failure the poster has to act
+          on, so it stays until dismissed. */}
+      {actionError ? (
+        <div
+          role="alert"
+          className="flex items-start justify-between gap-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800"
+        >
+          <span>{actionError}</span>
+          <button
+            onClick={() => setActionError(null)}
+            className="shrink-0 text-xs font-semibold text-rose-700 underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      ) : null}
+
       {/* Workspace Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -524,9 +711,10 @@ export default function PartnerListingsPage() {
 
             <form
               className="mt-5 space-y-4"
+              noValidate
               onSubmit={(e) => {
                 e.preventDefault();
-                create.mutate();
+                handleCreate();
               }}
             >
               {/* Category Service Selector */}
@@ -561,11 +749,12 @@ export default function PartnerListingsPage() {
                 </label>
                 <input
                   value={form.title}
-                  onChange={(e) => setForm((c) => ({ ...c, title: e.target.value }))}
-                  required
+                  onChange={(e) => createField("title", e.target.value)}
                   placeholder="e.g. Senior Python / React Developer"
-                  className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-indigo-500"
+                  aria-invalid={Boolean(createErrors.title)}
+                  className={`mt-1 h-10 w-full rounded-lg border px-3 text-sm outline-none ${createErrors.title ? "border-rose-300 focus:border-rose-500" : "border-slate-200 focus:border-indigo-500"}`}
                 />
+                <FieldError message={createErrors.title} />
               </div>
 
               {/* Description */}
@@ -575,12 +764,13 @@ export default function PartnerListingsPage() {
                 </label>
                 <textarea
                   value={form.description}
-                  onChange={(e) => setForm((c) => ({ ...c, description: e.target.value }))}
-                  required
+                  onChange={(e) => createField("description", e.target.value)}
                   rows={4}
                   placeholder="Describe key responsibilities, qualifications, requirements, and shift timings..."
-                  className="mt-1 w-full rounded-lg border border-slate-200 p-3 text-sm outline-none focus:border-indigo-500"
+                  aria-invalid={Boolean(createErrors.description)}
+                  className={`mt-1 w-full rounded-lg border p-3 text-sm outline-none ${createErrors.description ? "border-rose-300 focus:border-rose-500" : "border-slate-200 focus:border-indigo-500"}`}
                 />
+                <FieldError message={createErrors.description} />
               </div>
 
               {/* Grid 2 cols */}
@@ -591,24 +781,28 @@ export default function PartnerListingsPage() {
                   </label>
                   <input
                     value={form.location_text}
-                    onChange={(e) => setForm((c) => ({ ...c, location_text: e.target.value }))}
-                    required
+                    onChange={(e) => createField("location_text", e.target.value)}
                     placeholder="e.g. Indiranagar, Bengaluru / Remote"
-                    className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-indigo-500"
+                    aria-invalid={Boolean(createErrors.location_text)}
+                    className={`mt-1 h-10 w-full rounded-lg border px-3 text-sm outline-none ${createErrors.location_text ? "border-rose-300 focus:border-rose-500" : "border-slate-200 focus:border-indigo-500"}`}
                   />
+                  <FieldError message={createErrors.location_text} />
                 </div>
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700">
                     Contact Phone <span className="text-rose-500">*</span>
                   </label>
-                  <input
+                  <PhoneField
+                    chrome={false}
                     value={form.contact_phone}
-                    onChange={(e) => setForm((c) => ({ ...c, contact_phone: e.target.value }))}
-                    required
-                    placeholder="+91 99000 00088"
-                    className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-indigo-500"
+                    onValueChange={(next) => createField("contact_phone", next)}
+                    placeholder="99000 00088"
+                    aria-label="Contact phone"
+                    aria-invalid={Boolean(createErrors.contact_phone)}
+                    className={`mt-1 h-10 w-full rounded-lg border px-3 text-sm outline-none ${createErrors.contact_phone ? "border-rose-300 focus:border-rose-500" : "border-slate-200 focus:border-indigo-500"}`}
                   />
+                  <FieldError message={createErrors.contact_phone} />
                 </div>
 
                 <div>
@@ -633,10 +827,12 @@ export default function PartnerListingsPage() {
                   </label>
                   <input
                     value={form.pay_range}
-                    onChange={(e) => setForm((c) => ({ ...c, pay_range: e.target.value }))}
+                    onChange={(e) => createField("pay_range", e.target.value)}
                     placeholder="e.g. ₹35,000 - ₹50,000 / month"
-                    className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-indigo-500"
+                    aria-invalid={Boolean(createErrors.pay_range)}
+                    className={`mt-1 h-10 w-full rounded-lg border px-3 text-sm outline-none ${createErrors.pay_range ? "border-rose-300 focus:border-rose-500" : "border-slate-200 focus:border-indigo-500"}`}
                   />
+                  <FieldError message={createErrors.pay_range} />
                 </div>
 
                 <div>
@@ -660,15 +856,19 @@ export default function PartnerListingsPage() {
                   </label>
                   <input
                     value={form.experience_years}
-                    onChange={(e) => setForm((c) => ({ ...c, experience_years: e.target.value }))}
+                    onChange={(e) => createField("experience_years", e.target.value)}
                     placeholder="e.g. 2+ years"
-                    className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-indigo-500"
+                    aria-invalid={Boolean(createErrors.experience_years)}
+                    className={`mt-1 h-10 w-full rounded-lg border px-3 text-sm outline-none ${createErrors.experience_years ? "border-rose-300 focus:border-rose-500" : "border-slate-200 focus:border-indigo-500"}`}
                   />
+                  <FieldError message={createErrors.experience_years} />
                 </div>
               </div>
 
-              {create.error && (
-                <p className="text-xs text-red-600">{(create.error as Error).message}</p>
+              {create.error && Object.keys(createErrors).length === 0 && (
+                <p role="alert" className="text-xs text-red-600">
+                  {(create.error as Error).message}
+                </p>
               )}
 
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
@@ -713,9 +913,10 @@ export default function PartnerListingsPage() {
 
             <form
               className="mt-5 space-y-4"
+              noValidate
               onSubmit={(e) => {
                 e.preventDefault();
-                update.mutate();
+                handleEdit();
               }}
             >
               <div>
@@ -723,11 +924,12 @@ export default function PartnerListingsPage() {
                   Job / Role Title <span className="text-rose-500">*</span>
                 </label>
                 <input
-                  required
                   value={editForm.title}
-                  onChange={(e) => setEditForm((c) => ({ ...c, title: e.target.value }))}
-                  className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-indigo-500"
+                  onChange={(e) => editField("title", e.target.value)}
+                  aria-invalid={Boolean(editErrors.title)}
+                  className={`mt-1 h-10 w-full rounded-lg border px-3 text-sm outline-none ${editErrors.title ? "border-rose-300 focus:border-rose-500" : "border-slate-200 focus:border-indigo-500"}`}
                 />
+                <FieldError message={editErrors.title} />
               </div>
 
               <div>
@@ -735,12 +937,13 @@ export default function PartnerListingsPage() {
                   Detailed Description <span className="text-rose-500">*</span>
                 </label>
                 <textarea
-                  required
                   rows={4}
                   value={editForm.description}
-                  onChange={(e) => setEditForm((c) => ({ ...c, description: e.target.value }))}
-                  className="mt-1 w-full rounded-lg border border-slate-200 p-3 text-sm outline-none focus:border-indigo-500"
+                  onChange={(e) => editField("description", e.target.value)}
+                  aria-invalid={Boolean(editErrors.description)}
+                  className={`mt-1 w-full rounded-lg border p-3 text-sm outline-none ${editErrors.description ? "border-rose-300 focus:border-rose-500" : "border-slate-200 focus:border-indigo-500"}`}
                 />
+                <FieldError message={editErrors.description} />
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
@@ -750,21 +953,27 @@ export default function PartnerListingsPage() {
                   </label>
                   <input
                     value={editForm.location_text}
-                    onChange={(e) => setEditForm((c) => ({ ...c, location_text: e.target.value }))}
-                    className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-indigo-500"
+                    onChange={(e) => editField("location_text", e.target.value)}
+                    aria-invalid={Boolean(editErrors.location_text)}
+                    className={`mt-1 h-10 w-full rounded-lg border px-3 text-sm outline-none ${editErrors.location_text ? "border-rose-300 focus:border-rose-500" : "border-slate-200 focus:border-indigo-500"}`}
                   />
+                  <FieldError message={editErrors.location_text} />
                 </div>
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700">
                     Direct Contact Phone <span className="text-rose-500">*</span>
                   </label>
-                  <input
-                    required
+                  <PhoneField
+                    chrome={false}
                     value={editForm.contact_phone}
-                    onChange={(e) => setEditForm((c) => ({ ...c, contact_phone: e.target.value }))}
-                    className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-indigo-500"
+                    onValueChange={(next) => editField("contact_phone", next)}
+                    placeholder="99000 00088"
+                    aria-label="Contact phone"
+                    aria-invalid={Boolean(editErrors.contact_phone)}
+                    className={`mt-1 h-10 w-full rounded-lg border px-3 text-sm outline-none ${editErrors.contact_phone ? "border-rose-300 focus:border-rose-500" : "border-slate-200 focus:border-indigo-500"}`}
                   />
+                  <FieldError message={editErrors.contact_phone} />
                 </div>
               </div>
 
@@ -774,9 +983,11 @@ export default function PartnerListingsPage() {
                   <input
                     type="email"
                     value={editForm.contact_email}
-                    onChange={(e) => setEditForm((c) => ({ ...c, contact_email: e.target.value }))}
-                    className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-indigo-500"
+                    onChange={(e) => editField("contact_email", e.target.value)}
+                    aria-invalid={Boolean(editErrors.contact_email)}
+                    className={`mt-1 h-10 w-full rounded-lg border px-3 text-sm outline-none ${editErrors.contact_email ? "border-rose-300 focus:border-rose-500" : "border-slate-200 focus:border-indigo-500"}`}
                   />
+                  <FieldError message={editErrors.contact_email} />
                 </div>
 
                 <div>
@@ -812,23 +1023,29 @@ export default function PartnerListingsPage() {
                   <label className="block text-xs font-semibold text-slate-700">Pay / Salary Range</label>
                   <input
                     value={editForm.pay_range}
-                    onChange={(e) => setEditForm((c) => ({ ...c, pay_range: e.target.value }))}
-                    className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-indigo-500"
+                    onChange={(e) => editField("pay_range", e.target.value)}
+                    aria-invalid={Boolean(editErrors.pay_range)}
+                    className={`mt-1 h-10 w-full rounded-lg border px-3 text-sm outline-none ${editErrors.pay_range ? "border-rose-300 focus:border-rose-500" : "border-slate-200 focus:border-indigo-500"}`}
                   />
+                  <FieldError message={editErrors.pay_range} />
                 </div>
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700">Experience Required</label>
                   <input
                     value={editForm.experience_years}
-                    onChange={(e) => setEditForm((c) => ({ ...c, experience_years: e.target.value }))}
-                    className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-indigo-500"
+                    onChange={(e) => editField("experience_years", e.target.value)}
+                    aria-invalid={Boolean(editErrors.experience_years)}
+                    className={`mt-1 h-10 w-full rounded-lg border px-3 text-sm outline-none ${editErrors.experience_years ? "border-rose-300 focus:border-rose-500" : "border-slate-200 focus:border-indigo-500"}`}
                   />
+                  <FieldError message={editErrors.experience_years} />
                 </div>
               </div>
 
-              {update.error && (
-                <p className="text-xs text-red-600">{(update.error as Error).message}</p>
+              {update.error && Object.keys(editErrors).length === 0 && (
+                <p role="alert" className="text-xs text-red-600">
+                  {(update.error as Error).message}
+                </p>
               )}
 
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
