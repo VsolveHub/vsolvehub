@@ -31,20 +31,20 @@ export function EditListingDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="my-8 w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+      <div className="my-8 w-full max-w-2xl rounded-[var(--radius-card)] border border-line bg-surface p-6 shadow-overlay">
+        <div className="flex items-center justify-between border-b border-line pb-4">
           <div>
-            <h2 className="text-lg font-bold text-slate-950">Edit Career Opening</h2>
-            <p className="text-xs text-slate-500">
+            <h2 className="text-lg font-bold text-text">Edit Career Opening</h2>
+            <p className="text-xs text-text-muted">
               Update details for this opening ({listing.title}).
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100"
+            className="rounded-control p-1.5 text-text-muted hover:bg-surface-hover"
           >
-            <X className="h-5 w-5" />
+            <X className="size-4" />
           </button>
         </div>
 
@@ -57,35 +57,37 @@ export function EditListingDialog({
           }}
         >
           <div>
-            <label className="block text-xs font-semibold text-slate-700">
-              Job / Role Title <span className="text-rose-500">*</span>
+            <label className="block text-xs font-semibold text-text-secondary">
+              Listing Title <span className="text-danger-text">*</span>
             </label>
             <input
               value={form.title}
               onChange={(e) => onFieldChange("title", e.target.value)}
+              placeholder="e.g. Senior Python / React Developer"
               aria-invalid={Boolean(errors.title)}
-              className={`mt-1 h-10 w-full rounded-lg border px-3 text-sm outline-none ${
+              className={`mt-1 h-10 w-full rounded-control border bg-surface px-3 text-sm text-text outline-none transition focus:ring-1 ${
                 errors.title
-                  ? "border-rose-300 focus:border-rose-500"
-                  : "border-slate-200 focus:border-indigo-500"
+                  ? "border-danger-line focus:border-danger-text focus:ring-danger-text"
+                  : "border-line focus:border-line-strong focus:ring-focus-ring"
               }`}
             />
             <FieldError message={errors.title} />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700">
-              Detailed Description <span className="text-rose-500">*</span>
+            <label className="block text-xs font-semibold text-text-secondary">
+              Job Description & Requirements <span className="text-danger-text">*</span>
             </label>
             <textarea
-              rows={4}
               value={form.description}
               onChange={(e) => onFieldChange("description", e.target.value)}
+              rows={4}
+              placeholder="Describe key responsibilities, qualifications, requirements, and shift timings..."
               aria-invalid={Boolean(errors.description)}
-              className={`mt-1 w-full rounded-lg border p-3 text-sm outline-none ${
+              className={`mt-1 w-full rounded-control border bg-surface p-3 text-sm text-text outline-none transition focus:ring-1 ${
                 errors.description
-                  ? "border-rose-300 focus:border-rose-500"
-                  : "border-slate-200 focus:border-indigo-500"
+                  ? "border-danger-line focus:border-danger-text focus:ring-danger-text"
+                  : "border-line focus:border-line-strong focus:ring-focus-ring"
               }`}
             />
             <FieldError message={errors.description} />
@@ -93,25 +95,26 @@ export function EditListingDialog({
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <label className="block text-xs font-semibold text-slate-700">
-                Location / Work City
+              <label className="block text-xs font-semibold text-text-secondary">
+                Location Text <span className="text-danger-text">*</span>
               </label>
               <input
                 value={form.location_text}
                 onChange={(e) => onFieldChange("location_text", e.target.value)}
+                placeholder="e.g. Indiranagar, Bengaluru / Remote"
                 aria-invalid={Boolean(errors.location_text)}
-                className={`mt-1 h-10 w-full rounded-lg border px-3 text-sm outline-none ${
+                className={`mt-1 h-10 w-full rounded-control border bg-surface px-3 text-sm text-text outline-none transition focus:ring-1 ${
                   errors.location_text
-                    ? "border-rose-300 focus:border-rose-500"
-                    : "border-slate-200 focus:border-indigo-500"
+                    ? "border-danger-line focus:border-danger-text focus:ring-danger-text"
+                    : "border-line focus:border-line-strong focus:ring-focus-ring"
                 }`}
               />
               <FieldError message={errors.location_text} />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700">
-                Direct Contact Phone <span className="text-rose-500">*</span>
+              <label className="block text-xs font-semibold text-text-secondary">
+                Contact Phone <span className="text-danger-text">*</span>
               </label>
               <PhoneField
                 chrome={false}
@@ -120,29 +123,13 @@ export function EditListingDialog({
                 placeholder="99000 00088"
                 aria-label="Contact phone"
                 aria-invalid={Boolean(errors.contact_phone)}
-                className={`mt-1 h-10 w-full rounded-lg border px-3 text-sm outline-none ${
+                className={`mt-1 h-10 w-full rounded-control border bg-surface px-3 text-sm text-text outline-none transition focus:ring-1 ${
                   errors.contact_phone
-                    ? "border-rose-300 focus:border-rose-500"
-                    : "border-slate-200 focus:border-indigo-500"
+                    ? "border-danger-line focus:border-danger-text focus:ring-danger-text"
+                    : "border-line focus:border-line-strong focus:ring-focus-ring"
                 }`}
               />
               <FieldError message={errors.contact_phone} />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700">Contact Email</label>
-              <input
-                type="email"
-                value={form.contact_email}
-                onChange={(e) => onFieldChange("contact_email", e.target.value)}
-                aria-invalid={Boolean(errors.contact_email)}
-                className={`mt-1 h-10 w-full rounded-lg border px-3 text-sm outline-none ${
-                  errors.contact_email
-                    ? "border-rose-300 focus:border-rose-500"
-                    : "border-slate-200 focus:border-indigo-500"
-                }`}
-              />
-              <FieldError message={errors.contact_email} />
             </div>
 
             <ListingExtraFields
@@ -156,23 +143,23 @@ export function EditListingDialog({
           </div>
 
           {serverError && Object.keys(errors).length === 0 && (
-            <p role="alert" className="text-xs text-red-600">
+            <p role="alert" className="text-xs text-danger-text">
               {serverError}
             </p>
           )}
 
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-line">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              className="rounded-control border border-line px-4 py-2 text-xs font-semibold text-text-secondary hover:bg-surface-hover"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={isPending || !form.title}
-              className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2 text-xs font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-50"
+              disabled={isPending}
+              className="inline-flex items-center gap-2 rounded-control bg-action px-5 py-2 text-xs font-semibold text-action-text shadow-card transition hover:bg-action-hover active:bg-action-active disabled:opacity-50"
             >
               {isPending ? "Saving..." : "Save Changes"}
             </button>

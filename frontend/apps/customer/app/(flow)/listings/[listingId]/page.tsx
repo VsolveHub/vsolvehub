@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, ArrowLeft, Clock } from "lucide-react";
-import { PHONE_COUNTRIES, toNationalDigits } from "@vsolve/ui";
+import { ArrowLeft, Clock } from "lucide-react";
+import { Card, EmptyState, PHONE_COUNTRIES, toNationalDigits } from "@vsolve/ui";
 
 import {
   applySchema,
@@ -105,8 +105,8 @@ export default function ListingDetailPage() {
 
   if (isLoading) {
     return (
-      <main className="mx-auto flex w-full max-w-5xl items-center justify-center py-20 text-slate-400">
-        <Clock className="h-6 w-6 animate-spin text-slate-400" />
+      <main className="mx-auto flex w-full max-w-5xl items-center justify-center py-20 text-text-muted">
+        <Clock className="size-6 animate-spin text-text-muted" />
         <span className="ml-2 text-sm">Loading listing details...</span>
       </main>
     );
@@ -115,30 +115,31 @@ export default function ListingDetailPage() {
   if (error || !listing) {
     return (
       <main className="mx-auto flex w-full max-w-3xl flex-col items-center justify-center py-16 text-center">
-        <AlertCircle className="h-12 w-12 text-rose-500" />
-        <h2 className="mt-3 text-lg font-semibold text-slate-900">Listing Not Available</h2>
-        <p className="mt-1 text-sm text-slate-500">
-          This listing may have expired, closed, or is temporarily under review.
-        </p>
-        <Link
-          href="/listings"
-          className="mt-4 inline-flex items-center gap-2 rounded-lg bg-slate-950 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
-        >
-          <ArrowLeft className="h-4 w-4" /> Return to Job Board
-        </Link>
+        <EmptyState
+          title="Listing Not Available"
+          description="This listing may have expired, closed, or is temporarily under review."
+          action={
+            <Link
+              href="/listings"
+              className="inline-flex items-center gap-2 rounded-control bg-navy-900 px-4 py-2 text-sm font-semibold text-warm-0 hover:bg-navy-800"
+            >
+              <ArrowLeft className="size-4" /> Return to Job Board
+            </Link>
+          }
+        />
       </main>
     );
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8">
+    <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 pb-20 lg:pb-8">
       <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
-        <section className="flex flex-col gap-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+        <Card padding="lg" className="flex flex-col gap-6">
           <RoleHeader listing={listing} />
-          <hr className="border-slate-100" />
+          <hr className="border-line" />
           <RoleFacts listing={listing} />
           <JdSections listing={listing} onOpenReport={() => setReportModalOpen(true)} />
-        </section>
+        </Card>
 
         <ApplyPanel
           key={session.userId || "anon"}
@@ -158,6 +159,28 @@ export default function ListingDetailPage() {
           onSubmit={handleApply}
         />
       </div>
+
+      {/* Sticky Apply Bar on mobile (< lg) */}
+      {!activeApplication && !apply.isSuccess && (
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-line bg-surface/95 p-3 backdrop-blur-xs shadow-raised pb-safe">
+          <div className="flex items-center justify-between gap-3 max-w-md mx-auto">
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-text truncate">
+                {listing.title}
+              </p>
+              <p className="text-[11px] text-text-muted truncate">
+                {listing.poster_name || "Verified Employer"}
+              </p>
+            </div>
+            <a
+              href="#apply-panel"
+              className="inline-flex items-center justify-center rounded-control bg-action px-5 py-2 text-xs font-bold text-action-text shadow-card transition hover:bg-action-hover active:bg-action-active shrink-0"
+            >
+              Apply Now
+            </a>
+          </div>
+        </div>
+      )}
 
       <ReportDialog
         isOpen={reportModalOpen}

@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, BriefcaseBusiness, Clock, FileText } from "lucide-react";
+import { ArrowLeft, BriefcaseBusiness, Clock } from "lucide-react";
+import { EmptyState, ErrorState } from "@vsolve/ui";
 
 import {
   fetchMyApplications,
@@ -69,35 +70,35 @@ export default function MyApplicationsPage() {
         <div>
           <Link
             href="/listings"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 transition hover:text-slate-900"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-text-muted transition hover:text-text"
           >
-            <ArrowLeft className="h-4 w-4" /> Back to Job Listings
+            <ArrowLeft className="size-4" /> Back to Job Listings
           </Link>
-          <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-text sm:text-3xl">
             My Job Applications
           </h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-text-muted">
             Track, monitor, and manage all your career applications in one place.
           </p>
         </div>
         <Link
           href="/listings"
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-medium text-white shadow-xs transition hover:bg-slate-800"
+          className="inline-flex items-center justify-center gap-2 rounded-control bg-navy-900 px-4 py-2.5 text-sm font-semibold text-warm-0 shadow-card transition hover:bg-navy-800"
         >
-          <BriefcaseBusiness className="h-4 w-4" /> Browse Opportunities
+          <BriefcaseBusiness className="size-4" /> Browse Opportunities
         </Link>
       </div>
 
       {/* Tabs */}
-      <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
+      <div className="flex flex-wrap gap-2 border-b border-line pb-3">
         {FILTER_TABS.map((tab) => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
             className={`rounded-full px-4 py-1.5 text-xs font-semibold transition ${
               activeTab === tab.key
-                ? "bg-slate-950 text-white"
-                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                ? "bg-navy-900 text-warm-0 shadow-xs"
+                : "border border-line bg-surface text-text-secondary hover:border-line-strong hover:bg-surface-hover"
             }`}
           >
             {tab.label}
@@ -106,18 +107,19 @@ export default function MyApplicationsPage() {
       </div>
 
       {error ? (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          {(error as Error).message}
-        </div>
+        <ErrorState
+          title="Could not load your applications"
+          message={(error as Error).message || "An unexpected error occurred while fetching your applications."}
+        />
       ) : null}
 
       {withdrawNotice ? (
         <div
           role={withdrawNotice.kind === "error" ? "alert" : "status"}
-          className={`rounded-lg border p-4 text-sm ${
+          className={`rounded-control border p-4 text-sm font-medium ${
             withdrawNotice.kind === "error"
-              ? "border-red-200 bg-red-50 text-red-700"
-              : "border-emerald-200 bg-emerald-50 text-emerald-800"
+              ? "border-danger-line bg-danger-surface text-danger-text"
+              : "border-success-line bg-success-surface text-success-text"
           }`}
         >
           {withdrawNotice.message}
@@ -125,28 +127,29 @@ export default function MyApplicationsPage() {
       ) : null}
 
       {isLoading ? (
-        <div className="flex items-center justify-center py-16 text-slate-400">
-          <Clock className="h-6 w-6 animate-spin text-slate-400" />
+        <div className="flex items-center justify-center py-16 text-text-muted">
+          <Clock className="size-6 animate-spin text-text-muted" />
           <span className="ml-2 text-sm">Loading applications...</span>
         </div>
       ) : null}
 
       {!isLoading && filteredApplications.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50/50 p-12 text-center">
-          <FileText className="h-12 w-12 text-slate-300" />
-          <h3 className="mt-3 text-base font-medium text-slate-900">No applications found</h3>
-          <p className="mt-1 text-sm text-slate-500">
-            {activeTab === "ALL"
+        <EmptyState
+          title="No applications found"
+          description={
+            activeTab === "ALL"
               ? "You have not applied to any job listings yet."
-              : "No applications match the selected filter."}
-          </p>
-          <Link
-            href="/listings"
-            className="mt-4 inline-flex items-center gap-2 rounded-md bg-slate-950 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
-          >
-            Explore Open Listings
-          </Link>
-        </div>
+              : "No applications match the selected filter."
+          }
+          action={
+            <Link
+              href="/listings"
+              className="inline-flex items-center gap-2 rounded-control bg-navy-900 px-4 py-2 text-sm font-semibold text-warm-0 hover:bg-navy-800"
+            >
+              Explore Open Listings
+            </Link>
+          }
+        />
       ) : null}
 
       <div className="grid gap-4">

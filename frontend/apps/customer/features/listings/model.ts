@@ -79,3 +79,37 @@ export interface ApplyFormState {
   cover_note: string;
   resume_url: string;
 }
+
+/** Interim key-to-label map for structured fields before Slice 4 schema publication */
+export const STRUCTURED_FIELD_LABELS: Record<string, string> = {
+  pay_range: "Pay Range",
+  salary_range: "Salary Range",
+  compensation: "Compensation",
+  work_mode: "Work Mode",
+  shift: "Shift",
+  role_type: "Employment Type",
+  employment_type: "Employment Type",
+  experience_years: "Experience Required",
+  experience: "Experience Required",
+};
+
+export function formatFieldLabel(key: string): string {
+  return (
+    STRUCTURED_FIELD_LABELS[key] ||
+    key
+      .split("_")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ")
+  );
+}
+
+export const STATUS_EVENT_LABELS: Record<string, string> = {
+  CONTACT_REVEALED: "Your contact details were shared with the employer",
+  APPLIED: "Application submitted",
+  STATUS_CHANGED: "Status updated",
+};
+
+export function formatStatusEventKind(kind?: string): string {
+  if (!kind) return "Event";
+  return STATUS_EVENT_LABELS[kind] || kind.replaceAll("_", " ");
+}

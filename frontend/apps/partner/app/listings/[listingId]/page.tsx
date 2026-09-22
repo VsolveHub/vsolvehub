@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Clock, User } from "lucide-react";
+import { ArrowLeft, Clock } from "lucide-react";
+import { EmptyState, StatusChip } from "@vsolve/ui";
 
 import {
   fetchListingApplications,
@@ -88,37 +89,36 @@ export default function PartnerListingLeadsPage() {
       <div>
         <Link
           href="/listings"
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 transition hover:text-slate-900"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-text-muted transition hover:text-text"
         >
-          <ArrowLeft className="h-4 w-4" /> Back to Listings Workspace
+          <ArrowLeft className="size-4" /> Back to Listings Workspace
         </Link>
         <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-950">
+            <h1 className="text-2xl font-bold tracking-tight text-text">
               {listing?.title || "Listing Applicant Leads"}
             </h1>
-            <p className="mt-0.5 text-xs text-slate-500">
+            <p className="mt-0.5 text-xs text-text-muted">
               {listing?.service_name || "Role"} • {applications.length} total applicant(s) received
             </p>
           </div>
           {listing?.status && (
-            <span className="inline-flex w-fit items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-              Listing Status: {listing.status}
-            </span>
+            <StatusChip status={listing.status} category="listing" />
           )}
         </div>
       </div>
 
       {/* Filter Tabs */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-3">
+      <div className="flex flex-wrap items-center gap-2 border-b border-line pb-3">
         {FILTER_TABS.map((tab) => (
           <button
+            type="button"
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
             className={`rounded-full px-4 py-1.5 text-xs font-semibold transition ${
               activeTab === tab.key
-                ? "bg-slate-950 text-white"
-                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                ? "bg-navy-900 text-warm-0 shadow-xs"
+                : "border border-line bg-surface text-text-secondary hover:border-line-strong hover:bg-surface-hover"
             }`}
           >
             {tab.label}
@@ -128,29 +128,28 @@ export default function PartnerListingLeadsPage() {
 
       {/* Action mutation errors */}
       {(reveal.error || statusMutation.error) && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+        <div className="rounded-control border border-danger-line bg-danger-surface p-3 text-xs text-danger-text">
           {(reveal.error as Error)?.message || (statusMutation.error as Error)?.message}
         </div>
       )}
 
       {/* Loading & Empty States */}
       {isLoading ? (
-        <div className="flex items-center justify-center py-16 text-slate-400">
-          <Clock className="h-6 w-6 animate-spin" />
+        <div className="flex items-center justify-center py-16 text-text-muted">
+          <Clock className="size-6 animate-spin text-text-muted" />
           <span className="ml-2 text-sm">Loading applicants...</span>
         </div>
       ) : null}
 
       {!isLoading && filteredApplications.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50/50 p-16 text-center">
-          <User className="h-12 w-12 text-slate-300" />
-          <h3 className="mt-3 text-base font-semibold text-slate-950">No applicants in this view</h3>
-          <p className="mt-1 text-sm text-slate-500">
-            {activeTab === "ALL"
+        <EmptyState
+          title="No applicants in this view"
+          description={
+            activeTab === "ALL"
               ? "Candidates who apply will appear here directly."
-              : "No candidates match the selected filter."}
-          </p>
-        </div>
+              : "No candidates match the selected filter."
+          }
+        />
       ) : null}
 
       {/* Application Cards */}

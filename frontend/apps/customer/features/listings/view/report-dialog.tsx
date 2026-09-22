@@ -27,33 +27,33 @@ export function ReportDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+      <div className="w-full max-w-md rounded-[var(--radius-card)] border border-line bg-surface p-6 shadow-overlay">
         <div className="flex items-center justify-between">
-          <h3 className="text-base font-bold text-slate-950 flex items-center gap-2">
-            <Flag className="h-4 w-4 text-rose-600" />
+          <h3 className="text-base font-bold text-text flex items-center gap-2">
+            <Flag className="size-4 text-text-muted" />
             Report Listing
           </h3>
           <button
             type="button"
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600"
+            className="text-text-muted hover:text-text"
           >
-            <X className="h-4 w-4" />
+            <X className="size-4" />
           </button>
         </div>
 
-        <p className="mt-2 text-xs text-slate-500">
+        <p className="mt-2 text-xs text-text-muted">
           Help us maintain community safety. Reports open an immediate review ticket for our
           operations team.
         </p>
 
         <div className="mt-4 space-y-3">
           <div>
-            <label className="block text-xs font-semibold text-slate-700">Reason</label>
+            <label className="block text-xs font-semibold text-text-secondary">Reason</label>
             <select
               value={reason}
               onChange={(e) => onReasonChange(e.target.value)}
-              className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none"
+              className="mt-1 h-10 w-full rounded-control border border-line bg-surface px-3 text-sm text-text outline-none focus:border-line-strong"
             >
               <option value="spam_or_abuse">Spam, Phishing, or Scam</option>
               <option value="fraudulent">Fraudulent or Asking for Upfront Payment</option>
@@ -63,23 +63,24 @@ export function ReportDialog({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700">Additional Details</label>
+            <label className="block text-xs font-semibold text-text-secondary">Additional Details</label>
             <textarea
               value={detail}
               onChange={(e) => onDetailChange(e.target.value)}
               rows={3}
               placeholder="Describe the issue you noticed..."
-              className="mt-1 w-full rounded-lg border border-slate-200 p-2.5 text-sm outline-none"
-            />
+              className="mt-1 w-full rounded-control border border-line bg-surface p-2.5 text-sm text-text outline-none focus:border-line-strong"
+            >
+            </textarea>
           </div>
 
-          {error && <p className="text-xs text-red-600">{error}</p>}
+          {error && <p className="text-xs text-danger-text">{error}</p>}
 
           <div className="mt-4 flex items-center justify-end gap-2">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-slate-200 px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              className="rounded-control border border-line px-3.5 py-2 text-xs font-semibold text-text-secondary hover:bg-surface-hover"
             >
               Cancel
             </button>
@@ -87,7 +88,7 @@ export function ReportDialog({
               type="button"
               onClick={onSubmit}
               disabled={isPending}
-              className="rounded-lg bg-rose-600 px-4 py-2 text-xs font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
+              className="rounded-control bg-navy-900 px-4 py-2 text-xs font-semibold text-warm-0 hover:bg-navy-800 disabled:opacity-50"
             >
               {isPending ? "Submitting..." : "Submit Report"}
             </button>

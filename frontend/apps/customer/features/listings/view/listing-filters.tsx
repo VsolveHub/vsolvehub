@@ -32,17 +32,18 @@ export function ListingFilters({
 }: ListingFiltersProps) {
   return (
     <section className="flex flex-wrap items-center gap-2">
-      <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 uppercase tracking-wider mr-2">
-        <Filter className="h-3.5 w-3.5" /> Filter by:
+      <span className="flex items-center gap-1.5 text-xs font-semibold text-text-muted uppercase tracking-wider mr-2">
+        <Filter className="size-3.5 text-text-muted" /> Filter by:
       </span>
       {categories.map((cat) => (
         <button
+          type="button"
           key={cat.label}
           onClick={() => onSelectCategory(cat.value)}
-          className={`rounded-full px-4 py-1.5 text-xs font-medium transition ${
+          className={`rounded-full px-4 py-1.5 text-xs font-semibold transition ${
             selectedCategory === cat.value
-              ? "bg-slate-950 text-white shadow-xs"
-              : "border border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+              ? "bg-navy-900 text-warm-0 shadow-xs"
+              : "border border-line bg-surface text-text-secondary hover:border-line-strong hover:bg-surface-hover"
           }`}
         >
           {cat.label}
@@ -50,8 +51,9 @@ export function ListingFilters({
       ))}
       {hasActiveFilters ? (
         <button
+          type="button"
           onClick={onClearFilters}
-          className="ml-auto text-xs font-medium text-indigo-600 hover:underline"
+          className="ml-auto text-xs font-semibold text-text-link hover:underline"
         >
           Clear all filters
         </button>

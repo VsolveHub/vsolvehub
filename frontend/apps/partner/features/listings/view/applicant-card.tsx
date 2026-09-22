@@ -11,25 +11,13 @@ import {
   UserCheck,
   UserX,
 } from "lucide-react";
+import { Badge, Card, StatusChip } from "@vsolve/ui";
 
 import {
   snapshotFields,
   type ApplicationStatus,
   type PartnerApplication,
 } from "../queries";
-
-const APPLICATION_STATUS_CONFIG: Record<
-  string,
-  { label: string; bg: string; text: string; border: string }
-> = {
-  SUBMITTED: { label: "New Application", bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200" },
-  UNDER_REVIEW: { label: "Under Review", bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200" },
-  SHORTLISTED: { label: "Shortlisted", bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200" },
-  CONTACTED: { label: "Contacted", bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200" },
-  REJECTED: { label: "Rejected", bg: "bg-rose-50", text: "text-rose-700", border: "border-rose-200" },
-  WITHDRAWN: { label: "Candidate Withdrew", bg: "bg-slate-100", text: "text-slate-600", border: "border-slate-200" },
-  EXPIRED: { label: "Expired", bg: "bg-gray-100", text: "text-gray-500", border: "border-gray-200" },
-};
 
 export interface ApplicantCardProps {
   app: PartnerApplication;
@@ -48,122 +36,115 @@ export function ApplicantCard({
   isStatusPending,
   onReport,
 }: ApplicantCardProps) {
-  const cfg = APPLICATION_STATUS_CONFIG[app.status] || {
-    label: app.status,
-    bg: "bg-slate-100",
-    text: "text-slate-700",
-    border: "border-slate-200",
-  };
-
   const isContactRevealed = !!app.contact_revealed_at;
   const snapshot = snapshotFields(app.applicant_snapshot);
 
   return (
-    <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs transition hover:border-slate-300">
+    <Card className="p-5 transition duration-fast hover:border-line-strong hover:shadow-raised">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-3 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span
-              className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${cfg.bg} ${cfg.text} ${cfg.border}`}
-            >
-              {cfg.label}
-            </span>
+            <StatusChip status={app.status} category="listing-application" />
 
-            <span className="flex items-center gap-1 text-xs text-slate-400">
-              <Calendar className="h-3.5 w-3.5" />
+            <span className="flex items-center gap-1 text-xs text-text-muted">
+              <Calendar className="size-3.5" />
               Applied {new Date(app.created_at).toLocaleDateString()}
             </span>
 
             {app.contact_revealed_at && (
-              <span className="flex items-center gap-1 text-xs font-medium text-emerald-600">
-                <CheckCircle2 className="h-3.5 w-3.5" />
+              <Badge tone="success">
+                <CheckCircle2 className="size-3.5" />
                 Contact unlocked
-              </span>
+              </Badge>
             )}
           </div>
 
-          <h2 className="text-lg font-bold text-slate-950">
+          <h2 className="text-lg font-bold text-text">
             {app.applicant_name || snapshot.name || "Candidate"}
           </h2>
 
-          <div className="grid gap-2 rounded-lg border border-slate-100 bg-slate-50/70 p-3 text-xs sm:grid-cols-2 text-slate-700">
+          {/* Candidate Details & Resume */}
+          <div className="grid gap-2 rounded-control border border-line bg-surface-sunken p-3 text-xs sm:grid-cols-2 text-text-secondary">
             {snapshot.experience && (
               <div>
-                <span className="font-semibold text-slate-500">Experience:</span>{" "}
+                <span className="font-semibold text-text-muted">Experience:</span>{" "}
                 {snapshot.experience}
               </div>
             )}
 
             {app.resume_url ? (
               <div>
-                <span className="font-semibold text-slate-500">Resume Link:</span>{" "}
+                <span className="font-semibold text-text-muted">Resume Link:</span>{" "}
                 <a
                   href={app.resume_url}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1 font-semibold text-indigo-600 underline"
+                  className="inline-flex items-center gap-1 font-semibold text-text-link underline"
                 >
-                  View Profile / CV <ExternalLink className="h-3 w-3" />
+                  View Profile / CV <ExternalLink className="size-3" />
                 </a>
               </div>
             ) : (
-              <div className="text-slate-400">No resume link provided</div>
+              <div className="text-text-muted">No resume link provided</div>
             )}
           </div>
 
+          {/* Cover Note */}
           {app.cover_note && (
-            <div className="text-xs text-slate-600">
-              <span className="font-semibold text-slate-700">Cover Note:</span>
-              <p className="mt-1 rounded-md bg-slate-50 p-2.5 text-slate-700 italic border border-slate-100">
+            <div className="text-xs text-text-secondary">
+              <span className="font-semibold text-text">Cover Note:</span>
+              <p className="mt-1 rounded-control bg-surface-sunken p-2.5 text-text-secondary italic border border-line">
                 &ldquo;{app.cover_note}&rdquo;
               </p>
             </div>
           )}
 
-          <div className="flex flex-wrap items-center gap-4 rounded-lg border border-slate-100 bg-white p-3 text-xs">
+          {/* Contact Info (Masked or Revealed) */}
+          <div className="flex flex-wrap items-center gap-4 rounded-control border border-line bg-surface p-3 text-xs">
             {isContactRevealed ? (
               <>
-                <span className="flex items-center gap-1.5 font-semibold text-slate-800">
-                  <Phone className="h-4 w-4 text-emerald-600" />
+                <span className="flex items-center gap-1.5 font-semibold text-text">
+                  <Phone className="size-4 text-success-text" />
                   {app.applicant_phone || "Phone provided"}
                 </span>
                 {app.applicant_email && (
-                  <span className="flex items-center gap-1.5 font-semibold text-slate-800">
-                    <Mail className="h-4 w-4 text-indigo-600" />
+                  <span className="flex items-center gap-1.5 font-semibold text-text">
+                    <Mail className="size-4 text-text-link" />
                     {app.applicant_email}
                   </span>
                 )}
-                <span className="text-[11px] text-slate-400">
+                <span className="text-[11px] text-text-muted">
                   Unlocked on {new Date(app.contact_revealed_at!).toLocaleDateString()}
                 </span>
               </>
             ) : (
               <div className="flex items-center justify-between w-full">
-                <span className="flex items-center gap-1.5 text-slate-500">
-                  <Lock className="h-3.5 w-3.5 text-slate-400" />
+                <span className="flex items-center gap-1.5 text-text-muted">
+                  <Lock className="size-3.5 text-text-muted" />
                   Direct contact masked for candidate privacy.
                 </span>
                 <button
                   type="button"
                   onClick={() => onReveal(app.id)}
                   disabled={isRevealPending}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-indigo-700 disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-control bg-navy-900 px-3 py-1.5 text-xs font-semibold text-warm-0 shadow-card hover:bg-navy-800 disabled:opacity-50"
                 >
-                  <Unlock className="h-3.5 w-3.5" />
+                  <Unlock className="size-3.5" />
                   {isRevealPending ? "Unlocking..." : "Reveal Contact"}
                 </button>
               </div>
             )}
           </div>
 
+          {/* Status Timeline */}
           {app.status_events && app.status_events.length > 0 && (
             <div className="flex flex-wrap gap-2 pt-1">
               {app.status_events.map((ev) => (
                 <span
                   key={ev.id}
-                  className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500"
+                  className="inline-flex items-center gap-1 rounded-control bg-surface-sunken px-2 py-0.5 text-[11px] text-text-muted border border-line"
                 >
-                  <Clock className="h-3 w-3 text-slate-400" />
+                  <Clock className="size-3 text-text-muted" />
                   {ev.kind}: {ev.to_status} ({new Date(ev.created_at).toLocaleDateString()})
                 </span>
               ))}
@@ -171,15 +152,16 @@ export function ApplicantCard({
           )}
         </div>
 
+        {/* Candidate Action Buttons */}
         <div className="flex flex-wrap items-center gap-2 pt-2 lg:pt-0 lg:flex-col lg:items-end">
           {app.status !== "SHORTLISTED" && app.status !== "REJECTED" && (
             <button
               type="button"
               onClick={() => onStatusChange({ id: app.id, next: "SHORTLISTED" })}
               disabled={isStatusPending}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+              className="inline-flex items-center gap-1.5 rounded-control border border-success-line bg-success-surface px-3 py-1.5 text-xs font-semibold text-success-text hover:bg-success-surface/80"
             >
-              <UserCheck className="h-3.5 w-3.5" /> Shortlist
+              <UserCheck className="size-3.5" /> Shortlist
             </button>
           )}
 
@@ -188,9 +170,9 @@ export function ApplicantCard({
               type="button"
               onClick={() => onStatusChange({ id: app.id, next: "CONTACTED" })}
               disabled={isStatusPending}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-700 hover:bg-purple-100"
+              className="inline-flex items-center gap-1.5 rounded-control border border-line bg-surface-sunken px-3 py-1.5 text-xs font-semibold text-text-secondary hover:bg-surface-hover"
             >
-              <Phone className="h-3.5 w-3.5" /> Mark Contacted
+              <Phone className="size-3.5" /> Mark Contacted
             </button>
           )}
 
@@ -199,21 +181,21 @@ export function ApplicantCard({
               type="button"
               onClick={() => onStatusChange({ id: app.id, next: "REJECTED" })}
               disabled={isStatusPending}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200"
+              className="inline-flex items-center gap-1.5 rounded-control border border-line px-3 py-1.5 text-xs font-medium text-text-muted hover:border-danger-line hover:text-danger-text hover:bg-danger-surface/20"
             >
-              <UserX className="h-3.5 w-3.5" /> Reject
+              <UserX className="size-3.5" /> Reject
             </button>
           )}
 
           <button
             type="button"
             onClick={() => onReport(app)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500 hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700"
+            className="inline-flex items-center gap-1.5 rounded-control border border-line px-3 py-1.5 text-xs font-medium text-text-muted hover:border-line-strong hover:text-text"
           >
-            <Flag className="h-3.5 w-3.5" /> Report
+            <Flag className="size-3.5" /> Report
           </button>
         </div>
       </div>
-    </article>
+    </Card>
   );
 }

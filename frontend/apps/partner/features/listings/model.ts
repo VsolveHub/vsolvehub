@@ -93,29 +93,29 @@ export const STATUS_BADGES: Record<
   string,
   { label: string; bg: string; text: string; border: string }
 > = {
-  DRAFT: { label: "Draft", bg: "bg-slate-100", text: "text-slate-700", border: "border-slate-200" },
+  DRAFT: { label: "Draft", bg: "bg-surface-sunken", text: "text-text-secondary", border: "border-line" },
   PENDING_REVIEW: {
     label: "In Review",
-    bg: "bg-amber-50",
-    text: "text-amber-700",
-    border: "border-amber-200",
+    bg: "bg-warning-surface",
+    text: "text-warning-text",
+    border: "border-warning-line",
   },
   REJECTED: {
     label: "Rejected",
-    bg: "bg-rose-50",
-    text: "text-rose-700",
-    border: "border-rose-200",
+    bg: "bg-danger-surface",
+    text: "text-danger-text",
+    border: "border-danger-line",
   },
   PUBLISHED: {
     label: "Live & Active",
-    bg: "bg-emerald-50",
-    text: "text-emerald-700",
-    border: "border-emerald-200",
+    bg: "bg-success-surface",
+    text: "text-success-text",
+    border: "border-success-line",
   },
-  CLOSED: { label: "Closed", bg: "bg-slate-100", text: "text-slate-600", border: "border-slate-200" },
-  REMOVED: { label: "Removed", bg: "bg-rose-100", text: "text-rose-800", border: "border-rose-200" },
-  EXPIRED: { label: "Expired", bg: "bg-gray-100", text: "text-gray-600", border: "border-gray-200" },
-  ARCHIVED: { label: "Archived", bg: "bg-gray-100", text: "text-gray-600", border: "border-gray-200" },
+  CLOSED: { label: "Closed", bg: "bg-surface-sunken", text: "text-text-muted", border: "border-line" },
+  REMOVED: { label: "Removed", bg: "bg-danger-surface", text: "text-danger-text", border: "border-danger-line" },
+  EXPIRED: { label: "Expired", bg: "bg-surface-sunken", text: "text-text-muted", border: "border-line" },
+  ARCHIVED: { label: "Archived", bg: "bg-surface-sunken", text: "text-text-muted", border: "border-line" },
 };
 
 export const LISTING_TABS = [

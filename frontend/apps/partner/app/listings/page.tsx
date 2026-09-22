@@ -56,13 +56,13 @@ export default function PartnerListingsPage() {
       {actionError ? (
         <div
           role="alert"
-          className="flex items-start justify-between gap-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800"
+          className="flex items-start justify-between gap-4 rounded-control border border-danger-line bg-danger-surface p-4 text-sm text-danger-text"
         >
           <span>{actionError}</span>
           <button
             type="button"
             onClick={() => setActionError(null)}
-            className="shrink-0 text-xs font-semibold text-rose-700 underline"
+            className="shrink-0 text-xs font-semibold text-danger-text underline"
           >
             Dismiss
           </button>
@@ -77,7 +77,7 @@ export default function PartnerListingsPage() {
 
       <WorkspaceStats home={home} />
 
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-3">
+      <div className="flex flex-wrap items-center gap-2 border-b border-line pb-3">
         {LISTING_TABS.map((tab) => (
           <button
             type="button"
@@ -85,8 +85,8 @@ export default function PartnerListingsPage() {
             onClick={() => setActiveTab(tab.key)}
             className={`rounded-full px-4 py-1.5 text-xs font-semibold transition ${
               activeTab === tab.key
-                ? "bg-slate-950 text-white"
-                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                ? "bg-navy-900 text-warm-0 shadow-xs"
+                : "border border-line bg-surface text-text-secondary hover:border-line-strong hover:bg-surface-hover"
             }`}
           >
             {tab.label}
@@ -95,14 +95,14 @@ export default function PartnerListingsPage() {
       </div>
 
       {actionErrorObj && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+        <div className="rounded-control border border-danger-line bg-danger-surface p-3 text-xs text-danger-text">
           {(actionErrorObj as Error).message}
         </div>
       )}
 
       <div className="grid gap-4">
         {isLoading ? (
-          <div className="py-12 text-center text-sm text-slate-400">Loading workspace listings...</div>
+          <div className="py-12 text-center text-sm text-text-muted">Loading workspace listings...</div>
         ) : null}
 
         {!isLoading && filteredListings.length === 0 ? (

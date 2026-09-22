@@ -6,59 +6,13 @@ import {
   ExternalLink,
   XCircle,
 } from "lucide-react";
+import { Badge, Card, StatusChip } from "@vsolve/ui";
 
+import { formatStatusEventKind } from "../model";
 import {
   snapshotFields,
   type ListingApplication,
 } from "../queries";
-
-const STATUS_CONFIG: Record<
-  string,
-  { label: string; bg: string; text: string; border: string }
-> = {
-  SUBMITTED: {
-    label: "Submitted",
-    bg: "bg-blue-50",
-    text: "text-blue-700",
-    border: "border-blue-200",
-  },
-  UNDER_REVIEW: {
-    label: "Under Review",
-    bg: "bg-amber-50",
-    text: "text-amber-700",
-    border: "border-amber-200",
-  },
-  SHORTLISTED: {
-    label: "Shortlisted",
-    bg: "bg-emerald-50",
-    text: "text-emerald-700",
-    border: "border-emerald-200",
-  },
-  CONTACTED: {
-    label: "Contacted",
-    bg: "bg-purple-50",
-    text: "text-purple-700",
-    border: "border-purple-200",
-  },
-  REJECTED: {
-    label: "Not Selected",
-    bg: "bg-rose-50",
-    text: "text-rose-700",
-    border: "border-rose-200",
-  },
-  WITHDRAWN: {
-    label: "Withdrawn",
-    bg: "bg-slate-100",
-    text: "text-slate-600",
-    border: "border-slate-200",
-  },
-  EXPIRED: {
-    label: "Expired",
-    bg: "bg-gray-100",
-    text: "text-gray-500",
-    border: "border-gray-200",
-  },
-};
 
 export interface ApplicationCardProps {
   app: ListingApplication;
@@ -77,67 +31,56 @@ export function ApplicationCard({
   onConfirmWithdraw,
   isPending,
 }: ApplicationCardProps) {
-  const cfg = STATUS_CONFIG[app.status] || {
-    label: app.status,
-    bg: "bg-slate-100",
-    text: "text-slate-700",
-    border: "border-slate-200",
-  };
-
   const canWithdraw = ["SUBMITTED", "UNDER_REVIEW", "SHORTLISTED"].includes(app.status);
   const snapshot = snapshotFields(app.applicant_snapshot);
 
   return (
-    <article className="group rounded-xl border border-slate-200 bg-white p-5 shadow-xs transition hover:border-slate-300 hover:shadow-md">
+    <Card className="group transition duration-fast hover:border-line-strong hover:shadow-raised">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="flex-1 space-y-2">
           <div className="flex flex-wrap items-center gap-2.5">
-            <span
-              className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${cfg.bg} ${cfg.text} ${cfg.border}`}
-            >
-              {cfg.label}
-            </span>
-            <span className="flex items-center gap-1 text-xs text-slate-400">
-              <Calendar className="h-3.5 w-3.5" />
+            <StatusChip status={app.status} category="listing-application" />
+            <span className="flex items-center gap-1 text-xs text-text-muted">
+              <Calendar className="size-3.5" />
               Applied on {new Date(app.created_at).toLocaleDateString()}
             </span>
             {app.contact_revealed_at ? (
-              <span className="flex items-center gap-1 text-xs font-medium text-emerald-600">
-                <CheckCircle2 className="h-3.5 w-3.5" /> Contact Shared with Poster
-              </span>
+              <Badge tone="success">
+                <CheckCircle2 className="size-3.5" /> Contact Shared with Poster
+              </Badge>
             ) : null}
           </div>
 
-          <h2 className="text-lg font-semibold text-slate-950">
+          <h2 className="text-lg font-bold text-text">
             <Link
               href={`/listings/${app.listing}`}
-              className="inline-flex items-center gap-1.5 transition hover:text-blue-600 hover:underline"
+              className="inline-flex items-center gap-1.5 transition hover:text-text-link hover:underline"
             >
               {app.listing_title || "Job Listing"}
-              <ExternalLink className="h-3.5 w-3.5 text-slate-400" />
+              <ExternalLink className="size-3.5 text-text-muted" />
             </Link>
           </h2>
 
           {/* Applicant Details Snapshot */}
-          <div className="mt-3 grid gap-2 rounded-lg border border-slate-100 bg-slate-50/70 p-3 sm:grid-cols-2 text-xs text-slate-600">
+          <div className="mt-3 grid gap-2 rounded-control border border-line bg-surface-sunken p-3 sm:grid-cols-2 text-xs text-text-secondary">
             <div>
-              <span className="font-medium text-slate-500">Applicant:</span>{" "}
+              <span className="font-semibold text-text-muted">Applicant:</span>{" "}
               {app.applicant_name || snapshot.name || "N/A"}
             </div>
             {snapshot.experience ? (
               <div>
-                <span className="font-medium text-slate-500">Experience:</span>{" "}
+                <span className="font-semibold text-text-muted">Experience:</span>{" "}
                 {snapshot.experience}
               </div>
             ) : null}
             {app.resume_url ? (
               <div className="sm:col-span-2">
-                <span className="font-medium text-slate-500">Resume / Profile:</span>{" "}
+                <span className="font-semibold text-text-muted">Resume / Profile:</span>{" "}
                 <a
                   href={app.resume_url}
                   target="_blank"
                   rel="noreferrer"
-                  className="font-medium text-blue-600 underline"
+                  className="font-semibold text-text-link underline"
                 >
                   View Resume
                 </a>
@@ -146,24 +89,24 @@ export function ApplicationCard({
           </div>
 
           {app.cover_note ? (
-            <div className="mt-2 text-xs text-slate-600">
-              <span className="font-medium text-slate-700">Cover Note:</span>
-              <p className="mt-0.5 line-clamp-2 rounded bg-slate-50 p-2 text-slate-600 italic">
+            <div className="mt-2 text-xs text-text-secondary">
+              <span className="font-semibold text-text">Cover Note:</span>
+              <p className="mt-0.5 line-clamp-2 rounded-control bg-surface-sunken p-2 text-text-secondary italic border border-line">
                 &ldquo;{app.cover_note}&rdquo;
               </p>
             </div>
           ) : null}
 
-          {/* Status events timeline if present */}
+          {/* Status events timeline */}
           {app.status_events && app.status_events.length > 0 ? (
-            <div className="mt-3 flex flex-wrap gap-2 pt-2 border-t border-slate-100">
+            <div className="mt-3 flex flex-wrap gap-2 pt-2 border-t border-line">
               {app.status_events.map((ev) => (
                 <span
                   key={ev.id}
-                  className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600"
+                  className="inline-flex items-center gap-1 rounded-control bg-surface-sunken px-2 py-0.5 text-[11px] text-text-muted border border-line"
                 >
-                  <Clock className="h-3 w-3 text-slate-400" />
-                  {ev.kind}: {ev.to_status} ({new Date(ev.created_at).toLocaleDateString()})
+                  <Clock className="size-3 text-text-muted" />
+                  {formatStatusEventKind(ev.kind)} ({new Date(ev.created_at).toLocaleDateString()})
                 </span>
               ))}
             </div>
@@ -174,34 +117,37 @@ export function ApplicationCard({
         <div className="flex flex-col items-end gap-2 shrink-0">
           {canWithdraw ? (
             isWithdrawing ? (
-              <div className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 p-2 text-xs">
-                <span className="text-rose-700">Withdraw application?</span>
+              <div className="flex items-center gap-2 rounded-control border border-danger-line bg-danger-surface p-2 text-xs">
+                <span className="text-danger-text font-semibold">Withdraw application?</span>
                 <button
+                  type="button"
                   onClick={onConfirmWithdraw}
                   disabled={isPending}
-                  className="rounded bg-rose-600 px-2 py-1 font-medium text-white hover:bg-rose-700"
+                  className="rounded-control bg-navy-900 px-2.5 py-1 font-semibold text-warm-0 hover:bg-navy-800 disabled:opacity-50"
                 >
                   {isPending ? "..." : "Confirm"}
                 </button>
                 <button
+                  type="button"
                   onClick={onCancelWithdraw}
-                  className="rounded border border-slate-300 bg-white px-2 py-1 text-slate-700 hover:bg-slate-50"
+                  className="rounded-control border border-line bg-surface px-2.5 py-1 font-semibold text-text-secondary hover:bg-surface-hover"
                 >
                   Cancel
                 </button>
               </div>
             ) : (
               <button
+                type="button"
                 onClick={onStartWithdraw}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
+                className="inline-flex items-center gap-1.5 rounded-control border border-line px-3 py-1.5 text-xs font-semibold text-text-muted transition hover:border-danger-line hover:text-danger-text hover:bg-danger-surface/20"
               >
-                <XCircle className="h-3.5 w-3.5" />
+                <XCircle className="size-3.5" />
                 Withdraw
               </button>
             )
           ) : null}
         </div>
       </div>
-    </article>
+    </Card>
   );
 }
