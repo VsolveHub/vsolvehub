@@ -73,11 +73,11 @@ export function ApplicationCard({
                 {snapshot.experience}
               </div>
             ) : null}
-            {app.resume_url ? (
+            {app.resume_url || snapshot.resume_url || snapshot.portfolio_url ? (
               <div className="sm:col-span-2">
                 <span className="font-semibold text-text-muted">Resume / Profile:</span>{" "}
                 <a
-                  href={app.resume_url}
+                  href={app.resume_url || snapshot.resume_url || snapshot.portfolio_url}
                   target="_blank"
                   rel="noreferrer"
                   className="font-semibold text-text-link underline"

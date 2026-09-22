@@ -134,11 +134,12 @@ export function EditListingDialog({
 
             <ListingExtraFields
               roleType={form.role_type}
-              payRange={form.pay_range}
-              workMode={form.work_mode}
+              payRange={form.salary_range || form.pay_range || ""}
+              workMode={form.shift || form.work_mode || ""}
               experienceYears={form.experience_years}
               errors={errors}
               onChange={onFieldChange}
+              schema={listing?.listing_type_schema}
             />
           </div>
 

@@ -2,6 +2,7 @@ from typing import Any
 
 from rest_framework import serializers
 
+from apps.catalog.models import ServiceVariant
 from apps.identity.phone import InvalidPhoneNumberError, normalize_phone_number
 from apps.listings.models import (
     Application,
@@ -69,9 +70,16 @@ class ListingSummarySerializer(serializers.ModelSerializer[Listing]):
 
 class ListingDetailSerializer(ListingSummarySerializer):
     contact_masked = serializers.SerializerMethodField()
+    listing_type_schema = serializers.SerializerMethodField()
+    application_schema = serializers.SerializerMethodField()
 
     class Meta(ListingSummarySerializer.Meta):
-        fields = (*ListingSummarySerializer.Meta.fields, "contact_masked")
+        fields = (
+            *ListingSummarySerializer.Meta.fields,
+            "contact_masked",
+            "listing_type_schema",
+            "application_schema",
+        )
 
     def get_contact_masked(self, obj: Listing) -> dict[str, str]:
         return {
@@ -80,6 +88,18 @@ class ListingDetailSerializer(ListingSummarySerializer):
             else "",
             "email": obj.contact_email[:2] + "***" if obj.contact_email else "",
         }
+
+    def get_listing_type_schema(self, obj: Listing) -> dict[str, Any]:
+        if not hasattr(obj, "variant") or not obj.variant:
+            return {}
+        cfg = obj.variant.a10_configurations.filter(status="ACTIVE").first()
+        return cfg.listing_type_schema if cfg else {}
+
+    def get_application_schema(self, obj: Listing) -> dict[str, Any]:
+        if not hasattr(obj, "variant") or not obj.variant:
+            return {}
+        cfg = obj.variant.a10_configurations.filter(status="ACTIVE").first()
+        return cfg.application_schema if cfg else {}
 
 
 class PartnerListingSerializer(ListingSummarySerializer):
@@ -93,6 +113,7 @@ class PartnerListingSerializer(ListingSummarySerializer):
     service_slug = serializers.CharField(required=False, write_only=True)
     is_premium = serializers.BooleanField(required=False, default=False)
     payment_attempt_id = serializers.UUIDField(read_only=True, allow_null=True)
+    listing_type_schema = serializers.SerializerMethodField()
 
     class Meta(ListingSummarySerializer.Meta):
         fields = (
@@ -108,6 +129,7 @@ class PartnerListingSerializer(ListingSummarySerializer):
             "version",
             "created_at",
             "payment_attempt_id",
+            "listing_type_schema",
         )
         read_only_fields = (
             "status",
@@ -118,7 +140,14 @@ class PartnerListingSerializer(ListingSummarySerializer):
             "version",
             "created_at",
             "payment_attempt_id",
+            "listing_type_schema",
         )
+
+    def get_listing_type_schema(self, obj: Listing) -> dict[str, Any]:
+        if not hasattr(obj, "variant") or not obj.variant:
+            return {}
+        cfg = obj.variant.a10_configurations.filter(status="ACTIVE").first()
+        return cfg.listing_type_schema if cfg else {}
 
     def validate_structured_fields(self, value: dict[str, Any]) -> dict[str, Any]:
         """Keep role details to a small, flat, human-sized map.
@@ -152,8 +181,64 @@ class PartnerListingSerializer(ListingSummarySerializer):
                 raise serializers.ValidationError(
                     f"'{name}' must be {MAX_STRUCTURED_FIELD_VALUE_LENGTH} characters or fewer."
                 )
+            # Reconcile key aliases
+            if name == "pay_range":
+                name = "salary_range"
+            elif name == "work_mode":
+                name = "shift"
             cleaned[name] = text
         return cleaned
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        attrs = super().validate(attrs)
+        structured = attrs.get("structured_fields")
+        if structured is not None:
+            variant = None
+            if self.instance and hasattr(self.instance, "variant"):
+                variant = self.instance.variant
+            variant_id = attrs.get("variant_id")
+            if not variant and variant_id:
+                variant = ServiceVariant.objects.filter(id=variant_id).first()
+            if not variant:
+                service_id = attrs.get("service_id")
+                service_slug = attrs.get("service_slug")
+                if service_id:
+                    variant = ServiceVariant.objects.filter(
+                        service_id=service_id, booking_archetype="A10_LISTING", is_active=True
+                    ).first()
+                elif service_slug:
+                    variant = ServiceVariant.objects.filter(
+                        service__slug=service_slug, booking_archetype="A10_LISTING", is_active=True
+                    ).first()
+
+            if variant:
+                config = variant.a10_configurations.filter(status="ACTIVE").first()
+                if config and config.listing_type_schema:
+                    properties = config.listing_type_schema.get("properties", {})
+                    if properties:
+                        allowed_keys = set(properties.keys())
+                        for key, val in structured.items():
+                            if key not in allowed_keys:
+                                allowed_str = ", ".join(sorted(allowed_keys))
+                                raise serializers.ValidationError(
+                                    {
+                                        "structured_fields": (
+                                            f"'{key}' is not an allowed role detail. "
+                                            f"Allowed: {allowed_str}."
+                                        )
+                                    }
+                                )
+                            prop_enum = properties[key].get("enum")
+                            if prop_enum and val not in prop_enum:
+                                raise serializers.ValidationError(
+                                    {
+                                        "structured_fields": (
+                                            f"'{val}' is not an allowed choice for '{key}'. "
+                                            f"Allowed choices: {', '.join(prop_enum)}."
+                                        )
+                                    }
+                                )
+        return attrs
 
 
 class ApplicationAttachmentSerializer(serializers.ModelSerializer[ApplicationAttachment]):
@@ -313,3 +398,12 @@ class VendorSubscriptionSerializer(serializers.ModelSerializer[VendorSubscriptio
             "ends_at",
             "created_at",
         )
+
+
+class ListingCategoryOptionSerializer(serializers.Serializer[dict[str, str]]):
+    label = serializers.CharField()  # type: ignore[assignment]
+    value = serializers.CharField(allow_blank=True)
+
+
+class ListingFiltersTaxonomySerializer(serializers.Serializer[dict[str, Any]]):
+    categories = ListingCategoryOptionSerializer(many=True)

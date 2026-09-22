@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.66.0)
- * Checksum: a58b594a5d3fa5e0
+ * Checksum: 9139c7dd3e698a2f
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -1880,6 +1880,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["listings_reports_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/listings/filters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listings_filters_retrieve"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -8968,6 +8984,10 @@ export interface components {
          * @enum {string}
          */
         LifecycleStatusEnum: "DRAFT" | "ACTIVE" | "RETIRED" | "REJECTED";
+        ListingCategoryOption: {
+            label: string;
+            value: string;
+        };
         ListingDetail: {
             /** Format: uuid */
             readonly id: string;
@@ -8991,6 +9011,15 @@ export interface components {
             readonly contact_masked: {
                 [key: string]: string;
             };
+            readonly listing_type_schema: {
+                [key: string]: unknown;
+            };
+            readonly application_schema: {
+                [key: string]: unknown;
+            };
+        };
+        ListingFiltersTaxonomy: {
+            categories: components["schemas"]["ListingCategoryOption"][];
         };
         ListingReport: {
             /** Format: uuid */
@@ -10143,7 +10172,9 @@ export interface components {
             readonly variant_name: string;
             title: string;
             description: string;
-            structured_fields?: unknown;
+            structured_fields?: {
+                [key: string]: unknown;
+            };
             readonly status: components["schemas"]["StatusC74Enum"];
             readonly moderation_status: components["schemas"]["ModerationStatus8dcEnum"];
             readonly public_state: string;
@@ -10171,11 +10202,16 @@ export interface components {
             readonly created_at: string;
             /** Format: uuid */
             readonly payment_attempt_id: string | null;
+            readonly listing_type_schema: {
+                [key: string]: unknown;
+            };
         };
         PartnerListingRequest: {
             title: string;
             description: string;
-            structured_fields?: unknown;
+            structured_fields?: {
+                [key: string]: unknown;
+            };
             location_text?: string;
             /** @default false */
             is_premium: boolean;
@@ -13458,6 +13494,7 @@ export interface components {
          * @enum {string}
          */
         SubjectKindEnum: "CATALOG_BOOKING" | "ENGAGEMENT";
+        /** @description Customer application. The server is the authority; the form mirrors these rules. */
         SubmitApplicationRequest: {
             name: string;
             phone: string;
@@ -18513,6 +18550,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ListingReport"];
+                };
+            };
+        };
+    };
+    listings_filters_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListingFiltersTaxonomy"];
                 };
             };
         };

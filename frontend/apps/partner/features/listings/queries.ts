@@ -43,6 +43,18 @@ export interface ListingHome {
   };
 }
 
+export interface SchemaProperty {
+  type?: string;
+  title?: string;
+  enum?: string[];
+}
+
+export interface JsonSchemaObject {
+  type?: string;
+  properties?: Record<string, SchemaProperty>;
+  required?: string[];
+}
+
 /** Free-form role catalog from `partner/listings/roles` (OpenAPI OBJECT). */
 export interface CatalogServiceItem {
   id: string;
@@ -53,6 +65,8 @@ export interface CatalogServiceItem {
     code: string;
     name: string;
     fulfilment_archetype: string;
+    listing_type_schema?: JsonSchemaObject;
+    application_schema?: JsonSchemaObject;
   }>;
 }
 

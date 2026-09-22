@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
 import { PhoneField } from "@vsolve/ui";
 
+import type { CatalogServiceItem, JsonSchemaObject } from "../queries";
 import type { CreateListingFormState } from "../model";
 import { FieldError } from "./field-error";
 import { ListingExtraFields } from "./listing-extra-fields";
@@ -11,10 +12,14 @@ export interface CreateListingDialogProps {
   form: CreateListingFormState;
   errors: Record<string, string>;
   isPending: boolean;
-  services: Array<{
+  services: CatalogServiceItem[] | Array<{
     id: string;
     name: string;
-    variants?: Array<{ id: string; name: string }>;
+    variants?: Array<{
+      id: string;
+      name: string;
+      listing_type_schema?: JsonSchemaObject;
+    }>;
   }>;
   onFieldChange: (key: string, value: string) => void;
   onServiceChange: (serviceId: string) => void;
@@ -165,11 +170,16 @@ export function CreateListingDialog({
 
             <ListingExtraFields
               roleType={form.role_type}
-              payRange={form.pay_range}
-              workMode={form.work_mode}
+              payRange={form.salary_range || form.pay_range || ""}
+              workMode={form.shift || form.work_mode || ""}
               experienceYears={form.experience_years}
               errors={errors}
               onChange={onFieldChange}
+              schema={
+                services
+                  .flatMap((s) => s.variants ?? [])
+                  .find((v) => v.id === form.variant)?.listing_type_schema
+              }
             />
           </div>
 

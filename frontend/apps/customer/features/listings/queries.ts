@@ -88,3 +88,7 @@ export function reportListing(listingId: string, reason: string, detail = "") {
 export function fetchJobCategories() {
   return request(() => getApiClient().GET("/api/v1/categories/"));
 }
+
+export function fetchListingFilters() {
+  return request(() => getApiClient().GET("/api/v1/listings/filters"));
+}

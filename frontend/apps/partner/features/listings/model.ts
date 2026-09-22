@@ -35,8 +35,11 @@ export const listingShape = {
     .max(5000, "Description must be 5000 characters or fewer."),
   contact_phone: phoneRule,
   contact_email: emailRule,
-  pay_range: z.string().trim().max(300, "Keep the pay range to 300 characters or fewer."),
-  experience_years: z.string().trim().max(300, "Keep experience to 300 characters or fewer."),
+  salary_range: z.string().trim().max(300, "Keep the pay range to 300 characters or fewer.").optional(),
+  pay_range: z.string().trim().max(300, "Keep the pay range to 300 characters or fewer.").optional(),
+  shift: z.string().trim().max(300, "Keep shift to 300 characters or fewer.").optional(),
+  work_mode: z.string().trim().max(300, "Keep work mode to 300 characters or fewer.").optional(),
+  experience_years: z.string().trim().max(300, "Keep experience to 300 characters or fewer.").optional(),
 };
 
 export const createListingSchema = z.object({
@@ -137,9 +140,11 @@ export interface CreateListingFormState {
   contact_phone: string;
   contact_email: string;
   role_type: string;
-  pay_range: string;
-  work_mode: string;
+  salary_range: string;
+  shift: string;
   experience_years: string;
+  pay_range?: string;
+  work_mode?: string;
 }
 
 export interface EditListingFormState {
@@ -149,7 +154,9 @@ export interface EditListingFormState {
   contact_phone: string;
   contact_email: string;
   role_type: string;
-  pay_range: string;
-  work_mode: string;
+  salary_range: string;
+  shift: string;
   experience_years: string;
+  pay_range?: string;
+  work_mode?: string;
 }

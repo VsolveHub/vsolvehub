@@ -28,6 +28,8 @@ const INITIAL_FORM: CreateListingFormState = {
   contact_phone: "",
   contact_email: "",
   role_type: "Full-Time",
+  salary_range: "₹25,000 - ₹40,000 / month",
+  shift: "On-site",
   pay_range: "₹25,000 - ₹40,000 / month",
   work_mode: "On-site",
   experience_years: "1-3 years",
@@ -67,16 +69,21 @@ export function usePartnerListingsWorkspace() {
 
   const handleStartEdit = (listing: PartnerListing) => {
     setEditingListing(listing);
+    const fields = listingFields(listing.structured_fields);
+    const salary = String(fields.salary_range || fields.pay_range || "");
+    const shiftVal = String(fields.shift || fields.work_mode || "On-site");
     setEditForm({
       title: listing.title || "",
       description: listing.description || "",
       location_text: listing.location_text || "",
       contact_phone: listing.contact_phone || "",
       contact_email: listing.contact_email || "",
-      role_type: String(listingFields(listing.structured_fields).role_type || "Full-Time"),
-      pay_range: String(listingFields(listing.structured_fields).pay_range || ""),
-      work_mode: String(listingFields(listing.structured_fields).work_mode || "On-site"),
-      experience_years: String(listingFields(listing.structured_fields).experience_years || ""),
+      role_type: String(fields.role_type || "Full-Time"),
+      salary_range: salary,
+      pay_range: salary,
+      shift: shiftVal,
+      work_mode: shiftVal,
+      experience_years: String(fields.experience_years || ""),
     });
   };
 

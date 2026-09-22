@@ -83,7 +83,8 @@ class Command(BaseCommand):
             store["_auth_user_hash"] = user.get_session_auth_hash()
             store.create()
 
-            assert store.session_key is not None, "session_key must exist after create()"
+            if store.session_key is None:
+                raise RuntimeError("session_key must exist after create()")
             UserSession.objects.create(
                 user=user,
                 session_key_hash=keyed_hash(store.session_key),

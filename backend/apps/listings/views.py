@@ -8,7 +8,7 @@ from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.catalog.models import ServiceVariant
+from apps.catalog.models import ServiceVariant, Subcategory
 from apps.foundation.services import execute_idempotent
 from apps.listings.exceptions import (
     ApplicationDuplicateApiError,
@@ -28,6 +28,7 @@ from apps.listings.serializers import (
     ApplicationSerializer,
     ApplicationStatusSerializer,
     ListingDetailSerializer,
+    ListingFiltersTaxonomySerializer,
     ListingReportSerializer,
     ListingSummarySerializer,
     ModerationSerializer,
@@ -92,6 +93,35 @@ def _raise_listing_error(exc: Exception) -> NoReturn:
     if message.startswith("This listing is not accepting applications"):
         raise ListingNotAcceptingApplicationsApiError from exc
     raise ListingStateConflictApiError(message) from exc
+
+
+class ListingFiltersView(APIView):
+    permission_classes = (permissions.AllowAny,)
+
+    @extend_schema(responses=ListingFiltersTaxonomySerializer)
+    def get(self, _request: Any) -> Response:
+        subcats = (
+            Subcategory.objects.filter(
+                category__slug="career-jobs",
+                is_active=True,
+            )
+            .exclude(slug="hiring-partners")
+            .order_by("name")
+        )
+        options: list[dict[str, str]] = [{"label": "All Roles", "value": ""}]
+        if subcats.exists():
+            options.extend({"label": sc.name, "value": sc.slug} for sc in subcats)
+        else:
+            fallback = [
+                {"label": "IT & Software", "value": "software"},
+                {"label": "Sales & Marketing", "value": "sales"},
+                {"label": "Driver & Delivery", "value": "driver"},
+                {"label": "Office & Admin", "value": "admin"},
+                {"label": "Customer Support", "value": "support"},
+                {"label": "Retail & Shop", "value": "retail"},
+            ]
+            options.extend(fallback)
+        return Response({"categories": options})
 
 
 class ListingBrowseView(APIView):
@@ -217,24 +247,36 @@ class PartnerListingRoleCatalogView(APIView):
         variants = (
             ServiceVariant.objects.filter(booking_archetype="A10_LISTING", is_active=True)
             .select_related("service")
+            .prefetch_related("a10_configurations")
             .order_by("service__name")
         )
-        data = [
-            {
-                "id": str(v.service_id),
-                "slug": v.service.slug,
-                "name": v.service.name,
-                "variants": [
-                    {
-                        "id": str(v.id),
-                        "code": v.code,
-                        "name": v.name,
-                        "fulfilment_archetype": v.booking_archetype,
-                    }
-                ],
-            }
-            for v in variants
-        ]
+        data = []
+        for v in variants:
+            active_cfg = next(
+                (c for c in v.a10_configurations.all() if c.status == "ACTIVE"),
+                None,
+            )
+            data.append(
+                {
+                    "id": str(v.service_id),
+                    "slug": v.service.slug,
+                    "name": v.service.name,
+                    "variants": [
+                        {
+                            "id": str(v.id),
+                            "code": v.code,
+                            "name": v.name,
+                            "fulfilment_archetype": v.booking_archetype,
+                            "listing_type_schema": active_cfg.listing_type_schema
+                            if active_cfg
+                            else {},
+                            "application_schema": active_cfg.application_schema
+                            if active_cfg
+                            else {},
+                        }
+                    ],
+                }
+            )
         return Response(data)
 
 

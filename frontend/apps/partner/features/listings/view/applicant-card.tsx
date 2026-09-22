@@ -72,11 +72,11 @@ export function ApplicantCard({
               </div>
             )}
 
-            {app.resume_url ? (
+            {app.resume_url || snapshot.resume_url || snapshot.portfolio_url ? (
               <div>
                 <span className="font-semibold text-text-muted">Resume Link:</span>{" "}
                 <a
-                  href={app.resume_url}
+                  href={app.resume_url || snapshot.resume_url || snapshot.portfolio_url}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-1 font-semibold text-text-link underline"

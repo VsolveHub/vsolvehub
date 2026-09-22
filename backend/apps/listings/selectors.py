@@ -10,6 +10,7 @@ def public_listings(filters: dict[str, Any] | None = None) -> QuerySet[Listing]:
     filters = filters or {}
     qs = (
         Listing.objects.select_related("poster", "variant", "variant__service")
+        .prefetch_related("variant__a10_configurations")
         .annotate(application_count=Count("applications"))
         .filter(
             status=Listing.Status.PUBLISHED,
@@ -29,7 +30,11 @@ def public_listings(filters: dict[str, Any] | None = None) -> QuerySet[Listing]:
         qs = qs.filter(location_text__icontains=location)
     service = str(filters.get("service") or "").strip()
     if service:
-        qs = qs.filter(variant__service__slug=service)
+        qs = qs.filter(
+            Q(variant__service__slug__icontains=service)
+            | Q(variant__service__subcategory__slug__icontains=service)
+            | Q(variant__service__subcategory__name__icontains=service)
+        )
     for key, value in (filters.get("structured_fields") or {}).items():
         if value not in (None, ""):
             qs = qs.filter(**{f"structured_fields__{key}": value})

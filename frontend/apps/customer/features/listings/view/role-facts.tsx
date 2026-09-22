@@ -7,6 +7,12 @@ export interface RoleFactsProps {
 
 export function RoleFacts({ listing }: RoleFactsProps) {
   const fields = (listing.structured_fields || {}) as Record<string, unknown>;
+  const schema = listing.listing_type_schema as Record<string, unknown> | undefined;
+  const schemaProps = (schema?.properties as Record<string, unknown> | undefined) || {};
+
+  const sortedKeys = Array.from(
+    new Set([...Object.keys(schemaProps).filter((k) => k in fields), ...Object.keys(fields)]),
+  );
 
   return (
     <div>
@@ -20,10 +26,10 @@ export function RoleFacts({ listing }: RoleFactsProps) {
             <dd className="mt-1 text-sm font-semibold text-text">{listing.service_name}</dd>
           </div>
         )}
-        {Object.entries(fields).map(([key, val]) => (
+        {sortedKeys.map((key) => (
           <div key={key} className="rounded-control border border-line bg-surface-sunken p-3.5">
-            <dt className="text-xs text-text-muted">{formatFieldLabel(key)}</dt>
-            <dd className="mt-1 text-sm font-semibold text-text">{String(val)}</dd>
+            <dt className="text-xs text-text-muted">{formatFieldLabel(key, schema)}</dt>
+            <dd className="mt-1 text-sm font-semibold text-text">{String(fields[key])}</dd>
           </div>
         ))}
       </dl>

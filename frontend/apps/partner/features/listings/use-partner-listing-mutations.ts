@@ -61,8 +61,8 @@ export function usePartnerListingMutations({
         contact_email: editForm.contact_email || undefined,
         structured_fields: {
           role_type: editForm.role_type,
-          pay_range: editForm.pay_range,
-          work_mode: editForm.work_mode,
+          salary_range: editForm.salary_range || editForm.pay_range || "",
+          shift: editForm.shift || editForm.work_mode || "",
           experience_years: editForm.experience_years,
         },
       });
@@ -87,8 +87,8 @@ export function usePartnerListingMutations({
         contact_email: form.contact_email || undefined,
         structured_fields: {
           role_type: form.role_type,
-          pay_range: form.pay_range,
-          work_mode: form.work_mode,
+          salary_range: form.salary_range || form.pay_range || "",
+          shift: form.shift || form.work_mode || "",
           experience_years: form.experience_years,
         },
       }),

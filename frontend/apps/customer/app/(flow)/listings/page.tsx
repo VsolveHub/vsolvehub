@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { Button, EmptyState, ErrorState, Skeleton } from "@vsolve/ui";
 
-import { fetchListings, type Listing } from "@/features/listings/queries";
+import { fetchListingFilters, fetchListings, type Listing } from "@/features/listings/queries";
 import { ListingFilters, ListingRow } from "@/features/listings/view";
 
 export default function ListingsBrowsePage() {
@@ -38,6 +38,12 @@ export default function ListingsBrowsePage() {
     setAppliedLocation("");
     setSelectedCategory("");
   };
+
+  const { data: filtersData } = useQuery({
+    queryKey: ["listing-filters"],
+    queryFn: fetchListingFilters,
+    staleTime: 60_000,
+  });
 
   const {
     data: listings = [],
@@ -130,6 +136,7 @@ export default function ListingsBrowsePage() {
 
       {/* Filter Pills */}
       <ListingFilters
+        categories={filtersData?.categories}
         selectedCategory={selectedCategory}
         onSelectCategory={selectCategory}
         hasActiveFilters={hasActiveFilters}

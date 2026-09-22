@@ -24,6 +24,8 @@ from apps.listings.models import (
     VendorSubscriptionPlan,
 )
 from apps.listings.selectors import public_listings
+from apps.listings.serializers import ListingDetailSerializer, PartnerListingSerializer
+from rest_framework.exceptions import ValidationError
 from apps.listings.services import (
     APPLICATIONS_PER_HOUR_LIMIT,
     CONTACT_REVEALS_PER_DAY_LIMIT,
@@ -876,3 +878,135 @@ def test_premium_activation_and_webhook_replay(poster, a10_variant):
     activate_premium_feature(payment_attempt_id=listing.payment_attempt.id)
     listing.refresh_from_db()
     assert listing.is_premium is True
+
+
+@pytest.mark.django_db
+def test_slice4_structured_fields_schema_enforcement(a10_variant):
+    """Slice 4: Structured fields are validated against active variant schema and enums."""
+    config = A10VariantConfiguration.objects.get(variant=a10_variant)
+    config.listing_type_schema = {
+        "type": "object",
+        "properties": {
+            "role_type": {
+                "type": "string",
+                "title": "Role Type / Employment",
+                "enum": ["Full-Time", "Part-Time", "Contract", "Internship"],
+            },
+            "salary_range": {"type": "string", "title": "Pay Range / Compensation"},
+            "shift": {
+                "type": "string",
+                "title": "Workplace Mode / Shift",
+                "enum": ["On-site", "Hybrid", "Remote"],
+            },
+            "experience_years": {"type": "string", "title": "Experience Required"},
+        },
+    }
+    config.save()
+
+    # Valid payload with alias keys (pay_range -> salary_range, work_mode -> shift)
+    serializer = PartnerListingSerializer(
+        data={
+            "variant": str(a10_variant.id),
+            "title": "Valid Software Engineer",
+            "description": "A great software engineering role with at least 20 chars.",
+            "location_text": "Hyderabad",
+            "contact_phone": "+919900000088",
+            "structured_fields": {
+                "role_type": "Full-Time",
+                "pay_range": "₹50,000 / month",
+                "work_mode": "Hybrid",
+                "experience_years": "2+ years",
+            },
+        }
+    )
+    assert serializer.is_valid(), serializer.errors
+    validated_fields = serializer.validated_data["structured_fields"]
+    assert "salary_range" in validated_fields
+    assert "shift" in validated_fields
+    assert "pay_range" not in validated_fields
+    assert "work_mode" not in validated_fields
+
+    # Out-of-schema key refused
+    invalid_key_serializer = PartnerListingSerializer(
+        data={
+            "variant": str(a10_variant.id),
+            "title": "Invalid Key Engineer",
+            "description": "A great software engineering role with at least 20 chars.",
+            "location_text": "Hyderabad",
+            "contact_phone": "+919900000088",
+            "structured_fields": {
+                "unknown_extra_detail": "Not in schema",
+            },
+        }
+    )
+    with pytest.raises(ValidationError) as exc:
+        invalid_key_serializer.is_valid(raise_exception=True)
+    assert "unknown_extra_detail" in str(exc.value)
+
+    # Invalid enum choice refused
+    invalid_enum_serializer = PartnerListingSerializer(
+        data={
+            "variant": str(a10_variant.id),
+            "title": "Invalid Enum Engineer",
+            "description": "A great software engineering role with at least 20 chars.",
+            "location_text": "Hyderabad",
+            "contact_phone": "+919900000088",
+            "structured_fields": {
+                "role_type": "Moonlighting",
+            },
+        }
+    )
+    with pytest.raises(ValidationError) as exc:
+        invalid_enum_serializer.is_valid(raise_exception=True)
+    assert "Moonlighting" in str(exc.value)
+
+
+@pytest.mark.django_db
+def test_slice4_listing_detail_and_role_catalog_exposes_schemas(poster, a10_variant):
+    """Slice 4: ListingDetail and PartnerListingRoleCatalog expose schema and options."""
+    config = A10VariantConfiguration.objects.get(variant=a10_variant)
+    config.listing_type_schema = {
+        "type": "object",
+        "properties": {
+            "role_type": {"type": "string", "enum": ["Full-Time"]},
+        },
+    }
+    config.application_schema = {
+        "type": "object",
+        "properties": {
+            "resume_url": {"type": "string", "title": "Resume Link"},
+        },
+    }
+    config.save()
+
+    listing = create_listing(
+        poster=poster,
+        variant_id=a10_variant.id,
+        title="Python Engineer",
+        description="Senior engineer wanted with at least 20 characters.",
+    )
+
+    data = ListingDetailSerializer(listing).data
+    assert data["listing_type_schema"] == config.listing_type_schema
+    assert data["application_schema"] == config.application_schema
+
+    partner_client = _client_for(poster.user, "partner")
+    res = partner_client.get("/api/v1/partner/listings/roles")
+    assert res.status_code == 200
+    roles = res.json()
+    assert len(roles) > 0
+    first_variant = roles[0]["variants"][0]
+    assert "listing_type_schema" in first_variant
+    assert "application_schema" in first_variant
+
+
+@pytest.mark.django_db
+def test_slice4_listing_filters_taxonomy_endpoint(client):
+    """Slice 4: Listings filter taxonomy returns categories."""
+    res = client.get("/api/v1/listings/filters")
+    assert res.status_code == 200
+    body = res.json()
+    assert "categories" in body
+    assert len(body["categories"]) > 0
+    assert body["categories"][0]["label"] == "All Roles"
+    assert body["categories"][0]["value"] == ""

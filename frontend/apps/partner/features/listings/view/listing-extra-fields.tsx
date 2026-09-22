@@ -1,3 +1,4 @@
+import type { JsonSchemaObject } from "../queries";
 import { FieldError } from "./field-error";
 
 export interface ListingExtraFieldsProps {
@@ -7,6 +8,7 @@ export interface ListingExtraFieldsProps {
   experienceYears: string;
   errors?: Record<string, string>;
   onChange: (key: string, value: string) => void;
+  schema?: JsonSchemaObject | null;
 }
 
 export function ListingExtraFields({
@@ -16,54 +18,90 @@ export function ListingExtraFields({
   experienceYears,
   errors = {},
   onChange,
+  schema,
 }: ListingExtraFieldsProps) {
+  const roleTypeOptions = schema?.properties?.role_type?.enum || [
+    "Full-Time",
+    "Part-Time",
+    "Contract",
+    "Internship",
+  ];
+  const roleTypeLabel = schema?.properties?.role_type?.title || "Role Type / Employment";
+
+  const shiftOptions = schema?.properties?.shift?.enum || [
+    "On-site",
+    "Hybrid",
+    "Remote",
+    "Day",
+    "Night",
+    "Rotational",
+  ];
+  const shiftLabel = schema?.properties?.shift?.title || "Workplace Mode / Shift";
+
+  const salaryLabel = schema?.properties?.salary_range?.title || "Pay Range / Compensation";
+  const expLabel = schema?.properties?.experience_years?.title || "Experience Required";
+
+  const payError = errors.salary_range || errors.pay_range;
+  const shiftError = errors.shift || errors.work_mode;
+
   return (
     <>
       <div>
-        <label className="block text-xs font-semibold text-text-secondary">Role Type / Employment</label>
+        <label className="block text-xs font-semibold text-text-secondary">{roleTypeLabel}</label>
         <select
           value={roleType}
           onChange={(e) => onChange("role_type", e.target.value)}
           className="mt-1 h-10 w-full rounded-control border border-line bg-surface px-3 text-sm text-text outline-none focus:border-line-strong"
         >
-          <option value="Full-Time">Full-Time</option>
-          <option value="Part-Time">Part-Time</option>
-          <option value="Contract">Contract</option>
-          <option value="Internship">Internship</option>
+          {roleTypeOptions.map((opt) => (
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
+          ))}
         </select>
+        <FieldError message={errors.role_type} />
       </div>
 
       <div>
-        <label className="block text-xs font-semibold text-text-secondary">Workplace Mode</label>
+        <label className="block text-xs font-semibold text-text-secondary">{shiftLabel}</label>
         <select
           value={workMode}
-          onChange={(e) => onChange("work_mode", e.target.value)}
+          onChange={(e) => {
+            onChange("shift", e.target.value);
+            onChange("work_mode", e.target.value);
+          }}
           className="mt-1 h-10 w-full rounded-control border border-line bg-surface px-3 text-sm text-text outline-none focus:border-line-strong"
         >
-          <option value="On-site">On-site</option>
-          <option value="Hybrid">Hybrid</option>
-          <option value="Remote">Remote</option>
+          {shiftOptions.map((opt) => (
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
+          ))}
         </select>
+        <FieldError message={shiftError} />
       </div>
 
       <div>
-        <label className="block text-xs font-semibold text-text-secondary">Pay Range / Compensation</label>
+        <label className="block text-xs font-semibold text-text-secondary">{salaryLabel}</label>
         <input
           value={payRange}
-          onChange={(e) => onChange("pay_range", e.target.value)}
+          onChange={(e) => {
+            onChange("salary_range", e.target.value);
+            onChange("pay_range", e.target.value);
+          }}
           placeholder="e.g. ₹35,000 - ₹50,000 / month"
-          aria-invalid={Boolean(errors.pay_range)}
+          aria-invalid={Boolean(payError)}
           className={`mt-1 h-10 w-full rounded-control border bg-surface px-3 text-sm text-text outline-none transition focus:ring-1 ${
-            errors.pay_range
+            payError
               ? "border-danger-line focus:border-danger-text focus:ring-danger-text"
               : "border-line focus:border-line-strong focus:ring-focus-ring"
           }`}
         />
-        <FieldError message={errors.pay_range} />
+        <FieldError message={payError} />
       </div>
 
       <div>
-        <label className="block text-xs font-semibold text-text-secondary">Experience Required</label>
+        <label className="block text-xs font-semibold text-text-secondary">{expLabel}</label>
         <input
           value={experienceYears}
           onChange={(e) => onChange("experience_years", e.target.value)}

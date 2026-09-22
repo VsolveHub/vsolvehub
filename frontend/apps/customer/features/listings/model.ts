@@ -80,20 +80,28 @@ export interface ApplyFormState {
   resume_url: string;
 }
 
-/** Interim key-to-label map for structured fields before Slice 4 schema publication */
+/**
+ * Resolves a human-readable label for a structured field, prioritizing
+ * the server-published schema title, falling back to canonical defaults or title-casing.
+ */
 export const STRUCTURED_FIELD_LABELS: Record<string, string> = {
   pay_range: "Pay Range",
-  salary_range: "Salary Range",
+  salary_range: "Pay Range / Compensation",
   compensation: "Compensation",
-  work_mode: "Work Mode",
-  shift: "Shift",
-  role_type: "Employment Type",
-  employment_type: "Employment Type",
+  work_mode: "Workplace Mode / Shift",
+  shift: "Workplace Mode / Shift",
+  role_type: "Role Type / Employment",
+  employment_type: "Role Type / Employment",
   experience_years: "Experience Required",
-  experience: "Experience Required",
+  experience: "Experience / Qualification",
 };
 
-export function formatFieldLabel(key: string): string {
+export function formatFieldLabel(key: string, schema?: Record<string, unknown>): string {
+  const schemaTitle = (
+    schema?.properties as Record<string, { title?: string }> | undefined
+  )?.[key]?.title;
+  if (schemaTitle) return schemaTitle;
+
   return (
     STRUCTURED_FIELD_LABELS[key] ||
     key

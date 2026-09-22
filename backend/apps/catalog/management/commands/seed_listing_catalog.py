@@ -100,7 +100,7 @@ class Command(BaseCommand):
     help = "Seeds Career Opportunity or Job Opportunities (A10_LISTING) taxonomy and starter data."
 
     @transaction.atomic
-    def handle(self, *args: Any, **options: Any) -> None:
+    def handle(self, *args: Any, **options: Any) -> None:  # noqa: PLR0912, PLR0915
         csv_path = _find_csv_path()
         if csv_path is None:
             taxonomy = _FALLBACK_CAREER_TAXONOMY
@@ -160,7 +160,7 @@ class Command(BaseCommand):
                 if first_variant is None:
                     first_variant = variant
 
-                A10VariantConfiguration.objects.get_or_create(
+                A10VariantConfiguration.objects.update_or_create(
                     variant=variant,
                     version=1,
                     defaults={
@@ -169,17 +169,44 @@ class Command(BaseCommand):
                         "listing_type_schema": {
                             "type": "object",
                             "properties": {
-                                "role_type": {"type": "string"},
-                                "salary_range": {"type": "string"},
-                                "experience_years": {"type": "string"},
-                                "shift": {"type": "string"},
+                                "role_type": {
+                                    "type": "string",
+                                    "title": "Role Type / Employment",
+                                    "enum": ["Full-Time", "Part-Time", "Contract", "Internship"],
+                                },
+                                "salary_range": {
+                                    "type": "string",
+                                    "title": "Pay Range / Compensation",
+                                },
+                                "experience_years": {
+                                    "type": "string",
+                                    "title": "Experience Required",
+                                },
+                                "shift": {
+                                    "type": "string",
+                                    "title": "Workplace Mode / Shift",
+                                    "enum": [
+                                        "On-site",
+                                        "Hybrid",
+                                        "Remote",
+                                        "Day",
+                                        "Night",
+                                        "Rotational",
+                                    ],
+                                },
                             },
                         },
                         "application_schema": {
                             "type": "object",
                             "properties": {
-                                "experience": {"type": "string"},
-                                "portfolio_url": {"type": "string"},
+                                "experience": {
+                                    "type": "string",
+                                    "title": "Experience / Qualification",
+                                },
+                                "resume_url": {
+                                    "type": "string",
+                                    "title": "Resume Link / Portfolio URL",
+                                },
                             },
                         },
                     },
@@ -282,7 +309,7 @@ class Command(BaseCommand):
                 "is_active": True,
             },
         )
-        A10VariantConfiguration.objects.get_or_create(
+        A10VariantConfiguration.objects.update_or_create(
             variant=hiring_variant,
             version=1,
             defaults={
@@ -291,13 +318,45 @@ class Command(BaseCommand):
                 "listing_type_schema": {
                     "type": "object",
                     "properties": {
-                        "role_type": {"type": "string"},
-                        "salary_range": {"type": "string"},
+                        "role_type": {
+                            "type": "string",
+                            "title": "Role Type / Employment",
+                            "enum": ["Full-Time", "Part-Time", "Contract", "Internship"],
+                        },
+                        "salary_range": {
+                            "type": "string",
+                            "title": "Pay Range / Compensation",
+                        },
+                        "experience_years": {
+                            "type": "string",
+                            "title": "Experience Required",
+                        },
+                        "shift": {
+                            "type": "string",
+                            "title": "Workplace Mode / Shift",
+                            "enum": [
+                                "On-site",
+                                "Hybrid",
+                                "Remote",
+                                "Day",
+                                "Night",
+                                "Rotational",
+                            ],
+                        },
                     },
                 },
                 "application_schema": {
                     "type": "object",
-                    "properties": {"experience": {"type": "string"}},
+                    "properties": {
+                        "experience": {
+                            "type": "string",
+                            "title": "Experience / Qualification",
+                        },
+                        "resume_url": {
+                            "type": "string",
+                            "title": "Resume Link / Portfolio URL",
+                        },
+                    },
                 },
             },
         )
@@ -498,7 +557,9 @@ class Command(BaseCommand):
                     "ends_at": now + timedelta(days=89),
                 },
             )
-            self.stdout.write(self.style.SUCCESS("Ensured ACTIVE Enterprise subscription for Apex."))
+            self.stdout.write(
+                self.style.SUCCESS("Ensured ACTIVE Enterprise subscription for Apex.")
+            )
 
         # Ops moderation queue — submitted, not yet live.
         pending, pending_created = Listing.objects.get_or_create(
