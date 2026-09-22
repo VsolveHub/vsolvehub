@@ -13,3 +13,7 @@ export { WorkspaceStats } from "./workspace-stats";
 export type { WorkspaceStatsProps } from "./workspace-stats";
 export { WorkspaceEmptyState } from "./workspace-empty-state";
 export type { WorkspaceEmptyStateProps } from "./workspace-empty-state";
+export { ApplicantCard } from "./applicant-card";
+export type { ApplicantCardProps } from "./applicant-card";
+export { ReportApplicantDialog } from "./report-applicant-dialog";
+export type { ReportApplicantDialogProps } from "./report-applicant-dialog";
