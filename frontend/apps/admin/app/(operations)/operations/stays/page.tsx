@@ -16,8 +16,8 @@ type Property = {
 
 function csrfToken(): string {
   if (typeof document === "undefined") return "";
-  const match = document.cookie.match(/(?:^|; )csrftoken=([^;]+)/);
-  return match ? decodeURIComponent(match[1]) : "";
+  const token = document.cookie.match(/(?:^|; )csrftoken=([^;]+)/)?.[1];
+  return token ? decodeURIComponent(token) : "";
 }
 
 function OpsStaysInner() {

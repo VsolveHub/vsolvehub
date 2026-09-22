@@ -26,6 +26,7 @@ from apps.partners.models import PartnerProfile
 def _as_uuid(value: UUID | str) -> UUID:
     return value if isinstance(value, UUID) else UUID(str(value))
 
+
 APPLICATIONS_PER_HOUR_LIMIT = 10
 CONTACT_REVEALS_PER_DAY_LIMIT = 25
 APPLICATION_COOLDOWN_HOURS_DEFAULT = 24

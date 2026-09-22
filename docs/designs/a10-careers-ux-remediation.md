@@ -407,27 +407,27 @@ A, B and C touch disjoint modules and can run in parallel worktrees. The e2e cha
 
 ### Implementation Tasks
 
-- [ ] **T1 (P1, human: ~30min / CC: ~5min)** — customer listings — send the category as `service=`, defer `appliedQuery` and `appliedLocation`
+- [x] **T1 (P1, human: ~30min / CC: ~5min)** — customer listings — send the category as `service=`, defer `appliedQuery` and `appliedLocation`
   - Surfaced by: Architecture — `listings/page.tsx:40` effectiveQuery concatenation
   - Files: `frontend/apps/customer/app/(flow)/listings/page.tsx`, `frontend/apps/customer/features/listings/queries.ts`
   - Verify: type 20 characters, confirm zero requests; click a pill, confirm one request with `service=`
-- [ ] **T2 (P1, human: ~1h / CC: ~10min)** — shared UI — `PhoneField` with `defaultCountry` defaulting to `IN`, digits-only, strips a pasted `+91`
+- [x] **T2 (P1, human: ~1h / CC: ~10min)** — shared UI — `PhoneField` with `defaultCountry` defaulting to `IN`, digits-only, strips a pasted `+91`
   - Surfaced by: Architecture — hardcoded `+91` in a three-app package
   - Files: `frontend/packages/ui/src/`, customer `[listingId]/page.tsx:462-467`, `partner/app/listings/page.tsx:150,725`
   - Verify: paste `+91 99000 00088`, confirm ten digits and a `201`
-- [ ] **T3 (P1, human: ~45min / CC: ~8min)** — partner app — success toasts on create, edit, submit, publish, close, subscribe; one message map; `onError` for `action` and `subscribe`
+- [x] **T3 (P1, human: ~45min / CC: ~8min)** — partner app — success toasts on create, edit, submit, publish, close, subscribe; one message map; `onError` for `action` and `subscribe`
   - Surfaced by: Architecture — six callbacks at `:241,278,331,349` with no error handler on two
   - Files: `frontend/apps/partner/app/listings/page.tsx`
   - Verify: each action shows exactly one confirmation; a forced failure shows an inline message, not a toast
-- [ ] **T4 (P1, human: ~30min / CC: ~5min)** — customer app — withdraw confirmation and a `role="alert"` failure; remove the dead `HIRED` branch
+- [x] **T4 (P1, human: ~30min / CC: ~5min)** — customer app — withdraw confirmation and a `role="alert"` failure; remove the dead `HIRED` branch
   - Surfaced by: Code quality — `my-applications/page.tsx:96-98,106`
   - Files: `frontend/apps/customer/app/(flow)/listings/my-applications/page.tsx`
   - Verify: withdraw succeeds with a confirmation; a forced failure shows an alert
-- [ ] **T5 (P1, human: ~1h / CC: ~10min)** — e2e — extend `a10-careers` with the search assertions and update the phone selector
+- [x] **T5 (P1, human: ~1h / CC: ~10min)** — e2e — extend `a10-careers` with the search assertions and update the phone selector
   - Surfaced by: Tests — the keyword box has no coverage; `:150` breaks on the placeholder change
   - Files: `frontend/e2e/a10-careers.e2e.ts`
   - Verify: the owner runs the suite
-- [ ] **T6 (P2, human: ~20min / CC: ~3min)** — customer listings — a deliberate `staleTime` and `placeholderData`, following `crew/queries.ts:154`
+- [x] **T6 (P2, human: ~20min / CC: ~3min)** — customer listings — a deliberate `staleTime` and `placeholderData`, following `crew/queries.ts:154`
   - Surfaced by: Performance — defaults are `staleTime: 0` with refetch on focus
   - Files: `frontend/apps/customer/app/(flow)/listings/page.tsx`
   - Verify: switch tabs and return; confirm no refetch

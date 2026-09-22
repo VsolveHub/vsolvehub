@@ -41,7 +41,7 @@ ROLES: tuple[tuple[str, str, str], ...] = (
 #: A fixed local CSRF secret. Django accepts the cookie value as the request
 #: token, and the browser client echoes the cookie, so a constant is enough here
 #: and keeps the generated files readable.
-CSRF_TOKEN = "abcdefghijklmnopqrstuvwxyz123456"
+CSRF_TOKEN = "abcdefghijklmnopqrstuvwxyz123456"  # noqa: S105
 
 COOKIE_DOMAIN = "localhost"
 
@@ -62,14 +62,14 @@ class Command(BaseCommand):
             help="How long the minted sessions stay valid.",
         )
 
-    def handle(self, *args: Any, **options: Any) -> None:
+    def handle(self, *_args: Any, **options: Any) -> None:
         out_dir = Path(options["out"]).resolve()
         out_dir.mkdir(parents=True, exist_ok=True)
         hours: int = options["hours"]
-        User = get_user_model()
+        user_model = get_user_model()
 
         for name, phone, role_code in ROLES:
-            user = User.objects.filter(phone_number=phone).first()
+            user = user_model.objects.filter(phone_number=phone).first()
             if user is None:
                 raise CommandError(
                     f"No user with phone {phone} ({name}). "
@@ -83,6 +83,7 @@ class Command(BaseCommand):
             store["_auth_user_hash"] = user.get_session_auth_hash()
             store.create()
 
+            assert store.session_key is not None, "session_key must exist after create()"
             UserSession.objects.create(
                 user=user,
                 session_key_hash=keyed_hash(store.session_key),
