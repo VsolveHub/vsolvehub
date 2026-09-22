@@ -6,6 +6,8 @@ export type StatusCategory =
   | "case-severity"
   | "case-kind"
   | "partner-application"
+  | "listing"
+  | "listing-application"
   | "payout"
   | "refund"
   | "visit"
@@ -83,6 +85,48 @@ const REGISTRY: Record<StatusCategory, {
       approved: "Approved",
       suspended: "Suspended",
       offboarded: "Offboarded",
+    },
+  },
+  listing: {
+    tones: {
+      draft: "neutral",
+      pending_review: "warning",
+      rejected: "danger",
+      published: "success",
+      closed: "neutral",
+      removed: "danger",
+      expired: "neutral",
+      archived: "neutral",
+    },
+    labels: {
+      draft: "Draft",
+      pending_review: "In Review",
+      rejected: "Rejected",
+      published: "Live & Active",
+      closed: "Closed",
+      removed: "Removed",
+      expired: "Expired",
+      archived: "Archived",
+    },
+  },
+  "listing-application": {
+    tones: {
+      submitted: "info",
+      under_review: "warning",
+      shortlisted: "success",
+      contacted: "info",
+      rejected: "danger",
+      withdrawn: "neutral",
+      expired: "neutral",
+    },
+    labels: {
+      submitted: "Applied",
+      under_review: "Under review",
+      shortlisted: "Shortlisted",
+      contacted: "Contacted",
+      rejected: "Not selected",
+      withdrawn: "Withdrawn",
+      expired: "Closed",
     },
   },
   payout: {
