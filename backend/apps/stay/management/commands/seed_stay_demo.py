@@ -105,12 +105,21 @@ class Command(BaseCommand):
                 host=profile,
                 variant_id=first_variant.id,
                 title="Lakeview Double Sharing — Demo",
-                description="Enquiry-first A9 MVP demo property.",
+                description="High quality double sharing PG with attached bathroom, air conditioning, and 3 home-style meals included.",
                 location_text="Gachibowli, Hyderabad",
-                unit_name="Double sharing",
+                unit_name="Double sharing AC",
                 nightly_rate_paise=85000,
                 sharing_count=2,
             )
+            prop.structured_fields = {
+                "ac": True,
+                "food": True,
+                "wifi": True,
+                "power_backup": True,
+                "cleaning": True,
+                "room_type": "DOUBLE_SHARING",
+            }
+            prop.save(update_fields=("structured_fields",))
             submit_property(prop=prop, host=profile)
             moderate_property(
                 prop=prop,
@@ -119,8 +128,46 @@ class Command(BaseCommand):
                 reason="Demo seed approve for customer browse.",
             )
         else:
+            prop.structured_fields = {
+                "ac": True,
+                "food": True,
+                "wifi": True,
+                "power_backup": True,
+                "cleaning": True,
+                "room_type": "DOUBLE_SHARING",
+            }
             prop.moderation_status = Property.ModerationStatus.APPROVED
-            prop.save(update_fields=("moderation_status", "updated_at"))
+            prop.save(update_fields=("structured_fields", "moderation_status", "updated_at"))
+
+        # Add single room private stay
+        single_prop = Property.objects.filter(host=profile, title="Cyber Towers Executive Single Room").first()
+        if single_prop is None:
+            single_prop = create_property(
+                host=profile,
+                variant_id=first_variant.id,
+                title="Cyber Towers Executive Single Room",
+                description="Spacious private single room for working professionals with dedicated workstation, superfast WiFi, and daily housekeeping.",
+                location_text="Hitec City, Hyderabad",
+                unit_name="Executive Single AC Room",
+                nightly_rate_paise=160000,
+                sharing_count=1,
+            )
+            single_prop.structured_fields = {
+                "ac": True,
+                "food": True,
+                "wifi": True,
+                "power_backup": True,
+                "workstation": True,
+                "room_type": "PRIVATE_ROOM",
+            }
+            single_prop.save(update_fields=("structured_fields",))
+            submit_property(prop=single_prop, host=profile)
+            moderate_property(
+                prop=single_prop,
+                actor=host_user,
+                action="APPROVE",
+                reason="Executive single room approved.",
+            )
 
         pending = Property.objects.filter(host=profile, title="Pending Ops Hostel Bed").first()
         if pending is None:

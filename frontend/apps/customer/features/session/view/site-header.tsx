@@ -256,6 +256,10 @@ export const NAV_TARGETS: readonly NavTarget[] = [
   // Deliberately first and deliberately public: the catalog and the anonymous
   // basket are real surfaces for somebody who has never signed in.
   { href: "/catalog", label: "Services", shortLabel: "Services", icon: "home", private: false },
+  // A7 Equipment & Tool Rentals
+  { href: "/rentals", label: "Rentals", shortLabel: "Rentals", icon: "activity", private: false },
+  // A9 PG, Rooms & Hotels Stays
+  { href: "/stays", label: "Stays", shortLabel: "Stays", icon: "home", private: false },
   // A10 Career/Jobs — listing surface, not the area-priced Services catalogue.
   { href: "/listings", label: "Careers", shortLabel: "Careers", icon: "activity", private: false },
   { href: "/activity", label: "Bookings", shortLabel: "Bookings", icon: "activity", private: true },
@@ -270,6 +274,8 @@ export const NAV_TARGETS: readonly NavTarget[] = [
  */
 const OWNED: Record<string, readonly string[]> = {
   "/catalog": ["/catalog", "/book", "/cart", "/checkout"],
+  "/rentals": ["/rentals"],
+  "/stays": ["/stays"],
   "/listings": ["/listings"],
   "/activity": ["/activity", "/bookings", "/requests", "/projects", "/engagements"],
 };

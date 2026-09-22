@@ -89,6 +89,8 @@ class StayEnquiry(models.Model):
     check_in = models.DateField()
     check_out = models.DateField()
     guest_count = models.PositiveSmallIntegerField(default=1)
+    nights = models.PositiveIntegerField(default=1)
+    total_quote_paise = models.PositiveIntegerField(default=0)
     message = models.TextField(blank=True)
     host_response = models.TextField(blank=True)
     responded_at = models.DateTimeField(null=True, blank=True)

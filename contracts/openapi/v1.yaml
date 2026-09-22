@@ -13732,6 +13732,31 @@ paths:
   /api/v1/rentals:
     get:
       operationId: rentals_list
+      parameters:
+      - in: query
+        name: location
+        schema:
+          type: string
+      - in: query
+        name: max_deposit
+        schema:
+          type: integer
+      - in: query
+        name: max_price
+        schema:
+          type: integer
+      - in: query
+        name: min_price
+        schema:
+          type: integer
+      - in: query
+        name: q
+        schema:
+          type: string
+      - in: query
+        name: service
+        schema:
+          type: string
       tags:
       - rentals
       security:
@@ -16354,6 +16379,39 @@ paths:
   /api/v1/stays:
     get:
       operationId: stays_list
+      parameters:
+      - in: query
+        name: ac
+        schema:
+          type: boolean
+      - in: query
+        name: food
+        schema:
+          type: boolean
+      - in: query
+        name: location
+        schema:
+          type: string
+      - in: query
+        name: max_price
+        schema:
+          type: integer
+      - in: query
+        name: min_price
+        schema:
+          type: integer
+      - in: query
+        name: q
+        schema:
+          type: string
+      - in: query
+        name: service
+        schema:
+          type: string
+      - in: query
+        name: sharing_count
+        schema:
+          type: integer
       tags:
       - stays
       security:
@@ -16415,6 +16473,46 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/StayEnquiry'
+          description: ''
+  /api/v1/stays/quote:
+    get:
+      operationId: stays_quote_retrieve
+      parameters:
+      - in: query
+        name: check_in
+        schema:
+          type: string
+          format: date
+        required: true
+      - in: query
+        name: check_out
+        schema:
+          type: string
+          format: date
+        required: true
+      - in: query
+        name: property_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: unit_id
+        schema:
+          type: string
+          format: uuid
+          nullable: true
+      tags:
+      - stays
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StayQuoteResponse'
           description: ''
   /api/v1/tax-documents/{document_id}/:
     get:
@@ -28387,6 +28485,7 @@ components:
           items:
             $ref: '#/components/schemas/Unit'
           readOnly: true
+        structured_fields: {}
         created_at:
           type: string
           format: date-time
@@ -33985,6 +34084,14 @@ components:
           type: string
           format: uuid
           nullable: true
+        unit_name:
+          type: string
+          readOnly: true
+          default: Standard room
+        nightly_rate_paise:
+          type: integer
+          readOnly: true
+          default: 0
         status:
           $ref: '#/components/schemas/StayEnquiryStatusEnum'
         check_in:
@@ -33993,6 +34100,14 @@ components:
         check_out:
           type: string
           format: date
+        nights:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        total_quote_paise:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
         guest_count:
           type: integer
           maximum: 32767
@@ -34014,8 +34129,10 @@ components:
       - check_out
       - created_at
       - id
+      - nightly_rate_paise
       - property
       - property_title
+      - unit_name
     StayEnquiryStatusEnum:
       enum:
       - SUBMITTED
@@ -34042,6 +34159,31 @@ components:
       required:
       - action
       - reason
+    StayQuoteResponse:
+      type: object
+      properties:
+        property_id:
+          type: string
+          format: uuid
+        unit_id:
+          type: string
+          format: uuid
+          nullable: true
+        unit_name:
+          type: string
+        nights:
+          type: integer
+        nightly_rate_paise:
+          type: integer
+        total_quote_paise:
+          type: integer
+      required:
+      - nightly_rate_paise
+      - nights
+      - property_id
+      - total_quote_paise
+      - unit_id
+      - unit_name
     StepUpSession:
       type: object
       properties:

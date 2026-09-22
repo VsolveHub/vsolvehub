@@ -6,7 +6,7 @@ from datetime import date
 from typing import Any
 from uuid import UUID
 
-from django.db import transaction
+from django.db import models, transaction
 from django.utils import timezone
 
 from apps.catalog.models import A9VariantConfiguration
@@ -134,6 +134,13 @@ def create_enquiry(
     unit = None
     if unit_id is not None:
         unit = Unit.objects.get(id=_as_uuid(unit_id), property=prop, is_active=True)
+    elif prop.units.filter(is_active=True).exists():
+        unit = prop.units.filter(is_active=True).first()
+
+    nights = max(1, (check_out - check_in).days)
+    nightly_rate_paise = unit.nightly_rate_paise if unit else 0
+    total_quote_paise = nights * nightly_rate_paise
+
     return StayEnquiry.objects.create(
         property=prop,
         unit=unit,
@@ -141,9 +148,44 @@ def create_enquiry(
         check_in=check_in,
         check_out=check_out,
         guest_count=guest_count,
+        nights=nights,
+        total_quote_paise=total_quote_paise,
         message=message,
         status=StayEnquiry.Status.SUBMITTED,
     )
+
+
+def calculate_stay_quote(
+    *,
+    property_id: UUID | str,
+    check_in: date,
+    check_out: date,
+    unit_id: UUID | str | None = None,
+) -> dict[str, Any]:
+    prop = Property.objects.select_related("variant").get(id=_as_uuid(property_id))
+    _require_active_a9(prop.variant_id)
+    if prop.public_state != "PUBLISHED":
+        raise StayStateError("Property is not open.")
+    if check_out <= check_in:
+        raise StayStateError("Check-out must be after check-in.")
+    unit = None
+    if unit_id is not None:
+        unit = Unit.objects.get(id=_as_uuid(unit_id), property=prop, is_active=True)
+    elif prop.units.filter(is_active=True).exists():
+        unit = prop.units.filter(is_active=True).first()
+
+    nights = max(1, (check_out - check_in).days)
+    nightly_rate_paise = unit.nightly_rate_paise if unit else 0
+    total_quote_paise = nights * nightly_rate_paise
+
+    return {
+        "property_id": prop.id,
+        "unit_id": unit.id if unit else None,
+        "unit_name": unit.name if unit else "Standard room",
+        "nights": nights,
+        "nightly_rate_paise": nightly_rate_paise,
+        "total_quote_paise": total_quote_paise,
+    }
 
 
 def respond_enquiry(*, enquiry: StayEnquiry, host: Any, response: str, decline: bool = False) -> StayEnquiry:
@@ -162,7 +204,57 @@ def respond_enquiry(*, enquiry: StayEnquiry, host: Any, response: str, decline: 
     return enquiry
 
 
-def public_properties():
-    return Property.objects.filter(
+def public_properties(
+    *,
+    query: str = "",
+    location: str = "",
+    sharing_count: int | None = None,
+    has_ac: bool | None = None,
+    food_included: bool | None = None,
+    min_price_paise: int | None = None,
+    max_price_paise: int | None = None,
+    variant_code: str = "",
+):
+    qs = Property.objects.filter(
         moderation_status=Property.ModerationStatus.APPROVED
     ).prefetch_related("units").select_related("host", "variant")
+
+    if query:
+        q = query.strip()
+        qs = qs.filter(
+            models.Q(title__icontains=q)
+            | models.Q(description__icontains=q)
+            | models.Q(location_text__icontains=q)
+            | models.Q(host__display_name__icontains=q)
+        )
+    if location:
+        qs = qs.filter(location_text__icontains=location.strip())
+    if variant_code:
+        qs = qs.filter(
+            models.Q(variant__code__icontains=variant_code)
+            | models.Q(variant__service__slug__icontains=variant_code)
+        )
+    if sharing_count is not None:
+        qs = qs.filter(units__sharing_count=sharing_count, units__is_active=True)
+    if min_price_paise is not None:
+        qs = qs.filter(units__nightly_rate_paise__gte=min_price_paise, units__is_active=True)
+    if max_price_paise is not None:
+        qs = qs.filter(units__nightly_rate_paise__lte=max_price_paise, units__is_active=True)
+    if has_ac is True:
+        qs = qs.filter(
+            models.Q(structured_fields__ac=True)
+            | models.Q(units__attributes__ac=True)
+            | models.Q(title__icontains="ac")
+            | models.Q(description__icontains="ac")
+        )
+    if food_included is True:
+        qs = qs.filter(
+            models.Q(structured_fields__food=True)
+            | models.Q(units__attributes__food=True)
+            | models.Q(title__icontains="food")
+            | models.Q(title__icontains="meal")
+            | models.Q(description__icontains="food")
+            | models.Q(description__icontains="meal")
+        )
+
+    return qs.distinct()

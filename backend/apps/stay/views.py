@@ -2,7 +2,8 @@ from typing import Any
 from uuid import UUID
 
 from django.shortcuts import get_object_or_404
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -17,9 +18,12 @@ from apps.stay.serializers import (
     PropertySerializer,
     RespondEnquirySerializer,
     StayEnquirySerializer,
+    StayQuoteRequestSerializer,
+    StayQuoteResponseSerializer,
 )
 from apps.stay.services import (
     StayStateError,
+    calculate_stay_quote,
     create_enquiry,
     create_property,
     moderate_property,
@@ -43,9 +47,56 @@ def _error(exc: Exception) -> Response:
 class StayBrowseView(APIView):
     permission_classes = (permissions.AllowAny,)
 
-    @extend_schema(responses=PropertySerializer(many=True))
-    def get(self, _request: Any) -> Response:
-        return Response(PropertySerializer(public_properties(), many=True).data)
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("q", OpenApiTypes.STR, OpenApiParameter.QUERY),
+            OpenApiParameter("location", OpenApiTypes.STR, OpenApiParameter.QUERY),
+            OpenApiParameter("service", OpenApiTypes.STR, OpenApiParameter.QUERY),
+            OpenApiParameter("sharing_count", OpenApiTypes.INT, OpenApiParameter.QUERY),
+            OpenApiParameter("ac", OpenApiTypes.BOOL, OpenApiParameter.QUERY),
+            OpenApiParameter("food", OpenApiTypes.BOOL, OpenApiParameter.QUERY),
+            OpenApiParameter("min_price", OpenApiTypes.INT, OpenApiParameter.QUERY),
+            OpenApiParameter("max_price", OpenApiTypes.INT, OpenApiParameter.QUERY),
+        ],
+        responses=PropertySerializer(many=True),
+    )
+    def get(self, request: Any) -> Response:
+        sharing_count = request.query_params.get("sharing_count")
+        ac_param = request.query_params.get("ac")
+        food_param = request.query_params.get("food")
+        min_price = request.query_params.get("min_price")
+        max_price = request.query_params.get("max_price")
+
+        props = public_properties(
+            query=request.query_params.get("q", ""),
+            location=request.query_params.get("location", ""),
+            sharing_count=int(sharing_count) if sharing_count and sharing_count.isdigit() else None,
+            has_ac=True if ac_param in ("true", "1", "True") else (False if ac_param in ("false", "0", "False") else None),
+            food_included=True if food_param in ("true", "1", "True") else (False if food_param in ("false", "0", "False") else None),
+            min_price_paise=int(min_price) if min_price and min_price.isdigit() else None,
+            max_price_paise=int(max_price) if max_price and max_price.isdigit() else None,
+            variant_code=request.query_params.get("service", ""),
+        )
+        return Response(PropertySerializer(props, many=True).data)
+
+
+class StayQuoteView(APIView):
+    permission_classes = (permissions.AllowAny,)
+
+    @extend_schema(parameters=[StayQuoteRequestSerializer], responses=StayQuoteResponseSerializer)
+    def get(self, request: Any) -> Response:
+        ser = StayQuoteRequestSerializer(data=request.query_params)
+        ser.is_valid(raise_exception=True)
+        try:
+            quote = calculate_stay_quote(
+                property_id=ser.validated_data["property_id"],
+                unit_id=ser.validated_data.get("unit_id"),
+                check_in=ser.validated_data["check_in"],
+                check_out=ser.validated_data["check_out"],
+            )
+        except (StayStateError, Property.DoesNotExist) as exc:
+            return _error(exc)
+        return Response(StayQuoteResponseSerializer(quote).data)
 
 
 class StayDetailView(APIView):

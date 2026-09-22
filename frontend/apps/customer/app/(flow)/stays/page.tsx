@@ -1,66 +1,174 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import {
+  Building2,
+  FileCheck2,
+  MapPin,
+  Search,
+  Sparkles,
+} from "lucide-react";
+import { Button, EmptyState, ErrorState, Skeleton } from "@vsolve/ui";
 
-import { PUBLIC_API_BASE_URL } from "@/lib/api/config";
-
-type StayProperty = {
-  id: string;
-  title: string;
-  description: string;
-  location_text: string;
-  host_name: string;
-  public_state: string;
-  units: { id: string; name: string; nightly_rate_paise: number }[];
-};
-
-async function fetchStays(): Promise<StayProperty[]> {
-  const res = await fetch(`${PUBLIC_API_BASE_URL}/api/v1/stays`, { credentials: "include" });
-  if (!res.ok) throw new Error("Could not load stays.");
-  return (await res.json()) as StayProperty[];
-}
+import { fetchStays } from "@/features/stays/queries";
+import { type ActiveFilters, StayCard, StayFilters } from "@/features/stays/view";
 
 export default function StaysBrowsePage() {
-  const { data = [], isLoading, error } = useQuery({
-    queryKey: ["stays"],
-    queryFn: fetchStays,
+  const [draftQuery, setDraftQuery] = useState("");
+  const [draftLocation, setDraftLocation] = useState("");
+  const [appliedQuery, setAppliedQuery] = useState("");
+  const [appliedLocation, setAppliedLocation] = useState("");
+  const [filters, setFilters] = useState<ActiveFilters>({});
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAppliedQuery(draftQuery);
+    setAppliedLocation(draftLocation);
+  };
+
+  const clearFilters = () => {
+    setDraftQuery("");
+    setDraftLocation("");
+    setAppliedQuery("");
+    setAppliedLocation("");
+    setFilters({});
+  };
+
+  const {
+    data: stays = [],
+    isLoading,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: [
+      "stays",
+      appliedQuery,
+      appliedLocation,
+      filters.sharingCount,
+      filters.ac,
+      filters.food,
+      filters.maxPrice,
+    ],
+    queryFn: () =>
+      fetchStays({
+        q: appliedQuery,
+        location: appliedLocation,
+        sharing_count: filters.sharingCount,
+        ac: filters.ac,
+        food: filters.food,
+        max_price: filters.maxPrice,
+      }),
+    staleTime: 30_000,
   });
 
   return (
-    <main className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">Stays</h1>
-          <p className="mt-1 text-sm text-text-secondary">
-            Enquiry-first rooms / PG / hostel. Not a visit booking.
-          </p>
-        </div>
-        <Link href="/stays/mine" className="text-sm font-semibold text-action underline">
-          My enquiries
-        </Link>
-      </header>
-      {isLoading ? <p className="text-sm">Loading…</p> : null}
-      {error ? <p className="text-sm text-signal-700">Could not load stays.</p> : null}
-      {!isLoading && data.length === 0 ? (
-        <p className="text-sm text-text-secondary">No published properties yet.</p>
-      ) : null}
-      <ul className="flex flex-col gap-3">
-        {data.map((prop) => (
-          <li key={prop.id} className="rounded-xl border border-line p-4">
-            <Link href={`/stays/${prop.id}`} className="block space-y-1">
-              <h2 className="text-lg font-semibold">{prop.title}</h2>
-              <p className="text-sm text-text-secondary">
-                {prop.host_name} · {prop.location_text}
-              </p>
-              <p className="text-xs text-text-secondary">
-                From ₹
-                {((prop.units[0]?.nightly_rate_paise ?? 0) / 100).toLocaleString("en-IN")}/night
-              </p>
+    <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8">
+      {/* Hero / Header Section */}
+      <section className="relative overflow-hidden rounded-[var(--radius-card)] bg-gradient-to-br from-navy-950 via-navy-900 to-navy-800 p-6 text-warm-0 shadow-raised sm:p-10">
+        <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="max-w-2xl space-y-2">
+            <div className="inline-flex items-center gap-2 rounded-full border border-navy-300/30 bg-navy-500/15 px-3 py-1 text-xs font-semibold text-navy-200">
+              <Building2 className="size-3.5" />
+              Verified Rooms, PG & Short Stays
+            </div>
+            <h1 className="text-3xl font-extrabold tracking-tight text-warm-0 sm:text-4xl lg:text-5xl">
+              Find Rooms, PG & Hotels
+            </h1>
+            <p className="text-sm text-warm-200 sm:text-base">
+              Verified coliving, PG accommodation, and short stay rooms.
+              Instant date quote calculations and direct host communication.
+            </p>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-3">
+            <Link
+              href="/stays/mine"
+              className="inline-flex items-center gap-2 rounded-control border border-warm-0/20 bg-warm-0/10 px-4 py-2.5 text-sm font-semibold text-warm-0 backdrop-blur-xs transition hover:bg-warm-0/20"
+            >
+              <FileCheck2 className="size-4 text-warm-100" />
+              My Enquiries
             </Link>
-          </li>
-        ))}
-      </ul>
+          </div>
+        </div>
+
+        {/* Search Bar */}
+        <form
+          onSubmit={handleSearchSubmit}
+          className="relative z-10 mt-8 grid gap-3 rounded-control bg-surface p-2.5 shadow-raised md:grid-cols-[1fr_260px_auto]"
+        >
+          <label className="flex items-center gap-3 rounded-control border border-line bg-surface-sunken px-3.5 focus-within:border-line-strong">
+            <Search className="size-4 shrink-0 text-text-secondary" />
+            <input
+              type="search"
+              value={draftQuery}
+              onChange={(e) => setDraftQuery(e.target.value)}
+              placeholder="Search properties (e.g. Lakeview PG, Executive Single Room)"
+              className="w-full bg-transparent py-2.5 text-sm text-text placeholder:text-text-secondary/70 focus:outline-none"
+            />
+          </label>
+
+          <label className="flex items-center gap-3 rounded-control border border-line bg-surface-sunken px-3.5 focus-within:border-line-strong">
+            <MapPin className="size-4 shrink-0 text-text-secondary" />
+            <input
+              type="text"
+              value={draftLocation}
+              onChange={(e) => setDraftLocation(e.target.value)}
+              placeholder="City or Area (e.g. Hyderabad, Gachibowli)"
+              className="w-full bg-transparent py-2.5 text-sm text-text placeholder:text-text-secondary/70 focus:outline-none"
+            />
+          </label>
+
+          <Button type="submit" className="h-full px-6 font-bold">
+            Search Stays
+          </Button>
+        </form>
+      </section>
+
+      {/* Structured Filter Chips */}
+      <StayFilters
+        activeFilters={filters}
+        onChangeFilter={setFilters}
+        count={stays.length}
+      />
+
+      {/* State Rendering */}
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {Array.from({ length: 3 }).map((_, idx) => (
+            <div key={idx} className="flex flex-col gap-3 rounded-[var(--radius-card)] border border-line p-5">
+              <Skeleton className="h-6 w-32" />
+              <Skeleton className="h-8 w-3/4" />
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-8 w-1/2" />
+            </div>
+          ))}
+        </div>
+      ) : error ? (
+        <ErrorState
+          title="Could not load stay properties"
+          message={(error as Error).message}
+          actionLabel="Retry"
+          onAction={() => refetch()}
+        />
+      ) : stays.length === 0 ? (
+        <EmptyState
+          title="No stay properties found"
+          description="Try broadening your filters or searching another area."
+          action={
+            <Button variant="secondary" onClick={clearFilters}>
+              Reset Filters
+            </Button>
+          }
+        />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {stays.map((property) => (
+            <StayCard key={property.id} property={property} />
+          ))}
+        </div>
+      )}
     </main>
   );
 }

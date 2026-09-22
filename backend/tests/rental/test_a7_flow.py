@@ -113,6 +113,33 @@ def test_rental_happy_path_handover_return_release(rental_world):
 
 
 @pytest.mark.django_db
+def test_rental_filters(rental_world):
+    from apps.rental.services import public_assets
+
+    asset = create_asset(
+        partner=rental_world["partner"],
+        variant_id=rental_world["variant"].id,
+        title="Heavy Duty Wood Router",
+        location_text="Kondapur, Hyderabad",
+        daily_rate_paise=35000,
+        deposit_paise=80000,
+    )
+    submit_asset(asset=asset, partner=rental_world["partner"])
+    moderate_asset(
+        asset=asset, actor=rental_world["owner"], action="APPROVE", reason="test approve"
+    )
+
+    results = public_assets(query="Wood Router", location="Hyderabad")
+    assert any(a.id == asset.id for a in results)
+
+    results_rate = public_assets(min_daily_rate_paise=30000, max_daily_rate_paise=40000)
+    assert any(a.id == asset.id for a in results_rate)
+
+    results_deposit = public_assets(max_deposit_paise=50000)
+    assert not any(a.id == asset.id for a in results_deposit)
+
+
+@pytest.mark.django_db
 def test_no_fulfilment_unit_on_rental_models():
     from apps.rental import models as rental_models
 

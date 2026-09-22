@@ -93,11 +93,58 @@ def test_enquiry_happy_path(stay_world):
         message="Interested",
     )
     assert enquiry.status == StayEnquiry.Status.SUBMITTED
+    assert enquiry.nights == 10
+    assert enquiry.total_quote_paise == 900000
     respond_enquiry(
         enquiry=enquiry, host=stay_world["host"], response="Yes, available.", decline=False
     )
     enquiry.refresh_from_db()
     assert enquiry.status == StayEnquiry.Status.RESPONDED
+
+
+@pytest.mark.django_db
+def test_stay_quote_calculation_and_filters(stay_world):
+    from apps.stay.services import calculate_stay_quote, public_properties
+
+    prop = create_property(
+        host=stay_world["host"],
+        variant_id=stay_world["variant"].id,
+        title="Luxury AC Studio Stay",
+        location_text="Banjara Hills, Hyderabad",
+        nightly_rate_paise=150000,
+        sharing_count=1,
+    )
+    submit_property(prop=prop, host=stay_world["host"])
+    moderate_property(
+        prop=prop, actor=stay_world["host_user"], action="APPROVE", reason="demo approved"
+    )
+
+    check_in = timezone.localdate() + timedelta(days=5)
+    check_out = check_in + timedelta(days=3)
+    quote = calculate_stay_quote(
+        property_id=prop.id,
+        check_in=check_in,
+        check_out=check_out,
+    )
+    assert quote["nights"] == 3
+    assert quote["nightly_rate_paise"] == 150000
+    assert quote["total_quote_paise"] == 450000
+
+    # Structured filters testing
+    results = public_properties(query="Luxury", location="Hyderabad")
+    assert any(p.id == prop.id for p in results)
+
+    results_ac = public_properties(has_ac=True)
+    assert any(p.id == prop.id for p in results_ac)
+
+    results_single = public_properties(sharing_count=1)
+    assert any(p.id == prop.id for p in results_single)
+
+    results_expensive = public_properties(min_price_paise=100000)
+    assert any(p.id == prop.id for p in results_expensive)
+
+    results_cheap = public_properties(max_price_paise=50000)
+    assert not any(p.id == prop.id for p in results_cheap)
 
 
 @pytest.mark.django_db

@@ -1,58 +1,140 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { ArrowLeft, Clock, PackageCheck, Wrench } from "lucide-react";
+import { Button, EmptyState, ErrorState, Skeleton } from "@vsolve/ui";
 
-import { PUBLIC_API_BASE_URL } from "@/lib/api/config";
-
-type Booking = {
-  id: string;
-  status: string;
-  start_date: string;
-  end_date: string;
-  price_paise: number;
-  asset: { title: string };
-  deposit: { status: string; amount_paise: number; provider_note: string };
-};
-
-async function fetchMine(): Promise<Booking[]> {
-  const res = await fetch(`${PUBLIC_API_BASE_URL}/api/v1/me/rentals`, {
-    credentials: "include",
-  });
-  if (!res.ok) throw new Error("Sign in as a customer to see your rentals.");
-  return (await res.json()) as Booking[];
-}
+import { fetchMyRentals } from "@/features/rentals/queries";
+import { RentalBookingCard } from "@/features/rentals/view";
 
 export default function MyRentalsPage() {
-  const { data = [], isLoading, error } = useQuery({
+  const [activeTab, setActiveTab] = useState<"ALL" | "ACTIVE" | "COMPLETED">("ALL");
+
+  const {
+    data: bookings = [],
+    isLoading,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["my-rentals"],
-    queryFn: fetchMine,
+    queryFn: fetchMyRentals,
+  });
+
+  const filteredBookings = bookings.filter((b) => {
+    const s = (b.status ?? "").toUpperCase();
+    if (activeTab === "ACTIVE") {
+      return ["PENDING_PAYMENT", "REQUESTED", "CONFIRMED", "HANDOVER", "HANDED_OVER"].includes(s);
+    }
+    if (activeTab === "COMPLETED") {
+      return ["RETURNED", "CLOSED", "CANCELLED", "DISPUTED"].includes(s);
+    }
+    return true;
   });
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-8">
-      <Link href="/rentals" className="text-sm font-semibold text-action">
-        ← Rentals
-      </Link>
-      <h1 className="text-2xl font-bold">My rentals</h1>
-      {isLoading ? <p className="text-sm">Loading…</p> : null}
-      {error ? <p className="text-sm text-signal-700">{(error as Error).message}</p> : null}
-      <ul className="flex flex-col gap-3">
-        {data.map((row) => (
-          <li key={row.id} className="rounded-xl border border-line p-4 text-sm">
-            <p className="font-semibold">{row.asset.title}</p>
-            <p>
-              {row.start_date} → {row.end_date} · {row.status}
+    <main className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8">
+      {/* Navigation and Header */}
+      <div className="flex flex-col gap-2">
+        <Link
+          href="/rentals"
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-text-secondary hover:text-text transition"
+        >
+          <ArrowLeft className="size-3.5" />
+          Back to Equipment Rentals
+        </Link>
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+          <div>
+            <h1 className="text-2xl font-extrabold text-text sm:text-3xl">My Rentals</h1>
+            <p className="mt-0.5 text-xs text-text-secondary">
+              Track equipment bookings, pickup dates, and security deposit refunds.
             </p>
-            <p>
-              Deposit {row.deposit.status} ({row.deposit.amount_paise} paise)
-            </p>
-            {row.deposit.provider_note ? (
-              <p className="text-xs text-text-secondary">{row.deposit.provider_note}</p>
-            ) : null}
-          </li>
-        ))}
-      </ul>
+          </div>
+          <Link href="/rentals">
+            <Button size="sm" variant="secondary" className="font-bold">
+              + Rent Another Tool
+            </Button>
+          </Link>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex items-center gap-2 border-b border-line pb-2">
+        <button
+          type="button"
+          onClick={() => setActiveTab("ALL")}
+          className={`rounded-full px-4 py-1.5 text-xs font-bold transition ${
+            activeTab === "ALL"
+              ? "bg-action text-white"
+              : "bg-surface border border-line text-text-secondary hover:text-text"
+          }`}
+        >
+          All Rentals ({bookings.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("ACTIVE")}
+          className={`rounded-full px-4 py-1.5 text-xs font-bold transition ${
+            activeTab === "ACTIVE"
+              ? "bg-action text-white"
+              : "bg-surface border border-line text-text-secondary hover:text-text"
+          }`}
+        >
+          Active / In Hand
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("COMPLETED")}
+          className={`rounded-full px-4 py-1.5 text-xs font-bold transition ${
+            activeTab === "COMPLETED"
+              ? "bg-action text-white"
+              : "bg-surface border border-line text-text-secondary hover:text-text"
+          }`}
+        >
+          Completed & Returned
+        </button>
+      </div>
+
+      {/* Content State */}
+      {isLoading ? (
+        <div className="flex flex-col gap-4">
+          {Array.from({ length: 2 }).map((_, idx) => (
+            <div key={idx} className="rounded-[var(--radius-card)] border border-line p-5 space-y-3">
+              <Skeleton className="h-6 w-48" />
+              <Skeleton className="h-8 w-1/3" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          ))}
+        </div>
+      ) : error ? (
+        <ErrorState
+          title="Could not load your rentals"
+          message={(error as Error).message}
+          actionLabel="Retry"
+          onAction={() => refetch()}
+        />
+      ) : filteredBookings.length === 0 ? (
+        <EmptyState
+          title="No rental bookings found"
+          description={
+            activeTab === "ALL"
+              ? "You haven't rented any tools or equipment yet. Explore our verified rental catalog."
+              : `No ${activeTab.toLowerCase()} rental bookings right now.`
+          }
+          action={
+            <Link href="/rentals">
+              <Button className="font-bold">Browse Equipment Rentals</Button>
+            </Link>
+          }
+        />
+      ) : (
+        <div className="flex flex-col gap-4">
+          {filteredBookings.map((booking) => (
+            <RentalBookingCard key={booking.id} booking={booking} />
+          ))}
+        </div>
+      )}
     </main>
   );
 }

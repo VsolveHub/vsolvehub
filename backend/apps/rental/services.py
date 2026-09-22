@@ -6,7 +6,7 @@ from datetime import date, timedelta
 from typing import Any
 from uuid import UUID
 
-from django.db import transaction
+from django.db import models, transaction
 from django.utils import timezone
 
 from apps.catalog.models import A7VariantConfiguration
@@ -224,8 +224,40 @@ def release_deposit(*, booking: RentalBooking, partner: Any) -> RentalDeposit:
     return deposit
 
 
-def public_assets():
-    return RentalAsset.objects.filter(
+def public_assets(
+    *,
+    query: str = "",
+    location: str = "",
+    min_daily_rate_paise: int | None = None,
+    max_daily_rate_paise: int | None = None,
+    max_deposit_paise: int | None = None,
+    variant_code: str = "",
+):
+    qs = RentalAsset.objects.filter(
         moderation_status="APPROVED",
         current_status=RentalAsset.Status.ACTIVE,
     ).select_related("partner", "variant")
+
+    if query:
+        q = query.strip()
+        qs = qs.filter(
+            models.Q(title__icontains=q)
+            | models.Q(description__icontains=q)
+            | models.Q(location_text__icontains=q)
+            | models.Q(partner__display_name__icontains=q)
+        )
+    if location:
+        qs = qs.filter(location_text__icontains=location.strip())
+    if variant_code:
+        qs = qs.filter(
+            models.Q(variant__code__icontains=variant_code)
+            | models.Q(variant__service__slug__icontains=variant_code)
+        )
+    if min_daily_rate_paise is not None:
+        qs = qs.filter(daily_rate_paise__gte=min_daily_rate_paise)
+    if max_daily_rate_paise is not None:
+        qs = qs.filter(daily_rate_paise__lte=max_daily_rate_paise)
+    if max_deposit_paise is not None:
+        qs = qs.filter(deposit_paise__lte=max_deposit_paise)
+
+    return qs

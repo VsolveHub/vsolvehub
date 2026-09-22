@@ -127,6 +127,33 @@ class Command(BaseCommand):
             asset.current_status = RentalAsset.Status.ACTIVE
             asset.save(update_fields=("moderation_status", "current_status", "updated_at"))
 
+        # Second approved rental asset: Carpentry & Hand Tool Kit
+        carpenter_kit = RentalAsset.objects.filter(
+            partner=profile, title="Stanley Pro Carpentry Tool Kit"
+        ).first()
+        if carpenter_kit is None:
+            carpenter_kit = create_asset(
+                partner=profile,
+                variant_id=first_variant.id,
+                title="Stanley Pro Carpentry Tool Kit",
+                description="Complete professional woodworking kit including claw hammer, precision chisels, block plane, try square, and heavy-duty clamps.",
+                location_text="Madhapur, Hyderabad",
+                daily_rate_paise=29900,
+                deposit_paise=120000,
+                asset_identifier="STANLEY-CARP-002",
+            )
+            submit_asset(asset=carpenter_kit, partner=profile)
+            moderate_asset(
+                asset=carpenter_kit,
+                actor=owner_user,
+                action="APPROVE",
+                reason="Woodworking and carpenter demo asset.",
+            )
+        else:
+            carpenter_kit.moderation_status = "APPROVED"
+            carpenter_kit.current_status = RentalAsset.Status.ACTIVE
+            carpenter_kit.save(update_fields=("moderation_status", "current_status", "updated_at"))
+
         pending = RentalAsset.objects.filter(
             partner=profile, title="Angle Grinder — Pending Ops"
         ).first()

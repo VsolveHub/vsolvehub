@@ -1,126 +1,170 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useParams } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Clock,
+  MapPin,
+  ShieldAlert,
+  ShieldCheck,
+  Wrench,
+} from "lucide-react";
+import { Badge, EmptyState, ErrorState, Skeleton } from "@vsolve/ui";
 
-import { PUBLIC_API_BASE_URL } from "@/lib/api/config";
-
-type RentalAsset = {
-  id: string;
-  title: string;
-  description: string;
-  daily_rate_paise: number;
-  deposit_paise: number;
-  location_text: string;
-  partner_name: string;
-};
-
-async function fetchAsset(id: string): Promise<RentalAsset> {
-  const res = await fetch(`${PUBLIC_API_BASE_URL}/api/v1/rentals/${id}`, {
-    credentials: "include",
-  });
-  if (!res.ok) throw new Error("Asset not found or not public.");
-  return (await res.json()) as RentalAsset;
-}
-
-function csrfToken(): string {
-  if (typeof document === "undefined") return "";
-  const match = document.cookie.match(/(?:^|; )csrftoken=([^;]+)/);
-  return match ? decodeURIComponent(match[1]) : "";
-}
+import { formatPaise } from "@/features/rentals/model";
+import { fetchRentalAsset } from "@/features/rentals/queries";
+import { RentalBookPanel } from "@/features/rentals/view";
 
 export default function RentalDetailPage() {
   const params = useParams<{ assetId: string }>();
-  const router = useRouter();
   const assetId = params.assetId;
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [error, setError] = useState<string | null>(null);
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["rental", assetId],
-    queryFn: () => fetchAsset(assetId),
+  const {
+    data: asset,
+    isLoading,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ["rental-asset", assetId],
+    queryFn: () => fetchRentalAsset(assetId),
     enabled: Boolean(assetId),
   });
 
-  const book = useMutation({
-    mutationFn: async () => {
-      const res = await fetch(`${PUBLIC_API_BASE_URL}/api/v1/rentals/book`, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          "X-CSRFToken": csrfToken(),
-        },
-        body: JSON.stringify({
-          asset_id: assetId,
-          start_date: startDate,
-          end_date: endDate,
-        }),
-      });
-      const body = (await res.json().catch(() => ({}))) as { detail?: string };
-      if (!res.ok) throw new Error(body.detail ?? "Booking failed.");
-      return body;
-    },
-    onSuccess: () => router.push("/rentals/mine"),
-    onError: (err: Error) => setError(err.message),
-  });
+  if (isLoading) {
+    return (
+      <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8">
+        <Skeleton className="h-6 w-32" />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-2 space-y-4">
+            <Skeleton className="h-10 w-3/4" />
+            <Skeleton className="h-24 w-full" />
+            <Skeleton className="h-40 w-full" />
+          </div>
+          <Skeleton className="h-96 w-full" />
+        </div>
+      </main>
+    );
+  }
 
-  if (isLoading) return <main className="p-8 text-sm">Loading…</main>;
-  if (!data) return <main className="p-8 text-sm">Asset not available.</main>;
+  if (error || !asset) {
+    return (
+      <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-16">
+        <ErrorState
+          title="Rental asset not found"
+          message={error ? (error as Error).message : "This rental listing does not exist or has been retired."}
+          actionLabel="Retry"
+          onAction={() => refetch()}
+        />
+      </main>
+    );
+  }
 
   return (
-    <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 py-8">
-      <Link href="/rentals" className="text-sm font-semibold text-action">
-        ← Rentals
-      </Link>
-      <h1 className="text-2xl font-bold">{data.title}</h1>
-      <p className="text-sm text-text-secondary">{data.description}</p>
-      <p className="text-sm">
-        {data.partner_name} · {data.location_text}
-      </p>
-      <form
-        className="flex flex-col gap-3 rounded-xl border border-line p-4"
-        onSubmit={(event) => {
-          event.preventDefault();
-          setError(null);
-          book.mutate();
-        }}
-      >
-        <label className="text-sm">
-          Start
-          <input
-            type="date"
-            required
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="mt-1 w-full rounded border border-line px-3 py-2"
-          />
-        </label>
-        <label className="text-sm">
-          End
-          <input
-            type="date"
-            required
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            className="mt-1 w-full rounded border border-line px-3 py-2"
-          />
-        </label>
-        {error ? <p className="text-sm text-signal-700">{error}</p> : null}
-        <button
-          type="submit"
-          disabled={book.isPending}
-          className="rounded-lg bg-action px-4 py-2 text-sm font-semibold text-action-text"
+    <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8">
+      {/* Top back navigation */}
+      <nav aria-label="Breadcrumb">
+        <Link
+          href="/rentals"
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-text-secondary hover:text-text transition"
         >
-          {book.isPending ? "Booking…" : "Book rental"}
-        </button>
-        <p className="text-xs text-text-secondary">
-          Deposit hold may be PARTIAL (demo/test provider) until Part B live payments.
-        </p>
-      </form>
+          <ArrowLeft className="size-3.5" />
+          Back to Equipment Rentals
+        </Link>
+      </nav>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* Left Column: Asset Details & Trust Protocol */}
+        <div className="lg:col-span-7 flex flex-col gap-6">
+          <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6 shadow-xs">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone="brand" className="inline-flex items-center gap-1.5 text-xs font-bold">
+                <Wrench className="size-3" />
+                Verified Tool
+              </Badge>
+              <Badge tone="success" className="inline-flex items-center gap-1 text-xs font-bold">
+                <ShieldCheck className="size-3.5" />
+                Deposit Protected
+              </Badge>
+            </div>
+
+            <h1 className="mt-3 text-2xl font-extrabold text-text sm:text-3xl">
+              {asset.title}
+            </h1>
+
+            <p className="mt-1 text-xs text-text-secondary font-medium">
+              Offered by <strong className="text-text font-bold">{asset.partner_name}</strong>
+            </p>
+
+            {asset.location_text && (
+              <div className="mt-2 flex items-center gap-1.5 text-xs text-text-secondary">
+                <MapPin className="size-3.5 shrink-0 text-action" />
+                <span>Pickup available at {asset.location_text}</span>
+              </div>
+            )}
+
+            <div className="mt-6 border-t border-line/70 pt-5">
+              <h2 className="text-sm font-bold text-text">About This Equipment</h2>
+              <p className="mt-2 text-sm leading-relaxed text-text-secondary whitespace-pre-line">
+                {asset.description || "Certified commercial-grade equipment maintained in high operating condition."}
+              </p>
+            </div>
+
+            <div className="mt-6 grid grid-cols-2 gap-4 rounded-control bg-surface-sunken p-4 border border-line/60">
+              <div>
+                <span className="text-xs text-text-secondary font-medium">Daily Rental Rate</span>
+                <div className="text-xl font-extrabold text-text">
+                  {formatPaise(asset.daily_rate_paise)}
+                  <span className="text-xs font-medium text-text-secondary"> / day</span>
+                </div>
+              </div>
+              <div>
+                <span className="text-xs text-text-secondary font-medium">Security Deposit</span>
+                <div className="text-xl font-extrabold text-text">
+                  {formatPaise(asset.deposit_paise)}
+                </div>
+                <span className="text-[10px] font-semibold text-emerald-700">100% Refundable</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Trust and Safety Protocol Banner */}
+          <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6 shadow-xs space-y-4">
+            <h3 className="text-sm font-bold text-text flex items-center gap-2">
+              <ShieldCheck className="size-4 text-emerald-600" />
+              V Solve Hub Rental Guarantee
+            </h3>
+
+            <div className="grid gap-3 text-xs text-text-secondary">
+              <div className="flex items-start gap-2.5">
+                <CheckCircle2 className="size-4 shrink-0 text-emerald-600 mt-0.5" />
+                <span>
+                  <strong>Identity & Equipment Verification:</strong> Both customer and partner identities are verified before handover.
+                </span>
+              </div>
+              <div className="flex items-start gap-2.5">
+                <CheckCircle2 className="size-4 shrink-0 text-emerald-600 mt-0.5" />
+                <span>
+                  <strong>Full Security Deposit Release:</strong> When you return the tool in good condition, your security deposit is released back immediately.
+                </span>
+              </div>
+              <div className="flex items-start gap-2.5">
+                <CheckCircle2 className="size-4 shrink-0 text-emerald-600 mt-0.5" />
+                <span>
+                  <strong>Condition Checked:</strong> Inspect tool operation with the partner before signing off handover.
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column: Interactive Booking Panel */}
+        <div className="lg:col-span-5 sticky top-24">
+          <RentalBookPanel asset={asset} />
+        </div>
+      </div>
     </main>
   );
 }

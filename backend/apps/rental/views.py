@@ -2,7 +2,8 @@ from typing import Any
 from uuid import UUID
 
 from django.shortcuts import get_object_or_404
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -44,9 +45,31 @@ def _error(exc: Exception) -> Response:
 class RentalBrowseView(APIView):
     permission_classes = (permissions.AllowAny,)
 
-    @extend_schema(responses=RentalAssetSerializer(many=True))
-    def get(self, _request: Any) -> Response:
-        return Response(RentalAssetSerializer(public_assets(), many=True).data)
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("q", OpenApiTypes.STR, OpenApiParameter.QUERY),
+            OpenApiParameter("location", OpenApiTypes.STR, OpenApiParameter.QUERY),
+            OpenApiParameter("service", OpenApiTypes.STR, OpenApiParameter.QUERY),
+            OpenApiParameter("min_price", OpenApiTypes.INT, OpenApiParameter.QUERY),
+            OpenApiParameter("max_price", OpenApiTypes.INT, OpenApiParameter.QUERY),
+            OpenApiParameter("max_deposit", OpenApiTypes.INT, OpenApiParameter.QUERY),
+        ],
+        responses=RentalAssetSerializer(many=True),
+    )
+    def get(self, request: Any) -> Response:
+        min_rate = request.query_params.get("min_price")
+        max_rate = request.query_params.get("max_price")
+        max_deposit = request.query_params.get("max_deposit")
+
+        assets = public_assets(
+            query=request.query_params.get("q", ""),
+            location=request.query_params.get("location", ""),
+            min_daily_rate_paise=int(min_rate) if min_rate and min_rate.isdigit() else None,
+            max_daily_rate_paise=int(max_rate) if max_rate and max_rate.isdigit() else None,
+            max_deposit_paise=int(max_deposit) if max_deposit and max_deposit.isdigit() else None,
+            variant_code=request.query_params.get("service", ""),
+        )
+        return Response(RentalAssetSerializer(assets, many=True).data)
 
 
 class RentalDetailView(APIView):

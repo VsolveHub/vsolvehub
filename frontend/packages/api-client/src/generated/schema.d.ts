@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.66.0)
- * Checksum: 9139c7dd3e698a2f
+ * Checksum: 6ad8d22de1ae0b07
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -6295,6 +6295,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/stays/quote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["stays_quote_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tax-documents/{document_id}/": {
         parameters: {
             query?: never;
@@ -11144,6 +11160,7 @@ export interface components {
             /** Format: uuid */
             variant: string;
             readonly units: components["schemas"]["Unit"][];
+            structured_fields?: unknown;
             /** Format: date-time */
             readonly created_at: string;
         };
@@ -13425,11 +13442,17 @@ export interface components {
             readonly property_title: string;
             /** Format: uuid */
             unit?: string | null;
+            /** @default Standard room */
+            readonly unit_name: string;
+            /** @default 0 */
+            readonly nightly_rate_paise: number;
             status?: components["schemas"]["StayEnquiryStatusEnum"];
             /** Format: date */
             check_in: string;
             /** Format: date */
             check_out: string;
+            nights?: number;
+            total_quote_paise?: number;
             guest_count?: number;
             message?: string;
             host_response?: string;
@@ -13450,6 +13473,16 @@ export interface components {
         StayModerationRequest: {
             action: components["schemas"]["Action68eEnum"];
             reason: string;
+        };
+        StayQuoteResponse: {
+            /** Format: uuid */
+            property_id: string;
+            /** Format: uuid */
+            unit_id: string | null;
+            unit_name: string;
+            nights: number;
+            nightly_rate_paise: number;
+            total_quote_paise: number;
         };
         StepUpSession: {
             /** Format: date-time */
@@ -27080,7 +27113,14 @@ export interface operations {
     };
     rentals_list: {
         parameters: {
-            query?: never;
+            query?: {
+                location?: string;
+                max_deposit?: number;
+                max_price?: number;
+                min_price?: number;
+                q?: string;
+                service?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -29436,7 +29476,16 @@ export interface operations {
     };
     stays_list: {
         parameters: {
-            query?: never;
+            query?: {
+                ac?: boolean;
+                food?: boolean;
+                location?: string;
+                max_price?: number;
+                min_price?: number;
+                q?: string;
+                service?: string;
+                sharing_count?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -29495,6 +29544,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StayEnquiry"];
+                };
+            };
+        };
+    };
+    stays_quote_retrieve: {
+        parameters: {
+            query: {
+                check_in: string;
+                check_out: string;
+                property_id: string;
+                unit_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StayQuoteResponse"];
                 };
             };
         };

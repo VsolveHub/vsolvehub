@@ -66,7 +66,7 @@ describe("isCurrentTarget", () => {
     // target is a design decision, not an incidental one, and should fail here
     // first. (The basket left main navigation for the header icon; the cart
     // routes are owned by Services now.)
-    expect(NAV_TARGETS).toHaveLength(2);
+    expect(NAV_TARGETS).toHaveLength(5);
     expect(NAV_TARGETS.map((target) => target.href)).not.toContain("/account");
   });
 });

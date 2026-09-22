@@ -33,6 +33,7 @@ class PropertySerializer(serializers.ModelSerializer):
             "host_name",
             "variant",
             "units",
+            "structured_fields",
             "created_at",
         )
 
@@ -56,8 +57,26 @@ class CreateEnquirySerializer(serializers.Serializer):
     message = serializers.CharField(required=False, allow_blank=True, default="")
 
 
+class StayQuoteRequestSerializer(serializers.Serializer):
+    property_id = serializers.UUIDField()
+    unit_id = serializers.UUIDField(required=False, allow_null=True)
+    check_in = serializers.DateField()
+    check_out = serializers.DateField()
+
+
+class StayQuoteResponseSerializer(serializers.Serializer):
+    property_id = serializers.UUIDField()
+    unit_id = serializers.UUIDField(allow_null=True)
+    unit_name = serializers.CharField()
+    nights = serializers.IntegerField()
+    nightly_rate_paise = serializers.IntegerField()
+    total_quote_paise = serializers.IntegerField()
+
+
 class StayEnquirySerializer(serializers.ModelSerializer):
     property_title = serializers.CharField(source="property.title", read_only=True)
+    unit_name = serializers.CharField(source="unit.name", read_only=True, default="Standard room")
+    nightly_rate_paise = serializers.IntegerField(source="unit.nightly_rate_paise", read_only=True, default=0)
 
     class Meta:
         model = StayEnquiry
@@ -66,9 +85,13 @@ class StayEnquirySerializer(serializers.ModelSerializer):
             "property",
             "property_title",
             "unit",
+            "unit_name",
+            "nightly_rate_paise",
             "status",
             "check_in",
             "check_out",
+            "nights",
+            "total_quote_paise",
             "guest_count",
             "message",
             "host_response",
