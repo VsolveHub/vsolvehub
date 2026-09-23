@@ -102,7 +102,7 @@ export function StayQuotePanel({ property }: StayQuotePanelProps) {
         Get an instant server date quote and send your enquiry to the host.
       </p>
 
-      <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-5">
+      <form onSubmit={handleSubmit} noValidate className="mt-6 flex flex-col gap-5">
         {/* Room / Unit Selection */}
         {property.units.length > 1 && (
           <div className="flex flex-col gap-1.5">

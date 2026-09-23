@@ -74,7 +74,7 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
         Select your rental dates. Zero hidden charges.
       </p>
 
-      <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-5">
+      <form onSubmit={handleSubmit} noValidate className="mt-6 flex flex-col gap-5">
         {/* Date Selection */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label className="flex flex-col gap-1.5">
