@@ -10,6 +10,17 @@ export interface RentalFilterParams {
   min_price?: number;
   max_price?: number;
   max_deposit?: number;
+  start_date?: string;
+  end_date?: string;
+}
+
+export type RentalMineTab = "ALL" | "UPCOMING" | "ONGOING" | "RETURNED";
+
+export function rentalMineBucket(status?: string): Exclude<RentalMineTab, "ALL"> {
+  const value = (status ?? "").toUpperCase();
+  if (["RETURNED", "CLOSED", "CANCELLED", "DISPUTED"].includes(value)) return "RETURNED";
+  if (["HANDOVER", "HANDED_OVER"].includes(value)) return "ONGOING";
+  return "UPCOMING";
 }
 
 export function formatPaise(paise: number): string {

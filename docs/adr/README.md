@@ -59,7 +59,6 @@ The next free number after those reservations is **0013**.
 | [0006](0006-outbox-visibility-deadline-recovery.md) | Outbox visibility deadline and recovery | Accepted |
 | [0007](0007-m2-engagement-spine-and-fee-after-value.md) | M2 engagement spine and fee after value | Accepted (A5 fee model superseded by 0008; A3 front door superseded by 0009) |
 | [0008](0008-m2-visit-first-estimation-for-a5.md) | M2 visit-first estimation and tiered visit plans for A5 | Accepted (its "A3 unchanged" statements superseded by 0009) |
-| [0009](0009-m2-rate-card-instant-dispatch-for-a3.md) | M2 published rate card and instant crew dispatch for A3 | Accepted |
-| 0010 | Customer wallet and loyalty scope | Reserved — Phase C; not drafted on this branch |
+| [0010](0010-customer-wallet-and-loyalty-scope.md) | Customer wallet and loyalty scope | Accepted |
 | 0011 | A7 rental and A9 stay archetype engines | Reserved — not drafted on this branch |
 | [0012](0012-a10-listing-engine.md) | A10 listing engine | Proposed |

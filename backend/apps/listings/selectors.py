@@ -38,4 +38,14 @@ def public_listings(filters: dict[str, Any] | None = None) -> QuerySet[Listing]:
     for key, value in (filters.get("structured_fields") or {}).items():
         if value not in (None, ""):
             qs = qs.filter(**{f"structured_fields__{key}": value})
+    for key in ("employment_type", "work_mode", "experience"):
+        value = str(filters.get(key) or "").strip()
+        if value:
+            qs = qs.filter(**{f"structured_fields__{key}__icontains": value})
+    salary_band = str(filters.get("salary_band") or "").strip()
+    if salary_band:
+        qs = qs.filter(structured_fields__salary_band=salary_band)
+    sort = str(filters.get("sort") or "latest")
+    if sort == "latest":
+        qs = qs.order_by("-published_at", "-created_at")
     return qs

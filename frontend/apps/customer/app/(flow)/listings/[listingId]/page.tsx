@@ -19,8 +19,8 @@ import {
   reportListing,
   submitListingApplication,
 } from "@/features/listings/queries";
+import { ApplySteps } from "@/features/listings/apply-steps";
 import {
-  ApplyPanel,
   JdSections,
   ReportDialog,
   RoleFacts,
@@ -141,11 +141,9 @@ export default function ListingDetailPage() {
           <JdSections listing={listing} onOpenReport={() => setReportModalOpen(true)} />
         </Card>
 
-        <ApplyPanel
-          key={session.userId || "anon"}
+        <ApplySteps
+          listingId={listingId}
           posterName={listing.poster_name}
-          isSuccess={apply.isSuccess}
-          activeApplication={activeApplication}
           isAuthenticated={session.isAuthenticated}
           form={form}
           fieldErrors={fieldErrors}
@@ -156,6 +154,7 @@ export default function ListingDetailPage() {
               : undefined
           }
           onFieldChange={updateField}
+          onErrors={setFieldErrors}
           onSubmit={handleApply}
         />
       </div>

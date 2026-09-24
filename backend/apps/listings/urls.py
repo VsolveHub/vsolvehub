@@ -7,6 +7,11 @@ urlpatterns = [
     path("listings/filters", views.ListingFiltersView.as_view(), name="listing-filters"),
     path("listings/<uuid:listing_id>", views.ListingDetailView.as_view(), name="listing-detail"),
     path(
+        "listings/<uuid:listing_id>/resume-uploads",
+        views.ListingResumeUploadView.as_view(),
+        name="listing-resume-upload",
+    ),
+    path(
         "listings/<uuid:listing_id>/applications",
         views.ListingApplicationView.as_view(),
         name="listing-apply",

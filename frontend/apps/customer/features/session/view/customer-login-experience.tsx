@@ -3,6 +3,7 @@
 import type { OtpFlow } from "@vsolve/query";
 import { Button, ErrorState, Field, Input, Logo, cn, formatDuration } from "@vsolve/ui";
 import { useEffect, useRef, type FormEvent, type ReactNode } from "react";
+import { LoginReferralInput } from "./login-referral-input";
 
 function ShieldIcon({ className }: { className?: string }) {
   return (
@@ -218,6 +219,8 @@ function CustomerLoginForm({
             phoneError={flow.phoneError}
             codeLength={flow.codeLength}
           />
+
+          <LoginReferralInput />
 
           <Button
             type="submit"

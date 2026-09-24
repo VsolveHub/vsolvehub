@@ -82,6 +82,8 @@ def initiate_payment_attempt(
     customer_id: UUID,
     expected_checkout_version: int,
     idempotency_key: str,
+    wallet_amount_paise: int = 0,
+    coin_burn_amount: int = 0,
 ) -> PaymentAttempt:
     checkout, group, units, reservations = _locked_payment_context(
         checkout_id=checkout_id,
@@ -100,16 +102,32 @@ def initiate_payment_attempt(
             return active_attempt
         raise ValueError("A payment attempt is already active for this checkout.")
 
+    from .loyalty_funding import (  # noqa: PLC0415 - capture imports this module
+        quote_checkout_funding,
+        reserve_checkout_funding,
+    )
+
+    order_total = checkout.quote.total_paise
+    funding = quote_checkout_funding(
+        customer=checkout.customer,
+        order_payable_paise=order_total,
+        wallet_amount_paise=wallet_amount_paise,
+        coin_burn_amount=coin_burn_amount,
+    )
     attempt = PaymentAttempt.objects.create(
         checkout=checkout,
         booking_group=group,
         quote=checkout.quote,
         idempotency_key=idempotency_key,
         provider=settings.PAYMENT_PROVIDER,
-        amount_paise=checkout.quote.total_paise,
+        amount_paise=order_total,
+        wallet_reserved_paise=funding.wallet_paise,
+        coins_burned=funding.coins,
+        coin_discount_paise=funding.discount_paise,
         currency=checkout.quote.currency,
         expires_at=min(reservation.expires_at for reservation in reservations),
     )
+    reserve_checkout_funding(attempt=attempt, customer=checkout.customer, funding=funding)
     allocation_total = 0
     for unit in units:
         unit_lines = list(unit.lines.order_by("position"))
@@ -137,6 +155,26 @@ def initiate_payment_attempt(
     checkout.status = CheckoutSession.Status.PAYMENT_PENDING
     checkout.version += 1
     checkout.save(update_fields=("status", "version"))
+    if attempt.gateway_amount_paise == 0:
+        from .capture import _materialize_captured_group  # noqa: PLC0415
+        from .loyalty_funding import capture_checkout_funding  # noqa: PLC0415
+
+        capture_checkout_funding(attempt=attempt)
+        attempt.status = PaymentAttempt.Status.CAPTURED
+        attempt.captured_at = timezone.now()
+        attempt.reconciliation_state = PaymentAttempt.ReconciliationState.IN_SYNC
+        attempt.version += 1
+        attempt.save(
+            update_fields=(
+                "status",
+                "captured_at",
+                "reconciliation_state",
+                "version",
+                "updated_at",
+            )
+        )
+        _materialize_captured_group(attempt=attempt)
+        return attempt
     enqueue_outbox_event(
         aggregate_type="payment_attempt",
         aggregate_id=attempt.id,
@@ -192,12 +230,15 @@ def initiate_standalone_payment_attempt(
 
 def create_provider_order(*, attempt_id: UUID) -> PaymentAttempt:
     attempt = PaymentAttempt.objects.get(id=attempt_id)
-    if attempt.status != PaymentAttempt.Status.PROVIDER_PENDING:
+    if (
+        attempt.status != PaymentAttempt.Status.PROVIDER_PENDING
+        or attempt.gateway_amount_paise <= 0
+    ):
         return attempt
     provider = get_payment_provider(provider_code=attempt.provider)
     try:
         provider_order = provider.create_order(
-            amount_paise=attempt.amount_paise,
+            amount_paise=attempt.gateway_amount_paise,
             currency=attempt.currency,
             receipt=str(attempt.id),
             idempotency_key=attempt.idempotency_key,
@@ -220,6 +261,9 @@ def create_provider_order(*, attempt_id: UUID) -> PaymentAttempt:
     except PaymentProviderRejectedError:
         with transaction.atomic():
             locked = PaymentAttempt.objects.select_for_update().get(id=attempt.id)
+            from .loyalty_funding import release_checkout_funding  # noqa: PLC0415
+
+            release_checkout_funding(attempt=locked)
             locked.status = PaymentAttempt.Status.FAILED
             locked.reconciliation_state = PaymentAttempt.ReconciliationState.IN_SYNC
             locked.failure_code = "provider_order_rejected"
@@ -235,11 +279,14 @@ def create_provider_order(*, attempt_id: UUID) -> PaymentAttempt:
             )
             return locked
     if (
-        provider_order.amount_paise != attempt.amount_paise
+        provider_order.amount_paise != attempt.gateway_amount_paise
         or provider_order.currency != attempt.currency
     ):
         with transaction.atomic():
             locked = PaymentAttempt.objects.select_for_update().get(id=attempt.id)
+            from .loyalty_funding import release_checkout_funding  # noqa: PLC0415
+
+            release_checkout_funding(attempt=locked)
             locked.status = PaymentAttempt.Status.FAILED
             locked.reconciliation_state = PaymentAttempt.ReconciliationState.NEEDS_ATTENTION
             locked.failure_code = "provider_order_amount_mismatch"

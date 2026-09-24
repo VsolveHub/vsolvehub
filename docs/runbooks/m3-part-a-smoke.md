@@ -32,10 +32,17 @@ Use `http://localhost:3000` (not `127.0.0.1`) for CORS.
 
 OTP prints on screen in local/dev.
 
+## structured_fields display keys
+
+Jobs: `employment_type`, `work_mode`, `experience`, `salary_band`, `job_id`, `pay_range`.
+Rentals: `hero_image_url`, `gallery_urls`, `rating`, `usage_guide`, `safety_instructions`.
+Stays: `ac`, `food`, `house_rules`, `lat`, `lng`, `gallery_urls`.
+Hearts are browser-only (`localStorage` keys `vsolve-saved-listing`, `vsolve-saved-rental`, `vsolve-saved-stay`).
+
 ## Click paths
 
 1. **Career (A10)** — browse → apply → my-applications; partner listings chrome without Work; ops moderate with reason. See `m3-a10-listing-smoke.md`.
-2. **Rental (A7)** — Partner `9900000066` on `:3001/rentals`: create asset (title + paise rates + approved variant) → Submit for review → (ops approve if needed) → on seeded/customer booking: Handover (CONFIRMED) → Return (HANDOVER) → Release deposit (RETURNED). Deposit may show PARTIAL demo hold note (HELD OK; not live Razorpay). Customer book seeded Bosch Drill; ops approve pending Angle Grinder with reason.
+2. **Rental (A7)** — Partner `9900000066` on `:3001/rentals`: create asset (title + paise rates + approved variant) → Submit for review → (ops approve if needed) → customer book creates deposit `REQUESTED` and booking `PENDING_PAYMENT` until `A7_RENTAL_DEPOSIT` captures, then `HELD` and `CONFIRMED`. Handover (CONFIRMED) → Return (HANDOVER) → Release deposit (RETURNED). Seeded bookings may already be held for the demo inbox.
 3. **Stay (A9 enquiry-first)** — customer enquire on Lakeview PG; partner respond; ops approve pending hostel with reason.
 
 ## Tests

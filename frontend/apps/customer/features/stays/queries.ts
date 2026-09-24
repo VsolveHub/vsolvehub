@@ -23,6 +23,8 @@ export function fetchStays(params?: StayFilterParams) {
           food: params?.food,
           min_price: params?.min_price,
           max_price: params?.max_price,
+          limit: params?.limit,
+          offset: params?.offset,
         },
       },
     }),

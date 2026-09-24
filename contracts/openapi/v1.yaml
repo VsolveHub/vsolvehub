@@ -2258,6 +2258,211 @@ paths:
               schema:
                 $ref: '#/components/schemas/Offer'
           description: ''
+  /api/v1/customer/coins/:
+    get:
+      operationId: customer_coins_retrieve
+      summary: Customer V Coins balances across buckets
+      tags:
+      - loyalty
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerCoinsSummary'
+          description: ''
+  /api/v1/customer/coins/preview-burn/:
+    post:
+      operationId: customer_coins_preview_burn_create
+      summary: Server preview of coin burn math and caps
+      tags:
+      - loyalty
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CoinBurnPreviewRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CoinBurnPreviewRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CoinBurnPreviewRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoinBurnPreviewResponse'
+          description: ''
+  /api/v1/customer/coins/transactions/:
+    get:
+      operationId: customer_coins_transactions_list
+      summary: Customer V Coins activity transactions
+      tags:
+      - loyalty
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CoinTransaction'
+          description: ''
+  /api/v1/customer/referral/:
+    get:
+      operationId: customer_referral_retrieve
+      summary: Customer referral code, share link, and active tier schedule
+      tags:
+      - referral
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerReferralSummary'
+          description: ''
+  /api/v1/customer/referral/apply/:
+    post:
+      operationId: customer_referral_apply_create
+      summary: Apply referral code for the current customer at signup
+      tags:
+      - referral
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReferralValidateRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReferralValidateRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReferralValidateRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReferralAttribution'
+          description: ''
+  /api/v1/customer/referral/attributions/:
+    get:
+      operationId: customer_referral_attributions_list
+      summary: Customer's referrals list
+      tags:
+      - referral
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReferralAttribution'
+          description: ''
+  /api/v1/customer/referral/validate/:
+    post:
+      operationId: customer_referral_validate_create
+      summary: Validate referral code during registration
+      tags:
+      - referral
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReferralValidateRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReferralValidateRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReferralValidateRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReferralValidateResponse'
+          description: ''
+  /api/v1/customer/wallet/:
+    get:
+      operationId: customer_wallet_retrieve
+      summary: Customer wallet balance and policy
+      tags:
+      - wallet
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletAccount'
+          description: ''
+  /api/v1/customer/wallet/top-up/:
+    post:
+      operationId: customer_wallet_top_up_create
+      summary: Initiate wallet top-up payment attempt
+      tags:
+      - wallet
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WalletTopUpRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/WalletTopUpRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/WalletTopUpRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletTopUpResponse'
+          description: ''
+  /api/v1/customer/wallet/transactions/:
+    get:
+      operationId: customer_wallet_transactions_list
+      summary: Customer wallet transaction ledger
+      tags:
+      - wallet
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WalletTransaction'
+          description: ''
   /api/v1/engagement-amendments/{engagement_amendment_id}/accept/:
     post:
       operationId: m2_engagement_amendment_decide
@@ -4669,6 +4874,14 @@ paths:
       operationId: listings_list
       parameters:
       - in: query
+        name: employment_type
+        schema:
+          type: string
+      - in: query
+        name: experience
+        schema:
+          type: string
+      - in: query
         name: location
         schema:
           type: string
@@ -4677,7 +4890,19 @@ paths:
         schema:
           type: string
       - in: query
+        name: salary_band
+        schema:
+          type: string
+      - in: query
         name: service
+        schema:
+          type: string
+      - in: query
+        name: sort
+        schema:
+          type: string
+      - in: query
+        name: work_mode
         schema:
           type: string
       tags:
@@ -4781,6 +5006,33 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ListingReport'
+          description: ''
+  /api/v1/listings/{listing_id}/resume-uploads:
+    post:
+      operationId: listings_resume_uploads_create
+      parameters:
+      - in: path
+        name: listing_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - listings
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
           description: ''
   /api/v1/listings/filters:
     get:
@@ -9106,6 +9358,251 @@ paths:
               schema:
                 $ref: '#/components/schemas/PartnerListing'
           description: ''
+  /api/v1/ops/loyalty/burn-policies/:
+    get:
+      operationId: ops_loyalty_burn_policies_list
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CoinBurnPolicyWrite'
+          description: ''
+    post:
+      operationId: ops_loyalty_burn_policies_create
+      tags:
+      - operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CoinBurnPolicyWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CoinBurnPolicyWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CoinBurnPolicyWriteRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoinBurnPolicyWrite'
+          description: ''
+  /api/v1/ops/loyalty/grant-rules/:
+    get:
+      operationId: ops_loyalty_grant_rules_list
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CoinGrantRule'
+          description: ''
+    post:
+      operationId: ops_loyalty_grant_rules_create
+      tags:
+      - operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CoinGrantRuleRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CoinGrantRuleRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CoinGrantRuleRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoinGrantRule'
+          description: ''
+  /api/v1/ops/loyalty/grant-rules/{rule_id}/:
+    get:
+      operationId: ops_loyalty_grant_rules_retrieve
+      parameters:
+      - in: path
+        name: rule_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoinGrantRule'
+          description: ''
+    patch:
+      operationId: ops_loyalty_grant_rules_partial_update
+      parameters:
+      - in: path
+        name: rule_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCoinGrantRuleRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCoinGrantRuleRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCoinGrantRuleRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoinGrantRule'
+          description: ''
+  /api/v1/ops/loyalty/grant-rules/{rule_id}/tiers/:
+    get:
+      operationId: ops_loyalty_grant_rules_tiers_list
+      parameters:
+      - in: path
+        name: rule_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CoinEarnTier'
+          description: ''
+    post:
+      operationId: ops_loyalty_grant_rules_tiers_create
+      parameters:
+      - in: path
+        name: rule_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CoinEarnTierRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CoinEarnTierRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CoinEarnTierRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoinEarnTier'
+          description: ''
+  /api/v1/ops/referral/attributions/:
+    get:
+      operationId: ops_referral_attributions_list
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReferralAttribution'
+          description: ''
+  /api/v1/ops/referral/programs/:
+    get:
+      operationId: ops_referral_programs_list
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReferralProgramVersion'
+          description: ''
+    post:
+      operationId: ops_referral_programs_create
+      tags:
+      - operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReferralProgramWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReferralProgramWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReferralProgramWriteRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReferralProgramVersion'
+          description: ''
   /api/v1/ops/rentals:
     get:
       operationId: ops_rentals_list
@@ -9203,6 +9700,87 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Property'
+          description: ''
+  /api/v1/ops/wallet/adjustments/:
+    post:
+      operationId: ops_wallet_adjustments_create
+      tags:
+      - operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WalletAdjustmentRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/WalletAdjustmentRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/WalletAdjustmentRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletTransaction'
+          description: ''
+  /api/v1/ops/wallet/liability/:
+    get:
+      operationId: ops_wallet_liability_retrieve
+      summary: Total platform customer wallet liability
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletLiabilityReport'
+          description: ''
+  /api/v1/ops/wallet/policies/:
+    get:
+      operationId: ops_wallet_policies_list
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OpsWalletTopUpPolicy'
+          description: ''
+    post:
+      operationId: ops_wallet_policies_create
+      tags:
+      - operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpsWalletTopUpPolicyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OpsWalletTopUpPolicyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OpsWalletTopUpPolicyRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsWalletTopUpPolicy'
           description: ''
   /api/v1/orders/{order_id}/:
     get:
@@ -13734,6 +14312,11 @@ paths:
       operationId: rentals_list
       parameters:
       - in: query
+        name: end_date
+        schema:
+          type: string
+          format: date
+      - in: query
         name: location
         schema:
           type: string
@@ -13757,6 +14340,11 @@ paths:
         name: service
         schema:
           type: string
+      - in: query
+        name: start_date
+        schema:
+          type: string
+          format: date
       tags:
       - rentals
       security:
@@ -16389,6 +16977,10 @@ paths:
         schema:
           type: boolean
       - in: query
+        name: limit
+        schema:
+          type: integer
+      - in: query
         name: location
         schema:
           type: string
@@ -16398,6 +16990,10 @@ paths:
           type: integer
       - in: query
         name: min_price
+        schema:
+          type: integer
+      - in: query
+        name: offset
         schema:
           type: integer
       - in: query
@@ -18629,6 +19225,290 @@ components:
         * `REPLAN_REQUIRED` - Replan required
         * `CANCELLED` - Cancelled
         * `EXPIRED` - Expired
+    CoinBurnPolicy:
+      type: object
+      properties:
+        max_burn_percent:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        coin_value_paise:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+    CoinBurnPolicyWrite:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        max_burn_percent:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        coin_value_paise:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        is_active:
+          type: boolean
+          readOnly: true
+        effective_from:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - effective_from
+      - id
+      - is_active
+    CoinBurnPolicyWriteRequest:
+      type: object
+      properties:
+        max_burn_percent:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        coin_value_paise:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+    CoinBurnPreviewRequestRequest:
+      type: object
+      properties:
+        order_payable_paise:
+          type: integer
+          minimum: 1
+        requested_coins:
+          type: integer
+          minimum: 0
+      required:
+      - order_payable_paise
+      - requested_coins
+    CoinBurnPreviewResponse:
+      type: object
+      properties:
+        order_payable_paise:
+          type: integer
+        spendable_coins:
+          type: integer
+        max_burn_paise:
+          type: integer
+        max_burn_coins:
+          type: integer
+        applied_burn_coins:
+          type: integer
+        discount_paise:
+          type: integer
+        remaining_payable_paise:
+          type: integer
+      required:
+      - applied_burn_coins
+      - discount_paise
+      - max_burn_coins
+      - max_burn_paise
+      - order_payable_paise
+      - remaining_payable_paise
+      - spendable_coins
+    CoinEarnTier:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        tier_kind:
+          $ref: '#/components/schemas/TierKindEnum'
+        min_order_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        max_order_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        min_booking_sequence:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          nullable: true
+        max_booking_sequence:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          nullable: true
+        coins_amount:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        sort_order:
+          type: integer
+          maximum: 32767
+          minimum: 0
+      required:
+      - coins_amount
+      - id
+      - tier_kind
+    CoinEarnTierRequest:
+      type: object
+      properties:
+        tier_kind:
+          $ref: '#/components/schemas/TierKindEnum'
+        min_order_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        max_order_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        min_booking_sequence:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          nullable: true
+        max_booking_sequence:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          nullable: true
+        coins_amount:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        sort_order:
+          type: integer
+          maximum: 32767
+          minimum: 0
+      required:
+      - coins_amount
+      - tier_kind
+    CoinGrantRule:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 120
+        earn_mode:
+          $ref: '#/components/schemas/EarnModeEnum'
+        coins_amount:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        completions_required:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        grant_trigger:
+          $ref: '#/components/schemas/GrantTriggerEnum'
+        customer_eligibility:
+          $ref: '#/components/schemas/CustomerEligibilityEnum'
+        reactivation_inactive_days:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - name
+    CoinGrantRuleRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        earn_mode:
+          $ref: '#/components/schemas/EarnModeEnum'
+        coins_amount:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        completions_required:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        grant_trigger:
+          $ref: '#/components/schemas/GrantTriggerEnum'
+        customer_eligibility:
+          $ref: '#/components/schemas/CustomerEligibilityEnum'
+        reactivation_inactive_days:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        is_active:
+          type: boolean
+      required:
+      - name
+    CoinTransaction:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        kind:
+          $ref: '#/components/schemas/CoinTransactionKindEnum'
+        amount:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+        notes:
+          type: string
+          maxLength: 240
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - amount
+      - created_at
+      - id
+      - kind
+    CoinTransactionKindEnum:
+      enum:
+      - EARN_PROMISE
+      - UNLOCK
+      - RESERVE
+      - BURN
+      - RELEASE
+      - EXPIRE
+      - ADJUSTMENT
+      type: string
+      description: |-
+        * `EARN_PROMISE` - Earn promise
+        * `UNLOCK` - Unlock
+        * `RESERVE` - Reserve
+        * `BURN` - Burn
+        * `RELEASE` - Release
+        * `EXPIRE` - Expire
+        * `ADJUSTMENT` - Adjustment
     CommercialAmountBasisEnum:
       enum:
       - PARTNER_QUOTE
@@ -20383,6 +21263,25 @@ components:
       - status
       - version
       - work_tasks
+    CustomerCoinsSummary:
+      type: object
+      properties:
+        spendable_coins:
+          type: integer
+        promised_coins:
+          type: integer
+        locked_coins:
+          type: integer
+        expiring_soon_coins:
+          type: integer
+        active_burn_policy:
+          $ref: '#/components/schemas/CoinBurnPolicy'
+      required:
+      - active_burn_policy
+      - expiring_soon_coins
+      - locked_coins
+      - promised_coins
+      - spendable_coins
     CustomerContactAttemptRequestRequest:
       type: object
       properties:
@@ -20392,6 +21291,18 @@ components:
           maxLength: 32
       required:
       - outcome
+    CustomerEligibilityEnum:
+      enum:
+      - ALL_CUSTOMERS
+      - NEW_CUSTOMER
+      - EXISTING_CUSTOMER
+      - REACTIVATED_CUSTOMER
+      type: string
+      description: |-
+        * `ALL_CUSTOMERS` - All customers
+        * `NEW_CUSTOMER` - New customer (0 completions)
+        * `EXISTING_CUSTOMER` - Existing customer (1+ completions)
+        * `REACTIVATED_CUSTOMER` - Reactivated customer (>N days inactive)
     CustomerProposal:
       type: object
       description: |-
@@ -20653,6 +21564,25 @@ components:
       - non_responsive_rejections_remaining
       - quotes
       - server_now
+    CustomerReferralSummary:
+      type: object
+      properties:
+        code:
+          type: string
+        share_url:
+          type: string
+        total_earned_paise:
+          type: integer
+        successful_referral_count:
+          type: integer
+        active_program:
+          $ref: '#/components/schemas/ReferralProgramSummary'
+      required:
+      - active_program
+      - code
+      - share_url
+      - successful_referral_count
+      - total_earned_paise
     CustomerRequestedVisitSlots:
       type: object
       properties:
@@ -21125,6 +22055,16 @@ components:
           type: string
           default: ''
           maxLength: 400
+    EarnModeEnum:
+      enum:
+      - FLAT
+      - TIERED_ORDER_VALUE
+      - TIERED_BOOKING_SEQUENCE
+      type: string
+      description: |-
+        * `FLAT` - Flat
+        * `TIERED_ORDER_VALUE` - Tiered order value
+        * `TIERED_BOOKING_SEQUENCE` - Tiered booking sequence
     EngageKillSwitchRequestRequest:
       type: object
       properties:
@@ -22599,6 +23539,18 @@ components:
         * `WOMAN` - Woman
         * `OTHER` - Other
         * `UNDISCLOSED` - Prefers not to say
+    GrantTriggerEnum:
+      enum:
+      - SIGNUP
+      - REFERRAL_QUALIFIED
+      - BOOKING_COMPLETED
+      - MANUAL_OPS
+      type: string
+      description: |-
+        * `SIGNUP` - Signup
+        * `REFERRAL_QUALIFIED` - Referral qualified
+        * `BOOKING_COMPLETED` - Booking completed
+        * `MANUAL_OPS` - Manual operations
     GroupAddressChangeRequestRequest:
       type: object
       properties:
@@ -24741,6 +25693,47 @@ components:
       required:
       - expected_version
       - target_status
+    OpsWalletTopUpPolicy:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        min_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        max_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        is_active:
+          type: boolean
+          readOnly: true
+        effective_from:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - effective_from
+      - id
+      - is_active
+    OpsWalletTopUpPolicyRequest:
+      type: object
+      properties:
+        min_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        max_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
     Order:
       type: object
       properties:
@@ -26836,6 +27829,37 @@ components:
         scope:
           type: object
           additionalProperties: {}
+    PatchedCoinGrantRuleRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        earn_mode:
+          $ref: '#/components/schemas/EarnModeEnum'
+        coins_amount:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        completions_required:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        grant_trigger:
+          $ref: '#/components/schemas/GrantTriggerEnum'
+        customer_eligibility:
+          $ref: '#/components/schemas/CustomerEligibilityEnum'
+        reactivation_inactive_days:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        is_active:
+          type: boolean
     PatchedCrewMemberUpdateRequest:
       type: object
       description: |-
@@ -27097,6 +28121,18 @@ components:
           allOf:
           - $ref: '#/components/schemas/Money'
           readOnly: true
+        wallet_reserved_paise:
+          type: integer
+          readOnly: true
+        coins_burned:
+          type: integer
+          readOnly: true
+        coin_discount_paise:
+          type: integer
+          readOnly: true
+        razorpay_amount_paise:
+          type: integer
+          readOnly: true
         expires_at:
           type: string
           format: date-time
@@ -27120,6 +28156,8 @@ components:
       - amount
       - booking_group_id
       - checkout_id
+      - coin_discount_paise
+      - coins_burned
       - created_at
       - expires_at
       - failure_code
@@ -27129,11 +28167,13 @@ components:
       - provider_public_key
       - purpose
       - quote_id
+      - razorpay_amount_paise
       - reconciliation_state
       - simulated_capture_available
       - status
       - updated_at
       - version
+      - wallet_reserved_paise
     PaymentAttemptCreateRequest:
       type: object
       properties:
@@ -27143,6 +28183,14 @@ components:
         expected_checkout_version:
           type: integer
           minimum: 1
+        wallet_amount_paise:
+          type: integer
+          minimum: 0
+          default: 0
+        coin_burn_amount:
+          type: integer
+          minimum: 0
+          default: 0
       required:
       - checkout_id
       - expected_checkout_version
@@ -29817,6 +30865,8 @@ components:
       - M2_BOOKING_FEE
       - A10_VENDOR_SUBSCRIPTION
       - A10_PREMIUM_LISTING
+      - WALLET_TOP_UP
+      - A7_RENTAL_DEPOSIT
       type: string
       description: |-
         * `BOOKING_GROUP` - Booking group
@@ -29830,6 +30880,8 @@ components:
         * `M2_BOOKING_FEE` - M2 booking fee
         * `A10_VENDOR_SUBSCRIPTION` - A10 vendor subscription
         * `A10_PREMIUM_LISTING` - A10 premium listing
+        * `WALLET_TOP_UP` - Wallet top-up
+        * `A7_RENTAL_DEPOSIT` - A7 rental deposit
     QuestionAnswerRequest:
       type: object
       properties:
@@ -30931,6 +31983,207 @@ components:
         * `PAYMENT_REQUIRED` - PAYMENT_REQUIRED
         * `REPLAN` - REPLAN
         * `NONE` - NONE
+    ReferralAttribution:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        referee_display:
+          type: string
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/ReferralAttributionStatusEnum'
+        attributed_at:
+          type: string
+          format: date-time
+          readOnly: true
+        qualified_at:
+          type: string
+          format: date-time
+          nullable: true
+        rewarded_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - attributed_at
+      - id
+      - referee_display
+    ReferralAttributionStatusEnum:
+      enum:
+      - PENDING
+      - QUALIFIED
+      - REWARDED
+      - EXPIRED
+      - INELIGIBLE
+      type: string
+      description: |-
+        * `PENDING` - Pending
+        * `QUALIFIED` - Qualified
+        * `REWARDED` - Rewarded
+        * `EXPIRED` - Expired
+        * `INELIGIBLE` - Ineligible
+    ReferralProgramSummary:
+      type: object
+      properties:
+        version_code:
+          type: string
+          maxLength: 32
+        reward_sides:
+          $ref: '#/components/schemas/RewardSidesEnum'
+        referee_wallet_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        referee_coins_amount:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        tiers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReferralRewardTier'
+          readOnly: true
+      required:
+      - tiers
+      - version_code
+    ReferralProgramVersion:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        version_code:
+          type: string
+          maxLength: 32
+        reward_sides:
+          $ref: '#/components/schemas/RewardSidesEnum'
+        referee_wallet_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        referee_coins_amount:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        is_active:
+          type: boolean
+        effective_from:
+          type: string
+          format: date-time
+          readOnly: true
+        effective_until:
+          type: string
+          format: date-time
+          nullable: true
+        tiers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReferralRewardTier'
+          readOnly: true
+      required:
+      - effective_from
+      - id
+      - tiers
+      - version_code
+    ReferralProgramWriteRequest:
+      type: object
+      properties:
+        version_code:
+          type: string
+          minLength: 1
+          maxLength: 32
+        reward_sides:
+          $ref: '#/components/schemas/RewardSidesEnum'
+        referee_wallet_paise:
+          type: integer
+          minimum: 0
+        referee_coins_amount:
+          type: integer
+          minimum: 0
+        tiers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReferralTierWriteRequest'
+      required:
+      - referee_coins_amount
+      - referee_wallet_paise
+      - reward_sides
+      - tiers
+      - version_code
+    ReferralRewardTier:
+      type: object
+      properties:
+        min_qualified_referrals:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        referrer_wallet_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        referrer_coins_amount:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        referee_wallet_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        referee_coins_amount:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          nullable: true
+    ReferralTierWriteRequest:
+      type: object
+      properties:
+        min_qualified_referrals:
+          type: integer
+          minimum: 1
+        referrer_wallet_paise:
+          type: integer
+          minimum: 0
+        referrer_coins_amount:
+          type: integer
+          minimum: 0
+          default: 0
+      required:
+      - min_qualified_referrals
+      - referrer_wallet_paise
+    ReferralValidateRequestRequest:
+      type: object
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 32
+      required:
+      - code
+    ReferralValidateResponse:
+      type: object
+      properties:
+        valid:
+          type: boolean
+        code:
+          type: string
+        referrer_id:
+          type: string
+        referee_reward_summary:
+          type: string
+      required:
+      - code
+      - referee_reward_summary
+      - referrer_id
+      - valid
     Refund:
       type: object
       properties:
@@ -31225,7 +32478,7 @@ components:
           minimum: 0
         provider_note:
           type: string
-          description: 'PARTIAL money path: test/seed hold without live Razorpay.'
+          description: Operator note. A live hold is recorded only after payment capture.
           maxLength: 240
       required:
       - amount_paise
@@ -32133,6 +33386,16 @@ components:
         * `OPEN` - Waiting for the vendor
         * `ANSWERED` - Answered with a revised estimate
         * `DECLINED` - Declined by the vendor
+    RewardSidesEnum:
+      enum:
+      - REFERRER_ONLY
+      - REFEREE_ONLY
+      - BOTH
+      type: string
+      description: |-
+        * `REFERRER_ONLY` - Referrer only
+        * `REFEREE_ONLY` - Referee only
+        * `BOTH` - Both referrer and referee
     RoleFulfilment:
       type: object
       description: |-
@@ -34461,6 +35724,14 @@ components:
       - open
       - owner_team
       - unclaimed
+    TierKindEnum:
+      enum:
+      - ORDER_VALUE
+      - BOOKING_SEQUENCE
+      type: string
+      description: |-
+        * `ORDER_VALUE` - Order value
+        * `BOOKING_SEQUENCE` - Booking sequence
     TimelineEvent:
       type: object
       properties:
@@ -35481,6 +36752,165 @@ components:
       - experience_years
       - is_verified
       - photo_url
+    WalletAccount:
+      type: object
+      properties:
+        wallet_id:
+          type: string
+          format: uuid
+        currency:
+          type: string
+          default: INR
+        balance_paise:
+          type: integer
+          readOnly: true
+        available_balance_paise:
+          type: integer
+          readOnly: true
+        reserved_paise:
+          type: integer
+          readOnly: true
+        top_up_policy:
+          type: object
+          additionalProperties:
+            type: integer
+          readOnly: true
+      required:
+      - available_balance_paise
+      - balance_paise
+      - reserved_paise
+      - top_up_policy
+      - wallet_id
+    WalletAdjustmentRequest:
+      type: object
+      properties:
+        customer_id:
+          type: string
+          format: uuid
+        amount_paise:
+          type: integer
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 240
+        idempotency_key:
+          type: string
+          minLength: 1
+          maxLength: 128
+      required:
+      - amount_paise
+      - customer_id
+      - idempotency_key
+      - reason
+    WalletLiabilityReport:
+      type: object
+      properties:
+        total_liability_paise:
+          type: integer
+        currency:
+          type: string
+          default: INR
+        active_wallets_count:
+          type: integer
+      required:
+      - active_wallets_count
+      - total_liability_paise
+    WalletTopUpRequestRequest:
+      type: object
+      properties:
+        amount_paise:
+          type: integer
+          minimum: 1
+        idempotency_key:
+          type: string
+          minLength: 1
+          default: ''
+          maxLength: 128
+      required:
+      - amount_paise
+    WalletTopUpResponse:
+      type: object
+      properties:
+        payment_attempt_id:
+          type: string
+          format: uuid
+        purpose:
+          type: string
+        amount_paise:
+          type: integer
+        currency:
+          type: string
+        provider:
+          type: string
+        provider_order_id:
+          type: string
+        status:
+          type: string
+      required:
+      - amount_paise
+      - currency
+      - payment_attempt_id
+      - provider
+      - provider_order_id
+      - purpose
+      - status
+    WalletTransaction:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        amount_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+        kind:
+          $ref: '#/components/schemas/WalletTransactionKindEnum'
+        status:
+          $ref: '#/components/schemas/WalletTransactionStatusEnum'
+        idempotency_key:
+          type: string
+          maxLength: 128
+        notes:
+          type: string
+          maxLength: 240
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - amount_paise
+      - created_at
+      - id
+      - kind
+    WalletTransactionKindEnum:
+      enum:
+      - TOP_UP
+      - CHECKOUT_DEBIT
+      - CHECKOUT_RELEASE
+      - REFUND_CREDIT
+      - REFERRAL_CREDIT
+      - ADJUSTMENT
+      type: string
+      description: |-
+        * `TOP_UP` - Top up
+        * `CHECKOUT_DEBIT` - Checkout debit
+        * `CHECKOUT_RELEASE` - Checkout release
+        * `REFUND_CREDIT` - Refund credit
+        * `REFERRAL_CREDIT` - Referral credit
+        * `ADJUSTMENT` - Adjustment
+    WalletTransactionStatusEnum:
+      enum:
+      - RESERVED
+      - CAPTURED
+      - RELEASED
+      type: string
+      description: |-
+        * `RESERVED` - Reserved
+        * `CAPTURED` - Captured
+        * `RELEASED` - Released
     WarrantyClaimRequest:
       type: object
       description: The Customer calls on a warranty the retention was held against.

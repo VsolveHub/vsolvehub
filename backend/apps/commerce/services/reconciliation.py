@@ -156,7 +156,7 @@ def reconcile_payment_attempt(*, attempt_id: UUID) -> PaymentAttempt:
         if matching_orders:
             provider_order = matching_orders[0]
             if (
-                provider_order.amount_paise != attempt.amount_paise
+                provider_order.amount_paise != attempt.gateway_amount_paise
                 or provider_order.currency != attempt.currency
             ):
                 with transaction.atomic():

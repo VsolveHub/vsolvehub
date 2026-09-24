@@ -7,12 +7,13 @@ import {
   FileCheck2,
   MapPin,
   Search,
-  Sparkles,
 } from "lucide-react";
 import { Button, EmptyState, ErrorState, Skeleton } from "@vsolve/ui";
 
 import { fetchListingFilters, fetchListings, type Listing } from "@/features/listings/queries";
-import { ListingFilters, ListingRow } from "@/features/listings/view";
+import { ListingOpportunityCard } from "@/features/listings/listing-opportunity-card";
+import { ListingFilters } from "@/features/listings/view";
+import { PartAHero, PartAPill, PartAResultHeader } from "@/features/part-a";
 
 export default function ListingsBrowsePage() {
   const [draftQuery, setDraftQuery] = useState("");
@@ -20,6 +21,8 @@ export default function ListingsBrowsePage() {
   const [appliedQuery, setAppliedQuery] = useState("");
   const [appliedLocation, setAppliedLocation] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
+  const [employmentType, setEmploymentType] = useState("");
+  const [workMode, setWorkMode] = useState("");
 
   const commitDrafts = useCallback(() => {
     setAppliedQuery(draftQuery);
@@ -51,12 +54,15 @@ export default function ListingsBrowsePage() {
     isFetching,
     error,
   } = useQuery({
-    queryKey: ["listings", appliedQuery, appliedLocation, selectedCategory],
+    queryKey: ["listings", appliedQuery, appliedLocation, selectedCategory, employmentType, workMode],
     queryFn: () =>
       fetchListings({
         q: appliedQuery,
         location: appliedLocation,
         service: selectedCategory,
+        sort: "latest",
+        employment_type: employmentType,
+        work_mode: workMode,
       }),
     staleTime: 30_000,
     placeholderData: (previous) => previous,
@@ -67,37 +73,22 @@ export default function ListingsBrowsePage() {
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8">
-      {/* Hero / Header Section */}
-      <section className="relative overflow-hidden rounded-[var(--radius-card)] bg-gradient-to-br from-navy-950 via-navy-900 to-navy-800 p-6 text-warm-0 shadow-raised sm:p-10">
-        <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-          <div className="max-w-2xl space-y-2">
-            <div className="inline-flex items-center gap-2 rounded-full border border-navy-300/30 bg-navy-500/15 px-3 py-1 text-xs font-semibold text-navy-200">
-              <Sparkles className="size-3.5" />
-              Verified Career Opportunities
-            </div>
-            <h1 className="text-3xl font-extrabold tracking-tight text-warm-0 sm:text-4xl lg:text-5xl">
-              Find Your Next Role
-            </h1>
-            <p className="text-sm text-warm-200 sm:text-base">
-              Explore direct opportunities with verified hiring employers. Privacy-protected
-              contact sharing and direct application status updates.
-            </p>
-          </div>
-
-          <div className="flex shrink-0 items-center gap-3">
-            <Link
-              href="/listings/my-applications"
-              className="inline-flex items-center gap-2 rounded-control border border-warm-0/20 bg-warm-0/10 px-4 py-2.5 text-sm font-semibold text-warm-0 backdrop-blur-xs transition hover:bg-warm-0/20"
-            >
-              <FileCheck2 className="size-4 text-warm-100" />
-              My Applications
-            </Link>
-          </div>
-        </div>
-
-        {/* Search & Location Bar */}
-        <div className="relative z-10 mt-8 grid gap-3 rounded-control bg-surface p-2.5 shadow-raised md:grid-cols-[1fr_260px_auto]">
-          <label className="flex items-center gap-3 rounded-control border border-line bg-surface-sunken px-3.5 focus-within:border-line-strong">
+      <PartAHero
+        title="Find Your Next Opportunity"
+        subtitle="Jobs from trusted employers. Build your career with V Solve Hub."
+        image="/part-a/careers.svg"
+        aside={
+          <Link
+            href="/listings/my-applications"
+            className="inline-flex items-center gap-2 rounded-control border border-line bg-surface px-4 py-2.5 text-sm font-semibold text-navy-900"
+          >
+            <FileCheck2 className="size-4" />
+            My Applications
+          </Link>
+        }
+      >
+        <div className="grid gap-3 rounded-control bg-surface p-2.5 shadow-raised md:grid-cols-[1fr_260px_auto]">
+          <label className="flex items-center gap-3 rounded-control border border-line bg-surface-sunken px-3.5">
             <Search className="size-4 shrink-0 text-text-muted" />
             <input
               value={draftQuery}
@@ -105,42 +96,45 @@ export default function ListingsBrowsePage() {
               onKeyDown={(event) => {
                 if (event.key === "Enter") commitDrafts();
               }}
-              className="h-11 flex-1 bg-transparent text-sm text-text outline-none placeholder:text-text-muted"
-              placeholder="Job title, keyword, skill, or employer..."
+              className="h-11 flex-1 bg-transparent text-sm outline-none"
+              placeholder="Search jobs (e.g. accountant, developer)"
             />
           </label>
-
-          <label className="flex items-center gap-3 rounded-control border border-line bg-surface-sunken px-3.5 focus-within:border-line-strong">
+          <label className="flex items-center gap-3 rounded-control border border-line bg-surface-sunken px-3.5">
             <MapPin className="size-4 shrink-0 text-text-muted" />
             <input
               value={draftLocation}
               onChange={(event) => setDraftLocation(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") commitDrafts();
-              }}
-              className="h-11 flex-1 bg-transparent text-sm text-text outline-none placeholder:text-text-muted"
-              placeholder="City, area, or remote..."
+              className="h-11 flex-1 bg-transparent text-sm outline-none"
+              placeholder="Hyderabad"
             />
           </label>
-
-          <Button
-            type="button"
-            onClick={commitDrafts}
-            className="h-11 px-6 font-semibold"
-          >
-            <Search className="size-4" />
-            {isFetching ? "Searching..." : "Search"}
+          <Button type="button" onClick={commitDrafts} className="h-11 px-6 font-semibold">
+            {isFetching ? "Searching..." : "Search Jobs"}
           </Button>
         </div>
-      </section>
+      </PartAHero>
 
-      {/* Filter Pills */}
+      <div className="flex flex-wrap gap-2">
+        <PartAPill label="All jobs" active={!employmentType && !workMode} onClick={() => { setEmploymentType(""); setWorkMode(""); }} />
+        <PartAPill label="Full-time" active={employmentType === "Full-Time"} onClick={() => setEmploymentType("Full-Time")} />
+        <PartAPill label="On-site" active={workMode === "On-site"} onClick={() => setWorkMode("On-site")} />
+      </div>
+
       <ListingFilters
         categories={filtersData?.categories}
         selectedCategory={selectedCategory}
         onSelectCategory={selectCategory}
         hasActiveFilters={hasActiveFilters}
         onClearFilters={clearAllFilters}
+      />
+
+      <PartAResultHeader
+        count={listings.length}
+        place={appliedLocation || "Hyderabad"}
+        noun="jobs"
+        sort="latest"
+        onSort={() => undefined}
       />
 
       {/* Error Notice */}
@@ -176,7 +170,7 @@ export default function ListingsBrowsePage() {
       {/* Listings Grid */}
       <section className="grid gap-4">
         {listings.map((listing: Listing) => (
-          <ListingRow key={listing.id} listing={listing} />
+          <ListingOpportunityCard key={listing.id} listing={listing} />
         ))}
       </section>
     </main>

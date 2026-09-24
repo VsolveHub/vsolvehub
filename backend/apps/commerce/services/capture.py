@@ -53,9 +53,16 @@ def _request_automatic_refund(*, attempt: PaymentAttempt, reason_code: str) -> R
     existing = attempt.refunds.exclude(status=Refund.Status.FAILED).first()
     if existing is not None:
         return existing
+    from .loyalty_funding import split_refund_amounts  # noqa: PLC0415
+
+    wallet_credit, gateway_refund = split_refund_amounts(
+        attempt=attempt, refund_paise=attempt.amount_paise
+    )
     refund = Refund.objects.create(
         payment_attempt=attempt,
         amount_paise=attempt.amount_paise,
+        wallet_credit_paise=wallet_credit,
+        gateway_refund_paise=gateway_refund,
         currency=attempt.currency,
         reason_code=reason_code,
         idempotency_key=f"automatic:{reason_code}:{attempt.id}",
@@ -238,10 +245,16 @@ def _apply_a10_capture(*, attempt: PaymentAttempt) -> None:
         activate_premium_feature(payment_attempt_id=attempt.id)
 
 
+def _apply_wallet_capture(*, attempt: PaymentAttempt) -> None:
+    from apps.wallet.services import complete_wallet_top_up_payment  # noqa: PLC0415
+
+    complete_wallet_top_up_payment(payment_attempt_id=attempt.id)
+
+
 def _validate_payment_amount(*, attempt: PaymentAttempt, payment: ProviderPayment) -> bool:
     if (
         payment.provider_order_id != attempt.provider_order_id
-        or payment.amount_paise != attempt.amount_paise
+        or payment.amount_paise != attempt.gateway_amount_paise
         or payment.currency != attempt.currency
     ):
         attempt.reconciliation_state = PaymentAttempt.ReconciliationState.NEEDS_ATTENTION
@@ -281,6 +294,9 @@ def apply_provider_payment(
     attempt.failure_code = ""
     if payment.status == "captured":
         if attempt.status not in PAYMENT_FINAL_STATES:
+            from .loyalty_funding import capture_checkout_funding  # noqa: PLC0415
+
+            capture_checkout_funding(attempt=attempt)
             attempt.status = PaymentAttempt.Status.CAPTURED
             attempt.captured_at = timezone.now()
             attempt.version += 1
@@ -300,6 +316,14 @@ def apply_provider_payment(
         if attempt.purpose in A10_CAPTURE_PURPOSES:
             _apply_a10_capture(attempt=attempt)
             return None
+        if attempt.purpose == PaymentAttempt.Purpose.WALLET_TOP_UP:
+            _apply_wallet_capture(attempt=attempt)
+            return None
+        if attempt.purpose == PaymentAttempt.Purpose.A7_RENTAL_DEPOSIT:
+            from apps.rental.services import mark_deposit_held  # noqa: PLC0415
+
+            mark_deposit_held(payment_attempt_id=attempt.id)
+            return None
         _apply_m2_capture(attempt=attempt)
         return None
     if payment.status == "authorized" and attempt.status in (
@@ -309,6 +333,9 @@ def apply_provider_payment(
         attempt.status = PaymentAttempt.Status.AUTHORIZED
         attempt.version += 1
     elif payment.status == "failed" and attempt.status not in PAYMENT_FINAL_STATES:
+        from .loyalty_funding import release_checkout_funding  # noqa: PLC0415
+
+        release_checkout_funding(attempt=attempt)
         attempt.status = PaymentAttempt.Status.FAILED
         attempt.failure_code = "provider_payment_failed"
         attempt.version += 1

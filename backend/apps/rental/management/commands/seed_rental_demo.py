@@ -188,7 +188,8 @@ class Command(BaseCommand):
                 asset_id=asset.id,
                 start_date=start,
                 end_date=end,
-                notes="Seeded demo rental booking with PARTIAL deposit hold.",
+                notes="Seeded demo rental booking.",
+                hold_deposit_for_demo=True,
             )
 
         self.stdout.write(self.style.SUCCESS("seed_rental_demo completed."))

@@ -103,9 +103,17 @@ def test_rental_happy_path_handover_return_release(rental_world):
         start_date=start,
         end_date=start + timedelta(days=2),
     )
+    assert booking.status == RentalBooking.Status.PENDING_PAYMENT
+    assert booking.deposit.status == RentalDeposit.Status.REQUESTED
+    assert booking.deposit.payment_attempt_id is not None
+    assert booking.price_paise == 100000
+    from apps.rental.services import mark_deposit_held
+
+    mark_deposit_held(payment_attempt_id=booking.deposit.payment_attempt_id)
+    booking.refresh_from_db()
+    booking.deposit.refresh_from_db()
     assert booking.status == RentalBooking.Status.CONFIRMED
     assert booking.deposit.status == RentalDeposit.Status.HELD
-    assert booking.price_paise == 100000
     handover_booking(booking=booking, partner=rental_world["partner"])
     return_booking(booking=booking, partner=rental_world["partner"])
     deposit = release_deposit(booking=booking, partner=rental_world["partner"])
@@ -137,6 +145,17 @@ def test_rental_filters(rental_world):
 
     results_deposit = public_assets(max_deposit_paise=50000)
     assert not any(a.id == asset.id for a in results_deposit)
+
+    start = timezone.localdate() + timedelta(days=10)
+    create_booking(
+        customer=rental_world["customer"],
+        asset_id=asset.id,
+        start_date=start,
+        end_date=start + timedelta(days=2),
+        hold_deposit_for_demo=True,
+    )
+    blocked = public_assets(start_date=start, end_date=start + timedelta(days=1))
+    assert not any(a.id == asset.id for a in blocked)
 
 
 @pytest.mark.django_db

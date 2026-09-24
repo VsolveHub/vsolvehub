@@ -214,6 +214,8 @@ def public_properties(
     min_price_paise: int | None = None,
     max_price_paise: int | None = None,
     variant_code: str = "",
+    limit: int | None = None,
+    offset: int = 0,
 ):
     qs = Property.objects.filter(
         moderation_status=Property.ModerationStatus.APPROVED
@@ -257,4 +259,9 @@ def public_properties(
             | models.Q(description__icontains="meal")
         )
 
-    return qs.distinct()
+    qs = qs.distinct().order_by("-created_at")
+    if offset:
+        qs = qs[offset:]
+    if limit is not None:
+        qs = qs[:limit]
+    return qs

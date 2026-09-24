@@ -116,7 +116,12 @@ describe("useStartPayment", () => {
 
     const [path, options] = client.POST.mock.calls[0];
     expect(path).toBe("/api/v1/payment-attempts/");
-    expect(options.body).toEqual({ checkout_id: "checkout-1", expected_checkout_version: 3 });
+    expect(options.body).toEqual({
+      checkout_id: "checkout-1",
+      expected_checkout_version: 3,
+      wallet_amount_paise: 0,
+      coin_burn_amount: 0,
+    });
     expect(options.params.header["Idempotency-Key"]).toBe(
       paymentIntentKey({ checkoutId: "checkout-1", expectedCheckoutVersion: 3 }),
     );

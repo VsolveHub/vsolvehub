@@ -140,6 +140,8 @@ CHECKOUT_FREE_PURPOSES = (
     "M2_BOOKING_FEE",
     "A10_VENDOR_SUBSCRIPTION",
     "A10_PREMIUM_LISTING",
+    "WALLET_TOP_UP",
+    "A7_RENTAL_DEPOSIT",
 )
 
 
@@ -184,6 +186,10 @@ class PaymentAttempt(models.Model):
         #: A10: premium placement on one listing. Capture sets `Listing.is_premium`; it is
         #: not a second call into the subscription reducer.
         A10_PREMIUM_LISTING = "A10_PREMIUM_LISTING", "A10 premium listing"
+        #: Customer prepaid wallet top-up via payment gateway.
+        WALLET_TOP_UP = "WALLET_TOP_UP", "Wallet top-up"
+        #: A7 security deposit. Held only after this attempt is captured.
+        A7_RENTAL_DEPOSIT = "A7_RENTAL_DEPOSIT", "A7 rental deposit"
 
     #: Purposes that are charged outside a cart and therefore carry no `CheckoutSession`. Bound
     #: from the module-level tuple, which the check constraint below reads from the same name, so
@@ -240,6 +246,11 @@ class PaymentAttempt(models.Model):
     provider_order_id = models.CharField(max_length=128, blank=True)
     provider_payment_id = models.CharField(max_length=128, blank=True)
     amount_paise = models.PositiveBigIntegerField()
+    #: Closed-loop wallet reserved for this attempt. The provider is charged the remainder.
+    wallet_reserved_paise = models.PositiveBigIntegerField(default=0)
+    #: Coins reserved at attempt creation and burned on capture. Never restored on refund.
+    coins_burned = models.PositiveIntegerField(default=0)
+    coin_discount_paise = models.PositiveBigIntegerField(default=0)
     currency = models.CharField(max_length=3, default="INR")
     status = models.CharField(
         max_length=24,
@@ -263,6 +274,16 @@ class PaymentAttempt(models.Model):
             models.CheckConstraint(
                 condition=models.Q(amount_paise__gt=0),
                 name="commerce_payment_attempt_positive_amount",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(wallet_reserved_paise__gte=0)
+                & models.Q(coin_discount_paise__gte=0)
+                & models.Q(
+                    wallet_reserved_paise__lte=(
+                        models.F("amount_paise") - models.F("coin_discount_paise")
+                    )
+                ),
+                name="commerce_payment_attempt_funding_within_total",
             ),
             models.UniqueConstraint(
                 fields=("provider", "provider_order_id"),
@@ -293,6 +314,11 @@ class PaymentAttempt(models.Model):
 
     def __str__(self) -> str:
         return self.provider_order_id or str(self.id)
+
+    @property
+    def gateway_amount_paise(self) -> int:
+        """What the payment provider must collect after wallet and coin discount."""
+        return self.amount_paise - self.wallet_reserved_paise - self.coin_discount_paise
 
 
 class PaymentAllocation(models.Model):
@@ -397,6 +423,10 @@ class Refund(models.Model):
         related_name="requested_refunds",
     )
     amount_paise = models.PositiveBigIntegerField()
+    #: Share of this refund that returns to the customer wallet. Coins are not a share.
+    wallet_credit_paise = models.PositiveBigIntegerField(default=0)
+    #: Share sent to the provider. Null means the whole `amount_paise` (attempts with no split).
+    gateway_refund_paise = models.PositiveBigIntegerField(null=True, blank=True)
     currency = models.CharField(max_length=3, default="INR")
     reason_code = models.SlugField(max_length=80)
     idempotency_key = models.CharField(max_length=128, blank=True)

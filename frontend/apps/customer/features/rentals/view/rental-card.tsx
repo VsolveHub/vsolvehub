@@ -4,6 +4,8 @@ import Link from "next/link";
 import { ArrowRight, MapPin, ShieldCheck, Wrench } from "lucide-react";
 import { Badge, Button } from "@vsolve/ui";
 
+import { SaveHeart, useSavedItems } from "@/features/part-a";
+
 import { formatPaise, type RentalAsset } from "../model";
 
 interface RentalCardProps {
@@ -11,6 +13,7 @@ interface RentalCardProps {
 }
 
 export function RentalCard({ asset }: RentalCardProps) {
+  const saved = useSavedItems("rental");
   return (
     <article className="group relative flex flex-col justify-between overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface p-5 shadow-xs transition hover:border-line-strong hover:shadow-raised">
       <div className="flex flex-col gap-3">
@@ -20,10 +23,7 @@ export function RentalCard({ asset }: RentalCardProps) {
             <Wrench className="size-3" />
             Verified Tool
           </Badge>
-          <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700">
-            <ShieldCheck className="size-3.5 text-emerald-600" />
-            Protected Deposit
-          </span>
+          <SaveHeart saved={saved.isSaved(asset.id)} onToggle={() => saved.toggle(asset.id)} />
         </div>
 
         {/* Title and Partner */}

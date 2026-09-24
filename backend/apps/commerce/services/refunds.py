@@ -98,10 +98,15 @@ def request_unit_refund(
     amount_paise = sum(amount for _allocation, amount in refund_parts)
     if amount_paise <= 0:
         raise ValueError("The selected Fulfilment Units have no refundable balance.")
+    from .loyalty_funding import split_refund_amounts  # noqa: PLC0415
+
+    wallet_credit, gateway_refund = split_refund_amounts(attempt=attempt, refund_paise=amount_paise)
     refund = Refund.objects.create(
         order=order,
         payment_attempt=attempt,
         amount_paise=amount_paise,
+        wallet_credit_paise=wallet_credit,
+        gateway_refund_paise=gateway_refund,
         currency=attempt.currency,
         reason_code=reason_code,
         idempotency_key=idempotency_key,
@@ -162,9 +167,14 @@ def request_standalone_refund(
     )
     if amount_paise <= 0 or committed + amount_paise > attempt.amount_paise:
         raise ValueError("The refund exceeds the remaining refundable balance.")
+    from .loyalty_funding import split_refund_amounts  # noqa: PLC0415
+
+    wallet_credit, gateway_refund = split_refund_amounts(attempt=attempt, refund_paise=amount_paise)
     refund = Refund.objects.create(
         payment_attempt=attempt,
         amount_paise=amount_paise,
+        wallet_credit_paise=wallet_credit,
+        gateway_refund_paise=gateway_refund,
         currency=attempt.currency,
         reason_code=reason_code,
         idempotency_key=idempotency_key,
@@ -185,6 +195,21 @@ def submit_refund(*, refund_id: UUID) -> Refund:
     if refund.status != Refund.Status.REQUESTED:
         return refund
     attempt = refund.payment_attempt
+    gateway_amount = (
+        refund.amount_paise if refund.gateway_refund_paise is None else refund.gateway_refund_paise
+    )
+    if gateway_amount == 0 and attempt is not None:
+        with transaction.atomic():
+            return _apply_refund_provider_result(
+                ProviderRefund(
+                    provider_refund_id=f"wallet:{refund.id}",
+                    provider_payment_id=attempt.provider_payment_id or f"internal:{attempt.id}",
+                    amount_paise=0,
+                    currency=refund.currency,
+                    status="processed",
+                ),
+                refund_id=refund.id,
+            )
     if attempt is None or not attempt.provider_payment_id:
         with transaction.atomic():
             locked = Refund.objects.select_for_update().get(id=refund.id)
@@ -203,7 +228,7 @@ def submit_refund(*, refund_id: UUID) -> Refund:
     try:
         provider_refund = provider.create_refund(
             provider_payment_id=attempt.provider_payment_id,
-            amount_paise=refund.amount_paise,
+            amount_paise=gateway_amount,
             receipt=str(refund.id),
             idempotency_key=refund.idempotency_key,
         )
@@ -287,6 +312,9 @@ def _apply_refund_provider_result(
             refund.reconciliation_state = PaymentAttempt.ReconciliationState.IN_SYNC
             refund.failure_code = ""
             refund.completed_at = timezone.now()
+            from .loyalty_funding import credit_refunded_wallet  # noqa: PLC0415
+
+            credit_refunded_wallet(refund=refund)
             attempt = refund.payment_attempt
             if attempt is None:
                 raise ValueError("The provider refund has no payment attempt.")

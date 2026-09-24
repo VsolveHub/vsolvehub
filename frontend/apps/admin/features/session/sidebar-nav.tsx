@@ -9,6 +9,7 @@ import {
   HardHat,
   Inbox,
   IndianRupee,
+  Coins,
   Wallet,
   RotateCcw,
   Truck,
@@ -49,6 +50,7 @@ const PEOPLE_LINKS = [
 const MONEY_LINKS = [
   { href: "/operations/rate-cards", label: "Rate cards", icon: IndianRupee },
   { href: "/operations/payouts", label: "Payouts", icon: Wallet },
+  { href: "/operations/loyalty", label: "Wallet and loyalty", icon: Coins },
   { href: "/finance", label: "Refunds", icon: RotateCcw },
 ];
 

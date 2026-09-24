@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import uuid
+from datetime import date
 
 from django.conf import settings
 from django.db import models
-from django.db.models import Q
+from django.db.models import Q, QuerySet
 
 
 class RentalAsset(models.Model):
@@ -123,7 +124,14 @@ class RentalDeposit(models.Model):
     provider_note = models.CharField(
         max_length=240,
         blank=True,
-        help_text="PARTIAL money path: test/seed hold without live Razorpay.",
+        help_text="Operator note. A live hold is recorded only after payment capture.",
+    )
+    payment_attempt = models.ForeignKey(
+        "commerce.PaymentAttempt",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="rental_deposits",
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -189,7 +197,9 @@ class RentalModerationEvent(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 
-def overlapping_reservations(asset_id: uuid.UUID, start, end):
+def overlapping_reservations(
+    asset_id: uuid.UUID, start: date, end: date
+) -> QuerySet[AssetReservation]:
     return AssetReservation.objects.filter(
         asset_id=asset_id,
         status__in=(AssetReservation.Status.TENTATIVE, AssetReservation.Status.CONFIRMED),

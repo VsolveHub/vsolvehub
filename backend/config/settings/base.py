@@ -57,6 +57,8 @@ INSTALLED_APPS = [
     "apps.listings",
     "apps.rental",
     "apps.stay",
+    "apps.wallet",
+    "apps.loyalty",
 ]
 
 MIDDLEWARE = [
@@ -828,6 +830,14 @@ CELERY_BEAT_SCHEDULE = {
     "reconcile-refunds": {
         "task": "apps.commerce.tasks.reconcile_refunds",
         "schedule": 60.0,
+    },
+    "expire-abandoned-payment-attempts": {
+        "task": "apps.commerce.tasks.expire_abandoned_payment_attempts",
+        "schedule": 60.0,
+    },
+    "expire-loyalty-coins": {
+        "task": "apps.loyalty.tasks.expire_due_coins",
+        "schedule": 60.0 * 15,
     },
     "reconcile-payouts": {
         "task": "apps.payouts.tasks.reconcile_payouts",

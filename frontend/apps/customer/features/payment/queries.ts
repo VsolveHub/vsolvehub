@@ -59,9 +59,11 @@ export type TaxDocument = Schemas["TaxDocument"];
 export function paymentIntentKey(input: {
   checkoutId: string;
   expectedCheckoutVersion: number;
+  walletAmountPaise?: number;
+  coinBurnAmount?: number;
 }): string {
   return getStableIdempotencyKey(
-    `payment-attempt:${input.checkoutId}:${input.expectedCheckoutVersion}`,
+    `payment-attempt:${input.checkoutId}:${input.expectedCheckoutVersion}:${input.walletAmountPaise ?? 0}:${input.coinBurnAmount ?? 0}`,
   );
 }
 
@@ -70,6 +72,8 @@ export interface StartPaymentInput {
   expectedCheckoutVersion: number;
   /** Only so the created attempt can seed the group's cache entry. */
   groupId: string;
+  walletAmountPaise?: number;
+  coinBurnAmount?: number;
 }
 
 /**
@@ -93,6 +97,8 @@ export function useStartPayment() {
           body: {
             checkout_id: input.checkoutId,
             expected_checkout_version: input.expectedCheckoutVersion,
+            wallet_amount_paise: input.walletAmountPaise ?? 0,
+            coin_burn_amount: input.coinBurnAmount ?? 0,
           },
         }),
       ),

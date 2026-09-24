@@ -328,6 +328,10 @@ _TEMPLATES: dict[str, tuple[str, str]] = {
         "Confirm your quote is still good",
         "This quote has been open a while. Reconfirm it so the customer can still choose it.",
     ),
+    "booking_completed": (
+        "Your booking is complete",
+        "Your booking #{booking_id} is completed. Thank you for choosing V Solve Hub.",
+    ),
 }
 
 

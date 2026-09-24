@@ -21,6 +21,7 @@ export default function StaysBrowsePage() {
   const [appliedQuery, setAppliedQuery] = useState("");
   const [appliedLocation, setAppliedLocation] = useState("");
   const [filters, setFilters] = useState<ActiveFilters>({});
+  const [visible, setVisible] = useState(6);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,6 +51,7 @@ export default function StaysBrowsePage() {
       filters.ac,
       filters.food,
       filters.maxPrice,
+      visible,
     ],
     queryFn: () =>
       fetchStays({
@@ -59,6 +61,8 @@ export default function StaysBrowsePage() {
         ac: filters.ac,
         food: filters.food,
         max_price: filters.maxPrice,
+        limit: visible,
+        offset: 0,
       }),
     staleTime: 30_000,
   });
@@ -169,6 +173,11 @@ export default function StaysBrowsePage() {
           ))}
         </div>
       )}
+      {stays.length >= visible ? (
+        <Button type="button" variant="secondary" onClick={() => setVisible((count) => count + 6)}>
+          Load more
+        </Button>
+      ) : null}
     </main>
   );
 }

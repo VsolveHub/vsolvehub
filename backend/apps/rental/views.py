@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Any
 from uuid import UUID
 
@@ -53,6 +54,8 @@ class RentalBrowseView(APIView):
             OpenApiParameter("min_price", OpenApiTypes.INT, OpenApiParameter.QUERY),
             OpenApiParameter("max_price", OpenApiTypes.INT, OpenApiParameter.QUERY),
             OpenApiParameter("max_deposit", OpenApiTypes.INT, OpenApiParameter.QUERY),
+            OpenApiParameter("start_date", OpenApiTypes.DATE, OpenApiParameter.QUERY),
+            OpenApiParameter("end_date", OpenApiTypes.DATE, OpenApiParameter.QUERY),
         ],
         responses=RentalAssetSerializer(many=True),
     )
@@ -60,6 +63,13 @@ class RentalBrowseView(APIView):
         min_rate = request.query_params.get("min_price")
         max_rate = request.query_params.get("max_price")
         max_deposit = request.query_params.get("max_deposit")
+        def _parse_date(raw: str | None) -> date | None:
+            if not raw:
+                return None
+            try:
+                return date.fromisoformat(raw)
+            except ValueError:
+                return None
 
         assets = public_assets(
             query=request.query_params.get("q", ""),
@@ -68,6 +78,8 @@ class RentalBrowseView(APIView):
             max_daily_rate_paise=int(max_rate) if max_rate and max_rate.isdigit() else None,
             max_deposit_paise=int(max_deposit) if max_deposit and max_deposit.isdigit() else None,
             variant_code=request.query_params.get("service", ""),
+            start_date=_parse_date(request.query_params.get("start_date")),
+            end_date=_parse_date(request.query_params.get("end_date")),
         )
         return Response(RentalAssetSerializer(assets, many=True).data)
 

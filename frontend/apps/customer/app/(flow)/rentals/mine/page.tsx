@@ -6,11 +6,12 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Clock, PackageCheck, Wrench } from "lucide-react";
 import { Button, EmptyState, ErrorState, Skeleton } from "@vsolve/ui";
 
+import { rentalMineBucket } from "@/features/rentals/model";
 import { fetchMyRentals } from "@/features/rentals/queries";
 import { RentalBookingCard } from "@/features/rentals/view";
 
 export default function MyRentalsPage() {
-  const [activeTab, setActiveTab] = useState<"ALL" | "ACTIVE" | "COMPLETED">("ALL");
+  const [activeTab, setActiveTab] = useState<"ALL" | "UPCOMING" | "ONGOING" | "RETURNED">("ALL");
 
   const {
     data: bookings = [],
@@ -24,12 +25,7 @@ export default function MyRentalsPage() {
 
   const filteredBookings = bookings.filter((b) => {
     const s = (b.status ?? "").toUpperCase();
-    if (activeTab === "ACTIVE") {
-      return ["PENDING_PAYMENT", "REQUESTED", "CONFIRMED", "HANDOVER", "HANDED_OVER"].includes(s);
-    }
-    if (activeTab === "COMPLETED") {
-      return ["RETURNED", "CLOSED", "CANCELLED", "DISPUTED"].includes(s);
-    }
+    if (activeTab !== "ALL" && rentalMineBucket(s) !== activeTab) return false;
     return true;
   });
 
@@ -74,25 +70,36 @@ export default function MyRentalsPage() {
         </button>
         <button
           type="button"
-          onClick={() => setActiveTab("ACTIVE")}
+          onClick={() => setActiveTab("UPCOMING")}
           className={`rounded-full px-4 py-1.5 text-xs font-bold transition ${
-            activeTab === "ACTIVE"
+            activeTab === "UPCOMING"
               ? "bg-action text-white"
               : "bg-surface border border-line text-text-secondary hover:text-text"
           }`}
         >
-          Active / In Hand
+          Upcoming
         </button>
         <button
           type="button"
-          onClick={() => setActiveTab("COMPLETED")}
+          onClick={() => setActiveTab("ONGOING")}
           className={`rounded-full px-4 py-1.5 text-xs font-bold transition ${
-            activeTab === "COMPLETED"
+            activeTab === "ONGOING"
               ? "bg-action text-white"
               : "bg-surface border border-line text-text-secondary hover:text-text"
           }`}
         >
-          Completed & Returned
+          Ongoing
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("RETURNED")}
+          className={`rounded-full px-4 py-1.5 text-xs font-bold transition ${
+            activeTab === "RETURNED"
+              ? "bg-action text-white"
+              : "bg-surface border border-line text-text-secondary hover:text-text"
+          }`}
+        >
+          Returned
         </button>
       </div>
 

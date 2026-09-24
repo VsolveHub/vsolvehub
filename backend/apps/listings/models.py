@@ -322,3 +322,18 @@ class VendorSubscription(models.Model):
     @property
     def would_end_at(self) -> datetime:
         return timezone.now() + timedelta(days=self.plan.duration_days)
+
+
+class ListingResumeUpload(models.Model):
+    """Applicant resume stored by the platform. Apply still records `resume_url`."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    listing = models.ForeignKey(Listing, on_delete=models.PROTECT, related_name="resume_uploads")
+    applicant = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="listing_resume_uploads"
+    )
+    original_name = models.CharField(max_length=180)
+    content_type = models.CharField(max_length=80)
+    size_bytes = models.PositiveIntegerField()
+    stored_file = models.FileField(upload_to="listing-resumes/")
+    created_at = models.DateTimeField(auto_now_add=True)

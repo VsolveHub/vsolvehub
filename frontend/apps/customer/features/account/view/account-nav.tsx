@@ -1,7 +1,17 @@
 "use client";
 
 import { cn } from "@vsolve/ui";
-import { MapPin, MessageCircle, Shield, Smartphone, User, type LucideIcon } from "lucide-react";
+import {
+  Coins,
+  Gift,
+  MapPin,
+  MessageCircle,
+  Shield,
+  Smartphone,
+  User,
+  Wallet,
+  type LucideIcon,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -24,6 +34,9 @@ const SECTIONS: readonly {
   icon: LucideIcon;
 }[] = [
   { href: "/account", label: "Profile", hint: "Your personal details", icon: User },
+  { href: "/account/wallet", label: "Wallet", hint: "Prepaid balance & top-ups", icon: Wallet },
+  { href: "/account/coins", label: "V Coins", hint: "Earned, locked & expiring", icon: Coins },
+  { href: "/account/referrals", label: "Refer & Earn", hint: "Invite friends for rewards", icon: Gift },
   { href: "/account/addresses", label: "Addresses", hint: "Where we send someone", icon: MapPin },
   { href: "/account/messages", label: "Messages", hint: "What we send you", icon: MessageCircle },
   { href: "/account/privacy", label: "Privacy", hint: "Your data and consents", icon: Shield },

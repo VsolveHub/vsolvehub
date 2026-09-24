@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.66.0)
- * Checksum: 6ad8d22de1ae0b07
+ * Checksum: af18e9e3d128b1d2
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -888,6 +888,176 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["checkouts_search_advance_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer/coins/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Customer V Coins balances across buckets */
+        get: operations["customer_coins_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer/coins/preview-burn/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Server preview of coin burn math and caps */
+        post: operations["customer_coins_preview_burn_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer/coins/transactions/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Customer V Coins activity transactions */
+        get: operations["customer_coins_transactions_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer/referral/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Customer referral code, share link, and active tier schedule */
+        get: operations["customer_referral_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer/referral/apply/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply referral code for the current customer at signup */
+        post: operations["customer_referral_apply_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer/referral/attributions/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Customer's referrals list */
+        get: operations["customer_referral_attributions_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer/referral/validate/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Validate referral code during registration */
+        post: operations["customer_referral_validate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer/wallet/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Customer wallet balance and policy */
+        get: operations["customer_wallet_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer/wallet/top-up/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Initiate wallet top-up payment attempt */
+        post: operations["customer_wallet_top_up_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customer/wallet/transactions/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Customer wallet transaction ledger */
+        get: operations["customer_wallet_transactions_list"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1880,6 +2050,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["listings_reports_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/listings/{listing_id}/resume-uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["listings_resume_uploads_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3527,6 +3713,102 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ops/loyalty/burn-policies/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ops_loyalty_burn_policies_list"];
+        put?: never;
+        post: operations["ops_loyalty_burn_policies_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/loyalty/grant-rules/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ops_loyalty_grant_rules_list"];
+        put?: never;
+        post: operations["ops_loyalty_grant_rules_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/loyalty/grant-rules/{rule_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ops_loyalty_grant_rules_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["ops_loyalty_grant_rules_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/ops/loyalty/grant-rules/{rule_id}/tiers/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ops_loyalty_grant_rules_tiers_list"];
+        put?: never;
+        post: operations["ops_loyalty_grant_rules_tiers_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/referral/attributions/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ops_referral_attributions_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/referral/programs/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ops_referral_programs_list"];
+        put?: never;
+        post: operations["ops_referral_programs_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ops/rentals": {
         parameters: {
             query?: never;
@@ -3585,6 +3867,55 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["ops_stays_moderate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/wallet/adjustments/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ops_wallet_adjustments_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/wallet/liability/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Total platform customer wallet liability */
+        get: operations["ops_wallet_liability_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/wallet/policies/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ops_wallet_policies_list"];
+        put?: never;
+        post: operations["ops_wallet_policies_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7201,6 +7532,108 @@ export interface components {
          * @enum {string}
          */
         CheckoutStatusEnum: "CREATED" | "FINDING_PARTNER" | "PARTNER_COMMITTED" | "PAYMENT_PENDING" | "COMPLETED" | "REPLAN_REQUIRED" | "CANCELLED" | "EXPIRED";
+        CoinBurnPolicy: {
+            max_burn_percent?: number;
+            coin_value_paise?: number;
+        };
+        CoinBurnPolicyWrite: {
+            /** Format: uuid */
+            readonly id: string;
+            max_burn_percent?: number;
+            coin_value_paise?: number;
+            readonly is_active: boolean;
+            /** Format: date-time */
+            readonly effective_from: string;
+        };
+        CoinBurnPolicyWriteRequest: {
+            max_burn_percent?: number;
+            coin_value_paise?: number;
+        };
+        CoinBurnPreviewRequestRequest: {
+            order_payable_paise: number;
+            requested_coins: number;
+        };
+        CoinBurnPreviewResponse: {
+            order_payable_paise: number;
+            spendable_coins: number;
+            max_burn_paise: number;
+            max_burn_coins: number;
+            applied_burn_coins: number;
+            discount_paise: number;
+            remaining_payable_paise: number;
+        };
+        CoinEarnTier: {
+            /** Format: uuid */
+            readonly id: string;
+            tier_kind: components["schemas"]["TierKindEnum"];
+            /** Format: int64 */
+            min_order_paise?: number | null;
+            /** Format: int64 */
+            max_order_paise?: number | null;
+            min_booking_sequence?: number | null;
+            max_booking_sequence?: number | null;
+            coins_amount: number;
+            sort_order?: number;
+        };
+        CoinEarnTierRequest: {
+            tier_kind: components["schemas"]["TierKindEnum"];
+            /** Format: int64 */
+            min_order_paise?: number | null;
+            /** Format: int64 */
+            max_order_paise?: number | null;
+            min_booking_sequence?: number | null;
+            max_booking_sequence?: number | null;
+            coins_amount: number;
+            sort_order?: number;
+        };
+        CoinGrantRule: {
+            /** Format: uuid */
+            readonly id: string;
+            name: string;
+            earn_mode?: components["schemas"]["EarnModeEnum"];
+            coins_amount?: number;
+            completions_required?: number;
+            grant_trigger?: components["schemas"]["GrantTriggerEnum"];
+            customer_eligibility?: components["schemas"]["CustomerEligibilityEnum"];
+            reactivation_inactive_days?: number;
+            /** Format: date-time */
+            expires_at?: string | null;
+            is_active?: boolean;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        CoinGrantRuleRequest: {
+            name: string;
+            earn_mode?: components["schemas"]["EarnModeEnum"];
+            coins_amount?: number;
+            completions_required?: number;
+            grant_trigger?: components["schemas"]["GrantTriggerEnum"];
+            customer_eligibility?: components["schemas"]["CustomerEligibilityEnum"];
+            reactivation_inactive_days?: number;
+            /** Format: date-time */
+            expires_at?: string | null;
+            is_active?: boolean;
+        };
+        CoinTransaction: {
+            /** Format: uuid */
+            readonly id: string;
+            kind: components["schemas"]["CoinTransactionKindEnum"];
+            amount: number;
+            notes?: string;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        /**
+         * @description * `EARN_PROMISE` - Earn promise
+         *     * `UNLOCK` - Unlock
+         *     * `RESERVE` - Reserve
+         *     * `BURN` - Burn
+         *     * `RELEASE` - Release
+         *     * `EXPIRE` - Expire
+         *     * `ADJUSTMENT` - Adjustment
+         * @enum {string}
+         */
+        CoinTransactionKindEnum: "EARN_PROMISE" | "UNLOCK" | "RESERVE" | "BURN" | "RELEASE" | "EXPIRE" | "ADJUSTMENT";
         /**
          * @description * `PARTNER_QUOTE` - Partner quote total
          *     * `TAXABLE_VALUE` - Taxable value
@@ -7915,9 +8348,24 @@ export interface components {
             /** Format: date-time */
             readonly server_now: string;
         };
+        CustomerCoinsSummary: {
+            spendable_coins: number;
+            promised_coins: number;
+            locked_coins: number;
+            expiring_soon_coins: number;
+            active_burn_policy: components["schemas"]["CoinBurnPolicy"];
+        };
         CustomerContactAttemptRequestRequest: {
             outcome: string;
         };
+        /**
+         * @description * `ALL_CUSTOMERS` - All customers
+         *     * `NEW_CUSTOMER` - New customer (0 completions)
+         *     * `EXISTING_CUSTOMER` - Existing customer (1+ completions)
+         *     * `REACTIVATED_CUSTOMER` - Reactivated customer (>N days inactive)
+         * @enum {string}
+         */
+        CustomerEligibilityEnum: "ALL_CUSTOMERS" | "NEW_CUSTOMER" | "EXISTING_CUSTOMER" | "REACTIVATED_CUSTOMER";
         /**
          * @description A full quote or estimate, for a Customer who has paid to read it.
          *
@@ -7991,6 +8439,13 @@ export interface components {
             readonly non_responsive_rejections_remaining: number | null;
             /** Format: date-time */
             readonly server_now: string;
+        };
+        CustomerReferralSummary: {
+            code: string;
+            share_url: string;
+            total_earned_paise: number;
+            successful_referral_count: number;
+            active_program: components["schemas"]["ReferralProgramSummary"];
         };
         CustomerRequestedVisitSlots: {
             readonly slots: components["schemas"]["VisitPlanShare"][];
@@ -8210,6 +8665,13 @@ export interface components {
             /** @default  */
             note: string;
         };
+        /**
+         * @description * `FLAT` - Flat
+         *     * `TIERED_ORDER_VALUE` - Tiered order value
+         *     * `TIERED_BOOKING_SEQUENCE` - Tiered booking sequence
+         * @enum {string}
+         */
+        EarnModeEnum: "FLAT" | "TIERED_ORDER_VALUE" | "TIERED_BOOKING_SEQUENCE";
         EngageKillSwitchRequestRequest: {
             scope: components["schemas"]["KillSwitchScopeEnum"];
             /** @default  */
@@ -8767,6 +9229,14 @@ export interface components {
          * @enum {string}
          */
         GenderEnum: "MAN" | "WOMAN" | "OTHER" | "UNDISCLOSED";
+        /**
+         * @description * `SIGNUP` - Signup
+         *     * `REFERRAL_QUALIFIED` - Referral qualified
+         *     * `BOOKING_COMPLETED` - Booking completed
+         *     * `MANUAL_OPS` - Manual operations
+         * @enum {string}
+         */
+        GrantTriggerEnum: "SIGNUP" | "REFERRAL_QUALIFIED" | "BOOKING_COMPLETED" | "MANUAL_OPS";
         GroupAddressChangeRequestRequest: {
             expected_version: number;
             /** Format: uuid */
@@ -9669,6 +10139,23 @@ export interface components {
             target_status: components["schemas"]["TargetStatusEnum"];
             reason?: string;
         };
+        OpsWalletTopUpPolicy: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: int64 */
+            min_paise?: number;
+            /** Format: int64 */
+            max_paise?: number;
+            readonly is_active: boolean;
+            /** Format: date-time */
+            readonly effective_from: string;
+        };
+        OpsWalletTopUpPolicyRequest: {
+            /** Format: int64 */
+            min_paise?: number;
+            /** Format: int64 */
+            max_paise?: number;
+        };
         Order: {
             /** Format: uuid */
             readonly id: string;
@@ -10474,6 +10961,18 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        PatchedCoinGrantRuleRequest: {
+            name?: string;
+            earn_mode?: components["schemas"]["EarnModeEnum"];
+            coins_amount?: number;
+            completions_required?: number;
+            grant_trigger?: components["schemas"]["GrantTriggerEnum"];
+            customer_eligibility?: components["schemas"]["CustomerEligibilityEnum"];
+            reactivation_inactive_days?: number;
+            /** Format: date-time */
+            expires_at?: string | null;
+            is_active?: boolean;
+        };
         /**
          * @description The name this agency uses, their skills, the supervisor flag, and gender.
          *
@@ -10585,6 +11084,10 @@ export interface components {
             readonly failure_code: string;
             readonly version: number;
             readonly amount: components["schemas"]["Money"];
+            readonly wallet_reserved_paise: number;
+            readonly coins_burned: number;
+            readonly coin_discount_paise: number;
+            readonly razorpay_amount_paise: number;
             /** Format: date-time */
             readonly expires_at: string | null;
             readonly allocations: components["schemas"]["PaymentAllocation"][];
@@ -10597,6 +11100,10 @@ export interface components {
             /** Format: uuid */
             checkout_id: string;
             expected_checkout_version: number;
+            /** @default 0 */
+            wallet_amount_paise: number;
+            /** @default 0 */
+            coin_burn_amount: number;
         };
         /**
          * @description * `PROVIDER_PENDING` - Provider pending
@@ -11695,9 +12202,11 @@ export interface components {
          *     * `M2_BOOKING_FEE` - M2 booking fee
          *     * `A10_VENDOR_SUBSCRIPTION` - A10 vendor subscription
          *     * `A10_PREMIUM_LISTING` - A10 premium listing
+         *     * `WALLET_TOP_UP` - Wallet top-up
+         *     * `A7_RENTAL_DEPOSIT` - A7 rental deposit
          * @enum {string}
          */
-        PurposeEnum: "BOOKING_GROUP" | "SCOPE_AMENDMENT_REVISION" | "M2_QUOTE_UNLOCK" | "M2_VISIT_PLAN" | "M2_SITE_VISIT_FEE" | "M2_STAGE_FUNDING" | "M2_MATERIAL_ADVANCE" | "M2_SCOPE_AMENDMENT" | "M2_BOOKING_FEE" | "A10_VENDOR_SUBSCRIPTION" | "A10_PREMIUM_LISTING";
+        PurposeEnum: "BOOKING_GROUP" | "SCOPE_AMENDMENT_REVISION" | "M2_QUOTE_UNLOCK" | "M2_VISIT_PLAN" | "M2_SITE_VISIT_FEE" | "M2_STAGE_FUNDING" | "M2_MATERIAL_ADVANCE" | "M2_SCOPE_AMENDMENT" | "M2_BOOKING_FEE" | "A10_VENDOR_SUBSCRIPTION" | "A10_PREMIUM_LISTING" | "WALLET_TOP_UP" | "A7_RENTAL_DEPOSIT";
         QuestionAnswerRequest: {
             answer: string;
         };
@@ -12143,6 +12652,81 @@ export interface components {
          * @enum {string}
          */
         RecoveryActionEnum: "WAIT" | "PAYMENT_REQUIRED" | "REPLAN" | "NONE";
+        ReferralAttribution: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly referee_display: string;
+            status?: components["schemas"]["ReferralAttributionStatusEnum"];
+            /** Format: date-time */
+            readonly attributed_at: string;
+            /** Format: date-time */
+            qualified_at?: string | null;
+            /** Format: date-time */
+            rewarded_at?: string | null;
+        };
+        /**
+         * @description * `PENDING` - Pending
+         *     * `QUALIFIED` - Qualified
+         *     * `REWARDED` - Rewarded
+         *     * `EXPIRED` - Expired
+         *     * `INELIGIBLE` - Ineligible
+         * @enum {string}
+         */
+        ReferralAttributionStatusEnum: "PENDING" | "QUALIFIED" | "REWARDED" | "EXPIRED" | "INELIGIBLE";
+        ReferralProgramSummary: {
+            version_code: string;
+            reward_sides?: components["schemas"]["RewardSidesEnum"];
+            /** Format: int64 */
+            referee_wallet_paise?: number;
+            referee_coins_amount?: number;
+            readonly tiers: components["schemas"]["ReferralRewardTier"][];
+        };
+        ReferralProgramVersion: {
+            /** Format: uuid */
+            readonly id: string;
+            version_code: string;
+            reward_sides?: components["schemas"]["RewardSidesEnum"];
+            /** Format: int64 */
+            referee_wallet_paise?: number;
+            referee_coins_amount?: number;
+            is_active?: boolean;
+            /** Format: date-time */
+            readonly effective_from: string;
+            /** Format: date-time */
+            effective_until?: string | null;
+            readonly tiers: components["schemas"]["ReferralRewardTier"][];
+        };
+        ReferralProgramWriteRequest: {
+            version_code: string;
+            reward_sides: components["schemas"]["RewardSidesEnum"];
+            referee_wallet_paise: number;
+            referee_coins_amount: number;
+            tiers: components["schemas"]["ReferralTierWriteRequest"][];
+        };
+        ReferralRewardTier: {
+            min_qualified_referrals?: number;
+            /** Format: int64 */
+            referrer_wallet_paise?: number;
+            referrer_coins_amount?: number;
+            /** Format: int64 */
+            referee_wallet_paise?: number | null;
+            referee_coins_amount?: number | null;
+        };
+        ReferralTierWriteRequest: {
+            min_qualified_referrals: number;
+            referrer_wallet_paise: number;
+            /** @default 0 */
+            referrer_coins_amount: number;
+        };
+        ReferralValidateRequestRequest: {
+            code: string;
+        };
+        ReferralValidateResponse: {
+            valid: boolean;
+            code: string;
+            referrer_id: string;
+            referee_reward_summary: string;
+        };
         Refund: {
             /** Format: uuid */
             readonly id: string;
@@ -12250,7 +12834,7 @@ export interface components {
             amount_paise: number;
             status?: components["schemas"]["RentalDepositStatusEnum"];
             consumed_paise?: number;
-            /** @description PARTIAL money path: test/seed hold without live Razorpay. */
+            /** @description Operator note. A live hold is recorded only after payment capture. */
             provider_note?: string;
         };
         /**
@@ -12639,6 +13223,13 @@ export interface components {
          * @enum {string}
          */
         RevisionRequestStatusEnum: "OPEN" | "ANSWERED" | "DECLINED";
+        /**
+         * @description * `REFERRER_ONLY` - Referrer only
+         *     * `REFEREE_ONLY` - Referee only
+         *     * `BOTH` - Both referrer and referee
+         * @enum {string}
+         */
+        RewardSidesEnum: "REFERRER_ONLY" | "REFEREE_ONLY" | "BOTH";
         /**
          * @description One role, as booked against as named.
          *
@@ -13597,6 +14188,12 @@ export interface components {
             open: number;
             unclaimed: number;
         };
+        /**
+         * @description * `ORDER_VALUE` - Order value
+         *     * `BOOKING_SEQUENCE` - Booking sequence
+         * @enum {string}
+         */
+        TierKindEnum: "ORDER_VALUE" | "BOOKING_SEQUENCE";
         TimelineEvent: {
             /** Format: date-time */
             at: string;
@@ -14071,6 +14668,75 @@ export interface components {
             /** Format: uri */
             photo_url: string | null;
         };
+        WalletAccount: {
+            /** Format: uuid */
+            wallet_id: string;
+            /** @default INR */
+            currency: string;
+            readonly balance_paise: number;
+            readonly available_balance_paise: number;
+            readonly reserved_paise: number;
+            readonly top_up_policy: {
+                [key: string]: number;
+            };
+        };
+        WalletAdjustmentRequest: {
+            /** Format: uuid */
+            customer_id: string;
+            amount_paise: number;
+            reason: string;
+            idempotency_key: string;
+        };
+        WalletLiabilityReport: {
+            total_liability_paise: number;
+            /** @default INR */
+            currency: string;
+            active_wallets_count: number;
+        };
+        WalletTopUpRequestRequest: {
+            amount_paise: number;
+            /** @default  */
+            idempotency_key: string;
+        };
+        WalletTopUpResponse: {
+            /** Format: uuid */
+            payment_attempt_id: string;
+            purpose: string;
+            amount_paise: number;
+            currency: string;
+            provider: string;
+            provider_order_id: string;
+            status: string;
+        };
+        WalletTransaction: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: int64 */
+            amount_paise: number;
+            kind: components["schemas"]["WalletTransactionKindEnum"];
+            status?: components["schemas"]["WalletTransactionStatusEnum"];
+            idempotency_key?: string;
+            notes?: string;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        /**
+         * @description * `TOP_UP` - Top up
+         *     * `CHECKOUT_DEBIT` - Checkout debit
+         *     * `CHECKOUT_RELEASE` - Checkout release
+         *     * `REFUND_CREDIT` - Refund credit
+         *     * `REFERRAL_CREDIT` - Referral credit
+         *     * `ADJUSTMENT` - Adjustment
+         * @enum {string}
+         */
+        WalletTransactionKindEnum: "TOP_UP" | "CHECKOUT_DEBIT" | "CHECKOUT_RELEASE" | "REFUND_CREDIT" | "REFERRAL_CREDIT" | "ADJUSTMENT";
+        /**
+         * @description * `RESERVED` - Reserved
+         *     * `CAPTURED` - Captured
+         *     * `RELEASED` - Released
+         * @enum {string}
+         */
+        WalletTransactionStatusEnum: "RESERVED" | "CAPTURED" | "RELEASED";
         /** @description The Customer calls on a warranty the retention was held against. */
         WarrantyClaimRequest: {
             summary: string;
@@ -16372,6 +17038,220 @@ export interface operations {
             };
         };
     };
+    customer_coins_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerCoinsSummary"];
+                };
+            };
+        };
+    };
+    customer_coins_preview_burn_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CoinBurnPreviewRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CoinBurnPreviewRequestRequest"];
+                "multipart/form-data": components["schemas"]["CoinBurnPreviewRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoinBurnPreviewResponse"];
+                };
+            };
+        };
+    };
+    customer_coins_transactions_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoinTransaction"][];
+                };
+            };
+        };
+    };
+    customer_referral_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerReferralSummary"];
+                };
+            };
+        };
+    };
+    customer_referral_apply_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReferralValidateRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ReferralValidateRequestRequest"];
+                "multipart/form-data": components["schemas"]["ReferralValidateRequestRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReferralAttribution"];
+                };
+            };
+        };
+    };
+    customer_referral_attributions_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReferralAttribution"][];
+                };
+            };
+        };
+    };
+    customer_referral_validate_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReferralValidateRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ReferralValidateRequestRequest"];
+                "multipart/form-data": components["schemas"]["ReferralValidateRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReferralValidateResponse"];
+                };
+            };
+        };
+    };
+    customer_wallet_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletAccount"];
+                };
+            };
+        };
+    };
+    customer_wallet_top_up_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WalletTopUpRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["WalletTopUpRequestRequest"];
+                "multipart/form-data": components["schemas"]["WalletTopUpRequestRequest"];
+            };
+        };
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletTopUpResponse"];
+                };
+            };
+        };
+    };
+    customer_wallet_transactions_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletTransaction"][];
+                };
+            };
+        };
+    };
     m2_engagement_amendment_decide: {
         parameters: {
             query?: never;
@@ -18492,9 +19372,14 @@ export interface operations {
     listings_list: {
         parameters: {
             query?: {
+                employment_type?: string;
+                experience?: string;
                 location?: string;
                 q?: string;
+                salary_band?: string;
                 service?: string;
+                sort?: string;
+                work_mode?: string;
             };
             header?: never;
             path?: never;
@@ -18583,6 +19468,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ListingReport"];
+                };
+            };
+        };
+    };
+    listings_resume_uploads_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listing_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": Record<string, unknown>;
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };
@@ -22699,6 +23611,253 @@ export interface operations {
             };
         };
     };
+    ops_loyalty_burn_policies_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoinBurnPolicyWrite"][];
+                };
+            };
+        };
+    };
+    ops_loyalty_burn_policies_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CoinBurnPolicyWriteRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CoinBurnPolicyWriteRequest"];
+                "multipart/form-data": components["schemas"]["CoinBurnPolicyWriteRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoinBurnPolicyWrite"];
+                };
+            };
+        };
+    };
+    ops_loyalty_grant_rules_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoinGrantRule"][];
+                };
+            };
+        };
+    };
+    ops_loyalty_grant_rules_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CoinGrantRuleRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CoinGrantRuleRequest"];
+                "multipart/form-data": components["schemas"]["CoinGrantRuleRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoinGrantRule"];
+                };
+            };
+        };
+    };
+    ops_loyalty_grant_rules_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoinGrantRule"];
+                };
+            };
+        };
+    };
+    ops_loyalty_grant_rules_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedCoinGrantRuleRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedCoinGrantRuleRequest"];
+                "multipart/form-data": components["schemas"]["PatchedCoinGrantRuleRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoinGrantRule"];
+                };
+            };
+        };
+    };
+    ops_loyalty_grant_rules_tiers_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoinEarnTier"][];
+                };
+            };
+        };
+    };
+    ops_loyalty_grant_rules_tiers_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CoinEarnTierRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CoinEarnTierRequest"];
+                "multipart/form-data": components["schemas"]["CoinEarnTierRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoinEarnTier"];
+                };
+            };
+        };
+    };
+    ops_referral_attributions_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReferralAttribution"][];
+                };
+            };
+        };
+    };
+    ops_referral_programs_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReferralProgramVersion"][];
+                };
+            };
+        };
+    };
+    ops_referral_programs_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReferralProgramWriteRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ReferralProgramWriteRequest"];
+                "multipart/form-data": components["schemas"]["ReferralProgramWriteRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReferralProgramVersion"];
+                };
+            };
+        };
+    };
     ops_rentals_list: {
         parameters: {
             query?: never;
@@ -22787,6 +23946,94 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Property"];
+                };
+            };
+        };
+    };
+    ops_wallet_adjustments_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WalletAdjustmentRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["WalletAdjustmentRequest"];
+                "multipart/form-data": components["schemas"]["WalletAdjustmentRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletTransaction"];
+                };
+            };
+        };
+    };
+    ops_wallet_liability_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletLiabilityReport"];
+                };
+            };
+        };
+    };
+    ops_wallet_policies_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpsWalletTopUpPolicy"][];
+                };
+            };
+        };
+    };
+    ops_wallet_policies_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["OpsWalletTopUpPolicyRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["OpsWalletTopUpPolicyRequest"];
+                "multipart/form-data": components["schemas"]["OpsWalletTopUpPolicyRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpsWalletTopUpPolicy"];
                 };
             };
         };
@@ -27114,12 +28361,14 @@ export interface operations {
     rentals_list: {
         parameters: {
             query?: {
+                end_date?: string;
                 location?: string;
                 max_deposit?: number;
                 max_price?: number;
                 min_price?: number;
                 q?: string;
                 service?: string;
+                start_date?: string;
             };
             header?: never;
             path?: never;
@@ -29479,9 +30728,11 @@ export interface operations {
             query?: {
                 ac?: boolean;
                 food?: boolean;
+                limit?: number;
                 location?: string;
                 max_price?: number;
                 min_price?: number;
+                offset?: number;
                 q?: string;
                 service?: string;
                 sharing_count?: number;

@@ -1,0 +1,43 @@
+"use client";
+
+import { ErrorState, Spinner } from "@vsolve/ui";
+import { useCustomerCoins, useCoinTransactions } from "../queries";
+import { CoinsBucketsCard } from "./coins-buckets-card";
+import { CoinsBurnExplainer } from "./coins-burn-explainer";
+import { CoinsTransactionList } from "./coins-transaction-list";
+
+export function CoinsScreen() {
+  const coinsQuery = useCustomerCoins();
+  const txnsQuery = useCoinTransactions();
+
+  if (coinsQuery.isLoading) {
+    return (
+      <div className="flex min-h-[300px] items-center justify-center gap-2 text-text-secondary">
+        <Spinner size="md" />
+        <span className="text-sm">Loading your V Coins…</span>
+      </div>
+    );
+  }
+
+  if (coinsQuery.isError || !coinsQuery.data) {
+    return (
+      <ErrorState
+        title="Could not load V Coins"
+        message="We had trouble loading your coins balances. Please try again."
+        actionLabel="Retry"
+        onAction={() => void coinsQuery.refetch()}
+      />
+    );
+  }
+
+  const summary = coinsQuery.data;
+  const transactions = txnsQuery.data ?? [];
+
+  return (
+    <div className="space-y-6">
+      <CoinsBucketsCard summary={summary} />
+      <CoinsBurnExplainer summary={summary} />
+      <CoinsTransactionList transactions={transactions} />
+    </div>
+  );
+}

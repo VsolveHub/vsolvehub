@@ -1010,3 +1010,22 @@ def test_slice4_listing_filters_taxonomy_endpoint(client):
     assert len(body["categories"]) > 0
     assert body["categories"][0]["label"] == "All Roles"
     assert body["categories"][0]["value"] == ""
+
+
+@pytest.mark.django_db
+def test_public_listings_filter_employment_type(poster, a10_variant):
+    now = timezone.now()
+    Listing.objects.create(
+        poster=poster,
+        variant=a10_variant,
+        title="On site accountant",
+        description="Books and GST for a Hyderabad office team.",
+        status=Listing.Status.PUBLISHED,
+        moderation_status=Listing.ModerationStatus.APPROVED,
+        published_at=now,
+        expires_at=now + timedelta(days=14),
+        structured_fields={"employment_type": "Full-Time", "work_mode": "On-site"},
+    )
+    rows = list(public_listings({"employment_type": "Full-Time", "sort": "latest"}))
+    assert len(rows) == 1
+    assert list(public_listings({"work_mode": "Remote"})) == []

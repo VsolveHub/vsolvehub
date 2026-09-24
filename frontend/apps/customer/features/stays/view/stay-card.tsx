@@ -4,6 +4,8 @@ import Link from "next/link";
 import { ArrowRight, Building, Check, Coffee, MapPin, ShieldCheck, Users, Wind, Wifi } from "lucide-react";
 import { Badge, Button } from "@vsolve/ui";
 
+import { SaveHeart, useSavedItems } from "@/features/part-a";
+
 import { formatPaise, stayFields, type StayProperty } from "../model";
 
 interface StayCardProps {
@@ -11,6 +13,7 @@ interface StayCardProps {
 }
 
 export function StayCard({ property }: StayCardProps) {
+  const saved = useSavedItems("stay");
   const minRate = property.units.reduce(
     (min, u) => (u.nightly_rate_paise < min ? u.nightly_rate_paise : min),
     property.units[0]?.nightly_rate_paise ?? 0,
@@ -26,6 +29,9 @@ export function StayCard({ property }: StayCardProps) {
   return (
     <article className="group relative flex flex-col justify-between overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface p-5 shadow-xs transition hover:border-line-strong hover:shadow-raised">
       <div className="flex flex-col gap-3">
+        <div className="flex justify-end">
+          <SaveHeart saved={saved.isSaved(property.id)} onToggle={() => saved.toggle(property.id)} />
+        </div>
         {/* Top Badges */}
         <div className="flex items-center justify-between gap-2">
           <Badge tone="brand" className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider">

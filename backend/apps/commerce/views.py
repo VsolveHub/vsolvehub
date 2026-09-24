@@ -112,6 +112,8 @@ class PaymentAttemptCollectionView(APIView):
                         "expected_checkout_version"
                     ],
                     idempotency_key=key,
+                    wallet_amount_paise=serializer.validated_data.get("wallet_amount_paise", 0),
+                    coin_burn_amount=serializer.validated_data.get("coin_burn_amount", 0),
                 )
             except (PaymentAttempt.DoesNotExist, ValueError) as exc:
                 raise PaymentConflictError(str(exc)) from exc

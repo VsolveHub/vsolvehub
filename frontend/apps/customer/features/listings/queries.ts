@@ -29,7 +29,18 @@ export function snapshotFields(value: unknown): Record<string, string> {
   return out;
 }
 
-export function fetchListings(filters: { q?: string; location?: string; service?: string } = {}) {
+export function fetchListings(
+  filters: {
+    q?: string;
+    location?: string;
+    service?: string;
+    sort?: string;
+    employment_type?: string;
+    work_mode?: string;
+    experience?: string;
+    salary_band?: string;
+  } = {},
+) {
   return request(() =>
     getApiClient().GET("/api/v1/listings", {
       params: {
@@ -37,7 +48,27 @@ export function fetchListings(filters: { q?: string; location?: string; service?
           q: filters.q,
           location: filters.location,
           service: filters.service,
+          sort: filters.sort,
+          employment_type: filters.employment_type,
+          work_mode: filters.work_mode,
+          experience: filters.experience,
+          salary_band: filters.salary_band,
         },
+      },
+    }),
+  );
+}
+
+export function uploadListingResume(listingId: string, file: File) {
+  return request(() =>
+    getApiClient().POST("/api/v1/listings/{listing_id}/resume-uploads", {
+      params: { path: { listing_id: listingId } },
+      body: { file },
+      bodySerializer(body) {
+        const data = new FormData();
+        const picked = (body as { file?: Blob }).file;
+        if (picked) data.append("file", picked);
+        return data;
       },
     }),
   );

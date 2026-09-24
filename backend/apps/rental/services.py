@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date
 from typing import Any
 from uuid import UUID
 
+from django.conf import settings
 from django.db import models, transaction
-from django.utils import timezone
+
+from apps.commerce.models import PaymentAttempt
 
 from apps.catalog.models import A7VariantConfiguration
 from apps.rental.models import (
@@ -132,7 +134,7 @@ def create_booking(
     end_date: date,
     mode: str = "PICKUP",
     notes: str = "",
-    hold_deposit_for_demo: bool = True,
+    hold_deposit_for_demo: bool = False,
 ) -> RentalBooking:
     asset = (
         RentalAsset.objects.select_for_update()
@@ -157,13 +159,15 @@ def create_booking(
         start_date=start_date,
         end_date=end_date,
     )
-    deposit_status = (
-        RentalDeposit.Status.HELD if hold_deposit_for_demo else RentalDeposit.Status.REQUESTED
-    )
+    needs_deposit = asset.deposit_paise > 0 and not hold_deposit_for_demo
     deposit = RentalDeposit.objects.create(
         amount_paise=asset.deposit_paise,
-        status=deposit_status,
-        provider_note="PARTIAL: demo/test hold — live Razorpay capture not activated in Part A.",
+        status=(
+            RentalDeposit.Status.HELD
+            if hold_deposit_for_demo or asset.deposit_paise == 0
+            else RentalDeposit.Status.REQUESTED
+        ),
+        provider_note="" if not hold_deposit_for_demo else "Seed hold without a live capture.",
     )
     price = asset.daily_rate_paise * days
     booking = RentalBooking.objects.create(
@@ -171,7 +175,11 @@ def create_booking(
         asset=asset,
         reservation=reservation,
         deposit=deposit,
-        status=RentalBooking.Status.CONFIRMED,
+        status=(
+            RentalBooking.Status.PENDING_PAYMENT
+            if needs_deposit
+            else RentalBooking.Status.CONFIRMED
+        ),
         start_date=start_date,
         end_date=end_date,
         price_paise=price,
@@ -185,7 +193,35 @@ def create_booking(
         unit_price_paise=asset.daily_rate_paise,
         deposit_paise=asset.deposit_paise,
     )
+    if needs_deposit:
+        attempt = PaymentAttempt.objects.create(
+            purpose=PaymentAttempt.Purpose.A7_RENTAL_DEPOSIT,
+            idempotency_key=f"a7-deposit:{booking.id}",
+            provider=settings.PAYMENT_PROVIDER,
+            amount_paise=asset.deposit_paise,
+            currency="INR",
+        )
+        deposit.payment_attempt = attempt
+        deposit.save(update_fields=("payment_attempt", "updated_at"))
     return booking
+
+
+def mark_deposit_held(*, payment_attempt_id: UUID) -> None:
+    """Capture callback. Replay is a no-op once the deposit is already held."""
+    deposit = (
+        RentalDeposit.objects.select_for_update()
+        .select_related("booking")
+        .get(payment_attempt_id=payment_attempt_id)
+    )
+    if deposit.status == RentalDeposit.Status.HELD:
+        return
+    deposit.status = RentalDeposit.Status.HELD
+    deposit.provider_note = ""
+    deposit.save(update_fields=("status", "provider_note", "updated_at"))
+    booking = deposit.booking
+    if booking.status == RentalBooking.Status.PENDING_PAYMENT:
+        booking.status = RentalBooking.Status.CONFIRMED
+        booking.save(update_fields=("status", "updated_at"))
 
 
 def handover_booking(*, booking: RentalBooking, partner: Any) -> RentalBooking:
@@ -232,6 +268,8 @@ def public_assets(
     max_daily_rate_paise: int | None = None,
     max_deposit_paise: int | None = None,
     variant_code: str = "",
+    start_date: date | None = None,
+    end_date: date | None = None,
 ):
     qs = RentalAsset.objects.filter(
         moderation_status="APPROVED",
@@ -259,5 +297,12 @@ def public_assets(
         qs = qs.filter(daily_rate_paise__lte=max_daily_rate_paise)
     if max_deposit_paise is not None:
         qs = qs.filter(deposit_paise__lte=max_deposit_paise)
+    if start_date is not None and end_date is not None and end_date > start_date:
+        busy = AssetReservation.objects.filter(
+            status=AssetReservation.Status.CONFIRMED,
+            start_date__lt=end_date,
+            end_date__gt=start_date,
+        ).values("asset_id")
+        qs = qs.exclude(id__in=busy)
 
     return qs

@@ -20,6 +20,8 @@ export interface StayFilterParams {
   min_price?: number;
   max_price?: number;
   service?: string;
+  limit?: number;
+  offset?: number;
 }
 
 export function formatPaise(paise: number): string {

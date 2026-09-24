@@ -24,6 +24,7 @@ import {
   useStartPayment,
   type PaymentAllocation,
 } from "../queries";
+import { CheckoutLoyaltyOptions, useCheckoutLoyalty } from "./checkout-loyalty-options";
 
 /**
  * The payment screen for one Booking Group.
@@ -155,6 +156,9 @@ export function PaymentWorkspace({ groupId }: { groupId: string }) {
 
   // `useStartPayment` writes the created attempt straight into the checkout key,
   // so the poll picks it up without a second round trip.
+  const payablePaise =
+    group?.units.reduce((sum, unit) => sum + unit.total.amount_paise, 0) ?? 0;
+  const loyalty = useCheckoutLoyalty(payablePaise);
   const attempt = attemptQuery.data ?? startPayment.data ?? null;
   const countdown = useServerCountdown(attempt?.expires_at ?? null);
   const returnToBooking = shouldReturnToBooking(group, attempt);
@@ -233,6 +237,8 @@ export function PaymentWorkspace({ groupId }: { groupId: string }) {
         checkoutId,
         expectedCheckoutVersion: group.checkout_version,
         groupId: group.id,
+        walletAmountPaise: loyalty.walletAmountPaise,
+        coinBurnAmount: loyalty.coinBurnAmount,
       });
       if (
         created.simulated_capture_available &&
@@ -331,6 +337,8 @@ export function PaymentWorkspace({ groupId }: { groupId: string }) {
             {describeError(simulateCapture.error, "mutation").message}
           </p>
         ) : null}
+
+        <CheckoutLoyaltyOptions loyalty={loyalty} />
 
         <div className="mt-5">
           <Button

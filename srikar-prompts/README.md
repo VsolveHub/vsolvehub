@@ -6,6 +6,7 @@
 
 | File | Purpose |
 |---|---|
+| [`M3_STATE_2026-09-23.md`](M3_STATE_2026-09-23.md) | **Master platform state** — 23 Sep (Day 3), verified A7, A9, A10, curls, browser tests |
 | [`A10_CONTINUE_HERE.md`](A10_CONTINUE_HERE.md) | **Resume point** — 60s status, rules, next steps |
 | [`A10_IMPLEMENTATION_PLAN.md`](A10_IMPLEMENTATION_PLAN.md) | Living checklist; update after every completed slice |
 | [`CLIENT_DEMO.md`](CLIENT_DEMO.md) | Client progress demo script (local stack) |

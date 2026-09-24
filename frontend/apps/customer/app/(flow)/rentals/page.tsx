@@ -67,7 +67,7 @@ export default function RentalsBrowsePage() {
               Verified Tools & Equipment Rentals
             </div>
             <h1 className="text-3xl font-extrabold tracking-tight text-warm-0 sm:text-4xl lg:text-5xl">
-              Rent Pro Tools & Gear
+              Rent Tools & Equipment
             </h1>
             <p className="text-sm text-warm-200 sm:text-base">
               Rent certified power tools, carpentry kits, and equipment with verified partners.

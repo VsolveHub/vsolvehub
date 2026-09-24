@@ -23,6 +23,8 @@ from common.serializers import MoneySerializer
 class PaymentAttemptCreateSerializer(serializers.Serializer[dict[str, object]]):
     checkout_id = serializers.UUIDField()
     expected_checkout_version = serializers.IntegerField(min_value=1)
+    wallet_amount_paise = serializers.IntegerField(min_value=0, default=0, required=False)
+    coin_burn_amount = serializers.IntegerField(min_value=0, default=0, required=False)
 
 
 class PaymentAllocationSerializer(serializers.ModelSerializer[PaymentAllocation]):
@@ -80,6 +82,10 @@ class PaymentAttemptSerializer(serializers.ModelSerializer[PaymentAttempt]):
             "failure_code",
             "version",
             "amount",
+            "wallet_reserved_paise",
+            "coins_burned",
+            "coin_discount_paise",
+            "razorpay_amount_paise",
             "expires_at",
             "allocations",
             "created_at",
@@ -102,6 +108,13 @@ class PaymentAttemptSerializer(serializers.ModelSerializer[PaymentAttempt]):
         return bool(settings.PAYMENTS_ALLOW_SIMULATED_CAPTURE) and (
             attempt.provider == FakePaymentProvider.code
         )
+
+    razorpay_amount_paise = serializers.SerializerMethodField()
+
+    @staticmethod
+    @extend_schema_field(serializers.IntegerField())
+    def get_razorpay_amount_paise(attempt: PaymentAttempt) -> int:
+        return attempt.gateway_amount_paise
 
     @staticmethod
     @extend_schema_field(MoneySerializer)

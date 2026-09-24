@@ -50,3 +50,9 @@ The generated OpenAPI document and generated TypeScript client are never manuall
 | 0015 | M2 estimate lines, customer-supplied materials and one money truth | Proposed — blocks 22 of the 28 M2 screens |
 | 0016 | Partner active shelf hides work that has already started | Proposed |
 | 0017 | A10 Career/Jobs listing surface | Proposed — Wave D3; unpublished on `main` @ `4a08ad3` |
+| 0018 | A7 Rental MVP surface | Proposed |
+| 0019 | A9 Stay MVP surface | Proposed |
+| 0020 | Customer Wallet (INR) Surface | Published |
+| 0021 | V Coins Customer & Burn Preview Surface | Published |
+| 0022 | Customer Referral Surface | Published |
+| 0023 | Operations Loyalty, Wallet & Referral Management | Published |

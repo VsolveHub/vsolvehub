@@ -145,6 +145,8 @@ def test_stay_quote_calculation_and_filters(stay_world):
 
     results_cheap = public_properties(max_price_paise=50000)
     assert not any(p.id == prop.id for p in results_cheap)
+    page = list(public_properties(limit=1, offset=0))
+    assert len(page) <= 1
 
 
 @pytest.mark.django_db

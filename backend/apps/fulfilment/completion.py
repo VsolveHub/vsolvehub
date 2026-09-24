@@ -18,8 +18,10 @@ from django.utils import timezone
 
 from apps.carts.models import BookingGroup, FulfilmentUnit
 from apps.commerce.models import Booking, Refund
+from apps.foundation.services import enqueue_outbox_event
 from apps.fulfilment.exceptions import BookingCommandInvalidApiError
 from apps.fulfilment.models import (
+    BookingStatusHistory,
     CompletionResponse,
     CompletionSubmission,
     WorkEvidence,
@@ -258,6 +260,32 @@ def _settle_submission(
         context={"submission_id": str(submission.id)},
         extra_booking_fields=extra_fields,
     )
+    if to_status == Booking.Status.COMPLETED:
+        history = (
+            BookingStatusHistory.objects.filter(
+                booking=booking,
+                to_status=Booking.Status.COMPLETED,
+            )
+            .order_by("-created_at")
+            .first()
+        )
+        if history is not None:
+            enqueue_outbox_event(
+                aggregate_type="booking",
+                aggregate_id=booking.id,
+                event_type="customer.fulfilment.completed",
+                idempotency_key=f"customer-fulfilment-completed:{booking.id}",
+                payload={
+                    "event_version": 1,
+                    "booking_id": str(booking.id),
+                    "customer_id": str(booking.customer_id),
+                    "booking_group_id": str(group.id),
+                    "fulfilment_unit_id": str(unit.id),
+                    "partner_id": str(booking.partner_id),
+                    "status_history_id": str(history.id),
+                    "completed_at": history.created_at.isoformat(),
+                },
+            )
     if to_status == Booking.Status.PARTIALLY_COMPLETED:
         _refund_unperformed_work(
             booking=booking, unit=unit, submission=submission, idempotency_key=idempotency_key

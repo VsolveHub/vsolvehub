@@ -5,6 +5,7 @@ from django.shortcuts import get_object_or_404
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import permissions, status
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -20,7 +21,7 @@ from apps.listings.exceptions import (
     ListingVariantRequiredApiError,
     UnsupportedListingActionApiError,
 )
-from apps.listings.models import Application, Listing, VendorSubscriptionPlan
+from apps.listings.models import Application, Listing, ListingResumeUpload, VendorSubscriptionPlan
 from apps.listings.selectors import public_listings
 from apps.listings.serializers import (
     ActionReasonSerializer,
@@ -132,6 +133,11 @@ class ListingBrowseView(APIView):
             OpenApiParameter("q", OpenApiTypes.STR, OpenApiParameter.QUERY),
             OpenApiParameter("location", OpenApiTypes.STR, OpenApiParameter.QUERY),
             OpenApiParameter("service", OpenApiTypes.STR, OpenApiParameter.QUERY),
+            OpenApiParameter("sort", OpenApiTypes.STR, OpenApiParameter.QUERY),
+            OpenApiParameter("employment_type", OpenApiTypes.STR, OpenApiParameter.QUERY),
+            OpenApiParameter("work_mode", OpenApiTypes.STR, OpenApiParameter.QUERY),
+            OpenApiParameter("experience", OpenApiTypes.STR, OpenApiParameter.QUERY),
+            OpenApiParameter("salary_band", OpenApiTypes.STR, OpenApiParameter.QUERY),
         ],
         responses=ListingSummarySerializer(many=True),
     )
@@ -141,6 +147,11 @@ class ListingBrowseView(APIView):
                 "q": request.query_params.get("q"),
                 "location": request.query_params.get("location"),
                 "service": request.query_params.get("service"),
+                "sort": request.query_params.get("sort") or "latest",
+                "employment_type": request.query_params.get("employment_type"),
+                "work_mode": request.query_params.get("work_mode"),
+                "experience": request.query_params.get("experience"),
+                "salary_band": request.query_params.get("salary_band"),
             }
         )
         return Response(ListingSummarySerializer(rows, many=True).data)
@@ -153,6 +164,50 @@ class ListingDetailView(APIView):
     def get(self, _request: Any, listing_id: UUID) -> Response:
         listing = get_object_or_404(public_listings(), id=listing_id)
         return Response(ListingDetailSerializer(listing).data)
+
+
+_RESUME_TYPES = {
+    "application/pdf": ".pdf",
+    "application/msword": ".doc",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+}
+_RESUME_MAX_BYTES = 5 * 1024 * 1024
+
+
+class ListingResumeUploadView(APIView):
+    permission_classes = (permissions.IsAuthenticated,)
+    parser_classes = (MultiPartParser, FormParser)
+
+    @extend_schema(request={"multipart/form-data": {"type": "object"}}, responses={201: dict})
+    def post(self, request: Any, listing_id: UUID) -> Response:
+        listing = get_object_or_404(public_listings(), id=listing_id)
+        upload = request.FILES.get("file")
+        if upload is None:
+            return Response({"detail": "Attach a resume file."}, status=status.HTTP_400_BAD_REQUEST)
+        content_type = (upload.content_type or "").split(";")[0].strip()
+        if content_type not in _RESUME_TYPES:
+            return Response(
+                {"detail": "Resume must be a PDF, DOC, or DOCX file."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if upload.size > _RESUME_MAX_BYTES:
+            return Response(
+                {"detail": "Resume must be 5 MB or smaller."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        row = ListingResumeUpload.objects.create(
+            listing=listing,
+            applicant=request.user,
+            original_name=upload.name[:180],
+            content_type=content_type,
+            size_bytes=upload.size,
+            stored_file=upload,
+        )
+        resume_url = request.build_absolute_uri(row.stored_file.url)
+        return Response(
+            {"upload_id": str(row.id), "resume_url": resume_url, "original_name": row.original_name},
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class ListingApplicationView(APIView):

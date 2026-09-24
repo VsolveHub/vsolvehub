@@ -45,6 +45,23 @@ export function LoginScreen() {
 
   useEffect(() => {
     if (!isAuthenticated) return;
+
+    const pendingRef = typeof window !== "undefined" ? sessionStorage.getItem("vsolve_pending_referral") : null;
+    if (pendingRef) {
+      sessionStorage.removeItem("vsolve_pending_referral");
+      void getApiClient()
+        .POST("/api/v1/customer/referral/apply/", {
+          body: { code: pendingRef },
+        })
+        .catch(() => {
+          // If already attributed or invalid, fail open
+        })
+        .finally(() => {
+          router.replace(next ?? "/bookings");
+        });
+      return;
+    }
+
     router.replace(next ?? "/bookings");
   }, [isAuthenticated, next, router]);
 
