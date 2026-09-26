@@ -4,8 +4,15 @@ import { createIdempotencyKey, request, type Schemas } from "@vsolve/api-client"
 
 import { getApiClient } from "@/lib/api/browser";
 
-export type Listing = Schemas["ListingSummary"];
-export type ListingDetail = Schemas["ListingDetail"];
+export type ListingPay = {
+  salary_min_paise?: number;
+  salary_max_paise?: number;
+  salary_period?: string;
+  salary_display?: string;
+};
+
+export type Listing = Schemas["ListingSummary"] & ListingPay;
+export type ListingDetail = Schemas["ListingDetail"] & ListingPay;
 export type ListingApplication = Schemas["Application"];
 export type CatalogCategory = Schemas["Category"];
 export type SubmitApplicationPayload = Schemas["SubmitApplicationRequest"];

@@ -58,14 +58,49 @@ class PropertySerializer(serializers.ModelSerializer):
         )
 
 
+class StayPhotoUploadSerializer(serializers.Serializer):
+    upload_id = serializers.UUIDField()
+    url = serializers.URLField()
+    original_name = serializers.CharField()
+
+
+class StayTaxonomyVariantSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    name = serializers.CharField()
+    code = serializers.CharField()
+    property_schema = serializers.JSONField()
+
+
+class StayTaxonomyServiceSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    name = serializers.CharField()
+    slug = serializers.CharField()
+    variants = StayTaxonomyVariantSerializer(many=True)
+
+
+class StayTaxonomySubcategorySerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    name = serializers.CharField()
+    slug = serializers.CharField()
+    services = StayTaxonomyServiceSerializer(many=True)
+
+
 class CreatePropertySerializer(serializers.Serializer):
     variant_id = serializers.UUIDField()
     title = serializers.CharField(max_length=180)
     description = serializers.CharField(required=False, allow_blank=True, default="")
-    location_text = serializers.CharField(required=False, allow_blank=True, default="")
+    location_text = serializers.CharField(max_length=180)
     unit_name = serializers.CharField(required=False, default="Standard room")
-    nightly_rate_paise = serializers.IntegerField(min_value=1, required=False, default=100000)
+    nightly_rate_paise = serializers.IntegerField(min_value=1)
     sharing_count = serializers.IntegerField(min_value=1, required=False, default=1)
+    structured_fields = serializers.JSONField(required=False, default=dict)
+    cancellation_policy_text = serializers.CharField(required=False, allow_blank=True, default="")
+    house_rules = serializers.CharField(required=False, allow_blank=True, default="")
+    image_urls = serializers.ListField(
+        child=serializers.CharField(min_length=1),
+        min_length=1,
+        max_length=8,
+    )
 
 
 class CreateEnquirySerializer(serializers.Serializer):

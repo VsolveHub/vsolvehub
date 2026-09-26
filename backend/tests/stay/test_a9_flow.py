@@ -4,7 +4,9 @@ from datetime import timedelta
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
+from rest_framework import status
 
 from apps.catalog.models import (
     A9VariantConfiguration,
@@ -13,16 +15,19 @@ from apps.catalog.models import (
     ServiceVariant,
     Subcategory,
 )
+from apps.identity.models import Role, UserRole
 from apps.partners.models import PartnerApplication, PartnerCapability, PartnerProfile
-from apps.stay.models import StayEnquiry
+from apps.stay.models import PropertyMedia, StayEnquiry, StayPhotoUpload
 from apps.stay.services import (
     StayStateError,
     create_enquiry,
     create_property,
     moderate_property,
     respond_enquiry,
+    store_stay_photo,
     submit_property,
 )
+from tests.helpers import force_role_client
 
 User = get_user_model()
 
@@ -157,3 +162,64 @@ def test_no_fulfilment_unit_on_stay_models():
         model = getattr(stay_models, name)
         field_names = {f.name for f in model._meta.get_fields()}
         assert "fulfilment_unit" not in field_names
+
+
+def _tiny_jpeg() -> SimpleUploadedFile:
+    return SimpleUploadedFile("room.jpg", b"\xff\xd8\xff\xd9fake-jpeg", content_type="image/jpeg")
+
+
+def _partner_client(user):
+    role, _ = Role.objects.get_or_create(code="partner", defaults={"name": "Partner"})
+    UserRole.objects.get_or_create(user=user, role=role, revoked_at=None)
+    return force_role_client(user=user, role_code="partner")
+
+
+@pytest.mark.django_db
+def test_store_stay_photo_rejects_non_image(stay_world):
+    upload = SimpleUploadedFile("notes.txt", b"not-an-image", content_type="text/plain")
+    with pytest.raises(StayStateError, match="JPEG, PNG, or WebP"):
+        store_stay_photo(partner=stay_world["host"], upload=upload)
+
+
+@pytest.mark.django_db
+def test_partner_must_upload_stay_photos_not_paste_urls(stay_world):
+    client = _partner_client(stay_world["host_user"])
+    pasted = client.post(
+        "/api/v1/partner/stays/properties",
+        {
+            "variant_id": str(stay_world["variant"].id),
+            "title": "Pasted URL room",
+            "location_text": "Gachibowli",
+            "nightly_rate_paise": 85000,
+            "image_urls": ["https://cdn.example.com/room.jpg"],
+        },
+        format="json",
+    )
+    assert pasted.status_code == status.HTTP_400_BAD_REQUEST
+    assert "Upload photos" in pasted.json()["detail"]
+
+    uploaded = client.post(
+        "/api/v1/partner/stays/photos",
+        {"file": _tiny_jpeg()},
+        format="multipart",
+    )
+    assert uploaded.status_code == status.HTTP_201_CREATED
+    body = uploaded.json()
+    stored = StayPhotoUpload.objects.get(id=body["upload_id"])
+    assert stored.stored_file.storage.exists(stored.stored_file.name)
+
+    created = client.post(
+        "/api/v1/partner/stays/properties",
+        {
+            "variant_id": str(stay_world["variant"].id),
+            "title": "Uploaded photo room",
+            "location_text": "Gachibowli",
+            "nightly_rate_paise": 85000,
+            "image_urls": [body["url"]],
+        },
+        format="json",
+    )
+    assert created.status_code == status.HTTP_201_CREATED
+    media = PropertyMedia.objects.filter(property_id=created.json()["id"])
+    assert media.count() == 1
+    assert media.get().url == body["url"]

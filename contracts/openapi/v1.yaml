@@ -13267,6 +13267,25 @@ paths:
               schema:
                 $ref: '#/components/schemas/RentalBooking'
           description: ''
+  /api/v1/partner/rentals/photos:
+    post:
+      operationId: partner_rentals_photos_create
+      tags:
+      - partner
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RentalPhotoUpload'
+          description: ''
   /api/v1/partner/required-consents/:
     get:
       operationId: partner_required_consents_list
@@ -13413,6 +13432,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/StayEnquiry'
+          description: ''
+  /api/v1/partner/stays/photos:
+    post:
+      operationId: partner_stays_photos_create
+      tags:
+      - partner
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StayPhotoUpload'
           description: ''
   /api/v1/partner/stays/properties:
     get:
@@ -17202,6 +17240,25 @@ paths:
               schema:
                 $ref: '#/components/schemas/StayQuoteResponse'
           description: ''
+  /api/v1/stays/taxonomy:
+    get:
+      operationId: stays_taxonomy_list
+      description: Category → subcategory → service → variant + property_schema for
+        partner posting.
+      tags:
+      - stays
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StayTaxonomySubcategory'
+          description: ''
   /api/v1/tax-documents/{document_id}/:
     get:
       operationId: tax_documents_retrieve
@@ -20183,14 +20240,14 @@ components:
           default: ''
         location_text:
           type: string
-          default: ''
+          minLength: 1
+          maxLength: 180
         daily_rate_paise:
           type: integer
           minimum: 1
         deposit_paise:
           type: integer
           minimum: 0
-          default: 0
         asset_identifier:
           type: string
           default: ''
@@ -20205,8 +20262,13 @@ components:
           items:
             type: string
             minLength: 1
+          maxItems: 8
+          minItems: 1
       required:
       - daily_rate_paise
+      - deposit_paise
+      - image_urls
+      - location_text
       - title
       - variant_id
     CreateBookingRequest:
@@ -20274,7 +20336,8 @@ components:
           default: ''
         location_text:
           type: string
-          default: ''
+          minLength: 1
+          maxLength: 180
         unit_name:
           type: string
           minLength: 1
@@ -20282,12 +20345,28 @@ components:
         nightly_rate_paise:
           type: integer
           minimum: 1
-          default: 100000
         sharing_count:
           type: integer
           minimum: 1
           default: 1
+        structured_fields: {}
+        cancellation_policy_text:
+          type: string
+          default: ''
+        house_rules:
+          type: string
+          default: ''
+        image_urls:
+          type: array
+          items:
+            type: string
+            minLength: 1
+          maxItems: 8
+          minItems: 1
       required:
+      - image_urls
+      - location_text
+      - nightly_rate_paise
       - title
       - variant_id
     CrewAssignRequest:
@@ -24208,6 +24287,20 @@ components:
         description:
           type: string
         structured_fields: {}
+        salary_min_paise:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        salary_max_paise:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        salary_period:
+          type: string
+          maxLength: 16
+        salary_display:
+          type: string
+          readOnly: true
         status:
           $ref: '#/components/schemas/StatusC74Enum'
         moderation_status:
@@ -24254,6 +24347,7 @@ components:
       - listing_type_schema
       - poster_name
       - public_state
+      - salary_display
       - service_name
       - title
       - variant_name
@@ -24318,6 +24412,20 @@ components:
         description:
           type: string
         structured_fields: {}
+        salary_min_paise:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        salary_max_paise:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        salary_period:
+          type: string
+          maxLength: 16
+        salary_display:
+          type: string
+          readOnly: true
         status:
           $ref: '#/components/schemas/StatusC74Enum'
         moderation_status:
@@ -24348,6 +24456,7 @@ components:
       - id
       - poster_name
       - public_state
+      - salary_display
       - service_name
       - title
       - variant_name
@@ -27297,6 +27406,20 @@ components:
         structured_fields:
           type: object
           additionalProperties: {}
+        salary_min_paise:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        salary_max_paise:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        salary_period:
+          type: string
+          maxLength: 16
+        salary_display:
+          type: string
+          readOnly: true
         status:
           allOf:
           - $ref: '#/components/schemas/StatusC74Enum'
@@ -27378,6 +27501,7 @@ components:
       - poster_name
       - public_state
       - removed_at
+      - salary_display
       - service_name
       - status
       - title
@@ -27397,6 +27521,17 @@ components:
         structured_fields:
           type: object
           additionalProperties: {}
+        salary_min_paise:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        salary_max_paise:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        salary_period:
+          type: string
+          maxLength: 16
         location_text:
           type: string
           maxLength: 180
@@ -32772,6 +32907,21 @@ components:
       required:
       - action
       - reason
+    RentalPhotoUpload:
+      type: object
+      properties:
+        upload_id:
+          type: string
+          format: uuid
+        url:
+          type: string
+          format: uri
+        original_name:
+          type: string
+      required:
+      - original_name
+      - upload_id
+      - url
     RentalTaxonomyService:
       type: object
       properties:
@@ -35744,6 +35894,21 @@ components:
       required:
       - action
       - reason
+    StayPhotoUpload:
+      type: object
+      properties:
+        upload_id:
+          type: string
+          format: uuid
+        url:
+          type: string
+          format: uri
+        original_name:
+          type: string
+      required:
+      - original_name
+      - upload_id
+      - url
     StayQuoteResponse:
       type: object
       properties:
@@ -35795,6 +35960,60 @@ components:
       - customer_name
       - id
       - rating
+    StayTaxonomyService:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        variants:
+          type: array
+          items:
+            $ref: '#/components/schemas/StayTaxonomyVariant'
+      required:
+      - id
+      - name
+      - slug
+      - variants
+    StayTaxonomySubcategory:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        services:
+          type: array
+          items:
+            $ref: '#/components/schemas/StayTaxonomyService'
+      required:
+      - id
+      - name
+      - services
+      - slug
+    StayTaxonomyVariant:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        code:
+          type: string
+        property_schema: {}
+      required:
+      - code
+      - id
+      - name
+      - property_schema
     StepUpSession:
       type: object
       properties:

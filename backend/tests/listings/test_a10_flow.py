@@ -720,12 +720,18 @@ def test_partner_roles_and_create_by_service(poster, a10_variant):
             "title": "Created Via Service ID",
             "description": "Role created without explicit variant UUID",
             "contact_phone": "+919876543210",
+            "salary_min_paise": 2500000,
+            "salary_max_paise": 4000000,
+            "salary_period": "MONTHLY",
         },
         format="json",
     )
     assert create_res.status_code == 201, create_res.data
     assert create_res.data["title"] == "Created Via Service ID"
     assert create_res.data["variant"] == str(a10_variant.id)
+    assert create_res.data["salary_min_paise"] == 2500000
+    assert create_res.data["salary_max_paise"] == 4000000
+    assert create_res.data["salary_period"] == "MONTHLY"
 
 
 @pytest.mark.django_db
@@ -934,6 +940,9 @@ def test_slice4_structured_fields_schema_enforcement(a10_variant):
             "description": "A great software engineering role with at least 20 chars.",
             "location_text": "Hyderabad",
             "contact_phone": "+919900000088",
+            "salary_min_paise": 5000000,
+            "salary_max_paise": 7000000,
+            "salary_period": "MONTHLY",
             "structured_fields": {
                 "role_type": "Full-Time",
                 "pay_range": "₹50,000 / month",
@@ -957,6 +966,9 @@ def test_slice4_structured_fields_schema_enforcement(a10_variant):
             "description": "A great software engineering role with at least 20 chars.",
             "location_text": "Hyderabad",
             "contact_phone": "+919900000088",
+            "salary_min_paise": 5000000,
+            "salary_max_paise": 7000000,
+            "salary_period": "MONTHLY",
             "structured_fields": {
                 "unknown_extra_detail": "Not in schema",
             },
@@ -974,6 +986,9 @@ def test_slice4_structured_fields_schema_enforcement(a10_variant):
             "description": "A great software engineering role with at least 20 chars.",
             "location_text": "Hyderabad",
             "contact_phone": "+919900000088",
+            "salary_min_paise": 5000000,
+            "salary_max_paise": 7000000,
+            "salary_period": "MONTHLY",
             "structured_fields": {
                 "role_type": "Moonlighting",
             },
@@ -1052,3 +1067,52 @@ def test_public_listings_filter_employment_type(poster, a10_variant):
     rows = list(public_listings({"employment_type": "Full-Time", "sort": "latest"}))
     assert len(rows) == 1
     assert list(public_listings({"work_mode": "Remote"})) == []
+
+
+@pytest.mark.django_db
+def test_listing_salary_validation(a10_variant):
+    """Partner create must send valid salary rules."""
+    # valid payload
+    serializer = PartnerListingSerializer(
+        data={
+            "variant": str(a10_variant.id),
+            "title": "Valid Software Engineer",
+            "description": "A great software engineering role with at least 20 chars.",
+            "location_text": "Hyderabad",
+            "salary_min_paise": 1000000,
+            "salary_max_paise": 1500000,
+            "salary_period": "MONTHLY",
+        }
+    )
+    assert serializer.is_valid(), serializer.errors
+
+    # max < min
+    serializer = PartnerListingSerializer(
+        data={
+            "variant": str(a10_variant.id),
+            "title": "Valid Software Engineer",
+            "description": "A great software engineering role with at least 20 chars.",
+            "location_text": "Hyderabad",
+            "salary_min_paise": 1500000,
+            "salary_max_paise": 1000000,
+            "salary_period": "MONTHLY",
+        }
+    )
+    with pytest.raises(ValidationError) as exc:
+        serializer.is_valid(raise_exception=True)
+    assert "Maximum pay cannot be less than minimum pay." in str(exc.value)
+
+    # missing period
+    serializer = PartnerListingSerializer(
+        data={
+            "variant": str(a10_variant.id),
+            "title": "Valid Software Engineer",
+            "description": "A great software engineering role with at least 20 chars.",
+            "location_text": "Hyderabad",
+            "salary_min_paise": 1000000,
+            "salary_max_paise": 1500000,
+        }
+    )
+    with pytest.raises(ValidationError) as exc:
+        serializer.is_valid(raise_exception=True)
+    assert "Pay period must be" in str(exc.value)

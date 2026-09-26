@@ -174,14 +174,8 @@ class Command(BaseCommand):
                                     "title": "Role Type / Employment",
                                     "enum": ["Full-Time", "Part-Time", "Contract", "Internship"],
                                 },
-                                "salary_range": {
-                                    "type": "string",
-                                    "title": "Pay Range / Compensation",
-                                },
-                                "experience_years": {
-                                    "type": "string",
-                                    "title": "Experience Required",
-                                },
+                                "salary_period": {"type": "string", "title": "Pay period", "enum": ["MONTHLY", "YEARLY", "HOURLY"]},
+                                "experience_years": {"type": "string", "title": "Experience"},
                                 "shift": {
                                     "type": "string",
                                     "title": "Workplace Mode / Shift",
@@ -323,14 +317,8 @@ class Command(BaseCommand):
                             "title": "Role Type / Employment",
                             "enum": ["Full-Time", "Part-Time", "Contract", "Internship"],
                         },
-                        "salary_range": {
-                            "type": "string",
-                            "title": "Pay Range / Compensation",
-                        },
-                        "experience_years": {
-                            "type": "string",
-                            "title": "Experience Required",
-                        },
+                        "salary_period": {"type": "string", "title": "Pay period", "enum": ["MONTHLY", "YEARLY", "HOURLY"]},
+                        "experience_years": {"type": "string", "title": "Experience"},
                         "shift": {
                             "type": "string",
                             "title": "Workplace Mode / Shift",
@@ -425,11 +413,13 @@ class Command(BaseCommand):
                     ),
                     "location_text": "Hyderabad, Telangana",
                     "is_premium": False,
+                    "salary_min_paise": 80000000,
+                    "salary_max_paise": 140000000,
+                    "salary_period": "YEARLY",
                     "structured_fields": {
-                        "role_type": "Full Time",
-                        "salary_range": "₹8,00,000 - ₹14,00,000 / year",
+                        "role_type": "Full-Time",
                         "experience_years": "3+ years",
-                        "shift": "Day Shift",
+                        "shift": "Day",
                     },
                     "moderation_reason": "Initial demo listing seed.",
                 },
@@ -441,11 +431,13 @@ class Command(BaseCommand):
                     ),
                     "location_text": "Hyderabad / Hybrid",
                     "is_premium": True,
+                    "salary_min_paise": 120000000,
+                    "salary_max_paise": 180000000,
+                    "salary_period": "YEARLY",
                     "structured_fields": {
-                        "role_type": "Full Time",
-                        "salary_range": "₹12,00,000 - ₹18,00,000 / year",
+                        "role_type": "Full-Time",
                         "experience_years": "5+ years",
-                        "shift": "Day Shift",
+                        "shift": "Day",
                     },
                     "moderation_reason": "Demo premium / Featured listing seed.",
                 },
@@ -465,6 +457,9 @@ class Command(BaseCommand):
                         "is_premium": demo["is_premium"],
                         "published_at": now,
                         "expires_at": now + timedelta(days=30),
+                        "salary_min_paise": demo["salary_min_paise"],
+                        "salary_max_paise": demo["salary_max_paise"],
+                        "salary_period": demo["salary_period"],
                         "structured_fields": demo["structured_fields"],
                     },
                 )
@@ -476,6 +471,9 @@ class Command(BaseCommand):
                     listing.is_premium = demo["is_premium"]
                     listing.published_at = listing.published_at or now
                     listing.expires_at = now + timedelta(days=30)
+                    listing.salary_min_paise = demo["salary_min_paise"]
+                    listing.salary_max_paise = demo["salary_max_paise"]
+                    listing.salary_period = demo["salary_period"]
                     listing.structured_fields = demo["structured_fields"]
                     listing.save(
                         update_fields=(
@@ -486,6 +484,9 @@ class Command(BaseCommand):
                             "is_premium",
                             "published_at",
                             "expires_at",
+                            "salary_min_paise",
+                            "salary_max_paise",
+                            "salary_period",
                             "structured_fields",
                             "updated_at",
                         )
@@ -582,11 +583,13 @@ class Command(BaseCommand):
                 "contact_email": "careers@apexstaffing.in",
                 "status": Listing.Status.DRAFT,
                 "moderation_status": Listing.ModerationStatus.PENDING,
+                "salary_min_paise": 35000000,
+                "salary_max_paise": 50000000,
+                "salary_period": "YEARLY",
                 "structured_fields": {
-                    "role_type": "Full Time",
-                    "salary_range": "₹3,50,000 - ₹5,00,000 / year",
+                    "role_type": "Full-Time",
                     "experience_years": "1-2 years",
-                    "shift": "Day Shift",
+                    "shift": "Day",
                 },
             },
         )
@@ -594,8 +597,25 @@ class Command(BaseCommand):
             pending.status = Listing.Status.DRAFT
             pending.moderation_status = Listing.ModerationStatus.PENDING
             pending.variant = variant
+            pending.salary_min_paise = 35000000
+            pending.salary_max_paise = 50000000
+            pending.salary_period = "YEARLY"
+            pending.structured_fields = {
+                "role_type": "Full-Time",
+                "experience_years": "1-2 years",
+                "shift": "Day",
+            }
             pending.save(
-                update_fields=("status", "moderation_status", "variant", "updated_at"),
+                update_fields=(
+                    "status",
+                    "moderation_status",
+                    "variant",
+                    "salary_min_paise",
+                    "salary_max_paise",
+                    "salary_period",
+                    "structured_fields",
+                    "updated_at",
+                ),
             )
         if pending_created:
             ListingModerationEvent.objects.create(

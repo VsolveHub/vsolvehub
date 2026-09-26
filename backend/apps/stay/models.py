@@ -4,9 +4,19 @@ from __future__ import annotations
 
 import builtins
 import uuid
+from pathlib import Path
+from typing import Any
 
 from django.conf import settings
 from django.db import models
+
+
+def stay_ad_upload_to(instance: models.Model, filename: str) -> str:
+    ext = Path(filename).suffix.lower()
+    if ext not in {".jpg", ".jpeg", ".png", ".webp"}:
+        ext = ".jpg"
+    partner_key = getattr(instance, "partner_id", None) or "anon"
+    return f"stay-ads/{partner_key}/{uuid.uuid4().hex}{ext}"
 
 
 class Property(models.Model):
@@ -144,6 +154,28 @@ class PropertyMedia(models.Model):
     @builtins.property
     def sort_order(self) -> int:
         return self.display_order
+
+
+class StayPhotoUpload(models.Model):
+    """Partner-uploaded stay photo stored on the platform before it is attached."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    partner = models.ForeignKey(
+        "partners.PartnerProfile",
+        on_delete=models.CASCADE,
+        related_name="stay_photo_uploads",
+    )
+    stored_file = models.FileField(upload_to=stay_ad_upload_to)
+    original_name = models.CharField(max_length=180)
+    content_type = models.CharField(max_length=80)
+    size_bytes = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return self.original_name
 
 
 class StayReview(models.Model):

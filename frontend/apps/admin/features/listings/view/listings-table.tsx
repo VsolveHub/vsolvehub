@@ -10,6 +10,7 @@ import {
   RefreshCw,
   ShieldAlert,
 } from "lucide-react";
+import { formatMoney } from "@vsolve/ui";
 
 import { listingFields, type AdminListing } from "../queries";
 
@@ -92,20 +93,28 @@ export function ListingsTable({
 
                     <td className="px-4 py-3.5">
                       <div className="flex flex-col gap-1 text-xs">
-                        {fields.pay_range && (
+                        {listing.salary_min_paise && listing.salary_min_paise > 0 ? (
                           <span className="font-semibold text-slate-800">
-                            {String(fields.pay_range)}
+                            {formatMoney(listing.salary_min_paise)}
+                            {listing.salary_max_paise && listing.salary_max_paise > listing.salary_min_paise
+                              ? ` - ${formatMoney(listing.salary_max_paise)}`
+                              : ""}
+                            {listing.salary_period ? ` / ${listing.salary_period.toLowerCase()}` : ""}
                           </span>
-                        )}
+                        ) : listing.salary_display || fields.salary_range || fields.pay_range ? (
+                          <span className="font-semibold text-slate-800">
+                            {String(listing.salary_display || fields.salary_range || fields.pay_range)}
+                          </span>
+                        ) : null}
                         <div className="flex flex-wrap items-center gap-1">
                           {fields.role_type && (
                             <span className="rounded bg-slate-100 px-1.5 py-0.5 font-medium text-slate-600">
                               {String(fields.role_type)}
                             </span>
                           )}
-                          {fields.work_mode && (
+                          {(fields.shift || fields.work_mode) && (
                             <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-600">
-                              {String(fields.work_mode)}
+                              {String((fields.shift || fields.work_mode))}
                             </span>
                           )}
                         </div>

@@ -58,6 +58,26 @@ export async function fetchPartnerRentalBookings(): Promise<RentalBooking[]> {
   return Array.isArray(data) ? data : [];
 }
 
+export type RentalPhotoUpload = {
+  upload_id: string;
+  url: string;
+  original_name: string;
+};
+
+export async function uploadPartnerRentalPhoto(file: File): Promise<RentalPhotoUpload> {
+  const data = await request(() =>
+    getApiClient().POST("/api/v1/partner/rentals/photos" as never, {
+      body: { file },
+      bodySerializer(body: { file?: Blob }) {
+        const form = new FormData();
+        if (body.file) form.append("file", body.file, file.name);
+        return form;
+      },
+    } as never),
+  );
+  return data as RentalPhotoUpload;
+}
+
 export async function createPartnerRentalAsset(
   body: CreateAssetRequest,
 ): Promise<RentalAsset> {

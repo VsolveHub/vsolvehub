@@ -36,70 +36,371 @@ class Command(BaseCommand):
                 "description": "Nights in a property unit — enquiry-first MVP.",
             },
         )
-        taxonomy = {
-    "Rooms": [
-        "Single Room", "Double Sharing Room", "Triple Sharing Room", "Four Sharing Room",
-        "Family Room", "Studio Room", "Furnished Room", "Semi Furnished Room",
-        "Non Furnished Room", "AC Room", "Non AC Room", "Attached Bathroom Room",
-        "Shared Bathroom Room",
-    ],
-    "PG Accommodation": [
-        "Gents PG", "Ladies PG", "Students PG", "Working Professionals PG",
-        "AC PG", "Non AC PG", "Food Included PG", "Without Food PG",
-        "Single Sharing PG", "Double Sharing PG", "Triple Sharing PG",
-        "Four Sharing PG", "Luxury PG", "Budget PG",
-    ],
-    "Hostels": [
-        "Gents Hostel", "Ladies Hostel", "Students Hostel",
-        "Working Professionals Hostel", "AC Hostel", "Non AC Hostel",
-        "Dormitory Hostel", "Backpacker Hostel", "Budget Hostel",
-    ],
-    "Bed Space": [
-        "Single Bed Space", "Double Bed Space", "Shared Bed Space", "Labour Bed Space",
-    ],
-    "Co-Living Spaces": [
-        "Co-Living Room", "Shared Co-Living", "Premium Co-Living", "Fully Managed Co-Living",
-    ],
-    "Apartments": [
-        "1 RK Apartment", "1 BHK Apartment", "2 BHK Apartment", "3 BHK Apartment",
-        "4 BHK Apartment", "Fully Furnished Apartment", "Semi Furnished Apartment",
-        "Unfurnished Apartment",
-    ],
-    "Rental Properties": [
-        "Independent House", "Villa", "Farm House", "Studio Apartment",
-        "Service Apartment", "Duplex House", "Commercial Space",
-        "Office Space", "Shop Space", "Godown / Warehouse",
-    ],
-    "Short Stay": [
-        "Daily Room", "Weekly Stay", "Monthly Stay", "Hourly Stay",
-        "Guest House", "Service Apartment", "Vacation Home",
-    ],
-    "Student Accommodation": [
-        "College Nearby Hostel", "College Nearby PG", "Exam Stay Room", "Coaching Student PG",
-    ],
-    "Worker Accommodation": [
-        "Labour Room", "Labour Camp", "Construction Worker Stay",
-        "Factory Worker Stay", "Staff Accommodation", "Driver Accommodation",
-    ],
-    "Property Listing": [
-        "Room for Rent", "PG for Rent", "Hostel Vacancy", "Apartment for Rent",
-        "House for Rent", "Villa for Rent", "Commercial Space for Rent",
-        "Office Space for Rent", "Godown / Warehouse for Rent",
-    ],
-    "Premium Stays": [
-        "Luxury Apartment", "Premium Villa", "Executive Suite",
-        "Corporate Stay", "Serviced Residence",
-    ],
-}
+        taxonomy: list[dict[str, Any]] = [
+            {
+                "sub": "Rooms",
+                "services": [
+                    {
+                        "name": "Room",
+                        "schema": {
+                            "type": "object",
+                            "required": ["occupancy", "furnishing", "ac", "bathroom"],
+                            "properties": {
+                                "occupancy": {
+                                    "type": "string",
+                                    "enum": [
+                                        "Single",
+                                        "Double sharing",
+                                        "Triple sharing",
+                                        "Four sharing",
+                                        "Family",
+                                        "Studio",
+                                    ],
+                                },
+                                "furnishing": {
+                                    "type": "string",
+                                    "enum": ["Furnished", "Semi furnished", "Non furnished"],
+                                },
+                                "ac": {"type": "string", "enum": ["AC", "Non AC"]},
+                                "bathroom": {
+                                    "type": "string",
+                                    "enum": ["Attached bathroom", "Shared bathroom"],
+                                },
+                            },
+                        },
+                    }
+                ],
+            },
+            {
+                "sub": "PG Accommodation",
+                "services": [
+                    {
+                        "name": "PG",
+                        "schema": {
+                            "type": "object",
+                            "required": ["gender", "occupant", "food", "ac", "sharing", "tier"],
+                            "properties": {
+                                "gender": {
+                                    "type": "string",
+                                    "enum": ["Gents", "Ladies", "Unisex"],
+                                },
+                                "occupant": {
+                                    "type": "string",
+                                    "enum": ["Students", "Working professionals"],
+                                },
+                                "food": {
+                                    "type": "string",
+                                    "enum": ["Food included", "Without food"],
+                                },
+                                "ac": {"type": "string", "enum": ["AC", "Non AC"]},
+                                "sharing": {
+                                    "type": "string",
+                                    "enum": ["Single", "Double", "Triple", "Four"],
+                                },
+                                "tier": {
+                                    "type": "string",
+                                    "enum": ["Budget", "Standard", "Luxury"],
+                                },
+                            },
+                        },
+                    }
+                ],
+            },
+            {
+                "sub": "Hostels",
+                "services": [
+                    {
+                        "name": "Hostel",
+                        "schema": {
+                            "type": "object",
+                            "required": ["gender", "occupant", "ac", "hostel_type", "tier"],
+                            "properties": {
+                                "gender": {
+                                    "type": "string",
+                                    "enum": ["Gents", "Ladies", "Unisex"],
+                                },
+                                "occupant": {
+                                    "type": "string",
+                                    "enum": ["Students", "Working professionals"],
+                                },
+                                "ac": {"type": "string", "enum": ["AC", "Non AC"]},
+                                "hostel_type": {
+                                    "type": "string",
+                                    "enum": ["Standard", "Dormitory", "Backpacker"],
+                                },
+                                "tier": {"type": "string", "enum": ["Budget", "Standard"]},
+                            },
+                        },
+                    }
+                ],
+            },
+            {
+                "sub": "Bed Space",
+                "services": [
+                    {
+                        "name": "Bed space",
+                        "schema": {
+                            "type": "object",
+                            "required": ["occupancy"],
+                            "properties": {
+                                "occupancy": {
+                                    "type": "string",
+                                    "enum": ["Single", "Double", "Shared", "Labour"],
+                                },
+                                "ac": {"type": "string", "enum": ["AC", "Non AC"]},
+                            },
+                        },
+                    }
+                ],
+            },
+            {
+                "sub": "Co-Living Spaces",
+                "services": [
+                    {
+                        "name": "Co-living",
+                        "schema": {
+                            "type": "object",
+                            "required": ["room_type", "tier"],
+                            "properties": {
+                                "room_type": {
+                                    "type": "string",
+                                    "enum": ["Private room", "Shared"],
+                                },
+                                "tier": {
+                                    "type": "string",
+                                    "enum": ["Standard", "Premium", "Fully managed"],
+                                },
+                                "wifi": {"type": "boolean"},
+                                "food": {"type": "boolean"},
+                            },
+                        },
+                    }
+                ],
+            },
+            {
+                "sub": "Apartments",
+                "services": [
+                    {
+                        "name": "Apartment",
+                        "schema": {
+                            "type": "object",
+                            "required": ["layout", "furnishing"],
+                            "properties": {
+                                "layout": {
+                                    "type": "string",
+                                    "enum": ["1 RK", "1 BHK", "2 BHK", "3 BHK", "4 BHK"],
+                                },
+                                "furnishing": {
+                                    "type": "string",
+                                    "enum": [
+                                        "Fully furnished",
+                                        "Semi furnished",
+                                        "Unfurnished",
+                                    ],
+                                },
+                                "parking": {"type": "boolean"},
+                            },
+                        },
+                    }
+                ],
+            },
+            {
+                "sub": "Rental Properties",
+                "services": [
+                    {
+                        "name": "Residential rental",
+                        "schema": {
+                            "type": "object",
+                            "required": ["property_type"],
+                            "properties": {
+                                "property_type": {
+                                    "type": "string",
+                                    "enum": [
+                                        "Independent house",
+                                        "Villa",
+                                        "Farm house",
+                                        "Studio apartment",
+                                        "Serviced apartment",
+                                        "Duplex house",
+                                    ],
+                                },
+                                "furnishing": {
+                                    "type": "string",
+                                    "enum": [
+                                        "Furnished",
+                                        "Semi furnished",
+                                        "Unfurnished",
+                                    ],
+                                },
+                            },
+                        },
+                    },
+                    {
+                        "name": "Commercial rental",
+                        "schema": {
+                            "type": "object",
+                            "required": ["property_type"],
+                            "properties": {
+                                "property_type": {
+                                    "type": "string",
+                                    "enum": [
+                                        "Commercial space",
+                                        "Office space",
+                                        "Shop space",
+                                        "Godown / warehouse",
+                                    ],
+                                },
+                            },
+                        },
+                    },
+                ],
+            },
+            {
+                "sub": "Short Stay",
+                "services": [
+                    {
+                        "name": "Short stay",
+                        "schema": {
+                            "type": "object",
+                            "required": ["duration", "stay_type"],
+                            "properties": {
+                                "duration": {
+                                    "type": "string",
+                                    "enum": ["Daily", "Weekly", "Monthly", "Hourly"],
+                                },
+                                "stay_type": {
+                                    "type": "string",
+                                    "enum": [
+                                        "Room",
+                                        "Guest house",
+                                        "Service apartment",
+                                        "Vacation home",
+                                    ],
+                                },
+                            },
+                        },
+                    }
+                ],
+            },
+            {
+                "sub": "Student Accommodation",
+                "services": [
+                    {
+                        "name": "Student stay",
+                        "schema": {
+                            "type": "object",
+                            "required": ["stay_type"],
+                            "properties": {
+                                "stay_type": {
+                                    "type": "string",
+                                    "enum": [
+                                        "College nearby hostel",
+                                        "College nearby PG",
+                                        "Exam stay room",
+                                        "Coaching student PG",
+                                    ],
+                                },
+                                "gender": {
+                                    "type": "string",
+                                    "enum": ["Gents", "Ladies", "Unisex"],
+                                },
+                                "food": {"type": "boolean"},
+                            },
+                        },
+                    }
+                ],
+            },
+            {
+                "sub": "Worker Accommodation",
+                "services": [
+                    {
+                        "name": "Worker stay",
+                        "schema": {
+                            "type": "object",
+                            "required": ["stay_type"],
+                            "properties": {
+                                "stay_type": {
+                                    "type": "string",
+                                    "enum": [
+                                        "Labour room",
+                                        "Labour camp",
+                                        "Construction worker stay",
+                                        "Factory worker stay",
+                                        "Staff accommodation",
+                                        "Driver accommodation",
+                                    ],
+                                },
+                                "capacity": {"type": "number"},
+                            },
+                        },
+                    }
+                ],
+            },
+            {
+                "sub": "Property Listing",
+                "services": [
+                    {
+                        "name": "Property listing",
+                        "schema": {
+                            "type": "object",
+                            "required": ["listing_type"],
+                            "properties": {
+                                "listing_type": {
+                                    "type": "string",
+                                    "enum": [
+                                        "Room for rent",
+                                        "PG for rent",
+                                        "Hostel vacancy",
+                                        "Apartment for rent",
+                                        "House for rent",
+                                        "Villa for rent",
+                                        "Commercial space for rent",
+                                        "Office space for rent",
+                                        "Godown / warehouse for rent",
+                                    ],
+                                },
+                            },
+                        },
+                    }
+                ],
+            },
+            {
+                "sub": "Premium Stays",
+                "services": [
+                    {
+                        "name": "Premium stay",
+                        "schema": {
+                            "type": "object",
+                            "required": ["stay_type"],
+                            "properties": {
+                                "stay_type": {
+                                    "type": "string",
+                                    "enum": [
+                                        "Luxury apartment",
+                                        "Premium villa",
+                                        "Executive suite",
+                                        "Corporate stay",
+                                        "Serviced residence",
+                                    ],
+                                },
+                            },
+                        },
+                    }
+                ],
+            },
+        ]
         first_variant = None
-        for sub_name, services in taxonomy.items():
+        keep_service_ids: list[Any] = []
+        for group in taxonomy:
+            sub_name = str(group["sub"])
             sub, _ = Subcategory.objects.get_or_create(
                 category=category,
                 slug=slugify(sub_name)[:80],
                 defaults={"name": sub_name, "description": f"{sub_name}."},
             )
-            for svc_name in services:
-                svc, _ = Service.objects.get_or_create(
+            for svc_def in group["services"]:
+                svc_name = str(svc_def["name"])
+                svc, _ = Service.objects.update_or_create(
                     subcategory=sub,
                     slug=slugify(f"{sub.slug}-{svc_name}")[:80],
                     defaults={
@@ -108,6 +409,7 @@ class Command(BaseCommand):
                         "status": Service.Status.ACTIVE,
                     },
                 )
+                keep_service_ids.append(svc.id)
                 variant, _ = ServiceVariant.objects.update_or_create(
                     service=svc,
                     code=slugify(f"{svc.slug}-stay")[:64],
@@ -120,135 +422,19 @@ class Command(BaseCommand):
                         "is_active": True,
                     },
                 )
-                property_schema: dict[str, Any] = {}
-                if "PG" in sub_name:
-                    property_schema = {
-                        "type": "object",
-                        "properties": {
-                            "gender": {"type": "string", "enum": ["GENTS", "LADIES", "UNISEX"]},
-                            "food": {"type": "boolean"},
-                            "ac": {"type": "boolean"},
-                            "sharing": {"type": "number"},
-                            "tier": {"type": "string", "enum": ["BUDGET", "LUXURY", "STANDARD"]},
-                        },
-                    }
-                elif "Hostel" in sub_name:
-                    property_schema = {
-                        "type": "object",
-                        "properties": {
-                            "gender": {"type": "string", "enum": ["GENTS", "LADIES", "UNISEX"]},
-                            "ac": {"type": "boolean"},
-                            "hostel_type": {"type": "string"},
-                            "sharing": {"type": "number"},
-                        },
-                    }
-                elif "Bed Space" in sub_name:
-                    property_schema = {
-                        "type": "object",
-                        "properties": {
-                            "occupancy_type": {"type": "string"},
-                            "bed_type": {"type": "string"},
-                            "ac": {"type": "boolean"},
-                        },
-                    }
-                elif "Co-Living" in sub_name:
-                    property_schema = {
-                        "type": "object",
-                        "properties": {
-                            "room_type": {"type": "string"},
-                            "tier": {"type": "string"},
-                            "wifi": {"type": "boolean"},
-                            "food": {"type": "boolean"},
-                        },
-                    }
-                elif "Apartment" in sub_name:
-                    property_schema = {
-                        "type": "object",
-                        "properties": {
-                            "bhk": {"type": "string"},
-                            "furnishing": {"type": "string", "enum": ["FURNISHED", "SEMI_FURNISHED", "UNFURNISHED"]},
-                            "bathrooms": {"type": "number"},
-                            "parking": {"type": "boolean"},
-                        },
-                    }
-                elif "Rental Properties" in sub_name:
-                    property_schema = {
-                        "type": "object",
-                        "properties": {
-                            "property_type": {"type": "string"},
-                            "bhk": {"type": "string"},
-                            "furnishing": {"type": "string"},
-                            "commercial": {"type": "boolean"},
-                        },
-                    }
-                elif "Short Stay" in sub_name:
-                    property_schema = {
-                        "type": "object",
-                        "properties": {
-                            "duration_mode": {"type": "string", "enum": ["DAILY", "WEEKLY", "MONTHLY", "HOURLY"]},
-                            "check_in_time": {"type": "string"},
-                            "wifi": {"type": "boolean"},
-                        },
-                    }
-                elif "Student" in sub_name:
-                    property_schema = {
-                        "type": "object",
-                        "properties": {
-                            "institution_nearby": {"type": "string"},
-                            "gender": {"type": "string"},
-                            "food": {"type": "boolean"},
-                            "curfew": {"type": "string"},
-                        },
-                    }
-                elif "Worker" in sub_name:
-                    property_schema = {
-                        "type": "object",
-                        "properties": {
-                            "worker_type": {"type": "string"},
-                            "capacity": {"type": "number"},
-                            "transport_provided": {"type": "boolean"},
-                        },
-                    }
-                elif "Property Listing" in sub_name:
-                    property_schema = {
-                        "type": "object",
-                        "properties": {
-                            "listing_type": {"type": "string"},
-                            "bhk": {"type": "string"},
-                            "deposit": {"type": "number"},
-                        },
-                    }
-                elif "Premium" in sub_name:
-                    property_schema = {
-                        "type": "object",
-                        "properties": {
-                            "tier": {"type": "string"},
-                            "duration_mode": {"type": "string"},
-                            "amenities": {"type": "string"},
-                        },
-                    }
-                else:
-                    property_schema = {
-                        "type": "object",
-                        "properties": {
-                            "room_type": {"type": "string"},
-                            "sharing": {"type": "number"},
-                            "ac": {"type": "boolean"},
-                            "bathroom": {"type": "string"},
-                            "furnishing": {"type": "string"},
-                        },
-                    }
-
                 A9VariantConfiguration.objects.update_or_create(
                     variant=variant,
                     version=1,
                     defaults={
                         "status": A9VariantConfiguration.Status.ACTIVE,
-                        "property_schema": property_schema,
+                        "property_schema": svc_def["schema"],
                     },
                 )
                 if first_variant is None:
                     first_variant = variant
+        Service.objects.filter(subcategory__category=category).exclude(
+            id__in=keep_service_ids
+        ).update(status=Service.Status.RETIRED)
 
         assert first_variant is not None
 

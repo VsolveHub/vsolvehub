@@ -1,7 +1,12 @@
 import { request, type Schemas } from "@vsolve/api-client";
 import { getApiClient } from "@/lib/api/browser";
 
-export type AdminListing = Schemas["PartnerListing"];
+export type AdminListing = Schemas["PartnerListing"] & {
+  salary_min_paise?: number;
+  salary_max_paise?: number;
+  salary_period?: string;
+  salary_display?: string;
+};
 
 export function listingFields(
   value: unknown,

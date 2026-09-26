@@ -5,6 +5,7 @@ from django.shortcuts import get_object_or_404
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import permissions, status
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -18,17 +19,22 @@ from apps.stay.serializers import (
     RespondEnquirySerializer,
     StayEnquirySerializer,
     StayModerationSerializer,
+    StayPhotoUploadSerializer,
     StayQuoteRequestSerializer,
     StayQuoteResponseSerializer,
+    StayTaxonomySubcategorySerializer,
 )
 from apps.stay.services import (
     StayStateError,
     calculate_stay_quote,
     create_enquiry,
     create_property,
+    get_stay_taxonomy,
     moderate_property,
+    partner_owns_stay_photo,
     public_properties,
     respond_enquiry,
+    store_stay_photo,
     submit_property,
 )
 
@@ -42,6 +48,16 @@ def _error(exc: Exception) -> Response:
     if isinstance(exc, PermissionError):
         code = status.HTTP_403_FORBIDDEN
     return Response({"detail": str(exc)}, status=code)
+
+
+class StayTaxonomyView(APIView):
+    """Category → subcategory → service → variant + property_schema for partner posting."""
+
+    permission_classes = (permissions.AllowAny,)
+
+    @extend_schema(responses=StayTaxonomySubcategorySerializer(many=True))
+    def get(self, request: Any) -> Response:  # noqa: ARG002
+        return Response(get_stay_taxonomy())
 
 
 class StayBrowseView(APIView):
@@ -152,13 +168,41 @@ class MyStayEnquiriesView(APIView):
         return Response(StayEnquirySerializer(rows, many=True).data)
 
 
+class PartnerStayPhotoUploadView(APIView):
+    permission_classes = (IsPartnerUser,)
+    parser_classes = (MultiPartParser, FormParser)
+
+    @extend_schema(
+        request={"multipart/form-data": {"type": "object"}},
+        responses={201: StayPhotoUploadSerializer},
+    )
+    def post(self, request: Any) -> Response:
+        upload = request.FILES.get("file")
+        if upload is None:
+            return Response({"detail": "Attach a photo file."}, status=status.HTTP_400_BAD_REQUEST)
+        partner = _partner(request.user)
+        try:
+            row = store_stay_photo(partner=partner, upload=upload)
+        except (StayStateError, PermissionError) as exc:
+            return _error(exc)
+        photo_url = request.build_absolute_uri(row.stored_file.url)
+        return Response(
+            {
+                "upload_id": str(row.id),
+                "url": photo_url,
+                "original_name": row.original_name,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
 class PartnerPropertyCollectionView(APIView):
     permission_classes = (IsPartnerUser,)
 
     @extend_schema(responses=PropertySerializer(many=True))
     def get(self, request: Any) -> Response:
         partner = _partner(request.user)
-        rows = Property.objects.filter(host=partner).prefetch_related("units")
+        rows = Property.objects.filter(host=partner).prefetch_related("units", "media")
         return Response(PropertySerializer(rows, many=True).data)
 
     @extend_schema(request=CreatePropertySerializer, responses=PropertySerializer)
@@ -166,6 +210,12 @@ class PartnerPropertyCollectionView(APIView):
         ser = CreatePropertySerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         partner = _partner(request.user)
+        photo_urls = ser.validated_data.get("image_urls") or []
+        if not all(partner_owns_stay_photo(partner=partner, url=url) for url in photo_urls):
+            return Response(
+                {"detail": "Upload photos from this form instead of pasting links."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         try:
             prop = create_property(host=partner, **ser.validated_data)
         except (StayStateError, PermissionError) as exc:
@@ -226,7 +276,11 @@ class OpsStayCollectionView(APIView):
 
     @extend_schema(responses=PropertySerializer(many=True))
     def get(self, _request: Any) -> Response:
-        rows = Property.objects.all().prefetch_related("units").select_related("host")
+        rows = (
+            Property.objects.all()
+            .prefetch_related("units", "media", "reviews")
+            .select_related("host")
+        )
         return Response(PropertySerializer(rows, many=True).data)
 
 

@@ -32,6 +32,9 @@ class Listing(models.Model):
     title = models.CharField(max_length=180)
     description = models.TextField()
     structured_fields = models.JSONField(default=dict, blank=True)
+    salary_min_paise = models.PositiveIntegerField(default=0)
+    salary_max_paise = models.PositiveIntegerField(default=0)
+    salary_period = models.CharField(max_length=16, blank=True)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.DRAFT)
     moderation_status = models.CharField(
         max_length=16, choices=ModerationStatus.choices, default=ModerationStatus.DRAFT

@@ -4,10 +4,19 @@ from __future__ import annotations
 
 import uuid
 from datetime import date
+from pathlib import Path
 
 from django.conf import settings
 from django.db import models
 from django.db.models import Q, QuerySet
+
+
+def rental_ad_upload_to(instance: models.Model, filename: str) -> str:
+    ext = Path(filename).suffix.lower()
+    if ext not in {".jpg", ".jpeg", ".png", ".webp"}:
+        ext = ".jpg"
+    partner_key = getattr(instance, "partner_id", None) or "anon"
+    return f"rental-ads/{partner_key}/{uuid.uuid4().hex}{ext}"
 
 
 class RentalAsset(models.Model):
@@ -204,6 +213,28 @@ def overlapping_reservations(
         asset_id=asset_id,
         status__in=(AssetReservation.Status.TENTATIVE, AssetReservation.Status.CONFIRMED),
     ).filter(Q(start_date__lt=end) & Q(end_date__gt=start))
+
+class RentalPhotoUpload(models.Model):
+    """Partner-uploaded ad photo stored on the platform before it is attached to an asset."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    partner = models.ForeignKey(
+        "partners.PartnerProfile",
+        on_delete=models.CASCADE,
+        related_name="rental_photo_uploads",
+    )
+    stored_file = models.FileField(upload_to=rental_ad_upload_to)
+    original_name = models.CharField(max_length=180)
+    content_type = models.CharField(max_length=80)
+    size_bytes = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return self.original_name
+
 
 class RentalAssetMedia(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

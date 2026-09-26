@@ -18,10 +18,10 @@ export function WorkspaceHeader({
           <BriefcaseBusiness className="size-3.5" /> Hiring Partner Workspace
         </div>
         <h1 className="mt-1 text-2xl font-bold tracking-tight text-text sm:text-3xl">
-          Career Listings & Applicants
+          Jobs & applicants
         </h1>
         <p className="mt-1 text-sm text-text-muted">
-          Publish openings, review incoming applicant leads, and manage hiring subscriptions.
+          Post a role, set pay in rupees, and review applicants. Pay is stored as paise on the server.
         </p>
       </div>
 
@@ -41,7 +41,7 @@ export function WorkspaceHeader({
           className="inline-flex items-center gap-2 rounded-control bg-action px-4 py-2.5 text-sm font-semibold text-action-text shadow-card transition hover:bg-action-hover active:bg-action-active"
         >
           <Plus className="size-4" />
-          Post New Opening
+          Post a job
         </button>
       </div>
     </div>

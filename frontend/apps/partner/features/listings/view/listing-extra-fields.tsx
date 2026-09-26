@@ -1,10 +1,14 @@
+import { Field, Input, Select } from "@vsolve/ui";
+
 import type { JsonSchemaObject } from "../queries";
 import { FieldError } from "./field-error";
 
 export interface ListingExtraFieldsProps {
   roleType: string;
-  payRange: string;
-  workMode: string;
+  salaryMin: string;
+  salaryMax: string;
+  salaryPeriod: string;
+  shift: string;
   experienceYears: string;
   errors?: Record<string, string>;
   onChange: (key: string, value: string) => void;
@@ -13,108 +17,97 @@ export interface ListingExtraFieldsProps {
 
 export function ListingExtraFields({
   roleType,
-  payRange,
-  workMode,
+  salaryMin,
+  salaryMax,
+  salaryPeriod,
+  shift,
   experienceYears,
   errors = {},
   onChange,
   schema,
 }: ListingExtraFieldsProps) {
-  const roleTypeOptions = schema?.properties?.role_type?.enum || [
-    "Full-Time",
-    "Part-Time",
-    "Contract",
-    "Internship",
-  ];
-  const roleTypeLabel = schema?.properties?.role_type?.title || "Role Type / Employment";
-
-  const shiftOptions = schema?.properties?.shift?.enum || [
-    "On-site",
-    "Hybrid",
-    "Remote",
-    "Day",
-    "Night",
-    "Rotational",
-  ];
-  const shiftLabel = schema?.properties?.shift?.title || "Workplace Mode / Shift";
-
-  const salaryLabel = schema?.properties?.salary_range?.title || "Pay Range / Compensation";
-  const expLabel = schema?.properties?.experience_years?.title || "Experience Required";
-
-  const payError = errors.salary_range || errors.pay_range;
-  const shiftError = errors.shift || errors.work_mode;
+  const roleTypeOptions = schema?.properties?.role_type?.enum ?? [];
+  const shiftOptions = schema?.properties?.shift?.enum ?? [];
+  const periodOptions = schema?.properties?.salary_period?.enum ?? [];
+  const expLabel = schema?.properties?.experience_years?.title || "Experience";
 
   return (
     <>
-      <div>
-        <label className="block text-xs font-semibold text-text-secondary">{roleTypeLabel}</label>
-        <select
-          value={roleType}
-          onChange={(e) => onChange("role_type", e.target.value)}
-          className="mt-1 h-10 w-full rounded-control border border-line bg-surface px-3 text-sm text-text outline-none focus:border-line-strong"
-        >
+      <Field label="Employment type" showOptional={false}>
+        <Select value={roleType} onChange={(e) => onChange("role_type", e.target.value)}>
+          <option value="">Select employment type</option>
           {roleTypeOptions.map((opt) => (
             <option key={opt} value={opt}>
               {opt}
             </option>
           ))}
-        </select>
+        </Select>
         <FieldError message={errors.role_type} />
-      </div>
+      </Field>
 
-      <div>
-        <label className="block text-xs font-semibold text-text-secondary">{shiftLabel}</label>
-        <select
-          value={workMode}
-          onChange={(e) => {
-            onChange("shift", e.target.value);
-            onChange("work_mode", e.target.value);
-          }}
-          className="mt-1 h-10 w-full rounded-control border border-line bg-surface px-3 text-sm text-text outline-none focus:border-line-strong"
-        >
+      <Field label="Workplace / shift" showOptional={false}>
+        <Select value={shift} onChange={(e) => onChange("shift", e.target.value)}>
+          <option value="">Select workplace or shift</option>
           {shiftOptions.map((opt) => (
             <option key={opt} value={opt}>
               {opt}
             </option>
           ))}
-        </select>
-        <FieldError message={shiftError} />
+        </Select>
+        <FieldError message={errors.shift} />
+      </Field>
+
+      <div className="col-span-full grid gap-3 sm:grid-cols-3">
+        <Field
+          label="Minimum pay"
+          required
+          description="Amount in rupees."
+        >
+          <Input
+            inputMode="decimal"
+            placeholder="e.g. 25000"
+            value={salaryMin}
+            onChange={(e) => onChange("salary_min_rupees", e.target.value)}
+            aria-invalid={Boolean(errors.salary_min_rupees)}
+          />
+          <FieldError message={errors.salary_min_rupees} />
+        </Field>
+        <Field label="Maximum pay" required>
+          <Input
+            inputMode="decimal"
+            placeholder="e.g. 40000"
+            value={salaryMax}
+            onChange={(e) => onChange("salary_max_rupees", e.target.value)}
+            aria-invalid={Boolean(errors.salary_max_rupees)}
+          />
+          <FieldError message={errors.salary_max_rupees} />
+        </Field>
+        <Field label="Pay period" required>
+          <Select
+            value={salaryPeriod}
+            onChange={(e) => onChange("salary_period", e.target.value)}
+            aria-invalid={Boolean(errors.salary_period)}
+          >
+            <option value="">Select period</option>
+            {periodOptions.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt === "MONTHLY" ? "Monthly" : opt === "YEARLY" ? "Yearly" : opt === "HOURLY" ? "Hourly" : opt}
+              </option>
+            ))}
+          </Select>
+          <FieldError message={errors.salary_period} />
+        </Field>
       </div>
 
-      <div>
-        <label className="block text-xs font-semibold text-text-secondary">{salaryLabel}</label>
-        <input
-          value={payRange}
-          onChange={(e) => {
-            onChange("salary_range", e.target.value);
-            onChange("pay_range", e.target.value);
-          }}
-          placeholder="e.g. ₹35,000 - ₹50,000 / month"
-          aria-invalid={Boolean(payError)}
-          className={`mt-1 h-10 w-full rounded-control border bg-surface px-3 text-sm text-text outline-none transition focus:ring-1 ${
-            payError
-              ? "border-danger-line focus:border-danger-text focus:ring-danger-text"
-              : "border-line focus:border-line-strong focus:ring-focus-ring"
-          }`}
-        />
-        <FieldError message={payError} />
-      </div>
-
-      <div>
-        <label className="block text-xs font-semibold text-text-secondary">{expLabel}</label>
-        <input
+      <Field label={expLabel} showOptional={false}>
+        <Input
           value={experienceYears}
           onChange={(e) => onChange("experience_years", e.target.value)}
           placeholder="e.g. 2+ years"
           aria-invalid={Boolean(errors.experience_years)}
-          className={`mt-1 h-10 w-full rounded-control border bg-surface px-3 text-sm text-text outline-none transition focus:ring-1 ${
-            errors.experience_years
-              ? "border-danger-line focus:border-danger-text focus:ring-danger-text"
-              : "border-line focus:border-line-strong focus:ring-focus-ring"
-          }`}
         />
         <FieldError message={errors.experience_years} />
-      </div>
+      </Field>
     </>
   );
 }

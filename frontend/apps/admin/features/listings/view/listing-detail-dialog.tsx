@@ -1,4 +1,6 @@
 import { BriefcaseBusiness, X } from "lucide-react";
+import { formatMoney } from "@vsolve/ui";
+
 import { listingFields, type AdminListing } from "../queries";
 
 export interface ListingDetailDialogProps {
@@ -53,6 +55,20 @@ export function ListingDetailDialog({ listing, onClose }: ListingDetailDialogPro
               <span className="text-xs text-slate-500">Applications</span>
               <div className="font-semibold text-slate-800 mt-0.5">
                 {listing.application_count} applicants
+              </div>
+            </div>
+            <div className="col-span-2">
+              <span className="text-xs text-slate-500">Pay (server paise)</span>
+              <div className="font-semibold text-slate-800 mt-0.5">
+                {listing.salary_min_paise && listing.salary_min_paise > 0
+                  ? `${formatMoney(listing.salary_min_paise)}${
+                      listing.salary_max_paise && listing.salary_max_paise > listing.salary_min_paise
+                        ? ` - ${formatMoney(listing.salary_max_paise)}`
+                        : ""
+                    }${listing.salary_period ? ` / ${listing.salary_period.toLowerCase()}` : ""}`
+                  : listing.salary_display || fields.salary_range || fields.pay_range
+                    ? String(listing.salary_display || fields.salary_range || fields.pay_range)
+                    : "Not set"}
               </div>
             </div>
           </div>

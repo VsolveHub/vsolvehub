@@ -9,8 +9,10 @@ import {
   Send,
   Users,
   XCircle,
+  Briefcase,
+  IndianRupee,
 } from "lucide-react";
-import { Badge, Card, StatusChip } from "@vsolve/ui";
+import { Badge, Card, StatusChip, formatMoney } from "@vsolve/ui";
 
 import type { PartnerListing } from "../queries";
 
@@ -31,39 +33,77 @@ export function ListingCard({
   onAction,
   isActionPending,
 }: ListingCardProps) {
+  let displayPay = "";
+  if (listing.salary_min_paise && listing.salary_min_paise > 0) {
+    const minStr = formatMoney(listing.salary_min_paise);
+    if (listing.salary_max_paise && listing.salary_max_paise > listing.salary_min_paise) {
+      displayPay = `${minStr} - ${formatMoney(listing.salary_max_paise)}`;
+    } else {
+      displayPay = minStr;
+    }
+    if (listing.salary_period) {
+      displayPay += ` / ${listing.salary_period.toLowerCase()}`;
+    }
+  } else if (listing.salary_display) {
+    displayPay = listing.salary_display;
+  } else if (listing.structured_fields?.salary_range) {
+    displayPay = String(listing.structured_fields.salary_range);
+  }
+
+  const exp = listing.structured_fields?.experience_years 
+    ? String(listing.structured_fields.experience_years) 
+    : "";
+
   return (
     <Card className="p-5 transition duration-fast hover:border-line-strong hover:shadow-raised">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="space-y-2 flex-1">
+        <div className="space-y-3 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <StatusChip status={listing.status} category="listing" />
+            <h2 className="text-xl font-bold text-navy-900">{listing.title}</h2>
+          </div>
+          
+          {listing.service_name && (
+            <div className="text-sm font-semibold text-text-secondary">
+              {listing.service_name} {listing.poster_name ? `· ${listing.poster_name}` : ""}
+            </div>
+          )}
 
+          <div className="flex flex-wrap items-center gap-4 text-sm text-text-secondary">
+            {listing.location_text && (
+              <span className="flex items-center gap-1.5">
+                <MapPin className="size-4 text-text-muted" />
+                {listing.location_text}
+              </span>
+            )}
+            {exp && (
+              <span className="flex items-center gap-1.5">
+                <Briefcase className="size-4 text-text-muted" />
+                {exp}
+              </span>
+            )}
+            {displayPay && (
+              <span className="flex items-center gap-1.5">
+                <IndianRupee className="size-4 text-text-muted" />
+                {displayPay}
+              </span>
+            )}
+          </div>
+
+          <p className="line-clamp-2 text-sm text-text-secondary mt-2">
+            {listing.description}
+          </p>
+
+          <div className="flex flex-wrap items-center gap-2 pt-2">
+            <StatusChip status={listing.status} category="listing" />
+            
             {listing.moderation_status === "APPROVED" && listing.status !== "PUBLISHED" && (
               <Badge tone="info">
                 <CheckCircle2 className="size-3" /> Moderation Approved
               </Badge>
             )}
-
-            {listing.service_name && (
-              <span className="text-xs text-text-muted">• {listing.service_name}</span>
-            )}
-
+            
             <span className="text-xs text-text-muted">
-              • Created {new Date(listing.created_at).toLocaleDateString()}
-            </span>
-          </div>
-
-          <h2 className="text-lg font-bold text-text">{listing.title}</h2>
-          <p className="line-clamp-2 text-sm text-text-secondary">{listing.description}</p>
-
-          <div className="flex flex-wrap items-center gap-3 pt-1 text-xs text-text-muted">
-            <span className="flex items-center gap-1">
-              <MapPin className="size-3.5 text-text-muted" />
-              {listing.location_text || "Location on contact"}
-            </span>
-            <span className="flex items-center gap-1">
-              <Phone className="size-3.5 text-text-muted" />
-              {listing.contact_phone}
+              Created {new Date(listing.created_at).toLocaleDateString()}
             </span>
           </div>
 
@@ -80,8 +120,8 @@ export function ListingCard({
             href={`/listings/${listing.id}`}
             className="inline-flex items-center gap-1.5 rounded-control border border-line bg-surface px-3.5 py-2 text-xs font-semibold text-text transition hover:border-line-strong hover:bg-surface-hover"
           >
-            <Users className="size-3.5 text-text-muted" />
-            View Leads ({listing.application_count})
+            <Users className="size-3.5 text-action" />
+            View Applicants ({listing.application_count})
           </Link>
 
           {["DRAFT", "PUBLISHED"].includes(listing.status) && (
@@ -90,7 +130,7 @@ export function ListingCard({
               onClick={() => onStartEdit(listing)}
               className="inline-flex items-center gap-1.5 rounded-control border border-line bg-surface px-3.5 py-2 text-xs font-semibold text-text-secondary transition hover:border-line-strong hover:bg-surface-hover"
             >
-              <Pencil className="size-3.5 text-text-muted" /> Edit Opening
+              <Pencil className="size-3.5 text-text-muted" /> Edit Job
             </button>
           )}
 

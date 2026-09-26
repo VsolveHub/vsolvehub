@@ -9,6 +9,11 @@ urlpatterns = [
     path("rentals/<uuid:asset_id>", views.RentalDetailView.as_view(), name="rental-detail"),
     path("me/rentals", views.MyRentalsView.as_view(), name="my-rentals"),
     path(
+        "partner/rentals/photos",
+        views.PartnerRentalPhotoUploadView.as_view(),
+        name="partner-rental-photos",
+    ),
+    path(
         "partner/rentals/assets",
         views.PartnerAssetCollectionView.as_view(),
         name="partner-rental-assets",

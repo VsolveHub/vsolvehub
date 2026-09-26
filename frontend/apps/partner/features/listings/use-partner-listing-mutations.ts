@@ -5,6 +5,7 @@ import {
   serverErrorMessage,
   serverFieldErrors,
   SUCCESS_MESSAGES,
+  rupeesToPaise,
   type CreateListingFormState,
   type EditListingFormState,
 } from "./model";
@@ -53,7 +54,8 @@ export function usePartnerListingMutations({
   const update = useMutation({
     mutationFn: () => {
       if (!editingListing) throw new Error("No listing selected for editing");
-      return updatePartnerListing(editingListing.id, {
+      
+      const payload: any = {
         title: editForm.title,
         description: editForm.description,
         location_text: editForm.location_text,
@@ -61,11 +63,20 @@ export function usePartnerListingMutations({
         contact_email: editForm.contact_email || undefined,
         structured_fields: {
           role_type: editForm.role_type,
-          salary_range: editForm.salary_range || editForm.pay_range || "",
-          shift: editForm.shift || editForm.work_mode || "",
+          shift: editForm.shift,
           experience_years: editForm.experience_years,
         },
-      });
+      };
+
+      const minP = rupeesToPaise(editForm.salary_min_rupees);
+      const maxP = rupeesToPaise(editForm.salary_max_rupees);
+      if (minP != null && maxP != null) {
+        payload.salary_min_paise = minP;
+        payload.salary_max_paise = maxP;
+        payload.salary_period = editForm.salary_period;
+      }
+
+      return updatePartnerListing(editingListing.id, payload);
     },
     onSuccess: () => {
       onUpdateSuccess();
@@ -76,8 +87,8 @@ export function usePartnerListingMutations({
   });
 
   const create = useMutation({
-    mutationFn: () =>
-      createPartnerListing({
+    mutationFn: () => {
+      const payload: any = {
         variant: form.variant || undefined,
         service_id: form.service_id || undefined,
         title: form.title,
@@ -87,11 +98,21 @@ export function usePartnerListingMutations({
         contact_email: form.contact_email || undefined,
         structured_fields: {
           role_type: form.role_type,
-          salary_range: form.salary_range || form.pay_range || "",
-          shift: form.shift || form.work_mode || "",
+          shift: form.shift,
           experience_years: form.experience_years,
         },
-      }),
+      };
+
+      const minP = rupeesToPaise(form.salary_min_rupees);
+      const maxP = rupeesToPaise(form.salary_max_rupees);
+      if (minP != null && maxP != null) {
+        payload.salary_min_paise = minP;
+        payload.salary_max_paise = maxP;
+        payload.salary_period = form.salary_period;
+      }
+
+      return createPartnerListing(payload);
+    },
     onSuccess: () => {
       onCreateSuccess();
       notify(SUCCESS_MESSAGES.create);

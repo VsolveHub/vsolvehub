@@ -4,7 +4,12 @@ import { createIdempotencyKey, request, type Schemas } from "@vsolve/api-client"
 
 import { getApiClient } from "@/lib/api/browser";
 
-export type PartnerListing = Schemas["PartnerListing"];
+export type PartnerListing = Schemas["PartnerListing"] & {
+  salary_min_paise?: number;
+  salary_max_paise?: number;
+  salary_period?: string;
+  salary_display?: string;
+};
 export type PartnerApplication = Schemas["Application"];
 export type VendorSubscriptionPlan = Schemas["VendorSubscriptionPlan"];
 export type VendorSubscription = Schemas["VendorSubscription"];

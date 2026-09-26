@@ -6,6 +6,7 @@ from django.shortcuts import get_object_or_404
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import permissions, status
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -18,6 +19,7 @@ from apps.rental.serializers import (
     RentalAssetSerializer,
     RentalBookingSerializer,
     RentalModerationSerializer,
+    RentalPhotoUploadSerializer,
     RentalTaxonomySubcategorySerializer,
 )
 from apps.rental.services import (
@@ -27,9 +29,11 @@ from apps.rental.services import (
     get_rental_taxonomy,
     handover_booking,
     moderate_asset,
+    partner_owns_rental_photo,
     public_assets,
     release_deposit,
     return_booking,
+    store_rental_photo,
     submit_asset,
 )
 
@@ -138,6 +142,34 @@ class MyRentalsView(APIView):
         return Response(RentalBookingSerializer(rows, many=True).data)
 
 
+class PartnerRentalPhotoUploadView(APIView):
+    permission_classes = (IsPartnerUser,)
+    parser_classes = (MultiPartParser, FormParser)
+
+    @extend_schema(
+        request={"multipart/form-data": {"type": "object"}},
+        responses={201: RentalPhotoUploadSerializer},
+    )
+    def post(self, request: Any) -> Response:
+        upload = request.FILES.get("file")
+        if upload is None:
+            return Response({"detail": "Attach a photo file."}, status=status.HTTP_400_BAD_REQUEST)
+        partner = _partner(request.user)
+        try:
+            row = store_rental_photo(partner=partner, upload=upload)
+        except (RentalStateError, PermissionError) as exc:
+            return _error(exc)
+        photo_url = request.build_absolute_uri(row.stored_file.url)
+        return Response(
+            {
+                "upload_id": str(row.id),
+                "url": photo_url,
+                "original_name": row.original_name,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
 class PartnerAssetCollectionView(APIView):
     permission_classes = (IsPartnerUser,)
 
@@ -156,6 +188,12 @@ class PartnerAssetCollectionView(APIView):
         ser = CreateAssetSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         partner = _partner(request.user)
+        photo_urls = ser.validated_data.get("image_urls") or []
+        if not all(partner_owns_rental_photo(partner=partner, url=url) for url in photo_urls):
+            return Response(
+                {"detail": "Upload photos from this form instead of pasting links."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         try:
             asset = create_asset(partner=partner, **ser.validated_data)
         except (RentalStateError, PermissionError) as exc:
@@ -223,7 +261,7 @@ class OpsRentalCollectionView(APIView):
 
     @extend_schema(responses=RentalAssetSerializer(many=True))
     def get(self, _request: Any) -> Response:
-        rows = RentalAsset.objects.all().select_related("partner", "variant")
+        rows = RentalAsset.objects.all().select_related("partner", "variant").prefetch_related("media").prefetch_related("media")
         return Response(RentalAssetSerializer(rows, many=True).data)
 
 

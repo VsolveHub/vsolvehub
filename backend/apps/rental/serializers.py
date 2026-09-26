@@ -40,17 +40,27 @@ class RentalAssetSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class RentalPhotoUploadSerializer(serializers.Serializer):
+    upload_id = serializers.UUIDField()
+    url = serializers.URLField()
+    original_name = serializers.CharField()
+
+
 class CreateAssetSerializer(serializers.Serializer):
     variant_id = serializers.UUIDField()
     title = serializers.CharField(max_length=180)
     description = serializers.CharField(required=False, allow_blank=True, default="")
-    location_text = serializers.CharField(required=False, allow_blank=True, default="")
+    location_text = serializers.CharField(max_length=180)
     daily_rate_paise = serializers.IntegerField(min_value=1)
-    deposit_paise = serializers.IntegerField(min_value=0, required=False, default=0)
+    deposit_paise = serializers.IntegerField(min_value=0)
     asset_identifier = serializers.CharField(required=False, allow_blank=True, default="")
     structured_fields = serializers.JSONField(required=False, default=dict)
     media = serializers.ListField(child=serializers.DictField(), required=False, default=list)
-    image_urls = serializers.ListField(child=serializers.CharField(), required=False, default=list)
+    image_urls = serializers.ListField(
+        child=serializers.CharField(min_length=1),
+        min_length=1,
+        max_length=8,
+    )
 
 
 class RentalAssetMediaCreateSerializer(serializers.Serializer):

@@ -46,6 +46,7 @@ class ListingSummarySerializer(serializers.ModelSerializer[Listing]):
     variant_name = serializers.CharField(source="variant.name", read_only=True)
     application_count = serializers.IntegerField(read_only=True, default=0)
     public_state = serializers.CharField(read_only=True)
+    salary_display = serializers.SerializerMethodField()
 
     class Meta:
         model = Listing
@@ -57,6 +58,10 @@ class ListingSummarySerializer(serializers.ModelSerializer[Listing]):
             "title",
             "description",
             "structured_fields",
+            "salary_min_paise",
+            "salary_max_paise",
+            "salary_period",
+            "salary_display",
             "status",
             "moderation_status",
             "public_state",
@@ -66,6 +71,11 @@ class ListingSummarySerializer(serializers.ModelSerializer[Listing]):
             "expires_at",
             "application_count",
         )
+
+    def get_salary_display(self, obj: Listing) -> str:
+        if obj.salary_min_paise > 0:
+            return ""
+        return obj.structured_fields.get("salary_range", obj.structured_fields.get("pay_range", ""))
 
 
 class ListingDetailSerializer(ListingSummarySerializer):
@@ -238,6 +248,25 @@ class PartnerListingSerializer(ListingSummarySerializer):
                                         )
                                     }
                                 )
+
+        min_p = attrs.get("salary_min_paise", getattr(self.instance, "salary_min_paise", 0) or 0)
+        max_p = attrs.get("salary_max_paise", getattr(self.instance, "salary_max_paise", 0) or 0)
+        period = str(attrs.get("salary_period", getattr(self.instance, "salary_period", "")) or "")
+        creating = self.instance is None
+        if creating or min_p > 0 or max_p > 0 or period:
+            if min_p < 1:
+                raise serializers.ValidationError(
+                    {"salary_min_paise": "Enter a minimum pay in paise. The client sends rupees converted on submit."}
+                )
+            if max_p < min_p:
+                raise serializers.ValidationError(
+                    {"salary_max_paise": "Maximum pay cannot be less than minimum pay."}
+                )
+            if period not in ("MONTHLY", "YEARLY", "HOURLY"):
+                raise serializers.ValidationError(
+                    {"salary_period": "Pay period must be MONTHLY, YEARLY, or HOURLY."}
+                )
+
         return attrs
 
 

@@ -4,19 +4,22 @@ from __future__ import annotations
 
 from datetime import date
 from typing import Any
+from urllib.parse import urlparse
 from uuid import UUID
 
 import jsonschema
+from django.conf import settings
 from django.db import models, transaction
 from django.utils import timezone
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 
-from apps.catalog.models import A9VariantConfiguration
+from apps.catalog.models import A9VariantConfiguration, Category, Service, Subcategory
 from apps.stay.models import (
     Property,
     PropertyMedia,
     StayEnquiry,
     StayModerationEvent,
+    StayPhotoUpload,
     StayReview,
     Unit,
 )
@@ -35,6 +38,85 @@ def _as_uuid(value: UUID | str) -> UUID:
 def _require_stay_capability(partner: Any) -> None:
     if not partner.capabilities.filter(archetype="A9_STAY", status="APPROVED").exists():
         raise PermissionError("Partner does not have an approved A9 stay capability.")
+
+
+_STAY_PHOTO_TYPES = {
+    "image/jpeg": ".jpg",
+    "image/jpg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+}
+_STAY_PHOTO_MAX_BYTES = 8 * 1024 * 1024
+
+
+def store_stay_photo(*, partner: Any, upload: Any) -> StayPhotoUpload:
+    _require_stay_capability(partner)
+    content_type = (getattr(upload, "content_type", "") or "").split(";")[0].strip().lower()
+    if content_type not in _STAY_PHOTO_TYPES:
+        raise StayStateError("Photo must be a JPEG, PNG, or WebP image.")
+    size = int(getattr(upload, "size", 0) or 0)
+    if size <= 0:
+        raise StayStateError("Photo file is empty.")
+    if size > _STAY_PHOTO_MAX_BYTES:
+        raise StayStateError("Photo must be 8 MB or smaller.")
+    return StayPhotoUpload.objects.create(
+        partner=partner,
+        stored_file=upload,
+        original_name=str(getattr(upload, "name", "photo"))[:180],
+        content_type=content_type,
+        size_bytes=size,
+    )
+
+
+def partner_owns_stay_photo(*, partner: Any, url: str) -> bool:
+    path = urlparse(url).path
+    media_prefix = settings.MEDIA_URL.rstrip("/") + "/"
+    if not path.startswith(media_prefix + "stay-ads/"):
+        return False
+    stored_name = path[len(media_prefix) :] if path.startswith(media_prefix) else path.lstrip("/")
+    return StayPhotoUpload.objects.filter(partner=partner, stored_file=stored_name).exists()
+
+
+def get_stay_taxonomy() -> list[dict[str, Any]]:
+    category = Category.objects.filter(slug="rooms-pg-hostel-hotels").first()
+    if not category:
+        return []
+    result: list[dict[str, Any]] = []
+    subcategories = Subcategory.objects.filter(category=category).prefetch_related(
+        "services__variants__a9_configurations"
+    )
+    for sub in subcategories:
+        sub_data: dict[str, Any] = {
+            "id": sub.id,
+            "name": sub.name,
+            "slug": sub.slug,
+            "services": [],
+        }
+        for svc in sub.services.filter(status=Service.Status.ACTIVE):
+            svc_data: dict[str, Any] = {
+                "id": svc.id,
+                "name": svc.name,
+                "slug": svc.slug,
+                "variants": [],
+            }
+            for variant in svc.variants.filter(is_active=True, booking_archetype="A9_STAY"):
+                active_cfg = variant.a9_configurations.filter(
+                    status=A9VariantConfiguration.Status.ACTIVE
+                ).first()
+                if active_cfg:
+                    svc_data["variants"].append(
+                        {
+                            "id": variant.id,
+                            "name": variant.name,
+                            "code": variant.code,
+                            "property_schema": active_cfg.property_schema or {},
+                        }
+                    )
+            if svc_data["variants"]:
+                sub_data["services"].append(svc_data)
+        if sub_data["services"]:
+            result.append(sub_data)
+    return result
 
 
 def _require_active_a9(variant_id: UUID | str) -> A9VariantConfiguration:

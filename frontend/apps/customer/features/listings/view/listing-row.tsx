@@ -8,7 +8,7 @@ import {
   MapPin,
   Users,
 } from "lucide-react";
-import { Badge, Card } from "@vsolve/ui";
+import { Badge, Card, formatMoney } from "@vsolve/ui";
 
 import { listingFields, type Listing } from "../queries";
 
@@ -18,7 +18,23 @@ export interface ListingRowProps {
 
 export function ListingRow({ listing }: ListingRowProps) {
   const fields = listingFields(listing.structured_fields);
-  const payRange = fields.pay_range || fields.salary_range || fields.compensation;
+  let displayPay = "";
+  if (listing.salary_min_paise && listing.salary_min_paise > 0) {
+    const minStr = formatMoney(listing.salary_min_paise);
+    if (listing.salary_max_paise && listing.salary_max_paise > listing.salary_min_paise) {
+      displayPay = `${minStr} - ${formatMoney(listing.salary_max_paise)}`;
+    } else {
+      displayPay = minStr;
+    }
+    if (listing.salary_period) {
+      displayPay += ` / ${listing.salary_period.toLowerCase()}`;
+    }
+  } else if (listing.salary_display) {
+    displayPay = listing.salary_display;
+  } else if (fields.pay_range || fields.salary_range || fields.compensation) {
+    displayPay = String(fields.pay_range || fields.salary_range || fields.compensation);
+  }
+
   const roleType = fields.role_type || fields.employment_type;
   const experience = fields.experience_years || fields.experience;
   const shift = fields.shift || fields.work_mode;
@@ -77,10 +93,10 @@ export function ListingRow({ listing }: ListingRowProps) {
 
             {/* Badges / Structured Fields */}
             <div className="flex flex-wrap items-center gap-2 pt-1">
-              {payRange ? (
+              {displayPay ? (
                 <Badge tone="success">
                   <Coins className="size-3.5" />
-                  {String(payRange)}
+                  {String(displayPay)}
                 </Badge>
               ) : null}
 

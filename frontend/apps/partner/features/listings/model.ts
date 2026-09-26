@@ -1,6 +1,40 @@
 import { ApiRequestError } from "@vsolve/api-client";
 import { z } from "zod";
 
+export function rupeesToPaise(input: string): number | null {
+  const trimmed = input.trim().replace(/,/g, "").replace(/^₹\s*/u, "");
+  if (!trimmed) return null;
+  if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) return null;
+  const rupees = Number(trimmed);
+  if (!Number.isFinite(rupees) || rupees < 0) return null;
+  return Math.round(rupees * 100);
+}
+
+function refinePay(
+  data: { salary_min_rupees: string; salary_max_rupees: string; salary_period: string },
+  ctx: z.RefinementCtx,
+) {
+  const minP = rupeesToPaise(data.salary_min_rupees);
+  const maxP = rupeesToPaise(data.salary_max_rupees);
+  if (minP == null || minP < 1) {
+    ctx.addIssue({
+      path: ["salary_min_rupees"],
+      code: "custom",
+      message: "Enter a minimum pay in rupees, for example 25000 or 8,00,000.",
+    });
+  }
+  if (maxP == null || (minP != null && maxP < minP)) {
+    ctx.addIssue({
+      path: ["salary_max_rupees"],
+      code: "custom",
+      message: "Enter a maximum pay in rupees that is at least the minimum.",
+    });
+  }
+  if (!["MONTHLY", "YEARLY", "HOURLY"].includes(data.salary_period)) {
+    ctx.addIssue({ path: ["salary_period"], code: "custom", message: "Select a pay period." });
+  }
+}
+
 /**
  * Mirrors `PartnerListingSerializer` on the server, which stays the authority.
  * Catching these in the form keeps a demo on the happy path: no round-trip 400s.
@@ -35,11 +69,12 @@ export const listingShape = {
     .max(5000, "Description must be 5000 characters or fewer."),
   contact_phone: phoneRule,
   contact_email: emailRule,
-  salary_range: z.string().trim().max(300, "Keep the pay range to 300 characters or fewer.").optional(),
-  pay_range: z.string().trim().max(300, "Keep the pay range to 300 characters or fewer.").optional(),
+  salary_min_rupees: z.string().trim(),
+  salary_max_rupees: z.string().trim(),
+  salary_period: z.string().trim(),
   shift: z.string().trim().max(300, "Keep shift to 300 characters or fewer.").optional(),
-  work_mode: z.string().trim().max(300, "Keep work mode to 300 characters or fewer.").optional(),
   experience_years: z.string().trim().max(300, "Keep experience to 300 characters or fewer.").optional(),
+  role_type: z.string().trim().optional(),
 };
 
 export const createListingSchema = z.object({
@@ -49,12 +84,12 @@ export const createListingSchema = z.object({
     .trim()
     .min(3, "Enter a work location, or write 'Remote'.")
     .max(180, "Location must be 180 characters or fewer."),
-});
+}).superRefine(refinePay);
 
 export const editListingSchema = z.object({
   ...listingShape,
   location_text: z.string().trim().max(180, "Location must be 180 characters or fewer."),
-});
+}).superRefine(refinePay);
 
 export function issuesToFieldErrors(error: z.ZodError): Record<string, string> {
   const out: Record<string, string> = {};
@@ -140,11 +175,11 @@ export interface CreateListingFormState {
   contact_phone: string;
   contact_email: string;
   role_type: string;
-  salary_range: string;
+  salary_min_rupees: string;
+  salary_max_rupees: string;
+  salary_period: string;
   shift: string;
   experience_years: string;
-  pay_range?: string;
-  work_mode?: string;
 }
 
 export interface EditListingFormState {
@@ -154,9 +189,9 @@ export interface EditListingFormState {
   contact_phone: string;
   contact_email: string;
   role_type: string;
-  salary_range: string;
+  salary_min_rupees: string;
+  salary_max_rupees: string;
+  salary_period: string;
   shift: string;
   experience_years: string;
-  pay_range?: string;
-  work_mode?: string;
 }

@@ -4,6 +4,12 @@ from apps.stay import views
 
 urlpatterns = [
     path("stays", views.StayBrowseView.as_view(), name="stay-browse"),
+    path("stays/taxonomy", views.StayTaxonomyView.as_view(), name="stay-taxonomy"),
+    path(
+        "partner/stays/photos",
+        views.PartnerStayPhotoUploadView.as_view(),
+        name="partner-stay-photos",
+    ),
     path("stays/quote", views.StayQuoteView.as_view(), name="stay-quote"),
     path("stays/enquire", views.StayEnquireView.as_view(), name="stay-enquire"),
     path("stays/<uuid:property_id>", views.StayDetailView.as_view(), name="stay-detail"),

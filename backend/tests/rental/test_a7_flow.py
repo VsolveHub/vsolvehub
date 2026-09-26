@@ -4,7 +4,9 @@ from datetime import timedelta
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
+from rest_framework import status
 
 from apps.catalog.models import (
     A7VariantConfiguration,
@@ -13,8 +15,9 @@ from apps.catalog.models import (
     ServiceVariant,
     Subcategory,
 )
+from apps.identity.models import Role, UserRole
 from apps.partners.models import PartnerApplication, PartnerCapability, PartnerProfile
-from apps.rental.models import RentalBooking, RentalDeposit
+from apps.rental.models import RentalAssetMedia, RentalBooking, RentalDeposit, RentalPhotoUpload
 from apps.rental.services import (
     RentalStateError,
     create_asset,
@@ -23,8 +26,10 @@ from apps.rental.services import (
     moderate_asset,
     release_deposit,
     return_booking,
+    store_rental_photo,
     submit_asset,
 )
+from tests.helpers import force_role_client
 
 User = get_user_model()
 
@@ -248,3 +253,69 @@ def test_no_fulfilment_unit_on_rental_models():
         model = getattr(rental_models, name)
         field_names = {f.name for f in model._meta.get_fields()}
         assert "fulfilment_unit" not in field_names
+
+
+def _tiny_jpeg() -> SimpleUploadedFile:
+    return SimpleUploadedFile("drill.jpg", b"\xff\xd8\xff\xd9fake-jpeg", content_type="image/jpeg")
+
+
+def _partner_client(user):
+    role, _ = Role.objects.get_or_create(code="partner", defaults={"name": "Partner"})
+    UserRole.objects.get_or_create(user=user, role=role, revoked_at=None)
+    return force_role_client(user=user, role_code="partner")
+
+
+@pytest.mark.django_db
+def test_store_rental_photo_rejects_non_image(rental_world):
+    upload = SimpleUploadedFile("notes.txt", b"not-an-image", content_type="text/plain")
+    with pytest.raises(RentalStateError, match="JPEG, PNG, or WebP"):
+        store_rental_photo(partner=rental_world["partner"], upload=upload)
+
+
+@pytest.mark.django_db
+def test_partner_must_upload_photos_not_paste_urls(rental_world):
+    client = _partner_client(rental_world["owner"])
+    pasted = client.post(
+        "/api/v1/partner/rentals/assets",
+        {
+            "variant_id": str(rental_world["variant"].id),
+            "title": "Pasted URL drill",
+            "location_text": "Madhapur",
+            "daily_rate_paise": 50000,
+            "deposit_paise": 100000,
+            "image_urls": ["https://cdn.example.com/drill.jpg"],
+        },
+        format="json",
+    )
+    assert pasted.status_code == status.HTTP_400_BAD_REQUEST
+    assert "Upload photos" in pasted.json()["detail"]
+
+    uploaded = client.post(
+        "/api/v1/partner/rentals/photos",
+        {"file": _tiny_jpeg()},
+        format="multipart",
+    )
+    assert uploaded.status_code == status.HTTP_201_CREATED
+    body = uploaded.json()
+    assert body["url"]
+    assert RentalPhotoUpload.objects.filter(partner=rental_world["partner"]).exists()
+    stored = RentalPhotoUpload.objects.get(id=body["upload_id"])
+    assert stored.stored_file.name.startswith("rental-ads/")
+    assert stored.stored_file.storage.exists(stored.stored_file.name)
+
+    created = client.post(
+        "/api/v1/partner/rentals/assets",
+        {
+            "variant_id": str(rental_world["variant"].id),
+            "title": "Uploaded photo drill",
+            "location_text": "Madhapur",
+            "daily_rate_paise": 50000,
+            "deposit_paise": 100000,
+            "image_urls": [body["url"]],
+        },
+        format="json",
+    )
+    assert created.status_code == status.HTTP_201_CREATED
+    media = RentalAssetMedia.objects.filter(asset_id=created.json()["id"])
+    assert media.count() == 1
+    assert media.get().url == body["url"]

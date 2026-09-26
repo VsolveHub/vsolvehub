@@ -1,17 +1,16 @@
-from __future__ import annotations
-
-import jsonschema
-from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
-
 """A7 rental domain services. Fail-closed on capability + ACTIVE A7VariantConfiguration."""
 
+from __future__ import annotations
 
 from datetime import date
 from typing import Any
+from urllib.parse import urlparse
 from uuid import UUID
 
+import jsonschema
 from django.conf import settings
 from django.db import models, transaction
+from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 
 from apps.catalog.models import A7VariantConfiguration, Category, Service, Subcategory
 from apps.commerce.models import PaymentAttempt
@@ -23,6 +22,7 @@ from apps.rental.models import (
     RentalBookingLine,
     RentalDeposit,
     RentalModerationEvent,
+    RentalPhotoUpload,
     overlapping_reservations,
 )
 
@@ -48,6 +48,47 @@ def _require_active_a7(variant_id: UUID | str) -> A7VariantConfiguration:
     if config is None:
         raise RentalStateError("This rental category is not open yet.")
     return config
+
+
+_RENTAL_PHOTO_TYPES = {
+    "image/jpeg": ".jpg",
+    "image/jpg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+}
+_RENTAL_PHOTO_MAX_BYTES = 8 * 1024 * 1024
+
+
+def store_rental_photo(
+    *,
+    partner: Any,
+    upload: Any,
+) -> RentalPhotoUpload:
+    _require_rental_capability(partner)
+    content_type = (getattr(upload, "content_type", "") or "").split(";")[0].strip().lower()
+    if content_type not in _RENTAL_PHOTO_TYPES:
+        raise RentalStateError("Photo must be a JPEG, PNG, or WebP image.")
+    size = int(getattr(upload, "size", 0) or 0)
+    if size <= 0:
+        raise RentalStateError("Photo file is empty.")
+    if size > _RENTAL_PHOTO_MAX_BYTES:
+        raise RentalStateError("Photo must be 8 MB or smaller.")
+    return RentalPhotoUpload.objects.create(
+        partner=partner,
+        stored_file=upload,
+        original_name=str(getattr(upload, "name", "photo"))[:180],
+        content_type=content_type,
+        size_bytes=size,
+    )
+
+
+def partner_owns_rental_photo(*, partner: Any, url: str) -> bool:
+    path = urlparse(url).path
+    media_prefix = settings.MEDIA_URL.rstrip("/") + "/"
+    if not path.startswith(media_prefix + "rental-ads/"):
+        return False
+    stored_name = path[len(media_prefix) :] if path.startswith(media_prefix) else path.lstrip("/")
+    return RentalPhotoUpload.objects.filter(partner=partner, stored_file=stored_name).exists()
 
 
 def create_asset(

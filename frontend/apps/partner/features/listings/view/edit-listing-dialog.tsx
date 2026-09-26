@@ -31,7 +31,7 @@ export function EditListingDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="my-8 w-full max-w-2xl rounded-[var(--radius-card)] border border-line bg-surface p-6 shadow-overlay">
+      <div className="my-8 w-full max-w-4xl rounded-[var(--radius-card)] border border-line bg-surface p-6 shadow-overlay">
         <div className="flex items-center justify-between border-b border-line pb-4">
           <div>
             <h2 className="text-lg font-bold text-text">Edit Career Opening</h2>
@@ -134,8 +134,10 @@ export function EditListingDialog({
 
             <ListingExtraFields
               roleType={form.role_type}
-              payRange={form.salary_range || form.pay_range || ""}
-              workMode={form.shift || form.work_mode || ""}
+              salaryMin={form.salary_min_rupees}
+              salaryMax={form.salary_max_rupees}
+              salaryPeriod={form.salary_period}
+              shift={form.shift}
               experienceYears={form.experience_years}
               errors={errors}
               onChange={onFieldChange}
