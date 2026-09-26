@@ -64,4 +64,4 @@ pnpm exec vitest run \
 - Deposit money uses demo/test HELD path (no live Razorpay) — Part B.
 - A9 has no full UnitReservation locking matrix (enquiry-first MVP only).
 - AssetReservation overlap is application-level (day-granular), not Postgres ExclusionConstraint yet.
-- FE rental/stay pages use fetch until OpenAPI client regen is consumed everywhere.
+- Partner stays and Operations rentals/stays use the generated client. Partner rental reads still use fetch; create asset returned 403 in the 24 September 2026 browser pass. See `m3-end-to-end.md`.

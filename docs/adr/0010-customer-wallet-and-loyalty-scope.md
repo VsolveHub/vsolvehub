@@ -42,7 +42,7 @@ Without strict architectural boundaries, loyalty and wallet mechanics frequently
    - `ReferralReward` records are append-only and immutable.
 
 7. **Refund Policy:**
-   Refunds restore the wallet-funded portion to the customer wallet (`REFUND_CREDIT`) and the provider-funded portion via the provider gateway (Razorpay). Burned coins are never restored.
+   The wallet is **spend-only**: customers top up and purchase; there is **no cash-out / withdrawal** from wallet balance. Provider-funded (Razorpay / cash) payments are refunded via **Operations using Razorpay refund + reconcile hooks**. Wallet-funded checkout portions, when reversed, return only as `REFUND_CREDIT` back into the same spend-only wallet (never as bank cash-out). Burned V Coins are never restored.
 
 ## Consequences
 

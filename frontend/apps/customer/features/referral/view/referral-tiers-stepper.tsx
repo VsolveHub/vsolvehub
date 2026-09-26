@@ -31,6 +31,7 @@ export function ReferralTiersStepper({ summary }: ReferralTiersStepperProps) {
           const minCount = tier.min_qualified_referrals ?? (idx + 1);
           const isReached = currentCount >= minCount;
           const referrerRewardPaise = tier.referrer_wallet_paise ?? 0;
+          const referrerCoins = tier.referrer_coins_amount ?? 0;
 
           return (
             <div
@@ -58,22 +59,23 @@ export function ReferralTiersStepper({ summary }: ReferralTiersStepperProps) {
               </div>
 
               <div className="mt-3">
-                <span
-                  data-numeric
-                  className="text-xl font-extrabold text-navy-900"
-                >
-                  {formatMoney(referrerRewardPaise)}
-                </span>
-                <span className="text-xs text-text-secondary ml-1 font-medium">
-                  per friend
-                </span>
+                {referrerRewardPaise > 0 ? (
+                  <p>
+                    <span data-numeric className="text-xl font-extrabold text-navy-900">
+                      {formatMoney(referrerRewardPaise)}
+                    </span>
+                    <span className="text-xs text-text-secondary ml-1 font-medium">wallet per friend</span>
+                  </p>
+                ) : null}
+                {referrerCoins > 0 ? (
+                  <p className={referrerRewardPaise > 0 ? "mt-1 text-sm font-semibold text-navy-900" : ""}>
+                    <span data-numeric className="text-xl font-extrabold text-navy-900">
+                      {referrerCoins}
+                    </span>
+                    <span className="text-xs text-text-secondary ml-1 font-medium">V Coins per friend</span>
+                  </p>
+                ) : null}
               </div>
-
-              {tier.referrer_coins_amount ? (
-                <p className="mt-1 text-xs text-amber-700 font-semibold">
-                  + {tier.referrer_coins_amount} bonus coins
-                </p>
-              ) : null}
 
               <p className="mt-2 text-[11px] text-text-secondary leading-tight">
                 Applies once you reach {minCount} successfully verified friends.

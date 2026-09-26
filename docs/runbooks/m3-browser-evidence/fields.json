@@ -1,0 +1,586 @@
+{
+  "C0.1": {
+    "url": "http://localhost:3000/login",
+    "phone": "9900000077",
+    "fields": [
+      {
+        "label": "Mobile number *",
+        "control": "tel",
+        "data_type": "phone",
+        "required": "yes",
+        "allowed": "10 digits for India (+91). Digits only. maxLength 10. Placeholder example 9876543210.",
+        "value": "9900000077"
+      },
+      {
+        "label": "Country code (+91)",
+        "control": "select",
+        "data_type": "enum",
+        "required": "yes",
+        "allowed": "Predefined country calling codes shown in the control. Capture used +91.",
+        "value": "+91"
+      },
+      {
+        "label": "Invite / referral code (shown after Have an invite / referral code?)",
+        "control": "text",
+        "data_type": "string",
+        "required": "no",
+        "allowed": "Optional alphanumeric invite or referral code. Empty allowed.",
+        "value": "none \u2014 not used"
+      },
+      {
+        "label": "6-digit code *",
+        "control": "text",
+        "data_type": "OTP-digit-string",
+        "required": "yes",
+        "allowed": "Exactly 6 digits (0-9). Shown after Send code.",
+        "value": "218353"
+      }
+    ],
+    "notes": "OTP step adds 6-digit code field."
+  },
+  "C0.2": {
+    "url": "http://localhost:3000/listings",
+    "phone": "9900000077",
+    "fields": [],
+    "entry_fields_note": "Entry fields: none for this check. Header links Careers, Rentals, Stays must show."
+  },
+  "C1.1": {
+    "url": "http://localhost:3000/listings",
+    "phone": "9900000077",
+    "fields": [
+      {
+        "label": "Search jobs",
+        "control": "text",
+        "data_type": "string",
+        "required": "no",
+        "allowed": "Free text job keywords. Empty allowed.",
+        "value": "none \u2014 empty"
+      },
+      {
+        "label": "Location",
+        "control": "text",
+        "data_type": "string",
+        "required": "no",
+        "allowed": "City or area text. Placeholder Hyderabad. Empty allowed.",
+        "value": "Hyderabad (placeholder default)"
+      },
+      {
+        "label": "Sort by",
+        "control": "select",
+        "data_type": "enum",
+        "required": "no",
+        "allowed": "Options include at least Latest (value latest).",
+        "value": "Latest"
+      },
+      {
+        "label": "Job type filters (All jobs / Full-time / On-site)",
+        "control": "button",
+        "data_type": "enum",
+        "required": "no",
+        "allowed": "Toggle filter chips. Mutually selective per group.",
+        "value": "All jobs"
+      },
+      {
+        "label": "Role category filters",
+        "control": "button",
+        "data_type": "enum",
+        "required": "no",
+        "allowed": "One category chip including All Roles and catalog job families.",
+        "value": "All Roles"
+      }
+    ],
+    "pass": "5 live jobs; no Smoke Draft Electrician"
+  },
+  "Customer-Wallet-Top-Up": {
+    "fields": [
+      {
+        "label": "Quick Select",
+        "control": "button group",
+        "data_type": "integer (paise)",
+        "required": "no",
+        "allowed": "Preset values \u20b9200, \u20b9500, \u20b91,000, \u20b92,000. Updates the custom amount input.",
+        "notes": "Visual presets for quick entry."
+      },
+      {
+        "label": "Or Enter Custom Amount (\u20b9)",
+        "control": "number input",
+        "data_type": "integer",
+        "required": "yes",
+        "allowed": "Numeric value in rupees. Minimum \u20b9100 and maximum \u20b910,000 based on policy limits.",
+        "notes": "Converted to paise on submit."
+      }
+    ]
+  },
+  "Customer-Rental-Book": {
+    "fields": [
+      {
+        "label": "Pickup Date",
+        "control": "date input",
+        "data_type": "ISO 8601 Date",
+        "required": "yes",
+        "allowed": "Valid date. Must be equal to or greater than today.",
+        "notes": "Minimum date restricted in the DOM.",
+        "value": "2026-09-26"
+      },
+      {
+        "label": "Return Date",
+        "control": "date input",
+        "data_type": "ISO 8601 Date",
+        "required": "yes",
+        "allowed": "Valid date. Must be equal to or greater than the Pickup Date.",
+        "notes": "Validated before submit.",
+        "value": "2026-09-28"
+      },
+      {
+        "label": "Handover Preference",
+        "control": "button group",
+        "data_type": "string",
+        "required": "yes",
+        "allowed": "Options PICKUP or DELIVERY.",
+        "notes": "Visual cards acting as radio buttons. Default is PICKUP.",
+        "value": "PICKUP"
+      },
+      {
+        "label": "Notes / Special Instructions (Optional)",
+        "control": "textarea",
+        "data_type": "string",
+        "required": "no",
+        "allowed": "Any text.",
+        "notes": "No explicit max length shown in UI.",
+        "value": "M3 STE evidence booking"
+      }
+    ]
+  },
+  "Customer-Stay-Enquiry": {
+    "fields": [
+      {
+        "label": "Select Room Type",
+        "control": "button group",
+        "data_type": "string",
+        "required": "conditional",
+        "allowed": "Must be a valid Unit ID from the property.",
+        "notes": "Only shown if property.units.length > 1.",
+        "value": "Double Sharing"
+      },
+      {
+        "label": "Check-in Date",
+        "control": "date input",
+        "data_type": "ISO 8601 Date",
+        "required": "yes",
+        "allowed": "Valid date. Must be equal to or greater than today.",
+        "notes": "Validated before submit.",
+        "value": "2026-10-02"
+      },
+      {
+        "label": "Check-out Date",
+        "control": "date input",
+        "data_type": "ISO 8601 Date",
+        "required": "yes",
+        "allowed": "Valid date. Must be strictly after the Check-in Date.",
+        "notes": "Validated before submit.",
+        "value": "2026-10-05"
+      },
+      {
+        "label": "Number of Guests",
+        "control": "select",
+        "data_type": "integer",
+        "required": "yes",
+        "allowed": "Values 1, 2, 3, or 4+.",
+        "notes": "Options hardcoded 1 to 4+.",
+        "value": "1"
+      },
+      {
+        "label": "Message to Host (Optional)",
+        "control": "textarea",
+        "data_type": "string",
+        "required": "no",
+        "allowed": "Any text.",
+        "notes": "Free text.",
+        "value": "M3 STE evidence enquiry"
+      }
+    ]
+  },
+  "Customer-Listing-Apply": {
+    "fields": [
+      {
+        "label": "Full Name",
+        "control": "text input",
+        "data_type": "string",
+        "required": "yes",
+        "allowed": "Any text string.",
+        "notes": "Prefilled from profile usually.",
+        "value": "Smoke Premium"
+      },
+      {
+        "label": "Contact Phone",
+        "control": "PhoneField",
+        "data_type": "string",
+        "required": "yes",
+        "allowed": "Must be a valid Indian phone number.",
+        "notes": "Uses custom PhoneField component.",
+        "value": "9900000077"
+      },
+      {
+        "label": "Email Address",
+        "control": "email input",
+        "data_type": "string",
+        "required": "no",
+        "allowed": "Must follow valid email format.",
+        "notes": "Standard HTML5 email validation.",
+        "value": "none \u2014 empty"
+      },
+      {
+        "label": "Experience / Qualification",
+        "control": "text input",
+        "data_type": "string",
+        "required": "no",
+        "allowed": "Any text string.",
+        "notes": "Free text description.",
+        "value": "none \u2014 empty"
+      },
+      {
+        "label": "Resume Link / Portfolio URL",
+        "control": "url input",
+        "data_type": "string",
+        "required": "no",
+        "allowed": "Must follow valid URL format.",
+        "notes": "Standard HTML5 url validation.",
+        "value": "none \u2014 empty"
+      },
+      {
+        "label": "Cover Note / Message to Poster",
+        "control": "textarea",
+        "data_type": "string",
+        "required": "no",
+        "allowed": "Any text string.",
+        "notes": "Free text area.",
+        "value": "none \u2014 empty"
+      }
+    ]
+  },
+  "Partner-Create-Listing": {
+    "fields": [
+      {
+        "label": "Career Role / Service",
+        "control": "select",
+        "data_type": "string",
+        "required": "yes",
+        "allowed": "Must be a valid service ID from the fetched catalog.",
+        "notes": "Selects the role variant.",
+        "value": "Frontend Engineer"
+      },
+      {
+        "label": "Listing Title",
+        "control": "text input",
+        "data_type": "string",
+        "required": "yes",
+        "allowed": "Any text string.",
+        "notes": "",
+        "value": "M3 E2E Frontend Engineer"
+      },
+      {
+        "label": "Job Description & Requirements",
+        "control": "textarea",
+        "data_type": "string",
+        "required": "yes",
+        "allowed": "Any text string.",
+        "notes": "",
+        "value": "none \u2014 empty"
+      },
+      {
+        "label": "Location Text",
+        "control": "text input",
+        "data_type": "string",
+        "required": "yes",
+        "allowed": "Any text string.",
+        "notes": "e.g. Indiranagar, Bengaluru / Remote.",
+        "value": "none \u2014 empty"
+      },
+      {
+        "label": "Contact Phone",
+        "control": "PhoneField",
+        "data_type": "string",
+        "required": "yes",
+        "allowed": "Must be a valid Indian phone number.",
+        "notes": "",
+        "value": "9900000088"
+      }
+    ]
+  },
+  "Partner-Rental-Create": {
+    "fields": [
+      {
+        "label": "Variant",
+        "control": "select",
+        "data_type": "string",
+        "required": "yes",
+        "allowed": "Must be a valid variant ID from the fetched partner capabilities.",
+        "notes": "",
+        "value": "Drill Machine"
+      },
+      {
+        "label": "Title",
+        "control": "text input",
+        "data_type": "string",
+        "required": "yes",
+        "allowed": "Any text string.",
+        "notes": "",
+        "value": "M3 STE Evidence Drill"
+      },
+      {
+        "label": "Daily rate (paise)",
+        "control": "numeric input",
+        "data_type": "integer",
+        "required": "yes",
+        "allowed": "Numeric value. Minimum 1 paise.",
+        "notes": "Enforced by UI and API.",
+        "value": "25000"
+      },
+      {
+        "label": "Deposit (paise)",
+        "control": "numeric input",
+        "data_type": "integer",
+        "required": "no",
+        "allowed": "Numeric value. Minimum 0 paise.",
+        "notes": "Optional, defaults to 0.",
+        "value": "100000"
+      },
+      {
+        "label": "Location",
+        "control": "text input",
+        "data_type": "string",
+        "required": "no",
+        "allowed": "Any text string.",
+        "notes": "",
+        "value": "Hyderabad"
+      }
+    ]
+  },
+  "Partner-Stay-Add": {
+    "fields": [
+      {
+        "label": "Variant",
+        "control": "select",
+        "data_type": "string",
+        "required": "yes",
+        "allowed": "Must be a valid variant ID from the fetched partner capabilities.",
+        "notes": "",
+        "value": "Lakeview Double Sharing"
+      },
+      {
+        "label": "Title",
+        "control": "text input",
+        "data_type": "string",
+        "required": "yes",
+        "allowed": "Any text string.",
+        "notes": "",
+        "value": "Lakeview"
+      },
+      {
+        "label": "Location",
+        "control": "text input",
+        "data_type": "string",
+        "required": "no",
+        "allowed": "Any text string.",
+        "notes": "",
+        "value": "Lakeview"
+      },
+      {
+        "label": "Nightly rate (paise)",
+        "control": "numeric input",
+        "data_type": "integer",
+        "required": "yes",
+        "allowed": "Numeric value. Minimum 1 paise.",
+        "notes": "Enforced by UI.",
+        "value": "test value"
+      }
+    ]
+  },
+  "Partner-Stay-Respond": {
+    "fields": [
+      {
+        "label": "Your response",
+        "control": "textarea",
+        "data_type": "string",
+        "required": "yes",
+        "allowed": "Any non-empty text string.",
+        "notes": "Shown when enquiry status is SUBMITTED.",
+        "value": "M3 STE host response: room available Oct 2-5 at listed rate."
+      }
+    ]
+  },
+  "Ops-Listing-Moderate": {
+    "fields": [
+      {
+        "label": "Decision",
+        "control": "button group",
+        "data_type": "boolean",
+        "required": "yes",
+        "allowed": "Approve or Reject.",
+        "notes": "Controls isApproving state.",
+        "value": "Approve"
+      },
+      {
+        "label": "Approval Note / Rejection Reason",
+        "control": "textarea",
+        "data_type": "string",
+        "required": "conditional",
+        "allowed": "Any text string. Required if decision is Reject.",
+        "notes": "Rejection reason required.",
+        "value": "M3 STE evidence approval for Smoke Draft Electrician"
+      }
+    ]
+  },
+  "Ops-Rental-Stay-Moderate": {
+    "fields": [
+      {
+        "label": "Reason",
+        "control": "textarea",
+        "data_type": "string",
+        "required": "yes",
+        "allowed": "Any non-empty text string.",
+        "notes": "Shared input for both approve and reject operations.",
+        "value": "M3 STE rental asset approve"
+      },
+      {
+        "label": "Action",
+        "control": "button group",
+        "data_type": "string",
+        "required": "yes",
+        "allowed": "APPROVE or REJECT.",
+        "notes": "Triggers the moderation mutation.",
+        "value": "APPROVE"
+      }
+    ]
+  },
+  "Ops-Loyalty-Publish": {
+    "fields": [
+      {
+        "label": "Max burn percent",
+        "control": "numeric input",
+        "data_type": "integer",
+        "required": "yes",
+        "allowed": "Numeric value.",
+        "notes": "For Coin burn policy.",
+        "value": "25"
+      },
+      {
+        "label": "Coin value paise",
+        "control": "numeric input",
+        "data_type": "integer",
+        "required": "yes",
+        "allowed": "Numeric value.",
+        "notes": "For Coin burn policy.",
+        "value": "150000"
+      },
+      {
+        "label": "Minimum paise",
+        "control": "numeric input",
+        "data_type": "integer",
+        "required": "yes",
+        "allowed": "Numeric value.",
+        "notes": "For Wallet top-up limits.",
+        "value": "10000"
+      },
+      {
+        "label": "Maximum paise",
+        "control": "numeric input",
+        "data_type": "integer",
+        "required": "yes",
+        "allowed": "Numeric value.",
+        "notes": "For Wallet top-up limits.",
+        "value": "999000"
+      },
+      {
+        "label": "New version code",
+        "control": "text input",
+        "data_type": "string",
+        "required": "yes",
+        "allowed": "Any non-empty text string.",
+        "notes": "For Referral program versions.",
+        "value": "m3-e2e-2026-09-25"
+      },
+      {
+        "label": "Referee wallet paise",
+        "control": "numeric input",
+        "data_type": "integer",
+        "required": "yes",
+        "allowed": "Numeric value.",
+        "notes": "For Referral program versions.",
+        "value": "150000"
+      },
+      {
+        "label": "Referee coins",
+        "control": "numeric input",
+        "data_type": "integer",
+        "required": "yes",
+        "allowed": "Numeric value.",
+        "notes": "For Referral program versions.",
+        "value": "3"
+      },
+      {
+        "label": "Referrer wallet paise",
+        "control": "numeric input",
+        "data_type": "integer",
+        "required": "yes",
+        "allowed": "Numeric value.",
+        "notes": "For Referral program versions.",
+        "value": "150000"
+      },
+      {
+        "label": "Referrer coins",
+        "control": "numeric input",
+        "data_type": "integer",
+        "required": "yes",
+        "allowed": "Numeric value.",
+        "notes": "For Referral program versions.",
+        "value": "3"
+      }
+    ]
+  },
+  "C2.2": {
+    "url": "http://localhost:3000/account/coins",
+    "phone": "9900000077",
+    "fields": [
+      {
+        "label": "ENTER SAMPLE BOOKING TOTAL (\u20b9)",
+        "control": "number",
+        "data_type": "integer",
+        "required": "no",
+        "allowed": "Positive whole rupees for savings preview only. Not a payment.",
+        "value": "1000"
+      }
+    ],
+    "entry_fields_note": "Spendable/locked/expiring are display-only."
+  },
+  "C2.1": {
+    "url": "http://localhost:3000/account/wallet",
+    "phone": "9900000077",
+    "fields": [
+      {
+        "label": "Quick Select amount buttons",
+        "control": "button",
+        "data_type": "enum",
+        "required": "no",
+        "allowed": "\u20b9200, \u20b9500, \u20b91,000, \u20b92,000 presets.",
+        "value": "\u20b9500"
+      },
+      {
+        "label": "Or Enter Custom Amount (\u20b9)",
+        "control": "number",
+        "data_type": "integer",
+        "required": "yes",
+        "allowed": "Min \u20b9100. Max \u20b99,990 per transaction. Whole rupees.",
+        "value": "500"
+      }
+    ],
+    "pass": "Balance shows available; history shows Captured top-up."
+  },
+  "C2.3": {
+    "url": "http://localhost:3000/account/referral",
+    "phone": "9900000077",
+    "fields": [],
+    "entry_fields_note": "Entry fields: none on this screen. Referral code is display-only (VS0077D466).",
+    "pass": "Personal code and Give/Get program copy visible."
+  }
+}

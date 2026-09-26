@@ -6,6 +6,7 @@ import { Button, Card, ErrorState, Field, Input, Spinner } from "@vsolve/ui";
 import { useEffect, useState } from "react";
 
 import { getApiClient } from "@/lib/api/browser";
+import { PUBLIC_API_BASE_URL } from "@/lib/api/config";
 
 export function LoyaltyBoard() {
   const queryClient = useQueryClient();
@@ -31,6 +32,10 @@ export function LoyaltyBoard() {
   const [minPaise, setMinPaise] = useState("");
   const [maxPaise, setMaxPaise] = useState("");
   const [versionCode, setVersionCode] = useState("");
+  const [refereeWalletPaise, setRefereeWalletPaise] = useState("");
+  const [refereeCoins, setRefereeCoins] = useState("");
+  const [referrerWalletPaise, setReferrerWalletPaise] = useState("");
+  const [referrerCoins, setReferrerCoins] = useState("");
   const [seeded, setSeeded] = useState(false);
 
   useEffect(() => {
@@ -77,16 +82,16 @@ export function LoyaltyBoard() {
     mutationFn: () =>
       request(() =>
         getApiClient().POST("/api/v1/ops/referral/programs/", {
-          body: {
-            version_code: versionCode,
+            body: {
+            version_code: versionCode.trim(),
             reward_sides: "BOTH",
-            referee_wallet_paise: 5000,
-            referee_coins_amount: 100,
+            referee_wallet_paise: Number(refereeWalletPaise),
+            referee_coins_amount: Number(refereeCoins),
             tiers: [
               {
                 min_qualified_referrals: 1,
-                referrer_wallet_paise: 10000,
-                referrer_coins_amount: 0,
+                referrer_wallet_paise: Number(referrerWalletPaise),
+                referrer_coins_amount: Number(referrerCoins),
               },
             ],
           },
@@ -120,6 +125,12 @@ export function LoyaltyBoard() {
             ? "Liability total is unavailable for this sign-in."
             : `${liability.data?.total_liability_paise ?? 0} paise across ${liability.data?.active_wallets_count ?? 0} wallets`}
         </p>
+        <a
+          className="mt-3 inline-flex text-sm font-semibold text-text-link"
+          href={`${PUBLIC_API_BASE_URL}/api/v1/ops/wallet/liability.xlsx`}
+        >
+          Download Excel
+        </a>
       </Card>
 
       <Card padding="md">
@@ -199,9 +210,35 @@ export function LoyaltyBoard() {
           <Field label="New version code">
             <Input value={versionCode} onChange={(event) => setVersionCode(event.target.value)} />
           </Field>
+          <Field label="Referee wallet paise">
+            <Input
+              value={refereeWalletPaise}
+              onChange={(event) => setRefereeWalletPaise(event.target.value)}
+            />
+          </Field>
+          <Field label="Referee coins">
+            <Input value={refereeCoins} onChange={(event) => setRefereeCoins(event.target.value)} />
+          </Field>
+          <Field label="Referrer wallet paise">
+            <Input
+              value={referrerWalletPaise}
+              onChange={(event) => setReferrerWalletPaise(event.target.value)}
+            />
+          </Field>
+          <Field label="Referrer coins">
+            <Input
+              value={referrerCoins}
+              onChange={(event) => setReferrerCoins(event.target.value)}
+            />
+          </Field>
           <Button
             loading={publishProgram.isPending}
-            disabled={versionCode.trim() === ""}
+            disabled={
+              versionCode.trim() === "" ||
+              [refereeWalletPaise, refereeCoins, referrerWalletPaise, referrerCoins].some(
+                (value) => value.trim() === "" || !Number.isInteger(Number(value)),
+              )
+            }
             onClick={() => publishProgram.mutate()}
           >
             Publish version

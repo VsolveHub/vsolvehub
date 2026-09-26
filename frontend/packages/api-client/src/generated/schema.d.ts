@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.66.0)
- * Checksum: af18e9e3d128b1d2
+ * Checksum: d980ca9b96a76e31
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -7854,6 +7854,7 @@ export interface components {
             deposit_paise: number;
             /** @default  */
             asset_identifier: string;
+            structured_fields?: unknown;
         };
         CreateBookingRequest: {
             /** Format: uuid */
@@ -11666,8 +11667,20 @@ export interface components {
             readonly host_name: string;
             /** Format: uuid */
             variant: string;
-            readonly units: components["schemas"]["Unit"][];
             structured_fields?: unknown;
+            readonly media: components["schemas"]["PropertyMedia"][];
+            readonly reviews: components["schemas"]["StayReview"][];
+            readonly units: components["schemas"]["Unit"][];
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        PropertyMedia: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uri */
+            url: string;
+            caption?: string;
+            display_order?: number;
             /** Format: date-time */
             readonly created_at: string;
         };
@@ -12799,6 +12812,18 @@ export interface components {
             readonly partner_name: string;
             /** Format: uuid */
             readonly variant: string;
+            readonly structured_fields: unknown;
+            readonly media: components["schemas"]["RentalAssetMedia"][];
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        RentalAssetMedia: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uri */
+            url: string;
+            caption?: string;
+            display_order?: number;
             /** Format: date-time */
             readonly created_at: string;
         };
@@ -12836,6 +12861,9 @@ export interface components {
             consumed_paise?: number;
             /** @description Operator note. A live hold is recorded only after payment capture. */
             provider_note?: string;
+            /** Format: uuid */
+            readonly payment_attempt_id: string | null;
+            readonly simulated_capture_available: boolean;
         };
         /**
          * @description * `REQUESTED` - Requested
@@ -14058,9 +14086,11 @@ export interface components {
          *     * `DECLINED` - Declined
          *     * `WITHDRAWN` - Withdrawn
          *     * `EXPIRED` - Expired
+         *     * `CONFIRMED` - Confirmed
+         *     * `CANCELLED` - Cancelled
          * @enum {string}
          */
-        StayEnquiryStatusEnum: "SUBMITTED" | "RESPONDED" | "DECLINED" | "WITHDRAWN" | "EXPIRED";
+        StayEnquiryStatusEnum: "SUBMITTED" | "RESPONDED" | "DECLINED" | "WITHDRAWN" | "EXPIRED" | "CONFIRMED" | "CANCELLED";
         StayModerationRequest: {
             action: components["schemas"]["Action68eEnum"];
             reason: string;
@@ -14074,6 +14104,16 @@ export interface components {
             nights: number;
             nightly_rate_paise: number;
             total_quote_paise: number;
+        };
+        StayReview: {
+            /** Format: uuid */
+            readonly id: string;
+            rating: number;
+            comment?: string;
+            image_urls?: unknown;
+            readonly customer_name: string;
+            /** Format: date-time */
+            readonly created_at: string;
         };
         StepUpSession: {
             /** Format: date-time */

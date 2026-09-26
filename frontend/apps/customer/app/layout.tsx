@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import { QueryProvider, SessionSync } from "@vsolve/query";
+import { ToastProvider } from "@vsolve/ui";
 
 import { AppChrome } from "@/features/session/view/app-chrome";
 import { CUSTOMER_VIEWPORT_WIDTH_CLASS } from "@/features/session/view/app-chrome-layout";
@@ -57,12 +58,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${appFont.variable} bg-[#FAF9F7]`} suppressHydrationWarning>
       <body className={`${CUSTOMER_VIEWPORT_WIDTH_CLASS} bg-[#FAF9F7] antialiased`}>
         <QueryProvider showDevtools={false}>
-          <SessionSync />
-          {/* The chrome wraps the page rather than sitting above it: the phone
-              tab bar is fixed to the bottom of the viewport, so the same
-              component that decides whether it renders must also reserve the
-              space it covers. See `AppChrome`. */}
-          <AppChrome>{children}</AppChrome>
+          <ToastProvider>
+            <SessionSync />
+            {/* The chrome wraps the page rather than sitting above it: the phone
+                tab bar is fixed to the bottom of the viewport, so the same
+                component that decides whether it renders must also reserve the
+                space it covers. See `AppChrome`. */}
+            <AppChrome>{children}</AppChrome>
+          </ToastProvider>
         </QueryProvider>
       </body>
     </html>

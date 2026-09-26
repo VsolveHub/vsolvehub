@@ -7,6 +7,7 @@ from apps.wallet.views import (
     CustomerWalletTopUpView,
     CustomerWalletTransactionsView,
     CustomerWalletView,
+    OpsWalletLiabilityExcelView,
     OpsWalletLiabilityView,
 )
 
@@ -26,6 +27,11 @@ urlpatterns = [
         "ops/wallet/liability/",
         OpsWalletLiabilityView.as_view(),
         name="ops-wallet-liability",
+    ),
+    path(
+        "ops/wallet/liability.xlsx",
+        OpsWalletLiabilityExcelView.as_view(),
+        name="ops-wallet-liability-excel",
     ),
     path(
         "ops/wallet/policies/",

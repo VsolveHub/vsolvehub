@@ -140,11 +140,16 @@ def test_an_unconfigured_transport_refuses_rather_than_pretending_to_send() -> N
     assert configured_channels() == ()
 
 
-@override_settings(MESSAGE_TRANSPORT="msg91")
-def test_msg91_is_not_wired_yet_and_says_so() -> None:
-    # Guards against a future edit that registers the code before the implementation exists.
+@override_settings(MESSAGE_TRANSPORT="msg91", MSG91_AUTH_KEY="")
+def test_msg91_without_credentials_refuses() -> None:
     with pytest.raises(MessageTransportError):
         get_message_transport()
+
+
+@override_settings(MESSAGE_TRANSPORT="msg91", MSG91_AUTH_KEY="test-key")
+def test_msg91_transport_is_selected_when_the_auth_key_is_set() -> None:
+    transport = get_message_transport()
+    assert transport.code == "msg91"
 
 
 @override_settings(MESSAGE_TRANSPORT="fake", NOTIFICATIONS_ALLOW_FAKE_TRANSPORT=True)

@@ -3,8 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
-import { Calendar, ShieldCheck, Truck, Store, Info, AlertCircle } from "lucide-react";
-import { Button } from "@vsolve/ui";
+import { Calendar, ShieldCheck, Store, Info, AlertCircle } from "lucide-react";
+import { request } from "@vsolve/api-client";
+import { Button, useToast } from "@vsolve/ui";
+
+import { getApiClient } from "@/lib/api/browser";
 
 import { calculateRentalDays, formatPaise, type RentalAsset } from "../model";
 import { bookRental } from "../queries";
@@ -15,6 +18,7 @@ interface RentalBookPanelProps {
 
 export function RentalBookPanel({ asset }: RentalBookPanelProps) {
   const router = useRouter();
+  const toast = useToast();
 
   // Default dates: tomorrow and day after tomorrow
   const tomorrow = new Date();
@@ -27,7 +31,6 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
 
   const [startDate, setStartDate] = useState(defaultStart);
   const [endDate, setEndDate] = useState(defaultEnd);
-  const [mode, setMode] = useState<"PICKUP" | "DELIVERY">("PICKUP");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -42,10 +45,23 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
         asset_id: asset.id,
         start_date: startDate,
         end_date: endDate,
-        pickup_or_delivery_mode: mode,
+        pickup_or_delivery_mode: "PICKUP",
         notes,
       }),
-    onSuccess: () => {
+    onSuccess: async (booking) => {
+      const attemptId = booking.deposit?.payment_attempt_id;
+      if (attemptId && booking.deposit?.simulated_capture_available) {
+        await request(() =>
+          getApiClient().POST("/api/v1/payment-attempts/{attempt_id}/simulate-capture/", {
+            params: { path: { attempt_id: attemptId } },
+          }),
+        );
+        toast.notify(
+          "Deposit recorded. Razorpay isn’t configured, so the hold was recorded here.",
+        );
+      } else if (attemptId) {
+        toast.notify("Continue in Razorpay to hold this deposit.");
+      }
       router.push("/rentals/mine");
     },
     onError: (err: Error) => {
@@ -108,41 +124,12 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
           </label>
         </div>
 
-        {/* Handover Mode Selection */}
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-bold text-text">Handover Preference</span>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setMode("PICKUP")}
-              className={`flex items-center gap-2 rounded-control border p-3 text-left transition ${
-                mode === "PICKUP"
-                  ? "border-action bg-action-surface text-action font-bold"
-                  : "border-line bg-surface text-text-secondary hover:border-line-strong"
-              }`}
-            >
-              <Store className="size-4 shrink-0" />
-              <div>
-                <div className="text-xs font-bold">Self Pickup</div>
-                <div className="text-[10px] text-text-secondary">From partner store</div>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setMode("DELIVERY")}
-              className={`flex items-center gap-2 rounded-control border p-3 text-left transition ${
-                mode === "DELIVERY"
-                  ? "border-action bg-action-surface text-action font-bold"
-                  : "border-line bg-surface text-text-secondary hover:border-line-strong"
-              }`}
-            >
-              <Truck className="size-4 shrink-0" />
-              <div>
-                <div className="text-xs font-bold">Doorstep Delivery</div>
-                <div className="text-[10px] text-text-secondary">Partner delivers</div>
-              </div>
-            </button>
+        {/* OLX-style: pickup only — no doorstep delivery */}
+        <div className="flex items-center gap-2 rounded-control border border-line bg-surface-sunken p-3 text-xs text-text-secondary">
+          <Store className="size-4 shrink-0 text-action" />
+          <div>
+            <div className="font-bold text-text">Self pickup</div>
+            <div className="text-[10px]">Collect and return at the partner location. Doorstep delivery is not offered.</div>
           </div>
         </div>
 

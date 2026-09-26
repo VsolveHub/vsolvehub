@@ -15,14 +15,16 @@ from apps.rental.models import RentalAsset, RentalBooking
 from apps.rental.serializers import (
     CreateAssetSerializer,
     CreateBookingSerializer,
-    RentalModerationSerializer,
     RentalAssetSerializer,
     RentalBookingSerializer,
+    RentalModerationSerializer,
+    RentalTaxonomySubcategorySerializer,
 )
 from apps.rental.services import (
     RentalStateError,
     create_asset,
     create_booking,
+    get_rental_taxonomy,
     handover_booking,
     moderate_asset,
     public_assets,
@@ -41,6 +43,16 @@ def _error(exc: Exception) -> Response:
     if isinstance(exc, PermissionError):
         code = status.HTTP_403_FORBIDDEN
     return Response({"detail": str(exc)}, status=code)
+
+
+class RentalTaxonomyView(APIView):
+    """Category → subcategory → service → variant + asset_schema for partner posting forms."""
+
+    permission_classes = (permissions.AllowAny,)
+
+    @extend_schema(responses=RentalTaxonomySubcategorySerializer(many=True))
+    def get(self, request: Any) -> Response:  # noqa: ARG002
+        return Response(get_rental_taxonomy())
 
 
 class RentalBrowseView(APIView):
@@ -63,6 +75,7 @@ class RentalBrowseView(APIView):
         min_rate = request.query_params.get("min_price")
         max_rate = request.query_params.get("max_price")
         max_deposit = request.query_params.get("max_deposit")
+
         def _parse_date(raw: str | None) -> date | None:
             if not raw:
                 return None
@@ -120,7 +133,7 @@ class MyRentalsView(APIView):
     @extend_schema(responses=RentalBookingSerializer(many=True))
     def get(self, request: Any) -> Response:
         rows = RentalBooking.objects.filter(customer=request.user).select_related(
-            "asset", "asset__partner", "deposit"
+            "asset", "asset__partner", "deposit", "deposit__payment_attempt"
         )
         return Response(RentalBookingSerializer(rows, many=True).data)
 
@@ -131,7 +144,11 @@ class PartnerAssetCollectionView(APIView):
     @extend_schema(responses=RentalAssetSerializer(many=True))
     def get(self, request: Any) -> Response:
         partner = _partner(request.user)
-        rows = RentalAsset.objects.filter(partner=partner).select_related("partner", "variant")
+        rows = (
+            RentalAsset.objects.filter(partner=partner)
+            .select_related("partner", "variant")
+            .prefetch_related("media")
+        )
         return Response(RentalAssetSerializer(rows, many=True).data)
 
     @extend_schema(request=CreateAssetSerializer, responses=RentalAssetSerializer)

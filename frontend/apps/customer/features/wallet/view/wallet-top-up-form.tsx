@@ -1,9 +1,13 @@
 "use client";
 
-import { Button, formatMoney } from "@vsolve/ui";
-import { ArrowRight, CheckCircle2, Plus } from "lucide-react";
+import { request } from "@vsolve/api-client";
+import { Button, formatMoney, useToast } from "@vsolve/ui";
+import { CheckCircle2, Plus } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+
+import { getApiClient } from "@/lib/api/browser";
+
 import {
   useInitiateWalletTopUp,
   walletKeys,
@@ -23,11 +27,11 @@ export function WalletTopUpForm({ wallet }: WalletTopUpFormProps) {
   const maxPaise = (policy["max_top_up_paise"] as number | undefined) ?? 1000000; // ₹10,000
 
   const queryClient = useQueryClient();
+  const toast = useToast();
   const [amountPaise, setAmountPaise] = useState<number>(50000); // default ₹500
   const [customInput, setCustomInput] = useState<string>("500");
   const [createdAttempt, setCreatedAttempt] = useState<WalletTopUpResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isSimulating, setIsSimulating] = useState(false);
 
   const topUpMutation = useInitiateWalletTopUp();
 
@@ -63,7 +67,12 @@ export function WalletTopUpForm({ wallet }: WalletTopUpFormProps) {
       { amount_paise: amountPaise },
       {
         onSuccess: (data) => {
-          setCreatedAttempt(data);
+          if (data.provider === "razorpay") {
+            setCreatedAttempt(data);
+            toast.notify("Continue in Razorpay to add this money.");
+            return;
+          }
+          void recordLocalTopUp(data);
         },
         onError: (err: unknown) => {
           setErrorMessage(err instanceof Error ? err.message : "Failed to initiate top-up");
@@ -72,36 +81,24 @@ export function WalletTopUpForm({ wallet }: WalletTopUpFormProps) {
     );
   };
 
-  const handleSimulatePayment = async () => {
-    if (!createdAttempt) return;
-    setIsSimulating(true);
+  const recordLocalTopUp = async (attempt: WalletTopUpResponse) => {
     setErrorMessage(null);
     try {
-      // simulate-capture is a dev-only endpoint not in the OpenAPI schema.
-      // We call it via raw fetch, mirroring the session cookie the API client uses.
-      const csrfMeta = typeof document !== "undefined"
-        ? document.cookie.split(";").find(c => c.trim().startsWith("csrftoken="))?.split("=")[1]
-        : undefined;
-      const res = await fetch("/api/v1/commerce/payments/simulate-capture/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(csrfMeta ? { "X-CSRFToken": csrfMeta } : {}),
-        },
-        body: JSON.stringify({ payment_attempt_id: createdAttempt.payment_attempt_id }),
-      });
-      if (!res.ok) {
-        throw new Error("Simulation capture failed or is disabled in this environment.");
-      }
+      await request(() =>
+        getApiClient().POST("/api/v1/payment-attempts/{attempt_id}/simulate-capture/", {
+          params: { path: { attempt_id: attempt.payment_attempt_id } },
+        }),
+      );
       setCreatedAttempt(null);
       topUpMutation.reset();
-      // Refresh wallet balance and transaction list now that payment captured
       void queryClient.invalidateQueries({ queryKey: walletKeys.detail });
       void queryClient.invalidateQueries({ queryKey: walletKeys.transactions });
+      toast.notify(
+        `${formatMoney(attempt.amount_paise)} added to your wallet. Razorpay isn’t configured, so this was recorded here.`,
+      );
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : "Simulated capture failed");
-    } finally {
-      setIsSimulating(false);
+      setCreatedAttempt(attempt);
+      setErrorMessage(err instanceof Error ? err.message : "Could not record the top-up");
     }
   };
 
@@ -122,27 +119,18 @@ export function WalletTopUpForm({ wallet }: WalletTopUpFormProps) {
             <CheckCircle2 className="size-5 text-emerald-600 shrink-0 mt-0.5" />
             <div className="flex-1">
               <h3 className="text-sm font-bold text-emerald-900">
-                Top-Up Order Initiated: {formatMoney(createdAttempt.amount_paise)}
+                Razorpay checkout: {formatMoney(createdAttempt.amount_paise)}
               </h3>
               <p className="mt-1 text-xs text-emerald-800">
-                Attempt ID: <code className="font-mono text-[11px]">{createdAttempt.payment_attempt_id}</code>
+                Finish this top-up in Razorpay. The balance updates when the payment is captured.
               </p>
-              <div className="mt-4 flex flex-wrap gap-3">
-                <Button
-                  variant="primary"
-                  className="bg-[#EA580C] hover:bg-[#d65f1a] text-white text-xs h-9 px-4 font-semibold"
-                  disabled={isSimulating}
-                  onClick={handleSimulatePayment}
-                >
-                  {isSimulating ? "Confirming..." : "Simulate Instant Payment (Dev)"}
-                  <ArrowRight className="size-3.5 ml-1.5" />
-                </Button>
+              <div className="mt-4">
                 <Button
                   variant="outline"
                   className="text-xs h-9 px-3"
                   onClick={() => setCreatedAttempt(null)}
                 >
-                  Cancel
+                  Close
                 </Button>
               </div>
             </div>

@@ -9701,6 +9701,79 @@ paths:
               schema:
                 $ref: '#/components/schemas/Property'
           description: ''
+  /api/v1/ops/vendor-subscription-plans:
+    get:
+      operationId: ops_vendor_subscription_plans_list
+      tags:
+      - ops
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VendorSubscriptionPlan'
+          description: ''
+    post:
+      operationId: ops_vendor_subscription_plans_create
+      tags:
+      - ops
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpsCreateVendorSubscriptionPlanRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OpsCreateVendorSubscriptionPlanRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OpsCreateVendorSubscriptionPlanRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorSubscriptionPlan'
+          description: ''
+  /api/v1/ops/vendor-subscription-plans/{plan_id}:
+    patch:
+      operationId: ops_vendor_subscription_plans_partial_update
+      parameters:
+      - in: path
+        name: plan_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - ops
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOpsUpdateVendorSubscriptionPlanRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedOpsUpdateVendorSubscriptionPlanRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedOpsUpdateVendorSubscriptionPlanRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorSubscriptionPlan'
+          description: ''
   /api/v1/ops/wallet/adjustments/:
     post:
       operationId: ops_wallet_adjustments_create
@@ -14406,6 +14479,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RentalBooking'
+          description: ''
+  /api/v1/rentals/taxonomy:
+    get:
+      operationId: rentals_taxonomy_list
+      description: Category → subcategory → service → variant + asset_schema for partner
+        posting forms.
+      tags:
+      - rentals
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RentalTaxonomySubcategory'
           description: ''
   /api/v1/requirements/:
     get:
@@ -20102,6 +20194,17 @@ components:
         asset_identifier:
           type: string
           default: ''
+        structured_fields: {}
+        media:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        image_urls:
+          type: array
+          items:
+            type: string
+            minLength: 1
       required:
       - daily_rate_paise
       - title
@@ -25693,6 +25796,41 @@ components:
       required:
       - expected_version
       - target_status
+    OpsCreateVendorSubscriptionPlanRequest:
+      type: object
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 80
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        price_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        duration_days:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        max_active_listings:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        premium_capabilities: {}
+        premium_price_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+      required:
+      - code
+      - name
+      - price_paise
     OpsWalletTopUpPolicy:
       type: object
       properties:
@@ -27903,6 +28041,34 @@ components:
           type: string
           format: email
           maxLength: 254
+    PatchedOpsUpdateVendorSubscriptionPlanRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        price_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        duration_days:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        max_active_listings:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        premium_capabilities: {}
+        premium_price_paise:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        is_active:
+          type: boolean
     PatchedPartnerApplicationUpdateRequest:
       type: object
       properties:
@@ -29528,12 +29694,26 @@ components:
         variant:
           type: string
           format: uuid
+        structured_fields: {}
+        cancellation_policy_text:
+          type: string
+        house_rules:
+          type: string
+        media:
+          type: array
+          items:
+            $ref: '#/components/schemas/PropertyMedia'
+          readOnly: true
+        reviews:
+          type: array
+          items:
+            $ref: '#/components/schemas/StayReview'
+          readOnly: true
         units:
           type: array
           items:
             $ref: '#/components/schemas/Unit'
           readOnly: true
-        structured_fields: {}
         created_at:
           type: string
           format: date-time
@@ -29542,10 +29722,38 @@ components:
       - created_at
       - host_name
       - id
+      - media
       - public_state
+      - reviews
       - title
       - units
       - variant
+    PropertyMedia:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        url:
+          type: string
+          format: uri
+          maxLength: 1024
+        caption:
+          type: string
+          maxLength: 240
+        display_order:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - url
     Proposal:
       type: object
       description: A vendor's own quote, read back to that vendor.
@@ -32381,6 +32589,13 @@ components:
           type: string
           format: uuid
           readOnly: true
+        structured_fields:
+          readOnly: true
+        media:
+          type: array
+          items:
+            $ref: '#/components/schemas/RentalAssetMedia'
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -32394,11 +32609,47 @@ components:
       - description
       - id
       - location_text
+      - media
       - moderation_status
       - partner_name
       - public_state
+      - structured_fields
       - title
       - variant
+    RentalAssetMedia:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        url:
+          type: string
+          format: uri
+          maxLength: 1024
+        image_url:
+          type: string
+          readOnly: true
+        caption:
+          type: string
+          maxLength: 240
+        display_order:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        sort_order:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - image_url
+      - sort_order
+      - url
     RentalBooking:
       type: object
       properties:
@@ -32480,9 +32731,19 @@ components:
           type: string
           description: Operator note. A live hold is recorded only after payment capture.
           maxLength: 240
+        payment_attempt_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        simulated_capture_available:
+          type: boolean
+          readOnly: true
       required:
       - amount_paise
       - id
+      - payment_attempt_id
+      - simulated_capture_available
     RentalDepositStatusEnum:
       enum:
       - REQUESTED
@@ -32511,6 +32772,63 @@ components:
       required:
       - action
       - reason
+    RentalTaxonomyService:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        variants:
+          type: array
+          items:
+            $ref: '#/components/schemas/RentalTaxonomyVariant'
+      required:
+      - id
+      - name
+      - slug
+      - variants
+    RentalTaxonomySubcategory:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        services:
+          type: array
+          items:
+            $ref: '#/components/schemas/RentalTaxonomyService'
+      required:
+      - id
+      - name
+      - services
+      - slug
+    RentalTaxonomyVariant:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        code:
+          type: string
+        asset_schema: {}
+        default_deposit_paise:
+          type: integer
+      required:
+      - asset_schema
+      - code
+      - default_deposit_paise
+      - id
+      - name
     ReportRequest:
       type: object
       properties:
@@ -35403,6 +35721,8 @@ components:
       - DECLINED
       - WITHDRAWN
       - EXPIRED
+      - CONFIRMED
+      - CANCELLED
       type: string
       description: |-
         * `SUBMITTED` - Submitted
@@ -35410,6 +35730,8 @@ components:
         * `DECLINED` - Declined
         * `WITHDRAWN` - Withdrawn
         * `EXPIRED` - Expired
+        * `CONFIRMED` - Confirmed
+        * `CANCELLED` - Cancelled
     StayModerationRequest:
       type: object
       properties:
@@ -35447,6 +35769,32 @@ components:
       - total_quote_paise
       - unit_id
       - unit_name
+    StayReview:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        rating:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        comment:
+          type: string
+        image_urls: {}
+        customer_name:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - customer_name
+      - id
+      - rating
     StepUpSession:
       type: object
       properties:

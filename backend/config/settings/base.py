@@ -594,12 +594,15 @@ RAZORPAYX_WEBHOOK_SECRET = env("RAZORPAYX_WEBHOOK_SECRET", default="")
 PAYOUTS_LIVE_ENABLED = env.bool("PAYOUTS_LIVE_ENABLED", default=False)
 PAYOUTS_ALLOW_FAKE_PROVIDER = env.bool("PAYOUTS_ALLOW_FAKE_PROVIDER", default=False)
 
-# Outbound message transport for SMS, WhatsApp and voice. MSG91 is the intended provider and is
-# not implemented yet, so this stays `unconfigured` and `get_message_transport` refuses. A
-# transport that silently no-ops would report success to the escalation ladder while the vendor
-# heard nothing, which is the one failure the ladder exists to prevent.
+# Outbound message transport for SMS, WhatsApp and voice. MSG91 sends only when MSG91_AUTH_KEY
+# is set. An empty key refuses rather than reporting a send that never left.
 MESSAGE_TRANSPORT = env("MESSAGE_TRANSPORT", default="unconfigured")
 NOTIFICATIONS_ALLOW_FAKE_TRANSPORT = env.bool("NOTIFICATIONS_ALLOW_FAKE_TRANSPORT", default=False)
+# Present only after the client sends the MSG91 account. Empty means send refuses.
+MSG91_AUTH_KEY = env("MSG91_AUTH_KEY", default="")
+MSG91_SENDER_ID = env("MSG91_SENDER_ID", default="")
+MSG91_OTP_TEMPLATE_ID = env("MSG91_OTP_TEMPLATE_ID", default="")
+MSG91_API_BASE_URL = env("MSG91_API_BASE_URL", default="https://control.msg91.com/api/v5")
 
 GEOCODING_PROVIDER = env("GEOCODING_PROVIDER", default="unconfigured")
 GEOCODING_NOMINATIM_URL = env(

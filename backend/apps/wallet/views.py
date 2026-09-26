@@ -2,6 +2,7 @@
 
 from typing import cast
 
+from django.http import HttpResponse
 from drf_spectacular.utils import extend_schema
 from rest_framework import permissions, status
 from rest_framework.exceptions import ValidationError
@@ -12,7 +13,8 @@ from rest_framework.views import APIView
 
 from apps.identity.models import User
 from apps.partners.permissions import IsOperationsUser
-from apps.wallet.models import WalletAccount
+from apps.wallet.excel import workbook_bytes
+from apps.wallet.models import WalletAccount, WalletTransaction
 from apps.wallet.serializers import (
     WalletAccountSerializer,
     WalletLiabilityReportSerializer,
@@ -115,3 +117,35 @@ class OpsWalletLiabilityView(APIView):
                 "active_wallets_count": count,
             }
         )
+
+
+class OpsWalletLiabilityExcelView(APIView):
+    """Operations download of captured wallet rows. Excluded from the JSON contract."""
+
+    permission_classes = (permissions.IsAuthenticated, IsOperationsUser)
+
+    @extend_schema(exclude=True)
+    def get(self, request: Request) -> HttpResponse:  # noqa: ARG002
+        rows = [
+            [
+                str(txn.wallet.customer_id),
+                txn.kind,
+                txn.status,
+                txn.amount_paise,
+                txn.created_at.isoformat(),
+            ]
+            for txn in WalletTransaction.objects.select_related("wallet").order_by("-created_at")[
+                :5000
+            ]
+        ]
+        payload = workbook_bytes(
+            sheet_name="Wallet ledger",
+            headers=["customer_id", "kind", "status", "amount_paise", "created_at"],
+            rows=rows,
+        )
+        response = HttpResponse(
+            payload,
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = 'attachment; filename="wallet-ledger.xlsx"'
+        return response

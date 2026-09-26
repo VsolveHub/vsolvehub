@@ -64,14 +64,12 @@ export function RentalBookingCard({ booking }: RentalBookingCardProps) {
           </span>
         </div>
 
-        {booking.pickup_or_delivery_mode && (
-          <div className="flex items-center gap-2">
-            <Clock className="size-4 text-action shrink-0" />
-            <span>
-              Mode: <strong className="text-text font-bold capitalize">{booking.pickup_or_delivery_mode.toLowerCase()}</strong>
-            </span>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          <Clock className="size-4 text-action shrink-0" />
+          <span>
+            Handover: <strong className="text-text font-bold">Self pickup</strong>
+          </span>
+        </div>
       </div>
 
       {/* Lifecycle progress helper */}

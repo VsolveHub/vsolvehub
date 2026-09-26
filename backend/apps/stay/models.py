@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 import uuid
 
 from django.conf import settings
@@ -31,6 +32,8 @@ class Property(models.Model):
     )
     moderation_reason = models.CharField(max_length=480, blank=True)
     structured_fields = models.JSONField(default=dict, blank=True)
+    cancellation_policy_text = models.TextField(blank=True, default="")
+    house_rules = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -76,6 +79,8 @@ class StayEnquiry(models.Model):
         DECLINED = "DECLINED", "Declined"
         WITHDRAWN = "WITHDRAWN", "Withdrawn"
         EXPIRED = "EXPIRED", "Expired"
+        CONFIRMED = "CONFIRMED", "Confirmed"
+        CANCELLED = "CANCELLED", "Cancelled"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     property = models.ForeignKey(Property, on_delete=models.PROTECT, related_name="enquiries")
@@ -120,3 +125,48 @@ class StayModerationEvent(models.Model):
     action = models.CharField(max_length=20, choices=Action.choices)
     reason = models.CharField(max_length=480, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+class PropertyMedia(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    property = models.ForeignKey(Property, on_delete=models.CASCADE, related_name="media")
+    url = models.URLField(max_length=1024)
+    caption = models.CharField(max_length=240, blank=True)
+    display_order = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("display_order", "created_at")
+
+    @builtins.property
+    def image_url(self) -> str:
+        return self.url
+
+    @builtins.property
+    def sort_order(self) -> int:
+        return self.display_order
+
+
+class StayReview(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    property = models.ForeignKey(Property, on_delete=models.PROTECT, related_name="reviews")
+    enquiry = models.ForeignKey(
+        StayEnquiry, null=True, blank=True, on_delete=models.SET_NULL, related_name="reviews"
+    )
+    customer = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="stay_reviews"
+    )
+    rating = models.PositiveSmallIntegerField()
+    body = models.TextField(blank=True)
+    comment = models.TextField(blank=True)
+    image_urls = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        if not self.body and self.comment:
+            self.body = self.comment
+        elif not self.comment and self.body:
+            self.comment = self.body
+        super().save(*args, **kwargs)

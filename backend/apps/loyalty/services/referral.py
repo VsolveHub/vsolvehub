@@ -14,6 +14,7 @@ from apps.loyalty.models import (
     ReferralProgramVersion,
     ReferralReward,
 )
+from apps.loyalty.services.coins import grant_configured_coins
 from apps.wallet.models import WalletTransaction
 from apps.wallet.services import credit_wallet, get_or_create_wallet
 
@@ -223,6 +224,11 @@ def evaluate_referral_qualification(event: OutboxEvent) -> None:
                 idempotency_key=f"referral-reward:referrer:{attribution.id}",
                 notes=f"Referral reward for referring {referee.id}",
             )
+        referrer_grant = grant_configured_coins(
+            customer=referrer,
+            coins_amount=referrer_coins,
+            notes=f"Referral coins for referring {referee.id}",
+        )
 
         ReferralReward.objects.create(
             attribution=attribution,
@@ -234,6 +240,7 @@ def evaluate_referral_qualification(event: OutboxEvent) -> None:
             wallet_paise=referrer_wallet_paise,
             coins_amount=referrer_coins,
             wallet_transaction=referrer_wallet_txn,
+            coin_grant=referrer_grant,
         )
 
     # 2. Pay Referee if configured
@@ -251,6 +258,11 @@ def evaluate_referral_qualification(event: OutboxEvent) -> None:
                 idempotency_key=f"referral-reward:referee:{attribution.id}",
                 notes="Signup referral reward on completing first booking",
             )
+        referee_grant = grant_configured_coins(
+            customer=referee,
+            coins_amount=referee_coins,
+            notes="Referral welcome coins on first completed booking",
+        )
 
         ReferralReward.objects.create(
             attribution=attribution,
@@ -262,6 +274,7 @@ def evaluate_referral_qualification(event: OutboxEvent) -> None:
             wallet_paise=referee_wallet_paise,
             coins_amount=referee_coins,
             wallet_transaction=referee_wallet_txn,
+            coin_grant=referee_grant,
         )
 
     attribution.status = ReferralAttribution.Status.REWARDED

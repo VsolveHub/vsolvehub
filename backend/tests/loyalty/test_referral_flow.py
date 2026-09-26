@@ -129,6 +129,9 @@ def test_evaluate_referral_qualification_pays_volume_tiers_to_referrer_and_refer
 
     rewards = ReferralReward.objects.filter(attribution=attribution)
     assert rewards.count() == 2  # one for referrer, one for referee
+    referee_reward = rewards.get(reward_side=ReferralReward.RewardSide.REFEREE)
+    assert referee_reward.coin_grant_id is not None
+    assert referee_reward.coins_amount == 100
 
 
 def test_customer_referral_api() -> None:

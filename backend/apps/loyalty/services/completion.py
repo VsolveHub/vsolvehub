@@ -58,7 +58,21 @@ def record_completion_for_customer(
         grant_coins(
             customer=customer,
             trigger=CoinGrantRule.GrantTrigger.BOOKING_COMPLETED,
+            order_payable_paise=_order_payable_paise(event),
             sequence_n=count,
         )
 
     return RecordCompletionResult(created=created)
+
+
+def _order_payable_paise(event: OutboxEvent) -> int | None:
+    """Order total for earn-tier lookup. Missing bookings leave tiered rules idle."""
+    booking_id = event.payload.get("booking_id")
+    if not booking_id:
+        return None
+    from apps.commerce.models import Booking  # noqa: PLC0415
+
+    booking = Booking.objects.filter(id=booking_id).select_related("order").first()
+    if booking is None:
+        return None
+    return int(booking.order.total_paise)

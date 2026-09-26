@@ -14,10 +14,10 @@ from apps.stay.models import Property, StayEnquiry
 from apps.stay.serializers import (
     CreateEnquirySerializer,
     CreatePropertySerializer,
-    StayModerationSerializer,
     PropertySerializer,
     RespondEnquirySerializer,
     StayEnquirySerializer,
+    StayModerationSerializer,
     StayQuoteRequestSerializer,
     StayQuoteResponseSerializer,
 )
@@ -74,9 +74,15 @@ class StayBrowseView(APIView):
         props = public_properties(
             query=request.query_params.get("q", ""),
             location=request.query_params.get("location", ""),
-            sharing_count=int(sharing_count) if sharing_count and sharing_count.isdigit() else None,
-            has_ac=True if ac_param in ("true", "1", "True") else (False if ac_param in ("false", "0", "False") else None),
-            food_included=True if food_param in ("true", "1", "True") else (False if food_param in ("false", "0", "False") else None),
+            sharing_count=(
+                int(sharing_count) if sharing_count and sharing_count.isdigit() else None
+            ),
+            has_ac=True
+            if ac_param in ("true", "1", "True")
+            else (False if ac_param in ("false", "0", "False") else None),
+            food_included=True
+            if food_param in ("true", "1", "True")
+            else (False if food_param in ("false", "0", "False") else None),
             min_price_paise=int(min_price) if min_price and min_price.isdigit() else None,
             max_price_paise=int(max_price) if max_price and max_price.isdigit() else None,
             variant_code=request.query_params.get("service", ""),

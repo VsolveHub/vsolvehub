@@ -12,7 +12,7 @@ export default function AccountReferralPage() {
   return (
     <AccountSection
       title="Refer Friends & Earn"
-      description="Invite friends to Vsolve. When they book, you both get wallet credits to use on home services."
+      description="Invite friends to Vsolve. Rewards follow the published program: wallet balance, V Coins, or both."
       collapseHeaderOnMobile
     >
       <ReferralScreen />

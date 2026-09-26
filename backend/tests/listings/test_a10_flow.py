@@ -494,6 +494,29 @@ def test_m3_a10_10_subscription_purchase_and_activation(poster):
 
 
 @pytest.mark.django_db
+def test_m3_a10_10b_new_plan_expires_the_previous_active_subscription(poster):
+    """Buying a second plan leaves one ACTIVE subscription for the poster."""
+    first = VendorSubscriptionPlan.objects.create(
+        code=f"ent-{uuid.uuid4().hex[:6]}", name="Enterprise", price_paise=499900, duration_days=90
+    )
+    second = VendorSubscriptionPlan.objects.create(
+        code=f"growth-{uuid.uuid4().hex[:6]}", name="Growth", price_paise=249900, duration_days=60
+    )
+    current = start_subscription_purchase(poster=poster, plan=first, idempotency_key="sub-replace-1")
+    assert current.payment_attempt is not None
+    complete_subscription_payment(payment_attempt_id=current.payment_attempt.id)
+    replacement = start_subscription_purchase(
+        poster=poster, plan=second, idempotency_key="sub-replace-2"
+    )
+    assert replacement.payment_attempt is not None
+    complete_subscription_payment(payment_attempt_id=replacement.payment_attempt.id)
+    current.refresh_from_db()
+    replacement.refresh_from_db()
+    assert current.status == VendorSubscription.Status.EXPIRED
+    assert replacement.status == VendorSubscription.Status.ACTIVE
+
+
+@pytest.mark.django_db
 def test_m3_a10_11_subscription_webhook_replay_idempotency(poster):
     """M3-A10-11: Subscription payment webhook replayed -> activation is not duplicated, subscription period not double-extended."""
     plan = VendorSubscriptionPlan.objects.create(

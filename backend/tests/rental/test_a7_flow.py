@@ -121,6 +121,62 @@ def test_rental_happy_path_handover_return_release(rental_world):
 
 
 @pytest.mark.django_db
+def test_mark_deposit_held_avoids_for_update_on_outer_join(rental_world):
+    """Regression: Postgres rejects FOR UPDATE on the nullable side of an outer join.
+
+    `RentalBooking.deposit` is a reverse OneToOne from RentalDeposit, so locking the
+    deposit with `select_related("booking")` produced a left outer join under
+    `FOR UPDATE` and blew up simulate-capture for A7 deposits. Lock rows in separate
+    statements instead; assert no single statement mixes FOR UPDATE with a left join.
+    """
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    from apps.rental.services import mark_deposit_held
+
+    asset = create_asset(
+        partner=rental_world["partner"],
+        variant_id=rental_world["variant"].id,
+        title="Deposit Lock Drill",
+        daily_rate_paise=50000,
+        deposit_paise=100000,
+    )
+    submit_asset(asset=asset, partner=rental_world["partner"])
+    moderate_asset(
+        asset=asset, actor=rental_world["owner"], action="APPROVE", reason="ok for test"
+    )
+    start = timezone.localdate() + timedelta(days=3)
+    booking = create_booking(
+        customer=rental_world["customer"],
+        asset_id=asset.id,
+        start_date=start,
+        end_date=start + timedelta(days=1),
+    )
+    attempt_id = booking.deposit.payment_attempt_id
+    assert attempt_id is not None
+
+    with CaptureQueriesContext(connection) as captured:
+        mark_deposit_held(payment_attempt_id=attempt_id)
+
+    for query in captured.captured_queries:
+        sql = query["sql"].upper()
+        if "FOR UPDATE" in sql:
+            assert "LEFT OUTER JOIN" not in sql, sql
+            assert "LEFT JOIN" not in sql, sql
+
+    booking.refresh_from_db()
+    booking.deposit.refresh_from_db()
+    assert booking.status == RentalBooking.Status.CONFIRMED
+    assert booking.deposit.status == RentalDeposit.Status.HELD
+
+    # Replay after hold is a no-op (idempotent capture callback).
+    mark_deposit_held(payment_attempt_id=attempt_id)
+    booking.refresh_from_db()
+    assert booking.status == RentalBooking.Status.CONFIRMED
+    assert booking.deposit.status == RentalDeposit.Status.HELD
+
+
+@pytest.mark.django_db
 def test_rental_filters(rental_world):
     from apps.rental.services import public_assets
 
@@ -156,6 +212,32 @@ def test_rental_filters(rental_world):
     )
     blocked = public_assets(start_date=start, end_date=start + timedelta(days=1))
     assert not any(a.id == asset.id for a in blocked)
+
+
+@pytest.mark.django_db
+def test_create_booking_forces_pickup_even_when_delivery_requested(rental_world):
+    """OLX model: doorstep delivery is not offered; mode is always PICKUP."""
+    asset = create_asset(
+        partner=rental_world["partner"],
+        variant_id=rental_world["variant"].id,
+        title="Pickup Only Saw",
+        daily_rate_paise=25000,
+        deposit_paise=0,
+    )
+    submit_asset(asset=asset, partner=rental_world["partner"])
+    moderate_asset(
+        asset=asset, actor=rental_world["owner"], action="APPROVE", reason="ok for test"
+    )
+    start = timezone.localdate() + timedelta(days=5)
+    booking = create_booking(
+        customer=rental_world["customer"],
+        asset_id=asset.id,
+        start_date=start,
+        end_date=start + timedelta(days=1),
+        mode="DELIVERY",
+        hold_deposit_for_demo=True,
+    )
+    assert booking.pickup_or_delivery_mode == "PICKUP"
 
 
 @pytest.mark.django_db

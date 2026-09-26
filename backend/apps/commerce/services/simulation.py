@@ -97,6 +97,12 @@ def _standalone_attempt_belongs_to(*, attempt: PaymentAttempt, customer_id: UUID
         owned = WalletTransaction.objects.filter(
             payment_attempt=attempt, wallet__customer_id=customer_id
         ).exists()
+    elif purpose == PaymentAttempt.Purpose.A7_RENTAL_DEPOSIT:
+        from apps.rental.models import RentalDeposit  # noqa: PLC0415
+
+        owned = RentalDeposit.objects.filter(
+            payment_attempt=attempt, booking__customer_id=customer_id
+        ).exists()
     return owned
 
 

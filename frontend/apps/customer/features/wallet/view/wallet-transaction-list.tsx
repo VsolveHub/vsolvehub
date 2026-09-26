@@ -102,11 +102,20 @@ export function WalletTransactionList({ transactions }: WalletTransactionListPro
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold text-navy-900">{meta.label}</span>
-                    {txn.status && txn.status !== "CAPTURED" && (
-                      <Badge tone={txn.status === "RESERVED" ? "warning" : "neutral"} className="text-[10px] py-0">
-                        {txn.status}
+                    {txn.status ? (
+                      <Badge
+                        tone={
+                          txn.status === "CAPTURED"
+                            ? "success"
+                            : txn.status === "RESERVED"
+                              ? "warning"
+                              : "neutral"
+                        }
+                        className="text-[10px] py-0"
+                      >
+                        {txn.status === "CAPTURED" ? "Captured" : txn.status}
                       </Badge>
-                    )}
+                    ) : null}
                   </div>
                   <span className="block text-xs text-text-muted mt-0.5">{formattedDate}</span>
                 </div>
@@ -132,6 +141,9 @@ export function WalletTransactionList({ transactions }: WalletTransactionListPro
           );
         })}
       </div>
+      <p className="border-t border-line bg-surface px-6 py-3 text-xs text-text-secondary">
+        Wallet share refunds return here. Burned coins do not.
+      </p>
     </div>
   );
 }

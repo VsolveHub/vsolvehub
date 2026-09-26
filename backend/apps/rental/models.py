@@ -204,3 +204,23 @@ def overlapping_reservations(
         asset_id=asset_id,
         status__in=(AssetReservation.Status.TENTATIVE, AssetReservation.Status.CONFIRMED),
     ).filter(Q(start_date__lt=end) & Q(end_date__gt=start))
+
+class RentalAssetMedia(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    asset = models.ForeignKey(RentalAsset, on_delete=models.CASCADE, related_name="media")
+    url = models.URLField(max_length=1024)
+    caption = models.CharField(max_length=240, blank=True)
+    display_order = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("display_order", "created_at")
+
+    @property
+    def image_url(self) -> str:
+        return self.url
+
+    @property
+    def sort_order(self) -> int:
+        return self.display_order
+

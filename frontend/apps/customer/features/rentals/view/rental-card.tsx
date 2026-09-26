@@ -14,8 +14,20 @@ interface RentalCardProps {
 
 export function RentalCard({ asset }: RentalCardProps) {
   const saved = useSavedItems("rental");
+  const hero =
+    Array.isArray((asset as { media?: { url?: string }[] }).media) &&
+    (asset as { media: { url?: string }[] }).media[0]?.url
+      ? (asset as { media: { url: string }[] }).media[0].url
+      : null;
+
   return (
     <article className="group relative flex flex-col justify-between overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface p-5 shadow-xs transition hover:border-line-strong hover:shadow-raised">
+      {hero ? (
+        <div className="-mx-5 -mt-5 mb-3 aspect-[16/10] overflow-hidden bg-surface-sunken">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={hero} alt="" className="h-full w-full object-cover transition duration-slow group-hover:scale-[1.03]" />
+        </div>
+      ) : null}
       <div className="flex flex-col gap-3">
         {/* Top Badges */}
         <div className="flex items-center justify-between gap-2">

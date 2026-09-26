@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from apps.stay.models import Property, StayEnquiry, Unit
+from apps.stay.models import Property, PropertyMedia, StayEnquiry, StayReview, Unit
 
 
 class UnitSerializer(serializers.ModelSerializer):
@@ -16,9 +16,25 @@ class UnitSerializer(serializers.ModelSerializer):
         )
 
 
+class PropertyMediaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PropertyMedia
+        fields = ("id", "url", "caption", "display_order", "created_at")
+
+
+class StayReviewSerializer(serializers.ModelSerializer):
+    customer_name = serializers.CharField(source="customer.full_name", read_only=True)
+
+    class Meta:
+        model = StayReview
+        fields = ("id", "rating", "comment", "image_urls", "customer_name", "created_at")
+
+
 class PropertySerializer(serializers.ModelSerializer):
     public_state = serializers.CharField(read_only=True)
     host_name = serializers.CharField(source="host.display_name", read_only=True)
+    media = PropertyMediaSerializer(many=True, read_only=True)
+    reviews = StayReviewSerializer(many=True, read_only=True)
     units = UnitSerializer(many=True, read_only=True)
 
     class Meta:
@@ -32,8 +48,12 @@ class PropertySerializer(serializers.ModelSerializer):
             "public_state",
             "host_name",
             "variant",
-            "units",
             "structured_fields",
+            "cancellation_policy_text",
+            "house_rules",
+            "media",
+            "reviews",
+            "units",
             "created_at",
         )
 
@@ -76,7 +96,9 @@ class StayQuoteResponseSerializer(serializers.Serializer):
 class StayEnquirySerializer(serializers.ModelSerializer):
     property_title = serializers.CharField(source="property.title", read_only=True)
     unit_name = serializers.CharField(source="unit.name", read_only=True, default="Standard room")
-    nightly_rate_paise = serializers.IntegerField(source="unit.nightly_rate_paise", read_only=True, default=0)
+    nightly_rate_paise = serializers.IntegerField(
+        source="unit.nightly_rate_paise", read_only=True, default=0
+    )
 
     class Meta:
         model = StayEnquiry

@@ -25,9 +25,20 @@ export function StayCard({ property }: StayCardProps) {
   const isAc = Boolean(fields.ac);
   const hasFood = Boolean(fields.food);
   const hasWifi = Boolean(fields.wifi);
+  const hero =
+    Array.isArray((property as { media?: { url?: string }[] }).media) &&
+    (property as { media: { url?: string }[] }).media[0]?.url
+      ? (property as { media: { url: string }[] }).media[0].url
+      : null;
 
   return (
     <article className="group relative flex flex-col justify-between overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface p-5 shadow-xs transition hover:border-line-strong hover:shadow-raised">
+      {hero ? (
+        <div className="-mx-5 -mt-5 mb-3 aspect-[16/10] overflow-hidden bg-surface-sunken">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={hero} alt="" className="h-full w-full object-cover transition duration-slow group-hover:scale-[1.03]" />
+        </div>
+      ) : null}
       <div className="flex flex-col gap-3">
         <div className="flex justify-end">
           <SaveHeart saved={saved.isSaved(property.id)} onToggle={() => saved.toggle(property.id)} />

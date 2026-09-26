@@ -407,3 +407,30 @@ class ListingCategoryOptionSerializer(serializers.Serializer[dict[str, str]]):
 
 class ListingFiltersTaxonomySerializer(serializers.Serializer[dict[str, Any]]):
     categories = ListingCategoryOptionSerializer(many=True)
+
+
+class OpsCreateVendorSubscriptionPlanSerializer(serializers.ModelSerializer[VendorSubscriptionPlan]):
+    class Meta:
+        model = VendorSubscriptionPlan
+        fields = (
+            "code",
+            "name",
+            "price_paise",
+            "duration_days",
+            "max_active_listings",
+            "premium_capabilities",
+            "premium_price_paise",
+        )
+
+class OpsUpdateVendorSubscriptionPlanSerializer(serializers.ModelSerializer[VendorSubscriptionPlan]):
+    class Meta:
+        model = VendorSubscriptionPlan
+        fields = (
+            "name",
+            "price_paise",
+            "duration_days",
+            "max_active_listings",
+            "premium_capabilities",
+            "premium_price_paise",
+            "is_active",
+        )

@@ -548,6 +548,13 @@ def complete_subscription_payment(*, payment_attempt_id: UUID | str) -> None:
     if subscription is None or subscription.status != VendorSubscription.Status.PENDING_ACTIVATION:
         return
     now = timezone.now()
+    VendorSubscription.objects.filter(
+        poster_id=subscription.poster_id,
+        status=VendorSubscription.Status.ACTIVE,
+    ).exclude(id=subscription.id).update(
+        status=VendorSubscription.Status.EXPIRED,
+        updated_at=now,
+    )
     subscription.status = VendorSubscription.Status.ACTIVE
     subscription.starts_at = now
     subscription.ends_at = now + timedelta(days=subscription.plan.duration_days)

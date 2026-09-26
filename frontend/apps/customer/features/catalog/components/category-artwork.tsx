@@ -164,7 +164,7 @@ export function ServicePhoto({
     "grid place-items-center overflow-hidden rounded-card shadow-xs";
 
   if (imageUrl !== "") {
-    const isServiceCover = imageUrl.includes("/Service%20Cover/") || imageUrl.includes("/Service Cover/");
+    const isServiceCover = imageUrl.includes("/Service%20Cover/") || imageUrl.includes("/Service Cover/") || imageUrl.includes("/catalog/tiles/");
     return (
       <span
         className={`${CONTAINER} aspect-square w-full ${

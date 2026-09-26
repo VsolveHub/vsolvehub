@@ -383,8 +383,14 @@ class Command(BaseCommand):
         partner_role, _ = Role.objects.get_or_create(
             code="partner", defaults={"name": "Partner", "is_system": True}
         )
+        customer_role, _ = Role.objects.get_or_create(
+            code="customer", defaults={"name": "Customer", "is_system": True}
+        )
         UserRole.objects.update_or_create(
             user=demo_user, role=partner_role, defaults={"revoked_at": None}
+        )
+        UserRole.objects.update_or_create(
+            user=demo_user, role=customer_role, defaults={"revoked_at": None}
         )
         # Older seed drafts used uppercase PARTNER; FE hasRole expects "partner".
         UserRole.objects.filter(user=demo_user, role__code="PARTNER").delete()

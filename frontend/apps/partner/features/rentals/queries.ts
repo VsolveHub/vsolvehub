@@ -1,87 +1,91 @@
 "use client";
 
-import type { Schemas } from "@vsolve/api-client";
+import { request, type Schemas } from "@vsolve/api-client";
 
-import { PUBLIC_API_BASE_URL } from "@/lib/api/config";
+import { getApiClient } from "@/lib/api/browser";
 
 export type RentalAsset = Schemas["RentalAsset"];
 export type RentalBooking = Schemas["RentalBooking"];
-export type CreateAssetRequest = Schemas["CreateAssetRequest"];
+export type CreateAssetRequest = Schemas["CreateAssetRequest"] & {
+  structured_fields?: Record<string, unknown>;
+  image_urls?: string[];
+  media?: Array<{ url?: string; image_url?: string; caption?: string }>;
+};
 export type PartnerCapability = Schemas["PartnerCapability"];
 
-function csrfToken(): string {
-  if (typeof document === "undefined") return "";
-  const token = document.cookie.match(/(?:^|; )csrftoken=([^;]+)/)?.[1];
-  return token ? decodeURIComponent(token) : "";
-}
+export type RentalTaxonomyVariant = {
+  id: string;
+  name: string;
+  code: string;
+  asset_schema: Record<string, unknown>;
+  default_deposit_paise: number;
+};
 
-async function readError(res: Response, fallback: string): Promise<never> {
-  const body = (await res.json().catch(() => ({}))) as {
-    detail?: string;
-    message?: string;
-  };
-  throw new Error(body.detail ?? body.message ?? fallback);
+export type RentalTaxonomyService = {
+  id: string;
+  name: string;
+  slug: string;
+  variants: RentalTaxonomyVariant[];
+};
+
+export type RentalTaxonomySubcategory = {
+  id: string;
+  name: string;
+  slug: string;
+  services: RentalTaxonomyService[];
+};
+
+export async function fetchRentalTaxonomy(): Promise<RentalTaxonomySubcategory[]> {
+  const client = getApiClient();
+  const { data, error } = await client.GET("/api/v1/rentals/taxonomy" as never);
+  if (error) {
+    throw new Error(
+      typeof error === "object" && error && "detail" in error
+        ? String((error as { detail: unknown }).detail)
+        : "Failed to load rental taxonomy",
+    );
+  }
+  return Array.isArray(data) ? (data as RentalTaxonomySubcategory[]) : [];
 }
 
 export async function fetchPartnerRentalAssets(): Promise<RentalAsset[]> {
-  const res = await fetch(`${PUBLIC_API_BASE_URL}/api/v1/partner/rentals/assets`, {
-    credentials: "include",
-  });
-  if (!res.ok) await readError(res, "Could not load rental assets.");
-  return (await res.json()) as RentalAsset[];
+  const data = await request(() => getApiClient().GET("/api/v1/partner/rentals/assets"));
+  return Array.isArray(data) ? data : [];
 }
 
 export async function fetchPartnerRentalBookings(): Promise<RentalBooking[]> {
-  const res = await fetch(`${PUBLIC_API_BASE_URL}/api/v1/partner/rentals/bookings`, {
-    credentials: "include",
-  });
-  if (!res.ok) await readError(res, "Could not load rental bookings.");
-  return (await res.json()) as RentalBooking[];
+  const data = await request(() => getApiClient().GET("/api/v1/partner/rentals/bookings"));
+  return Array.isArray(data) ? data : [];
 }
 
 export async function createPartnerRentalAsset(
   body: CreateAssetRequest,
 ): Promise<RentalAsset> {
-  const res = await fetch(`${PUBLIC_API_BASE_URL}/api/v1/partner/rentals/assets`, {
-    method: "POST",
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      "X-CSRFToken": csrfToken(),
-    },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) await readError(res, "Could not create asset.");
-  return (await res.json()) as RentalAsset;
+  const data = await request(() =>
+    getApiClient().POST("/api/v1/partner/rentals/assets", { body }),
+  );
+  return data as RentalAsset;
 }
 
 export async function submitPartnerRentalAsset(assetId: string): Promise<RentalAsset> {
-  const res = await fetch(
-    `${PUBLIC_API_BASE_URL}/api/v1/partner/rentals/assets/${assetId}/submit`,
-    {
-      method: "POST",
-      credentials: "include",
-      headers: { "X-CSRFToken": csrfToken() },
-    },
+  const data = await request(() =>
+    getApiClient().POST("/api/v1/partner/rentals/assets/{asset_id}/{action}", {
+      params: { path: { asset_id: assetId, action: "submit" } },
+    }),
   );
-  if (!res.ok) await readError(res, "Submit failed.");
-  return (await res.json()) as RentalAsset;
+  return data as RentalAsset;
 }
 
 export async function partnerRentalBookingAction(
   bookingId: string,
   action: "handover" | "return" | "release-deposit",
 ): Promise<RentalBooking> {
-  const res = await fetch(
-    `${PUBLIC_API_BASE_URL}/api/v1/partner/rentals/bookings/${bookingId}/${action}`,
-    {
-      method: "POST",
-      credentials: "include",
-      headers: { "X-CSRFToken": csrfToken() },
-    },
+  const data = await request(() =>
+    getApiClient().POST("/api/v1/partner/rentals/bookings/{booking_id}/{action}", {
+      params: { path: { booking_id: bookingId, action } },
+    }),
   );
-  if (!res.ok) await readError(res, `${action} failed.`);
-  return (await res.json()) as RentalBooking;
+  return data as RentalBooking;
 }
 
 /** Approved A7 variants the partner may list against. */

@@ -5,7 +5,7 @@ from math import floor
 from uuid import UUID
 
 from django.db import transaction
-from django.db.models import Q, Sum
+from django.db.models import F, Q, Sum
 from django.utils import timezone
 
 from apps.commerce.models import PaymentAttempt
@@ -211,6 +211,35 @@ def grant_coins(
         grants.append(grant)
 
     return grants
+
+
+@transaction.atomic
+def grant_configured_coins(
+    *,
+    customer: User,
+    coins_amount: int,
+    notes: str,
+) -> CoinGrant | None:
+    """Credit a specific coin amount into the spendable ledger. Zero is a no-op."""
+    if coins_amount <= 0:
+        return None
+    grant = CoinGrant.objects.create(
+        customer=customer,
+        rule=None,
+        coins_amount=coins_amount,
+        locked_coins=0,
+        spendable_coins=coins_amount,
+        status=CoinGrant.Status.UNLOCKED,
+    )
+    CoinTransaction.objects.create(
+        customer=customer,
+        grant=grant,
+        amount=coins_amount,
+        kind=CoinTransaction.Kind.EARN_PROMISE,
+        status=CoinTransaction.Status.CAPTURED,
+        notes=notes,
+    )
+    return grant
 
 
 @transaction.atomic

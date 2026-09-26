@@ -6,11 +6,22 @@ from datetime import date
 from typing import Any
 from uuid import UUID
 
+import jsonschema
 from django.db import models, transaction
 from django.utils import timezone
+from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 
 from apps.catalog.models import A9VariantConfiguration
-from apps.stay.models import Property, StayEnquiry, StayModerationEvent, Unit
+from apps.stay.models import (
+    Property,
+    PropertyMedia,
+    StayEnquiry,
+    StayModerationEvent,
+    StayReview,
+    Unit,
+)
+
+_MAX_STAY_REVIEW_RATING = 5
 
 
 class StayStateError(ValueError):
@@ -47,11 +58,22 @@ def create_property(
     unit_name: str = "Standard room",
     nightly_rate_paise: int = 100000,
     sharing_count: int = 1,
+    structured_fields: dict[str, Any] | None = None,
+    cancellation_policy_text: str = "",
+    house_rules: str = "",
+    media: list[dict[str, Any]] | None = None,
+    image_urls: list[str] | None = None,
 ) -> Property:
     _require_stay_capability(host)
-    _require_active_a9(variant_id)
+    config = _require_active_a9(variant_id)
     if nightly_rate_paise <= 0:
         raise StayStateError("Nightly rate must be positive paise.")
+    fields = structured_fields or {}
+    if config.property_schema and fields:
+        try:
+            jsonschema.validate(instance=fields, schema=config.property_schema)
+        except JsonSchemaValidationError as e:
+            raise StayStateError(f"Invalid structured fields: {e.message}") from e
     prop = Property.objects.create(
         host=host,
         variant_id=_as_uuid(variant_id),
@@ -59,6 +81,9 @@ def create_property(
         description=description,
         location_text=location_text,
         moderation_status=Property.ModerationStatus.DRAFT,
+        structured_fields=fields,
+        cancellation_policy_text=cancellation_policy_text,
+        house_rules=house_rules,
     )
     Unit.objects.create(
         property=prop,
@@ -66,7 +91,142 @@ def create_property(
         sharing_count=sharing_count,
         nightly_rate_paise=nightly_rate_paise,
     )
+    items: list[dict[str, Any]] = list(media or [])
+    if image_urls:
+        for idx, url in enumerate(image_urls):
+            items.append({"url": url, "display_order": idx})
+    for idx, item in enumerate(items):
+        url = str(item.get("url") or item.get("image_url") or "").strip()
+        if not url:
+            continue
+        PropertyMedia.objects.create(
+            property=prop,
+            url=url,
+            caption=str(item.get("caption") or ""),
+            display_order=int(item.get("display_order") or item.get("sort_order") or idx),
+        )
     return prop
+
+
+@transaction.atomic
+def update_property_ad(
+    *,
+    prop: Property,
+    host: Any,
+    title: str | None = None,
+    description: str | None = None,
+    location_text: str | None = None,
+    structured_fields: dict[str, Any] | None = None,
+    cancellation_policy_text: str | None = None,
+    house_rules: str | None = None,
+) -> Property:
+    """Partner updates the published/draft Ad in place (no live event sync)."""
+    _require_stay_capability(host)
+    if prop.host_id != host.id:
+        raise PermissionError("Not your property.")
+    config = _require_active_a9(prop.variant_id)
+    updates: list[str] = []
+    if title is not None:
+        prop.title = title.strip()
+        updates.append("title")
+    if description is not None:
+        prop.description = description
+        updates.append("description")
+    if location_text is not None:
+        prop.location_text = location_text
+        updates.append("location_text")
+    if structured_fields is not None:
+        if config.property_schema:
+            try:
+                jsonschema.validate(instance=structured_fields, schema=config.property_schema)
+            except JsonSchemaValidationError as e:
+                raise StayStateError(f"Invalid structured fields: {e.message}") from e
+        prop.structured_fields = structured_fields
+        updates.append("structured_fields")
+    if cancellation_policy_text is not None:
+        prop.cancellation_policy_text = cancellation_policy_text
+        updates.append("cancellation_policy_text")
+    if house_rules is not None:
+        prop.house_rules = house_rules
+        updates.append("house_rules")
+    if updates:
+        updates.append("updated_at")
+        prop.save(update_fields=updates)
+    return prop
+
+
+@transaction.atomic
+def confirm_enquiry(*, enquiry: StayEnquiry, host: Any) -> StayEnquiry:
+    _require_stay_capability(host)
+    if enquiry.property.host_id != host.id:
+        raise PermissionError("Not your enquiry.")
+    if enquiry.status not in (
+        StayEnquiry.Status.SUBMITTED,
+        StayEnquiry.Status.RESPONDED,
+    ):
+        raise StayStateError("Enquiry cannot be confirmed from this state.")
+    enquiry.status = StayEnquiry.Status.CONFIRMED
+    enquiry.save(update_fields=("status", "updated_at"))
+    return enquiry
+
+
+@transaction.atomic
+def cancel_enquiry(*, enquiry: StayEnquiry, actor: Any, as_host: bool = False) -> StayEnquiry:
+    if as_host:
+        _require_stay_capability(actor)
+        if enquiry.property.host_id != actor.id:
+            raise PermissionError("Not your enquiry.")
+    elif enquiry.customer_id != getattr(actor, "id", None):
+        raise PermissionError("Not your enquiry.")
+    if enquiry.status in (StayEnquiry.Status.CANCELLED, StayEnquiry.Status.EXPIRED):
+        raise StayStateError("Enquiry is already closed.")
+    enquiry.status = StayEnquiry.Status.CANCELLED
+    enquiry.save(update_fields=("status", "updated_at"))
+    return enquiry
+
+
+@transaction.atomic
+def create_stay_review(
+    *,
+    customer: Any,
+    property_id: UUID | str,
+    rating: int,
+    body: str = "",
+    image_urls: list[str] | None = None,
+    enquiry_id: UUID | str | None = None,
+) -> Any:
+    if rating < 1 or rating > _MAX_STAY_REVIEW_RATING:
+        raise StayStateError("Rating must be between 1 and 5.")
+    prop = Property.objects.get(id=_as_uuid(property_id))
+    enquiry = None
+    if enquiry_id:
+        enquiry = StayEnquiry.objects.get(id=_as_uuid(enquiry_id), customer=customer)
+        if enquiry.property_id != prop.id:
+            raise StayStateError("Enquiry does not match property.")
+        if enquiry.status != StayEnquiry.Status.CONFIRMED:
+            raise StayStateError("Reviews require a confirmed stay.")
+    else:
+        # Allow review when customer has at least one confirmed enquiry on property.
+        enquiry = (
+            StayEnquiry.objects.filter(
+                customer=customer,
+                property=prop,
+                status=StayEnquiry.Status.CONFIRMED,
+            )
+            .order_by("-created_at")
+            .first()
+        )
+        if enquiry is None:
+            raise StayStateError("Reviews require a confirmed stay.")
+    return StayReview.objects.create(
+        property=prop,
+        enquiry=enquiry,
+        customer=customer,
+        rating=rating,
+        body=body,
+        comment=body,
+        image_urls=list(image_urls or []),
+    )
 
 
 def submit_property(*, prop: Property, host: Any) -> Property:
@@ -188,7 +348,9 @@ def calculate_stay_quote(
     }
 
 
-def respond_enquiry(*, enquiry: StayEnquiry, host: Any, response: str, decline: bool = False) -> StayEnquiry:
+def respond_enquiry(
+    *, enquiry: StayEnquiry, host: Any, response: str, decline: bool = False
+) -> StayEnquiry:
     _require_stay_capability(host)
     if enquiry.property.host_id != host.id:
         raise PermissionError("Not your enquiry.")
@@ -217,9 +379,11 @@ def public_properties(
     limit: int | None = None,
     offset: int = 0,
 ):
-    qs = Property.objects.filter(
-        moderation_status=Property.ModerationStatus.APPROVED
-    ).prefetch_related("units").select_related("host", "variant")
+    qs = (
+        Property.objects.filter(moderation_status=Property.ModerationStatus.APPROVED)
+        .prefetch_related("units")
+        .select_related("host", "variant")
+    )
 
     if query:
         q = query.strip()

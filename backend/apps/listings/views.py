@@ -11,6 +11,7 @@ from rest_framework.views import APIView
 
 from apps.catalog.models import ServiceVariant, Subcategory
 from apps.foundation.services import execute_idempotent
+from apps.partners.permissions import IsOperationsUser
 from apps.listings.exceptions import (
     ApplicationDuplicateApiError,
     ApplicationRateLimitApiError,
@@ -38,6 +39,8 @@ from apps.listings.serializers import (
     SubmitApplicationSerializer,
     VendorSubscriptionPlanSerializer,
     VendorSubscriptionSerializer,
+    OpsCreateVendorSubscriptionPlanSerializer,
+    OpsUpdateVendorSubscriptionPlanSerializer,
 )
 from apps.listings.services import (
     ListingStateError,
@@ -615,3 +618,31 @@ class OpsListingReinstateView(APIView):
         except (ListingStateError, PermissionError) as exc:
             _raise_listing_error(exc)
         return Response(PartnerListingSerializer(listing).data)
+
+
+class OpsVendorSubscriptionPlanCollectionView(APIView):
+    permission_classes = (IsOperationsUser,)
+
+    @extend_schema(responses=VendorSubscriptionPlanSerializer(many=True))
+    def get(self, _request: Any) -> Response:
+        plans = VendorSubscriptionPlan.objects.all().order_by("code")
+        return Response(VendorSubscriptionPlanSerializer(plans, many=True).data)
+
+    @extend_schema(request=OpsCreateVendorSubscriptionPlanSerializer, responses=VendorSubscriptionPlanSerializer)
+    def post(self, request: Any) -> Response:
+        ser = OpsCreateVendorSubscriptionPlanSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        plan = ser.save()
+        return Response(VendorSubscriptionPlanSerializer(plan).data, status=status.HTTP_201_CREATED)
+
+
+class OpsVendorSubscriptionPlanDetailView(APIView):
+    permission_classes = (IsOperationsUser,)
+
+    @extend_schema(request=OpsUpdateVendorSubscriptionPlanSerializer, responses=VendorSubscriptionPlanSerializer)
+    def patch(self, request: Any, plan_id: UUID) -> Response:
+        plan = get_object_or_404(VendorSubscriptionPlan, id=plan_id)
+        ser = OpsUpdateVendorSubscriptionPlanSerializer(plan, data=request.data, partial=True)
+        ser.is_valid(raise_exception=True)
+        plan = ser.save()
+        return Response(VendorSubscriptionPlanSerializer(plan).data)

@@ -5,7 +5,7 @@
 import * as React from "react";
 import { useState, useEffect } from "react";
 import { useLogout, useAuthGuard, useOtpFlow } from "@vsolve/query";
-import { Button, Logo, Dialog, OtpForm, cn } from "@vsolve/ui";
+import { Button, Logo, Dialog, OtpForm, cn, useHydrated } from "@vsolve/ui";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -31,6 +31,7 @@ export function SiteHeader() {
 
   // Global login dialog state
   const [isLoginOpen, setIsLoginOpen] = useState(false);
+  const hydrated = useHydrated();
   const guard = useAuthGuard(getApiClient());
   const flow = useOtpFlow(getApiClient(), {
     onAuthenticated: () => {
@@ -46,7 +47,8 @@ export function SiteHeader() {
     return () => window.removeEventListener("open-login-popup", handleOpen);
   }, []);
 
-  const loginDialogOpen = isLoginOpen && guard.status !== "authenticated";
+  const loginDialogOpen = hydrated && isLoginOpen && guard.status !== "authenticated";
+  const sessionKnown = hydrated && !session.isResolving;
 
   const handleOpenChange = (open: boolean) => {
     setIsLoginOpen(open);
@@ -56,7 +58,7 @@ export function SiteHeader() {
   };
 
   const targets = NAV_TARGETS.filter(
-    (target) => !target.private || session.isAuthenticated,
+    (target) => !target.private || (sessionKnown && session.isAuthenticated),
   );
 
   return (
@@ -135,7 +137,7 @@ export function SiteHeader() {
             )}
           </Link>
 
-          {session.isResolving ? null : session.isAuthenticated ? (
+          {!sessionKnown ? null : session.isAuthenticated ? (
             <div className="flex items-center gap-2 sm:gap-3">
               <NotificationBell />
               <Link
@@ -197,7 +199,7 @@ export function SiteHeader() {
               </span>
             )}
           </Link>
-          {session.isResolving ? null : session.isAuthenticated ? (
+          {!sessionKnown ? null : session.isAuthenticated ? (
             <>
               <NotificationBell />
               <Link
@@ -220,6 +222,7 @@ export function SiteHeader() {
       </div>
 
       {/* Global Interactive Login Dialog Modal */}
+      {hydrated ? (
       <Dialog
         open={loginDialogOpen}
         onOpenChange={handleOpenChange}
@@ -240,6 +243,7 @@ export function SiteHeader() {
           />
         </div>
       </Dialog>
+      ) : null}
     </header>
   );
 }

@@ -5,6 +5,13 @@ import { Check, Copy, Gift, MessageCircle, Users } from "lucide-react";
 import { useState } from "react";
 import type { CustomerReferralSummary } from "../queries";
 
+function rewardLabel(paise: number, coins: number): string {
+  const parts: string[] = [];
+  if (paise > 0) parts.push(formatMoney(paise));
+  if (coins > 0) parts.push(`${coins} V Coins`);
+  return parts.join(" + ");
+}
+
 interface ReferralShareCardProps {
   summary: CustomerReferralSummary;
 }
@@ -27,16 +34,26 @@ export function ReferralShareCard({ summary }: ReferralShareCardProps) {
   );
   const whatsappUrl = `https://api.whatsapp.com/send?text=${whatsappMessage}`;
 
-  // Derive headline amounts from the active program (server-driven, no hardcoding)
   const program = summary.active_program;
-  const refereeReward = program?.referee_wallet_paise ?? 0;
-  const maxReferrerTier = program?.tiers?.at(-1);
-  const maxReferrerReward = maxReferrerTier?.referrer_wallet_paise ?? 0;
-
+  const refereeLabel = rewardLabel(
+    program?.referee_wallet_paise ?? 0,
+    program?.referee_coins_amount ?? 0,
+  );
+  const topTier = program?.tiers?.at(-1);
+  const referrerLabel = rewardLabel(
+    topTier?.referrer_wallet_paise ?? 0,
+    topTier?.referrer_coins_amount ?? 0,
+  );
   const headlineCopy =
-    refereeReward > 0 && maxReferrerReward > 0
-      ? `Give ${formatMoney(refereeReward)}, Get up to ${formatMoney(maxReferrerReward)}`
-      : "Invite friends and both of you earn wallet credits!";
+    refereeLabel && referrerLabel
+      ? `Give ${refereeLabel}, get up to ${referrerLabel}`
+      : refereeLabel || referrerLabel
+        ? `Invite friends and earn ${refereeLabel || referrerLabel}`
+        : "Invite friends. Rewards show here when a program is published.";
+  const rewardSentence =
+    refereeLabel || referrerLabel
+      ? "Rewards are paid after your friend's first completed booking, in the wallet amount and V Coins this program publishes."
+      : "Share your code. A published program decides whether the reward is wallet balance, V Coins, or both.";
 
   return (
     <div className="relative overflow-hidden rounded-card border border-[#e7e2da] bg-white p-6 shadow-sm md:p-8">
@@ -61,7 +78,7 @@ export function ReferralShareCard({ summary }: ReferralShareCardProps) {
             {headlineCopy}
           </h2>
           <p className="mt-1.5 max-w-prose text-xs text-text-secondary leading-relaxed">
-            Share your unique code. When your friend completes their first service booking, both of you earn instant wallet credits!
+            {rewardSentence}
           </p>
 
           {/* Share code box */}
