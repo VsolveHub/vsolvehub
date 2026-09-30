@@ -25,6 +25,9 @@ class User(AbstractBaseUser, PermissionsMixin):
     date_joined = models.DateTimeField(default=timezone.now)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    #: Legacy A7 handover PIN store. New bookings use ``RentalBooking.handover_pin_hash``;
+    #: this column is retained for backfill/compat and is no longer written on create.
+    rental_handover_pin_hash = models.CharField(max_length=255, blank=True, default="")
 
     objects = UserManager()
 

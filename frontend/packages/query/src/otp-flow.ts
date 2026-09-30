@@ -92,7 +92,10 @@ function countDigits(value: string): number {
 
 const INDIAN_MOBILE_DIGITS = 10;
 
-function capIndianMobileDigits(digitsOnly: string): string {
+function capIndianMobileDigits(digitsOnly: string, hasLeadingPlus = false): string {
+  if (hasLeadingPlus && digitsOnly.startsWith("91")) {
+    return digitsOnly.slice(2, 2 + INDIAN_MOBILE_DIGITS);
+  }
   if (digitsOnly.startsWith("91") && digitsOnly.length > INDIAN_MOBILE_DIGITS) {
     return digitsOnly.slice(2, 2 + INDIAN_MOBILE_DIGITS);
   }
@@ -107,7 +110,7 @@ export function sanitizePhoneInput(value: string): string {
     : compact.replace(/\+/g, "");
 
   const digitsOnly = (normalized.match(/\d/g) ?? []).join("");
-  const cappedDigits = capIndianMobileDigits(digitsOnly);
+  const cappedDigits = capIndianMobileDigits(digitsOnly, normalized.startsWith("+"));
 
   if (normalized.startsWith("+")) {
     return cappedDigits;

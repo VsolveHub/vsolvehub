@@ -1,5 +1,5 @@
 import { BriefcaseBusiness, X } from "lucide-react";
-import { formatMoney } from "@vsolve/ui";
+import { formatMoney, formatMoneyText } from "@vsolve/ui";
 
 import { listingFields, type AdminListing } from "../queries";
 
@@ -67,7 +67,7 @@ export function ListingDetailDialog({ listing, onClose }: ListingDetailDialogPro
                         : ""
                     }${listing.salary_period ? ` / ${listing.salary_period.toLowerCase()}` : ""}`
                   : listing.salary_display || fields.salary_range || fields.pay_range
-                    ? String(listing.salary_display || fields.salary_range || fields.pay_range)
+                    ? formatMoneyText(String(listing.salary_display || fields.salary_range || fields.pay_range))
                     : "Not set"}
               </div>
             </div>
@@ -82,7 +82,9 @@ export function ListingDetailDialog({ listing, onClose }: ListingDetailDialogPro
                     <span className="font-medium text-slate-500 capitalize">
                       {k.replace("_", " ")}:{" "}
                     </span>
-                    <span className="font-semibold text-slate-800">{String(v)}</span>
+                    <span className="font-semibold text-slate-800">
+                      {/salary|pay_range|compensation/i.test(k) ? formatMoneyText(String(v)) : String(v)}
+                    </span>
                   </div>
                 ))}
               </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, formatMoney } from "@vsolve/ui";
-import { ArrowRight, CheckCircle2, HelpCircle, Sparkles } from "lucide-react";
+import { HelpCircle, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { useCoinBurnPreview, type CustomerCoinsSummary } from "../queries";
 
@@ -69,7 +69,10 @@ export function CoinsBurnExplainer({ summary }: CoinsBurnExplainerProps) {
               3
             </span>
             <span>
-              <strong className="text-navy-900">Redeem at checkout:</strong> 1 V Coin = ₹{((policy.coin_value_paise ?? 10) / 100).toFixed(2)}. Apply coins for up to {policy.max_burn_percent ?? 30}% off any booking total.
+              <strong className="text-navy-900">Redeem at checkout:</strong>{" "}
+              {typeof policy.coin_value_paise === "number" && typeof policy.max_burn_percent === "number"
+                ? `1 V Coin = ₹${(policy.coin_value_paise / 100).toFixed(2)}. Apply coins for up to ${policy.max_burn_percent}% off a booking total.`
+                : "The published burn policy sets the coin value and the maximum share of a bill you can pay with coins."}
             </span>
           </li>
         </ol>

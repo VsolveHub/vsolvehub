@@ -98,6 +98,61 @@ function reassurance(stateChange: StateChange, operation: OperationKind): string
   return "";
 }
 
+/**
+ * Product copy for A7/A9 (and related) domain codes. Prefer these over the
+ * backend `message` so partners and customers never see raw API text.
+ */
+const FRIENDLY_DOMAIN_MESSAGES: Record<string, { title: string; message: string }> = {
+  min_stay_not_met: {
+    title: "Stay is too short",
+    message: "This property needs a longer stay. Pick dates that meet the minimum nights.",
+  },
+  dates_unavailable: {
+    title: "Dates not available",
+    message: "Those dates sit outside when this property can be booked. Try another range.",
+  },
+  out_of_stock: {
+    title: "Out of stock",
+    message: "Nothing is left to rent for those dates. Try different dates or another listing.",
+  },
+  insufficient_quantity: {
+    title: "Not enough stock",
+    message: "There is not enough quantity available for those dates.",
+  },
+  handover_pin_invalid: {
+    title: "Incorrect PIN",
+    message: "That handover PIN does not match. Ask the customer to confirm their PIN and try again.",
+  },
+  rental_state_invalid: {
+    title: "That step is not available",
+    message: "This rental cannot move to that step right now. Refresh and check the booking status.",
+  },
+  stay_state_invalid: {
+    title: "That step is not available",
+    message: "This stay cannot move to that step right now. Refresh and try again.",
+  },
+};
+
+/** Customer-facing sentence for a thrown error — never the raw backend blob. */
+export function friendlyErrorMessage(
+  error: unknown,
+  fallback = "Something went wrong. Please try again.",
+): string {
+  if (error instanceof ApiRequestError) {
+    const mapped = FRIENDLY_DOMAIN_MESSAGES[error.code];
+    if (mapped) return mapped.message;
+    // Known domain codes without a map still avoid dumping nested details.
+    if (error.code && error.code !== "validation_error") {
+      return error.message || fallback;
+    }
+    if (Object.keys(error.fieldErrors).length > 0) {
+      return "Check the highlighted fields and try again.";
+    }
+    return fallback;
+  }
+  return describeError(error, "mutation").message || fallback;
+}
+
 export function describeError(
   error: unknown,
   operation: OperationKind = "read",
@@ -106,13 +161,12 @@ export function describeError(
 
   if (error instanceof ApiRequestError) {
     const action = ACTION_COPY[error.recovery];
+    const mapped = FRIENDLY_DOMAIN_MESSAGES[error.code];
     return {
       titleKey: `error.code.${error.code}.title`,
-      title: titleForRecovery(error.recovery),
-      // The server's message is customer-safe by contract, so it is preferred
-      // over a generic client string.
+      title: mapped?.title ?? titleForRecovery(error.recovery),
       messageKey: `error.code.${error.code}.message`,
-      message: `${error.message}${reassurance(stateChange, operation)}`,
+      message: `${mapped?.message ?? (error.code === "validation_error" ? "Check the highlighted fields and try again." : error.message)}${reassurance(stateChange, operation)}`,
       stateChange,
       action: { intent: error.recovery, ...action },
       reference: error.requestId,

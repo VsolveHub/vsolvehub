@@ -98,9 +98,7 @@ def test_rental_happy_path_handover_return_release(rental_world):
         deposit_paise=100000,
     )
     submit_asset(asset=asset, partner=rental_world["partner"])
-    moderate_asset(
-        asset=asset, actor=rental_world["owner"], action="APPROVE", reason="ok for test"
-    )
+    moderate_asset(asset=asset, actor=rental_world["owner"], action="APPROVE", reason="ok for test")
     start = timezone.localdate() + timedelta(days=1)
     booking = create_booking(
         customer=rental_world["customer"],
@@ -111,6 +109,7 @@ def test_rental_happy_path_handover_return_release(rental_world):
     assert booking.status == RentalBooking.Status.PENDING_PAYMENT
     assert booking.deposit.status == RentalDeposit.Status.REQUESTED
     assert booking.deposit.payment_attempt_id is not None
+    assert booking.deposit.payment_attempt.expires_at is not None
     assert booking.price_paise == 100000
     from apps.rental.services import mark_deposit_held
 
@@ -119,7 +118,11 @@ def test_rental_happy_path_handover_return_release(rental_world):
     booking.deposit.refresh_from_db()
     assert booking.status == RentalBooking.Status.CONFIRMED
     assert booking.deposit.status == RentalDeposit.Status.HELD
-    handover_booking(booking=booking, partner=rental_world["partner"])
+    handover_booking(
+        booking=booking,
+        partner=rental_world["partner"],
+        pin=booking.handover_pin_hash,
+    )
     return_booking(booking=booking, partner=rental_world["partner"])
     deposit = release_deposit(booking=booking, partner=rental_world["partner"])
     assert deposit.status == RentalDeposit.Status.RELEASED
@@ -147,9 +150,7 @@ def test_mark_deposit_held_avoids_for_update_on_outer_join(rental_world):
         deposit_paise=100000,
     )
     submit_asset(asset=asset, partner=rental_world["partner"])
-    moderate_asset(
-        asset=asset, actor=rental_world["owner"], action="APPROVE", reason="ok for test"
-    )
+    moderate_asset(asset=asset, actor=rental_world["owner"], action="APPROVE", reason="ok for test")
     start = timezone.localdate() + timedelta(days=3)
     booking = create_booking(
         customer=rental_world["customer"],
@@ -230,9 +231,7 @@ def test_create_booking_forces_pickup_even_when_delivery_requested(rental_world)
         deposit_paise=0,
     )
     submit_asset(asset=asset, partner=rental_world["partner"])
-    moderate_asset(
-        asset=asset, actor=rental_world["owner"], action="APPROVE", reason="ok for test"
-    )
+    moderate_asset(asset=asset, actor=rental_world["owner"], action="APPROVE", reason="ok for test")
     start = timezone.localdate() + timedelta(days=5)
     booking = create_booking(
         customer=rental_world["customer"],
@@ -288,7 +287,7 @@ def test_partner_must_upload_photos_not_paste_urls(rental_world):
         format="json",
     )
     assert pasted.status_code == status.HTTP_400_BAD_REQUEST
-    assert "Upload photos" in pasted.json()["detail"]
+    assert "Upload photos" in pasted.json()["error"]["message"]
 
     uploaded = client.post(
         "/api/v1/partner/rentals/photos",

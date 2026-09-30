@@ -146,6 +146,21 @@ export function Readout({
    Formatters
    --------------------------------------------------------------------------- */
 
+export function formatInrRupees(
+  amountRupees: number,
+  options: { showPaise?: boolean } = {},
+): string {
+  const hasPaise = amountRupees % 1 !== 0;
+  const showPaise = options.showPaise ?? hasPaise;
+
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    minimumFractionDigits: showPaise ? 2 : 0,
+    maximumFractionDigits: showPaise ? 2 : 0,
+  }).format(amountRupees);
+}
+
 /**
  * Formats integer paise as rupees.
  *
@@ -160,16 +175,105 @@ export function formatMoney(
   amountPaise: number,
   options: { showPaise?: boolean } = {},
 ): string {
-  const rupees = amountPaise / 100;
-  const hasPaise = amountPaise % 100 !== 0;
-  const showPaise = options.showPaise ?? hasPaise;
+  return formatInrRupees(amountPaise / 100, options);
+}
 
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    minimumFractionDigits: showPaise ? 2 : 0,
-    maximumFractionDigits: showPaise ? 2 : 0,
-  }).format(rupees);
+/**
+ * Parses common free-text ranges like `25000 - 45000`, optional existing ₹/commas,
+ * and reformats numeric tokens with Indian commas + ₹.
+ * Preserves non-numeric suffixes (e.g. `/ year`, `LPA`).
+ */
+export function formatMoneyText(raw: string): string {
+  if (!raw || typeof raw !== "string") return raw;
+
+  // Remove existing ₹ symbols (and optional following spaces) so we don't double up
+  const text = raw.replace(/₹\s*/g, "");
+
+  // Match numbers (digits, optional commas, optional decimals)
+  const regex = /\b\d[\d,]*(\.\d+)?/g;
+
+  return text.replace(regex, (match) => {
+    const num = parseFloat(match.replace(/,/g, ""));
+    if (Number.isNaN(num)) return match;
+    return formatInrRupees(num);
+  });
+}
+
+const DATE_ONLY = new Intl.DateTimeFormat("en-IN", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+});
+
+const DATE_TIME = new Intl.DateTimeFormat("en-IN", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+});
+
+function coerceDate(value: Date | string | number): Date | null {
+  // Date-only wires (`YYYY-MM-DD`) parse as UTC midnight in JS, which flips the
+  // calendar day west of UTC. Build a local noon Date from the parts instead.
+  if (typeof value === "string") {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+    if (match) {
+      const year = Number(match[1]);
+      const month = Number(match[2]);
+      const day = Number(match[3]);
+      const local = new Date(year, month - 1, day, 12, 0, 0);
+      return Number.isNaN(local.getTime()) ? null : local;
+    }
+  }
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/**
+ * Human-visible calendar date in Indian order: DD/MM/YYYY (e.g. 27/09/2026).
+ *
+ * API / DB / wire values stay ISO `YYYY-MM-DD`. This is display only — never
+ * feed the result back into a wire payload.
+ */
+export function formatDate(value: Date | string | number): string {
+  const date = coerceDate(value);
+  return date === null ? "" : DATE_ONLY.format(date);
+}
+
+/**
+ * Parse a human DD/MM/YYYY (or D/M/YYYY) string into an ISO `YYYY-MM-DD` wire value.
+ * Returns `null` when the text is empty or not a real calendar day.
+ */
+export function parseDisplayDate(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const match = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec(trimmed);
+  if (!match) return null;
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const date = new Date(year, month - 1, day, 12, 0, 0);
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+  const mm = `${month}`.padStart(2, "0");
+  const dd = `${day}`.padStart(2, "0");
+  return `${year}-${mm}-${dd}`;
+}
+
+/**
+ * Human-visible date+time with Indian day order (e.g. 27/09/2026, 1:30 pm).
+ */
+export function formatDateTime(value: Date | string | number): string {
+  const date = coerceDate(value);
+  return date === null ? "" : DATE_TIME.format(date);
 }
 
 /**

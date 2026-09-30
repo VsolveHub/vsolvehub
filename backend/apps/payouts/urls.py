@@ -7,6 +7,7 @@ on it also require a fresh OTP step-up.
 
 from django.urls import path
 
+from apps.payouts.exports import PayoutBatchBankExportView
 from apps.payouts.views import (
     LedgerAdjustmentView,
     PartnerEarningsView,
@@ -68,5 +69,17 @@ urlpatterns = [
         "operations/ledger-adjustments/",
         LedgerAdjustmentView.as_view(),
         name="operations-ledger-adjustments",
+    ),
+]
+urlpatterns += [
+    path(
+        "operations/payout-batches/<uuid:pk>/bank-export.csv",
+        PayoutBatchBankExportView.as_view(export_format="csv"),
+        name="payout_bank_export_csv",
+    ),
+    path(
+        "operations/payout-batches/<uuid:pk>/bank-export.xlsx",
+        PayoutBatchBankExportView.as_view(export_format="xlsx"),
+        name="payout_bank_export_xlsx",
     ),
 ]

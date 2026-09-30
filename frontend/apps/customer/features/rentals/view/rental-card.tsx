@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, MapPin, ShieldCheck, Wrench } from "lucide-react";
+import { ArrowRight, MapPin, Wrench } from "lucide-react";
 import { Badge, Button } from "@vsolve/ui";
 
 import { SaveHeart, useSavedItems } from "@/features/part-a";
@@ -31,10 +31,17 @@ export function RentalCard({ asset }: RentalCardProps) {
       <div className="flex flex-col gap-3">
         {/* Top Badges */}
         <div className="flex items-center justify-between gap-2">
-          <Badge tone="brand" className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider">
-            <Wrench className="size-3" />
-            Verified Tool
-          </Badge>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Badge tone="brand" className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider">
+              <Wrench className="size-3" />
+              Verified Tool
+            </Badge>
+            {typeof asset.quantity_available === "number" && asset.quantity_available > 1 ? (
+              <Badge tone="neutral" className="text-xs font-bold">
+                Qty {asset.quantity_available}
+              </Badge>
+            ) : null}
+          </div>
           <SaveHeart saved={saved.isSaved(asset.id)} onToggle={() => saved.toggle(asset.id)} />
         </div>
 

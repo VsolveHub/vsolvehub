@@ -49,32 +49,52 @@ def _try_confirm_group_capacity(*, group: BookingGroup) -> bool:
     return True
 
 
-def _request_automatic_refund(*, attempt: PaymentAttempt, reason_code: str) -> Refund:
-    existing = attempt.refunds.exclude(status=Refund.Status.FAILED).first()
+def _request_automatic_refund(
+    *, attempt: PaymentAttempt, reason_code: str, amount_paise: int | None = None
+) -> Refund:
+    """Request an automatic refund against a captured attempt.
+
+    ``amount_paise`` defaults to the full attempt total (cancel / capacity-failure
+    paths). Callers that refund only a deposit residual pass an explicit amount;
+    refund allocations are created only for full-amount refunds because unit
+    allocations are not split for standalone residual refunds.
+    """
+    refund_amount = attempt.amount_paise if amount_paise is None else amount_paise
+    if refund_amount <= 0:
+        raise ValueError("A positive refund amount is required.")
+    idempotency_key = f"automatic:{reason_code}:{attempt.id}"
+    existing = (
+        attempt.refunds.filter(idempotency_key=idempotency_key)
+        .exclude(status=Refund.Status.FAILED)
+        .first()
+    )
     if existing is not None:
         return existing
     from .loyalty_funding import split_refund_amounts  # noqa: PLC0415
 
     wallet_credit, gateway_refund = split_refund_amounts(
-        attempt=attempt, refund_paise=attempt.amount_paise
+        attempt=attempt, refund_paise=refund_amount
     )
     refund = Refund.objects.create(
         payment_attempt=attempt,
-        amount_paise=attempt.amount_paise,
+        amount_paise=refund_amount,
         wallet_credit_paise=wallet_credit,
         gateway_refund_paise=gateway_refund,
         currency=attempt.currency,
         reason_code=reason_code,
-        idempotency_key=f"automatic:{reason_code}:{attempt.id}",
+        idempotency_key=idempotency_key,
     )
-    for allocation in attempt.allocations.all():
-        if allocation.amount_paise == 0:
-            continue
-        RefundAllocation.objects.create(
-            refund=refund,
-            payment_allocation=allocation,
-            amount_paise=allocation.amount_paise,
-        )
+    # Unit allocations only make sense when the whole attempt is returned; a
+    # deposit residual on a combined rental+deposit charge has no unit split.
+    if refund_amount == attempt.amount_paise:
+        for allocation in attempt.allocations.all():
+            if allocation.amount_paise == 0:
+                continue
+            RefundAllocation.objects.create(
+                refund=refund,
+                payment_allocation=allocation,
+                amount_paise=allocation.amount_paise,
+            )
     enqueue_outbox_event(
         aggregate_type="refund",
         aggregate_id=refund.id,
@@ -323,6 +343,16 @@ def apply_provider_payment(
             from apps.rental.services import mark_deposit_held  # noqa: PLC0415
 
             mark_deposit_held(payment_attempt_id=attempt.id)
+            return None
+        if attempt.purpose == PaymentAttempt.Purpose.A7_RENTAL_BOOKING:
+            from apps.rental.services import complete_rental_booking_payment  # noqa: PLC0415
+
+            complete_rental_booking_payment(payment_attempt_id=attempt.id)
+            return None
+        if attempt.purpose == PaymentAttempt.Purpose.A9_STAY_RESERVATION:
+            from apps.stay.services import confirm_reservation_payment  # noqa: PLC0415
+
+            confirm_reservation_payment(payment_attempt_id=attempt.id)
             return None
         _apply_m2_capture(attempt=attempt)
         return None

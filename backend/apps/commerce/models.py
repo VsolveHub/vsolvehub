@@ -142,6 +142,8 @@ CHECKOUT_FREE_PURPOSES = (
     "A10_PREMIUM_LISTING",
     "WALLET_TOP_UP",
     "A7_RENTAL_DEPOSIT",
+    "A9_STAY_RESERVATION",
+    "A7_RENTAL_BOOKING",
 )
 
 
@@ -190,6 +192,8 @@ class PaymentAttempt(models.Model):
         WALLET_TOP_UP = "WALLET_TOP_UP", "Wallet top-up"
         #: A7 security deposit. Held only after this attempt is captured.
         A7_RENTAL_DEPOSIT = "A7_RENTAL_DEPOSIT", "A7 rental deposit"
+        A9_STAY_RESERVATION = "A9_STAY_RESERVATION", "A9 stay reservation"
+        A7_RENTAL_BOOKING = "A7_RENTAL_BOOKING", "A7 rental booking"
 
     #: Purposes that are charged outside a cart and therefore carry no `CheckoutSession`. Bound
     #: from the module-level tuple, which the check constraint below reads from the same name, so

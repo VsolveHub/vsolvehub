@@ -65,9 +65,22 @@ describe("available actions", () => {
     expect(availableActions("OFFBOARDED")).toHaveLength(0);
   });
 
-  it("lets a submitted application be reviewed, returned or approved", () => {
+  it("lets a submitted application start review only", () => {
     const targets = availableActions("SUBMITTED").map((action) => action.target);
-    expect(targets).toEqual(["UNDER_REVIEW", "CHANGES_REQUIRED", "APPROVED"]);
+    expect(targets).toEqual(["UNDER_REVIEW"]);
+  });
+
+  it("lets under-review request changes or approve, not suspend", () => {
+    const targets = availableActions("UNDER_REVIEW").map((action) => action.target);
+    expect(targets).toEqual(["CHANGES_REQUIRED", "APPROVED"]);
+    expect(isActionAvailable("UNDER_REVIEW", "SUSPENDED")).toBe(false);
+  });
+
+  it("offers no Operations decisions while changes are outstanding", () => {
+    // Align with review.py: CHANGES_REQUIRED is not a source status for Ops.
+    expect(availableActions("CHANGES_REQUIRED")).toHaveLength(0);
+    expect(isActionAvailable("CHANGES_REQUIRED", "APPROVED")).toBe(false);
+    expect(isActionAvailable("CHANGES_REQUIRED", "SUSPENDED")).toBe(false);
   });
 
   it("does not offer approving an already-approved application", () => {
@@ -96,7 +109,7 @@ describe("reasons", () => {
   it("requires a reason to request changes", () => {
     // A CHANGES_REQUIRED with no note is how onboarding stalls: the Partner is
     // told to fix something and not told what.
-    const action = availableActions("SUBMITTED").find(
+    const action = availableActions("UNDER_REVIEW").find(
       (candidate) => candidate.target === "CHANGES_REQUIRED",
     )!;
     expect(action.requiresReason).toBe(true);
@@ -111,7 +124,7 @@ describe("reasons", () => {
   });
 
   it("does not require a reason to approve", () => {
-    const approve = availableActions("SUBMITTED").find(
+    const approve = availableActions("UNDER_REVIEW").find(
       (candidate) => candidate.target === "APPROVED",
     )!;
     expect(canSubmitDecision(approve, "")).toBe(true);

@@ -28,7 +28,13 @@ export type { Countdown } from "./countdown";
 
 export { shouldRetryQuery, shouldRetryMutation, queryRetryDelay } from "./retry";
 
-export { describeError, isFieldError, categorizeError, isPendingCategory } from "./error-presentation";
+export {
+  describeError,
+  friendlyErrorMessage,
+  isFieldError,
+  categorizeError,
+  isPendingCategory,
+} from "./error-presentation";
 export type {
   ErrorCategory,
   ErrorPresentation,

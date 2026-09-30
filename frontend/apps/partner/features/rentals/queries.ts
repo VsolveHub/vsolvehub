@@ -6,12 +6,9 @@ import { getApiClient } from "@/lib/api/browser";
 
 export type RentalAsset = Schemas["RentalAsset"];
 export type RentalBooking = Schemas["RentalBooking"];
-export type CreateAssetRequest = Schemas["CreateAssetRequest"] & {
-  structured_fields?: Record<string, unknown>;
-  image_urls?: string[];
-  media?: Array<{ url?: string; image_url?: string; caption?: string }>;
-};
+export type CreateAssetRequest = Schemas["CreateAssetRequest"];
 export type PartnerCapability = Schemas["PartnerCapability"];
+export type PartnerBookingActionRequest = Schemas["PartnerBookingActionRequest"];
 
 export type RentalTaxonomyVariant = {
   id: string;
@@ -36,16 +33,17 @@ export type RentalTaxonomySubcategory = {
 };
 
 export async function fetchRentalTaxonomy(): Promise<RentalTaxonomySubcategory[]> {
-  const client = getApiClient();
-  const { data, error } = await client.GET("/api/v1/rentals/taxonomy" as never);
-  if (error) {
-    throw new Error(
-      typeof error === "object" && error && "detail" in error
-        ? String((error as { detail: unknown }).detail)
-        : "Failed to load rental taxonomy",
-    );
-  }
+  const data = await request(() => getApiClient().GET("/api/v1/rentals/taxonomy"));
   return Array.isArray(data) ? (data as RentalTaxonomySubcategory[]) : [];
+}
+
+export async function fetchPartnerDefaultLocation(): Promise<string> {
+  try {
+    const data = await request(() => getApiClient().GET("/api/v1/partner/me/"));
+    return (data.default_location_text ?? "").trim();
+  } catch {
+    return "";
+  }
 }
 
 export async function fetchPartnerRentalAssets(): Promise<RentalAsset[]> {
@@ -53,8 +51,12 @@ export async function fetchPartnerRentalAssets(): Promise<RentalAsset[]> {
   return Array.isArray(data) ? data : [];
 }
 
-export async function fetchPartnerRentalBookings(): Promise<RentalBooking[]> {
-  const data = await request(() => getApiClient().GET("/api/v1/partner/rentals/bookings"));
+export async function fetchPartnerRentalBookings(status?: string): Promise<RentalBooking[]> {
+  const data = await request(() =>
+    getApiClient().GET("/api/v1/partner/rentals/bookings", {
+      params: status ? { query: { status } } : undefined,
+    }),
+  );
   return Array.isArray(data) ? data : [];
 }
 
@@ -66,21 +68,20 @@ export type RentalPhotoUpload = {
 
 export async function uploadPartnerRentalPhoto(file: File): Promise<RentalPhotoUpload> {
   const data = await request(() =>
-    getApiClient().POST("/api/v1/partner/rentals/photos" as never, {
+    getApiClient().POST("/api/v1/partner/rentals/photos", {
       body: { file },
-      bodySerializer(body: { file?: Blob }) {
+      bodySerializer(body) {
         const form = new FormData();
-        if (body.file) form.append("file", body.file, file.name);
+        const blob = body && typeof body === "object" && "file" in body ? (body as { file?: Blob }).file : undefined;
+        if (blob) form.append("file", blob, file.name);
         return form;
       },
-    } as never),
+    }),
   );
   return data as RentalPhotoUpload;
 }
 
-export async function createPartnerRentalAsset(
-  body: CreateAssetRequest,
-): Promise<RentalAsset> {
+export async function createPartnerRentalAsset(body: CreateAssetRequest): Promise<RentalAsset> {
   const data = await request(() =>
     getApiClient().POST("/api/v1/partner/rentals/assets", { body }),
   );
@@ -98,11 +99,19 @@ export async function submitPartnerRentalAsset(assetId: string): Promise<RentalA
 
 export async function partnerRentalBookingAction(
   bookingId: string,
-  action: "handover" | "return" | "release-deposit",
+  action: "handover" | "return" | "release-deposit" | "dispute-deposit" | "cancel",
+  body?: Partial<PartnerBookingActionRequest>,
 ): Promise<RentalBooking> {
+  const payload: PartnerBookingActionRequest = {
+    pin: body?.pin ?? "",
+    reason: body?.reason ?? "",
+    // Always send consume_paise so blank never becomes full-deposit consume on the server.
+    consume_paise: body?.consume_paise ?? 0,
+  };
   const data = await request(() =>
     getApiClient().POST("/api/v1/partner/rentals/bookings/{booking_id}/{action}", {
       params: { path: { booking_id: bookingId, action } },
+      body: payload,
     }),
   );
   return data as RentalBooking;

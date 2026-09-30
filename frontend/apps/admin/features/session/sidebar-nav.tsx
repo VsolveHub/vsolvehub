@@ -17,12 +17,14 @@ import {
   ShoppingCart,
   Sliders,
   Calendar,
+  BadgePercent,
   ToggleLeft,
   Users,
   FileCheck2,
   MessageSquareHeart,
   PanelLeftClose,
   PanelLeftOpen,
+  User,
 } from "lucide-react";
 import { SidebarLink } from "./sidebar-link";
 import { useCaseQueueSummary } from "../cases/queries";
@@ -32,6 +34,7 @@ const WORK_LINKS = [
   { href: "/operations/requests", label: "Requests", icon: Inbox, badgeKey: "requests_open" },
   { href: "/operations/cases", label: "Cases", icon: Briefcase, badgeKey: "mine_open" },
   { href: "/operations/listings", label: "Job Listings", icon: BriefcaseBusiness },
+  { href: "/operations/work-items", label: "Work Items", icon: ClipboardCheck },
   { href: "/operations/rentals", label: "Rentals", icon: HardHat },
   { href: "/operations/stays", label: "Stays", icon: Building2 },
   { href: "/operations/dispatch", label: "Dispatch", icon: Truck },
@@ -41,6 +44,7 @@ const WORK_LINKS = [
 
 const PEOPLE_LINKS = [
   { href: "/operations/partners", label: "Partners", icon: Users },
+  { href: "/operations/partners/import", label: "Import partners", icon: FileCheck2 },
   { href: "/operations/crew-documents", label: "Crew documents", icon: FileCheck2 },
   { href: "/operations/feedback", label: "Service feedback", icon: MessageSquareHeart },
   { href: "/reviews", label: "Partner reviews", icon: ClipboardCheck },
@@ -49,24 +53,45 @@ const PEOPLE_LINKS = [
 
 const MONEY_LINKS = [
   { href: "/operations/rate-cards", label: "Rate cards", icon: IndianRupee },
+  { href: "/operations/vendor-plans", label: "Vendor plans", icon: BadgePercent },
   { href: "/operations/payouts", label: "Payouts", icon: Wallet },
   { href: "/operations/loyalty", label: "Wallet and loyalty", icon: Coins },
+  { href: "/operations/reports", label: "Reports", icon: FileCheck2 },
   { href: "/finance", label: "Refunds", icon: RotateCcw },
+];
+
+const DASHBOARD_LINKS = [
+  { href: "/operations/dashboards/overview", label: "Overview", icon: Home },
+  { href: "/operations/dashboards/categories", label: "Categories", icon: HardHat },
+  { href: "/operations/dashboards/customer", label: "Customer", icon: Users },
+  { href: "/operations/dashboards/vendor", label: "Vendor", icon: BriefcaseBusiness },
+  { href: "/operations/dashboards/booking", label: "Booking", icon: HardHat },
 ];
 
 const SYSTEM_LINKS = [
   { href: "/operations/compatibility-rules", label: "Compatibility rules", icon: Sliders },
   { href: "/operations/kill-switches", label: "Kill switches", icon: ToggleLeft },
+  { href: "/operations/profile", label: "Profile", icon: User },
 ];
 
 const GROUPS = [
   { label: "Work", links: WORK_LINKS },
   { label: "People", links: PEOPLE_LINKS },
   { label: "Money", links: MONEY_LINKS },
+  { label: "Dashboards", links: DASHBOARD_LINKS },
   { label: "System", links: SYSTEM_LINKS },
 ];
 
-export function SidebarNavContent({ isCollapsed, onToggle }: { isCollapsed?: boolean; onToggle?: () => void }) {
+export function SidebarNavContent({
+  isCollapsed,
+  onToggle,
+  onLinkClick,
+}: {
+  isCollapsed?: boolean;
+  onToggle?: () => void;
+  /** Called after every nav link click — use to close a mobile drawer. */
+  onLinkClick?: () => void;
+}) {
   const { data: counts } = useCaseQueueSummary();
 
   return (
@@ -88,12 +113,13 @@ export function SidebarNavContent({ isCollapsed, onToggle }: { isCollapsed?: boo
                 }
                 return (
                   <li key={entry.href}>
-                    <SidebarLink 
-                      href={entry.href} 
-                      label={entry.label} 
-                      icon={entry.icon} 
+                    <SidebarLink
+                      href={entry.href}
+                      label={entry.label}
+                      icon={entry.icon}
                       isCollapsed={isCollapsed}
                       badgeCount={badgeCount}
+                      onClick={onLinkClick}
                     />
                   </li>
                 );

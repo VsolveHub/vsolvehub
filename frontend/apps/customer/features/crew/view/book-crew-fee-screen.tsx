@@ -11,8 +11,10 @@ import {
 import { Badge, Button, ErrorState, Skeleton, buttonStyles, useIsWideScreen } from "@vsolve/ui";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 import { AccessRefusal } from "@/features/access/view/access-refusal";
+import { completeOrOpenCheckout } from "@/features/payment/standalone-handoff";
 import { confirmedCrewName, toBookingView, toRateTermsView } from "../adapters";
 import { useRateCardState, useStartBookingFeeCheckout } from "../queries";
 import { RateTermsLink } from "./rate-terms-sheet";
@@ -64,9 +66,32 @@ export function BookCrewFeeScreen({ requirementId, requestHref }: BookCrewFeeScr
   const isWide = useIsWideScreen();
   const rateQuery = useRateCardState(requirementId);
   const checkout = useStartBookingFeeCheckout();
+  const [isHandingOff, setIsHandingOff] = useState(false);
+  const [handoffError, setHandoffError] = useState<unknown>(null);
 
   const state = rateQuery.data ?? null;
   const booking = state?.booking ?? null;
+
+  async function payBookingFee() {
+    if (booking === null) return;
+    setHandoffError(null);
+    try {
+      const started = await checkout.mutateAsync({
+        requirementId,
+        bookingId: booking.id,
+        isRetryAfterFailure: bookingFeePhase(state!) === "failed",
+      });
+      setIsHandingOff(true);
+      await completeOrOpenCheckout(String(started.payment_attempt_id), {
+        businessName: "Vsolve Hub",
+      });
+      void rateQuery.refetch();
+    } catch (error) {
+      setHandoffError(error);
+    } finally {
+      setIsHandingOff(false);
+    }
+  }
 
   const holdCountdown = useServerCountdown(booking?.hold_expires_at ?? null);
   const holdAnnouncement = holdCountdown?.announce ?? undefined;
@@ -104,7 +129,7 @@ export function BookCrewFeeScreen({ requirementId, requestHref }: BookCrewFeeScr
   const crewName = confirmedCrewName(state);
   const isHeld = bookingPhase(state) === "offer_held";
 
-  const refusal = isBookingFeeNotChargeable(checkout.error) ? (
+  const refusal = isBookingFeeNotChargeable(checkout.error ?? handoffError) ? (
     // `m2_booking_fee_not_chargeable` is not in the frozen `errors.ts` and falls
     // through to `choose_again` — offered against nothing the Customer can
     // choose. What actually happened is that the hold lapsed between the render
@@ -116,7 +141,7 @@ export function BookCrewFeeScreen({ requirementId, requestHref }: BookCrewFeeScr
       inline
     />
   ) : (
-    <AccessRefusal error={checkout.error} attempting="pay the booking fee" />
+    <AccessRefusal error={checkout.error ?? handoffError} attempting="pay the booking fee" />
   );
 
   const body = (
@@ -151,14 +176,8 @@ export function BookCrewFeeScreen({ requirementId, requestHref }: BookCrewFeeScr
         phase={feePhase}
         canCheckOut={canCheckOutBookingFee(state)}
         feeLabel={view.bookingFeeLabel}
-        isPending={checkout.isPending}
-        onPay={() =>
-          checkout.mutate({
-            requirementId,
-            bookingId: booking.id,
-            isRetryAfterFailure: feePhase === "failed",
-          })
-        }
+        isPending={checkout.isPending || isHandingOff}
+        onPay={() => void payBookingFee()}
         requestHref={requestHref}
       />
 

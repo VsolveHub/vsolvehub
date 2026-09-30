@@ -197,6 +197,19 @@ class RefundSerializer(serializers.ModelSerializer[Refund]):
         return {"amount_paise": refund.amount_paise, "currency": refund.currency}
 
 
+class RefundPageSerializer(serializers.Serializer[dict[str, object]]):
+    """Cursor page envelope for Operations refund list.
+
+    Declared rather than implied: drf-spectacular cannot see a paginator
+    instantiated inside a plain APIView, so a bare array schema would publish
+    a shape the view never sends.
+    """
+
+    next = serializers.URLField(allow_null=True)
+    previous = serializers.URLField(allow_null=True)
+    results = RefundSerializer(many=True)
+
+
 class BookingSerializer(serializers.ModelSerializer[Booking]):
     fulfilment_unit_id = serializers.UUIDField(read_only=True, allow_null=True)
     reservation_id = serializers.UUIDField(read_only=True)

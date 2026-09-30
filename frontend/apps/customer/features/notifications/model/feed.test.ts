@@ -23,7 +23,7 @@ function target(overrides: Partial<NotificationTarget> = {}): NotificationTarget
 
 describe("targetHref", () => {
   it("routes an engagement to the agreement it is about", () => {
-    expect(targetHref(target({ kind: "ENGAGEMENT", id: "eng-9" }))).toBe("/engagements/eng-9");
+    expect(targetHref(target({ kind: "ENGAGEMENT", id: "eng-9" }))).toBe("/jobs/eng-9");
   });
 
   it("routes a requirement to the request it is about", () => {

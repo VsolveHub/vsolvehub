@@ -7,10 +7,16 @@ from apps.notifications.models import NotificationIntent
 from apps.notifications.services import request_notification
 
 
-def notify_booking_completed(event: OutboxEvent) -> NotificationIntent:
+def notify_booking_completed(event: OutboxEvent) -> NotificationIntent | None:
     """Dispatch booking.completed notification for completed fulfilment."""
     customer_id = event.payload.get("customer_id")
     booking_id = event.payload.get("booking_id")
+
+    source_type = event.payload.get("source_type", "BOOKING")
+    if source_type != "BOOKING" and not booking_id:
+        # Ignore notifications for rentals and stays for now
+        return None
+
     if not customer_id or not booking_id:
         raise ValueError("Payload missing customer_id or booking_id.")
 

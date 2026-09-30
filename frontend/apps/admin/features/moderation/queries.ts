@@ -4,7 +4,7 @@ import { getApiClient } from "@/lib/api/browser";
 
 export type OpsRentalAsset = Schemas["RentalAsset"];
 export type OpsStayProperty = Schemas["Property"];
-export type ModerationAction = "APPROVE" | "REJECT";
+export type ModerationAction = "APPROVE" | "REJECT" | "REMOVE" | "REINSTATE";
 
 export async function fetchOpsRentals(): Promise<OpsRentalAsset[]> {
   const data = await request(() => getApiClient().GET("/api/v1/ops/rentals"));
@@ -40,4 +40,17 @@ export async function moderateOpsStay(
       body: { action, reason },
     }),
   );
+}
+
+export type OpsStayReservation = Schemas["StayReservation"];
+export type OpsStayEnquiry = Schemas["StayEnquiry"];
+
+export async function fetchOpsStayReservations(): Promise<OpsStayReservation[]> {
+  const data = await request(() => getApiClient().GET("/api/v1/ops/stays/reservations"));
+  return Array.isArray(data) ? data : [];
+}
+
+export async function fetchOpsStayEnquiries(): Promise<OpsStayEnquiry[]> {
+  const data = await request(() => getApiClient().GET("/api/v1/ops/stays/enquiries"));
+  return Array.isArray(data) ? data : [];
 }

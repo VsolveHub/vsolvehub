@@ -58,14 +58,14 @@ export function WalletHeroCard({ wallet }: WalletHeroCardProps) {
             <span>1-Click Fast Checkout</span>
           </div>
           <p className="text-xs leading-relaxed text-text-secondary">
-            Use your wallet balance to instantly pay for services, repairs, and materials without OTP delays.
+            Spend this prepaid balance on bookings. It cannot be withdrawn as cash.
           </p>
           <div className="flex items-center gap-2 pt-1">
             <Badge tone="neutral" className="text-[10px] px-2 py-0.5">
-              Zero transaction fees
+              Spend only
             </Badge>
             <Badge tone="neutral" className="text-[10px] px-2 py-0.5">
-              Never expires
+              No cash-out
             </Badge>
           </div>
         </div>

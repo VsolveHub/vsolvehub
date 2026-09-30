@@ -170,14 +170,6 @@ export function purchaseSubscription(planId: string) {
   );
 }
 
-export function completePaymentAttempt(attemptId: string) {
-  return request(() =>
-    getApiClient().POST("/api/v1/payment-attempts/{attempt_id}/simulate-capture/", {
-      params: { path: { attempt_id: attemptId } },
-    }),
-  );
-}
-
 export function fetchCareerServices() {
   return request(() => getApiClient().GET("/api/v1/partner/listings/roles")) as unknown as Promise<
     CatalogServiceItem[]

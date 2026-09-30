@@ -98,6 +98,14 @@ urlpatterns = [
         views.OpsListingReinstateView.as_view(),
         name="ops-listing-reinstate",
     ),
-    path("ops/vendor-subscription-plans", views.OpsVendorSubscriptionPlanCollectionView.as_view(), name="ops-vendor-subscription-plans"),
-    path("ops/vendor-subscription-plans/<uuid:plan_id>", views.OpsVendorSubscriptionPlanDetailView.as_view(), name="ops-vendor-subscription-plan-detail"),
+    path(
+        "ops/vendor-subscription-plans",
+        views.OpsVendorSubscriptionPlanCollectionView.as_view(),
+        name="ops-vendor-subscription-plans",
+    ),
+    path(
+        "ops/vendor-subscription-plans/<uuid:plan_id>",
+        views.OpsVendorSubscriptionPlanDetailView.as_view(),
+        name="ops-vendor-subscription-plan-detail",
+    ),
 ]

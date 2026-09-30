@@ -740,6 +740,64 @@ def test_webhook_rejects_invalid_signature_without_persisting_payload() -> None:
     assert Reservation.objects.count() == 0
 
 
+def test_webhook_payload_mismatch_returns_409() -> None:
+    """Same provider event id with a different body must conflict, not 500."""
+    client = APIClient()
+    first_payload = {
+        "event": "payment.captured",
+        "payload": {
+            "payment": {
+                "entity": {
+                    "id": "pay_conflict",
+                    "order_id": "order_conflict",
+                    "amount": 10000,
+                    "currency": "INR",
+                    "status": "captured",
+                }
+            }
+        },
+    }
+    first_raw = json.dumps(first_payload, separators=(",", ":")).encode()
+    first_sig = hmac.new(
+        settings.PAYMENT_WEBHOOK_SECRET.encode(), first_raw, hashlib.sha256
+    ).hexdigest()
+    first = client.post(
+        "/api/v1/payment-webhooks/razorpay/",
+        data=first_raw,
+        content_type="application/json",
+        HTTP_X_RAZORPAY_SIGNATURE=first_sig,
+        HTTP_X_RAZORPAY_EVENT_ID="evt_payload_reuse",
+    )
+    assert first.status_code in {HTTPStatus.OK, HTTPStatus.ACCEPTED}
+
+    second_payload = {
+        "event": "payment.failed",
+        "payload": {
+            "payment": {
+                "entity": {
+                    "id": "pay_conflict_other",
+                    "order_id": "order_conflict_other",
+                    "amount": 99999,
+                    "currency": "INR",
+                    "status": "failed",
+                }
+            }
+        },
+    }
+    second_raw = json.dumps(second_payload, separators=(",", ":")).encode()
+    second_sig = hmac.new(
+        settings.PAYMENT_WEBHOOK_SECRET.encode(), second_raw, hashlib.sha256
+    ).hexdigest()
+    second = client.post(
+        "/api/v1/payment-webhooks/razorpay/",
+        data=second_raw,
+        content_type="application/json",
+        HTTP_X_RAZORPAY_SIGNATURE=second_sig,
+        HTTP_X_RAZORPAY_EVENT_ID="evt_payload_reuse",
+    )
+    assert second.status_code == HTTPStatus.CONFLICT
+
+
 def test_webhook_rejects_invalid_json_and_safely_ignores_unsubscribed_event() -> None:
     client = APIClient()
     invalid_body = b"not-json"

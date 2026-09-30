@@ -5,6 +5,7 @@ import { Badge, Button, ConfirmAction, ErrorState, Skeleton, formatMoney } from 
 import { useState } from "react";
 
 import { AccessRefusal } from "@/features/access/view/access-refusal";
+import { completeOrOpenCheckout } from "@/features/payment/standalone-handoff";
 import { toAmendmentsView, type AmendmentView, type EngagementView } from "../adapters";
 import {
   useAcceptAmendment,
@@ -122,10 +123,23 @@ export function AmendmentPanel({ engagement, nouns }: AmendmentPanelProps) {
           isAccepting={accept.isPending}
           isDeclining={decline.isPending}
           onAccept={() =>
-            accept.mutate(
-              { engagementId: engagement.engagementId, amendmentId: live.amendmentId },
-              { onSuccess: () => setConfirming(false) },
-            )
+            void (async () => {
+              try {
+                const decision = await accept.mutateAsync({
+                  engagementId: engagement.engagementId,
+                  amendmentId: live.amendmentId,
+                });
+                setConfirming(false);
+                const attemptId = decision.checkout?.payment_attempt_id ?? null;
+                if (attemptId !== null) {
+                  await completeOrOpenCheckout(String(attemptId), {
+                    businessName: "Vsolve Hub",
+                  });
+                }
+              } catch {
+                // Mutation / handoff errors surface via accept.error / AccessRefusal.
+              }
+            })()
           }
           onDecline={() =>
             decline.mutate({

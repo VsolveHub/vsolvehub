@@ -6,7 +6,7 @@ import {
   ExternalLink,
   XCircle,
 } from "lucide-react";
-import { Badge, Card, StatusChip } from "@vsolve/ui";
+import { Badge, Card, StatusChip, formatDate } from "@vsolve/ui";
 
 import { formatStatusEventKind } from "../model";
 import {
@@ -42,7 +42,7 @@ export function ApplicationCard({
             <StatusChip status={app.status} category="listing-application" />
             <span className="flex items-center gap-1 text-xs text-text-muted">
               <Calendar className="size-3.5" />
-              Applied on {new Date(app.created_at).toLocaleDateString()}
+              Applied on {formatDate(app.created_at)}
             </span>
             {app.contact_revealed_at ? (
               <Badge tone="success">
@@ -106,7 +106,7 @@ export function ApplicationCard({
                   className="inline-flex items-center gap-1 rounded-control bg-surface-sunken px-2 py-0.5 text-[11px] text-text-muted border border-line"
                 >
                   <Clock className="size-3 text-text-muted" />
-                  {formatStatusEventKind(ev.kind)} ({new Date(ev.created_at).toLocaleDateString()})
+                  {formatStatusEventKind(ev.kind)} ({formatDate(ev.created_at)})
                 </span>
               ))}
             </div>

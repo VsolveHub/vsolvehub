@@ -2,7 +2,7 @@ from typing import Any
 
 from rest_framework import serializers
 
-from apps.catalog.models import ServiceVariant
+from apps.catalog.models import Service, ServiceVariant
 from apps.identity.phone import InvalidPhoneNumberError, normalize_phone_number
 from apps.listings.models import (
     Application,
@@ -56,7 +56,6 @@ class ListingSummarySerializer(serializers.ModelSerializer[Listing]):
             "service_name",
             "variant_name",
             "title",
-            "description",
             "structured_fields",
             "salary_min_paise",
             "salary_max_paise",
@@ -85,6 +84,10 @@ class ListingDetailSerializer(ListingSummarySerializer):
 
     class Meta(ListingSummarySerializer.Meta):
         fields = (
+            # The detail page renders the full job description. The public browse
+            # list is the payload that must not carry it, so it is opted back in
+            # here instead of being inherited by every summary consumer.
+            "description",
             *ListingSummarySerializer.Meta.fields,
             "contact_masked",
             "listing_type_schema",
@@ -127,6 +130,9 @@ class PartnerListingSerializer(ListingSummarySerializer):
 
     class Meta(ListingSummarySerializer.Meta):
         fields = (
+            # Partners author the description, so it stays on the read/write path
+            # even though the public browse payload no longer carries it.
+            "description",
             *ListingSummarySerializer.Meta.fields,
             "variant",
             "service_id",
@@ -256,7 +262,9 @@ class PartnerListingSerializer(ListingSummarySerializer):
         if creating or min_p > 0 or max_p > 0 or period:
             if min_p < 1:
                 raise serializers.ValidationError(
-                    {"salary_min_paise": "Enter a minimum pay in paise. The client sends rupees converted on submit."}
+                    {
+                        "salary_min_paise": "Enter a minimum pay in paise. The client sends rupees converted on submit."
+                    }
                 )
             if max_p < min_p:
                 raise serializers.ValidationError(
@@ -398,10 +406,16 @@ class ApplicationReportSerializer(serializers.ModelSerializer[ApplicationReport]
 
 
 class VendorSubscriptionPlanSerializer(serializers.ModelSerializer[VendorSubscriptionPlan]):
+    service_name = serializers.CharField(source="service.name", read_only=True, allow_null=True)
+    service_slug = serializers.CharField(source="service.slug", read_only=True, allow_null=True)
+
     class Meta:
         model = VendorSubscriptionPlan
         fields = (
             "id",
+            "service",
+            "service_name",
+            "service_slug",
             "code",
             "name",
             "price_paise",
@@ -409,7 +423,21 @@ class VendorSubscriptionPlanSerializer(serializers.ModelSerializer[VendorSubscri
             "max_active_listings",
             "premium_capabilities",
             "premium_price_paise",
+            "details",
+            "is_active",
         )
+
+
+class OpsVendorPlanServiceOptionSerializer(serializers.Serializer[dict[str, object]]):
+    id = serializers.UUIDField()
+    name = serializers.CharField()
+    slug = serializers.CharField()
+    subcategory_name = serializers.CharField()
+
+
+class OpsVendorSubscriptionPlanCatalogSerializer(serializers.Serializer[dict[str, object]]):
+    plans = VendorSubscriptionPlanSerializer(many=True)
+    services = OpsVendorPlanServiceOptionSerializer(many=True)
 
 
 class VendorSubscriptionSerializer(serializers.ModelSerializer[VendorSubscription]):
@@ -438,10 +466,17 @@ class ListingFiltersTaxonomySerializer(serializers.Serializer[dict[str, Any]]):
     categories = ListingCategoryOptionSerializer(many=True)
 
 
-class OpsCreateVendorSubscriptionPlanSerializer(serializers.ModelSerializer[VendorSubscriptionPlan]):
+class OpsCreateVendorSubscriptionPlanSerializer(
+    serializers.ModelSerializer[VendorSubscriptionPlan]
+):
+    service = serializers.PrimaryKeyRelatedField(
+        queryset=Service.objects.all(), allow_null=True, required=False
+    )
+
     class Meta:
         model = VendorSubscriptionPlan
         fields = (
+            "service",
             "code",
             "name",
             "price_paise",
@@ -449,17 +484,28 @@ class OpsCreateVendorSubscriptionPlanSerializer(serializers.ModelSerializer[Vend
             "max_active_listings",
             "premium_capabilities",
             "premium_price_paise",
+            "details",
+            "is_active",
         )
 
-class OpsUpdateVendorSubscriptionPlanSerializer(serializers.ModelSerializer[VendorSubscriptionPlan]):
+
+class OpsUpdateVendorSubscriptionPlanSerializer(
+    serializers.ModelSerializer[VendorSubscriptionPlan]
+):
+    service = serializers.PrimaryKeyRelatedField(
+        queryset=Service.objects.all(), allow_null=True, required=False
+    )
+
     class Meta:
         model = VendorSubscriptionPlan
         fields = (
+            "service",
             "name",
             "price_paise",
             "duration_days",
             "max_active_listings",
             "premium_capabilities",
             "premium_price_paise",
+            "details",
             "is_active",
         )

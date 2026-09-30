@@ -44,6 +44,9 @@ class Property(models.Model):
     structured_fields = models.JSONField(default=dict, blank=True)
     cancellation_policy_text = models.TextField(blank=True, default="")
     house_rules = models.TextField(blank=True, default="")
+    min_stay_nights = models.PositiveSmallIntegerField(default=1)
+    available_from = models.DateField(null=True, blank=True)
+    available_until = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -97,6 +100,13 @@ class StayEnquiry(models.Model):
     unit = models.ForeignKey(
         Unit, null=True, blank=True, on_delete=models.PROTECT, related_name="enquiries"
     )
+    unit_reservation = models.OneToOneField(
+        "UnitReservation",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="enquiry",
+    )
     customer = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="stay_enquiries"
     )
@@ -135,6 +145,7 @@ class StayModerationEvent(models.Model):
     action = models.CharField(max_length=20, choices=Action.choices)
     reason = models.CharField(max_length=480, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
 
 class PropertyMedia(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -202,3 +213,86 @@ class StayReview(models.Model):
         elif not self.comment and self.body:
             self.comment = self.body
         super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return str(self.id)
+
+
+class UnitReservation(models.Model):
+    """Day-granular hold on a unit. Overlap enforced via select_for_update in services."""
+
+    class Status(models.TextChoices):
+        HELD = "HELD", "Held"
+        CONFIRMED = "CONFIRMED", "Confirmed"
+        RELEASED = "RELEASED", "Released"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    unit = models.ForeignKey(Unit, on_delete=models.PROTECT, related_name="reservations")
+    check_in = models.DateField()
+    check_out = models.DateField()
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.HELD)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        indexes = [
+            models.Index(fields=("unit", "status", "check_in", "check_out")),
+        ]
+
+    def __str__(self) -> str:
+        return str(self.id)
+
+
+class StayReservation(models.Model):
+    """Paid reservation on a property unit. Created after payment capture."""
+
+    class Status(models.TextChoices):
+        HELD = "HELD", "Held (awaiting payment)"
+        PAYMENT_PENDING = "PAYMENT_PENDING", "Payment pending"
+        CONFIRMED = "CONFIRMED", "Confirmed"
+        CHECKED_IN = "CHECKED_IN", "Checked in"
+        CHECKED_OUT = "CHECKED_OUT", "Checked out"
+        CANCELLED = "CANCELLED", "Cancelled"
+        NO_SHOW = "NO_SHOW", "No show"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    property = models.ForeignKey(Property, on_delete=models.PROTECT, related_name="reservations")
+    unit = models.ForeignKey(Unit, on_delete=models.PROTECT, related_name="stay_reservations")
+    unit_reservation = models.OneToOneField(
+        UnitReservation, on_delete=models.PROTECT, related_name="stay_reservation"
+    )
+    customer = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="stay_reservations"
+    )
+    payment_attempt = models.ForeignKey(
+        "commerce.PaymentAttempt",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="stay_reservations",
+    )
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.HELD)
+    check_in = models.DateField()
+    check_out = models.DateField()
+    guest_count = models.PositiveSmallIntegerField(default=1)
+    nights = models.PositiveIntegerField(default=1)
+    total_paise = models.PositiveIntegerField(default=0)
+    checked_in_at = models.DateTimeField(null=True, blank=True)
+    checked_out_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancellation_reason = models.CharField(max_length=240, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(total_paise__gt=0),
+                name="stay_reservation_positive_total",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return str(self.id)

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft, Building, Clock, FileCheck2, Flame, MapPin } from "lucide-react";
-import { Badge } from "@vsolve/ui";
+import { Badge, formatDate } from "@vsolve/ui";
 import type { ListingDetail } from "../queries";
 
 export interface RoleHeaderProps {
@@ -40,7 +40,7 @@ export function RoleHeader({ listing }: RoleHeaderProps) {
           {listing.published_at && (
             <span className="flex items-center gap-1 text-xs text-text-muted">
               <Clock className="size-3.5" />
-              Published {new Date(listing.published_at).toLocaleDateString()}
+              Published {formatDate(listing.published_at)}
             </span>
           )}
         </div>

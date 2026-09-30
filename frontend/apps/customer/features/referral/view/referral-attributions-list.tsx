@@ -1,7 +1,7 @@
 "use client";
 
-import { Badge } from "@vsolve/ui";
-import { CheckCircle2, Clock, Gift, Users } from "lucide-react";
+import { Badge , formatDate} from "@vsolve/ui";
+import { Gift, Users } from "lucide-react";
 import type { ReferralAttribution } from "../queries";
 
 interface ReferralAttributionsListProps {
@@ -56,11 +56,7 @@ export function ReferralAttributionsList({ attributions }: ReferralAttributionsL
       <div className="divide-y divide-[#eee9e0]">
         {attributions.map((attr) => {
           const meta = getReferralStatusMeta(attr.status);
-          const formattedDate = new Date(attr.attributed_at || "").toLocaleDateString("en-IN", {
-            day: "numeric",
-            month: "short",
-            year: "numeric",
-          });
+          const formattedDate = formatDate(attr.attributed_at || "");
 
           return (
             <div

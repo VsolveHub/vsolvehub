@@ -13,7 +13,7 @@ describe("catalogCategoryHref / listingsBrowseHref", () => {
     expect(isCareerJobsCategory(CAREER_JOBS_CATEGORY_SLUG)).toBe(true);
     expect(catalogCategoryHref(CAREER_JOBS_CATEGORY_SLUG)).toBe(LISTINGS_HREF);
     expect(catalogCategoryHref(CAREER_JOBS_CATEGORY_SLUG, "it-software-jobs")).toBe(
-      LISTINGS_HREF,
+      `${LISTINGS_HREF}?service=it-software-jobs`,
     );
   });
 

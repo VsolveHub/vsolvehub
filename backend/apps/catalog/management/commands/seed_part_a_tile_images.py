@@ -1,7 +1,10 @@
 import textwrap
+
 from django.core.management.base import BaseCommand
 from django.db import transaction
-from apps.catalog.models import Category, Subcategory
+
+from apps.catalog.models import Category
+
 
 class Command(BaseCommand):
     help = textwrap.dedent("""
@@ -13,8 +16,8 @@ class Command(BaseCommand):
         # Define target categories and their specific subcategories (or None for all)
         targets = {
             "career-jobs": None,  # None means all subcategories
-            "rental-services": ["home-appliance-rental", "tools-machinery"],
-            "rooms-pg-hostel-hotels": ["hostels", "pg-accommodation", "short-stay"],
+            "rental-services": None,  # all rental subcategories
+            "rooms-pg-hostel-hotels": None,  # all stay subcategories
         }
 
         updated_categories = 0
@@ -25,16 +28,18 @@ class Command(BaseCommand):
                 try:
                     category = Category.objects.get(slug=cat_slug)
                 except Category.DoesNotExist:
-                    self.stderr.write(self.style.WARNING(f"Category '{cat_slug}' not found, skipping."))
+                    self.stderr.write(
+                        self.style.WARNING(f"Category '{cat_slug}' not found, skipping.")
+                    )
                     continue
-                
+
                 # Update Category
                 if not category.image_url:
                     category.image_url = f"/catalog/tiles/{category.slug}.png"
                     category.save(update_fields=["image_url", "updated_at"])
                     updated_categories += 1
                     self.stdout.write(f"Updated category: {category.slug}")
-                
+
                 # Update Subcategories
                 if subcat_slugs is None:
                     # All subcategories
@@ -42,7 +47,7 @@ class Command(BaseCommand):
                 else:
                     # Specific subcategories
                     subcategories = category.subcategories.filter(slug__in=subcat_slugs)
-                
+
                 for subcategory in subcategories:
                     if not subcategory.image_url:
                         subcategory.image_url = f"/catalog/tiles/{subcategory.slug}.png"

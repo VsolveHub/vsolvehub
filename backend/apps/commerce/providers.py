@@ -350,5 +350,13 @@ def get_payment_provider(*, provider_code: str | None = None) -> PaymentProvider
     if code == FakePaymentProvider.code:
         return FakePaymentProvider()
     if code == RazorpayPaymentProvider.code:
+        key_id = (getattr(settings, "RAZORPAY_KEY_ID", "") or "").strip()
+        key_secret = (getattr(settings, "RAZORPAY_KEY_SECRET", "") or "").strip()
+        if not key_id or not key_secret:
+            raise PaymentProviderError(
+                "PAYMENT_PROVIDER=razorpay requires RAZORPAY_KEY_ID and "
+                "RAZORPAY_KEY_SECRET. Set those in backend/.env or keep "
+                "PAYMENT_PROVIDER=fake for local demo."
+            )
         return RazorpayPaymentProvider()
     raise PaymentProviderError("No payment provider is configured for this environment.")

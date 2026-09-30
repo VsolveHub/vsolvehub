@@ -29,6 +29,7 @@ from rest_framework.exceptions import ValidationError
 from apps.listings.services import (
     APPLICATIONS_PER_HOUR_LIMIT,
     CONTACT_REVEALS_PER_DAY_LIMIT,
+    ListingPlanCapError,
     ListingStateError,
     close_listing,
     activate_premium_feature,
@@ -502,7 +503,9 @@ def test_m3_a10_10b_new_plan_expires_the_previous_active_subscription(poster):
     second = VendorSubscriptionPlan.objects.create(
         code=f"growth-{uuid.uuid4().hex[:6]}", name="Growth", price_paise=249900, duration_days=60
     )
-    current = start_subscription_purchase(poster=poster, plan=first, idempotency_key="sub-replace-1")
+    current = start_subscription_purchase(
+        poster=poster, plan=first, idempotency_key="sub-replace-1"
+    )
     assert current.payment_attempt is not None
     complete_subscription_payment(payment_attempt_id=current.payment_attempt.id)
     replacement = start_subscription_purchase(
@@ -588,7 +591,7 @@ def test_m3_a10_13_max_active_listings_plan_limit(poster, a10_variant):
     submit_listing(listing=l2, actor=poster.user)
     moderate_listing(listing=l2, actor=poster.user, approved=True)
 
-    with pytest.raises(ListingStateError, match="Active listing limit reached"):
+    with pytest.raises(ListingPlanCapError, match="Active listing limit reached"):
         publish_listing(listing=l2, actor=poster.user)
 
 
@@ -1116,3 +1119,118 @@ def test_listing_salary_validation(a10_variant):
     with pytest.raises(ValidationError) as exc:
         serializer.is_valid(raise_exception=True)
     assert "Pay period must be" in str(exc.value)
+
+
+@pytest.mark.django_db
+def test_ops_vendor_subscription_plans_are_scoped_per_service(a10_variant):
+    """Operations can publish a plan for one service and leave another plan global."""
+    rental_service = Service.objects.create(
+        subcategory=a10_variant.service.subcategory,
+        slug=f"jcb-{uuid.uuid4().hex[:6]}",
+        name="JCB Hire",
+        short_description="Hourly JCB rental",
+        status=Service.Status.ACTIVE,
+    )
+    ServiceVariant.objects.create(
+        service=rental_service,
+        code=f"jcb-day-{uuid.uuid4().hex[:6]}",
+        name="JCB day hire",
+        pricing_strategy=ServiceVariant.PricingStrategy.FIXED,
+        booking_archetype=ServiceVariant.BookingArchetype.A7_RENTAL,
+        required_skill_code="rental",
+        tax_category_code="rental",
+    )
+    op_user = _create_user(phone_number=f"+9196{uuid.uuid4().int % 10**8:08d}", is_staff=True)
+    op_client = _client_for(op_user, role="operations")
+
+    create_res = op_client.post(
+        "/api/v1/ops/vendor-subscription-plans",
+        {
+            "service": str(a10_variant.service_id),
+            "code": f"jobs-growth-{uuid.uuid4().hex[:6]}",
+            "name": "Jobs Growth",
+            "price_paise": 249900,
+            "duration_days": 60,
+            "max_active_listings": 15,
+            "premium_capabilities": ["FEATURED_PLACEMENT"],
+            "premium_price_paise": 49900,
+            "details": "Featured job posts for the Career service only.",
+            "is_active": True,
+        },
+        format="json",
+    )
+    assert create_res.status_code == 201, create_res.data
+    assert create_res.data["service"] == str(a10_variant.service_id)
+    assert create_res.data["service_name"] == a10_variant.service.name
+    assert create_res.data["details"] == "Featured job posts for the Career service only."
+
+    catalog = op_client.get("/api/v1/ops/vendor-subscription-plans")
+    assert catalog.status_code == 200
+    service_ids = {item["id"] for item in catalog.data["services"]}
+    assert str(rental_service.id) in service_ids
+    assert str(a10_variant.service_id) not in service_ids
+    plan_ids = {item["id"] for item in catalog.data["plans"]}
+    assert create_res.data["id"] in plan_ids
+
+    patch_res = op_client.patch(
+        f"/api/v1/ops/vendor-subscription-plans/{create_res.data['id']}",
+        {"details": "Updated extra details for this service.", "is_active": False},
+        format="json",
+    )
+    assert patch_res.status_code == 200, patch_res.data
+    assert patch_res.data["details"] == "Updated extra details for this service."
+    assert patch_res.data["is_active"] is False
+
+
+@pytest.mark.django_db
+def test_free_tier_max_one_listing(poster, a10_variant):
+    """M3: Poster with no active subscription can publish 1 listing, but second is blocked."""
+    # No subscription created
+
+    # 1st listing published
+    l1 = create_listing(
+        poster=poster, variant_id=a10_variant.id, title="Free Role 1", description="desc"
+    )
+    submit_listing(listing=l1, actor=poster.user)
+    moderate_listing(listing=l1, actor=poster.user, approved=True)
+    publish_listing(listing=l1, actor=poster.user)
+
+    # 2nd listing approved but publish blocked by free tier cap
+    l2 = create_listing(
+        poster=poster, variant_id=a10_variant.id, title="Free Role 2", description="desc"
+    )
+    submit_listing(listing=l2, actor=poster.user)
+    moderate_listing(listing=l2, actor=poster.user, approved=True)
+
+    with pytest.raises(ListingPlanCapError, match="Active listing limit reached"):
+        publish_listing(listing=l2, actor=poster.user)
+
+
+@pytest.mark.django_db
+def test_listing_plan_cap_api_error(poster, a10_variant):
+    """API returns 409 listing_plan_cap when publish quota is exceeded."""
+    # Free tier: 1st listing published
+    l1 = create_listing(
+        poster=poster, variant_id=a10_variant.id, title="API Role 1", description="desc"
+    )
+    submit_listing(listing=l1, actor=poster.user)
+    moderate_listing(listing=l1, actor=poster.user, approved=True)
+    publish_listing(listing=l1, actor=poster.user)
+
+    # 2nd listing
+    l2 = create_listing(
+        poster=poster, variant_id=a10_variant.id, title="API Role 2", description="desc"
+    )
+    submit_listing(listing=l2, actor=poster.user)
+    moderate_listing(listing=l2, actor=poster.user, approved=True)
+
+    partner_client = _client_for(poster.user, role="partner")
+    response = partner_client.post(
+        f"/api/v1/partner/listings/{l2.id}/publish", {"reason": "lets go"}, format="json"
+    )
+    assert response.status_code == 409
+    body = response.json()
+    assert "error" in body
+    assert body["error"]["code"] == "listing_plan_cap"
+    # Must not fall through to the generic listing_state_conflict code.
+    assert body["error"]["code"] != "listing_state_conflict"

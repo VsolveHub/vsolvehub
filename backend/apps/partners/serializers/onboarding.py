@@ -263,8 +263,9 @@ class PartnerApplicationTransitionSerializer(
 class PartnerProfileUpdateSerializer(serializers.Serializer[dict[str, object]]):
     """What a Partner may change about themselves without a review.
 
-    `display_name` only. It is the name Customers see, so it is theirs to get
-    right, and nothing downstream depends on its value.
+    `display_name` is the name Customers see. `default_location_text` is the
+    registered pickup / address used to prefill A7 rental ads (still editable
+    per asset).
 
     **Not** `phone_number`. That is the login credential: changing it moves who
     can sign in, so it belongs behind an OTP challenge on the *new* number, not
@@ -276,12 +277,19 @@ class PartnerProfileUpdateSerializer(serializers.Serializer[dict[str, object]]):
     reviewed them, and a field here would silently reopen a reviewed decision.
     """
 
-    display_name = serializers.CharField(max_length=120, trim_whitespace=True)
+    display_name = serializers.CharField(max_length=120, trim_whitespace=True, required=False)
+    default_location_text = serializers.CharField(
+        max_length=240, required=False, allow_blank=True, trim_whitespace=True
+    )
 
     @staticmethod
     def validate_display_name(value: str) -> str:
         if not value.strip():
             raise serializers.ValidationError("Enter the name Customers should see.")
+        return value.strip()
+
+    @staticmethod
+    def validate_default_location_text(value: str) -> str:
         return value.strip()
 
 
@@ -321,6 +329,7 @@ class PartnerProfileSerializer(serializers.ModelSerializer[PartnerProfile]):
             "service_areas",
             "member_since",
             "has_payout_account",
+            "default_location_text",
         )
         read_only_fields = fields
 

@@ -25,6 +25,7 @@ import {
   isStepUpRequired,
   useReconcileRefund,
   useRequestRefund,
+  useOperationsRefunds,
 } from "../queries";
 
 /**
@@ -160,6 +161,9 @@ export function RefundConsole({ onStepUpRequired }: { onStepUpRequired: (reason:
 
   const create = useRequestRefund();
   const reconcile = useReconcileRefund();
+  const refundsQuery = useOperationsRefunds();
+
+  const allRefunds = refundsQuery.data?.pages.flatMap((page) => page.results) ?? [];
 
   const errors = validateRefund(draft);
   const units = parseUnitIds(draft.unitIds);
@@ -374,6 +378,103 @@ export function RefundConsole({ onStepUpRequired }: { onStepUpRequired: (reason:
         >
           Reconcile this refund
         </Button>
+      </Card>
+
+      <Card className="mt-5 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-base font-bold text-text">Refunds ledger & history</h2>
+            <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
+              Published operations audit feed of all platform refunds. Direct reconciliation by id remains available above.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => refundsQuery.refetch()}
+            loading={refundsQuery.isRefetching}
+          >
+            Refresh
+          </Button>
+        </div>
+
+        {refundsQuery.isLoading ? (
+          <p className="mt-4 text-sm text-text-secondary">Loading refunds...</p>
+        ) : refundsQuery.isError ? (
+          <ErrorState
+            inline
+            className="mt-4"
+            title="Could not load refunds"
+            message="Check your connection or session step-up status and try again."
+          />
+        ) : allRefunds.length === 0 ? (
+          <p className="mt-4 text-sm text-text-muted">No refunds recorded yet.</p>
+        ) : (
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs sm:text-sm">
+              <thead className="border-b border-border text-text-secondary">
+                <tr>
+                  <th className="py-2 pr-3 font-semibold">Refund ID</th>
+                  <th className="py-2 pr-3 font-semibold">Order</th>
+                  <th className="py-2 pr-3 font-semibold">Amount</th>
+                  <th className="py-2 pr-3 font-semibold">Status</th>
+                  <th className="py-2 pr-3 font-semibold">Reconciliation</th>
+                  <th className="py-2 text-right font-semibold">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60">
+                {allRefunds.map((r) => (
+                  <tr key={r.id} className="hover:bg-surface-elevated/40">
+                    <td className="py-2.5 pr-3 font-mono text-xs text-text-secondary" data-numeric>
+                      {maskId(r.id)}
+                    </td>
+                    <td className="py-2.5 pr-3 font-mono text-xs text-text-secondary" data-numeric>
+                      {r.order_id ? maskId(r.order_id) : "—"}
+                    </td>
+                    <td className="py-2.5 pr-3 font-semibold text-text" data-numeric>
+                      {formatMoney(r.amount.amount_paise)}
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <Badge tone={STATUS_TONE[r.status]}>{STATUS_LABEL[r.status]}</Badge>
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <Badge tone={RECONCILIATION_TONE[r.reconciliation_state]}>
+                        {RECONCILIATION_LABEL[r.reconciliation_state]}
+                      </Badge>
+                    </td>
+                    <td className="py-2.5 text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        loading={reconcile.isPending && reconcile.variables === r.id}
+                        onClick={() => {
+                          setLookupId(r.id);
+                          reconcile.mutate(r.id, {
+                            onError: (error) => raiseStepUp(error, "the provider was asked"),
+                          });
+                        }}
+                      >
+                        Reconcile
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {refundsQuery.hasNextPage ? (
+              <div className="mt-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  loading={refundsQuery.isFetchingNextPage}
+                  onClick={() => refundsQuery.fetchNextPage()}
+                >
+                  Load more
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        )}
       </Card>
     </div>
   );

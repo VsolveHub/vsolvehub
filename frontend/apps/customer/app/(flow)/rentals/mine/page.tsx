@@ -3,15 +3,23 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Clock, PackageCheck, Wrench } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { Button, EmptyState, ErrorState, Skeleton } from "@vsolve/ui";
 
-import { rentalMineBucket } from "@/features/rentals/model";
+import { rentalMineBucket, type RentalMineTab } from "@/features/rentals/model";
 import { fetchMyRentals } from "@/features/rentals/queries";
 import { RentalBookingCard } from "@/features/rentals/view";
 
+const TABS: { key: RentalMineTab; label: string }[] = [
+  { key: "ALL", label: "All Rentals" },
+  { key: "UPCOMING", label: "Upcoming" },
+  { key: "ONGOING", label: "Ongoing" },
+  { key: "RETURNED", label: "Returned" },
+  { key: "INACTIVE", label: "Cancelled / Disputed" },
+];
+
 export default function MyRentalsPage() {
-  const [activeTab, setActiveTab] = useState<"ALL" | "UPCOMING" | "ONGOING" | "RETURNED">("ALL");
+  const [activeTab, setActiveTab] = useState<RentalMineTab>("ALL");
 
   const {
     data: bookings = [],
@@ -31,7 +39,6 @@ export default function MyRentalsPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8">
-      {/* Navigation and Header */}
       <div className="flex flex-col gap-2">
         <Link
           href="/rentals"
@@ -55,55 +62,30 @@ export default function MyRentalsPage() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-line pb-2">
-        <button
-          type="button"
-          onClick={() => setActiveTab("ALL")}
-          className={`rounded-full px-4 py-1.5 text-xs font-bold transition ${
-            activeTab === "ALL"
-              ? "bg-action text-white"
-              : "bg-surface border border-line text-text-secondary hover:text-text"
-          }`}
-        >
-          All Rentals ({bookings.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("UPCOMING")}
-          className={`rounded-full px-4 py-1.5 text-xs font-bold transition ${
-            activeTab === "UPCOMING"
-              ? "bg-action text-white"
-              : "bg-surface border border-line text-text-secondary hover:text-text"
-          }`}
-        >
-          Upcoming
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("ONGOING")}
-          className={`rounded-full px-4 py-1.5 text-xs font-bold transition ${
-            activeTab === "ONGOING"
-              ? "bg-action text-white"
-              : "bg-surface border border-line text-text-secondary hover:text-text"
-          }`}
-        >
-          Ongoing
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("RETURNED")}
-          className={`rounded-full px-4 py-1.5 text-xs font-bold transition ${
-            activeTab === "RETURNED"
-              ? "bg-action text-white"
-              : "bg-surface border border-line text-text-secondary hover:text-text"
-          }`}
-        >
-          Returned
-        </button>
+      <div className="flex flex-wrap items-center gap-2 border-b border-line pb-2">
+        {TABS.map((tab) => {
+          const count =
+            tab.key === "ALL"
+              ? bookings.length
+              : bookings.filter((b) => rentalMineBucket(b.status) === tab.key).length;
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key)}
+              className={`rounded-full px-4 py-1.5 text-xs font-bold transition ${
+                activeTab === tab.key
+                  ? "bg-action text-white"
+                  : "bg-surface border border-line text-text-secondary hover:text-text"
+              }`}
+            >
+              {tab.label}
+              {tab.key === "ALL" ? ` (${count})` : count > 0 ? ` (${count})` : ""}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Content State */}
       {isLoading ? (
         <div className="flex flex-col gap-4">
           {Array.from({ length: 2 }).map((_, idx) => (
@@ -127,7 +109,9 @@ export default function MyRentalsPage() {
           description={
             activeTab === "ALL"
               ? "You haven't rented any tools or equipment yet. Explore our verified rental catalog."
-              : `No ${activeTab.toLowerCase()} rental bookings right now.`
+              : activeTab === "INACTIVE"
+                ? "No cancelled or disputed rental bookings right now."
+                : `No ${activeTab.toLowerCase()} rental bookings right now.`
           }
           action={
             <Link href="/rentals">

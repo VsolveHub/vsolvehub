@@ -13,21 +13,6 @@ export function LoginReferralInput() {
   const [validationSuccess, setValidationSuccess] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    // Check URL params for ?ref=...
-    const urlParams = new URLSearchParams(window.location.search);
-    const refParam = urlParams.get("ref");
-    const pendingCode = refParam || sessionStorage.getItem("vsolve_pending_referral");
-
-    if (pendingCode) {
-      setCode(pendingCode);
-      setIsOpen(true);
-      void validateCode(pendingCode);
-    }
-  }, []);
-
   const validateCode = async (codeToTest: string) => {
     const clean = codeToTest.trim().toUpperCase();
     if (!clean) return;
@@ -55,6 +40,21 @@ export function LoginReferralInput() {
     }
   };
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    // Check URL params for ?ref=...
+    const urlParams = new URLSearchParams(window.location.search);
+    const refParam = urlParams.get("ref");
+    const pendingCode = refParam || sessionStorage.getItem("vsolve_pending_referral");
+
+    if (pendingCode) {
+      setCode(pendingCode);
+      setIsOpen(true);
+      void validateCode(pendingCode);
+    }
+  }, []);
+
   const handleApplyClick = (e: React.MouseEvent) => {
     e.preventDefault();
     void validateCode(code);
@@ -68,7 +68,7 @@ export function LoginReferralInput() {
         className="flex items-center gap-1.5 text-xs font-semibold text-[#EA580C] hover:text-[#d65f1a] transition-colors"
       >
         <Gift className="size-3.5" />
-        <span>Have an invite / referral code?</span>
+        <span>Have an invite code? Apply it only at signup</span>
       </button>
     );
   }
@@ -116,6 +116,9 @@ export function LoginReferralInput() {
       {validationError && (
         <p className="mt-1 text-[11px] font-medium text-rose-600">{validationError}</p>
       )}
+      <p className="mt-2 text-[11px] leading-relaxed text-text-secondary">
+        Referral codes apply only at first signup. An existing account cannot add one later.
+      </p>
     </div>
   );
 }

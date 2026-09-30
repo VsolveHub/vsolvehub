@@ -1,9 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ModerationQueue } from "./moderation-queue";
+import { MarketplaceQueue } from "./marketplace-queue";
 import OpsRentalsPage from "@/app/(operations)/operations/rentals/page";
 import OpsStaysPage from "@/app/(operations)/operations/stays/page";
 
@@ -25,9 +25,9 @@ function wrapper({ children }: { children: ReactNode }) {
 }
 
 describe("operations moderation queue", () => {
-  it("keeps approve and reject off until a reason is typed", async () => {
+  it("asks for a reason only after an action is chosen", async () => {
     render(
-      <ModerationQueue
+      <MarketplaceQueue
         heading="Rental assets"
         queryKey="ops-rentals-test"
         load={async () => [
@@ -44,8 +44,13 @@ describe("operations moderation queue", () => {
       { wrapper },
     );
 
-    expect(await screen.findByRole("button", { name: "Approve" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Reject" })).toBeDisabled();
+    expect(await screen.findByRole("button", { name: "Approve" })).toBeEnabled();
+    expect(screen.queryByLabelText(/reason/i)).not.toBeInTheDocument();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
+    expect(await screen.findByRole("heading", { name: "Approve this listing" })).toBeInTheDocument();
+    expect(screen.getByLabelText(/reason/i)).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Approve" }).at(-1)).toBeDisabled();
   });
 
   it("does not mount a second operations shell on rentals or stays", async () => {

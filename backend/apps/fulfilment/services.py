@@ -510,3 +510,65 @@ def declare_booking_late(*, booking_id: UUID) -> Booking | None:
         reason="partner_overdue",
     )
     return booking
+
+
+def cancel_booking_group_on_refund(*, payment_attempt: Any, refund: Any) -> None:
+    """Cancel FulfilmentUnit bookings after a full BOOKING_GROUP refund — no new Refund rows."""
+    from apps.carts.models import FulfilmentUnit
+    from apps.commerce.models import Booking, FinancialException
+    from apps.commerce.services.base import _open_exception
+    from apps.fulfilment.cancellation.cancel import _release_booking_reservation
+
+    unit_ids = set(payment_attempt.allocations.values_list("fulfilment_unit_id", flat=True))
+    if not unit_ids:
+        group_id = payment_attempt.booking_group_id
+        if group_id is None and getattr(refund, "order_id", None):
+            group_id = refund.order.booking_group_id
+        if group_id is not None:
+            unit_ids = set(
+                FulfilmentUnit.objects.filter(booking_group_id=group_id).values_list(
+                    "id", flat=True
+                )
+            )
+
+    for unit_id in unit_ids:
+        booking = (
+            Booking.objects.filter(fulfilment_unit_id=unit_id).order_by("-version").first()
+        )
+        if booking is None:
+            continue
+
+        group, unit, booking = locked_booking_context(booking.id)
+
+        if booking.status == Booking.Status.CANCELLED:
+            _release_booking_reservation(booking)
+            continue
+
+        if Booking.Status.CANCELLED not in ALLOWED_TRANSITIONS.get(booking.status, frozenset()):
+            # Completed / in-progress / disputed: do not force an illegal transition.
+            # Ledger REVERSAL (T6) still runs from the commerce hook when earnings exist.
+            if booking.status not in TERMINAL_BOOKING_STATUSES:
+                _open_exception(
+                    kind=FinancialException.Kind.REFUND_FAILED,
+                    code="booking_not_cancellable_after_refund",
+                    attempt=payment_attempt,
+                    refund=refund,
+                    context={"booking_id": str(booking.id), "status": booking.status},
+                )
+            continue
+
+        apply_transition(
+            group=group,
+            unit=unit,
+            booking=booking,
+            to_status=Booking.Status.CANCELLED,
+            command=BookingCommand.CANCEL,
+            actor=None,
+            reason=f"Payment {payment_attempt.id} was fully refunded.",
+            idempotency_key=f"refund-cancel:{refund.id}:{booking.id}",
+            extra_booking_fields={
+                "cancelled_at": timezone.now(),
+                "cancellation_reason": "full_refund",
+            },
+        )
+        _release_booking_reservation(booking)

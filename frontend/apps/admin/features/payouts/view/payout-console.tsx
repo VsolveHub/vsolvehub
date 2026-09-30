@@ -5,6 +5,7 @@ import { Badge, Button, Card, ErrorState, Spinner, formatMoney } from "@vsolve/u
 import { useState } from "react";
 
 import { getApiClient } from "@/lib/api/browser";
+import { PUBLIC_API_BASE_URL } from "@/lib/api/config";
 
 import {
   isSelfApproval,
@@ -168,6 +169,33 @@ function BatchDetail({ batchId }: { batchId: string }) {
           >
             Cancel run
           </Button>
+        ) : null}
+        
+        {batch.status === "APPROVED" ? (
+          <>
+            <Button
+              variant="outline"
+              onClick={() =>
+                window.open(
+                  `${PUBLIC_API_BASE_URL}/api/v1/operations/payout-batches/${batch.id}/bank-export.csv`,
+                  "_blank",
+                )
+              }
+            >
+              Export Bank CSV
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() =>
+                window.open(
+                  `${PUBLIC_API_BASE_URL}/api/v1/operations/payout-batches/${batch.id}/bank-export.xlsx`,
+                  "_blank",
+                )
+              }
+            >
+              Export Bank Excel
+            </Button>
+          </>
         ) : null}
       </div>
 

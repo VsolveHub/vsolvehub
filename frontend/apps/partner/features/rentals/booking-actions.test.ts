@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   bookingActionLabel,
+  canCancelBooking,
+  canDisputeDeposit,
   canSubmitAsset,
   partnerBookingAction,
 } from "./booking-actions";
@@ -30,11 +32,38 @@ describe("partnerBookingAction", () => {
   });
 });
 
+describe("canCancelBooking", () => {
+  it("allows cancel before handover", () => {
+    expect(canCancelBooking("PENDING_PAYMENT")).toBe(true);
+    expect(canCancelBooking("CONFIRMED")).toBe(true);
+  });
+
+  it("hides cancel after handover", () => {
+    expect(canCancelBooking("HANDOVER")).toBe(false);
+    expect(canCancelBooking("RETURNED")).toBe(false);
+    expect(canCancelBooking("CANCELLED")).toBe(false);
+  });
+});
+
+describe("canDisputeDeposit", () => {
+  it("offers dispute when RETURNED and deposit held", () => {
+    expect(canDisputeDeposit("RETURNED", "HELD")).toBe(true);
+    expect(canDisputeDeposit("RETURNED", "AUTHORIZED")).toBe(true);
+  });
+
+  it("hides dispute otherwise", () => {
+    expect(canDisputeDeposit("RETURNED", "RELEASED")).toBe(false);
+    expect(canDisputeDeposit("HANDOVER", "HELD")).toBe(false);
+  });
+});
+
 describe("bookingActionLabel", () => {
   it("labels each action for the button", () => {
     expect(bookingActionLabel("handover")).toBe("Handover");
     expect(bookingActionLabel("return")).toBe("Return");
     expect(bookingActionLabel("release-deposit")).toBe("Release deposit");
+    expect(bookingActionLabel("dispute-deposit")).toBe("Raise deposit dispute");
+    expect(bookingActionLabel("cancel")).toBe("Cancel booking");
   });
 });
 

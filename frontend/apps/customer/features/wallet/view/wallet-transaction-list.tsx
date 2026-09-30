@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, formatMoney } from "@vsolve/ui";
+import { Badge, formatMoney , formatDate} from "@vsolve/ui";
 import { ArrowDownLeft, ArrowUpRight, Clock, Gift, RefreshCcw, Wallet } from "lucide-react";
 import type { WalletTransaction } from "../queries";
 
@@ -81,13 +81,7 @@ export function WalletTransactionList({ transactions }: WalletTransactionListPro
         {transactions.map((txn) => {
           const meta = getTxnKindMetadata(txn.kind);
           const Icon = meta.icon;
-          const formattedDate = new Date(txn.created_at).toLocaleDateString("en-IN", {
-            day: "numeric",
-            month: "short",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-          });
+          const formattedDate = formatDate(txn.created_at);
 
           return (
             <div key={txn.id} className="flex items-center justify-between px-6 py-4 hover:bg-[#FAF9F7]/60 transition-colors">

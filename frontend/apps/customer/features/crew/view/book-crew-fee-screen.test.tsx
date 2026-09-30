@@ -14,8 +14,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  */
 
 const client = { GET: vi.fn(), POST: vi.fn(), PATCH: vi.fn(), PUT: vi.fn(), DELETE: vi.fn() };
+const push = vi.fn();
+const replace = vi.fn();
 
 vi.mock("@/lib/api/browser", () => ({ getApiClient: () => client }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push, replace }) }));
+vi.mock("@/features/payment/standalone-handoff", () => ({
+  completeOrOpenCheckout: vi.fn().mockResolvedValue(undefined),
+}));
 
 const { BookCrewFeeScreen } = await import("./book-crew-fee-screen");
 

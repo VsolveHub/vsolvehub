@@ -6,13 +6,11 @@ import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
   CheckCircle2,
-  Clock,
   MapPin,
-  ShieldAlert,
   ShieldCheck,
   Wrench,
 } from "lucide-react";
-import { Badge, EmptyState, ErrorState, Skeleton } from "@vsolve/ui";
+import { Badge, ErrorState, Skeleton } from "@vsolve/ui";
 
 import { formatPaise } from "@/features/rentals/model";
 import { fetchRentalAsset } from "@/features/rentals/queries";
@@ -112,7 +110,7 @@ export default function RentalDetailPage() {
               </p>
             </div>
 
-            <div className="mt-6 grid grid-cols-2 gap-4 rounded-control bg-surface-sunken p-4 border border-line/60">
+            <div className="mt-6 grid grid-cols-2 gap-4 rounded-control bg-surface-sunken p-4 border border-line/60 sm:grid-cols-3">
               <div>
                 <span className="text-xs text-text-secondary font-medium">Daily Rental Rate</span>
                 <div className="text-xl font-extrabold text-text">
@@ -126,6 +124,15 @@ export default function RentalDetailPage() {
                   {formatPaise(asset.deposit_paise)}
                 </div>
                 <span className="text-[10px] font-semibold text-emerald-700">100% Refundable</span>
+              </div>
+              <div>
+                <span className="text-xs text-text-secondary font-medium">Quantity available</span>
+                <div className="text-xl font-extrabold text-text">
+                  {asset.quantity_available ?? 1}
+                </div>
+                <span className="text-[10px] font-semibold text-text-secondary">
+                  Identical units for rent
+                </span>
               </div>
             </div>
           </div>

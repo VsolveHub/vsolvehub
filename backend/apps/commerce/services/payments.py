@@ -209,6 +209,10 @@ def initiate_standalone_payment_attempt(
         raise ValueError("This purpose requires a Checkout.")
     if amount_paise <= 0:
         raise ValueError("A payment attempt needs a positive amount.")
+    # Anchor the payment window to the persisted created_at so a caller-supplied
+    # expires_at that is already in the past (or lands before created_at due to
+    # clock/test skew) cannot race expire_abandoned_payment_attempts ahead of
+    # provider order creation.
     attempt = PaymentAttempt.objects.create(
         checkout=None,
         purpose=purpose,
@@ -216,8 +220,12 @@ def initiate_standalone_payment_attempt(
         provider=settings.PAYMENT_PROVIDER,
         amount_paise=amount_paise,
         currency=currency,
-        expires_at=expires_at,
+        expires_at=None,
     )
+    if expires_at is not None:
+        min_expiry = attempt.created_at + timedelta(seconds=settings.M1_PAYMENT_WINDOW_SECONDS)
+        attempt.expires_at = max(expires_at, min_expiry)
+        attempt.save(update_fields=("expires_at",))
     enqueue_outbox_event(
         aggregate_type="payment_attempt",
         aggregate_id=attempt.id,

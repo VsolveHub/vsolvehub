@@ -27,6 +27,7 @@ class RentalAssetSerializer(serializers.ModelSerializer):
             "location_text",
             "daily_rate_paise",
             "deposit_paise",
+            "quantity_available",
             "condition_grade",
             "current_status",
             "moderation_status",
@@ -50,9 +51,12 @@ class CreateAssetSerializer(serializers.Serializer):
     variant_id = serializers.UUIDField()
     title = serializers.CharField(max_length=180)
     description = serializers.CharField(required=False, allow_blank=True, default="")
-    location_text = serializers.CharField(max_length=180)
+    location_text = serializers.CharField(
+        max_length=180, required=False, allow_blank=True, default=""
+    )
     daily_rate_paise = serializers.IntegerField(min_value=1)
     deposit_paise = serializers.IntegerField(min_value=0)
+    quantity_available = serializers.IntegerField(min_value=1, required=False, default=1)
     asset_identifier = serializers.CharField(required=False, allow_blank=True, default="")
     structured_fields = serializers.JSONField(required=False, default=dict)
     media = serializers.ListField(child=serializers.DictField(), required=False, default=list)
@@ -97,12 +101,21 @@ class CreateBookingSerializer(serializers.Serializer):
     asset_id = serializers.UUIDField()
     start_date = serializers.DateField()
     end_date = serializers.DateField()
+    quantity = serializers.IntegerField(min_value=1, required=False, default=1)
     # Accepted for API compat; always coerced to PICKUP (OLX pickup-only model).
     pickup_or_delivery_mode = serializers.CharField(required=False, default="PICKUP")
     notes = serializers.CharField(required=False, allow_blank=True, default="")
 
     def validate_pickup_or_delivery_mode(self, value: str) -> str:
         return "PICKUP"
+
+
+class PartnerBookingActionSerializer(serializers.Serializer):
+    pin = serializers.CharField(required=False, allow_blank=True, default="")
+    reason = serializers.CharField(required=False, allow_blank=True, default="")
+    # Optional partial deposit consume for dispute-deposit. Default 0 = dispute
+    # without consuming; only amounts > 0 consume held deposit (never silent full).
+    consume_paise = serializers.IntegerField(min_value=0, required=False, default=0)
 
 
 class RentalDepositSerializer(serializers.ModelSerializer):
@@ -132,6 +145,8 @@ class RentalDepositSerializer(serializers.ModelSerializer):
 class RentalBookingSerializer(serializers.ModelSerializer):
     asset = RentalAssetSerializer(read_only=True)
     deposit = RentalDepositSerializer(read_only=True)
+    handover_pin = serializers.SerializerMethodField()
+    quantity = serializers.SerializerMethodField()
 
     class Meta:
         model = RentalBooking
@@ -140,13 +155,36 @@ class RentalBookingSerializer(serializers.ModelSerializer):
             "status",
             "start_date",
             "end_date",
+            "quantity",
             "price_paise",
             "pickup_or_delivery_mode",
             "notes",
             "asset",
             "deposit",
+            "handover_pin",
             "created_at",
         )
+
+    def get_quantity(self, booking: RentalBooking) -> int:
+        line = booking.lines.order_by("id").first()
+        if line is None:
+            return 1
+        return int(line.quantity or 1)
+
+    def get_handover_pin(self, booking: RentalBooking) -> str | None:
+        """Plaintext PIN for the customer only, once the booking is paid/active."""
+        request = self.context.get("request")
+        if request is None or not getattr(request, "user", None):
+            return None
+        user = request.user
+        if not user.is_authenticated or user.id != booking.customer_id:
+            return None
+        if booking.status not in (
+            RentalBooking.Status.CONFIRMED,
+            RentalBooking.Status.HANDOVER,
+        ):
+            return None
+        return booking.handover_pin_hash or None
 
 
 class RentalModerationSerializer(serializers.Serializer):

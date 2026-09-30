@@ -1,7 +1,7 @@
 "use client";
 
 import { describeError } from "@vsolve/query";
-import { Badge, Button, ErrorState, Logo, Skeleton } from "@vsolve/ui";
+import { Badge, Button, ErrorState, Logo, Skeleton , formatDate} from "@vsolve/ui";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -46,11 +46,7 @@ function TaxDocumentCard({ document }: { document: TaxDocument }) {
         <p className="mt-1 text-text-secondary">
           Issued{" "}
           <time dateTime={document.issued_at}>
-            {new Date(document.issued_at).toLocaleDateString("en-IN", {
-              day: "numeric",
-              month: "short",
-              year: "numeric",
-            })}
+            {formatDate(document.issued_at)}
           </time>
         </p>
       ) : null}

@@ -11,7 +11,7 @@ from typing import cast
 
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -153,8 +153,20 @@ class PartnerMeView(APIView):
         profile = PartnerProfile.objects.filter(user=cast(User, request.user)).first()
         if profile is None:
             raise NotFound("No Partner profile exists for this account.")
-        profile.display_name = cast(str, serializer.validated_data["display_name"])
-        profile.save(update_fields=("display_name", "updated_at"))
+        updates = ["updated_at"]
+        if "display_name" in serializer.validated_data:
+            profile.display_name = cast(str, serializer.validated_data["display_name"])
+            updates.append("display_name")
+        if "default_location_text" in serializer.validated_data:
+            profile.default_location_text = cast(
+                str, serializer.validated_data["default_location_text"]
+            )
+            updates.append("default_location_text")
+        if len(updates) == 1:
+            raise ValidationError(
+                {"non_field_errors": ["Provide display_name and/or default_location_text."]}
+            )
+        profile.save(update_fields=updates)
         profile = (
             PartnerProfile.objects.select_related("user", "application")
             .prefetch_related(

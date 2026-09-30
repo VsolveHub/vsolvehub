@@ -91,11 +91,19 @@ const REINSTATE: ReviewAction = {
  * reviewer's to act on, and reaching into one would be exactly the database-edit
  * habit the plan forbids.
  */
+/**
+ * Mirrors `transition_partner_application` allowed edges in
+ * `backend/apps/partners/services/review.py`. Offering a button the server
+ * rejects is how reviewers burn a click and trust.
+ *
+ * `CHANGES_REQUIRED` has no Operations transitions: the Partner resubmits, which
+ * returns the application to `SUBMITTED` / `UNDER_REVIEW` via the Partner path.
+ */
 const ACTIONS: Record<Status, readonly ReviewAction[]> = {
   DRAFT: [],
-  SUBMITTED: [START_REVIEW, REQUEST_CHANGES, APPROVE],
-  UNDER_REVIEW: [REQUEST_CHANGES, APPROVE, SUSPEND],
-  CHANGES_REQUIRED: [APPROVE, SUSPEND],
+  SUBMITTED: [START_REVIEW],
+  UNDER_REVIEW: [REQUEST_CHANGES, APPROVE],
+  CHANGES_REQUIRED: [],
   APPROVED: [SUSPEND, OFFBOARD],
   SUSPENDED: [REINSTATE, OFFBOARD],
   OFFBOARDED: [],

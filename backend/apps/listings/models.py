@@ -277,6 +277,13 @@ class ApplicationReport(models.Model):
 
 class VendorSubscriptionPlan(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    service = models.ForeignKey(
+        "catalog.Service",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="vendor_subscription_plans",
+    )
     code = models.SlugField(max_length=80, unique=True)
     name = models.CharField(max_length=120)
     price_paise = models.PositiveBigIntegerField()
@@ -284,6 +291,7 @@ class VendorSubscriptionPlan(models.Model):
     max_active_listings = models.PositiveSmallIntegerField(default=3)
     premium_capabilities = models.JSONField(default=list, blank=True)
     premium_price_paise = models.PositiveBigIntegerField(default=49900)
+    details = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
 
     def __str__(self) -> str:

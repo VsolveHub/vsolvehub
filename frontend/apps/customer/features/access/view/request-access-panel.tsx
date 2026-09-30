@@ -11,15 +11,17 @@ import {
   visitPlanPhase,
 } from "@vsolve/query";
 import { buttonStyles, formatMoney } from "@vsolve/ui";
-import type { ReactNode } from "react";
 import Link from "next/link";
+import { useState, type ReactNode } from "react";
 
 import { useProfileCompletionGate } from "@/features/account/view/profile-completion-dialog";
 import { useRateCardState } from "@/features/crew/queries";
 import { CrewDispatchPanel } from "@/features/crew/view/crew-dispatch-panel";
+import { completeOrOpenCheckout } from "@/features/payment/standalone-handoff";
 import { firstStageOf, toQuoteListView } from "@/features/quotes/adapters";
 import { useCustomerQuotes } from "@/features/quotes/queries";
 import type { RequirementArchetype } from "@/features/requirement/adapters";
+import { visitHref } from "@/lib/routes";
 import {
   toTeaserListView,
   toVisitTrackerView,
@@ -32,7 +34,6 @@ import {
   useUnlockState,
   useVisitPlan,
 } from "../queries";
-import { visitHref } from "@/lib/routes";
 
 import { UnlockPanel } from "./unlock-panel";
 import { VisitPlanCheckout } from "./visit-plan-checkout";
@@ -240,10 +241,31 @@ function A3QuoteAccess({
   const teasersQuery = useQuoteTeasers(requirementId);
   const unlockQuery = useUnlockState(requirementId);
   const checkout = useStartUnlockCheckout();
+  const [isHandingOff, setIsHandingOff] = useState(false);
+  const [handoffError, setHandoffError] = useState<unknown>(null);
 
   const unlock = unlockQuery.data ?? null;
   const teasers = teasersQuery.data === undefined ? null : toTeaserListView(teasersQuery.data);
   const phase = unlock === null ? null : unlockPhase(unlock);
+
+  async function startUnlockPayment() {
+    setHandoffError(null);
+    try {
+      const started = await checkout.mutateAsync({
+        requirementId,
+        isRetryAfterFailure: phase === "failed",
+      });
+      setIsHandingOff(true);
+      await completeOrOpenCheckout(String(started.payment_attempt_id), {
+        businessName: "Vsolve Hub",
+      });
+      void unlockQuery.refetch();
+    } catch (error) {
+      setHandoffError(error);
+    } finally {
+      setIsHandingOff(false);
+    }
+  }
 
   return (
     <>
@@ -262,13 +284,9 @@ function A3QuoteAccess({
           void unlockQuery.refetch();
           void teasersQuery.refetch();
         }}
-        onStartCheckout={() =>
-          profileGate.run(() =>
-            checkout.mutate({ requirementId, isRetryAfterFailure: phase === "failed" }),
-          )
-        }
-        isStartingCheckout={checkout.isPending}
-        checkoutError={checkout.error}
+        onStartCheckout={() => profileGate.run(() => void startUnlockPayment())}
+        isStartingCheckout={checkout.isPending || isHandingOff}
+        checkoutError={checkout.error ?? handoffError}
         quotesHref={quotesHref}
         supportAction={supportAction}
       />

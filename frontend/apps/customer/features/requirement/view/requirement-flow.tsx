@@ -561,11 +561,6 @@ function FlowBody({
   /** What is stopping the send, in the order the page reads. */
   const briefBlocked =
     sectionBlocks.what ?? sectionBlocks.where_when ?? sectionBlocks.visits_send ?? null;
-  const coreBriefBlocked =
-    stateSectionBlocks.what ??
-    stateSectionBlocks.where_when ??
-    stateSectionBlocks.visits_send ??
-    null;
   const canSendBrief = briefBlocked === null;
   const canSubmit = canSendBrief;
 

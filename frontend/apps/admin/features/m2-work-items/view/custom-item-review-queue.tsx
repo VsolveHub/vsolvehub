@@ -1,7 +1,7 @@
 "use client";
 
 import { describeError } from "@vsolve/query";
-import { Badge, Button, Card, EmptyState, ErrorState, Field, Select, Spinner } from "@vsolve/ui";
+import { Badge, Button, Card, EmptyState, ErrorState, Field, Select, Spinner , formatDate, formatMoney } from "@vsolve/ui";
 import { useState } from "react";
 
 import {
@@ -28,9 +28,7 @@ import {
  * band for everyone. Operations publishes a rate for it separately, from
  * the catalog screen, once ready.
  */
-function formatRupees(paise: number): string {
-  return `₹${(paise / 100).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
-}
+
 
 export function CustomItemReviewQueue() {
   const reviews = useCustomItemReviews();
@@ -88,14 +86,14 @@ function ReviewCard({
         <div>
           <p className="text-base font-semibold text-text">{review.title}</p>
           <p className="text-sm text-text-secondary">
-            {formatRupees(review.rate_paise)} · per {review.unit.replaceAll("_", " ")}
+            {formatMoney(review.rate_paise)} · per {review.unit.replaceAll("_", " ")}
           </p>
         </div>
         <Badge tone="warning">Pending</Badge>
       </div>
 
       <p className="mt-2 text-xs text-text-muted">
-        Submitted {new Date(review.created_at).toLocaleDateString("en-IN")}
+        Submitted {formatDate(review.created_at)}
         {review.proposal ? ` · on quote ${review.proposal.slice(0, 8)}` : ""}
       </p>
 

@@ -126,25 +126,39 @@ describe("the workspaces", () => {
     const hrefs = Array.from(nav.querySelectorAll("a")).map((link) => link.getAttribute("href"));
 
     expect(hrefs).toEqual([
+      // Work
       "/",
-      "/operations/partners",
-      "/operations/crew-documents",
-      "/operations/feedback",
-      "/reviews",
       "/operations/requests",
-      "/operations/rate-cards",
       "/operations/cases",
       "/operations/listings",
+      "/operations/work-items",
       "/operations/rentals",
       "/operations/stays",
-      "/operations/payouts",
-      "/operations/loyalty",
-      "/finance",
       "/operations/dispatch",
       "/operations/manual-offers",
       "/operations/assisted-checkouts",
-      "/operations/compatibility-rules",
+      // People
+      "/operations/partners",
+      "/operations/partners/import",
+      "/operations/crew-documents",
+      "/operations/feedback",
+      "/reviews",
       "/operations/partner-availability",
+      // Money
+      "/operations/rate-cards",
+      "/operations/vendor-plans",
+      "/operations/payouts",
+      "/operations/loyalty",
+      "/operations/reports",
+      "/finance",
+      // Dashboards
+      "/operations/dashboards/overview",
+      "/operations/dashboards/categories",
+      "/operations/dashboards/customer",
+      "/operations/dashboards/vendor",
+      "/operations/dashboards/booking",
+      // System
+      "/operations/compatibility-rules",
       "/operations/kill-switches",
       "/operations/profile",
     ]);

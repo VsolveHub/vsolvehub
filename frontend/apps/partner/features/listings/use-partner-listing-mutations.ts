@@ -1,6 +1,9 @@
+import { ApiRequestError } from "@vsolve/api-client";
+import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@vsolve/ui";
 
+import { completeOrOpenCheckout } from "../payment/standalone-handoff";
 import {
   serverErrorMessage,
   serverFieldErrors,
@@ -10,13 +13,14 @@ import {
   type EditListingFormState,
 } from "./model";
 import {
-  completePaymentAttempt,
   createPartnerListing,
   purchaseSubscription,
   runListingAction,
   updatePartnerListing,
   type PartnerListing,
 } from "./queries";
+
+const BUSINESS_NAME = "Vsolve Hub";
 
 export interface MutationHandlersProps {
   editingListing: PartnerListing | null;
@@ -26,6 +30,8 @@ export interface MutationHandlersProps {
   onCreateSuccess: () => void;
   onActionSuccess: (next: "submit" | "publish" | "republish" | "close") => void;
   onSubscribeSuccess: () => void;
+  /** Opens billing when publish hits the free-tier / plan cap (T20). */
+  onPlanCap?: () => void;
   setCreateErrors: (errors: Record<string, string>) => void;
   setEditErrors: (errors: Record<string, string>) => void;
   setActionError: (err: string | null) => void;
@@ -39,12 +45,15 @@ export function usePartnerListingMutations({
   onCreateSuccess,
   onActionSuccess,
   onSubscribeSuccess,
+  onPlanCap,
   setCreateErrors,
   setEditErrors,
   setActionError,
 }: MutationHandlersProps) {
   const queryClient = useQueryClient();
   const { notify } = useToast();
+  /** Tracks whether the Razorpay widget is open (blocks double-launch). */
+  const [isHandingOff, setIsHandingOff] = useState(false);
 
   const invalidateLists = () => {
     queryClient.invalidateQueries({ queryKey: ["partner-listings"] });
@@ -54,8 +63,8 @@ export function usePartnerListingMutations({
   const update = useMutation({
     mutationFn: () => {
       if (!editingListing) throw new Error("No listing selected for editing");
-      
-      const payload: any = {
+
+      const payload: Record<string, unknown> = {
         title: editForm.title,
         description: editForm.description,
         location_text: editForm.location_text,
@@ -76,7 +85,7 @@ export function usePartnerListingMutations({
         payload.salary_period = editForm.salary_period;
       }
 
-      return updatePartnerListing(editingListing.id, payload);
+      return updatePartnerListing(editingListing.id, payload as Parameters<typeof updatePartnerListing>[1]);
     },
     onSuccess: () => {
       onUpdateSuccess();
@@ -88,7 +97,7 @@ export function usePartnerListingMutations({
 
   const create = useMutation({
     mutationFn: () => {
-      const payload: any = {
+      const payload: Record<string, unknown> = {
         variant: form.variant || undefined,
         service_id: form.service_id || undefined,
         title: form.title,
@@ -111,7 +120,7 @@ export function usePartnerListingMutations({
         payload.salary_period = form.salary_period;
       }
 
-      return createPartnerListing(payload);
+      return createPartnerListing(payload as Parameters<typeof createPartnerListing>[0]);
     },
     onSuccess: () => {
       onCreateSuccess();
@@ -136,27 +145,68 @@ export function usePartnerListingMutations({
       notify(SUCCESS_MESSAGES[next]);
       invalidateLists();
     },
-    onError: (error, { next }) =>
+    onError: (error, { next }) => {
+      if (
+        error instanceof ApiRequestError &&
+        error.code === "listing_plan_cap" &&
+        (next === "publish" || next === "republish")
+      ) {
+        onPlanCap?.();
+        setActionError(
+          serverErrorMessage(
+            error,
+            "Active listing limit reached for the current plan. Upgrade to publish more.",
+          ),
+        );
+        return;
+      }
       setActionError(
         serverErrorMessage(error, `Could not ${next} this opening. Please try again.`),
-      ),
+      );
+    },
   });
 
   const subscribe = useMutation({
     mutationFn: async (planId: string) => {
       const sub = await purchaseSubscription(planId);
-      if (sub.payment_attempt_id) {
-        try {
-          await completePaymentAttempt(sub.payment_attempt_id);
-        } catch (err) {
-          console.warn("Auto-capture subscription warning:", err);
-        }
+
+      if (!sub.payment_attempt_id) {
+        // No payment needed (free tier or already active)
+        notify(SUCCESS_MESSAGES.subscribe);
+        return sub;
       }
-      return sub;
+
+      setIsHandingOff(true);
+      try {
+        const result = await completeOrOpenCheckout(String(sub.payment_attempt_id), {
+          businessName: BUSINESS_NAME,
+          onAwaitingCapture: () =>
+            notify("Complete payment in Razorpay. Subscription activates when capture is confirmed."),
+        });
+
+        if (result.mode === "simulated") {
+          notify(SUCCESS_MESSAGES.subscribe);
+          return sub;
+        }
+        if (result.mode === "pending") {
+          notify(
+            "Subscription started. Payment is still preparing — refresh shortly, or open payment again from plans.",
+          );
+          return sub;
+        }
+        notify("Payment submitted. Waiting for Razorpay capture to activate the plan.");
+        // Brief poll so a fast webhook can light up ACTIVE before we leave.
+        for (let i = 0; i < 6; i += 1) {
+          await new Promise((r) => setTimeout(r, 800));
+          invalidateLists();
+        }
+        return sub;
+      } finally {
+        setIsHandingOff(false);
+      }
     },
     onSuccess: () => {
       onSubscribeSuccess();
-      notify(SUCCESS_MESSAGES.subscribe);
       invalidateLists();
     },
     onError: (error) =>
@@ -165,5 +215,5 @@ export function usePartnerListingMutations({
       ),
   });
 
-  return { create, update, action, subscribe };
+  return { create, update, action, subscribe, isHandingOff };
 }

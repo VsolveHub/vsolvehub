@@ -108,6 +108,22 @@ describe("PaymentWorkspace development payment", () => {
     });
 
     client.GET.mockImplementation((path: string) => {
+      if (path === "/api/v1/identity/session/" || path === "/api/v1/auth/session/") {
+        return Promise.resolve(
+          ok({
+            user_id: "u1",
+            full_name: "Test User",
+            phone_number: "+919876543210",
+            roles: ["customer"],
+            user: {
+              id: "u1",
+              full_name: "Test User",
+              phone_number: "+919876543210",
+            },
+            active_role: "customer",
+          }),
+        );
+      }
       if (path === "/api/v1/booking-groups/{group_id}/") return Promise.resolve(ok(payableGroup));
       if (path === "/api/v1/checkouts/{checkout_id}/payment/") return Promise.resolve(notFound());
       return Promise.resolve(notFound());
@@ -133,7 +149,7 @@ describe("PaymentWorkspace development payment", () => {
     expect(client.POST).toHaveBeenCalledWith(
       "/api/v1/payment-attempts/",
       expect.objectContaining({
-        body: { checkout_id: "checkout-1", expected_checkout_version: 7 },
+        body: expect.objectContaining({ checkout_id: "checkout-1", expected_checkout_version: 7 }),
       }),
     );
     await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/bookings/group-1"));

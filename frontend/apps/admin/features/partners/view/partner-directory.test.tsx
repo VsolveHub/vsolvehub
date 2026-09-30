@@ -42,7 +42,7 @@ afterEach(() => {
 });
 
 describe("PartnerDirectory filters", () => {
-  it("does not show the skill chip wall before continuing to the list", async () => {
+  it("renders skill filter chips", async () => {
     render(
       <PartnerDirectory
         filters={{}}
@@ -53,23 +53,27 @@ describe("PartnerDirectory filters", () => {
       { wrapper },
     );
 
-    expect(screen.queryByRole("button", { name: /^Electrician$/i })).not.toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: /^Skills$/i })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /^Electrician$/i })).toBeInTheDocument();
   });
 
-  it("reads skills as a union in the toolbar hint", async () => {
+  it("indicates active skills and allows clearing", async () => {
+    const onFiltersChange = vi.fn();
     render(
       <PartnerDirectory
         filters={{ skills: ["electrician"] }}
-        onFiltersChange={() => undefined}
+        onFiltersChange={onFiltersChange}
         selectedId={null}
         onSelect={() => undefined}
       />,
       { wrapper },
     );
 
-    expect(await screen.findByText(/Skill:/i)).toBeInTheDocument();
-    expect(screen.getByText(/Electrician/i)).toBeInTheDocument();
+    const chip = await screen.findByRole("button", { name: /^Electrician$/i });
+    expect(chip).toHaveAttribute("aria-pressed", "true");
+    const clearBtn = screen.getByRole("button", { name: /clear 1 skill filter/i });
+    expect(clearBtn).toBeInTheDocument();
+    fireEvent.click(clearBtn);
+    expect(onFiltersChange).toHaveBeenCalledWith(expect.objectContaining({ skills: [] }));
   });
 });
 

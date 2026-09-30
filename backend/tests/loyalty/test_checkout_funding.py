@@ -301,3 +301,43 @@ def test_payment_attempt_api_accepts_loyalty_modifiers(monkeypatch: pytest.Monke
     assert body["coins_burned"] == 0
     assert body["razorpay_amount_paise"] == checkout.quote.total_paise - 500
     assert isinstance(client, APIClient)
+
+
+def test_parallel_attempts_cannot_reserve_the_same_coins(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("apps.foundation.services._queue_outbox_event", lambda _event_id: None)
+    _client, customer, checkout, _group = _payment_ready_group()
+    from apps.loyalty.models import CoinLedger
+    from apps.loyalty.services.coins import get_customer_coin_balances, issue_coins
+
+    issue_coins(
+        customer=customer,
+        amount=50,
+        idempotency_key="parallel-issue",
+        source=CoinLedger.Source.MANUAL,
+    )
+
+    def start(key: str) -> str:
+        close_old_connections()
+        try:
+            initiate_payment_attempt(
+                checkout_id=checkout.id,
+                customer_id=customer.id,
+                expected_checkout_version=checkout.version,
+                idempotency_key=key,
+                wallet_amount_paise=0,
+                coin_burn_amount=50,
+            )
+            return "ok"
+        except ValueError:
+            return "refused"
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(start, ("parallel-coin-a", "parallel-coin-b")))
+    assert results.count("ok") == 1
+    assert results.count("refused") == 1
+    balances = get_customer_coin_balances(customer)
+    assert balances["spendable_coins"] == 0

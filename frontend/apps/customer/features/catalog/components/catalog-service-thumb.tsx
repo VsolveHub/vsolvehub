@@ -1,6 +1,6 @@
 "use client";
 
-import { cn } from "@vsolve/ui";
+import { cn , formatDate} from "@vsolve/ui";
 import { createElement, type ReactNode } from "react";
 
 import { useCatalogServiceIndex } from "../client-queries";
@@ -142,9 +142,5 @@ export function formatBookingWhen(iso: string): string {
 /** Date-only fields such as `service_by`. */
 export function formatBookingDay(isoDate: string): string {
   const value = isoDate.includes("T") ? isoDate : `${isoDate}T12:00:00`;
-  return new Date(value).toLocaleDateString("en-IN", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-  });
+  return formatDate(value);
 }

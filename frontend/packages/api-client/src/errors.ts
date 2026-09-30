@@ -165,6 +165,8 @@ const RECOVERY_BY_CODE: Record<string, RecoveryIntent> = {
   // Attachments
   m2_attachment_invalid: "fix_input",
   m2_attachment_unavailable: "retry",
+  m2_arrival_code_invalid: "fix_input",
+  m2_arrival_code_too_soon: "choose_again",
 
   // Proposals
   m2_proposal_below_wage_floor: "fix_input",
@@ -276,6 +278,15 @@ const RECOVERY_BY_CODE: Record<string, RecoveryIntent> = {
 
   // Adapters
   m2_provider_unavailable: "retry",
+
+  // A7 rentals / A9 stays — domain refusals the booking UIs surface
+  min_stay_not_met: "fix_input",
+  dates_unavailable: "choose_again",
+  out_of_stock: "choose_again",
+  insufficient_quantity: "choose_again",
+  handover_pin_invalid: "fix_input",
+  rental_state_invalid: "choose_again",
+  stay_state_invalid: "choose_again",
 };
 
 /**

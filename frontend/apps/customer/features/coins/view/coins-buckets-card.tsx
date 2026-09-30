@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, formatMoney } from "@vsolve/ui";
+import { formatMoney } from "@vsolve/ui";
 import { AlertCircle, Coins as CoinsIcon, Lock, Sparkles } from "lucide-react";
 import type { CustomerCoinsSummary } from "../queries";
 
@@ -10,8 +10,10 @@ interface CoinsBucketsCardProps {
 
 export function CoinsBucketsCard({ summary }: CoinsBucketsCardProps) {
   const policy = summary.active_burn_policy;
-  const coinValuePaise = policy.coin_value_paise ?? 10;
-  const spendableRupeeValuePaise = summary.spendable_coins * coinValuePaise;
+  const coinValuePaise = policy.coin_value_paise;
+  const maxBurnPercent = policy.max_burn_percent;
+  const spendableRupeeValuePaise =
+    typeof coinValuePaise === "number" ? summary.spendable_coins * coinValuePaise : null;
 
   return (
     <div className="rounded-card border border-[#e7e2da] bg-white p-6 shadow-sm md:p-8">
@@ -34,17 +36,37 @@ export function CoinsBucketsCard({ summary }: CoinsBucketsCardProps) {
             >
               {summary.spendable_coins.toLocaleString("en-IN")}
             </span>
-            <span className="text-sm font-semibold text-emerald-700">
-              ≈ {formatMoney(spendableRupeeValuePaise)} discount
-            </span>
+            {spendableRupeeValuePaise != null ? (
+              <span className="text-sm font-semibold text-emerald-700">
+                ≈ {formatMoney(spendableRupeeValuePaise)} discount
+              </span>
+            ) : null}
           </div>
           <p className="mt-1.5 text-xs text-text-secondary">
-            Apply at checkout for up to {policy.max_burn_percent}% off your service bill.
+            {typeof maxBurnPercent === "number"
+              ? `Apply at checkout for up to ${maxBurnPercent}% off your service bill.`
+              : "Apply at checkout. The live burn policy sets the discount cap."}
           </p>
         </div>
 
         {/* Bucket stats */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:w-auto">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:w-auto">
+          <div className="flex items-start gap-3 rounded-xl border border-[#eee9e0] bg-[#FAF9F7] p-3.5">
+            <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-amber-100/70 text-amber-700">
+              <Sparkles className="size-4" />
+            </span>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span data-numeric className="text-base font-bold text-navy-900">
+                  {summary.promised_coins.toLocaleString("en-IN")}
+                </span>
+                <span className="text-xs font-medium text-text-muted">Promised</span>
+              </div>
+              <p className="mt-0.5 text-[11px] leading-tight text-text-secondary">
+                Credited after the booking or referral that earned them is completed.
+              </p>
+            </div>
+          </div>
           {/* Locked / Promised Bucket */}
           <div className="flex items-start gap-3 rounded-xl border border-[#eee9e0] bg-[#FAF9F7] p-3.5">
             <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-orange-100/70 text-[#EA580C]">

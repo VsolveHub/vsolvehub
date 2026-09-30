@@ -19,12 +19,11 @@ import { evidenceIndex, toProjectView } from "@/features/project/adapters";
 import { useProject } from "@/features/project/queries";
 import { ProjectDecisions, ProjectWarranty } from "@/features/project/view/project-panels";
 import { toAmendmentsView, toEngagementView, type EngagementView, type StageView } from "../adapters";
+import { completeOrOpenCheckout } from "@/features/payment/standalone-handoff";
 import {
-  isSimulatedCaptureUnavailable,
   useEngagement,
   useEngagementAmendments,
   useFundStage,
-  useSimulateStageCapture,
 } from "../queries";
 import { LeadOnlyHub } from "./lead-only-hub";
 import { Receipt } from "./receipt";
@@ -1181,34 +1180,41 @@ function FundStageDialog({
   onClose: () => void;
 }) {
   const fund = useFundStage();
-  const capture = useSimulateStageCapture();
   const [settled, setSettled] = useState<"paid" | "awaiting-provider" | null>(null);
+  const [handoffError, setHandoffError] = useState<unknown>(null);
+  const [isHandingOff, setIsHandingOff] = useState(false);
 
-  const isWorking = fund.isPending || capture.isPending;
-  const failure = fund.error ?? (isSimulatedCaptureUnavailable(capture.error) ? null : capture.error);
+  const isWorking = fund.isPending || isHandingOff;
+  const failure = fund.error ?? handoffError;
 
   async function pay() {
     // `useFundStage` keys its idempotency on the stage, so a second press
     // returns the same attempt rather than a second charge.
+    setHandoffError(null);
     const checkout = await fund.mutateAsync({ engagementId, stageId: stage.stageId });
 
     const attemptId = checkout?.payment_attempt_id ?? null;
-    if (attemptId === null || checkout?.provider !== "fake") {
-      // A real provider is configured and this app has no sheet to hand the
-      // charge to. Saying so beats a success state nothing backs up.
+    if (attemptId === null) {
       setSettled("awaiting-provider");
       return;
     }
 
+    setIsHandingOff(true);
     try {
-      await capture.mutateAsync({ engagementId, paymentAttemptId: attemptId });
-      setSettled("paid");
+      const result = await completeOrOpenCheckout(String(attemptId), {
+        businessName: "Vsolve Hub",
+      });
+      if (result.mode === "simulated") {
+        setSettled("paid");
+        return;
+      }
+      // Razorpay Checkout closed (or still preparing). Capture only comes from
+      // the webhook — never from the widget callback.
+      setSettled("awaiting-provider");
     } catch (error) {
-      // Capture switched off is what production looks like, and the checkout
-      // above genuinely was created — so it settles as awaiting rather than as
-      // a failure that lost the Customer's press.
-      if (isSimulatedCaptureUnavailable(error)) setSettled("awaiting-provider");
-      else throw error;
+      setHandoffError(error);
+    } finally {
+      setIsHandingOff(false);
     }
   }
 

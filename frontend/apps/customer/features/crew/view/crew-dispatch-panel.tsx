@@ -25,6 +25,7 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 
 import { AccessRefusal } from "@/features/access/view/access-refusal";
+import { completeOrOpenCheckout } from "@/features/payment/standalone-handoff";
 // Imported rather than taken as a prop, unlike `bookCrewFeeHref`: this
 // destination is not a function of any record — every A3 engagement lands in the
 // same list — and `lib/routes` exists precisely so both sides of the
@@ -176,11 +177,19 @@ export function CrewDispatchPanel({
       },
       {
         onSuccess: (checkout) => {
-          if (checkout.provider === "fake") {
-            simulateCapture(checkout.payment_attempt_id);
-            return;
-          }
-          router.push(bookCrewFeeHref);
+          void (async () => {
+            try {
+              const result = await completeOrOpenCheckout(String(checkout.payment_attempt_id), {
+                businessName: "Vsolve Hub",
+              });
+              if (result.mode === "pending") {
+                // Order not ready yet — recovery screen can retry Checkout.
+                router.push(bookCrewFeeHref);
+              }
+            } catch {
+              router.push(bookCrewFeeHref);
+            }
+          })();
         },
       },
     );

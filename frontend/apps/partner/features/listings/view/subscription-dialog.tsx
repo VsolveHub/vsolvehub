@@ -1,6 +1,20 @@
 import { Check, Crown, X } from "lucide-react";
 import type { VendorSubscriptionPlan } from "../queries";
 
+function premiumLabels(plan: VendorSubscriptionPlan): string[] {
+  const raw = plan.premium_capabilities;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((entry) => {
+      if (typeof entry === "string") return entry.replaceAll("_", " ");
+      if (entry && typeof entry === "object" && "code" in entry) {
+        return String((entry as { code: string }).code).replaceAll("_", " ");
+      }
+      return "";
+    })
+    .filter(Boolean);
+}
+
 export interface SubscriptionDialogProps {
   isOpen: boolean;
   onClose: () => void;
@@ -48,6 +62,12 @@ export function SubscriptionDialog({
           {plans.map((plan) => {
             const priceInRupees = plan.price_paise / 100;
             const isCurrent = currentPlanName === plan.name;
+            const premiums = premiumLabels(plan);
+            const details = typeof plan.details === "string" ? plan.details.trim() : "";
+            const serviceLabel =
+              typeof plan.service_name === "string" && plan.service_name.trim()
+                ? plan.service_name.trim()
+                : "All hiring services";
 
             return (
               <div
@@ -59,7 +79,7 @@ export function SubscriptionDialog({
                 }`}
               >
                 <div>
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <h3 className="font-bold text-text">{plan.name}</h3>
                     {isCurrent && (
                       <span className="rounded-full bg-signal-100 px-2 py-0.5 text-[10px] font-bold text-signal-800">
@@ -68,10 +88,16 @@ export function SubscriptionDialog({
                     )}
                   </div>
 
+                  <p className="mt-1 text-[11px] text-text-muted">{serviceLabel}</p>
+
                   <div className="mt-3">
                     <span className="text-2xl font-extrabold text-text">₹{priceInRupees}</span>
                     <span className="text-xs text-text-muted"> / {plan.duration_days} days</span>
                   </div>
+
+                  {details ? (
+                    <p className="mt-3 text-xs leading-5 text-text-secondary">{details}</p>
+                  ) : null}
 
                   <ul className="mt-4 space-y-2 text-xs text-text-secondary">
                     <li className="flex items-center gap-1.5">
@@ -82,10 +108,25 @@ export function SubscriptionDialog({
                       <Check className="size-3.5 text-success-text shrink-0" />
                       Direct applicant contact reveal
                     </li>
-                    <li className="flex items-center gap-1.5">
-                      <Check className="size-3.5 text-success-text shrink-0" />
-                      Verified hiring badge
-                    </li>
+                    {premiums.length > 0 ? (
+                      premiums.map((label) => (
+                        <li key={label} className="flex items-center gap-1.5">
+                          <Check className="size-3.5 text-success-text shrink-0" />
+                          <span className="capitalize">{label}</span>
+                        </li>
+                      ))
+                    ) : (
+                      <li className="flex items-center gap-1.5">
+                        <Check className="size-3.5 text-success-text shrink-0" />
+                        Verified hiring badge
+                      </li>
+                    )}
+                    {(plan.premium_price_paise ?? 0) > 0 ? (
+                      <li className="flex items-center gap-1.5">
+                        <Check className="size-3.5 text-success-text shrink-0" />
+                        Premium placement from ₹{((plan.premium_price_paise ?? 0) / 100).toFixed(0)}
+                      </li>
+                    ) : null}
                   </ul>
                 </div>
 

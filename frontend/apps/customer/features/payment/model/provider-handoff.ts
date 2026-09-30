@@ -55,16 +55,21 @@ export interface HandoffTarget {
 
 export function handoffTarget(attempt: PaymentAttempt): HandoffTarget | null {
   if (!isInteractiveProvider(attempt.provider)) return null;
-  if (attempt.provider_public_key === null || attempt.provider_order_id === "") return null;
+  if (
+    !attempt.provider_public_key ||
+    !attempt.provider_order_id ||
+    attempt.provider_order_id.trim() === ""
+  ) {
+    return null;
+  }
 
   return {
     provider: attempt.provider,
     publicKey: attempt.provider_public_key,
     providerOrderId: attempt.provider_order_id,
     // Passed to the widget for display only. Razorpay charges what its own order
-    // says, so this cannot cause a mismatched charge — and it is Django's number
-    // either way, never one this client worked out.
-    amountPaise: attempt.amount.amount_paise,
+    // says, so pass the net gateway amount (gross minus wallet & coins).
+    amountPaise: attempt.razorpay_amount_paise ?? attempt.amount.amount_paise,
     currency: attempt.amount.currency,
   };
 }
@@ -136,6 +141,10 @@ export async function openProviderCheckout(
   target: HandoffTarget,
   options: { businessName: string },
 ): Promise<HandoffEnded> {
+  if (!target.providerOrderId || !target.publicKey) {
+    throw new Error("Payment order ID or public key is missing.");
+  }
+
   await loadRazorpayScript();
 
   const Razorpay = window.Razorpay;

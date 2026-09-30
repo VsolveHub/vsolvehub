@@ -62,13 +62,32 @@ function plan(overrides: Partial<Schemas["VisitPlan"]> = {}): Schemas["VisitPlan
   };
 }
 
+function heldVisit(id = "visit-1"): Schemas["SiteVisit"] {
+  return {
+    id,
+    status: "REQUESTED",
+    is_plan_visit: true,
+    timezone: "Asia/Kolkata",
+    vendor: null,
+    fee_paise: 4950,
+    adjusts_against_final_price: true,
+    scheduled_for: "2026-09-04T02:30:00.000Z",
+    duration_minutes: 60,
+    arrival_confirmed_at: null,
+    arrival_method: "START_OTP",
+    completed_at: null,
+    estimate_due_at: null,
+    cancellation_reason_code: "",
+  };
+}
+
 function visitPlanState(
   overrides: Partial<Schemas["VisitPlanState"]> = {},
 ): Schemas["VisitPlanState"] {
   return {
     plan: plan(),
     available_tiers: [],
-    visits: [],
+    visits: [heldVisit("visit-1")],
     checkout_available: true,
     can_read_full_estimates: false,
     server_now: "2026-08-16T10:05:00.000Z",
@@ -135,7 +154,19 @@ describe("request-detail visit payment", () => {
   });
 
   it("starts checkout and captures a fake-provider payment after confirmation", async () => {
-    client.GET.mockResolvedValue(ok(visitPlanState()));
+    client.GET.mockImplementation((path: string) => {
+      if (path === "/api/v1/payment-attempts/{attempt_id}/") {
+        return Promise.resolve(
+          ok({
+            id: "attempt-1",
+            status: "CREATED",
+            provider: "fake",
+            simulated_capture_available: true,
+          }),
+        );
+      }
+      return Promise.resolve(ok(visitPlanState()));
+    });
     client.POST.mockImplementation((path: string) => {
       if (path === "/api/v1/requirements/{requirement_id}/visit-plan/checkout/") {
         return Promise.resolve(ok(checkout, 201));

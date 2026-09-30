@@ -14,7 +14,6 @@ export function useTheme() {
 
   useEffect(() => {
     const saved = localStorage.getItem("vsolve-theme") as Theme | null;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (saved) setThemeState(saved);
   }, []);
 

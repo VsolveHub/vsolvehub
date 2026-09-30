@@ -1,19 +1,36 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Badge, Button, Card, EmptyState, Field, Input, Select, Textarea, formatMoney } from "@vsolve/ui";
+import { friendlyErrorMessage } from "@vsolve/query";
+import {
+  Badge,
+  Button,
+  Card,
+  Dialog,
+  EmptyState,
+  Field,
+  Input,
+  Select,
+  Textarea,
+  formatDate,
+  formatMoney,
+} from "@vsolve/ui";
 import { Camera, MapPin, X } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 
 import { usePartnerCapabilities } from "@/features/capability/queries";
 import {
   bookingActionLabel,
+  canCancelBooking,
+  canDisputeDeposit,
   canSubmitAsset,
   partnerBookingAction,
   type BookingAction,
 } from "@/features/rentals/booking-actions";
 import {
   createPartnerRentalAsset,
+  fetchPartnerDefaultLocation,
   fetchPartnerRentalAssets,
   fetchPartnerRentalBookings,
   fetchRentalTaxonomy,
@@ -26,6 +43,28 @@ import {
 
 const MAX_PHOTOS = 8;
 
+const BOOKING_STATUS_FILTERS = [
+  "ALL",
+  "PENDING_PAYMENT",
+  "CONFIRMED",
+  "HANDOVER",
+  "RETURNED",
+  "CANCELLED",
+  "DISPUTED",
+] as const;
+
+type BookingStatusFilter = (typeof BOOKING_STATUS_FILTERS)[number];
+
+const BOOKING_STATUS_LABELS: Record<BookingStatusFilter, string> = {
+  ALL: "All",
+  PENDING_PAYMENT: "Pending payment",
+  CONFIRMED: "Confirmed",
+  HANDOVER: "Handover",
+  RETURNED: "Returned",
+  CANCELLED: "Cancelled",
+  DISPUTED: "Disputed",
+};
+
 type PhotoDraft = {
   localId: string;
   previewUrl: string;
@@ -34,10 +73,32 @@ type PhotoDraft = {
   error?: string;
 };
 
-function schemaPropertyKeys(schema: Record<string, unknown> | undefined): string[] {
+type BookingActionBody = { pin?: string; reason?: string; consume_paise: number };
+
+type SchemaProperty = {
+  type?: string;
+  enum?: unknown[];
+};
+
+type HandoverModal = { bookingId: string; pin: string; error: string | null };
+type DisputeModal = {
+  bookingId: string;
+  reason: string;
+  consumeRupees: string;
+  error: string | null;
+};
+type CancelModal = { bookingId: string; reason: string; error: string | null };
+
+function schemaPropertyMap(
+  schema: Record<string, unknown> | undefined,
+): Record<string, SchemaProperty> {
   const props = schema?.properties;
-  if (!props || typeof props !== "object" || Array.isArray(props)) return [];
-  return Object.keys(props as Record<string, unknown>);
+  if (!props || typeof props !== "object" || Array.isArray(props)) return {};
+  return props as Record<string, SchemaProperty>;
+}
+
+function schemaPropertyKeys(schema: Record<string, unknown> | undefined): string[] {
+  return Object.keys(schemaPropertyMap(schema));
 }
 
 function schemaRequiredKeys(schema: Record<string, unknown> | undefined): Set<string> {
@@ -63,6 +124,20 @@ function newLocalId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function statusFilterLabel(status: BookingStatusFilter): string {
+  return BOOKING_STATUS_LABELS[status];
+}
+
+function bookingBadgeTone(
+  status: string,
+): "success" | "warning" | "neutral" | "danger" {
+  const value = status.toUpperCase();
+  if (value === "CANCELLED" || value === "DISPUTED") return "danger";
+  if (value === "PENDING_PAYMENT") return "warning";
+  if (value === "CONFIRMED" || value === "HANDOVER") return "success";
+  return "neutral";
+}
+
 export function PartnerRentalsWorkspace() {
   const qc = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -72,11 +147,36 @@ export function PartnerRentalsWorkspace() {
   const [serviceId, setServiceId] = useState("");
   const [variantId, setVariantId] = useState("");
   const [dailyRate, setDailyRate] = useState("");
-  const [deposit, setDeposit] = useState("");
+  const [depositOverride, setDepositOverride] = useState<string | null>(null);
+  const [quantity, setQuantity] = useState("1");
   const [location, setLocation] = useState("");
+  const [defaultLocation, setDefaultLocation] = useState("");
   const [photos, setPhotos] = useState<PhotoDraft[]>([]);
   const [structuredFields, setStructuredFields] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
+
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const queryStatus = searchParams?.get("status") ?? "";
+  const bookingStatusFilter = BOOKING_STATUS_FILTERS.includes(queryStatus as BookingStatusFilter)
+    ? (queryStatus as BookingStatusFilter)
+    : "ALL";
+
+  function setBookingStatusFilter(status: BookingStatusFilter) {
+    const params = new URLSearchParams(searchParams?.toString() ?? "");
+    if (status === "ALL") {
+      params.delete("status");
+    } else {
+      params.set("status", status);
+    }
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }
+
+  const [handoverModal, setHandoverModal] = useState<HandoverModal | null>(null);
+  const [disputeModal, setDisputeModal] = useState<DisputeModal | null>(null);
+  const [cancelModal, setCancelModal] = useState<CancelModal | null>(null);
 
   const capabilities = usePartnerCapabilities();
   const capabilityVariants = rentalVariantChoices(capabilities.data?.capabilities);
@@ -89,26 +189,42 @@ export function PartnerRentalsWorkspace() {
     queryFn: fetchPartnerRentalAssets,
   });
   const bookings = useQuery({
-    queryKey: ["partner-rentals", "bookings"],
-    queryFn: fetchPartnerRentalBookings,
+    queryKey: ["partner-rentals", "bookings", bookingStatusFilter],
+    queryFn: () =>
+      fetchPartnerRentalBookings(bookingStatusFilter === "ALL" ? undefined : bookingStatusFilter),
   });
+
+  // Defensive client filter in case the API ignores `?status=` (stays enquiry pattern).
+  const filteredBookings = useMemo(() => {
+    const rows = bookings.data ?? [];
+    if (bookingStatusFilter === "ALL") return rows;
+    return rows.filter((booking) => (booking.status ?? "").toUpperCase() === bookingStatusFilter);
+  }, [bookings.data, bookingStatusFilter]);
 
   const subcategories: RentalTaxonomySubcategory[] = taxonomy.data ?? [];
   const selectedSub = subcategories.find((s) => s.slug === subcategorySlug);
   const selectedService = selectedSub?.services.find((s) => s.id === serviceId);
   const selectedVariant = selectedService?.variants.find((v) => v.id === variantId);
   const assetSchema = selectedVariant?.asset_schema as Record<string, unknown> | undefined;
-  const schemaKeys = useMemo(() => schemaPropertyKeys(assetSchema), [assetSchema]);
-  const requiredSchemaKeys = useMemo(() => schemaRequiredKeys(assetSchema), [assetSchema]);
+  const schemaProps = schemaPropertyMap(assetSchema);
+  const schemaKeys = schemaPropertyKeys(assetSchema);
+  const requiredSchemaKeys = schemaRequiredKeys(assetSchema);
   const backendDepositPaise = selectedVariant?.default_deposit_paise;
+  const deposit =
+    depositOverride ??
+    (backendDepositPaise == null ? "" : paiseToRupeeInput(backendDepositPaise));
 
   useEffect(() => {
-    if (backendDepositPaise == null) {
-      setDeposit("");
-      return;
-    }
-    setDeposit(paiseToRupeeInput(backendDepositPaise));
-  }, [backendDepositPaise]);
+    let cancelled = false;
+    void fetchPartnerDefaultLocation().then((loc) => {
+      if (cancelled) return;
+      setDefaultLocation(loc);
+      setLocation((current) => (current.trim() ? current : loc));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -132,24 +248,38 @@ export function PartnerRentalsWorkspace() {
       setServiceId("");
       setVariantId("");
       setDailyRate("");
-      setDeposit("");
-      setLocation("");
+      setDepositOverride(null);
+      setQuantity("1");
+      setLocation(defaultLocation);
       setPhotos([]);
       setStructuredFields({});
       setFormError(null);
       invalidate();
     },
-    onError: (err: Error) => setFormError(err.message),
+    onError: (err: unknown) => setFormError(friendlyErrorMessage(err)),
   });
 
   const act = useMutation({
     mutationFn: async (
-      input: { kind: "submit"; id: string } | { kind: "booking"; id: string; action: BookingAction },
+      input:
+        | { kind: "submit"; id: string }
+        | { kind: "booking"; id: string; action: BookingAction; body?: BookingActionBody },
     ) => {
       if (input.kind === "submit") return submitPartnerRentalAsset(input.id);
-      return partnerRentalBookingAction(input.id, input.action);
+      return partnerRentalBookingAction(input.id, input.action, input.body);
     },
-    onSuccess: invalidate,
+    onSuccess: () => {
+      setHandoverModal(null);
+      setDisputeModal(null);
+      setCancelModal(null);
+      invalidate();
+    },
+    onError: (err: unknown) => {
+      const message = friendlyErrorMessage(err);
+      setHandoverModal((current) => (current ? { ...current, error: message } : current));
+      setDisputeModal((current) => (current ? { ...current, error: message } : current));
+      setCancelModal((current) => (current ? { ...current, error: message } : current));
+    },
   });
 
   function patchPhoto(localId: string, patch: Partial<PhotoDraft>) {
@@ -181,7 +311,7 @@ export function PartnerRentalsWorkspace() {
         } catch (err) {
           patchPhoto(draft.localId, {
             uploading: false,
-            error: err instanceof Error ? err.message : "Could not upload this photo.",
+            error: friendlyErrorMessage(err, "Could not upload this photo."),
           });
         }
       }),
@@ -197,6 +327,76 @@ export function PartnerRentalsWorkspace() {
     });
   }
 
+  function runBookingAction(bookingId: string, action: BookingAction) {
+    if (action === "handover") {
+      setHandoverModal({ bookingId, pin: "", error: null });
+      return;
+    }
+    if (action === "dispute-deposit") {
+      setDisputeModal({ bookingId, reason: "", consumeRupees: "", error: null });
+      return;
+    }
+    if (action === "cancel") {
+      setCancelModal({ bookingId, reason: "", error: null });
+      return;
+    }
+    act.mutate({ kind: "booking", id: bookingId, action, body: { consume_paise: 0 } });
+  }
+
+  function confirmCancel() {
+    if (!cancelModal) return;
+    act.mutate({
+      kind: "booking",
+      id: cancelModal.bookingId,
+      action: "cancel",
+      body: { reason: cancelModal.reason.trim(), consume_paise: 0 },
+    });
+  }
+
+  function confirmHandover() {
+    if (!handoverModal) return;
+    const pin = handoverModal.pin.trim();
+    if (!/^\d{4}$/.test(pin)) {
+      setHandoverModal({ ...handoverModal, error: "Enter the 4-digit handover PIN from the customer." });
+      return;
+    }
+    act.mutate({
+      kind: "booking",
+      id: handoverModal.bookingId,
+      action: "handover",
+      body: { pin, consume_paise: 0 },
+    });
+  }
+
+  function confirmDispute() {
+    if (!disputeModal) return;
+    const reason = disputeModal.reason.trim();
+    if (!reason) {
+      setDisputeModal({ ...disputeModal, error: "Add a reason for the deposit dispute." });
+      return;
+    }
+    // Blank consume = 0 (none). Always send consume_paise so the server never
+    // treats a missing field as full deposit consume.
+    let consumePaise = 0;
+    if (disputeModal.consumeRupees.trim()) {
+      const parsed = rupeesToPaise(disputeModal.consumeRupees);
+      if (parsed == null || parsed < 0) {
+        setDisputeModal({
+          ...disputeModal,
+          error: "Enter a valid consume amount in rupees, or leave blank for none.",
+        });
+        return;
+      }
+      consumePaise = parsed;
+    }
+    act.mutate({
+      kind: "booking",
+      id: disputeModal.bookingId,
+      action: "dispute-deposit",
+      body: { reason, consume_paise: consumePaise },
+    });
+  }
+
   function onCreate(event: FormEvent) {
     event.preventDefault();
     const dailyPaise = rupeesToPaise(dailyRate);
@@ -204,6 +404,7 @@ export function PartnerRentalsWorkspace() {
       deposit.trim() === ""
         ? backendDepositPaise ?? null
         : rupeesToPaise(deposit);
+    const quantityAvailable = Number.parseInt(quantity.trim(), 10);
     if (!variantId || !title.trim()) {
       setFormError("Choose a category, service, variant, and a title.");
       return;
@@ -218,6 +419,10 @@ export function PartnerRentalsWorkspace() {
     }
     if (depositPaise == null) {
       setFormError("Choose a variant so the refundable deposit can load from its category policy.");
+      return;
+    }
+    if (!Number.isFinite(quantityAvailable) || quantityAvailable < 1) {
+      setFormError("Quantity must be at least 1.");
       return;
     }
     if (photos.some((photo) => photo.uploading)) {
@@ -255,10 +460,11 @@ export function PartnerRentalsWorkspace() {
       location_text: location.trim(),
       daily_rate_paise: dailyPaise,
       deposit_paise: depositPaise,
+      quantity_available: quantityAvailable,
       asset_identifier: "",
       structured_fields: fields,
       image_urls: urls,
-    } as Parameters<typeof createPartnerRentalAsset>[0]);
+    });
   }
 
   const uploadingCount = photos.filter((photo) => photo.uploading).length;
@@ -351,6 +557,7 @@ export function PartnerRentalsWorkspace() {
                   setServiceId("");
                   setVariantId("");
                   setStructuredFields({});
+                  setDepositOverride(null);
                 }}
               >
                 <option value="">Select category</option>
@@ -370,6 +577,7 @@ export function PartnerRentalsWorkspace() {
                   setServiceId(e.target.value);
                   setVariantId("");
                   setStructuredFields({});
+                  setDepositOverride(null);
                   const svc = selectedSub?.services.find((s) => s.id === e.target.value);
                   const first = svc?.variants[0];
                   if (first) {
@@ -392,6 +600,7 @@ export function PartnerRentalsWorkspace() {
                 onChange={(e) => {
                   setVariantId(e.target.value);
                   setStructuredFields({});
+                  setDepositOverride(null);
                 }}
               >
                 <option value="">Select a variant</option>
@@ -425,20 +634,48 @@ export function PartnerRentalsWorkspace() {
                 placeholder="Condition, what is included, and pickup notes."
               />
             </Field>
-            {schemaKeys.map((key) => (
-              <Field key={key} label={key.replace(/_/g, " ")} required={requiredSchemaKeys.has(key)} showOptional={false}>
-                <Input
-                  id={`rental-field-${key}`}
-                  value={structuredFields[key] ?? ""}
-                  onChange={(e) =>
-                    setStructuredFields((current) => ({ ...current, [key]: e.target.value }))
-                  }
-                />
-              </Field>
-            ))}
+            {schemaKeys.map((key) => {
+              const spec = schemaProps[key] ?? {};
+              const enums = Array.isArray(spec.enum) ? spec.enum.map(String) : null;
+              const required = requiredSchemaKeys.has(key);
+              const label = key.replace(/_/g, " ");
+              if (enums || spec.type === "boolean") {
+                const options = enums ?? ["true", "false"];
+                return (
+                  <Field key={key} label={label} required={required} showOptional={false}>
+                    <Select
+                      id={`rental-field-${key}`}
+                      value={structuredFields[key] ?? ""}
+                      onChange={(e) =>
+                        setStructuredFields((current) => ({ ...current, [key]: e.target.value }))
+                      }
+                    >
+                      <option value="">Select {label}</option>
+                      {options.map((option) => (
+                        <option key={option} value={option}>
+                          {spec.type === "boolean" ? (option === "true" ? "Yes" : "No") : option}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                );
+              }
+              return (
+                <Field key={key} label={label} required={required} showOptional={false}>
+                  <Input
+                    id={`rental-field-${key}`}
+                    inputMode={spec.type === "number" ? "numeric" : "text"}
+                    value={structuredFields[key] ?? ""}
+                    onChange={(e) =>
+                      setStructuredFields((current) => ({ ...current, [key]: e.target.value }))
+                    }
+                  />
+                </Field>
+              );
+            })}
           </section>
 
-          <section className="grid gap-3 sm:grid-cols-2">
+          <section className="grid gap-3 sm:grid-cols-3">
             <Field label="Daily rate" required description="Amount in rupees. Customers see this per day.">
               <div className="relative">
                 <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-semibold text-text-secondary">
@@ -468,13 +705,30 @@ export function PartnerRentalsWorkspace() {
                   className="pl-8"
                   inputMode="decimal"
                   value={deposit}
-                  onChange={(e) => setDeposit(e.target.value)}
+                  onChange={(e) => setDepositOverride(e.target.value)}
                 />
               </div>
             </Field>
+            <Field label="Quantity available" required description="How many identical units you can rent out.">
+              <Input
+                id="rental-quantity"
+                inputMode="numeric"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                placeholder="1"
+              />
+            </Field>
           </section>
 
-          <Field label="Pickup location" required>
+          <Field
+            label="Pickup location"
+            required
+            description={
+              defaultLocation
+                ? "Prefills from your profile default address. Edit if this pickup differs."
+                : "Customers collect from this address."
+            }
+          >
             <Input
               id="rental-location"
               value={location}
@@ -497,15 +751,15 @@ export function PartnerRentalsWorkspace() {
         </div>
         {assets.isLoading ? <p className="text-sm text-text-secondary">Loading…</p> : null}
         {assets.error ? (
-          <p className="text-sm text-danger-text">{(assets.error as Error).message}</p>
+          <p className="text-sm text-danger-text">{friendlyErrorMessage(assets.error)}</p>
         ) : null}
         {assets.data && assets.data.length === 0 ? (
           <EmptyState compact title="No ads yet" description="Post an ad with photos to list it for review." />
         ) : null}
         <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {assets.data?.map((asset) => {
-            const media = (asset as { media?: { url?: string }[] }).media;
-            const thumb = media?.[0]?.url;
+            const thumb = asset.media?.[0]?.url;
+            const qty = asset.quantity_available;
             return (
               <li key={asset.id}>
                 <Card padding="none" className="overflow-hidden">
@@ -518,7 +772,10 @@ export function PartnerRentalsWorkspace() {
                         No photo
                       </div>
                     )}
-                    <Badge className="absolute right-2 top-2">{asset.public_state}</Badge>
+                    <div className="absolute right-2 top-2 flex flex-col items-end gap-1">
+                      <Badge>{asset.public_state}</Badge>
+                      {typeof qty === "number" ? <Badge tone="neutral">Qty {qty}</Badge> : null}
+                    </div>
                   </div>
                   <div className="flex flex-col gap-2 p-3">
                     <p className="text-lg font-extrabold text-navy-900">{formatMoney(asset.daily_rate_paise)} / day</p>
@@ -548,32 +805,96 @@ export function PartnerRentalsWorkspace() {
       </section>
 
       <Card>
-        <h2 className="mb-3 text-base font-semibold text-navy-900">Bookings</h2>
+        <div className="mb-3 flex flex-col gap-3">
+          <h2 className="text-base font-semibold text-navy-900">Bookings</h2>
+          <div className="flex flex-wrap gap-2">
+            {BOOKING_STATUS_FILTERS.map((status) => (
+              <button
+                key={status}
+                type="button"
+                onClick={() => setBookingStatusFilter(status)}
+                className={`rounded-full px-3 py-1 text-xs font-bold transition ${
+                  bookingStatusFilter === status
+                    ? "bg-action text-white"
+                    : "border border-line bg-surface text-text-secondary hover:text-navy-900"
+                }`}
+              >
+                {statusFilterLabel(status)}
+              </button>
+            ))}
+          </div>
+        </div>
         {bookings.isLoading ? <p className="text-sm text-text-secondary">Loading…</p> : null}
         {bookings.error ? (
-          <p className="text-sm text-danger-text">{(bookings.error as Error).message}</p>
+          <p className="text-sm text-danger-text">{friendlyErrorMessage(bookings.error)}</p>
         ) : null}
-        {bookings.data && bookings.data.length === 0 ? (
-          <EmptyState compact title="No bookings yet" description="Bookings appear here after a customer reserves an asset." />
+        {act.isError && !handoverModal && !disputeModal && !cancelModal ? (
+          <p className="mb-3 text-sm text-danger-text">{friendlyErrorMessage(act.error)}</p>
+        ) : null}
+        {!bookings.isLoading && !bookings.error && filteredBookings.length === 0 ? (
+          <EmptyState
+            compact
+            title={
+              bookingStatusFilter === "ALL"
+                ? "No bookings yet"
+                : `No ${statusFilterLabel(bookingStatusFilter).toLowerCase()} bookings`
+            }
+            description={
+              bookingStatusFilter === "ALL"
+                ? "Bookings appear here after a customer reserves an asset."
+                : "Try another status filter to see more."
+            }
+          />
         ) : null}
         <ul className="flex flex-col gap-3">
-          {bookings.data?.map((booking) => {
+          {filteredBookings.map((booking) => {
             const action = partnerBookingAction(booking.status ?? "", booking.deposit?.status);
+            const showDispute = canDisputeDeposit(booking.status ?? "", booking.deposit?.status);
+            const showCancel = canCancelBooking(booking.status ?? "");
+            const statusValue = (booking.status ?? "").toUpperCase();
             return (
               <li key={booking.id} className="rounded-card border border-line p-3">
-                <p className="font-semibold text-navy-900">{booking.asset.title}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-semibold text-navy-900">{booking.asset.title}</p>
+                  <Badge tone={bookingBadgeTone(statusValue)}>
+                    {BOOKING_STATUS_LABELS[statusValue as BookingStatusFilter] ?? booking.status}
+                  </Badge>
+                </div>
                 <p className="text-sm text-text-secondary">
-                  {booking.status} · {formatMoney(booking.price_paise)} · {booking.start_date} – {booking.end_date}
+                  {formatMoney(booking.price_paise)} · {formatDate(booking.start_date)} –{" "}
+                  {formatDate(booking.end_date)}
                 </p>
-                {action ? (
-                  <div className="mt-3">
-                    <Button
-                      size="sm"
-                      disabled={act.isPending}
-                      onClick={() => act.mutate({ kind: "booking", id: booking.id, action })}
-                    >
-                      {bookingActionLabel(action)}
-                    </Button>
+                {action || showDispute || showCancel ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {action ? (
+                      <Button
+                        size="sm"
+                        disabled={act.isPending}
+                        onClick={() => runBookingAction(booking.id, action)}
+                      >
+                        {bookingActionLabel(action)}
+                      </Button>
+                    ) : null}
+                    {showDispute ? (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={act.isPending}
+                        onClick={() => runBookingAction(booking.id, "dispute-deposit")}
+                      >
+                        {bookingActionLabel("dispute-deposit")}
+                      </Button>
+                    ) : null}
+                    {showCancel ? (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={act.isPending}
+                        onClick={() => runBookingAction(booking.id, "cancel")}
+                      >
+                        {bookingActionLabel("cancel")}
+                      </Button>
+                    ) : null}
                   </div>
                 ) : null}
               </li>
@@ -581,6 +902,154 @@ export function PartnerRentalsWorkspace() {
           })}
         </ul>
       </Card>
+
+      <Dialog
+        open={Boolean(handoverModal)}
+        onOpenChange={(open) => {
+          if (!open && !act.isPending) setHandoverModal(null);
+        }}
+        title="Confirm handover"
+        description="Ask the customer for their 4-digit handover PIN, then enter it here."
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              disabled={act.isPending}
+              onClick={() => setHandoverModal(null)}
+            >
+              Cancel
+            </Button>
+            <Button loading={act.isPending} loadingLabel="Confirming…" onClick={confirmHandover}>
+              Confirm handover
+            </Button>
+          </>
+        }
+      >
+        <Field
+          label="Handover PIN"
+          required
+          error={handoverModal?.error ?? undefined}
+        >
+          <Input
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={4}
+            value={handoverModal?.pin ?? ""}
+            onChange={(e) =>
+              setHandoverModal((current) =>
+                current ? { ...current, pin: e.target.value.replace(/\D/g, "").slice(0, 4), error: null } : current,
+              )
+            }
+            placeholder="4-digit PIN"
+          />
+        </Field>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(disputeModal)}
+        onOpenChange={(open) => {
+          if (!open && !act.isPending) setDisputeModal(null);
+        }}
+        title="Raise deposit dispute"
+        description="Explain the issue. Leave consume blank (or 0) to dispute without taking money from the deposit."
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              disabled={act.isPending}
+              onClick={() => setDisputeModal(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              loading={act.isPending}
+              loadingLabel="Submitting…"
+              onClick={confirmDispute}
+            >
+              Raise dispute
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          <Field label="Reason" required error={disputeModal?.error ?? undefined}>
+            <Textarea
+              value={disputeModal?.reason ?? ""}
+              onChange={(e) =>
+                setDisputeModal((current) =>
+                  current ? { ...current, reason: e.target.value, error: null } : current,
+                )
+              }
+              placeholder="e.g. Scratched housing, missing bit set"
+              rows={3}
+            />
+          </Field>
+          <Field
+            label="Amount to consume from deposit"
+            description="Rupees. Leave blank for none (0). Blank never means full deposit."
+            showOptional={false}
+          >
+            <div className="relative">
+              <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-semibold text-text-secondary">
+                ₹
+              </span>
+              <Input
+                className="pl-8"
+                inputMode="decimal"
+                value={disputeModal?.consumeRupees ?? ""}
+                onChange={(e) =>
+                  setDisputeModal((current) =>
+                    current ? { ...current, consumeRupees: e.target.value, error: null } : current,
+                  )
+                }
+                placeholder="0"
+              />
+            </div>
+          </Field>
+        </div>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(cancelModal)}
+        onOpenChange={(open) => {
+          if (!open && !act.isPending) setCancelModal(null);
+        }}
+        title="Cancel booking"
+        description="Cancels before handover. The customer gets a full refund and the asset dates are freed."
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              disabled={act.isPending}
+              onClick={() => setCancelModal(null)}
+            >
+              Keep booking
+            </Button>
+            <Button
+              variant="danger"
+              loading={act.isPending}
+              loadingLabel="Cancelling…"
+              onClick={confirmCancel}
+            >
+              Cancel booking
+            </Button>
+          </>
+        }
+      >
+        <Field label="Reason" showOptional error={cancelModal?.error ?? undefined}>
+          <Textarea
+            value={cancelModal?.reason ?? ""}
+            onChange={(e) =>
+              setCancelModal((current) =>
+                current ? { ...current, reason: e.target.value, error: null } : current,
+              )
+            }
+            placeholder="e.g. Equipment unavailable"
+            rows={3}
+          />
+        </Field>
+      </Dialog>
     </div>
   );
 }

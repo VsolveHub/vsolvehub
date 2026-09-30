@@ -365,6 +365,10 @@ def _apply_refund_provider_result(
                         item.payment_allocation_id: item.amount_paise for item in allocations
                     },
                 )
+            if refunded_total == attempt.amount_paise:
+                from .base import _cancel_domain_booking_on_refund
+
+                _cancel_domain_booking_on_refund(attempt=attempt, refund=refund)
     elif normalized in ("failed", "rejected"):
         refund.status = Refund.Status.FAILED
         refund.failure_code = "provider_refund_failed"

@@ -65,9 +65,7 @@ def _sheet_xml(rows: list[list[object]]) -> str:
         for column_index, value in enumerate(row, start=1):
             ref = f"{_column_name(column_index)}{row_index}"
             text = escape(str(value))
-            cells.append(
-                f'<c r="{ref}" t="inlineStr"><is><t>{text}</t></is></c>'
-            )
+            cells.append(f'<c r="{ref}" t="inlineStr"><is><t>{text}</t></is></c>')
         body.append(f'<row r="{row_index}">{"".join(cells)}</row>')
     return (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'

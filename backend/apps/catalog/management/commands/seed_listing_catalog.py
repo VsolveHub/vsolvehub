@@ -153,10 +153,13 @@ class Command(BaseCommand):
                         "name": f"{svc_name} listing",
                         "pricing_strategy": ServiceVariant.PricingStrategy.FIXED,
                         "booking_archetype": ServiceVariant.BookingArchetype.A10_LISTING,
-                        "required_skill_code": svc_slug[:32],
+                        "required_skill_code": "career-jobs",
                         "tax_category_code": "listing",
                     },
                 )
+                if variant.required_skill_code != "career-jobs":
+                    variant.required_skill_code = "career-jobs"
+                    variant.save(update_fields=("required_skill_code", "updated_at"))
                 if first_variant is None:
                     first_variant = variant
 
@@ -174,7 +177,11 @@ class Command(BaseCommand):
                                     "title": "Role Type / Employment",
                                     "enum": ["Full-Time", "Part-Time", "Contract", "Internship"],
                                 },
-                                "salary_period": {"type": "string", "title": "Pay period", "enum": ["MONTHLY", "YEARLY", "HOURLY"]},
+                                "salary_period": {
+                                    "type": "string",
+                                    "title": "Pay period",
+                                    "enum": ["MONTHLY", "YEARLY", "HOURLY"],
+                                },
                                 "experience_years": {"type": "string", "title": "Experience"},
                                 "shift": {
                                     "type": "string",
@@ -247,12 +254,18 @@ class Command(BaseCommand):
             VendorSubscriptionPlan.objects.update_or_create(
                 code=p["code"],
                 defaults={
+                    "service": None,
                     "name": p["name"],
                     "price_paise": p["price_paise"],
                     "duration_days": p["duration_days"],
                     "max_active_listings": p["max_active_listings"],
                     "premium_capabilities": p["premium_capabilities"],
                     "premium_price_paise": p["premium_price_paise"],
+                    "details": (
+                        f"Up to {p['max_active_listings']} live job posts for "
+                        f"{p['duration_days']} days. Featured placement is an add-on "
+                        "when this plan lists FEATURED_PLACEMENT."
+                    ),
                     "is_active": True,
                 },
             )
@@ -317,7 +330,11 @@ class Command(BaseCommand):
                             "title": "Role Type / Employment",
                             "enum": ["Full-Time", "Part-Time", "Contract", "Internship"],
                         },
-                        "salary_period": {"type": "string", "title": "Pay period", "enum": ["MONTHLY", "YEARLY", "HOURLY"]},
+                        "salary_period": {
+                            "type": "string",
+                            "title": "Pay period",
+                            "enum": ["MONTHLY", "YEARLY", "HOURLY"],
+                        },
                         "experience_years": {"type": "string", "title": "Experience"},
                         "shift": {
                             "type": "string",

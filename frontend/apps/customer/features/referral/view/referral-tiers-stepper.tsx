@@ -1,7 +1,7 @@
 "use client";
 
 import { Badge, formatMoney } from "@vsolve/ui";
-import { Award, CheckCircle, ChevronRight } from "lucide-react";
+import { Award, CheckCircle } from "lucide-react";
 import type { CustomerReferralSummary } from "../queries";
 
 interface ReferralTiersStepperProps {

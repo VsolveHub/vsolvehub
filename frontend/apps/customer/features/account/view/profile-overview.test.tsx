@@ -46,10 +46,7 @@ describe("ProfileOverview", () => {
     expect(screen.getByText("Gopal Rao")).toBeInTheDocument();
     expect(screen.getByText("+919876543210")).toBeInTheDocument();
     expect(screen.getByText("gopal@example.test")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /edit profile/i })).toHaveAttribute(
-      "href",
-      "/account/edit",
-    );
+    expect(screen.getByRole("button", { name: /edit profile/i })).toBeInTheDocument();
   });
 
   it("goes to login after sign out succeeds", () => {

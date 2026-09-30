@@ -1,26 +1,31 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
   Building2,
   FileCheck2,
   MapPin,
   Search,
-  Sparkles,
 } from "lucide-react";
 import { Button, EmptyState, ErrorState, Skeleton } from "@vsolve/ui";
 
 import { fetchStays } from "@/features/stays/queries";
 import { type ActiveFilters, StayCard, StayFilters } from "@/features/stays/view";
 
-export default function StaysBrowsePage() {
+function StaysBrowseContent() {
+  const searchParams = useSearchParams();
+  const initCategory = searchParams.get("category") ?? undefined;
+
   const [draftQuery, setDraftQuery] = useState("");
   const [draftLocation, setDraftLocation] = useState("");
   const [appliedQuery, setAppliedQuery] = useState("");
   const [appliedLocation, setAppliedLocation] = useState("");
-  const [filters, setFilters] = useState<ActiveFilters>({});
+  const [filters, setFilters] = useState<ActiveFilters>(
+    initCategory ? { categorySlug: initCategory } : {}
+  );
   const [visible, setVisible] = useState(6);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -47,20 +52,21 @@ export default function StaysBrowsePage() {
       "stays",
       appliedQuery,
       appliedLocation,
-      filters.sharingCount,
       filters.ac,
       filters.food,
       filters.maxPrice,
+      filters.categorySlug,
+      filters.serviceSlug,
       visible,
     ],
     queryFn: () =>
       fetchStays({
         q: appliedQuery,
         location: appliedLocation,
-        sharing_count: filters.sharingCount,
         ac: filters.ac,
         food: filters.food,
         max_price: filters.maxPrice,
+        service: filters.serviceSlug || filters.categorySlug,
         limit: visible,
         offset: 0,
       }),
@@ -179,5 +185,13 @@ export default function StaysBrowsePage() {
         </Button>
       ) : null}
     </main>
+  );
+}
+
+export default function StaysBrowsePage() {
+  return (
+    <Suspense fallback={null}>
+      <StaysBrowseContent />
+    </Suspense>
   );
 }

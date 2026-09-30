@@ -28,6 +28,7 @@ from apps.commerce.serializers import (
     PaymentAttemptCreateSerializer,
     PaymentAttemptSerializer,
     RefundCreateSerializer,
+    RefundPageSerializer,
     RefundSerializer,
     TaxDocumentSerializer,
     WebhookAcceptedSerializer,
@@ -43,8 +44,13 @@ from apps.commerce.services import (
 )
 from apps.foundation.services import execute_idempotent
 from apps.identity.models import User
-from apps.partners.permissions import HasRecentOperationsStepUp
+from apps.partners.permissions import (
+    HasRecentOperationsStepUp,
+    IsOperationsUser,
+    has_active_session_role,
+)
 from common.errors.serializers import ApiErrorSerializer
+from common.pagination import StrictCursorPagination
 from common.schema import IDEMPOTENCY_KEY_HEADER
 
 RAZORPAY_SIGNATURE_HEADER = OpenApiParameter(
@@ -297,7 +303,12 @@ class RazorpayWebhookView(APIView):
         tags=["Payment Webhooks"],
         request=OpenApiTypes.OBJECT,
         parameters=[RAZORPAY_SIGNATURE_HEADER, RAZORPAY_EVENT_ID_HEADER],
-        responses={202: WebhookAcceptedSerializer, 400: ApiErrorSerializer},
+        responses={
+            202: WebhookAcceptedSerializer,
+            200: WebhookAcceptedSerializer,
+            400: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+        },
         auth=[],
     )
     def post(self, request: Request) -> Response:
@@ -315,13 +326,17 @@ class RazorpayWebhookView(APIView):
             raise ValidationError("Webhook JSON is invalid.", code="webhook_invalid") from exc
         payload = _mapping(decoded, "body")
         event_type, event_data = _normalise_webhook(payload)
-        webhook, created = record_verified_webhook(
-            provider="razorpay",
-            event_id=event_id,
-            event_type=event_type,
-            payload_sha256=hashlib.sha256(raw_body).hexdigest(),
-            event_data=event_data,
-        )
+        try:
+            webhook, created = record_verified_webhook(
+                provider="razorpay",
+                event_id=event_id,
+                event_type=event_type,
+                payload_sha256=hashlib.sha256(raw_body).hexdigest(),
+                event_data=event_data,
+            )
+        except ValueError as exc:
+            # Same event id with a different payload must not 500 — Ops retries need 409.
+            raise PaymentConflictError(str(exc)) from exc
         del webhook
         return Response(
             {"accepted": True, "duplicate": not created},
@@ -387,12 +402,43 @@ class RefundDetailView(APIView):
     @extend_schema(tags=["Payments"], responses={200: RefundSerializer})
     def get(self, request: Request, refund_id: UUID) -> Response:
         user = cast(User, request.user)
-        refund = get_object_or_404(
-            Refund.objects.prefetch_related("allocations__payment_allocation__fulfilment_unit"),
-            id=refund_id,
-            order__customer=user,
+        queryset = Refund.objects.prefetch_related(
+            "allocations__payment_allocation__fulfilment_unit"
         )
+        if has_active_session_role(request=request, role_code="operations"):
+            refund = get_object_or_404(queryset, id=refund_id)
+        else:
+            refund = get_object_or_404(queryset, id=refund_id, order__customer=user)
         return Response(RefundSerializer(refund).data)
+
+
+class OperationsRefundCursorPagination(StrictCursorPagination):
+    ordering = ("-created_at", "id")
+
+
+class OperationsRefundListView(APIView):
+    permission_classes = (IsAuthenticated, IsOperationsUser)
+
+    @extend_schema(
+        tags=["Operations"],
+        operation_id="operations_refunds_list",
+        parameters=[
+            OpenApiParameter("cursor", str, description="Opaque page cursor."),
+        ],
+        responses={
+            200: RefundPageSerializer,
+            400: ApiErrorSerializer,
+            403: ApiErrorSerializer,
+        },
+    )
+    def get(self, request: Request) -> Response:
+        queryset = Refund.objects.prefetch_related(
+            "allocations__payment_allocation__fulfilment_unit"
+        ).order_by("-created_at", "id")
+
+        paginator = OperationsRefundCursorPagination()
+        page = paginator.paginate_queryset(queryset, request, self)
+        return paginator.get_paginated_response(RefundSerializer(page or [], many=True).data)
 
 
 class FinanceRefundReconcileView(APIView):

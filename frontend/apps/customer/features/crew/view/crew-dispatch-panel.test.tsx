@@ -139,7 +139,19 @@ afterEach(() => {
 
 describe("request-detail crew payment", () => {
   it("starts checkout and captures a fake payment in one click", async () => {
-    client.GET.mockResolvedValue(ok(state()));
+    client.GET.mockImplementation((path: string) => {
+      if (path === "/api/v1/payment-attempts/{attempt_id}/") {
+        return Promise.resolve(
+          ok({
+            id: "attempt-new",
+            status: "CREATED",
+            provider: "fake",
+            simulated_capture_available: true,
+          }),
+        );
+      }
+      return Promise.resolve(ok(state()));
+    });
     client.POST.mockImplementation((path: string) => {
       if (path === "/api/v1/requirements/{requirement_id}/booking-fee/checkout/") {
         return Promise.resolve(ok(checkout, 201));
@@ -190,16 +202,25 @@ describe("request-detail crew payment", () => {
   });
 
   it("shows Pay again after failure and captures the replacement attempt", async () => {
-    client.GET.mockResolvedValue(
-      ok(
-        state({
-          booking_fee: fee("FAILED", {
-            payment_attempt_id: "attempt-failed",
-            failure_code: "payment_failed",
+    const failedState = state({
+      booking_fee: fee("FAILED", {
+        payment_attempt_id: "attempt-failed",
+        failure_code: "payment_failed",
+      }),
+    });
+    client.GET.mockImplementation((path: string) => {
+      if (path === "/api/v1/payment-attempts/{attempt_id}/") {
+        return Promise.resolve(
+          ok({
+            id: "attempt-new",
+            status: "CREATED",
+            provider: "fake",
+            simulated_capture_available: true,
           }),
-        }),
-      ),
-    );
+        );
+      }
+      return Promise.resolve(ok(failedState));
+    });
     client.POST.mockImplementation((path: string) => {
       if (path === "/api/v1/requirements/{requirement_id}/booking-fee/checkout/") {
         return Promise.resolve(ok(checkout, 201));

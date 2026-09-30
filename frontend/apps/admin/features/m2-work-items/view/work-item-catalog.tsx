@@ -1,7 +1,7 @@
 "use client";
 
 import { describeError } from "@vsolve/query";
-import { Badge, Button, Card, EmptyState, ErrorState, Field, Input, Select, Spinner } from "@vsolve/ui";
+import { Badge, Button, Card, EmptyState, ErrorState, Field, Input, Select, Spinner, formatMoney } from "@vsolve/ui";
 import { useState } from "react";
 
 import {
@@ -61,9 +61,7 @@ function rupeesToPaise(value: string): number | null {
   return Number.isSafeInteger(paise) && paise > 0 ? paise : null;
 }
 
-function formatRupees(paise: number): string {
-  return `₹${(paise / 100).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
-}
+
 
 export function WorkItemCatalog() {
   const [skillId, setSkillId] = useState("");
@@ -193,7 +191,7 @@ function WorkItemCard({
                       `City ${rate.service_area.slice(0, 8)}`}
                   </span>
                   <span className="font-semibold text-text" data-numeric>
-                    {formatRupees(rate.reference_rate_paise)}
+                    {formatMoney(rate.reference_rate_paise)}
                   </span>
                 </li>
               ))}

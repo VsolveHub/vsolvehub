@@ -45,6 +45,7 @@ const devOrigins = [
 ];
 
 const nextConfig: NextConfig = {
+  basePath: process.env.NEXT_PUBLIC_BASE_PATH || undefined,
   // Workspace packages are shipped as TS source; let Next compile them.
   transpilePackages: ["@vsolve/ui", "@vsolve/config", "@vsolve/api-client", "@vsolve/query"],
   allowedDevOrigins: devOrigins,

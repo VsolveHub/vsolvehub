@@ -114,8 +114,20 @@ export {
 export type { Catalog, Locale, Message, Translator } from "./i18n";
 
 // The signature device: money, countdowns and OTP codes.
-export { Readout, formatMoney, formatDuration, describeDuration } from "./readout";
+export {
+  Readout,
+  formatMoney,
+  formatInrRupees,
+  formatMoneyText,
+  formatDate,
+  parseDisplayDate,
+  formatDateTime,
+  formatDuration,
+  describeDuration,
+} from "./readout";
 export type { ReadoutProps } from "./readout";
+export { IsoDateField } from "./iso-date-field";
+export type { IsoDateFieldProps } from "./iso-date-field";
 
 // Explanation that is available without being in the way. Never for a decision
 // or a legal disclosure — see the component's own note.

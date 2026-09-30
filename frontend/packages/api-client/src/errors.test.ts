@@ -124,6 +124,15 @@ describe("ApiRequestError recovery mapping", () => {
     expect(
       new ApiRequestError(403, detail("partner_self_review_forbidden")).recovery,
     ).toBe("contact_support");
+    expect(new ApiRequestError(400, detail("min_stay_not_met")).recovery).toBe("fix_input");
+    expect(new ApiRequestError(409, detail("dates_unavailable")).recovery).toBe("choose_again");
+    expect(new ApiRequestError(409, detail("out_of_stock")).recovery).toBe("choose_again");
+    expect(new ApiRequestError(409, detail("insufficient_quantity")).recovery).toBe(
+      "choose_again",
+    );
+    expect(new ApiRequestError(400, detail("handover_pin_invalid")).recovery).toBe("fix_input");
+    expect(new ApiRequestError(400, detail("rental_state_invalid")).recovery).toBe("choose_again");
+    expect(new ApiRequestError(400, detail("stay_state_invalid")).recovery).toBe("choose_again");
   });
 
   it("does not match a code that only differs by casing", () => {

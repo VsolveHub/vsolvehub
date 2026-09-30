@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
 
 export interface DrawerProps {
@@ -27,10 +27,10 @@ export function Drawer({ children, trigger, title, onOpenChange, side = "right",
   
   const isOpen = open !== undefined ? open : internalOpen;
   
-  const handleOpenChange = (newOpen: boolean) => {
+  const handleOpenChange = useCallback((newOpen: boolean) => {
     setInternalOpen(newOpen);
     onOpenChange?.(newOpen);
-  };
+  }, [onOpenChange]);
 
   const triggerRef = useRef<HTMLDivElement>(null);
   const drawerRef = useRef<HTMLElement>(null);
@@ -38,6 +38,7 @@ export function Drawer({ children, trigger, title, onOpenChange, side = "right",
   useEffect(() => {
     if (!isOpen) return;
     
+    const triggerNode = triggerRef.current;
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
@@ -78,9 +79,9 @@ export function Drawer({ children, trigger, title, onOpenChange, side = "right",
     return () => {
       document.body.style.overflow = originalOverflow;
       document.removeEventListener("keydown", handleKeyDown);
-      triggerRef.current?.querySelector("button")?.focus();
+      triggerNode?.querySelector("button")?.focus();
     };
-  }, [isOpen]);
+  }, [isOpen, handleOpenChange]);
 
   const slideInClass = side === "left" ? "animate-in slide-in-from-left-full" : "animate-in slide-in-from-right-full";
   const positionClass = side === "left" ? "left-0 border-r" : "right-0 border-l";

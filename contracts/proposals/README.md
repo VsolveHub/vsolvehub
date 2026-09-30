@@ -56,3 +56,6 @@ The generated OpenAPI document and generated TypeScript client are never manuall
 | 0021 | V Coins Customer & Burn Preview Surface | Published |
 | 0022 | Customer Referral Surface | Published |
 | 0023 | Operations Loyalty, Wallet & Referral Management | Published |
+| 0024 | Listing application resume upload | Proposed |
+| 0025 | Stays & Rentals UX MVP (property-first, stock, PIN, dispute) | Published |
+| 0026 | M3 QA financial integrity (deposit gateway refunds, per-booking PIN, Ops refunds, stay expiry, listing_plan_cap, full-refund cancel+ledger) | Published |

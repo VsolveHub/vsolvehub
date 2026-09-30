@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Button, Card, ErrorState, Spinner, formatMoney } from "@vsolve/ui";
+import { Badge, Button, Card, ErrorState, Spinner, formatMoney , formatDate} from "@vsolve/ui";
 
 import { Pictogram, type PictogramName } from "@/components/pictogram";
 
@@ -236,7 +236,7 @@ export function EarningsPanel() {
                   <span className="text-warning-text">
                     not usable until{" "}
                     <time dateTime={account.data.effective_from}>
-                      {new Date(account.data.effective_from).toLocaleDateString("en-IN")}
+                      {formatDate(account.data.effective_from)}
                     </time>
                   </span>
                 </>

@@ -59,6 +59,7 @@ INSTALLED_APPS = [
     "apps.stay",
     "apps.wallet",
     "apps.loyalty",
+    "apps.ops_reports",
 ]
 
 MIDDLEWARE = [
@@ -522,6 +523,9 @@ SPECTACULAR_SETTINGS = {
         "ProjectDelayClaimStatusEnum": "apps.requirements.models.ProjectDelayClaim.Status",
         "ProjectTransferStatusEnum": "apps.requirements.models.ProjectTransfer.Status",
         "ProjectDeliverableKindEnum": "apps.requirements.models.ProjectDeliverable.Kind",
+        # Stays/rentals and listings moderation status choice sets
+        "ModerationStatusEnum": "apps.stay.models.Property.ModerationStatus",
+        "ListingModerationStatusEnum": "apps.listings.models.Listing.ModerationStatus",
     },
 }
 API_DOCS_ENABLED = env.bool("API_DOCS_ENABLED")

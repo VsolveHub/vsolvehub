@@ -1,5 +1,6 @@
 """Periodic reconciliation for provider ambiguity and in-flight refunds."""
 
+from datetime import timedelta
 from uuid import UUID
 
 from celery import shared_task
@@ -65,9 +66,14 @@ def reconcile_one_refund(_self: object, refund_id: str) -> None:
     reconcile_refund(refund_id=UUID(refund_id))
 
 
+# Give create_provider_order / outbox a chance before an already-past expires_at
+# (corrupt or forced) can mark PROVIDER_PENDING attempts EXPIRED with no order_id.
+_PROVIDER_ORDER_CREATE_GRACE_SECONDS = 120
+
+
 @shared_task
 def expire_abandoned_payment_attempts() -> int:
-    """Release wallet and coin reservations when a payment attempt times out."""
+    """Release wallet/coin funding and domain holds when a payment attempt times out."""
     now = timezone.now()
     attempt_ids = list(
         PaymentAttempt.objects.filter(
@@ -91,10 +97,29 @@ def expire_abandoned_payment_attempts() -> int:
                 continue
             if attempt.expires_at is None or attempt.expires_at >= timezone.now():
                 continue
+            # Corrupt window (expires_at <= created_at) must not kill handoff.
+            if attempt.expires_at <= attempt.created_at:
+                continue
+            # Still waiting on Razorpay order create — do not expire during grace.
+            if (
+                attempt.status == PaymentAttempt.Status.PROVIDER_PENDING
+                and not attempt.provider_order_id
+                and attempt.created_at
+                > timezone.now() - timedelta(seconds=_PROVIDER_ORDER_CREATE_GRACE_SECONDS)
+            ):
+                continue
             release_checkout_funding(attempt=attempt)
             attempt.status = PaymentAttempt.Status.EXPIRED
             attempt.failure_code = "payment_attempt_expired"
             attempt.version += 1
             attempt.save(update_fields=("status", "failure_code", "version", "updated_at"))
+            if attempt.purpose == PaymentAttempt.Purpose.A7_RENTAL_BOOKING:
+                from apps.rental.services import release_booking_for_expired_payment
+
+                release_booking_for_expired_payment(payment_attempt_id=attempt.id)
+            elif attempt.purpose == PaymentAttempt.Purpose.A9_STAY_RESERVATION:
+                from apps.stay.services import release_reservation_for_expired_payment
+
+                release_reservation_for_expired_payment(payment_attempt_id=attempt.id)
             expired += 1
     return expired

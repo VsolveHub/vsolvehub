@@ -526,7 +526,7 @@ class Command(BaseCommand):
         groups: dict[str, BookedGroup],
         *,
         ops_primary: User,
-        area: ServiceArea,  # noqa: ARG002 - kept for symmetry with the other _seed_* signatures
+        area: ServiceArea,
     ) -> None:
         self.stdout.write("Advancing Bookings through their lifecycle...")
 
@@ -653,7 +653,7 @@ class Command(BaseCommand):
 
     def _seed_payouts(
         self,
-        groups: dict[str, BookedGroup],  # noqa: ARG002 - kept for symmetry
+        groups: dict[str, BookedGroup],
         *,
         ops_primary: User,
         ops_secondary: User,

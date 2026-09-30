@@ -135,6 +135,29 @@ class Command(BaseCommand):
                 ],
             },
             {
+                "sub": "Hotels",
+                "services": [
+                    {
+                        "name": "Hotel",
+                        "schema": {
+                            "type": "object",
+                            "required": ["star_rating", "room_type"],
+                            "properties": {
+                                "star_rating": {
+                                    "type": "string",
+                                    "enum": ["Budget", "2 Star", "3 Star", "4 Star", "5 Star"],
+                                },
+                                "room_type": {
+                                    "type": "string",
+                                    "enum": ["Standard", "Deluxe", "Suite", "Executive"],
+                                },
+                                "breakfast": {"type": "boolean"},
+                            },
+                        },
+                    }
+                ],
+            },
+            {
                 "sub": "Bed Space",
                 "services": [
                     {
@@ -422,16 +445,39 @@ class Command(BaseCommand):
                         "is_active": True,
                     },
                 )
+
                 A9VariantConfiguration.objects.update_or_create(
                     variant=variant,
                     version=1,
                     defaults={
                         "status": A9VariantConfiguration.Status.ACTIVE,
                         "property_schema": svc_def["schema"],
+                        # Default to ENQUIRY during creation, we'll force-update below
+                        "booking_mode": A9VariantConfiguration.BookingMode.ENQUIRY,
                     },
                 )
                 if first_variant is None:
                     first_variant = variant
+
+        # Force-update all active A9VariantConfigurations based on subcategory name
+        A9VariantConfiguration.objects.filter(
+            status=A9VariantConfiguration.Status.ACTIVE,
+            variant__service__subcategory__name__in=[
+                "Hotels",
+                "Short Stay",
+                "Premium Stays",
+                "Hostels",
+            ],
+        ).update(booking_mode=A9VariantConfiguration.BookingMode.RESERVATION)
+
+        A9VariantConfiguration.objects.filter(status=A9VariantConfiguration.Status.ACTIVE).exclude(
+            variant__service__subcategory__name__in=[
+                "Hotels",
+                "Short Stay",
+                "Premium Stays",
+                "Hostels",
+            ]
+        ).update(booking_mode=A9VariantConfiguration.BookingMode.ENQUIRY)
         Service.objects.filter(subcategory__category=category).exclude(
             id__in=keep_service_ids
         ).update(status=Service.Status.RETIRED)
@@ -489,9 +535,21 @@ class Command(BaseCommand):
                 "cleaning": True,
                 "room_type": "DOUBLE_SHARING",
             }
-            prop.cancellation_policy_text = "Free cancellation up to 24 hours before check-in. 50% charge thereafter."
-            prop.house_rules = "No smoking in rooms. Gate closes at 11 PM. Visitors allowed in lounge only."
-            prop.save(update_fields=("structured_fields", "cancellation_policy_text", "house_rules", "moderation_status", "updated_at"))
+            prop.cancellation_policy_text = (
+                "Free cancellation up to 24 hours before check-in. 50% charge thereafter."
+            )
+            prop.house_rules = (
+                "No smoking in rooms. Gate closes at 11 PM. Visitors allowed in lounge only."
+            )
+            prop.save(
+                update_fields=(
+                    "structured_fields",
+                    "cancellation_policy_text",
+                    "house_rules",
+                    "moderation_status",
+                    "updated_at",
+                )
+            )
             submit_property(prop=prop, host=profile)
             moderate_property(
                 prop=prop,
@@ -508,13 +566,27 @@ class Command(BaseCommand):
                 "cleaning": True,
                 "room_type": "DOUBLE_SHARING",
             }
-            prop.cancellation_policy_text = "Free cancellation up to 24 hours before check-in. 50% charge thereafter."
-            prop.house_rules = "No smoking in rooms. Gate closes at 11 PM. Visitors allowed in lounge only."
+            prop.cancellation_policy_text = (
+                "Free cancellation up to 24 hours before check-in. 50% charge thereafter."
+            )
+            prop.house_rules = (
+                "No smoking in rooms. Gate closes at 11 PM. Visitors allowed in lounge only."
+            )
             prop.moderation_status = Property.ModerationStatus.APPROVED
-            prop.save(update_fields=("structured_fields", "cancellation_policy_text", "house_rules", "moderation_status", "updated_at"))
+            prop.save(
+                update_fields=(
+                    "structured_fields",
+                    "cancellation_policy_text",
+                    "house_rules",
+                    "moderation_status",
+                    "updated_at",
+                )
+            )
 
         # Add single room private stay
-        single_prop = Property.objects.filter(host=profile, title="Cyber Towers Executive Single Room").first()
+        single_prop = Property.objects.filter(
+            host=profile, title="Cyber Towers Executive Single Room"
+        ).first()
         if single_prop is None:
             single_prop = create_property(
                 host=profile,
@@ -534,9 +606,19 @@ class Command(BaseCommand):
                 "workstation": True,
                 "room_type": "PRIVATE_ROOM",
             }
-            single_prop.cancellation_policy_text = "Standard flexible cancellation: full refund 48 hours prior."
+            single_prop.cancellation_policy_text = (
+                "Standard flexible cancellation: full refund 48 hours prior."
+            )
             single_prop.house_rules = "Quiet hours after 10 PM. No pets allowed."
-            single_prop.save(update_fields=("structured_fields", "cancellation_policy_text", "house_rules", "moderation_status", "updated_at"))
+            single_prop.save(
+                update_fields=(
+                    "structured_fields",
+                    "cancellation_policy_text",
+                    "house_rules",
+                    "moderation_status",
+                    "updated_at",
+                )
+            )
             submit_property(prop=single_prop, host=profile)
             moderate_property(
                 prop=single_prop,
@@ -545,9 +627,63 @@ class Command(BaseCommand):
                 reason="Executive single room approved.",
             )
         else:
-            single_prop.cancellation_policy_text = "Standard flexible cancellation: full refund 48 hours prior."
+            single_prop.cancellation_policy_text = (
+                "Standard flexible cancellation: full refund 48 hours prior."
+            )
             single_prop.house_rules = "Quiet hours after 10 PM. No pets allowed."
-            single_prop.save(update_fields=("cancellation_policy_text", "house_rules", "updated_at"))
+            single_prop.save(
+                update_fields=("cancellation_policy_text", "house_rules", "updated_at")
+            )
+
+        hotel_variant = ServiceVariant.objects.filter(
+            service__subcategory__name="Hotels", code__endswith="-stay"
+        ).first()
+
+        hotel_prop = Property.objects.filter(host=profile, title="Grand Hyatt Hotel Demo").first()
+        if hotel_prop is None and hotel_variant:
+            hotel_prop = create_property(
+                host=profile,
+                variant_id=hotel_variant.id,
+                title="Grand Hyatt Hotel Demo",
+                description="Luxurious 5-star hotel demo with city views, swimming pool, and reservation-first booking.",
+                location_text="Banjara Hills, Hyderabad",
+                unit_name="Deluxe Suite",
+                nightly_rate_paise=450000,
+                sharing_count=2,
+            )
+            hotel_prop.structured_fields = {
+                "star_rating": "5 Star",
+                "room_type": "Deluxe",
+                "breakfast": True,
+            }
+            hotel_prop.cancellation_policy_text = (
+                "Free cancellation up to 48 hours before check-in."
+            )
+            hotel_prop.house_rules = "No smoking in rooms. Pets not allowed."
+            hotel_prop.save(
+                update_fields=(
+                    "structured_fields",
+                    "cancellation_policy_text",
+                    "house_rules",
+                    "moderation_status",
+                    "updated_at",
+                )
+            )
+            submit_property(prop=hotel_prop, host=profile)
+            moderate_property(
+                prop=hotel_prop,
+                actor=host_user,
+                action="APPROVE",
+                reason="Demo seed approve for customer reservation.",
+            )
+        elif hotel_prop:
+            hotel_prop.moderation_status = Property.ModerationStatus.APPROVED
+            hotel_prop.save(
+                update_fields=(
+                    "moderation_status",
+                    "updated_at",
+                )
+            )
 
         pending = Property.objects.filter(host=profile, title="Pending Ops Hostel Bed").first()
         if pending is None:
@@ -588,6 +724,18 @@ class Command(BaseCommand):
             url="https://picsum.photos/seed/stay5/800/600",
             defaults={"caption": "Dedicated Workstation", "display_order": 1},
         )
+        if hotel_prop:
+            PropertyMedia.objects.get_or_create(
+                property=hotel_prop,
+                url="https://picsum.photos/seed/hotel1/800/600",
+                defaults={"caption": "Grand Hotel Facade", "display_order": 0},
+            )
+            PropertyMedia.objects.get_or_create(
+                property=hotel_prop,
+                url="https://picsum.photos/seed/hotel2/800/600",
+                defaults={"caption": "Deluxe Suite Interior", "display_order": 1},
+            )
+
         PropertyMedia.objects.get_or_create(
             property=pending,
             url="https://picsum.photos/seed/stay6/800/600",

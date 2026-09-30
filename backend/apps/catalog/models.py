@@ -793,6 +793,10 @@ class A9VariantConfiguration(models.Model):
         ACTIVE = "ACTIVE", "Active"
         RETIRED = "RETIRED", "Retired"
 
+    class BookingMode(models.TextChoices):
+        RESERVATION = "RESERVATION", "Reservation (paid)"
+        ENQUIRY = "ENQUIRY", "Enquiry (visit-first)"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     variant = models.ForeignKey(
         ServiceVariant,
@@ -801,6 +805,11 @@ class A9VariantConfiguration(models.Model):
     )
     version = models.PositiveIntegerField(default=1)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.ACTIVE)
+    booking_mode = models.CharField(
+        max_length=16,
+        choices=BookingMode.choices,
+        default=BookingMode.ENQUIRY,
+    )
     property_schema = models.JSONField(default=dict, blank=True)
     enquiry_schema = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

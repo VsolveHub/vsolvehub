@@ -63,8 +63,8 @@ describe("catalog category rows", () => {
 
     const section = screen.getByRole("region", { name: "Electrician" });
     expect(screen.getByRole("link", { name: "Subcategory 7" })).toBeInTheDocument();
-    // Seven subcategories plus the see-all link.
-    expect(within(section).getAllByRole("link")).toHaveLength(8);
+    // Eight subcategories plus the see-all link.
+    expect(within(section).getAllByRole("link")).toHaveLength(9);
     expect(
       screen.getByRole("link", { name: "See all Electrician subcategories" }),
     ).toHaveAttribute("href", "/catalog/electrician");

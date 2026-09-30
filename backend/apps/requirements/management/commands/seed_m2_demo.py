@@ -2238,11 +2238,7 @@ class Command(BaseCommand):
                     "is_required": required,
                     "validation_rules": {
                         **({"minimum": minimum} if minimum is not None else {}),
-                        **(
-                            {"default": QUESTION_DEFAULT[code]}
-                            if code in QUESTION_DEFAULT
-                            else {}
-                        ),
+                        **({"default": QUESTION_DEFAULT[code]} if code in QUESTION_DEFAULT else {}),
                     },
                     "display_order": order,
                     "is_active": True,

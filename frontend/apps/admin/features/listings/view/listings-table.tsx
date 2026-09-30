@@ -10,7 +10,7 @@ import {
   RefreshCw,
   ShieldAlert,
 } from "lucide-react";
-import { formatMoney } from "@vsolve/ui";
+import { formatMoney, formatMoneyText, formatDate } from "@vsolve/ui";
 
 import { listingFields, type AdminListing } from "../queries";
 
@@ -103,7 +103,7 @@ export function ListingsTable({
                           </span>
                         ) : listing.salary_display || fields.salary_range || fields.pay_range ? (
                           <span className="font-semibold text-slate-800">
-                            {String(listing.salary_display || fields.salary_range || fields.pay_range)}
+                            {formatMoneyText(String(listing.salary_display || fields.salary_range || fields.pay_range))}
                           </span>
                         ) : null}
                         <div className="flex flex-wrap items-center gap-1">
@@ -184,11 +184,7 @@ export function ListingsTable({
                     </td>
 
                     <td className="px-4 py-3.5 text-xs text-slate-500">
-                      {new Date(listing.created_at).toLocaleDateString("en-IN", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}
+                      {formatDate(listing.created_at)}
                     </td>
 
                     <td className="px-4 py-3.5 text-right">

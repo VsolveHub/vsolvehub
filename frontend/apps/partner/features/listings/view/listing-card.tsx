@@ -4,7 +4,6 @@ import {
   CheckCircle2,
   MapPin,
   Pencil,
-  Phone,
   RotateCcw,
   Send,
   Users,
@@ -12,7 +11,7 @@ import {
   Briefcase,
   IndianRupee,
 } from "lucide-react";
-import { Badge, Card, StatusChip, formatMoney } from "@vsolve/ui";
+import { Badge, Card, StatusChip, formatMoney, formatMoneyText, formatDate } from "@vsolve/ui";
 
 import type { PartnerListing } from "../queries";
 
@@ -45,9 +44,9 @@ export function ListingCard({
       displayPay += ` / ${listing.salary_period.toLowerCase()}`;
     }
   } else if (listing.salary_display) {
-    displayPay = listing.salary_display;
+    displayPay = formatMoneyText(listing.salary_display);
   } else if (listing.structured_fields?.salary_range) {
-    displayPay = String(listing.structured_fields.salary_range);
+    displayPay = formatMoneyText(String(listing.structured_fields.salary_range));
   }
 
   const exp = listing.structured_fields?.experience_years 
@@ -103,7 +102,7 @@ export function ListingCard({
             )}
             
             <span className="text-xs text-text-muted">
-              Created {new Date(listing.created_at).toLocaleDateString()}
+              Created {formatDate(listing.created_at)}
             </span>
           </div>
 

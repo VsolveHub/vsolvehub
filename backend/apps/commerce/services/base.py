@@ -192,3 +192,57 @@ def allocate_document_number(*, kind: str, issued_on: date | None = None) -> tup
     sequence.last_sequence += 1
     sequence.save(update_fields=("last_sequence",))
     return series, sequence.last_sequence
+
+
+def _cancel_domain_booking_on_refund(*, attempt: PaymentAttempt, refund: Refund) -> None:
+    """Cancel linked bookings / release capacity after a payment is fully refunded.
+
+    Fail-closed and purpose-aware. Does not create a second Refund — customer cancel
+    entry points already request refunds; calling them here would loop.
+    """
+    if attempt.purpose in (
+        PaymentAttempt.Purpose.A7_RENTAL_BOOKING,
+        PaymentAttempt.Purpose.A7_RENTAL_DEPOSIT,
+    ):
+        from apps.rental.services import cancel_booking_on_refund
+
+        cancel_booking_on_refund(payment_attempt_id=attempt.id)
+        return
+
+    if attempt.purpose == PaymentAttempt.Purpose.A9_STAY_RESERVATION:
+        from apps.stay.services import cancel_reservation_on_refund
+
+        cancel_reservation_on_refund(payment_attempt_id=attempt.id)
+        return
+
+    if attempt.purpose != PaymentAttempt.Purpose.BOOKING_GROUP:
+        return
+
+    from apps.carts.models import FulfilmentUnit
+    from apps.commerce.models import Booking
+    from apps.fulfilment.services import cancel_booking_group_on_refund
+    from apps.payouts.services import reverse_booking_earning_for_refund
+
+    cancel_booking_group_on_refund(payment_attempt=attempt, refund=refund)
+
+    unit_ids = list(attempt.allocations.values_list("fulfilment_unit_id", flat=True))
+    if not unit_ids:
+        group_id = attempt.booking_group_id
+        if group_id is None and refund.order_id is not None:
+            group_id = refund.order.booking_group_id
+        if group_id is not None:
+            unit_ids = list(
+                FulfilmentUnit.objects.filter(booking_group_id=group_id).values_list(
+                    "id", flat=True
+                )
+            )
+
+    booking_ids = Booking.objects.filter(fulfilment_unit_id__in=unit_ids).values_list(
+        "id", flat=True
+    )
+    for booking_id in set(booking_ids):
+        reverse_booking_earning_for_refund(
+            booking_id=booking_id,
+            refund_id=refund.id,
+            actor=refund.requested_by,
+        )

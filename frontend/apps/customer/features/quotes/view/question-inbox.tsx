@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, cn } from "@vsolve/ui";
+import { cn } from "@vsolve/ui";
 import {
   ArrowLeft,
   Briefcase,
@@ -105,7 +105,7 @@ export function QuestionInbox({
           role="dialog"
           aria-modal="true"
           aria-label="Chat with Professional"
-          className="fixed inset-0 z-[100] flex flex-col bg-[#F4F6F8] animate-in fade-in slide-in-from-bottom-3 duration-200"
+          className="fixed inset-0 z-[100] flex flex-col bg-surface-sunken animate-in fade-in slide-in-from-bottom-3 duration-200"
         >
           {/* Top Navigation Bar */}
           <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between border-b border-line bg-surface px-4 shadow-2xs">
@@ -249,7 +249,7 @@ export function QuestionInbox({
                       e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
                     }}
                     disabled={answer.isPending}
-                    className="w-full resize-none rounded-[22px] border border-line bg-[#F8F9FA] px-4 py-2.5 text-sm text-navy-900 leading-5 placeholder:text-text-muted focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-900/20 max-h-32 min-h-[44px] box-border"
+                    className="w-full resize-none rounded-[22px] border border-line bg-surface-sunken px-4 py-2.5 text-sm text-navy-900 leading-5 placeholder:text-text-muted focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-900/20 max-h-32 min-h-[44px] box-border"
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
@@ -297,7 +297,7 @@ export function QuestionInbox({
 
 function ChatBubble({
   side,
-  who,
+  who: _who,
   at,
   children,
 }: {
@@ -327,44 +327,6 @@ function ChatBubble({
           <span>{when(at)}</span>
           {isMine ? <CheckCheck className="size-3 text-sky-300 inline" /> : null}
         </div>
-      </div>
-    </div>
-  );
-}
-
-function InlineReplyBox({
-  onAnswer,
-  pending,
-}: {
-  questionId: string;
-  requirementId: string;
-  onAnswer: (text: string) => void;
-  pending: boolean;
-}) {
-  const [text, setText] = useState("");
-  return (
-    <div className="mt-2 flex flex-col gap-2">
-      <textarea
-        rows={2}
-        maxLength={2000}
-        value={text}
-        onChange={(event) => setText(event.target.value)}
-        placeholder="Type your answer here…"
-        className="w-full resize-none rounded-xl border border-line bg-white p-2.5 text-sm text-navy-900 placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-navy-900/20"
-      />
-      <div className="flex justify-end">
-        <Button
-          size="sm"
-          disabled={text.trim() === ""}
-          loading={pending}
-          loadingLabel="Sending"
-          onClick={() => {
-            onAnswer(text.trim());
-            setText("");
-          }}
-        >
-          Send answer
-        </Button>
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from apps.stay.models import Property, PropertyMedia, StayEnquiry, StayReview, Unit
+from apps.stay.models import Property, PropertyMedia, StayEnquiry, StayReservation, StayReview, Unit
 
 
 class UnitSerializer(serializers.ModelSerializer):
@@ -36,6 +36,7 @@ class PropertySerializer(serializers.ModelSerializer):
     media = PropertyMediaSerializer(many=True, read_only=True)
     reviews = StayReviewSerializer(many=True, read_only=True)
     units = UnitSerializer(many=True, read_only=True)
+    booking_mode = serializers.SerializerMethodField()
 
     class Meta:
         model = Property
@@ -51,11 +52,29 @@ class PropertySerializer(serializers.ModelSerializer):
             "structured_fields",
             "cancellation_policy_text",
             "house_rules",
+            "min_stay_nights",
+            "available_from",
+            "available_until",
             "media",
             "reviews",
             "units",
+            "booking_mode",
             "created_at",
         )
+
+    def get_booking_mode(self, obj: Property) -> str:
+        from apps.catalog.models import A9VariantConfiguration
+
+        config = (
+            A9VariantConfiguration.objects.filter(
+                variant_id=obj.variant_id, status=A9VariantConfiguration.Status.ACTIVE
+            )
+            .order_by("-version")
+            .first()
+        )
+        if config is None:
+            return A9VariantConfiguration.BookingMode.ENQUIRY
+        return config.booking_mode
 
 
 class StayPhotoUploadSerializer(serializers.Serializer):
@@ -69,6 +88,7 @@ class StayTaxonomyVariantSerializer(serializers.Serializer):
     name = serializers.CharField()
     code = serializers.CharField()
     property_schema = serializers.JSONField()
+    booking_mode = serializers.CharField()
 
 
 class StayTaxonomyServiceSerializer(serializers.Serializer):
@@ -89,18 +109,51 @@ class CreatePropertySerializer(serializers.Serializer):
     variant_id = serializers.UUIDField()
     title = serializers.CharField(max_length=180)
     description = serializers.CharField(required=False, allow_blank=True, default="")
-    location_text = serializers.CharField(max_length=180)
-    unit_name = serializers.CharField(required=False, default="Standard room")
-    nightly_rate_paise = serializers.IntegerField(min_value=1)
+    location_text = serializers.CharField(
+        max_length=180, required=False, allow_blank=True, default=""
+    )
+    unit_name = serializers.CharField(required=False, allow_blank=True, default="")
+    nightly_rate_paise = serializers.IntegerField(min_value=1, required=False, allow_null=True)
     sharing_count = serializers.IntegerField(min_value=1, required=False, default=1)
     structured_fields = serializers.JSONField(required=False, default=dict)
     cancellation_policy_text = serializers.CharField(required=False, allow_blank=True, default="")
     house_rules = serializers.CharField(required=False, allow_blank=True, default="")
+    min_stay_nights = serializers.IntegerField(min_value=1, required=False, default=1)
+    available_from = serializers.DateField(required=False, allow_null=True)
+    available_until = serializers.DateField(required=False, allow_null=True)
     image_urls = serializers.ListField(
         child=serializers.CharField(min_length=1),
         min_length=1,
         max_length=8,
     )
+
+
+class UpdatePropertySerializer(serializers.Serializer):
+    title = serializers.CharField(max_length=180, required=False)
+    description = serializers.CharField(required=False, allow_blank=True)
+    location_text = serializers.CharField(max_length=180, required=False)
+    structured_fields = serializers.JSONField(required=False)
+    cancellation_policy_text = serializers.CharField(required=False, allow_blank=True)
+    house_rules = serializers.CharField(required=False, allow_blank=True)
+    min_stay_nights = serializers.IntegerField(min_value=1, required=False)
+    available_from = serializers.DateField(required=False, allow_null=True)
+    available_until = serializers.DateField(required=False, allow_null=True)
+
+
+class CreateUnitSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=120)
+    nightly_rate_paise = serializers.IntegerField(min_value=1)
+    sharing_count = serializers.IntegerField(min_value=1, required=False, default=1)
+    attributes = serializers.JSONField(required=False, default=dict)
+    is_active = serializers.BooleanField(required=False, default=True)
+
+
+class UpdateUnitSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=120, required=False)
+    nightly_rate_paise = serializers.IntegerField(min_value=1, required=False)
+    sharing_count = serializers.IntegerField(min_value=1, required=False)
+    attributes = serializers.JSONField(required=False)
+    is_active = serializers.BooleanField(required=False)
 
 
 class CreateEnquirySerializer(serializers.Serializer):
@@ -126,6 +179,10 @@ class StayQuoteResponseSerializer(serializers.Serializer):
     nights = serializers.IntegerField()
     nightly_rate_paise = serializers.IntegerField()
     total_quote_paise = serializers.IntegerField()
+    booking_mode = serializers.CharField(required=False)
+    min_stay_nights = serializers.IntegerField(required=False)
+    available_from = serializers.DateField(required=False, allow_null=True)
+    available_until = serializers.DateField(required=False, allow_null=True)
 
 
 class StayEnquirySerializer(serializers.ModelSerializer):
@@ -165,3 +222,43 @@ class RespondEnquirySerializer(serializers.Serializer):
 class StayModerationSerializer(serializers.Serializer):
     action = serializers.ChoiceField(choices=["APPROVE", "REJECT", "REMOVE", "REINSTATE"])
     reason = serializers.CharField(max_length=480)
+
+
+class StayReservationSerializer(serializers.ModelSerializer):
+    property_title = serializers.CharField(source="property.title", read_only=True)
+    unit_name = serializers.CharField(source="unit.name", read_only=True, default="Standard room")
+    customer_name = serializers.CharField(source="customer.full_name", read_only=True)
+    customer_phone = serializers.CharField(source="customer.phone_number", read_only=True)
+
+    class Meta:
+        model = StayReservation
+        fields = (
+            "id",
+            "property",
+            "property_title",
+            "unit",
+            "unit_name",
+            "customer",
+            "customer_name",
+            "customer_phone",
+            "payment_attempt",
+            "status",
+            "check_in",
+            "check_out",
+            "guest_count",
+            "nights",
+            "total_paise",
+            "checked_in_at",
+            "checked_out_at",
+            "cancelled_at",
+            "cancellation_reason",
+            "created_at",
+        )
+
+
+class CreateReservationSerializer(serializers.Serializer):
+    property_id = serializers.UUIDField()
+    unit_id = serializers.UUIDField()
+    check_in = serializers.DateField()
+    check_out = serializers.DateField()
+    guest_count = serializers.IntegerField(min_value=1, required=False, default=1)

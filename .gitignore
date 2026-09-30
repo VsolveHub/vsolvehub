@@ -75,3 +75,17 @@ archive/
 # The screenshots in docs/demo/a10/ are committed; these are not.
 docs/demo/*.zip
 docs/demo/a10-replay/
+
+# The owner's working notes, client documents and screenshots. Committed by
+# accident: 86 files, 30MB, including a contributor name/email dump and a client
+# cost estimate. Kept on disk, excluded from future commits. The copies already in
+# this branch's history are a separate decision, to be taken before it merges.
+srikar-prompts/
+
+# Celery beat's scheduler state. Local runtime data, rewritten on every beat run,
+# and sharing it between hosts would let one inherit another's last-run times.
+# beat.ps1 warns against exactly that: a second scheduler double-fires every
+# periodic task.
+backend/celerybeat-schedule
+backend/celerybeat-schedule-shm
+backend/celerybeat-schedule-wal

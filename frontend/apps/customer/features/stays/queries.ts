@@ -31,6 +31,10 @@ export function fetchStays(params?: StayFilterParams) {
   );
 }
 
+export function fetchStayTaxonomy() {
+  return request(() => getApiClient().GET("/api/v1/stays/taxonomy"));
+}
+
 export function fetchStayProperty(propertyId: string) {
   return request(() =>
     getApiClient().GET("/api/v1/stays/{property_id}", {
@@ -86,3 +90,36 @@ export function createStayEnquiry(payload: {
 export function fetchMyStayEnquiries() {
   return request(() => getApiClient().GET("/api/v1/me/stay-enquiries"));
 }
+
+export type StayReservation = Schemas["StayReservation"];
+
+export function fetchMyStayReservations() {
+  return request(() => getApiClient().GET("/api/v1/me/stay-reservations"));
+}
+
+export function cancelStayEnquiry(enquiryId: string) {
+  return request(() =>
+    getApiClient().POST("/api/v1/me/stay-enquiries/{enquiry_id}/cancel", {
+      params: { path: { enquiry_id: enquiryId } },
+    }),
+  );
+}
+
+export function cancelStayReservation(reservationId: string) {
+  return request(() =>
+    getApiClient().POST("/api/v1/me/stay-reservations/{reservation_id}/cancel", {
+      params: { path: { reservation_id: reservationId } },
+    }),
+  );
+}
+
+export function canCancelStayEnquiry(status?: string): boolean {
+  const value = (status ?? "").toUpperCase();
+  return ["SUBMITTED", "RESPONDED", "CONFIRMED"].includes(value);
+}
+
+export function canCancelStayReservation(status?: string): boolean {
+  const value = (status ?? "").toUpperCase();
+  return ["HELD", "PAYMENT_PENDING", "CONFIRMED"].includes(value);
+}
+

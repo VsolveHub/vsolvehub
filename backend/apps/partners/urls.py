@@ -180,3 +180,11 @@ urlpatterns = [
         name="operations-partner-tax-profile-verify",
     ),
 ]
+
+from apps.partners.views.operations import PartnerImportView
+
+urlpatterns += [
+    path(
+        "operations/partners/import/", PartnerImportView.as_view(), name="operations_partner_import"
+    ),
+]

@@ -3,23 +3,33 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Building2 } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { Button, EmptyState, ErrorState, Skeleton } from "@vsolve/ui";
 
-import { fetchMyStayEnquiries } from "@/features/stays/queries";
-import { StayEnquiryCard } from "@/features/stays/view";
+import { fetchMyStayEnquiries, fetchMyStayReservations } from "@/features/stays/queries";
+import { StayEnquiryCard, StayReservationCard } from "@/features/stays/view";
 
 export default function MyStayEnquiriesPage() {
-  const [activeTab, setActiveTab] = useState<"ALL" | "PENDING" | "RESPONDED">("ALL");
+  const [activeTab, setActiveTab] = useState<"ALL" | "PENDING" | "RESPONDED" | "RESERVATIONS">("RESERVATIONS");
 
   const {
     data: enquiries = [],
-    isLoading,
-    error,
-    refetch,
+    isLoading: enquiriesLoading,
+    error: enquiriesError,
+    refetch: refetchEnquiries,
   } = useQuery({
     queryKey: ["my-stay-enquiries"],
     queryFn: fetchMyStayEnquiries,
+  });
+
+  const {
+    data: reservations = [],
+    isLoading: reservationsLoading,
+    error: reservationsError,
+    refetch: refetchReservations,
+  } = useQuery({
+    queryKey: ["my-stay-reservations"],
+    queryFn: fetchMyStayReservations,
   });
 
   const filteredEnquiries = enquiries.filter((e) => {
@@ -32,6 +42,10 @@ export default function MyStayEnquiriesPage() {
     }
     return true;
   });
+
+  const isLoading = activeTab === "RESERVATIONS" ? reservationsLoading : enquiriesLoading;
+  const error = activeTab === "RESERVATIONS" ? reservationsError : enquiriesError;
+  const refetch = activeTab === "RESERVATIONS" ? refetchReservations : refetchEnquiries;
 
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8">
@@ -46,9 +60,9 @@ export default function MyStayEnquiriesPage() {
         </Link>
         <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
           <div>
-            <h1 className="text-2xl font-extrabold text-text sm:text-3xl">My Stay Enquiries</h1>
+            <h1 className="text-2xl font-extrabold text-text sm:text-3xl">My Stays</h1>
             <p className="mt-0.5 text-xs text-text-secondary">
-              Track host responses, date quotes, and room availability.
+              Track your reservations, host responses, and availability.
             </p>
           </div>
           <Link href="/stays">
@@ -60,7 +74,18 @@ export default function MyStayEnquiriesPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-line pb-2">
+      <div className="flex items-center gap-2 border-b border-line pb-2 flex-wrap">
+        <button
+          type="button"
+          onClick={() => setActiveTab("RESERVATIONS")}
+          className={`rounded-full px-4 py-1.5 text-xs font-bold transition ${
+            activeTab === "RESERVATIONS"
+              ? "bg-action text-white"
+              : "bg-surface border border-line text-text-secondary hover:text-text"
+          }`}
+        >
+          Reservations ({reservations.length})
+        </button>
         <button
           type="button"
           onClick={() => setActiveTab("ALL")}
@@ -109,11 +134,29 @@ export default function MyStayEnquiriesPage() {
         </div>
       ) : error ? (
         <ErrorState
-          title="Could not load your stay enquiries"
+          title="Could not load your data"
           message={(error as Error).message}
           actionLabel="Retry"
           onAction={() => refetch()}
         />
+      ) : activeTab === "RESERVATIONS" ? (
+        reservations.length === 0 ? (
+          <EmptyState
+            title="No stay reservations found"
+            description="You don't have any confirmed stay reservations yet."
+            action={
+              <Link href="/stays">
+                <Button className="font-bold">Explore Rooms & Stays</Button>
+              </Link>
+            }
+          />
+        ) : (
+          <div className="flex flex-col gap-4">
+            {reservations.map((reservation) => (
+              <StayReservationCard key={reservation.id} reservation={reservation} />
+            ))}
+          </div>
+        )
       ) : filteredEnquiries.length === 0 ? (
         <EmptyState
           title="No stay enquiries found"
@@ -138,3 +181,4 @@ export default function MyStayEnquiriesPage() {
     </main>
   );
 }
+

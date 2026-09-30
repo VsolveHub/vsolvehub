@@ -19,6 +19,7 @@ import { getApiClient } from "@/lib/api/browser";
  */
 
 export type PartnerProfile = Schemas["PartnerProfile"];
+export type PartnerProfileUpdate = Schemas["PatchedPartnerProfileUpdateRequest"];
 
 /** `404` is a real answer: an applicant with no profile yet has none to show. */
 export function isNoProfileYet(error: unknown): boolean {
@@ -36,24 +37,22 @@ export function usePartnerProfile() {
 }
 
 /**
- * Changes the name Customers see.
+ * Changes what a Partner may change about themselves.
  *
- * `display_name` only. The phone number is the login credential — moving it
- * moves who can sign in — so it belongs behind an OTP challenge on the new
- * number rather than behind a field on this form. Django refuses it here.
+ * Accepts `display_name` and/or `default_location_text`. The phone number is
+ * the login credential — moving it moves who can sign in — so it belongs behind
+ * an OTP challenge on the new number rather than behind a field on this form.
  *
- * No optimistic write: the response is the authoritative profile, and a name
- * that appeared before the server accepted it would be a claim this client
- * cannot make.
+ * No optimistic write: the response is the authoritative profile.
  */
 export function useUpdatePartnerProfile() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (displayName: string) =>
+    mutationFn: (patch: PartnerProfileUpdate) =>
       request(() =>
         getApiClient().PATCH("/api/v1/partner/me/", {
-          body: { display_name: displayName },
+          body: patch,
         }),
       ),
     onSuccess: (profile) => {

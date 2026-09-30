@@ -8,7 +8,7 @@ import {
   MapPin,
   Users,
 } from "lucide-react";
-import { Badge, Card, formatMoney } from "@vsolve/ui";
+import { Badge, Card, formatMoney, formatMoneyText, formatDate } from "@vsolve/ui";
 
 import { listingFields, type Listing } from "../queries";
 
@@ -30,9 +30,9 @@ export function ListingRow({ listing }: ListingRowProps) {
       displayPay += ` / ${listing.salary_period.toLowerCase()}`;
     }
   } else if (listing.salary_display) {
-    displayPay = listing.salary_display;
+    displayPay = formatMoneyText(listing.salary_display);
   } else if (fields.pay_range || fields.salary_range || fields.compensation) {
-    displayPay = String(fields.pay_range || fields.salary_range || fields.compensation);
+    displayPay = formatMoneyText(String(fields.pay_range || fields.salary_range || fields.compensation));
   }
 
   const roleType = fields.role_type || fields.employment_type;
@@ -75,7 +75,7 @@ export function ListingRow({ listing }: ListingRowProps) {
                   <span>•</span>
                   <span className="flex items-center gap-1">
                     <Clock className="size-3.5" />
-                    Posted {new Date(listing.published_at).toLocaleDateString()}
+                    Posted {formatDate(listing.published_at)}
                   </span>
                 </>
               )}
@@ -86,10 +86,12 @@ export function ListingRow({ listing }: ListingRowProps) {
               {listing.title}
             </h2>
 
-            {/* Description */}
-            <p className="line-clamp-2 text-sm leading-relaxed text-text-secondary">
-              {listing.description}
-            </p>
+            {/* Summary list payloads omit description (ListingDetail only). */}
+            {(fields.summary || fields.description) ? (
+              <p className="line-clamp-2 text-sm leading-relaxed text-text-secondary">
+                {String(fields.summary || fields.description)}
+              </p>
+            ) : null}
 
             {/* Badges / Structured Fields */}
             <div className="flex flex-wrap items-center gap-2 pt-1">

@@ -42,25 +42,25 @@ class RentalAsset(models.Model):
     asset_identifier = models.CharField(max_length=80, blank=True)
     is_serialized = models.BooleanField(default=True)
     quantity_available = models.PositiveIntegerField(default=1)
+
+    class ModerationStatus(models.TextChoices):
+        DRAFT = "DRAFT", "Draft"
+        PENDING = "PENDING", "Pending"
+        APPROVED = "APPROVED", "Approved"
+        REJECTED = "REJECTED", "Rejected"
+        REMOVED = "REMOVED", "Removed"
+
     condition_grade = models.CharField(
         max_length=16, choices=ConditionGrade.choices, default=ConditionGrade.GOOD
     )
-    current_status = models.CharField(
-        max_length=24, choices=Status.choices, default=Status.ACTIVE
-    )
+    current_status = models.CharField(max_length=24, choices=Status.choices, default=Status.ACTIVE)
     daily_rate_paise = models.PositiveIntegerField()
     deposit_paise = models.PositiveIntegerField(default=0)
     location_text = models.CharField(max_length=180, blank=True)
     moderation_status = models.CharField(
         max_length=16,
-        choices=[
-            ("DRAFT", "Draft"),
-            ("PENDING", "Pending"),
-            ("APPROVED", "Approved"),
-            ("REJECTED", "Rejected"),
-            ("REMOVED", "Removed"),
-        ],
-        default="DRAFT",
+        choices=ModerationStatus.choices,
+        default=ModerationStatus.DRAFT,
     )
     moderation_reason = models.CharField(max_length=480, blank=True)
     structured_fields = models.JSONField(default=dict, blank=True)
@@ -73,6 +73,12 @@ class RentalAsset(models.Model):
             models.Index(fields=("partner", "current_status"), name="rental_asset_partner_idx"),
             models.Index(
                 fields=("moderation_status", "current_status"), name="rental_asset_public_idx"
+            ),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(quantity_available__gte=1),
+                name="rental_asset_quantity_available_gte_1",
             ),
         ]
 
@@ -163,15 +169,14 @@ class RentalBooking(models.Model):
     reservation = models.OneToOneField(
         AssetReservation, on_delete=models.PROTECT, related_name="booking"
     )
-    deposit = models.OneToOneField(
-        RentalDeposit, on_delete=models.PROTECT, related_name="booking"
-    )
+    deposit = models.OneToOneField(RentalDeposit, on_delete=models.PROTECT, related_name="booking")
     status = models.CharField(max_length=24, choices=Status.choices, default=Status.CONFIRMED)
     start_date = models.DateField()
     end_date = models.DateField()
     price_paise = models.PositiveIntegerField()
     pickup_or_delivery_mode = models.CharField(max_length=32, default="PICKUP")
     notes = models.TextField(blank=True)
+    handover_pin_hash = models.CharField(max_length=255, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -197,7 +202,9 @@ class RentalModerationEvent(models.Model):
         REINSTATED = "REINSTATED", "Reinstated"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    asset = models.ForeignKey(RentalAsset, on_delete=models.PROTECT, related_name="moderation_events")
+    asset = models.ForeignKey(
+        RentalAsset, on_delete=models.PROTECT, related_name="moderation_events"
+    )
     actor = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT
     )
@@ -213,6 +220,58 @@ def overlapping_reservations(
         asset_id=asset_id,
         status__in=(AssetReservation.Status.TENTATIVE, AssetReservation.Status.CONFIRMED),
     ).filter(Q(start_date__lt=end) & Q(end_date__gt=start))
+
+
+def overlapping_reserved_quantity(asset_id: uuid.UUID, start: date, end: date) -> int:
+    """Sum booking-line quantities held by overlapping tentative/confirmed reservations.
+
+    Counting reservation *rows* under-counts multi-unit bookings (quantity > 1 on a
+    line still creates one ``AssetReservation``), which let stock be oversold.
+
+    CANCELLED/RETURNED bookings are excluded even if a leaked CONFIRMED
+    reservation row remains (ghost hold); callers should still repair those rows.
+    """
+    lines = (
+        RentalBookingLine.objects.filter(
+            asset_id=asset_id,
+            booking__reservation__status__in=(
+                AssetReservation.Status.TENTATIVE,
+                AssetReservation.Status.CONFIRMED,
+            ),
+            booking__reservation__start_date__lt=end,
+            booking__reservation__end_date__gt=start,
+        )
+        .exclude(
+            booking__status__in=(
+                RentalBooking.Status.CANCELLED,
+                RentalBooking.Status.RETURNED,
+            )
+        )
+        .select_related("booking__reservation")
+    )
+
+    events = []
+    for line in lines:
+        r_start = line.booking.reservation.start_date
+        r_end = line.booking.reservation.end_date
+        act_start = max(r_start, start)
+        act_end = min(r_end, end)
+        if act_start < act_end:
+            events.append((act_start, line.quantity))
+            events.append((act_end, -line.quantity))
+
+    if not events:
+        return 0
+
+    events.sort(key=lambda x: (x[0], x[1]))
+    max_q = 0
+    cur_q = 0
+    for _, delta in events:
+        cur_q += delta
+        max_q = max(max_q, cur_q)
+
+    return max_q
+
 
 class RentalPhotoUpload(models.Model):
     """Partner-uploaded ad photo stored on the platform before it is attached to an asset."""
@@ -254,4 +313,3 @@ class RentalAssetMedia(models.Model):
     @property
     def sort_order(self) -> int:
         return self.display_order
-

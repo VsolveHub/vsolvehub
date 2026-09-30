@@ -223,7 +223,7 @@ def record_adjustment(
     corrects_id: UUID | None,
     net_paise: int,
     reason: str,
-    actor: User,
+    actor: User | None,
     idempotency_key: str,
 ) -> PartnerLedgerEntry:
     """Correct the ledger by adding to it, never by editing it.
@@ -633,3 +633,28 @@ def start_paying_batch(*, batch_id: UUID, expected_version: int) -> PayoutBatch:
             payload={"payout_item_id": str(item.id)},
         )
     return batch
+
+
+def reverse_booking_earning_for_refund(
+    *, booking_id: UUID, refund_id: UUID, actor: User | None
+) -> PartnerLedgerEntry | None:
+    """Append a REVERSAL for a settled EARNING after a refund succeeds.
+
+    Idempotent on `(refund_id, earning.id)`. No-op when the booking was never settled.
+    """
+    earning = PartnerLedgerEntry.objects.filter(
+        booking_id=booking_id, kind=PartnerLedgerEntry.Kind.EARNING
+    ).first()
+    if earning is None:
+        return None
+    if earning.net_paise == 0:
+        return None
+
+    return record_adjustment(
+        partner_id=earning.partner_id,
+        corrects_id=earning.id,
+        net_paise=-earning.net_paise,
+        reason=f"refund_reversal:{refund_id}",
+        actor=actor,
+        idempotency_key=f"refund-reversal:{refund_id}:{earning.id}",
+    )

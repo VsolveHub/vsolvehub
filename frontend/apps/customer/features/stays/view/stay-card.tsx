@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Building, Check, Coffee, MapPin, ShieldCheck, Users, Wind, Wifi } from "lucide-react";
+import { ArrowRight, Building, Coffee, MapPin, ShieldCheck, Users, Wind, Wifi } from "lucide-react";
 import { Badge, Button } from "@vsolve/ui";
 
 import { SaveHeart, useSavedItems } from "@/features/part-a";
@@ -31,16 +31,25 @@ export function StayCard({ property }: StayCardProps) {
       ? (property as { media: { url: string }[] }).media[0].url
       : null;
 
+  const detailHref = `/stays/${property.id}`;
+
   return (
     <article className="group relative flex flex-col justify-between overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface p-5 shadow-xs transition hover:border-line-strong hover:shadow-raised">
+      {/* Stretched link under content. Content is pointer-events-none so clicks
+          reach the link; SaveHeart re-enables pointer events. */}
+      <Link
+        href={detailHref}
+        className="absolute inset-0 z-0 rounded-[inherit] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+        aria-label={`View ${property.title}`}
+      />
       {hero ? (
-        <div className="-mx-5 -mt-5 mb-3 aspect-[16/10] overflow-hidden bg-surface-sunken">
+        <div className="pointer-events-none -mx-5 -mt-5 mb-3 aspect-[16/10] overflow-hidden bg-surface-sunken">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={hero} alt="" className="h-full w-full object-cover transition duration-slow group-hover:scale-[1.03]" />
         </div>
       ) : null}
-      <div className="flex flex-col gap-3">
-        <div className="flex justify-end">
+      <div className="relative z-[1] pointer-events-none flex flex-col gap-3">
+        <div className="relative z-10 flex justify-end pointer-events-auto">
           <SaveHeart saved={saved.isSaved(property.id)} onToggle={() => saved.toggle(property.id)} />
         </div>
         {/* Top Badges */}
@@ -111,7 +120,7 @@ export function StayCard({ property }: StayCardProps) {
       </div>
 
       {/* Pricing and Action Footer */}
-      <div className="mt-5 border-t border-line/70 pt-4">
+      <div className="relative z-[1] pointer-events-none mt-5 border-t border-line/70 pt-4">
         <div className="flex items-end justify-between gap-3">
           <div>
             <div className="flex items-baseline gap-1">
@@ -121,16 +130,22 @@ export function StayCard({ property }: StayCardProps) {
               <span className="text-xs font-medium text-text-secondary">/ night</span>
             </div>
             <p className="mt-0.5 text-[11px] font-medium text-text-secondary">
+              {typeof property.min_stay_nights === "number" && property.min_stay_nights > 1
+                ? `Minimum stay ${property.min_stay_nights} nights · `
+                : ""}
               Enquiry-first booking · Instant date quote
             </p>
           </div>
 
-          <Link href={`/stays/${property.id}`}>
-            <Button size="sm" className="inline-flex items-center gap-1.5 font-bold">
-              Check Dates
-              <ArrowRight className="size-3.5 transition group-hover:translate-x-0.5" />
-            </Button>
-          </Link>
+          <Button
+            size="sm"
+            className="inline-flex items-center gap-1.5 font-bold"
+            tabIndex={-1}
+            aria-hidden
+          >
+            Check Dates
+            <ArrowRight className="size-3.5 transition group-hover:translate-x-0.5" />
+          </Button>
         </div>
       </div>
     </article>

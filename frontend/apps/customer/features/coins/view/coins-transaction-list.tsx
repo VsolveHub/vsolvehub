@@ -1,7 +1,7 @@
 "use client";
 
-import { Badge } from "@vsolve/ui";
-import { ArrowDownLeft, ArrowUpRight, Clock, Coins, Sparkles, XCircle } from "lucide-react";
+import { formatDate } from "@vsolve/ui";
+import { ArrowUpRight, Clock, Coins, Sparkles } from "lucide-react";
 import type { CoinTransaction } from "../queries";
 
 interface CoinsTransactionListProps {
@@ -88,11 +88,7 @@ export function CoinsTransactionList({ transactions }: CoinsTransactionListProps
         {transactions.map((txn) => {
           const meta = getCoinTxnMeta(txn.kind);
           const Icon = meta.icon;
-          const formattedDate = new Date(txn.created_at).toLocaleDateString("en-IN", {
-            day: "numeric",
-            month: "short",
-            year: "numeric",
-          });
+          const formattedDate = formatDate(txn.created_at);
 
           return (
             <div key={txn.id} className="flex items-center justify-between px-6 py-4 hover:bg-[#FAF9F7]/60 transition-colors">

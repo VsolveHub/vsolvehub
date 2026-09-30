@@ -7,6 +7,7 @@ export interface RentalFilterParams {
   q?: string;
   location?: string;
   service?: string;
+  category?: string;
   min_price?: number;
   max_price?: number;
   max_deposit?: number;
@@ -14,11 +15,13 @@ export interface RentalFilterParams {
   end_date?: string;
 }
 
-export type RentalMineTab = "ALL" | "UPCOMING" | "ONGOING" | "RETURNED";
+export type RentalMineTab = "ALL" | "UPCOMING" | "ONGOING" | "RETURNED" | "INACTIVE";
 
 export function rentalMineBucket(status?: string): Exclude<RentalMineTab, "ALL"> {
   const value = (status ?? "").toUpperCase();
-  if (["RETURNED", "CLOSED", "CANCELLED", "DISPUTED"].includes(value)) return "RETURNED";
+  // Cancelled / disputed leave the Returned bucket (T19).
+  if (["CANCELLED", "DISPUTED"].includes(value)) return "INACTIVE";
+  if (["RETURNED", "CLOSED"].includes(value)) return "RETURNED";
   if (["HANDOVER", "HANDED_OVER"].includes(value)) return "ONGOING";
   return "UPCOMING";
 }

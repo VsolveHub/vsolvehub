@@ -37,60 +37,132 @@ class Command(BaseCommand):
             },
         )
         taxonomy = {
-    "Event Furniture Rental": [
-        "Plastic Chair", "Cushion Chair", "VIP Sofa Chair", "Round Table",
-        "Dining Table", "Cocktail Table", "Stage Sofa Set", "Bride/Groom Chair",
-        "Reception Table", "VIP Lounge Sofa", "Bar Counter",
-    ],
-    "Tent/Shamiana": [
-        "10x10 ft Tent (10-15 members)", "20x20 ft Tent (30-50 members)",
-        "30x30 ft Tent (70-100 members)", "40x40 ft Tent (120-150 members)",
-        "50x50 ft Tent (200-300 members)", "60x40 ft Tent (250-400 members)",
-        "100x50 ft Tent (500+ members)", "Dome Tent", "Pagoda Tent",
-    ],
-    "Lighting Rental": [
-        "LED Lights", "Focus Lights", "Decorative Lights", "Serial Lights",
-        "Flood Lights", "Stage Lights", "Moving Head Lights", "Laser Lights", "LED Wall",
-    ],
-    "Sound System Rental": [
-        "Small Speaker", "Large Speaker", "Line Array System", "Subwoofer",
-        "Microphone", "Cordless Microphone", "Amplifier", "DJ Setup",
-        "Mixer System", "Audio Mixer Console",
-    ],
-    "Decor Items Rent": [
-        "Balloon Kit", "Theme Props", "Photo Booth Setup", "Cutouts",
-        "Flower Panels", "Entry Gate Setup", "Selfie Point Setup",
-        "LED Name Board", "Red Carpet",
-    ],
-    "Catering Equipment": [
-        "Cooking Vessels", "Serving Dishes", "Buffet Tables", "Plates & Glasses",
-        "Water Dispenser", "Gas Stove", "Deep Freezer", "Tea/Coffee Counter Setup",
-    ],
-    "Construction Equipment": [
-        "Concrete Mixer", "Vibrator Machine", "Scaffolding", "Centering Material",
-        "JCB / Excavator", "Drilling Machine", "Power Trowel", "Diesel Generator",
-    ],
-    "Home Appliance Rental": [
-        "Refrigerator", "Washing Machine", "TV", "AC", "Air Cooler",
-        "Water Purifier", "Microwave Oven",
-    ],
-    "Furniture Rental (Home/Office)": [
-        "Sofa", "Bed", "Mattress", "Wardrobe", "Office Chair",
-        "Office Table", "Study Table", "Workstation",
-    ],
-    "Camera & Media Equipment": [
-        "DSLR Camera", "Lens", "Video Camera", "Tripod", "Gimbal",
-        "Drone Camera", "Action Camera", "LED Video Light",
-    ],
-    "Tools & Machinery": [
-        "Drill Machine", "Cutter Machine", "Grinder", "Welding Machine",
-        "Power Tools Kit", "Air Compressor", "Pressure Washer", "Ladder",
-    ],
-    "Cooling/Heating": [
-        "Air Cooler", "AC Rental", "Industrial Fan", "Heater",
-        "Air Blower", "Mist Fan",
-    ],
-}
+            "Event Furniture Rental": [
+                "Plastic Chair",
+                "Cushion Chair",
+                "VIP Sofa Chair",
+                "Round Table",
+                "Dining Table",
+                "Cocktail Table",
+                "Stage Sofa Set",
+                "Bride/Groom Chair",
+                "Reception Table",
+                "VIP Lounge Sofa",
+                "Bar Counter",
+            ],
+            "Tent/Shamiana": [
+                "10x10 ft Tent (10-15 members)",
+                "20x20 ft Tent (30-50 members)",
+                "30x30 ft Tent (70-100 members)",
+                "40x40 ft Tent (120-150 members)",
+                "50x50 ft Tent (200-300 members)",
+                "60x40 ft Tent (250-400 members)",
+                "100x50 ft Tent (500+ members)",
+                "Dome Tent",
+                "Pagoda Tent",
+            ],
+            "Lighting Rental": [
+                "LED Lights",
+                "Focus Lights",
+                "Decorative Lights",
+                "Serial Lights",
+                "Flood Lights",
+                "Stage Lights",
+                "Moving Head Lights",
+                "Laser Lights",
+                "LED Wall",
+            ],
+            "Sound System Rental": [
+                "Small Speaker",
+                "Large Speaker",
+                "Line Array System",
+                "Subwoofer",
+                "Microphone",
+                "Cordless Microphone",
+                "Amplifier",
+                "DJ Setup",
+                "Mixer System",
+                "Audio Mixer Console",
+            ],
+            "Decor Items Rent": [
+                "Balloon Kit",
+                "Theme Props",
+                "Photo Booth Setup",
+                "Cutouts",
+                "Flower Panels",
+                "Entry Gate Setup",
+                "Selfie Point Setup",
+                "LED Name Board",
+                "Red Carpet",
+            ],
+            "Catering Equipment": [
+                "Cooking Vessels",
+                "Serving Dishes",
+                "Buffet Tables",
+                "Plates & Glasses",
+                "Water Dispenser",
+                "Gas Stove",
+                "Deep Freezer",
+                "Tea/Coffee Counter Setup",
+            ],
+            "Construction Equipment": [
+                "Concrete Mixer",
+                "Vibrator Machine",
+                "Scaffolding",
+                "Centering Material",
+                "JCB / Excavator",
+                "Drilling Machine",
+                "Power Trowel",
+                "Diesel Generator",
+            ],
+            "Home Appliance Rental": [
+                "Refrigerator",
+                "Washing Machine",
+                "TV",
+                "AC",
+                "Air Cooler",
+                "Water Purifier",
+                "Microwave Oven",
+            ],
+            "Furniture Rental (Home/Office)": [
+                "Sofa",
+                "Bed",
+                "Mattress",
+                "Wardrobe",
+                "Office Chair",
+                "Office Table",
+                "Study Table",
+                "Workstation",
+            ],
+            "Camera & Media Equipment": [
+                "DSLR Camera",
+                "Lens",
+                "Video Camera",
+                "Tripod",
+                "Gimbal",
+                "Drone Camera",
+                "Action Camera",
+                "LED Video Light",
+            ],
+            "Tools & Machinery": [
+                "Drill Machine",
+                "Cutter Machine",
+                "Grinder",
+                "Welding Machine",
+                "Power Tools Kit",
+                "Air Compressor",
+                "Pressure Washer",
+                "Ladder",
+            ],
+            "Cooling/Heating": [
+                "Air Cooler",
+                "AC Rental",
+                "Industrial Fan",
+                "Heater",
+                "Air Blower",
+                "Mist Fan",
+            ],
+        }
         first_variant = None
         for sub_name, services in taxonomy.items():
             sub, _ = Subcategory.objects.get_or_create(
@@ -122,17 +194,41 @@ class Command(BaseCommand):
                 )
                 asset_schema = {}
                 if "Tent" in sub_name or "Shamiana" in sub_name:
-                    asset_schema = {"type": "object", "properties": {"size": {"type": "string"}, "capacity": {"type": "number"}}}
+                    asset_schema = {
+                        "type": "object",
+                        "properties": {"size": {"type": "string"}, "capacity": {"type": "number"}},
+                    }
                 elif "Appliance" in sub_name:
-                    asset_schema = {"type": "object", "properties": {"brand": {"type": "string"}, "condition": {"type": "string"}}}
+                    asset_schema = {
+                        "type": "object",
+                        "properties": {
+                            "brand": {"type": "string"},
+                            "condition": {"type": "string"},
+                        },
+                    }
                 elif "Camera" in sub_name:
-                    asset_schema = {"type": "object", "properties": {"kit": {"type": "string"}, "megapixels": {"type": "number"}}}
+                    asset_schema = {
+                        "type": "object",
+                        "properties": {"kit": {"type": "string"}, "megapixels": {"type": "number"}},
+                    }
                 elif "Vehicle" in sub_name:
-                    asset_schema = {"type": "object", "properties": {"vehicle_type": {"type": "string"}, "fuel_type": {"type": "string"}}}
+                    asset_schema = {
+                        "type": "object",
+                        "properties": {
+                            "vehicle_type": {"type": "string"},
+                            "fuel_type": {"type": "string"},
+                        },
+                    }
                 elif "Furniture" in sub_name:
-                    asset_schema = {"type": "object", "properties": {"material": {"type": "string"}, "color": {"type": "string"}}}
+                    asset_schema = {
+                        "type": "object",
+                        "properties": {"material": {"type": "string"}, "color": {"type": "string"}},
+                    }
                 else:
-                    asset_schema = {"type": "object", "properties": {"condition": {"type": "string"}}}
+                    asset_schema = {
+                        "type": "object",
+                        "properties": {"condition": {"type": "string"}},
+                    }
 
                 A7VariantConfiguration.objects.update_or_create(
                     variant=variant,

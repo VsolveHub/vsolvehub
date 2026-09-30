@@ -25,6 +25,7 @@ import {
   Spinner,
   Textarea,
   formatMoney,
+  formatDate,
 } from "@vsolve/ui";
 import { useMemo, useState } from "react";
 
@@ -528,7 +529,7 @@ function QuotePanel({
                 <option value="">Choose a visit…</option>
                 {siteVisits.map((visit) => (
                   <option key={visit.siteVisitId} value={visit.siteVisitId}>
-                    {new Date(visit.at).toLocaleDateString("en-IN")} —{" "}
+                    {formatDate(visit.at)} —{" "}
                     {visit.status.replaceAll("_", " ").toLowerCase()}
                   </option>
                 ))}

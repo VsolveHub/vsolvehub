@@ -21,9 +21,14 @@ export type DepositStatus =
   | "FULLY_CONSUMED"
   | string;
 
-export type BookingAction = "handover" | "return" | "release-deposit";
+export type BookingAction =
+  | "handover"
+  | "return"
+  | "release-deposit"
+  | "dispute-deposit"
+  | "cancel";
 
-/** Single primary action for a booking row, or null when none applies. */
+/** Primary + optional secondary actions for a booking row. */
 export function partnerBookingAction(
   status: RentalBookingStatus,
   depositStatus?: DepositStatus | null,
@@ -39,6 +44,22 @@ export function partnerBookingAction(
   return null;
 }
 
+/** Pre-handover cancel: PENDING_PAYMENT or CONFIRMED only. */
+export function canCancelBooking(status: RentalBookingStatus): boolean {
+  return status === "PENDING_PAYMENT" || status === "CONFIRMED";
+}
+
+/** After return with held deposit, partner may raise a dispute instead of full release. */
+export function canDisputeDeposit(
+  status: RentalBookingStatus,
+  depositStatus?: DepositStatus | null,
+): boolean {
+  return (
+    status === "RETURNED" &&
+    (depositStatus === "HELD" || depositStatus === "AUTHORIZED")
+  );
+}
+
 export function bookingActionLabel(action: BookingAction): string {
   switch (action) {
     case "handover":
@@ -47,6 +68,10 @@ export function bookingActionLabel(action: BookingAction): string {
       return "Return";
     case "release-deposit":
       return "Release deposit";
+    case "dispute-deposit":
+      return "Raise deposit dispute";
+    case "cancel":
+      return "Cancel booking";
   }
 }
 

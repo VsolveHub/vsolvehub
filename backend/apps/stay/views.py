@@ -11,10 +11,13 @@ from rest_framework.views import APIView
 
 from apps.partners.models import PartnerProfile
 from apps.partners.permissions import IsOperationsUser, IsPartnerUser
-from apps.stay.models import Property, StayEnquiry
+from apps.stay.exceptions import StayStateApiError
+from apps.stay.models import Property, StayEnquiry, StayReservation, Unit
 from apps.stay.serializers import (
     CreateEnquirySerializer,
     CreatePropertySerializer,
+    CreateReservationSerializer,
+    CreateUnitSerializer,
     PropertySerializer,
     RespondEnquirySerializer,
     StayEnquirySerializer,
@@ -22,20 +25,34 @@ from apps.stay.serializers import (
     StayPhotoUploadSerializer,
     StayQuoteRequestSerializer,
     StayQuoteResponseSerializer,
+    StayReservationSerializer,
     StayTaxonomySubcategorySerializer,
+    UnitSerializer,
+    UpdatePropertySerializer,
+    UpdateUnitSerializer,
 )
 from apps.stay.services import (
     StayStateError,
     calculate_stay_quote,
+    cancel_enquiry,
+    cancel_reservation,
+    check_in_reservation,
+    check_out_reservation,
+    confirm_enquiry,
     create_enquiry,
     create_property,
+    create_reservation,
+    create_unit,
     get_stay_taxonomy,
+    initiate_reservation_payment,
     moderate_property,
     partner_owns_stay_photo,
     public_properties,
     respond_enquiry,
     store_stay_photo,
     submit_property,
+    update_property_ad,
+    update_unit,
 )
 
 
@@ -43,11 +60,17 @@ def _partner(user: Any) -> PartnerProfile:
     return get_object_or_404(PartnerProfile, user=user)
 
 
-def _error(exc: Exception) -> Response:
-    code = status.HTTP_400_BAD_REQUEST
+def _raise_domain_error(exc: Exception) -> None:
     if isinstance(exc, PermissionError):
-        code = status.HTTP_403_FORBIDDEN
-    return Response({"detail": str(exc)}, status=code)
+        raise StayStateApiError(reason=str(exc), code="permission_denied") from exc
+    code = getattr(exc, "code", "stay_state_invalid")
+    raise StayStateApiError(reason=str(exc), code=str(code)) from exc
+
+
+def _error(exc: Exception) -> Response:
+    """Legacy wrapper — prefer raising StayStateApiError via _raise_domain_error."""
+    _raise_domain_error(exc)
+    raise AssertionError("unreachable")  # pragma: no cover
 
 
 class StayTaxonomyView(APIView):
@@ -168,6 +191,65 @@ class MyStayEnquiriesView(APIView):
         return Response(StayEnquirySerializer(rows, many=True).data)
 
 
+class MyStayEnquiryCancelView(APIView):
+    """Customer cancels an open stay enquiry."""
+
+    permission_classes = (permissions.IsAuthenticated,)
+
+    @extend_schema(request=None, responses=StayEnquirySerializer)
+    def post(self, request: Any, enquiry_id: UUID) -> Response:
+        enquiry = get_object_or_404(
+            StayEnquiry.objects.select_related("property"),
+            id=enquiry_id,
+            customer=request.user,
+        )
+        try:
+            enquiry = cancel_enquiry(enquiry=enquiry, actor=request.user, as_host=False)
+        except (StayStateError, PermissionError) as exc:
+            return _error(exc)
+        return Response(StayEnquirySerializer(enquiry).data)
+
+
+class PartnerEnquiryCancelView(APIView):
+    """Host declines/cancels an open enquiry (sets CANCELLED)."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(request=None, responses=StayEnquirySerializer)
+    def post(self, request: Any, enquiry_id: UUID) -> Response:
+        partner = _partner(request.user)
+        enquiry = get_object_or_404(
+            StayEnquiry.objects.select_related("property"),
+            id=enquiry_id,
+            property__host=partner,
+        )
+        try:
+            enquiry = cancel_enquiry(enquiry=enquiry, actor=partner, as_host=True)
+        except (StayStateError, PermissionError) as exc:
+            return _error(exc)
+        return Response(StayEnquirySerializer(enquiry).data)
+
+
+class PartnerEnquiryConfirmView(APIView):
+    """Host confirms an enquiry and holds the unit calendar."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(request=None, responses=StayEnquirySerializer)
+    def post(self, request: Any, enquiry_id: UUID) -> Response:
+        partner = _partner(request.user)
+        enquiry = get_object_or_404(
+            StayEnquiry.objects.select_related("property", "unit"),
+            id=enquiry_id,
+            property__host=partner,
+        )
+        try:
+            enquiry = confirm_enquiry(enquiry=enquiry, host=partner)
+        except (StayStateError, PermissionError) as exc:
+            return _error(exc)
+        return Response(StayEnquirySerializer(enquiry).data)
+
+
 class PartnerStayPhotoUploadView(APIView):
     permission_classes = (IsPartnerUser,)
     parser_classes = (MultiPartParser, FormParser)
@@ -226,7 +308,11 @@ class PartnerPropertyCollectionView(APIView):
 class PartnerPropertyActionView(APIView):
     permission_classes = (IsPartnerUser,)
 
-    @extend_schema(request=None, responses=PropertySerializer)
+    @extend_schema(
+        operation_id="partner_stays_property_action",
+        request=None,
+        responses=PropertySerializer,
+    )
     def post(self, request: Any, property_id: UUID, action: str) -> Response:
         partner = _partner(request.user)
         prop = get_object_or_404(Property, id=property_id, host=partner)
@@ -238,6 +324,69 @@ class PartnerPropertyActionView(APIView):
         except (StayStateError, PermissionError) as exc:
             return _error(exc)
         return Response(PropertySerializer(prop).data)
+
+
+class PartnerPropertyDetailView(APIView):
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(request=UpdatePropertySerializer, responses=PropertySerializer)
+    def patch(self, request: Any, property_id: UUID) -> Response:
+        ser = UpdatePropertySerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        partner = _partner(request.user)
+        prop = get_object_or_404(Property, id=property_id, host=partner)
+        payload = dict(ser.validated_data)
+        clear_available_from = "available_from" in payload and payload["available_from"] is None
+        clear_available_until = "available_until" in payload and payload["available_until"] is None
+        try:
+            prop = update_property_ad(
+                prop=prop,
+                host=partner,
+                clear_available_from=clear_available_from,
+                clear_available_until=clear_available_until,
+                **payload,
+            )
+        except (StayStateError, PermissionError) as exc:
+            _raise_domain_error(exc)
+        return Response(PropertySerializer(prop).data)
+
+
+class PartnerUnitCollectionView(APIView):
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(responses=UnitSerializer(many=True))
+    def get(self, request: Any, property_id: UUID) -> Response:
+        partner = _partner(request.user)
+        prop = get_object_or_404(Property, id=property_id, host=partner)
+        return Response(UnitSerializer(prop.units.all(), many=True).data)
+
+    @extend_schema(request=CreateUnitSerializer, responses=UnitSerializer)
+    def post(self, request: Any, property_id: UUID) -> Response:
+        ser = CreateUnitSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        partner = _partner(request.user)
+        prop = get_object_or_404(Property, id=property_id, host=partner)
+        try:
+            unit = create_unit(prop=prop, host=partner, **ser.validated_data)
+        except (StayStateError, PermissionError) as exc:
+            _raise_domain_error(exc)
+        return Response(UnitSerializer(unit).data, status=status.HTTP_201_CREATED)
+
+
+class PartnerUnitDetailView(APIView):
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(request=UpdateUnitSerializer, responses=UnitSerializer)
+    def patch(self, request: Any, unit_id: UUID) -> Response:
+        ser = UpdateUnitSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        partner = _partner(request.user)
+        unit = get_object_or_404(Unit.objects.select_related("property"), id=unit_id)
+        try:
+            unit = update_unit(unit=unit, host=partner, **ser.validated_data)
+        except (StayStateError, PermissionError) as exc:
+            _raise_domain_error(exc)
+        return Response(UnitSerializer(unit).data)
 
 
 class PartnerEnquiryCollectionView(APIView):
@@ -302,3 +451,112 @@ class OpsStayModerateView(APIView):
         except StayStateError as exc:
             return _error(exc)
         return Response(PropertySerializer(prop).data)
+
+
+class StayReserveView(APIView):
+    permission_classes = (permissions.IsAuthenticated,)
+
+    @extend_schema(request=CreateReservationSerializer, responses=StayReservationSerializer)
+    def post(self, request: Any) -> Response:
+        ser = CreateReservationSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        data = ser.validated_data
+        try:
+            res = create_reservation(
+                customer=request.user,
+                property_id=data["property_id"],
+                unit_id=data["unit_id"],
+                check_in=data["check_in"],
+                check_out=data["check_out"],
+                guest_count=data.get("guest_count", 1),
+            )
+            initiate_reservation_payment(res.id)
+            res.refresh_from_db()
+        except (StayStateError, PermissionError, Property.DoesNotExist, Unit.DoesNotExist) as exc:
+            return _error(exc)
+        return Response(StayReservationSerializer(res).data, status=status.HTTP_201_CREATED)
+
+
+class MyStayReservationsView(APIView):
+    permission_classes = (permissions.IsAuthenticated,)
+
+    @extend_schema(responses=StayReservationSerializer(many=True))
+    def get(self, request: Any) -> Response:
+        rows = StayReservation.objects.filter(customer=request.user).select_related(
+            "property", "unit", "customer"
+        )
+        return Response(StayReservationSerializer(rows, many=True).data)
+
+
+class MyStayReservationCancelView(APIView):
+    """Customer cancel pre-check-in. Paid reservations trigger an automatic refund path."""
+
+    permission_classes = (permissions.IsAuthenticated,)
+
+    @extend_schema(request=None, responses=StayReservationSerializer)
+    def post(self, request: Any, reservation_id: UUID) -> Response:
+        res = get_object_or_404(
+            StayReservation.objects.select_related(
+                "property", "unit", "customer", "payment_attempt", "unit_reservation"
+            ),
+            id=reservation_id,
+            customer=request.user,
+        )
+        reason = ""
+        if isinstance(request.data, dict):
+            reason = str(request.data.get("reason") or "")
+        try:
+            res = cancel_reservation(reservation=res, customer=request.user, reason=reason)
+        except (StayStateError, PermissionError) as exc:
+            return _error(exc)
+        res = StayReservation.objects.select_related("property", "unit", "customer").get(id=res.id)
+        return Response(StayReservationSerializer(res).data)
+
+
+class PartnerReservationCollectionView(APIView):
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(responses=StayReservationSerializer(many=True))
+    def get(self, request: Any) -> Response:
+        partner = _partner(request.user)
+        rows = StayReservation.objects.filter(property__host=partner).select_related(
+            "property", "unit", "customer"
+        )
+        return Response(StayReservationSerializer(rows, many=True).data)
+
+
+class PartnerReservationActionView(APIView):
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(request=None, responses=StayReservationSerializer)
+    def post(self, request: Any, reservation_id: UUID, action: str) -> Response:
+        partner = _partner(request.user)
+        res = get_object_or_404(StayReservation, id=reservation_id, property__host=partner)
+        try:
+            if action == "check_in":
+                res = check_in_reservation(reservation=res, host=partner)
+            elif action == "check_out":
+                res = check_out_reservation(reservation=res, host=partner)
+            else:
+                raise StayStateError("Unknown action.")
+        except (StayStateError, PermissionError) as exc:
+            return _error(exc)
+        return Response(StayReservationSerializer(res).data)
+
+
+class OpsStayEnquiriesView(APIView):
+    permission_classes = (IsOperationsUser,)
+
+    @extend_schema(responses=StayEnquirySerializer(many=True))
+    def get(self, _request: Any) -> Response:
+        rows = StayEnquiry.objects.all().select_related("property", "unit")
+        return Response(StayEnquirySerializer(rows, many=True).data)
+
+
+class OpsStayReservationsView(APIView):
+    permission_classes = (IsOperationsUser,)
+
+    @extend_schema(responses=StayReservationSerializer(many=True))
+    def get(self, _request: Any) -> Response:
+        rows = StayReservation.objects.all().select_related("property", "unit", "customer")
+        return Response(StayReservationSerializer(rows, many=True).data)

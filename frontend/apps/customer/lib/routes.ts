@@ -157,9 +157,15 @@ export function staysBrowseHref(serviceSlug?: string): string {
  * Rental and Stay land on their native surfaces — never cart / book / requests.
  */
 export function catalogCategoryHref(categorySlug: string, tileSlug?: string): string {
-  if (isCareerJobsCategory(categorySlug)) return LISTINGS_HREF;
-  if (isRentalCategory(categorySlug)) return RENTALS_HREF;
-  if (isStayCategory(categorySlug)) return STAYS_HREF;
+  if (isCareerJobsCategory(categorySlug)) {
+    return tileSlug ? `${LISTINGS_HREF}?service=${encodeURIComponent(tileSlug)}` : LISTINGS_HREF;
+  }
+  if (isRentalCategory(categorySlug)) {
+    return tileSlug ? `${RENTALS_HREF}?category=${encodeURIComponent(tileSlug)}` : RENTALS_HREF;
+  }
+  if (isStayCategory(categorySlug)) {
+    return tileSlug ? `${STAYS_HREF}?category=${encodeURIComponent(tileSlug)}` : STAYS_HREF;
+  }
   if (tileSlug !== undefined && tileSlug !== "") {
     return `/catalog/${categorySlug}?tile=${encodeURIComponent(tileSlug)}`;
   }

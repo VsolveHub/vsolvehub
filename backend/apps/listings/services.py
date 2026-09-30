@@ -30,9 +30,14 @@ def _as_uuid(value: UUID | str) -> UUID:
 APPLICATIONS_PER_HOUR_LIMIT = 10
 CONTACT_REVEALS_PER_DAY_LIMIT = 25
 APPLICATION_COOLDOWN_HOURS_DEFAULT = 24
+FREE_TIER_MAX_ACTIVE_LISTINGS = 1
 
 
 class ListingStateError(ValueError):
+    pass
+
+
+class ListingPlanCapError(ListingStateError):
     pass
 
 
@@ -193,21 +198,22 @@ def publish_listing(*, listing: Listing, actor: Any) -> Listing:
     if listing.status not in (Listing.Status.DRAFT, Listing.Status.CLOSED, Listing.Status.EXPIRED):
         raise ListingStateError("This listing cannot be published from its current state.")
     subscription = _active_subscription(listing.poster)
-    # No active subscription: publish is still allowed when capability + ACTIVE config
-    # hold (explicit free tier). Plan max_active_listings applies only with an ACTIVE
-    # VendorSubscription — not a hidden default plan that auto-publishes.
-    if subscription is not None:
-        active_count = (
-            Listing.objects.filter(
-                poster=listing.poster,
-                status=Listing.Status.PUBLISHED,
-                expires_at__gt=timezone.now(),
-            )
-            .exclude(id=listing.id)
-            .count()
+    # Explicit free tier allows max 1 active listing, not unlimited.
+    # Plan max_active_listings applies when an active VendorSubscription exists.
+    active_count = (
+        Listing.objects.filter(
+            poster=listing.poster,
+            status=Listing.Status.PUBLISHED,
+            expires_at__gt=timezone.now(),
         )
+        .exclude(id=listing.id)
+        .count()
+    )
+    if subscription is not None:
         if active_count >= subscription.plan.max_active_listings:
-            raise ListingStateError("Active listing limit reached for the current plan.")
+            raise ListingPlanCapError("Active listing limit reached for the current plan.")
+    elif active_count >= FREE_TIER_MAX_ACTIVE_LISTINGS:
+        raise ListingPlanCapError("Active listing limit reached for the free tier.")
     listing.status = Listing.Status.PUBLISHED
     listing.published_at = timezone.now()
     listing.expires_at = listing.published_at + timedelta(days=30)
@@ -627,7 +633,7 @@ def partner_summary(poster: PartnerProfile) -> dict[str, Any]:
         "new_applications": Application.objects.filter(
             listing__poster=poster, status=Application.Status.SUBMITTED
         ).count(),
-        "plan_limit": active_subscription.plan.max_active_listings if active_subscription else None,
+        "plan_limit": active_subscription.plan.max_active_listings if active_subscription else 1,
         "subscription": (
             {
                 "id": str(active_subscription.id),

@@ -6,6 +6,7 @@ import { Badge, ErrorState, Skeleton, Spinner } from "@vsolve/ui";
 import { useCaseQueueSummary, useOperationsCases } from "@/features/cases/queries";
 import { useKillSwitches } from "@/features/kill-switches/queries";
 import { maskId } from "@/features/shared/identifiers";
+import { DashboardPinStrip } from "./pin-strip";
 
 /**
  * The Operations home screen.
@@ -94,12 +95,13 @@ interface TileProps {
   value: number;
   caption: string;
   accent: string;
+  href?: string;
 }
 
-function Tile({ label, value, caption, accent }: TileProps) {
-  return (
+function Tile({ label, value, caption, accent, href }: TileProps) {
+  const content = (
     <div
-      className={`bg-surface border border-line rounded-card p-4 border-l-4 shadow-card ${accent}`}
+      className={`bg-surface border border-line rounded-card p-4 border-l-4 shadow-card ${accent} transition-colors hover:bg-surface-hover/40`}
     >
       <span className="text-xs font-bold text-text-secondary tracking-wider uppercase">
         {label}
@@ -108,7 +110,17 @@ function Tile({ label, value, caption, accent }: TileProps) {
         <span className="text-3xl font-bold text-text">{value}</span>
       </div>
       <p className="mt-1 text-xs text-text-secondary">{caption}</p>
+      {href ? (
+        <span className="mt-2 text-xs font-medium text-action block">View related →</span>
+      ) : null}
     </div>
+  );
+  return href ? (
+    <Link href={href} className="block">
+      {content}
+    </Link>
+  ) : (
+    content
   );
 }
 
@@ -136,6 +148,7 @@ export function DashboardView() {
 
   return (
     <div className="space-y-8">
+      <DashboardPinStrip />
       {summary.isError ? (
         <ErrorState
           severity="warning"
@@ -160,6 +173,7 @@ export function DashboardView() {
               label="Breaching SLA"
               value={counts.breaching_sla}
               accent="border-l-[#b3261e]"
+              href="/operations/cases"
               caption={
                 counts.oldest_overdue_minutes === null
                   ? "Nothing past its deadline"
@@ -170,6 +184,7 @@ export function DashboardView() {
               label="My open cases"
               value={counts.mine_open}
               accent="border-l-[#00246b]"
+              href="/operations/cases"
               caption={
                 counts.mine_due_soon === 0
                   ? "None due within the hour"
@@ -180,12 +195,14 @@ export function DashboardView() {
               label="Quality queue"
               value={counts.teams.find((team) => team.owner_team === "QUALITY_SUPPORT")?.open ?? 0}
               accent="border-l-[#5f584d]"
+              href="/operations/cases"
               caption="Open quality and warranty cases"
             />
             <Tile
               label="Holding payout"
               value={counts.holding_payout}
               accent="border-l-[#8a3a00]"
+              href="/operations/cases"
               caption="Cases blocking a partner payout"
             />
           </>

@@ -7,9 +7,13 @@ import type { NextConfig } from "next";
 const workspaceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 const nextConfig: NextConfig = {
+  basePath: process.env.NEXT_PUBLIC_BASE_PATH || undefined,
   // Workspace packages are shipped as TS source; let Next compile them.
   transpilePackages: ["@vsolve/ui", "@vsolve/config", "@vsolve/api-client", "@vsolve/query"],
-  // Next 16 uses Turbopack for development and production by default.
+  // Next 16 defaults to Turbopack, which forks a worker per CPU and OOM-kills
+  // this 16GB laptop during the first route compile. Webpack stays in one
+  // process. Keep turbopack.root for production builds / explicit --turbopack.
+  experimental: { cpus: 1 },
   turbopack: { root: workspaceRoot },
   logging: {
     fetches: {

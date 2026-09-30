@@ -48,6 +48,10 @@ export function getEnquiryStatusBadge(status?: string): {
       return { label: "Host Responded", tone: "success" };
     case "DECLINED":
       return { label: "Declined by Host", tone: "danger" };
+    case "CANCELLED":
+      return { label: "Cancelled", tone: "danger" };
+    case "CONFIRMED":
+      return { label: "Confirmed", tone: "success" };
     case "WITHDRAWN":
       return { label: "Withdrawn", tone: "neutral" };
     case "EXPIRED":

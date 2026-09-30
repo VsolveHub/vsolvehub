@@ -1,6 +1,7 @@
 from typing import Any, NoReturn
 from uuid import UUID
 
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
@@ -9,15 +10,15 @@ from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.catalog.models import ServiceVariant, Subcategory
+from apps.catalog.models import Service, ServiceVariant, Subcategory
 from apps.foundation.services import execute_idempotent
-from apps.partners.permissions import IsOperationsUser
 from apps.listings.exceptions import (
     ApplicationDuplicateApiError,
     ApplicationRateLimitApiError,
     ListingCapabilityRequiredApiError,
     ListingIdempotencyKeyRequiredApiError,
     ListingNotAcceptingApplicationsApiError,
+    ListingPlanCapApiError,
     ListingStateConflictApiError,
     ListingVariantRequiredApiError,
     UnsupportedListingActionApiError,
@@ -34,13 +35,14 @@ from apps.listings.serializers import (
     ListingReportSerializer,
     ListingSummarySerializer,
     ModerationSerializer,
+    OpsCreateVendorSubscriptionPlanSerializer,
+    OpsUpdateVendorSubscriptionPlanSerializer,
+    OpsVendorSubscriptionPlanCatalogSerializer,
     PartnerListingSerializer,
     ReportSerializer,
     SubmitApplicationSerializer,
     VendorSubscriptionPlanSerializer,
     VendorSubscriptionSerializer,
-    OpsCreateVendorSubscriptionPlanSerializer,
-    OpsUpdateVendorSubscriptionPlanSerializer,
 )
 from apps.listings.services import (
     ListingStateError,
@@ -96,6 +98,10 @@ def _raise_listing_error(exc: Exception) -> NoReturn:
         raise ApplicationRateLimitApiError from exc
     if message.startswith("This listing is not accepting applications"):
         raise ListingNotAcceptingApplicationsApiError from exc
+    from apps.listings.services import ListingPlanCapError
+
+    if isinstance(exc, ListingPlanCapError) or "Active listing limit" in message:
+        raise ListingPlanCapApiError from exc
     raise ListingStateConflictApiError(message) from exc
 
 
@@ -208,7 +214,11 @@ class ListingResumeUploadView(APIView):
         )
         resume_url = request.build_absolute_uri(row.stored_file.url)
         return Response(
-            {"upload_id": str(row.id), "resume_url": resume_url, "original_name": row.original_name},
+            {
+                "upload_id": str(row.id),
+                "resume_url": resume_url,
+                "original_name": row.original_name,
+            },
             status=status.HTTP_201_CREATED,
         )
 
@@ -530,7 +540,17 @@ class VendorSubscriptionPlanView(APIView):
 
     @extend_schema(responses=VendorSubscriptionPlanSerializer(many=True))
     def get(self, _request: Any) -> Response:
-        plans = VendorSubscriptionPlan.objects.filter(is_active=True)
+        plans = (
+            VendorSubscriptionPlan.objects.filter(is_active=True)
+            .filter(
+                Q(service__isnull=True)
+                | Q(
+                    service__variants__booking_archetype=ServiceVariant.BookingArchetype.A10_LISTING
+                )
+            )
+            .distinct()
+            .order_by("code")
+        )
         return Response(VendorSubscriptionPlanSerializer(plans, many=True).data)
 
 
@@ -626,12 +646,43 @@ class OpsListingReinstateView(APIView):
 class OpsVendorSubscriptionPlanCollectionView(APIView):
     permission_classes = (IsOperationsUser,)
 
-    @extend_schema(responses=VendorSubscriptionPlanSerializer(many=True))
+    @extend_schema(responses=OpsVendorSubscriptionPlanCatalogSerializer)
     def get(self, _request: Any) -> Response:
-        plans = VendorSubscriptionPlan.objects.all().order_by("code")
-        return Response(VendorSubscriptionPlanSerializer(plans, many=True).data)
+        plans = VendorSubscriptionPlan.objects.select_related("service").order_by("code")
+        services = (
+            Service.objects.filter(status=Service.Status.ACTIVE)
+            .filter(
+                Q(slug="hiring-partner-job-listings")
+                | Q(
+                    variants__booking_archetype__in=(
+                        ServiceVariant.BookingArchetype.A7_RENTAL,
+                        ServiceVariant.BookingArchetype.A9_STAY,
+                    )
+                )
+            )
+            .select_related("subcategory")
+            .distinct()
+            .order_by("name")
+        )
+        return Response(
+            {
+                "plans": VendorSubscriptionPlanSerializer(plans, many=True).data,
+                "services": [
+                    {
+                        "id": service.id,
+                        "name": service.name,
+                        "slug": service.slug,
+                        "subcategory_name": service.subcategory.name,
+                    }
+                    for service in services
+                ],
+            }
+        )
 
-    @extend_schema(request=OpsCreateVendorSubscriptionPlanSerializer, responses=VendorSubscriptionPlanSerializer)
+    @extend_schema(
+        request=OpsCreateVendorSubscriptionPlanSerializer,
+        responses=VendorSubscriptionPlanSerializer,
+    )
     def post(self, request: Any) -> Response:
         ser = OpsCreateVendorSubscriptionPlanSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -642,7 +693,10 @@ class OpsVendorSubscriptionPlanCollectionView(APIView):
 class OpsVendorSubscriptionPlanDetailView(APIView):
     permission_classes = (IsOperationsUser,)
 
-    @extend_schema(request=OpsUpdateVendorSubscriptionPlanSerializer, responses=VendorSubscriptionPlanSerializer)
+    @extend_schema(
+        request=OpsUpdateVendorSubscriptionPlanSerializer,
+        responses=VendorSubscriptionPlanSerializer,
+    )
     def patch(self, request: Any, plan_id: UUID) -> Response:
         plan = get_object_or_404(VendorSubscriptionPlan, id=plan_id)
         ser = OpsUpdateVendorSubscriptionPlanSerializer(plan, data=request.data, partial=True)

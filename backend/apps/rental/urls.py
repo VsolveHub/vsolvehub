@@ -9,6 +9,11 @@ urlpatterns = [
     path("rentals/<uuid:asset_id>", views.RentalDetailView.as_view(), name="rental-detail"),
     path("me/rentals", views.MyRentalsView.as_view(), name="my-rentals"),
     path(
+        "me/rentals/<uuid:booking_id>/cancel",
+        views.MyRentalCancelView.as_view(),
+        name="my-rental-cancel",
+    ),
+    path(
         "partner/rentals/photos",
         views.PartnerRentalPhotoUploadView.as_view(),
         name="partner-rental-photos",
@@ -38,5 +43,10 @@ urlpatterns = [
         "ops/rentals/<uuid:asset_id>/moderate",
         views.OpsRentalModerateView.as_view(),
         name="ops-rental-moderate",
+    ),
+    path(
+        "ops/rentals/bookings/<uuid:booking_id>/cancel",
+        views.OpsRentalBookingCancelView.as_view(),
+        name="ops-rental-booking-cancel",
     ),
 ]

@@ -1,3 +1,4 @@
+import { formatMoneyText } from "@vsolve/ui";
 import { formatFieldLabel } from "../model";
 import type { ListingDetail } from "../queries";
 
@@ -26,12 +27,17 @@ export function RoleFacts({ listing }: RoleFactsProps) {
             <dd className="mt-1 text-sm font-semibold text-text">{listing.service_name}</dd>
           </div>
         )}
-        {sortedKeys.map((key) => (
-          <div key={key} className="rounded-control border border-line bg-surface-sunken p-3.5">
-            <dt className="text-xs text-text-muted">{formatFieldLabel(key, schema)}</dt>
-            <dd className="mt-1 text-sm font-semibold text-text">{String(fields[key])}</dd>
-          </div>
-        ))}
+        {sortedKeys.map((key) => {
+          const rawValue = String(fields[key]);
+          const isMoneyKey = /salary|pay_range|compensation/i.test(key);
+          const displayValue = isMoneyKey ? formatMoneyText(rawValue) : rawValue;
+          return (
+            <div key={key} className="rounded-control border border-line bg-surface-sunken p-3.5">
+              <dt className="text-xs text-text-muted">{formatFieldLabel(key, schema)}</dt>
+              <dd className="mt-1 text-sm font-semibold text-text">{displayValue}</dd>
+            </div>
+          );
+        })}
       </dl>
     </div>
   );

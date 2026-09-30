@@ -188,7 +188,7 @@ describe("customer visit arrival", () => {
           partner_quote_total_paise: 0,
           platform_fee_paise: 0,
           platform_fee_tax_paise: 0,
-          customer_total_paise: 0,
+          customer_total_paise: 1_000_000,
           discount_kind: null,
           discount_bps: null,
           discount_base_paise: 1_000_000,

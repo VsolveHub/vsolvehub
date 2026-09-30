@@ -53,6 +53,7 @@ class Command(BaseCommand):
                 service__status=Service.Status.ACTIVE,
             )
             .exclude(required_skill_code="")
+            .exclude(booking_archetype=ServiceVariant.BookingArchetype.A10_LISTING)
             .select_related("service__subcategory")
             .order_by("required_skill_code", "service__subcategory__name")
         )

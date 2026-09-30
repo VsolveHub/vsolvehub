@@ -1,4 +1,4 @@
-import { Card } from "@vsolve/ui";
+import { Card, formatDate } from "@vsolve/ui";
 import type { ListingHome } from "../queries";
 
 export interface WorkspaceStatsProps {
@@ -42,7 +42,7 @@ export function WorkspaceStats({ home }: WorkspaceStatsProps) {
         </div>
         <div className="mt-2 text-[11px] text-text-muted">
           {home?.subscription?.ends_at
-            ? `Renews ${new Date(home.subscription.ends_at).toLocaleDateString()}`
+            ? `Renews ${formatDate(home.subscription.ends_at)}`
             : "No active plan"}
         </div>
       </Card>

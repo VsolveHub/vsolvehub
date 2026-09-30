@@ -1,13 +1,14 @@
 "use client";
 
-import { Button, Card, ErrorState, Skeleton } from "@vsolve/ui";
-import { describeError } from "@vsolve/query";
+import { Button, Card, ErrorState, Skeleton , formatDate} from "@vsolve/ui";
+import { friendlyErrorMessage } from "@vsolve/query";
 import Link from "next/link";
 
 import { Pictogram, type PictogramName } from "@/components/pictogram";
 import { useState, type ReactNode } from "react";
 
 import { isNoProfileYet, usePartnerProfile, type PartnerProfile } from "../queries";
+import { EditLocationDialog } from "./edit-location-dialog";
 import { EditNameDialog } from "./edit-name-dialog";
 
 /**
@@ -91,6 +92,7 @@ function Page({ children }: { children: ReactNode }) {
 export function ProfilePanel() {
   const profileQuery = usePartnerProfile();
   const [isEditingName, setIsEditingName] = useState(false);
+  const [isEditingLocation, setIsEditingLocation] = useState(false);
 
   if (profileQuery.isPending) {
     return (
@@ -117,7 +119,7 @@ export function ProfilePanel() {
         ) : (
           <ErrorState
             title="We could not load your profile"
-            message={describeError(profileQuery.error, "read").message}
+            message={friendlyErrorMessage(profileQuery.error)}
             actionLabel="Try again"
             onAction={() => void profileQuery.refetch()}
           />
@@ -172,6 +174,11 @@ export function ProfilePanel() {
         currentName={profile.display_name}
         onClose={() => setIsEditingName(false)}
       />
+      <EditLocationDialog
+        open={isEditingLocation}
+        currentLocation={profile.default_location_text ?? ""}
+        onClose={() => setIsEditingLocation(false)}
+      />
 
       {/* The most consequential fact on the screen, so it gets a band rather
           than a line: whether this person can be offered work at all. */}
@@ -192,6 +199,23 @@ export function ProfilePanel() {
       )}
 
       <Card className="p-5">
+        <Fact icon="distance" label="Default pickup location">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <span>
+              {profile.default_location_text?.trim()
+                ? profile.default_location_text
+                : <span className="text-text-secondary">Not set yet — used to prefill rental ads</span>}
+            </span>
+            <Button
+              variant="outline"
+              className="shrink-0 self-start"
+              onClick={() => setIsEditingLocation(true)}
+            >
+              {profile.default_location_text?.trim() ? "Edit" : "Add"}
+            </Button>
+          </div>
+        </Fact>
+
         <Fact icon="all-work" label="What you do">
           {profile.skills.length === 0 ? (
             <span className="text-text-secondary">Not set yet</span>
@@ -209,10 +233,7 @@ export function ProfilePanel() {
         </Fact>
 
         <Fact icon="date" label="With us since">
-          {new Date(profile.member_since).toLocaleDateString(undefined, {
-            month: "long",
-            year: "numeric",
-          })}
+          {formatDate(profile.member_since)}
           {profile.experience_years > 0 ? (
             <span className="block text-text-secondary">
               {profile.experience_years} {profile.experience_years === 1 ? "year" : "years"} of

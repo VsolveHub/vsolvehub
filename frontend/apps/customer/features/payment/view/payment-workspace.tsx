@@ -13,6 +13,7 @@ import { Money } from "@/features/checkout/view/money";
 
 import { paymentPhase, canReconcile, type PaymentAttempt } from "../model/outcome";
 import { handoffTarget, openProviderCheckout } from "../model/provider-handoff";
+import { waitForPaymentHandoff } from "../standalone-handoff";
 import {
   isNoAttemptStarted,
   isProviderUnreachable,
@@ -202,17 +203,24 @@ export function PaymentWorkspace({ groupId }: { groupId: string }) {
       return;
     }
 
-    const target = handoffTarget(current);
-    if (target === null) {
-      setHandoffError(
-        "This payment cannot be opened in your browser. Please contact support with this page open.",
-      );
-      return;
-    }
-
     setHandoffError(null);
     setIsHandingOff(true);
     try {
+      const readyAttempt = await waitForPaymentHandoff(current.id);
+      if (
+        readyAttempt.simulated_capture_available &&
+        !isSimulatedCaptureUnavailable(simulateCapture.error)
+      ) {
+        await simulateCapture.mutateAsync(readyAttempt.id);
+        return;
+      }
+      const target = handoffTarget(readyAttempt);
+      if (target === null) {
+        setHandoffError(
+          "This payment is still preparing or cannot be opened. Please try again in a moment.",
+        );
+        return;
+      }
       await openProviderCheckout(target, { businessName: BUSINESS_NAME });
     } catch (error) {
       setHandoffError(
@@ -245,6 +253,8 @@ export function PaymentWorkspace({ groupId }: { groupId: string }) {
         !isSimulatedCaptureUnavailable(simulateCapture.error)
       ) {
         await simulateCapture.mutateAsync(created.id);
+      } else {
+        await handlePay(created);
       }
     } catch {
       // The relevant mutation owns the visible error while the screen stays retryable.

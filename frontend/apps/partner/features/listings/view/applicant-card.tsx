@@ -11,7 +11,7 @@ import {
   UserCheck,
   UserX,
 } from "lucide-react";
-import { Badge, Card, StatusChip } from "@vsolve/ui";
+import { Badge, Card, StatusChip, formatDate } from "@vsolve/ui";
 
 import {
   snapshotFields,
@@ -48,7 +48,7 @@ export function ApplicantCard({
 
             <span className="flex items-center gap-1 text-xs text-text-muted">
               <Calendar className="size-3.5" />
-              Applied {new Date(app.created_at).toLocaleDateString()}
+              Applied {formatDate(app.created_at)}
             </span>
 
             {app.contact_revealed_at && (
@@ -114,7 +114,7 @@ export function ApplicantCard({
                   </span>
                 )}
                 <span className="text-[11px] text-text-muted">
-                  Unlocked on {new Date(app.contact_revealed_at!).toLocaleDateString()}
+                  Unlocked on {formatDate(app.contact_revealed_at!)}
                 </span>
               </>
             ) : (
@@ -145,7 +145,7 @@ export function ApplicantCard({
                   className="inline-flex items-center gap-1 rounded-control bg-surface-sunken px-2 py-0.5 text-[11px] text-text-muted border border-line"
                 >
                   <Clock className="size-3 text-text-muted" />
-                  {ev.kind}: {ev.to_status} ({new Date(ev.created_at).toLocaleDateString()})
+                  {ev.kind}: {ev.to_status} ({formatDate(ev.created_at)})
                 </span>
               ))}
             </div>

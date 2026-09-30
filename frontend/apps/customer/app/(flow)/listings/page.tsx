@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useState } from "react";
+import { Suspense, useCallback, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
   FileCheck2,
@@ -15,12 +16,15 @@ import { ListingOpportunityCard } from "@/features/listings/listing-opportunity-
 import { ListingFilters } from "@/features/listings/view";
 import { PartAHero, PartAPill, PartAResultHeader } from "@/features/part-a";
 
-export default function ListingsBrowsePage() {
+function ListingsBrowseContent() {
+  const searchParams = useSearchParams();
+  const initService = searchParams.get("service") ?? "";
+
   const [draftQuery, setDraftQuery] = useState("");
   const [draftLocation, setDraftLocation] = useState("");
   const [appliedQuery, setAppliedQuery] = useState("");
   const [appliedLocation, setAppliedLocation] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState(initService);
   const [employmentType, setEmploymentType] = useState("");
   const [workMode, setWorkMode] = useState("");
 
@@ -174,5 +178,13 @@ export default function ListingsBrowsePage() {
         ))}
       </section>
     </main>
+  );
+}
+
+export default function ListingsBrowsePage() {
+  return (
+    <Suspense fallback={null}>
+      <ListingsBrowseContent />
+    </Suspense>
   );
 }

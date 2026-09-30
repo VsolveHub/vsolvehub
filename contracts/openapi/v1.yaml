@@ -5065,6 +5065,29 @@ paths:
                 items:
                   $ref: '#/components/schemas/RentalBooking'
           description: ''
+  /api/v1/me/rentals/{booking_id}/cancel:
+    post:
+      operationId: me_rentals_cancel_create
+      description: 'Customer cancel: PENDING_PAYMENT or CONFIRMED only. Fail-closed
+        after handover.'
+      parameters:
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - me
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RentalBooking'
+          description: ''
   /api/v1/me/stay-enquiries:
     get:
       operationId: me_stay_enquiries_list
@@ -5080,6 +5103,67 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/StayEnquiry'
+          description: ''
+  /api/v1/me/stay-enquiries/{enquiry_id}/cancel:
+    post:
+      operationId: me_stay_enquiries_cancel_create
+      description: Customer cancels an open stay enquiry.
+      parameters:
+      - in: path
+        name: enquiry_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - me
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StayEnquiry'
+          description: ''
+  /api/v1/me/stay-reservations:
+    get:
+      operationId: me_stay_reservations_list
+      tags:
+      - me
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StayReservation'
+          description: ''
+  /api/v1/me/stay-reservations/{reservation_id}/cancel:
+    post:
+      operationId: me_stay_reservations_cancel_create
+      description: Customer cancel pre-check-in. Paid reservations trigger an automatic
+        refund path.
+      parameters:
+      - in: path
+        name: reservation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - me
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StayReservation'
           description: ''
   /api/v1/my/listing-applications:
     get:
@@ -7803,6 +7887,23 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/operations/partners/import/:
+    post:
+      operationId: operations_partners_import_create
+      summary: Import partners via CSV
+      tags:
+      - operations
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: {}
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
   /api/v1/operations/payments/{payment_attempt_id}/chargeback/:
     post:
       operationId: m2_operations_record_chargeback
@@ -8219,6 +8320,40 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/operations/payout-batches/{id}/bank-export.csv:
+    get:
+      operationId: operations_payout_batches_bank_export.csv_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/operations/payout-batches/{id}/bank-export.xlsx:
+    get:
+      operationId: operations_payout_batches_bank_export.xlsx_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
   /api/v1/operations/queues/:
     get:
       operationId: m2_operations_queues
@@ -8448,6 +8583,38 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReconciliationSummary'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/refunds/:
+    get:
+      operationId: operations_refunds_list
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor.
+      tags:
+      - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundPage'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: ''
         '403':
           content:
@@ -9245,6 +9412,90 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/ops/dashboard-preferences/:
+    get:
+      operationId: ops_dashboard_preferences_retrieve
+      tags:
+      - ops
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsDashboardPreference'
+          description: ''
+    put:
+      operationId: ops_dashboard_preferences_update
+      tags:
+      - ops
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpsDashboardPreferenceRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OpsDashboardPreferenceRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OpsDashboardPreferenceRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsDashboardPreference'
+          description: ''
+    patch:
+      operationId: ops_dashboard_preferences_partial_update
+      tags:
+      - ops
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOpsDashboardPreferenceRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedOpsDashboardPreferenceRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedOpsDashboardPreferenceRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsDashboardPreference'
+          description: ''
+  /api/v1/ops/dashboards/{kind}/:
+    get:
+      operationId: ops_dashboards_retrieve
+      summary: Get dashboard aggregates
+      parameters:
+      - in: path
+        name: kind
+        schema:
+          type: string
+        required: true
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/v1/ops/listings:
     get:
       operationId: ops_listings_list
@@ -9652,6 +9903,202 @@ paths:
               schema:
                 $ref: '#/components/schemas/RentalAsset'
           description: ''
+  /api/v1/ops/rentals/bookings/{booking_id}/cancel:
+    post:
+      operationId: ops_rentals_bookings_cancel_create
+      parameters:
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - ops
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RentalBooking'
+          description: ''
+  /api/v1/ops/reports/:
+    get:
+      operationId: ops_reports_list
+      summary: List available operations reports
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OpsReportCatalogItem'
+          description: ''
+  /api/v1/ops/reports/{report_id}/:
+    get:
+      operationId: ops_reports_retrieve
+      summary: Preview operations report data
+      parameters:
+      - in: path
+        name: report_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsReportPreviewResponse'
+          description: ''
+  /api/v1/ops/reports/presets/:
+    get:
+      operationId: ops_reports_presets_list
+      tags:
+      - ops
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OpsReportPreset'
+          description: ''
+    post:
+      operationId: ops_reports_presets_create
+      tags:
+      - ops
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpsReportPresetRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OpsReportPresetRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OpsReportPresetRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsReportPreset'
+          description: ''
+  /api/v1/ops/reports/presets/{id}/:
+    get:
+      operationId: ops_reports_presets_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - ops
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsReportPreset'
+          description: ''
+    put:
+      operationId: ops_reports_presets_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - ops
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpsReportPresetRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OpsReportPresetRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OpsReportPresetRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsReportPreset'
+          description: ''
+    patch:
+      operationId: ops_reports_presets_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - ops
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOpsReportPresetRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedOpsReportPresetRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedOpsReportPresetRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsReportPreset'
+          description: ''
+    delete:
+      operationId: ops_reports_presets_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - ops
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/v1/ops/stays:
     get:
       operationId: ops_stays_list
@@ -9701,9 +10148,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/Property'
           description: ''
-  /api/v1/ops/vendor-subscription-plans:
+  /api/v1/ops/stays/enquiries:
     get:
-      operationId: ops_vendor_subscription_plans_list
+      operationId: ops_stays_enquiries_list
       tags:
       - ops
       security:
@@ -9715,7 +10162,37 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/VendorSubscriptionPlan'
+                  $ref: '#/components/schemas/StayEnquiry'
+          description: ''
+  /api/v1/ops/stays/reservations:
+    get:
+      operationId: ops_stays_reservations_list
+      tags:
+      - ops
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StayReservation'
+          description: ''
+  /api/v1/ops/vendor-subscription-plans:
+    get:
+      operationId: ops_vendor_subscription_plans_retrieve
+      tags:
+      - ops
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsVendorSubscriptionPlanCatalog'
           description: ''
     post:
       operationId: ops_vendor_subscription_plans_create
@@ -13201,7 +13678,7 @@ paths:
           description: ''
   /api/v1/partner/rentals/assets/{asset_id}/{action}:
     post:
-      operationId: partner_rentals_assets_create_2
+      operationId: partner_rentals_asset_action
       parameters:
       - in: path
         name: action
@@ -13228,6 +13705,11 @@ paths:
   /api/v1/partner/rentals/bookings:
     get:
       operationId: partner_rentals_bookings_list
+      parameters:
+      - in: query
+        name: status
+        schema:
+          type: string
       tags:
       - partner
       security:
@@ -13258,6 +13740,17 @@ paths:
         required: true
       tags:
       - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerBookingActionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PartnerBookingActionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PartnerBookingActionRequest'
       security:
       - cookieAuth: []
       responses:
@@ -13400,6 +13893,50 @@ paths:
                 items:
                   $ref: '#/components/schemas/StayEnquiry'
           description: ''
+  /api/v1/partner/stays/enquiries/{enquiry_id}/cancel:
+    post:
+      operationId: partner_stays_enquiries_cancel_create
+      description: Host declines/cancels an open enquiry (sets CANCELLED).
+      parameters:
+      - in: path
+        name: enquiry_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StayEnquiry'
+          description: ''
+  /api/v1/partner/stays/enquiries/{enquiry_id}/confirm:
+    post:
+      operationId: partner_stays_enquiries_confirm_create
+      description: Host confirms an enquiry and holds the unit calendar.
+      parameters:
+      - in: path
+        name: enquiry_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StayEnquiry'
+          description: ''
   /api/v1/partner/stays/enquiries/{enquiry_id}/respond:
     post:
       operationId: partner_stays_enquiries_respond_create
@@ -13493,9 +14030,41 @@ paths:
               schema:
                 $ref: '#/components/schemas/Property'
           description: ''
+  /api/v1/partner/stays/properties/{property_id}:
+    patch:
+      operationId: partner_stays_properties_partial_update
+      parameters:
+      - in: path
+        name: property_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdatePropertyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdatePropertyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdatePropertyRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Property'
+          description: ''
   /api/v1/partner/stays/properties/{property_id}/{action}:
     post:
-      operationId: partner_stays_properties_create_2
+      operationId: partner_stays_property_action
       parameters:
       - in: path
         name: action
@@ -13518,6 +14087,135 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Property'
+          description: ''
+  /api/v1/partner/stays/properties/{property_id}/units:
+    get:
+      operationId: partner_stays_properties_units_list
+      parameters:
+      - in: path
+        name: property_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Unit'
+          description: ''
+    post:
+      operationId: partner_stays_properties_units_create
+      parameters:
+      - in: path
+        name: property_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUnitRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CreateUnitRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CreateUnitRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unit'
+          description: ''
+  /api/v1/partner/stays/reservations:
+    get:
+      operationId: partner_stays_reservations_list
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StayReservation'
+          description: ''
+  /api/v1/partner/stays/reservations/{reservation_id}/{action}:
+    post:
+      operationId: partner_stays_reservations_create
+      parameters:
+      - in: path
+        name: action
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: reservation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StayReservation'
+          description: ''
+  /api/v1/partner/stays/units/{unit_id}:
+    patch:
+      operationId: partner_stays_units_partial_update
+      parameters:
+      - in: path
+        name: unit_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateUnitRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateUnitRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateUnitRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unit'
           description: ''
   /api/v1/partner/workspaces/:
     get:
@@ -13723,7 +14421,19 @@ paths:
               schema:
                 $ref: '#/components/schemas/WebhookAccepted'
           description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookAccepted'
+          description: ''
         '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
           content:
             application/json:
               schema:
@@ -14422,6 +15132,10 @@ paths:
     get:
       operationId: rentals_list
       parameters:
+      - in: query
+        name: category
+        schema:
+          type: string
       - in: query
         name: end_date
         schema:
@@ -17239,6 +17953,32 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/StayQuoteResponse'
+          description: ''
+  /api/v1/stays/reserve:
+    post:
+      operationId: stays_reserve_create
+      tags:
+      - stays
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReservationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CreateReservationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CreateReservationRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StayReservation'
           description: ''
   /api/v1/stays/taxonomy:
     get:
@@ -20240,7 +20980,7 @@ components:
           default: ''
         location_text:
           type: string
-          minLength: 1
+          default: ''
           maxLength: 180
         daily_rate_paise:
           type: integer
@@ -20248,6 +20988,10 @@ components:
         deposit_paise:
           type: integer
           minimum: 0
+        quantity_available:
+          type: integer
+          minimum: 1
+          default: 1
         asset_identifier:
           type: string
           default: ''
@@ -20268,7 +21012,6 @@ components:
       - daily_rate_paise
       - deposit_paise
       - image_urls
-      - location_text
       - title
       - variant_id
     CreateBookingRequest:
@@ -20283,6 +21026,10 @@ components:
         end_date:
           type: string
           format: date
+        quantity:
+          type: integer
+          minimum: 1
+          default: 1
         pickup_or_delivery_mode:
           type: string
           minLength: 1
@@ -20336,15 +21083,15 @@ components:
           default: ''
         location_text:
           type: string
-          minLength: 1
+          default: ''
           maxLength: 180
         unit_name:
           type: string
-          minLength: 1
-          default: Standard room
+          default: ''
         nightly_rate_paise:
           type: integer
           minimum: 1
+          nullable: true
         sharing_count:
           type: integer
           minimum: 1
@@ -20356,6 +21103,18 @@ components:
         house_rules:
           type: string
           default: ''
+        min_stay_nights:
+          type: integer
+          minimum: 1
+          default: 1
+        available_from:
+          type: string
+          format: date
+          nullable: true
+        available_until:
+          type: string
+          format: date
+          nullable: true
         image_urls:
           type: array
           items:
@@ -20365,10 +21124,53 @@ components:
           minItems: 1
       required:
       - image_urls
-      - location_text
-      - nightly_rate_paise
       - title
       - variant_id
+    CreateReservationRequest:
+      type: object
+      properties:
+        property_id:
+          type: string
+          format: uuid
+        unit_id:
+          type: string
+          format: uuid
+        check_in:
+          type: string
+          format: date
+        check_out:
+          type: string
+          format: date
+        guest_count:
+          type: integer
+          minimum: 1
+          default: 1
+      required:
+      - check_in
+      - check_out
+      - property_id
+      - unit_id
+    CreateUnitRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        nightly_rate_paise:
+          type: integer
+          minimum: 1
+        sharing_count:
+          type: integer
+          minimum: 1
+          default: 1
+        attributes: {}
+        is_active:
+          type: boolean
+          default: true
+      required:
+      - name
+      - nightly_rate_paise
     CrewAssignRequest:
       type: object
       description: |-
@@ -24268,6 +25070,8 @@ components:
     ListingDetail:
       type: object
       properties:
+        description:
+          type: string
         id:
           type: string
           format: uuid
@@ -24284,8 +25088,6 @@ components:
         title:
           type: string
           maxLength: 180
-        description:
-          type: string
         structured_fields: {}
         salary_min_paise:
           type: integer
@@ -24304,7 +25106,7 @@ components:
         status:
           $ref: '#/components/schemas/StatusC74Enum'
         moderation_status:
-          $ref: '#/components/schemas/ModerationStatus8dcEnum'
+          $ref: '#/components/schemas/ListingModerationStatusEnum'
         public_state:
           type: string
           readOnly: true
@@ -24360,6 +25162,20 @@ components:
             $ref: '#/components/schemas/ListingCategoryOption'
       required:
       - categories
+    ListingModerationStatusEnum:
+      enum:
+      - DRAFT
+      - PENDING
+      - APPROVED
+      - REJECTED
+      - REMOVED
+      type: string
+      description: |-
+        * `DRAFT` - Draft
+        * `PENDING` - Pending review
+        * `APPROVED` - Approved
+        * `REJECTED` - Rejected
+        * `REMOVED` - Removed
     ListingReport:
       type: object
       properties:
@@ -24409,8 +25225,6 @@ components:
         title:
           type: string
           maxLength: 180
-        description:
-          type: string
         structured_fields: {}
         salary_min_paise:
           type: integer
@@ -24429,7 +25243,7 @@ components:
         status:
           $ref: '#/components/schemas/StatusC74Enum'
         moderation_status:
-          $ref: '#/components/schemas/ModerationStatus8dcEnum'
+          $ref: '#/components/schemas/ListingModerationStatusEnum'
         public_state:
           type: string
           readOnly: true
@@ -24452,7 +25266,6 @@ components:
           default: 0
       required:
       - application_count
-      - description
       - id
       - poster_name
       - public_state
@@ -24539,7 +25352,7 @@ components:
           type: string
       required:
       - approved
-    ModerationStatus384Enum:
+    ModerationStatusEnum:
       enum:
       - DRAFT
       - PENDING
@@ -24550,20 +25363,6 @@ components:
       description: |-
         * `DRAFT` - Draft
         * `PENDING` - Pending
-        * `APPROVED` - Approved
-        * `REJECTED` - Rejected
-        * `REMOVED` - Removed
-    ModerationStatus8dcEnum:
-      enum:
-      - DRAFT
-      - PENDING
-      - APPROVED
-      - REJECTED
-      - REMOVED
-      type: string
-      description: |-
-        * `DRAFT` - Draft
-        * `PENDING` - Pending review
         * `APPROVED` - Approved
         * `REJECTED` - Rejected
         * `REMOVED` - Removed
@@ -25908,6 +26707,10 @@ components:
     OpsCreateVendorSubscriptionPlanRequest:
       type: object
       properties:
+        service:
+          type: string
+          format: uuid
+          nullable: true
         code:
           type: string
           minLength: 1
@@ -25936,10 +26739,161 @@ components:
           maximum: 9223372036854775807
           minimum: 0
           format: int64
+        details:
+          type: string
+        is_active:
+          type: boolean
       required:
       - code
       - name
       - price_paise
+    OpsDashboardPreference:
+      type: object
+      properties:
+        pinned_tiles:
+          description: List of tile IDs pinned by the operator. e.g. ['open_cases',
+            'overdue_bookings', 'captured_today', 'wallet_liability']
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - updated_at
+    OpsDashboardPreferenceRequest:
+      type: object
+      properties:
+        pinned_tiles:
+          description: List of tile IDs pinned by the operator. e.g. ['open_cases',
+            'overdue_bookings', 'captured_today', 'wallet_liability']
+    OpsReportCatalogItem:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        filters:
+          type: array
+          items:
+            type: string
+        columns:
+          type: array
+          items:
+            type: string
+      required:
+      - columns
+      - filters
+      - id
+      - name
+    OpsReportPreset:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 255
+        report_id:
+          type: string
+          maxLength: 64
+        filters_json: {}
+        columns_json:
+          description: Allow-list of columns
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - name
+      - report_id
+      - updated_at
+    OpsReportPresetRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        report_id:
+          type: string
+          minLength: 1
+          maxLength: 64
+        filters_json: {}
+        columns_json:
+          description: Allow-list of columns
+      required:
+      - name
+      - report_id
+    OpsReportPreviewResponse:
+      type: object
+      properties:
+        report_id:
+          type: string
+        name:
+          type: string
+        filters_applied:
+          type: object
+          additionalProperties: {}
+        columns:
+          type: array
+          items:
+            type: string
+        totals:
+          type: object
+          additionalProperties: {}
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        total_rows_count:
+          type: integer
+      required:
+      - columns
+      - filters_applied
+      - name
+      - report_id
+      - rows
+      - total_rows_count
+      - totals
+    OpsVendorPlanServiceOption:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        subcategory_name:
+          type: string
+      required:
+      - id
+      - name
+      - slug
+      - subcategory_name
+    OpsVendorSubscriptionPlanCatalog:
+      type: object
+      properties:
+        plans:
+          type: array
+          items:
+            $ref: '#/components/schemas/VendorSubscriptionPlan'
+        services:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsVendorPlanServiceOption'
+      required:
+      - plans
+      - services
     OpsWalletTopUpPolicy:
       type: object
       properties:
@@ -26591,6 +27545,19 @@ components:
       - status
       - version
       - work_tasks
+    PartnerBookingActionRequest:
+      type: object
+      properties:
+        pin:
+          type: string
+          default: ''
+        reason:
+          type: string
+          default: ''
+        consume_paise:
+          type: integer
+          minimum: 0
+          default: 0
     PartnerBookingEarning:
       type: object
       description: One Partner's own money for one job — never the Customer's invoice.
@@ -27382,6 +28349,10 @@ components:
     PartnerListing:
       type: object
       properties:
+        description:
+          type: string
+          maxLength: 5000
+          minLength: 20
         id:
           type: string
           format: uuid
@@ -27399,10 +28370,6 @@ components:
           type: string
           maxLength: 180
           minLength: 5
-        description:
-          type: string
-          maxLength: 5000
-          minLength: 20
         structured_fields:
           type: object
           additionalProperties: {}
@@ -27426,7 +28393,7 @@ components:
           readOnly: true
         moderation_status:
           allOf:
-          - $ref: '#/components/schemas/ModerationStatus8dcEnum'
+          - $ref: '#/components/schemas/ListingModerationStatusEnum'
           readOnly: true
         public_state:
           type: string
@@ -27510,14 +28477,14 @@ components:
     PartnerListingRequest:
       type: object
       properties:
-        title:
-          type: string
-          minLength: 5
-          maxLength: 180
         description:
           type: string
           minLength: 20
           maxLength: 5000
+        title:
+          type: string
+          minLength: 5
+          maxLength: 180
         structured_fields:
           type: object
           additionalProperties: {}
@@ -27787,9 +28754,13 @@ components:
         has_payout_account:
           type: boolean
           readOnly: true
+        default_location_text:
+          type: string
+          readOnly: true
       required:
       - approval_status
       - biography
+      - default_location_text
       - display_name
       - experience_years
       - has_payout_account
@@ -28176,9 +29147,33 @@ components:
           type: string
           format: email
           maxLength: 254
+    PatchedOpsDashboardPreferenceRequest:
+      type: object
+      properties:
+        pinned_tiles:
+          description: List of tile IDs pinned by the operator. e.g. ['open_cases',
+            'overdue_bookings', 'captured_today', 'wallet_liability']
+    PatchedOpsReportPresetRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        report_id:
+          type: string
+          minLength: 1
+          maxLength: 64
+        filters_json: {}
+        columns_json:
+          description: Allow-list of columns
     PatchedOpsUpdateVendorSubscriptionPlanRequest:
       type: object
       properties:
+        service:
+          type: string
+          format: uuid
+          nullable: true
         name:
           type: string
           minLength: 1
@@ -28202,6 +29197,8 @@ components:
           maximum: 9223372036854775807
           minimum: 0
           format: int64
+        details:
+          type: string
         is_active:
           type: boolean
     PatchedPartnerApplicationUpdateRequest:
@@ -28251,8 +29248,9 @@ components:
       description: |-
         What a Partner may change about themselves without a review.
 
-        `display_name` only. It is the name Customers see, so it is theirs to get
-        right, and nothing downstream depends on its value.
+        `display_name` is the name Customers see. `default_location_text` is the
+        registered pickup / address used to prefill A7 rental ads (still editable
+        per asset).
 
         **Not** `phone_number`. That is the login credential: changing it moves who
         can sign in, so it belongs behind an OTP challenge on the *new* number, not
@@ -28267,6 +29265,9 @@ components:
           type: string
           minLength: 1
           maxLength: 120
+        default_location_text:
+          type: string
+          maxLength: 240
     PatchedRequirementUpdateRequest:
       type: object
       description: |-
@@ -28309,6 +29310,51 @@ components:
           writeOnly: true
           minLength: 1
           maxLength: 16
+    PatchedUpdatePropertyRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 180
+        description:
+          type: string
+        location_text:
+          type: string
+          minLength: 1
+          maxLength: 180
+        structured_fields: {}
+        cancellation_policy_text:
+          type: string
+        house_rules:
+          type: string
+        min_stay_nights:
+          type: integer
+          minimum: 1
+        available_from:
+          type: string
+          format: date
+          nullable: true
+        available_until:
+          type: string
+          format: date
+          nullable: true
+    PatchedUpdateUnitRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        nightly_rate_paise:
+          type: integer
+          minimum: 1
+        sharing_count:
+          type: integer
+          minimum: 1
+        attributes: {}
+        is_active:
+          type: boolean
     PatchedWorkItemUpdateRequest:
       type: object
       description: A partial edit. Every field optional — Operations edits one thing
@@ -29819,7 +30865,7 @@ components:
           type: string
           maxLength: 180
         moderation_status:
-          $ref: '#/components/schemas/ModerationStatus384Enum'
+          $ref: '#/components/schemas/ModerationStatusEnum'
         public_state:
           type: string
           readOnly: true
@@ -29834,6 +30880,18 @@ components:
           type: string
         house_rules:
           type: string
+        min_stay_nights:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        available_from:
+          type: string
+          format: date
+          nullable: true
+        available_until:
+          type: string
+          format: date
+          nullable: true
         media:
           type: array
           items:
@@ -29849,11 +30907,15 @@ components:
           items:
             $ref: '#/components/schemas/Unit'
           readOnly: true
+        booking_mode:
+          type: string
+          readOnly: true
         created_at:
           type: string
           format: date-time
           readOnly: true
       required:
+      - booking_mode
       - created_at
       - host_name
       - id
@@ -31210,6 +32272,8 @@ components:
       - A10_PREMIUM_LISTING
       - WALLET_TOP_UP
       - A7_RENTAL_DEPOSIT
+      - A9_STAY_RESERVATION
+      - A7_RENTAL_BOOKING
       type: string
       description: |-
         * `BOOKING_GROUP` - Booking group
@@ -31225,6 +32289,8 @@ components:
         * `A10_PREMIUM_LISTING` - A10 premium listing
         * `WALLET_TOP_UP` - Wallet top-up
         * `A7_RENTAL_DEPOSIT` - A7 rental deposit
+        * `A9_STAY_RESERVATION` - A9 stay reservation
+        * `A7_RENTAL_BOOKING` - A7 rental booking
     QuestionAnswerRequest:
       type: object
       properties:
@@ -32645,6 +33711,31 @@ components:
       - fulfilment_unit_ids
       - order_id
       - reason_code
+    RefundPage:
+      type: object
+      description: |-
+        Cursor page envelope for Operations refund list.
+
+        Declared rather than implied: drf-spectacular cannot see a paginator
+        instantiated inside a plain APIView, so a bare array schema would publish
+        a shape the view never sends.
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Refund'
+      required:
+      - next
+      - previous
+      - results
     RefundStatusEnum:
       enum:
       - REQUESTED
@@ -32702,6 +33793,9 @@ components:
         deposit_paise:
           type: integer
           readOnly: true
+        quantity_available:
+          type: integer
+          readOnly: true
         condition_grade:
           allOf:
           - $ref: '#/components/schemas/ConditionGradeEnum'
@@ -32712,7 +33806,7 @@ components:
           readOnly: true
         moderation_status:
           allOf:
-          - $ref: '#/components/schemas/ModerationStatus384Enum'
+          - $ref: '#/components/schemas/ModerationStatusEnum'
           readOnly: true
         public_state:
           type: string
@@ -32748,6 +33842,7 @@ components:
       - moderation_status
       - partner_name
       - public_state
+      - quantity_available
       - structured_fields
       - title
       - variant
@@ -32800,6 +33895,9 @@ components:
         end_date:
           type: string
           format: date
+        quantity:
+          type: integer
+          readOnly: true
         price_paise:
           type: integer
           maximum: 2147483647
@@ -32817,6 +33915,11 @@ components:
           allOf:
           - $ref: '#/components/schemas/RentalDeposit'
           readOnly: true
+        handover_pin:
+          type: string
+          nullable: true
+          description: Plaintext PIN for the customer only, once the booking is paid/active.
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -32826,8 +33929,10 @@ components:
       - created_at
       - deposit
       - end_date
+      - handover_pin
       - id
       - price_paise
+      - quantity
       - start_date
     RentalBookingStatusEnum:
       enum:
@@ -35927,6 +37032,18 @@ components:
           type: integer
         total_quote_paise:
           type: integer
+        booking_mode:
+          type: string
+        min_stay_nights:
+          type: integer
+        available_from:
+          type: string
+          format: date
+          nullable: true
+        available_until:
+          type: string
+          format: date
+          nullable: true
       required:
       - nightly_rate_paise
       - nights
@@ -35934,6 +37051,108 @@ components:
       - total_quote_paise
       - unit_id
       - unit_name
+    StayReservation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        property:
+          type: string
+          format: uuid
+        property_title:
+          type: string
+          readOnly: true
+        unit:
+          type: string
+          format: uuid
+        unit_name:
+          type: string
+          readOnly: true
+          default: Standard room
+        customer:
+          type: string
+          format: uuid
+        customer_name:
+          type: string
+          readOnly: true
+        customer_phone:
+          type: string
+          readOnly: true
+        payment_attempt:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          $ref: '#/components/schemas/StayReservationStatusEnum'
+        check_in:
+          type: string
+          format: date
+        check_out:
+          type: string
+          format: date
+        guest_count:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        nights:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        total_paise:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        checked_in_at:
+          type: string
+          format: date-time
+          nullable: true
+        checked_out_at:
+          type: string
+          format: date-time
+          nullable: true
+        cancelled_at:
+          type: string
+          format: date-time
+          nullable: true
+        cancellation_reason:
+          type: string
+          maxLength: 240
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - check_in
+      - check_out
+      - created_at
+      - customer
+      - customer_name
+      - customer_phone
+      - id
+      - property
+      - property_title
+      - unit
+      - unit_name
+    StayReservationStatusEnum:
+      enum:
+      - HELD
+      - PAYMENT_PENDING
+      - CONFIRMED
+      - CHECKED_IN
+      - CHECKED_OUT
+      - CANCELLED
+      - NO_SHOW
+      type: string
+      description: |-
+        * `HELD` - Held (awaiting payment)
+        * `PAYMENT_PENDING` - Payment pending
+        * `CONFIRMED` - Confirmed
+        * `CHECKED_IN` - Checked in
+        * `CHECKED_OUT` - Checked out
+        * `CANCELLED` - Cancelled
+        * `NO_SHOW` - No show
     StayReview:
       type: object
       properties:
@@ -36009,7 +37228,10 @@ components:
         code:
           type: string
         property_schema: {}
+        booking_mode:
+          type: string
       required:
+      - booking_mode
       - code
       - id
       - name
@@ -36763,6 +37985,18 @@ components:
           type: string
           format: uuid
           readOnly: true
+        service:
+          type: string
+          format: uuid
+          nullable: true
+        service_name:
+          type: string
+          readOnly: true
+          nullable: true
+        service_slug:
+          type: string
+          readOnly: true
+          nullable: true
         code:
           type: string
           maxLength: 80
@@ -36789,11 +38023,17 @@ components:
           maximum: 9223372036854775807
           minimum: 0
           format: int64
+        details:
+          type: string
+        is_active:
+          type: boolean
       required:
       - code
       - id
       - name
       - price_paise
+      - service_name
+      - service_slug
     VendorSubscriptionStatusEnum:
       enum:
       - PENDING_ACTIVATION

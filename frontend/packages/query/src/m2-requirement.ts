@@ -30,6 +30,8 @@
 import { ApiRequestError } from "@vsolve/api-client";
 import type { Schemas } from "@vsolve/api-client";
 
+import { CursorContractError } from "./cursor";
+
 export type RequirementSummary = Schemas["RequirementSummary"];
 export type RequirementSummaryPage = Schemas["RequirementSummaryPage"];
 export type RequirementDraft = Schemas["RequirementDraft"];
@@ -83,6 +85,7 @@ export function readRequirementList(
  * attempts, because those are the failures that do pass.
  */
 export function shouldRetryM2Read(failureCount: number, error: unknown): boolean {
+  if (error instanceof CursorContractError) return false;
   if (error instanceof ApiRequestError) {
     if (error.status === 401 || error.status === 403 || error.status === 404) return false;
   }

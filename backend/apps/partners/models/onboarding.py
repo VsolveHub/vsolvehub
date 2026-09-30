@@ -70,6 +70,9 @@ class PartnerProfile(models.Model):
     #: Required by the review command when refusing, so a partner is told what to change rather
     #: than left guessing at a rejected upload.
     photo_review_reason = models.TextField(blank=True)
+    #: Free-text default pickup / business address for rental autofill and similar forms.
+    #: Stays still keep a per-property ``location_text``; this is the partner-level default.
+    default_location_text = models.CharField(max_length=240, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

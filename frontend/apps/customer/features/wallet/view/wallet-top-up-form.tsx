@@ -1,13 +1,11 @@
 "use client";
 
-import { request } from "@vsolve/api-client";
 import { Button, formatMoney, useToast } from "@vsolve/ui";
-import { CheckCircle2, Plus } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { getApiClient } from "@/lib/api/browser";
-
+import { completeOrOpenCheckout } from "../../payment/standalone-handoff";
 import {
   useInitiateWalletTopUp,
   walletKeys,
@@ -19,34 +17,77 @@ interface WalletTopUpFormProps {
   wallet: WalletAccount;
 }
 
-const PRESET_AMOUNTS_PAISE = [20000, 50000, 100000, 200000]; // ₹200, ₹500, ₹1,000, ₹2,000
+function policyLimit(policy: Record<string, number> | undefined, key: string): number | null {
+  const value = policy?.[key];
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
+}
 
 export function WalletTopUpForm({ wallet }: WalletTopUpFormProps) {
-  const policy = wallet.top_up_policy || {};
-  const minPaise = (policy["min_top_up_paise"] as number | undefined) ?? 10000; // ₹100
-  const maxPaise = (policy["max_top_up_paise"] as number | undefined) ?? 1000000; // ₹10,000
+  const policy = wallet.top_up_policy;
+  const minPaise = policyLimit(policy, "min_top_up_paise");
+  const maxPaise = policyLimit(policy, "max_top_up_paise");
+  const limitsPublished = minPaise != null && maxPaise != null && minPaise <= maxPaise;
 
   const queryClient = useQueryClient();
   const toast = useToast();
-  const [amountPaise, setAmountPaise] = useState<number>(50000); // default ₹500
-  const [customInput, setCustomInput] = useState<string>("500");
+  const [amountPaise, setAmountPaise] = useState<number | null>(null);
+  const [customInput, setCustomInput] = useState("");
   const [createdAttempt, setCreatedAttempt] = useState<WalletTopUpResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isHandingOff, setIsHandingOff] = useState(false);
 
   const topUpMutation = useInitiateWalletTopUp();
 
-  const handleSelectPreset = (paise: number) => {
-    setAmountPaise(paise);
-    setCustomInput((paise / 100).toString());
-    setErrorMessage(null);
-  };
-
   const handleCustomChange = (val: string) => {
     setCustomInput(val);
-    const num = parseInt(val, 10);
-    if (!isNaN(num) && num > 0) {
-      setAmountPaise(num * 100);
+    const num = Number(val);
+    if (Number.isFinite(num) && num > 0) {
+      setAmountPaise(Math.round(num * 100));
       setErrorMessage(null);
+      return;
+    }
+    setAmountPaise(null);
+  };
+
+  const refreshWallet = () => {
+    void queryClient.invalidateQueries({ queryKey: walletKeys.detail });
+    void queryClient.invalidateQueries({ queryKey: walletKeys.transactions });
+  };
+
+  const finishLocalOrCheckout = async (attempt: WalletTopUpResponse) => {
+    setIsHandingOff(true);
+    setErrorMessage(null);
+    try {
+      const result = await completeOrOpenCheckout(attempt.payment_attempt_id, {
+        businessName: "Vsolve Hub",
+        onAwaitingCapture: () =>
+          toast.notify("Complete payment in Razorpay. Wallet updates when capture is confirmed."),
+      });
+
+      if (result.mode === "simulated") {
+        setCreatedAttempt(null);
+        topUpMutation.reset();
+        setCustomInput("");
+        setAmountPaise(null);
+        refreshWallet();
+        toast.notify(
+          `${formatMoney(attempt.amount_paise)} added to your wallet. Razorpay isn’t configured, so this was recorded here.`,
+        );
+        return;
+      }
+
+      setCreatedAttempt(attempt);
+      if (result.mode === "pending") {
+        toast.notify("Top-up started. Payment is still preparing — try again in a moment.");
+      } else {
+        toast.notify("Payment submitted. Waiting for Razorpay capture to credit your wallet.");
+        refreshWallet();
+      }
+    } catch (err) {
+      setCreatedAttempt(attempt);
+      setErrorMessage(err instanceof Error ? err.message : "Could not open payment");
+    } finally {
+      setIsHandingOff(false);
     }
   };
 
@@ -54,6 +95,14 @@ export function WalletTopUpForm({ wallet }: WalletTopUpFormProps) {
     e.preventDefault();
     setErrorMessage(null);
 
+    if (!limitsPublished || minPaise == null || maxPaise == null) {
+      setErrorMessage("Top-up limits are not published yet.");
+      return;
+    }
+    if (amountPaise == null) {
+      setErrorMessage("Enter an amount to add.");
+      return;
+    }
     if (amountPaise < minPaise) {
       setErrorMessage(`Minimum top-up amount is ${formatMoney(minPaise)}`);
       return;
@@ -67,12 +116,7 @@ export function WalletTopUpForm({ wallet }: WalletTopUpFormProps) {
       { amount_paise: amountPaise },
       {
         onSuccess: (data) => {
-          if (data.provider === "razorpay") {
-            setCreatedAttempt(data);
-            toast.notify("Continue in Razorpay to add this money.");
-            return;
-          }
-          void recordLocalTopUp(data);
+          void finishLocalOrCheckout(data);
         },
         onError: (err: unknown) => {
           setErrorMessage(err instanceof Error ? err.message : "Failed to initiate top-up");
@@ -81,36 +125,22 @@ export function WalletTopUpForm({ wallet }: WalletTopUpFormProps) {
     );
   };
 
-  const recordLocalTopUp = async (attempt: WalletTopUpResponse) => {
-    setErrorMessage(null);
-    try {
-      await request(() =>
-        getApiClient().POST("/api/v1/payment-attempts/{attempt_id}/simulate-capture/", {
-          params: { path: { attempt_id: attempt.payment_attempt_id } },
-        }),
-      );
-      setCreatedAttempt(null);
-      topUpMutation.reset();
-      void queryClient.invalidateQueries({ queryKey: walletKeys.detail });
-      void queryClient.invalidateQueries({ queryKey: walletKeys.transactions });
-      toast.notify(
-        `${formatMoney(attempt.amount_paise)} added to your wallet. Razorpay isn’t configured, so this was recorded here.`,
-      );
-    } catch (err) {
-      setCreatedAttempt(attempt);
-      setErrorMessage(err instanceof Error ? err.message : "Could not record the top-up");
-    }
-  };
-
   return (
     <div className="rounded-card border border-[#e7e2da] bg-white p-6 shadow-sm md:p-8">
-      <div className="flex items-center justify-between border-b border-[#eee9e0] pb-4">
-        <div>
-          <h2 className="text-lg font-bold text-navy-900">Add Money to Wallet</h2>
-          <p className="text-xs text-text-secondary">
-            Min {formatMoney(minPaise)} • Max {formatMoney(maxPaise)} per transaction
+      <div className="border-b border-[#eee9e0] pb-4">
+        <h2 className="text-lg font-bold text-navy-900">Add money</h2>
+        <p className="text-xs text-text-secondary">
+          Prepaid balance for bookings only. It cannot be withdrawn.
+        </p>
+        {limitsPublished ? (
+          <p className="mt-1 text-xs text-text-secondary">
+            Min {formatMoney(minPaise)} • Max {formatMoney(maxPaise)} per add
           </p>
-        </div>
+        ) : (
+          <p className="mt-1 text-xs text-amber-800">
+            Top-up limits are not published yet. Add money once Operations publishes them.
+          </p>
+        )}
       </div>
 
       {createdAttempt ? (
@@ -124,7 +154,17 @@ export function WalletTopUpForm({ wallet }: WalletTopUpFormProps) {
               <p className="mt-1 text-xs text-emerald-800">
                 Finish this top-up in Razorpay. The balance updates when the payment is captured.
               </p>
-              <div className="mt-4">
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button
+                  variant="primary"
+                  className="text-xs h-9 px-3"
+                  disabled={isHandingOff}
+                  loading={isHandingOff}
+                  loadingLabel="Opening…"
+                  onClick={() => void finishLocalOrCheckout(createdAttempt)}
+                >
+                  Open Razorpay again
+                </Button>
                 <Button
                   variant="outline"
                   className="text-xs h-9 px-3"
@@ -138,40 +178,12 @@ export function WalletTopUpForm({ wallet }: WalletTopUpFormProps) {
         </div>
       ) : (
         <form onSubmit={handleTopUpSubmit} className="mt-6 space-y-5">
-          {/* Quick presets */}
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-text-muted mb-2.5">
-              Quick Select
-            </label>
-            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-              {PRESET_AMOUNTS_PAISE.map((preset) => {
-                const isSelected = amountPaise === preset;
-                return (
-                  <button
-                    key={preset}
-                    type="button"
-                    onClick={() => handleSelectPreset(preset)}
-                    className={`flex items-center justify-center gap-1.5 rounded-xl border py-2.5 px-3 text-sm font-semibold transition-all ${
-                      isSelected
-                        ? "border-[#EA580C] bg-orange-50/70 text-[#EA580C] shadow-xs"
-                        : "border-[#e7e2da] bg-white text-navy-900 hover:border-slate-300 hover:bg-[#FAF9F7]"
-                    }`}
-                  >
-                    <Plus className="size-3.5 opacity-60" />
-                    <span>{formatMoney(preset)}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Custom amount */}
           <div>
             <label
               htmlFor="wallet-custom-amount"
               className="block text-xs font-semibold uppercase tracking-wider text-text-muted mb-1.5"
             >
-              Or Enter Custom Amount (₹)
+              Amount (₹)
             </label>
             <div className="relative">
               <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-base font-bold text-navy-900">
@@ -180,12 +192,13 @@ export function WalletTopUpForm({ wallet }: WalletTopUpFormProps) {
               <input
                 id="wallet-custom-amount"
                 type="number"
-                min={minPaise / 100}
-                max={maxPaise / 100}
+                min={limitsPublished && minPaise != null ? minPaise / 100 : undefined}
+                max={limitsPublished && maxPaise != null ? maxPaise / 100 : undefined}
                 value={customInput}
                 onChange={(e) => handleCustomChange(e.target.value)}
-                placeholder="500"
-                className="w-full rounded-xl border border-[#e7e2da] bg-white py-2.5 pl-8 pr-4 text-sm font-bold text-navy-900 placeholder:text-text-muted focus:border-[#EA580C] focus:outline-none focus:ring-2 focus:ring-[#EA580C]/20"
+                placeholder={limitsPublished && minPaise != null ? String(minPaise / 100) : ""}
+                disabled={!limitsPublished}
+                className="w-full rounded-xl border border-[#e7e2da] bg-white py-2.5 pl-8 pr-4 text-sm font-bold text-navy-900 placeholder:text-text-muted focus:border-[#EA580C] focus:outline-none focus:ring-2 focus:ring-[#EA580C]/20 disabled:bg-[#FAF9F7]"
               />
             </div>
           </div>
@@ -199,9 +212,18 @@ export function WalletTopUpForm({ wallet }: WalletTopUpFormProps) {
               type="submit"
               variant="primary"
               className="w-full bg-[#EA580C] hover:bg-[#d65f1a] text-white py-3 rounded-xl font-bold text-sm shadow-sm transition-transform active:scale-[0.99]"
-              disabled={topUpMutation.isPending}
+              disabled={
+                !limitsPublished ||
+                amountPaise == null ||
+                topUpMutation.isPending ||
+                isHandingOff
+              }
             >
-              {topUpMutation.isPending ? "Setting up top-up..." : `Proceed to Add ${formatMoney(amountPaise)}`}
+              {topUpMutation.isPending || isHandingOff
+                ? "Opening payment…"
+                : amountPaise != null
+                  ? `Add ${formatMoney(amountPaise)}`
+                  : "Add money"}
             </Button>
           </div>
         </form>

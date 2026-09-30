@@ -11,9 +11,11 @@ interface SidebarLinkProps {
   icon: LucideIcon;
   isCollapsed?: boolean;
   badgeCount?: number;
+  /** Called when the link is clicked — e.g. to close a mobile drawer. */
+  onClick?: () => void;
 }
 
-export function SidebarLink({ href, label, icon: Icon, isCollapsed, badgeCount }: SidebarLinkProps) {
+export function SidebarLink({ href, label, icon: Icon, isCollapsed, badgeCount, onClick }: SidebarLinkProps) {
   const pathname = usePathname();
   
   const active =
@@ -26,6 +28,7 @@ export function SidebarLink({ href, label, icon: Icon, isCollapsed, badgeCount }
       href={href}
       title={isCollapsed ? label : undefined}
       aria-current={active ? "page" : undefined}
+      onClick={onClick}
       className={[
         "relative flex items-center gap-3 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors",
         active

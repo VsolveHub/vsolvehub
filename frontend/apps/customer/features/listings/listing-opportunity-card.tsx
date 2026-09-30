@@ -4,12 +4,14 @@ import Link from "next/link";
 import { Building, MapPin } from "lucide-react";
 
 import { SaveHeart, useSavedItems } from "@/features/part-a";
+import { formatMoneyText } from "@vsolve/ui";
 import { listingFields, type Listing } from "./queries";
 
 export function ListingOpportunityCard({ listing }: { listing: Listing }) {
   const saved = useSavedItems("listing");
   const fields = listingFields(listing.structured_fields);
-  const pay = fields.pay_range || fields.salary_range || fields.compensation || "Pay on request";
+  const rawPay = fields.pay_range || fields.salary_range || fields.compensation;
+  const pay = rawPay ? formatMoneyText(String(rawPay)) : "Pay on request";
   const experience = fields.experience_years || fields.experience || "Experience on request";
   const roleType = fields.role_type || fields.employment_type || "Full-time";
   const mode = fields.shift || fields.work_mode || "On-site";

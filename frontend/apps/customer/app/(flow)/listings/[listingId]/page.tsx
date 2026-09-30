@@ -5,7 +5,8 @@ import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Clock } from "lucide-react";
-import { Card, EmptyState, PHONE_COUNTRIES, toNationalDigits } from "@vsolve/ui";
+import { friendlyErrorMessage } from "@vsolve/query";
+import { Card, EmptyState, PHONE_COUNTRIES, toE164, toNationalDigits } from "@vsolve/ui";
 
 import {
   applySchema,
@@ -71,7 +72,11 @@ export default function ListingDetailPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const apply = useMutation({
-    mutationFn: () => submitListingApplication(listingId, form),
+    mutationFn: () =>
+      submitListingApplication(listingId, {
+        ...form,
+        phone: toE164(form.phone, PHONE_COUNTRIES.IN),
+      }),
     onSuccess: () => {
       setFieldErrors({});
       queryClient.invalidateQueries({ queryKey: ["listing", listingId] });
@@ -145,12 +150,14 @@ export default function ListingDetailPage() {
           listingId={listingId}
           posterName={listing.poster_name}
           isAuthenticated={session.isAuthenticated}
+          isSuccess={apply.isSuccess}
+          activeApplication={activeApplication}
           form={form}
           fieldErrors={fieldErrors}
           isPending={apply.isPending}
           serverError={
             apply.error && Object.keys(fieldErrors).length === 0
-              ? (apply.error as Error).message
+              ? friendlyErrorMessage(apply.error)
               : undefined
           }
           onFieldChange={updateField}

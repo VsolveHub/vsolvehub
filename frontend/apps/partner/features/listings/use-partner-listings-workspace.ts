@@ -109,6 +109,9 @@ export function usePartnerListingsWorkspace() {
       setIsSubscriptionModalOpen(false);
       setActionError(null);
     },
+    onPlanCap: () => {
+      setIsSubscriptionModalOpen(true);
+    },
     setCreateErrors,
     setEditErrors,
     setActionError,

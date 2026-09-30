@@ -615,7 +615,6 @@ export function PartnerLiveDelivery({
        this cannot become a render-time derivation of `enabled`. The whole deck
        clears, not just the head: everything pending belonged to the online
        spell that just ended. */
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     stopAlertSound();
     setQueue([]);
   }, [enabled, stopAlertSound]);

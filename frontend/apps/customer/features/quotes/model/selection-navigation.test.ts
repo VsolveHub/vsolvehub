@@ -22,7 +22,7 @@ function selection(engagementId: string | null): ProposalSelection {
 describe("selection navigation", () => {
   it("opens the engagement returned by a confirmed choice", () => {
     expect(destinationAfterSelection(selection("engagement-1"))).toBe(
-      "/engagements/engagement-1",
+      "/jobs/engagement-1",
     );
   });
 

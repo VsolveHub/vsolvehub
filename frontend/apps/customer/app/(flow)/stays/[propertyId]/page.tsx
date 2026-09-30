@@ -6,21 +6,19 @@ import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
   Building,
-  CheckCircle2,
   Coffee,
   MapPin,
   ShieldCheck,
   Sparkles,
-  Users,
   Wind,
   Wifi,
   Zap,
 } from "lucide-react";
-import { Badge, EmptyState, ErrorState, Skeleton } from "@vsolve/ui";
+import { Badge, ErrorState, Skeleton } from "@vsolve/ui";
 
 import { formatPaise, stayFields } from "@/features/stays/model";
 import { fetchStayProperty } from "@/features/stays/queries";
-import { StayQuotePanel } from "@/features/stays/view";
+import { StayImageGallery, StayQuotePanel } from "@/features/stays/view";
 
 export default function StayDetailPage() {
   const params = useParams<{ propertyId: string }>();
@@ -43,6 +41,7 @@ export default function StayDetailPage() {
         <Skeleton className="h-6 w-32" />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-4">
+            <Skeleton className="aspect-[16/10] w-full rounded-[var(--radius-card)]" />
             <Skeleton className="h-10 w-3/4" />
             <Skeleton className="h-24 w-full" />
             <Skeleton className="h-40 w-full" />
@@ -88,6 +87,8 @@ export default function StayDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Left Column: Property Details & Amenities */}
         <div className="lg:col-span-7 flex flex-col gap-6">
+          <StayImageGallery media={property.media} title={property.title} />
+
           <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6 shadow-xs">
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone="brand" className="inline-flex items-center gap-1.5 text-xs font-bold">
@@ -191,16 +192,18 @@ export default function StayDetailPage() {
           </div>
 
           {/* Enquiry Policy Card */}
-          <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6 shadow-xs space-y-4">
-            <h3 className="text-sm font-bold text-text flex items-center gap-2">
-              <ShieldCheck className="size-4 text-emerald-600" />
-              Direct Host Communication Guarantee
-            </h3>
-            <p className="text-xs text-text-secondary leading-relaxed">
-              When you send an enquiry with your check-in dates, the host receives your dates directly.
-              Once the host confirms availability and pricing quote, you will receive a notification to finalize check-in.
-            </p>
-          </div>
+          {(property as Record<string, unknown>).booking_mode !== "RESERVATION" && (
+            <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6 shadow-xs space-y-4">
+              <h3 className="text-sm font-bold text-text flex items-center gap-2">
+                <ShieldCheck className="size-4 text-emerald-600" />
+                Direct Host Communication Guarantee
+              </h3>
+              <p className="text-xs text-text-secondary leading-relaxed">
+                When you send an enquiry with your check-in dates, the host receives your dates directly.
+                Once the host confirms availability and pricing quote, you will receive a notification to finalize check-in.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Right Column: Interactive Quote and Enquiry Panel */}

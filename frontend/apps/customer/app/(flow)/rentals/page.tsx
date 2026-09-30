@@ -1,26 +1,31 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
   FileCheck2,
   MapPin,
   Search,
-  Sparkles,
   Wrench,
 } from "lucide-react";
 import { Button, EmptyState, ErrorState, Skeleton } from "@vsolve/ui";
 
 import { fetchRentals } from "@/features/rentals/queries";
-import { RentalCard, RentalFilters } from "@/features/rentals/view";
+import { type ActiveRentalFilters, RentalCard, RentalFilters } from "@/features/rentals/view";
 
-export default function RentalsBrowsePage() {
+function RentalsBrowseContent() {
+  const searchParams = useSearchParams();
+  const initCategory = searchParams.get("category") ?? undefined;
+
   const [draftQuery, setDraftQuery] = useState("");
   const [draftLocation, setDraftLocation] = useState("");
   const [appliedQuery, setAppliedQuery] = useState("");
   const [appliedLocation, setAppliedLocation] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("");
+  const [filters, setFilters] = useState<ActiveRentalFilters>(
+    initCategory ? { categorySlug: initCategory } : {}
+  );
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,16 +33,12 @@ export default function RentalsBrowsePage() {
     setAppliedLocation(draftLocation);
   };
 
-  const handleSelectCategory = (cat: string) => {
-    setSelectedCategory(cat);
-  };
-
   const clearFilters = () => {
     setDraftQuery("");
     setDraftLocation("");
     setAppliedQuery("");
     setAppliedLocation("");
-    setSelectedCategory("");
+    setFilters({});
   };
 
   const {
@@ -46,12 +47,23 @@ export default function RentalsBrowsePage() {
     error,
     refetch,
   } = useQuery({
-    queryKey: ["rentals", appliedQuery, appliedLocation, selectedCategory],
+    queryKey: [
+      "rentals",
+      appliedQuery,
+      appliedLocation,
+      filters.categorySlug,
+      filters.serviceSlug,
+      filters.startDate,
+      filters.endDate,
+    ],
     queryFn: () =>
       fetchRentals({
         q: appliedQuery,
         location: appliedLocation,
-        service: selectedCategory,
+        service: filters.serviceSlug,
+        category: filters.categorySlug,
+        start_date: filters.startDate,
+        end_date: filters.endDate,
       }),
     staleTime: 30_000,
   });
@@ -121,8 +133,8 @@ export default function RentalsBrowsePage() {
 
       {/* Filter Chips */}
       <RentalFilters
-        selectedCategory={selectedCategory}
-        onSelectCategory={handleSelectCategory}
+        activeFilters={filters}
+        onChangeFilter={setFilters}
         count={rentals.length}
       />
 
@@ -163,5 +175,13 @@ export default function RentalsBrowsePage() {
         </div>
       )}
     </main>
+  );
+}
+
+export default function RentalsBrowsePage() {
+  return (
+    <Suspense fallback={null}>
+      <RentalsBrowseContent />
+    </Suspense>
   );
 }

@@ -198,6 +198,10 @@ export function LoyaltyBoard() {
 
       <Card padding="md">
         <h2 className="text-sm font-semibold">Referral program versions</h2>
+        <p className="mt-1 text-sm text-text-secondary">
+          Codes apply only at customer signup. A later version does not rewrite an existing
+          attribution.
+        </p>
         <ul className="mt-2 text-sm">
           {(programs.data ?? []).map((program) => (
             <li key={program.id}>

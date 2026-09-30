@@ -78,7 +78,8 @@ export function ReferralShareCard({ summary }: ReferralShareCardProps) {
             {headlineCopy}
           </h2>
           <p className="mt-1.5 max-w-prose text-xs text-text-secondary leading-relaxed">
-            {rewardSentence}
+            {rewardSentence} A code applies only when a new customer signs up — it cannot be
+            attached later.
           </p>
 
           {/* Share code box */}

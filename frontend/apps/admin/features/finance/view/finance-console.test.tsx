@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { UNIT_ID, ok, refund, refusal } from "@/features/shared/fixtures";
+import { formatMoney } from "@vsolve/ui";
 
 /**
  * The Finance console.
@@ -63,6 +64,7 @@ beforeEach(() => {
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   for (const method of Object.values(client)) method.mockReset();
+  client.GET.mockResolvedValue(ok({ results: [], next: null, previous: null }));
 });
 
 afterEach(() => {
@@ -374,3 +376,25 @@ describe("the step-up", () => {
     expect(await screen.findByText(/not right, or it has expired/i)).toBeInTheDocument();
   });
 });
+
+describe("operations refunds ledger", () => {
+  it("renders live operations refunds and allows reconciling from the table", async () => {
+    const sampleRefund = refund({ id: "refund-123", status: "PROCESSING" });
+    client.GET.mockResolvedValue(ok({ results: [sampleRefund], next: null, previous: null }));
+    client.POST.mockResolvedValue(ok(refund({ id: "refund-123", status: "SUCCEEDED" })));
+
+    render(<RefundConsole onStepUpRequired={vi.fn()} />, { wrapper });
+
+    expect(await screen.findByText(/Refunds ledger & history/i)).toBeInTheDocument();
+    expect(await screen.findByText(formatMoney(sampleRefund.amount.amount_paise))).toBeInTheDocument();
+
+    const reconcileBtn = await screen.findByRole("button", { name: "Reconcile" });
+    fireEvent.click(reconcileBtn);
+
+    await waitFor(() => expect(client.POST).toHaveBeenCalledTimes(1));
+    expect(client.POST.mock.calls[0]![0]).toBe(
+      "/api/v1/finance/refunds/{refund_id}/reconcile/",
+    );
+  });
+});
+

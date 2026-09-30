@@ -93,3 +93,12 @@ class UnsupportedListingActionApiError(ListingApiError):
     default_code = "unsupported_listing_action"
     error_code = "unsupported_listing_action"
     safe_message = "That action is not supported."
+
+
+class ListingPlanCapApiError(ListingApiError):
+    status_code = status.HTTP_409_CONFLICT
+    default_code = "listing_plan_cap"
+    error_code = "listing_plan_cap"
+    safe_message = (
+        "Active listing limit reached for the current plan. Please upgrade to publish more."
+    )

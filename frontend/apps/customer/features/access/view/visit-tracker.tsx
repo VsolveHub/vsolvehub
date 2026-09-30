@@ -13,6 +13,7 @@ import {
   Skeleton,
   buttonStyles,
   cn,
+  formatDate
 } from "@vsolve/ui";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -1024,13 +1025,12 @@ function VisitStateGlyph({ state }: { state: VisitSlotRow["state"] }) {
  * than by arithmetic on instants, so the comparison is the same one the row's
  * own label is rendered from.
  */
-function isToday(scheduledFor: string | null, timeZone: string | null): boolean {
+function isToday(scheduledFor: string | null, _timeZone: string | null): boolean {
   if (scheduledFor === null) return false;
   const when = new Date(scheduledFor);
   if (Number.isNaN(when.getTime())) return false;
-  const zone = timeZone ?? undefined;
   try {
-    const format = (value: Date) => value.toLocaleDateString("en-IN", { timeZone: zone });
+    const format = (value: Date) => formatDate(value);
     return format(when) === format(new Date());
   } catch {
     // An unknown IANA zone from a future service area must not take the list

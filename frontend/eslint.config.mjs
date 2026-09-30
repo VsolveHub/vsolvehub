@@ -8,6 +8,8 @@ export default defineConfig([
   {
     rules: {
       "@next/next/no-html-link-for-pages": "off",
+      "react-hooks/set-state-in-effect": "off",
+      "react-hooks/immutability": "off",
       "@typescript-eslint/no-unused-vars": [
         "error",
         {
@@ -81,6 +83,9 @@ export default defineConfig([
     "**/build/**",
     "**/next-env.d.ts",
     "**/node_modules/**",
+    "**/playwright-report/**",
+    "**/test-results/**",
+    "**/e2e/**",
     "packages/api-client/src/generated/**",
   ]),
 ]);

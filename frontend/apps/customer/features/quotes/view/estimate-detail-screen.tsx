@@ -1,7 +1,7 @@
 "use client";
 
 import { blocksNewSelection } from "@vsolve/query";
-import { Badge, Button, Disclosure, ErrorState, Skeleton, buttonStyles, cn } from "@vsolve/ui";
+import { Badge, Button, Disclosure, ErrorState, Skeleton, buttonStyles, cn , formatDate} from "@vsolve/ui";
 import { ChevronLeft, MessageCircle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -426,9 +426,9 @@ export function EstimateDetailScreen({
             <Disclosure summary="Terms, warranty and dates">
               <dl className="grid gap-3 pb-3 sm:grid-cols-2">
                 <Fact label="Warranty" value={card.warrantyTerms} empty="Not stated" />
-                <Fact label="Valid until" value={card.validUntil === null ? null : new Date(card.validUntil).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} empty="No validity given" />
+                <Fact label="Valid until" value={card.validUntil === null ? null : formatDate(card.validUntil)} empty="No validity given" />
                 <Fact label="Written" value={card.visitCompletedAt === null ? null : "On site, after their visit"} empty="Not recorded" />
-                <Fact label="Sent" value={new Date(card.submittedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })} />
+                <Fact label="Sent" value={formatDate(card.submittedAt)} />
                 {card.revision > 1 ? <Fact label="Revision" value={String(card.revision)} /> : null}
               </dl>
             </Disclosure>

@@ -57,11 +57,22 @@ describe("handoffTarget", () => {
     });
   });
 
+  it("prefers razorpay_amount_paise (gateway net) over gross amount", () => {
+    const target = handoffTarget(
+      attempt({
+        amount: { amount_paise: 250000, currency: "INR" },
+        razorpay_amount_paise: 200000,
+      }),
+    );
+    expect(target?.amountPaise).toBe(200000);
+  });
+
   it("refuses an attempt missing what the widget needs", () => {
     // Opening a widget without these fails inside the provider's own iframe,
     // where we cannot explain it to anyone.
     expect(handoffTarget(attempt({ provider_public_key: null }))).toBeNull();
     expect(handoffTarget(attempt({ provider_order_id: "" }))).toBeNull();
+    expect(handoffTarget(attempt({ provider_order_id: "   " }))).toBeNull();
   });
 
   it("refuses a non-interactive provider even when fully described", () => {

@@ -116,7 +116,11 @@ export function isExpired(attempt: PaymentAttempt, serverNow: Date): boolean {
  */
 export function canHandOff(attempt: PaymentAttempt, serverNow: Date): boolean {
   if (isSettled(attempt) || isExpired(attempt, serverNow)) return false;
-  return attempt.provider_public_key !== null && attempt.provider_order_id !== "";
+  return Boolean(
+    attempt.provider_public_key &&
+      attempt.provider_order_id &&
+      attempt.provider_order_id.trim() !== "",
+  );
 }
 
 export type PaymentPhase =

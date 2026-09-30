@@ -6,8 +6,8 @@ import {
   request,
   type Schemas,
 } from "@vsolve/api-client";
-import { useRequestOtp } from "@vsolve/query";
-import { useMutation } from "@tanstack/react-query";
+import { EXPIRING_STATE, cursorFromNextUrl, useRequestOtp } from "@vsolve/query";
+import { useInfiniteQuery, useMutation } from "@tanstack/react-query";
 
 import { getApiClient } from "@/lib/api/browser";
 
@@ -210,4 +210,31 @@ export function isInProgress(error: unknown): boolean {
 
 export function isKeyReused(error: unknown): boolean {
   return error instanceof ApiRequestError && error.code === "idempotency_key_reused";
+}
+
+/* -------------------------------------------------------------------------
+   Operations Refunds List (Proposal 0026)
+   ------------------------------------------------------------------------- */
+
+export type RefundPage = Schemas["RefundPage"];
+
+export function useOperationsRefunds() {
+  return useInfiniteQuery({
+    queryKey: ["operations", "refunds"] as const,
+    queryFn: async ({ pageParam }) => {
+      const page = await request(() =>
+        getApiClient().GET("/api/v1/operations/refunds/", {
+          params: {
+            query: {
+              ...(pageParam ? { cursor: pageParam } : {}),
+            },
+          },
+        }),
+      );
+      return page;
+    },
+    initialPageParam: "" as string,
+    getNextPageParam: (lastPage) => cursorFromNextUrl(lastPage.next),
+    ...EXPIRING_STATE,
+  });
 }

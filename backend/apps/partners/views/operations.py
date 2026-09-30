@@ -456,3 +456,96 @@ class OperationsPartnerScheduleView(APIView):
         except PartnerDomainError as exc:
             _raise_api_error(exc)
         return Response(PartnerScheduleSerializer({"rules": rules, "exceptions": exceptions}).data)
+
+
+import csv
+import hashlib
+import io
+
+from rest_framework import permissions, status
+from rest_framework.parsers import MultiPartParser
+
+
+class PartnerImportView(APIView):
+    permission_classes = (permissions.IsAuthenticated, IsOperationsUser)
+    parser_classes = (MultiPartParser,)
+
+    @extend_schema(summary="Import partners via CSV", request=dict, tags=["operations"])
+    def post(self, request: Request) -> Response:
+        file_obj = request.FILES.get("file")
+        if not file_obj:
+            return Response({"detail": "File required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        dry_run = request.data.get("dry_run", "true").lower() == "true"
+
+        file_bytes = file_obj.read()
+        file_hash = hashlib.sha256(file_bytes).hexdigest()
+
+        try:
+            content = file_bytes.decode("utf-8")
+            reader = csv.DictReader(io.StringIO(content))
+        except Exception:
+            return Response({"detail": "Invalid CSV file"}, status=status.HTTP_400_BAD_REQUEST)
+
+        results = {"created": 0, "skipped": 0, "errors": 0, "rows": []}
+
+        # We need to import User and PartnerProfile to create them
+        from django.db import transaction
+
+        from apps.identity.models import Role, User, UserRole
+        from apps.partners.models import PartnerProfile
+
+        try:
+            with transaction.atomic():
+                partner_role, _ = Role.objects.get_or_create(
+                    code="partner", defaults={"name": "Partner"}
+                )
+                for i, row in enumerate(reader, start=2):
+                    phone = row.get("phone", "").strip()
+                    full_name = row.get("full_name", "").strip()
+                    city = row.get("city", "").strip()
+
+                    if not phone or not full_name:
+                        results["errors"] += 1
+                        results["rows"].append(
+                            {"row": i, "status": "error", "message": "Phone and full_name required"}
+                        )
+                        continue
+
+                    try:
+                        from apps.identity.phone import normalize_phone_number
+
+                        phone = normalize_phone_number(phone)
+                    except Exception:
+                        results["errors"] += 1
+                        results["rows"].append(
+                            {"row": i, "status": "error", "message": "Invalid phone number format"}
+                        )
+                        continue
+
+                    if User.objects.filter(phone_number=phone).exists():
+                        results["skipped"] += 1
+                        results["rows"].append(
+                            {"row": i, "status": "skipped", "message": "Phone exists"}
+                        )
+                        continue
+
+                    if not dry_run:
+                        user = User.objects.create_user(phone_number=phone, full_name=full_name)
+                        UserRole.objects.create(user=user, role=partner_role)
+                        PartnerProfile.objects.create(
+                            user=user,
+                            display_name=full_name,
+                        )
+
+                    results["created"] += 1
+                    results["rows"].append({"row": i, "status": "created", "phone": phone})
+
+                if dry_run:
+                    transaction.set_rollback(True)
+        except Exception as e:
+            return Response(
+                {"detail": f"Import failed: {e!s}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        return Response({"dry_run": dry_run, "file_hash": file_hash, "results": results})

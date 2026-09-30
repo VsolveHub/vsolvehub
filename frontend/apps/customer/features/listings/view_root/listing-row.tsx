@@ -8,7 +8,7 @@ import {
   MapPin,
   Users,
 } from "lucide-react";
-import { Badge, Card } from "@vsolve/ui";
+import { Badge, Card, formatDate, formatMoneyText } from "@vsolve/ui";
 
 import { listingFields, type Listing } from "../queries";
 
@@ -18,7 +18,8 @@ export interface ListingRowProps {
 
 export function ListingRow({ listing }: ListingRowProps) {
   const fields = listingFields(listing.structured_fields);
-  const payRange = fields.pay_range || fields.salary_range || fields.compensation;
+  const rawPayRange = fields.pay_range || fields.salary_range || fields.compensation;
+  const payRange = rawPayRange ? formatMoneyText(String(rawPayRange)) : null;
   const roleType = fields.role_type || fields.employment_type;
   const experience = fields.experience_years || fields.experience;
   const shift = fields.shift || fields.work_mode;
@@ -59,7 +60,7 @@ export function ListingRow({ listing }: ListingRowProps) {
                   <span>•</span>
                   <span className="flex items-center gap-1">
                     <Clock className="size-3.5" />
-                    Posted {new Date(listing.published_at).toLocaleDateString()}
+                    Posted {formatDate(listing.published_at)}
                   </span>
                 </>
               )}
@@ -70,10 +71,12 @@ export function ListingRow({ listing }: ListingRowProps) {
               {listing.title}
             </h2>
 
-            {/* Description */}
-            <p className="line-clamp-2 text-sm leading-relaxed text-text-secondary">
-              {listing.description}
-            </p>
+            {/* Summary list payloads omit description (ListingDetail only). */}
+            {(fields.summary || fields.description) ? (
+              <p className="line-clamp-2 text-sm leading-relaxed text-text-secondary">
+                {String(fields.summary || fields.description)}
+              </p>
+            ) : null}
 
             {/* Badges / Structured Fields */}
             <div className="flex flex-wrap items-center gap-2 pt-1">

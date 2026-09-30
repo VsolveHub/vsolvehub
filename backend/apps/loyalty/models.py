@@ -15,6 +15,8 @@ class CustomerCompletion(models.Model):
     class SourceType(models.TextChoices):
         BOOKING = "BOOKING", "Booking"
         ENGAGEMENT = "ENGAGEMENT", "Engagement"
+        RENTAL_COMPLETED = "RENTAL_COMPLETED", "Rental completed"
+        STAY_CHECKED_OUT = "STAY_CHECKED_OUT", "Stay checked out"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     customer = models.ForeignKey(

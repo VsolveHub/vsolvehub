@@ -1,6 +1,6 @@
 "use client";
 
-import { describeError } from "@vsolve/query";
+import { friendlyErrorMessage } from "@vsolve/query";
 import { Button, Dialog, Field, Input } from "@vsolve/ui";
 import { useState } from "react";
 
@@ -37,7 +37,7 @@ function EditNameForm({ currentName, onClose }: EditNameDialogProps) {
 
   function save() {
     if (trimmed === "" || isUnchanged) return;
-    update.mutate(trimmed, { onSuccess: onClose });
+    update.mutate({ display_name: trimmed }, { onSuccess: onClose });
   }
 
   return (
@@ -67,7 +67,7 @@ function EditNameForm({ currentName, onClose }: EditNameDialogProps) {
       <Field
         label="Your name"
         required
-        error={update.isError ? describeError(update.error, "mutation").message : undefined}
+        error={update.isError ? friendlyErrorMessage(update.error) : undefined}
       >
         <Input value={name} autoComplete="name" onChange={(event) => setName(event.target.value)} />
       </Field>

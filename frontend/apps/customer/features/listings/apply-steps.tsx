@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { CheckCircle2 } from "lucide-react";
 
 import { SaveHeart, useSavedItems } from "@/features/part-a";
+import { AlreadyAppliedCard } from "./view/already-applied-card";
 import { uploadListingResume } from "./queries";
 import { applySchema, issuesToFieldErrors, type ApplyFormState } from "./model";
 
@@ -11,6 +13,8 @@ export function ApplySteps({
   listingId,
   posterName,
   isAuthenticated,
+  isSuccess,
+  activeApplication,
   form,
   fieldErrors,
   isPending,
@@ -22,6 +26,8 @@ export function ApplySteps({
   listingId: string;
   posterName?: string;
   isAuthenticated: boolean;
+  isSuccess?: boolean;
+  activeApplication?: { status?: string };
   form: ApplyFormState;
   fieldErrors: Record<string, string>;
   isPending: boolean;
@@ -40,6 +46,42 @@ export function ApplySteps({
       <section id="apply-panel" className="rounded-card border border-line bg-surface p-6">
         <h2 className="text-lg font-bold">Apply for this Position</h2>
         <p className="mt-2 text-xs text-text-secondary">Sign in to send this application to {posterName}.</p>
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new CustomEvent("open-login-popup"))}
+          className="mt-4 w-full rounded-control bg-action py-2.5 text-sm font-bold text-action-text"
+        >
+          Sign In / Register
+        </button>
+      </section>
+    );
+  }
+
+  if (isSuccess) {
+    return (
+      <section id="apply-panel" className="rounded-card border border-line bg-surface p-6">
+        <div className="rounded-card border border-success-line bg-success-surface p-5 text-center">
+          <CheckCircle2 className="mx-auto size-8 text-success-text" />
+          <h3 className="mt-2 text-sm font-bold text-success-text">Application Submitted!</h3>
+          <p className="mt-1 text-xs text-success-text">
+            Your application has been received by {posterName}. Track updates in My Applications.
+          </p>
+          <Link
+            href="/listings/my-applications"
+            className="mt-4 inline-flex items-center justify-center rounded-control bg-navy-900 px-4 py-2 text-xs font-semibold text-warm-0 hover:bg-navy-800"
+          >
+            View in My Applications →
+          </Link>
+        </div>
+      </section>
+    );
+  }
+
+  if (activeApplication) {
+    return (
+      <section id="apply-panel" className="rounded-card border border-line bg-surface p-6">
+        <h2 className="text-lg font-bold">Apply for this Position</h2>
+        <AlreadyAppliedCard posterName={posterName} status={activeApplication.status} />
       </section>
     );
   }
@@ -56,6 +98,7 @@ export function ApplySteps({
       {step === 1 ? (
         <form
           className="mt-4 space-y-3"
+          noValidate
           onSubmit={(event) => {
             event.preventDefault();
             const parsed = applySchema.safeParse(form);
@@ -71,15 +114,17 @@ export function ApplySteps({
             Full name
             <input className="mt-1 h-10 w-full rounded-control border border-line px-3 text-sm" value={form.name} onChange={(e) => onFieldChange("name", e.target.value)} />
           </label>
-          <p className="text-xs text-danger-text">{fieldErrors.name}</p>
+          {fieldErrors.name ? <p className="text-xs text-danger-text">{fieldErrors.name}</p> : null}
           <label className="block text-xs font-semibold">
             Phone
             <input className="mt-1 h-10 w-full rounded-control border border-line px-3 text-sm" value={form.phone} onChange={(e) => onFieldChange("phone", e.target.value)} />
           </label>
+          {fieldErrors.phone ? <p className="text-xs text-danger-text">{fieldErrors.phone}</p> : null}
           <label className="block text-xs font-semibold">
             Email
             <input className="mt-1 h-10 w-full rounded-control border border-line px-3 text-sm" value={form.email} onChange={(e) => onFieldChange("email", e.target.value)} />
           </label>
+          {fieldErrors.email ? <p className="text-xs text-danger-text">{fieldErrors.email}</p> : null}
           <label className="block text-xs font-semibold">
             Resume
             <input
@@ -102,10 +147,12 @@ export function ApplySteps({
           </label>
           {fileName ? <p className="text-xs text-text-secondary">{fileName}</p> : null}
           {uploadError ? <p className="text-xs text-danger-text">{uploadError}</p> : null}
+          {fieldErrors.resume_url ? <p className="text-xs text-danger-text">{fieldErrors.resume_url}</p> : null}
           <label className="block text-xs font-semibold">
             Cover note
             <textarea className="mt-1 w-full rounded-control border border-line px-3 py-2 text-sm" maxLength={500} value={form.cover_note} onChange={(e) => onFieldChange("cover_note", e.target.value)} />
           </label>
+          {fieldErrors.cover_note ? <p className="text-xs text-danger-text">{fieldErrors.cover_note}</p> : null}
           <button type="submit" className="w-full rounded-control bg-action py-2.5 text-sm font-bold text-action-text">
             Review Application
           </button>
@@ -117,9 +164,24 @@ export function ApplySteps({
           <p>{form.email || "No email"}</p>
           <p className="text-xs text-text-secondary">{form.resume_url || "No resume uploaded"}</p>
           <p className="text-xs">{form.cover_note}</p>
-          {serverError ? <p className="text-xs text-danger-text">{serverError}</p> : null}
+          {Object.keys(fieldErrors).length > 0 ? (
+            <div role="alert" className="rounded-control border border-danger-line bg-danger-surface p-3 text-xs text-danger-text">
+              <p className="font-semibold">Check these fields</p>
+              <ul className="mt-1 list-disc pl-4">
+                {Object.entries(fieldErrors).map(([key, message]) =>
+                  message ? <li key={key}>{message}</li> : null,
+                )}
+              </ul>
+            </div>
+          ) : null}
+          {serverError ? (
+            <div role="alert" className="rounded-control border border-danger-line bg-danger-surface p-3 text-xs text-danger-text">
+              <p className="font-semibold">Application couldn&apos;t be submitted</p>
+              <p className="mt-0.5">{serverError}</p>
+            </div>
+          ) : null}
           <button type="button" className="text-xs underline" onClick={() => setStep(1)}>Back</button>
-          <button type="button" disabled={isPending} onClick={onSubmit} className="block w-full rounded-control bg-action py-2.5 text-sm font-bold text-action-text">
+          <button type="button" disabled={isPending} onClick={onSubmit} className="block w-full rounded-control bg-action py-2.5 text-sm font-bold text-action-text disabled:opacity-50">
             {isPending ? "Sending…" : "Submit application"}
           </button>
           <Link href="/listings/my-applications" className="block text-center text-xs text-text-secondary">My applications</Link>

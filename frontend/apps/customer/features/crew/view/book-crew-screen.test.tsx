@@ -316,11 +316,11 @@ describe("BookCrewScreen rate rail", () => {
     // The trimmed rail shows exactly two figures — the day rate and the
     // booking fee — both fields on the payload, plus the booking control that
     // states the fee again rather than a total this screen would compute.
-    expect(await screen.findByText("₹900")).toBeInTheDocument();
-    expect(screen.getByText(/a day to the crew/)).toBeInTheDocument();
-    expect(screen.getByText(/₹300 booking fee/)).toBeInTheDocument();
+    expect(await screen.findByText(/₹900 a day to the crew/)).toBeInTheDocument();
+    expect(screen.getAllByText(/₹300 booking fee/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByRole("button", { name: /Book this crew/i })).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /Book — pay ₹300 when accepted/ }),
+      screen.getByText(/You pay ₹300 only when a supervisor accepts/),
     ).toBeInTheDocument();
   });
 
@@ -682,7 +682,7 @@ describe("BookCrewScreen for a fixed cook team", () => {
     expect(await screen.findByText("Your cook brings their own helpers.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "More cook teams" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "More days" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Reporting time")).toBeInTheDocument();
+    expect(screen.getByLabelText(/Reporting time/i)).toBeInTheDocument();
 
     const lunch = screen.getByRole("checkbox", { name: "Lunch" });
     const dinner = screen.getByRole("checkbox", { name: "Dinner" });

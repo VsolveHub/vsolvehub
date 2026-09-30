@@ -223,3 +223,54 @@ def test_partner_must_upload_stay_photos_not_paste_urls(stay_world):
     media = PropertyMedia.objects.filter(property_id=created.json()["id"])
     assert media.count() == 1
     assert media.get().url == body["url"]
+
+
+@pytest.mark.django_db(transaction=True)
+def test_stay_reservation_simulated_capture(stay_world, client):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from apps.commerce.models import PaymentAttempt
+    from apps.commerce.services.simulation import simulate_capture
+    from apps.stay.services import (
+        create_property,
+        initiate_reservation_payment,
+        moderate_property,
+        submit_property,
+    )
+
+    prop = create_property(
+        host=stay_world["host"],
+        variant_id=stay_world["variant"].id,
+        title="Demo PG",
+        nightly_rate_paise=90000,
+    )
+    submit_property(prop=prop, host=stay_world["host"])
+    moderate_property(
+        prop=prop, actor=stay_world["host_user"], action="APPROVE", reason="ok for test"
+    )
+
+    check_in = timezone.localdate() + timedelta(days=3)
+
+    # We can create reservation directly
+    from apps.stay.services import create_reservation
+
+    unit = prop.units.first()
+    res = create_reservation(
+        customer=stay_world["guest"],
+        property_id=prop.id,
+        unit_id=unit.id,
+        check_in=check_in,
+        check_out=check_in + timedelta(days=10),
+        guest_count=1,
+    )
+
+    attempt = initiate_reservation_payment(res.id)
+    assert attempt.status == PaymentAttempt.Status.PROVIDER_PENDING
+
+    # Needs simulate_capture
+    simulate_capture(attempt_id=attempt.id, customer_id=stay_world["guest"].id)
+
+    attempt.refresh_from_db()
+    assert attempt.status == PaymentAttempt.Status.CAPTURED

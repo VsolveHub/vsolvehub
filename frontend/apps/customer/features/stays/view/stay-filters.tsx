@@ -1,13 +1,17 @@
 "use client";
 
-import { Building2, Coffee, Layers, User, Users, Wind } from "lucide-react";
-import { cn } from "@vsolve/ui";
+import { useQuery } from "@tanstack/react-query";
+import { Building2, Coffee, Layers, Wind } from "lucide-react";
+import { cn, Skeleton } from "@vsolve/ui";
+
+import { fetchStayTaxonomy } from "../queries";
 
 export interface ActiveFilters {
-  sharingCount?: number;
   ac?: boolean;
   food?: boolean;
   maxPrice?: number;
+  categorySlug?: string;
+  serviceSlug?: string;
 }
 
 interface StayFiltersProps {
@@ -21,133 +25,142 @@ export function StayFilters({
   onChangeFilter,
   count,
 }: StayFiltersProps) {
-  const isAll =
-    activeFilters.sharingCount === undefined &&
-    activeFilters.ac === undefined &&
-    activeFilters.food === undefined &&
-    activeFilters.maxPrice === undefined;
+  const { data: taxonomy = [], isLoading } = useQuery({
+    queryKey: ["stayTaxonomy"],
+    queryFn: fetchStayTaxonomy,
+    staleTime: 5 * 60 * 1000,
+  });
 
-  const setSingle = () => {
-    onChangeFilter({
-      ...activeFilters,
-      sharingCount: activeFilters.sharingCount === 1 ? undefined : 1,
-    });
-  };
-
-  const setDouble = () => {
-    onChangeFilter({
-      ...activeFilters,
-      sharingCount: activeFilters.sharingCount === 2 ? undefined : 2,
-    });
-  };
+  const isAll = !activeFilters.categorySlug && !activeFilters.serviceSlug;
 
   const toggleAc = () => {
-    onChangeFilter({
-      ...activeFilters,
-      ac: activeFilters.ac ? undefined : true,
-    });
+    onChangeFilter({ ...activeFilters, ac: activeFilters.ac ? undefined : true });
   };
 
   const toggleFood = () => {
-    onChangeFilter({
-      ...activeFilters,
-      food: activeFilters.food ? undefined : true,
-    });
+    onChangeFilter({ ...activeFilters, food: activeFilters.food ? undefined : true });
   };
 
   const toggleBudget = () => {
-    onChangeFilter({
-      ...activeFilters,
-      maxPrice: activeFilters.maxPrice === 100000 ? undefined : 100000,
-    });
+    onChangeFilter({ ...activeFilters, maxPrice: activeFilters.maxPrice === 100000 ? undefined : 100000 });
   };
+
+  const setCategory = (slug?: string) => {
+    onChangeFilter({ ...activeFilters, categorySlug: slug, serviceSlug: undefined });
+  };
+
+  const setService = (slug: string) => {
+    onChangeFilter({ ...activeFilters, serviceSlug: slug });
+  };
+
+  const activeCategory = taxonomy.find((cat) => cat.slug === activeFilters.categorySlug);
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={() => onChangeFilter({})}
-          className={cn(
-            "inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition",
-            isAll
-              ? "bg-action text-white shadow-xs"
-              : "bg-surface border border-line text-text-secondary hover:border-line-strong hover:text-text",
-          )}
-        >
-          <Layers className="size-3.5" />
-          All Stays
-        </button>
+      <div className="flex flex-col gap-3">
+        {/* Row 1: Categories + Amenities */}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setCategory(undefined)}
+            className={cn(
+              "inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition",
+              isAll
+                ? "bg-action text-white shadow-xs"
+                : "bg-surface border border-line text-text-secondary hover:border-line-strong hover:text-text",
+            )}
+          >
+            <Layers className="size-3.5" />
+            All Stays
+          </button>
 
-        <button
-          type="button"
-          onClick={setSingle}
-          className={cn(
-            "inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition",
-            activeFilters.sharingCount === 1
-              ? "bg-action text-white shadow-xs"
-              : "bg-surface border border-line text-text-secondary hover:border-line-strong hover:text-text",
+          {isLoading ? (
+            Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-[34px] w-24 rounded-full" />
+            ))
+          ) : (
+            taxonomy.map((cat) => (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => setCategory(cat.slug)}
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition",
+                  activeFilters.categorySlug === cat.slug
+                    ? "bg-action text-white shadow-xs"
+                    : "bg-surface border border-line text-text-secondary hover:border-line-strong hover:text-text",
+                )}
+              >
+                {cat.name}
+              </button>
+            ))
           )}
-        >
-          <User className="size-3.5" />
-          Private Single Room
-        </button>
 
-        <button
-          type="button"
-          onClick={setDouble}
-          className={cn(
-            "inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition",
-            activeFilters.sharingCount === 2
-              ? "bg-action text-white shadow-xs"
-              : "bg-surface border border-line text-text-secondary hover:border-line-strong hover:text-text",
-          )}
-        >
-          <Users className="size-3.5" />
-          Double Sharing PG
-        </button>
+          <div className="h-6 w-px bg-line mx-1" />
 
-        <button
-          type="button"
-          onClick={toggleAc}
-          className={cn(
-            "inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition",
-            activeFilters.ac
-              ? "bg-action text-white shadow-xs"
-              : "bg-surface border border-line text-text-secondary hover:border-line-strong hover:text-text",
-          )}
-        >
-          <Wind className="size-3.5" />
-          AC Included
-        </button>
+          <button
+            type="button"
+            onClick={toggleAc}
+            className={cn(
+              "inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition",
+              activeFilters.ac
+                ? "bg-action text-white shadow-xs"
+                : "bg-surface border border-line text-text-secondary hover:border-line-strong hover:text-text",
+            )}
+          >
+            <Wind className="size-3.5" />
+            AC Included
+          </button>
 
-        <button
-          type="button"
-          onClick={toggleFood}
-          className={cn(
-            "inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition",
-            activeFilters.food
-              ? "bg-action text-white shadow-xs"
-              : "bg-surface border border-line text-text-secondary hover:border-line-strong hover:text-text",
-          )}
-        >
-          <Coffee className="size-3.5" />
-          Meals Included
-        </button>
+          <button
+            type="button"
+            onClick={toggleFood}
+            className={cn(
+              "inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition",
+              activeFilters.food
+                ? "bg-action text-white shadow-xs"
+                : "bg-surface border border-line text-text-secondary hover:border-line-strong hover:text-text",
+            )}
+          >
+            <Coffee className="size-3.5" />
+            Meals Included
+          </button>
 
-        <button
-          type="button"
-          onClick={toggleBudget}
-          className={cn(
-            "inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition",
-            activeFilters.maxPrice === 100000
-              ? "bg-action text-white shadow-xs"
-              : "bg-surface border border-line text-text-secondary hover:border-line-strong hover:text-text",
-          )}
-        >
-          <Building2 className="size-3.5" />
-          Budget (&lt; ₹1,000/night)
-        </button>
+          <button
+            type="button"
+            onClick={toggleBudget}
+            className={cn(
+              "inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition",
+              activeFilters.maxPrice === 100000
+                ? "bg-action text-white shadow-xs"
+                : "bg-surface border border-line text-text-secondary hover:border-line-strong hover:text-text",
+            )}
+          >
+            <Building2 className="size-3.5" />
+            Budget (&lt; ₹1,000/night)
+          </button>
+        </div>
+
+        {/* Row 2: Subcategories (Services/Variants) */}
+        {activeCategory && activeCategory.services && activeCategory.services.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            {activeCategory.services.map((svc) => (
+              <button
+                key={svc.id}
+                type="button"
+                onClick={() => setService(svc.slug)}
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold transition",
+                  activeFilters.serviceSlug === svc.slug
+                    ? "bg-text text-surface shadow-xs"
+                    : "bg-surface-sunken border border-line text-text-secondary hover:border-line-strong hover:text-text",
+                )}
+              >
+                {svc.name}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="flex items-center justify-between text-xs text-text-secondary font-medium px-1">

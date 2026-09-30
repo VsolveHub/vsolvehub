@@ -40,6 +40,18 @@ const ratingSummary = {
   ratings: [],
 };
 
+const feedbackSummary = {
+  subject_kind: "CATALOG_BOOKING" as const,
+  subject_id: "booking-1",
+  can_submit: false,
+  my_feedback: null,
+  available_tags: [
+    { code: "ALL_GOOD", label: "All good", is_exclusive: true },
+    { code: "PRICE_UNCLEAR", label: "Pricing wasn't clear", is_exclusive: false },
+    { code: "APP_PROBLEM", label: "The app was slow", is_exclusive: false },
+  ],
+};
+
 let queryClient: QueryClient;
 
 function wrapper({ children }: { children: ReactNode }) {
@@ -430,13 +442,16 @@ describe("paid booking presentation", () => {
       if (path === "/api/v1/bookings/{booking_id}/ratings/") {
         return Promise.resolve(ok({ ...ratingSummary, can_rate: true }));
       }
+      if (path === "/api/v1/bookings/{booking_id}/platform-feedback/") {
+        return Promise.resolve(ok({ ...feedbackSummary, can_submit: false }));
+      }
       return Promise.resolve(refusal("not_found", 404));
     });
 
     renderDetail();
 
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "We value your feedback" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /how was blockage pro/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /view your receipt/i })).toHaveAttribute(
       "href",
       "/bookings/group-1/receipt",

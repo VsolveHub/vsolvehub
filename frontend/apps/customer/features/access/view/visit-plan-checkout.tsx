@@ -4,10 +4,10 @@ import { visitPlanPhase } from "@vsolve/query";
 import { useState, type ReactNode } from "react";
 
 import { useProfileCompletionGate } from "@/features/account/view/profile-completion-dialog";
+import { completeOrOpenCheckout } from "@/features/payment/standalone-handoff";
 
 import { toPlanCheckoutView, toVisitTrackerView } from "../adapters";
 import {
-  canSimulateAccessCheckout,
   useSimulateVisitPlanCapture,
   useStartVisitPlanCheckout,
   type VisitPlanState,
@@ -47,6 +47,8 @@ export function VisitPlanCheckout({
   const checkout = useStartVisitPlanCheckout();
   const simulateCapture = useSimulateVisitPlanCapture();
   const [paying, setPaying] = useState(false);
+  const [isHandingOff, setIsHandingOff] = useState(false);
+  const [handoffError, setHandoffError] = useState<unknown>(null);
 
   const phase = state === null ? null : visitPlanPhase(state);
   const view = state === null ? null : toPlanCheckoutView(state);
@@ -54,10 +56,24 @@ export function VisitPlanCheckout({
   const paymentAttemptId = state?.plan?.payment_attempt_id ?? null;
   const canSimulatePendingCapture =
     state?.plan?.simulated_capture_available === true && paymentAttemptId !== null;
-  const isPending = checkout.isPending || simulateCapture.isPending;
+  const isPending = checkout.isPending || simulateCapture.isPending || isHandingOff;
 
   function markVisitPlanPaid(attemptId: string) {
     simulateCapture.mutate({ requirementId, paymentAttemptId: attemptId });
+  }
+
+  async function handOffAttempt(attemptId: string) {
+    setHandoffError(null);
+    setIsHandingOff(true);
+    try {
+      await completeOrOpenCheckout(String(attemptId), {
+        businessName: "Vsolve Hub",
+      });
+    } catch (error) {
+      setHandoffError(error);
+    } finally {
+      setIsHandingOff(false);
+    }
   }
 
   function startCheckout() {
@@ -70,9 +86,7 @@ export function VisitPlanCheckout({
       },
       {
         onSuccess: (started) => {
-          if (canSimulateAccessCheckout(started)) {
-            markVisitPlanPaid(started.payment_attempt_id);
-          }
+          void handOffAttempt(started.payment_attempt_id);
         },
         onSettled: () => setPaying(false),
       },
@@ -85,7 +99,7 @@ export function VisitPlanCheckout({
     },
     chargeableLabel: view?.chargeableLabel ?? null,
     isPending,
-    error: checkout.error ?? simulateCapture.error,
+    error: checkout.error ?? simulateCapture.error ?? handoffError,
     canSimulatePendingCapture,
     simulatePendingCapture: () => {
       if (paymentAttemptId !== null) {

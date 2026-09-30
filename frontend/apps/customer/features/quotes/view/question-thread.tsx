@@ -151,7 +151,7 @@ export function QuestionThread({
                 e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
               }}
               disabled={isAnswering || isAsking || (!pendingVendorQuestion && (!canAsk || left === 0))}
-              className="w-full resize-none rounded-[22px] border border-line bg-[#F8F9FA] px-4 py-2.5 text-sm text-navy-900 leading-5 placeholder:text-text-muted focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-900/20 max-h-32 min-h-[44px] box-border"
+              className="w-full resize-none rounded-[22px] border border-line bg-surface-sunken px-4 py-2.5 text-sm text-navy-900 leading-5 placeholder:text-text-muted focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-900/20 max-h-32 min-h-[44px] box-border"
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
