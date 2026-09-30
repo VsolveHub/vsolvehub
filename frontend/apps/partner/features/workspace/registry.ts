@@ -89,6 +89,19 @@ export interface WorkspaceNavItem {
   activePrefix?: string;
   /** Opens the notification panel instead of navigating. */
   kind?: "notifications";
+  /**
+   * Desktop header only. The phone dock does not render it.
+   *
+   * A workspace with more destinations than the dock has slots puts the extras
+   * here and gives the phone a segmented sub-nav inside the workspace instead
+   * (`features/workspace/view/section-nav.tsx`). The dock keeps its five
+   * targets and its thumb reach; the wide header, which lays every item out
+   * inline, shows all of them.
+   *
+   * Not a capability gate — `action` is. An item without `action` is shown to
+   * anyone holding the grant.
+   */
+  desktopOnly?: boolean;
 }
 
 export interface WorkspaceDefinition {
@@ -205,17 +218,42 @@ export const LISTING_TAP_FIRST_NAV: readonly WorkspaceNavItem[] = [
   { href: "/me", label: "Me", icon: UserCircle2 },
 ];
 
+/**
+ * Shell chrome for A7 rental hosts: Home / Rentals / Bookings / Money / Alerts / Me
+ * on a wide screen, and the five-target dock on a phone.
+ *
+ * Bookings is the demand side of a rental ad and used to sit at the foot of the
+ * same page as the ads grid, where a partner with any history scrolled past
+ * their listings to reach it. It is its own destination now — desktop-only,
+ * because `SectionNav` gives the phone the same split one level down.
+ */
 export const RENTAL_TAP_FIRST_NAV: readonly WorkspaceNavItem[] = [
   { href: "/home", label: "Home", icon: Home },
   { href: "/rentals", label: "Rentals", icon: HardHat, activePrefix: "/rentals" },
+  { href: "/rentals/bookings", label: "Bookings", icon: CalendarCheck, desktopOnly: true },
   { href: "/money", label: "Money", icon: Wallet },
   { href: "#notifications", label: "Alerts", icon: Bell, kind: "notifications" },
   { href: "/me", label: "Me", icon: UserCircle2 },
 ];
 
+/**
+ * Shell chrome for A9 stay hosts — the same shape as `RENTAL_TAP_FIRST_NAV`
+ * with the two demand-side destinations a stay has.
+ *
+ * Guest enquiries and paid reservations were both cards at the bottom of the
+ * property page. Neither is about the property, and a host with a week of
+ * bookings had to scroll past the listing form to see who was arriving. They
+ * are separate destinations now.
+ *
+ * `Stays` keeps `activePrefix: "/stays"` so the dock still lights it while the
+ * partner is inside a sub-route — the phone has no separate tab for these, so a
+ * bar with nothing lit would say "you are nowhere".
+ */
 export const STAY_TAP_FIRST_NAV: readonly WorkspaceNavItem[] = [
   { href: "/home", label: "Home", icon: Home },
   { href: "/stays", label: "Stays", icon: FolderKanban, activePrefix: "/stays" },
+  { href: "/stays/enquiries", label: "Enquiries", icon: ClipboardList, desktopOnly: true },
+  { href: "/stays/bookings", label: "Bookings", icon: CalendarCheck, desktopOnly: true },
   { href: "/money", label: "Money", icon: Wallet },
   { href: "#notifications", label: "Alerts", icon: Bell, kind: "notifications" },
   { href: "/me", label: "Me", icon: UserCircle2 },
@@ -279,6 +317,23 @@ export function primaryShellNavFor(
   return TAP_FIRST_NAV;
 }
 
+/**
+ * What the phone dock renders: the primary nav minus its desktop-only items.
+ *
+ * `BottomTabBar` calls this rather than filtering inline, so the dock's
+ * composition is testable without rendering it — the dock has a raised centre
+ * Home and two slots either side, and which destinations survive that budget is
+ * a navigation decision, not a layout one.
+ *
+ * `DesktopPrimaryNav` deliberately does not call it. The wide header lays every
+ * item out inline and has room for all of them.
+ */
+export function dockNavFor(
+  items: readonly WorkspaceNavItem[],
+): readonly WorkspaceNavItem[] {
+  return items.filter((item) => item.desktopOnly !== true);
+}
+
 export const WORKSPACE_REGISTRY: Record<string, WorkspaceDefinition> = {
   [WORKFORCE_WORKSPACE]: {
     key: WORKFORCE_WORKSPACE,
@@ -328,6 +383,7 @@ export const WORKSPACE_REGISTRY: Record<string, WorkspaceDefinition> = {
     nav: [
       { href: "/home", label: "Home", icon: Home },
       { href: "/rentals", label: "Rentals", icon: HardHat, activePrefix: "/rentals" },
+      { href: "/rentals/bookings", label: "Bookings", icon: CalendarCheck, desktopOnly: true },
       { href: "/me", label: "Me", icon: UserCircle2, activePrefix: "/me" },
     ],
   },
@@ -340,6 +396,8 @@ export const WORKSPACE_REGISTRY: Record<string, WorkspaceDefinition> = {
     nav: [
       { href: "/home", label: "Home", icon: Home },
       { href: "/stays", label: "Stays", icon: FolderKanban, activePrefix: "/stays" },
+      { href: "/stays/enquiries", label: "Enquiries", icon: ClipboardList, desktopOnly: true },
+      { href: "/stays/bookings", label: "Bookings", icon: CalendarCheck, desktopOnly: true },
       { href: "/me", label: "Me", icon: UserCircle2, activePrefix: "/me" },
     ],
   },

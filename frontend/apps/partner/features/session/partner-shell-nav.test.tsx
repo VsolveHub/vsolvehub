@@ -6,6 +6,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   LISTING_WORKSPACE,
+  RENTAL_WORKSPACE,
+  STAY_WORKSPACE,
   WORKFORCE_WORKSPACE,
   primaryShellNavFor,
   resolveWorkspaces,
@@ -46,6 +48,24 @@ describe("getPartnerChromeMode", () => {
 
   it("keeps listing detail focused (no dock over the inbox)", () => {
     expect(getPartnerChromeMode("/listings/abc")).toBe("focused");
+  });
+
+  it("gives full chrome to every stays and rentals destination", () => {
+    // These stop being cards on one page and become destinations. A destination
+    // with "focused" chrome has a back button and no dock, which is right for a
+    // detail step and wrong for somewhere the nav points at.
+    expect(getPartnerChromeMode("/stays")).toBe("full");
+    expect(getPartnerChromeMode("/stays/enquiries")).toBe("full");
+    expect(getPartnerChromeMode("/stays/bookings")).toBe("full");
+    expect(getPartnerChromeMode("/rentals")).toBe("full");
+    expect(getPartnerChromeMode("/rentals/bookings")).toBe("full");
+  });
+
+  it("does not mistake a same-prefix route for a workspace route", () => {
+    // `/stays-archive` is not inside `/stays`. A bare `startsWith` says it is and
+    // hands a stranger's route the partner dock.
+    expect(getPartnerChromeMode("/stays-archive")).toBe("focused");
+    expect(getPartnerChromeMode("/rentals-archive")).toBe("focused");
   });
 });
 
@@ -93,5 +113,46 @@ describe("PartnerShell primary nav chrome", () => {
 
     expect(hrefs).toContain("/work/all");
     expect(hrefs).not.toContain("/listings");
+  });
+
+  it("stay host: the dock keeps five targets, Enquiries and Bookings live in the header", () => {
+    const workspaces = resolveWorkspaces([grant(STAY_WORKSPACE)]);
+    const items = primaryShellNavFor(workspaces);
+    const workspaceKeys = workspaces.map((w) => w.key);
+
+    render(<BottomTabBar items={items} workspaceKeys={workspaceKeys} />);
+
+    const dock = screen.getByRole("navigation", { name: "Partner navigation" });
+    const dockHrefs = within(dock)
+      .getAllByRole("link")
+      .map((link) => link.getAttribute("href"));
+
+    expect(dockHrefs).toContain("/stays");
+    expect(dockHrefs).not.toContain("/stays/enquiries");
+    expect(dockHrefs).not.toContain("/stays/bookings");
+
+    render(<DesktopPrimaryNav items={items} workspaceKeys={workspaceKeys} />);
+
+    expect(screen.getByRole("link", { name: /Enquiries/i })).toHaveAttribute(
+      "href",
+      "/stays/enquiries",
+    );
+    expect(screen.getByRole("link", { name: /Bookings/i })).toHaveAttribute(
+      "href",
+      "/stays/bookings",
+    );
+  });
+
+  it("rental host: Bookings is offered and Enquiries never is", () => {
+    const workspaces = resolveWorkspaces([grant(RENTAL_WORKSPACE)]);
+    const items = primaryShellNavFor(workspaces);
+
+    render(<DesktopPrimaryNav items={items} workspaceKeys={workspaces.map((w) => w.key)} />);
+
+    expect(screen.getByRole("link", { name: /Bookings/i })).toHaveAttribute(
+      "href",
+      "/rentals/bookings",
+    );
+    expect(screen.queryByRole("link", { name: /Enquiries/i })).toBeNull();
   });
 });

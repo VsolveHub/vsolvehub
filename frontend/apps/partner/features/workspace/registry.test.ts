@@ -7,11 +7,14 @@ import {
   LISTING_WORKSPACE,
   MAX_TAB_ITEMS,
   PROJECT_WORKSPACE,
+  RENTAL_TAP_FIRST_NAV,
   RENTAL_WORKSPACE,
+  STAY_TAP_FIRST_NAV,
   STAY_WORKSPACE,
   TAP_FIRST_NAV,
   WORKFORCE_WORKSPACE,
   activeWorkspace,
+  dockNavFor,
   navigationFor,
   primaryShellNavFor,
   resolveWorkspaces,
@@ -225,6 +228,64 @@ describe("primaryShellNavFor — live PartnerShell chrome", () => {
     const hrefs = primaryShellNavFor(workspaces).map((item) => item.href);
     expect(hrefs).toContain("/stays");
     expect(hrefs).not.toContain("/work/all");
+  });
+});
+
+describe("the specialty nav is specialised per workspace", () => {
+  // Enquiries and Bookings stopped being cards on one page and became
+  // destinations. An A9 stay and an A7 rental do not have the same set of them,
+  // so the two arrays must not converge — a rental host has no enquiry stage at
+  // all (`apps/rental` has no enquiry model), and a stay host takes paid
+  // reservations as well as enquiries.
+
+  it("offers Enquiries to a stay host only", () => {
+    const stayHrefs = primaryShellNavFor(resolveWorkspaces([grant(STAY_WORKSPACE, [])])).map(
+      (item) => item.href,
+    );
+    const rentalHrefs = primaryShellNavFor(resolveWorkspaces([grant(RENTAL_WORKSPACE, [])])).map(
+      (item) => item.href,
+    );
+
+    expect(stayHrefs).toContain("/stays/enquiries");
+    expect(rentalHrefs).not.toContain("/stays/enquiries");
+    expect(RENTAL_TAP_FIRST_NAV.map((item) => item.label)).not.toContain("Enquiries");
+  });
+
+  it("gives each host their own Bookings, never the other's", () => {
+    // Both navs have a Bookings item and they point at different routes. One
+    // shared label over two record sets is how a rental host ends up reading a
+    // stay's reservations.
+    const stayHrefs = STAY_TAP_FIRST_NAV.map((item) => item.href);
+    const rentalHrefs = RENTAL_TAP_FIRST_NAV.map((item) => item.href);
+
+    expect(stayHrefs).toContain("/stays/bookings");
+    expect(stayHrefs).not.toContain("/rentals/bookings");
+    expect(rentalHrefs).toContain("/rentals/bookings");
+    expect(rentalHrefs).not.toContain("/stays/bookings");
+  });
+
+  it("keeps the new destinations out of the phone dock", () => {
+    // The dock is a raised centre Home and two slots either side. The two extra
+    // stay destinations would not fit, so they are desktop-only and reached on a
+    // phone through `SectionNav` inside the workspace instead.
+    const stayDock = dockNavFor(STAY_TAP_FIRST_NAV).map((item) => item.href);
+    const rentalDock = dockNavFor(RENTAL_TAP_FIRST_NAV).map((item) => item.href);
+
+    expect(stayDock).toEqual(["/home", "/stays", "/money", "#notifications", "/me"]);
+    expect(rentalDock).toEqual(["/home", "/rentals", "/money", "#notifications", "/me"]);
+  });
+
+  it("keeps them in the wide header", () => {
+    const stayDesktop = STAY_TAP_FIRST_NAV.map((item) => item.href);
+    expect(stayDesktop).toEqual([
+      "/home",
+      "/stays",
+      "/stays/enquiries",
+      "/stays/bookings",
+      "/money",
+      "#notifications",
+      "/me",
+    ]);
   });
 });
 

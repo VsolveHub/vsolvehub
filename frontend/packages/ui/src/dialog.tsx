@@ -24,6 +24,16 @@ import { cn } from "./cn";
  * summary to open as a sheet rather than a centred modal.
  */
 
+/**
+ * Where a `Sheet` docks.
+ *
+ * - `bottom` — the original sheet. Right for a summary or a picker on a phone.
+ * - `end` — a record inspector. Bottom sheet below `lg:`, right-hand panel from
+ *   `lg:` up, so a list on a wide screen keeps its rows in view while one of
+ *   them is open beside it.
+ */
+export type SheetSide = "bottom" | "end";
+
 interface BaseProps {
   open: boolean;
   /** Called for every dismissal: Escape, backdrop, or the close button. */
@@ -212,7 +222,8 @@ export function Sheet({
   dismissable = true,
   className,
   fullScreen = false,
-}: BaseProps & { fullScreen?: boolean }) {
+  side = "bottom",
+}: BaseProps & { fullScreen?: boolean; side?: SheetSide }) {
   const ref = useModalDialog(open, onOpenChange);
   const id = useId();
 
@@ -230,11 +241,23 @@ export function Sheet({
       className={cn(
         fullScreen
           ? "fixed inset-0 m-0 max-h-none h-dvh w-full max-w-none rounded-none border-0 p-0 bg-surface text-text shadow-none z-50 backdrop:bg-navy-900/40"
-          : "fixed inset-x-0 bottom-0 top-auto m-0 mx-auto w-full max-w-xl max-h-[96dvh] overflow-hidden rounded-b-none rounded-t-[20px] border border-line/60 p-0 bg-surface text-text shadow-overlay backdrop:bg-navy-900/40",
+          : side === "end"
+            ? // A record inspector on a wide screen, the familiar sheet on a
+              // phone. Written as one string rather than merging a `lg:` override
+              // over the bottom-sheet classes because `cn` is `clsx` and does not
+              // resolve conflicting utilities — the behaviour would then depend
+              // on stylesheet order rather than on this line.
+              "fixed inset-x-0 bottom-0 top-auto m-0 mx-auto w-full max-w-xl max-h-[96dvh] overflow-hidden rounded-b-none rounded-t-[20px] border border-line/60 p-0 bg-surface text-text shadow-overlay backdrop:bg-navy-900/40 lg:inset-y-0 lg:bottom-auto lg:left-auto lg:right-0 lg:top-0 lg:m-0 lg:h-dvh lg:max-h-none lg:w-full lg:max-w-md lg:rounded-none lg:rounded-l-[20px] lg:border-0 lg:border-l lg:border-line/60"
+            : "fixed inset-x-0 bottom-0 top-auto m-0 mx-auto w-full max-w-xl max-h-[96dvh] overflow-hidden rounded-b-none rounded-t-[20px] border border-line/60 p-0 bg-surface text-text shadow-overlay backdrop:bg-navy-900/40",
         className,
       )}
     >
-      <div className={cn("flex flex-col overflow-hidden", fullScreen ? "h-dvh" : "max-h-[96dvh]")}>
+      <div
+        className={cn(
+          "flex flex-col overflow-hidden",
+          fullScreen ? "h-dvh" : side === "end" ? "max-h-[96dvh] lg:h-dvh lg:max-h-none" : "max-h-[96dvh]",
+        )}
+      >
         <div
           className={cn(
             "shrink-0 flex items-center justify-between gap-4 border-b border-line/80",

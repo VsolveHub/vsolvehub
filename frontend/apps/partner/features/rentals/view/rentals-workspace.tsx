@@ -6,64 +6,32 @@ import {
   Badge,
   Button,
   Card,
-  Dialog,
   EmptyState,
   Field,
   Input,
   Select,
   Textarea,
-  formatDate,
   formatMoney,
 } from "@vsolve/ui";
 import { Camera, MapPin, X } from "lucide-react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 
 import { usePartnerCapabilities } from "@/features/capability/queries";
-import {
-  bookingActionLabel,
-  canCancelBooking,
-  canDisputeDeposit,
-  canSubmitAsset,
-  partnerBookingAction,
-  type BookingAction,
-} from "@/features/rentals/booking-actions";
+import { canSubmitAsset } from "@/features/rentals/booking-actions";
 import {
   createPartnerRentalAsset,
   fetchPartnerDefaultLocation,
   fetchPartnerRentalAssets,
-  fetchPartnerRentalBookings,
   fetchRentalTaxonomy,
-  partnerRentalBookingAction,
   rentalVariantChoices,
   submitPartnerRentalAsset,
   uploadPartnerRentalPhoto,
   type RentalTaxonomySubcategory,
 } from "@/features/rentals/queries";
+import { RENTAL_SECTIONS } from "@/features/rentals/view/rental-sections";
+import { SectionNav } from "@/features/workspace/view/section-nav";
 
 const MAX_PHOTOS = 8;
-
-const BOOKING_STATUS_FILTERS = [
-  "ALL",
-  "PENDING_PAYMENT",
-  "CONFIRMED",
-  "HANDOVER",
-  "RETURNED",
-  "CANCELLED",
-  "DISPUTED",
-] as const;
-
-type BookingStatusFilter = (typeof BOOKING_STATUS_FILTERS)[number];
-
-const BOOKING_STATUS_LABELS: Record<BookingStatusFilter, string> = {
-  ALL: "All",
-  PENDING_PAYMENT: "Pending payment",
-  CONFIRMED: "Confirmed",
-  HANDOVER: "Handover",
-  RETURNED: "Returned",
-  CANCELLED: "Cancelled",
-  DISPUTED: "Disputed",
-};
 
 type PhotoDraft = {
   localId: string;
@@ -73,21 +41,10 @@ type PhotoDraft = {
   error?: string;
 };
 
-type BookingActionBody = { pin?: string; reason?: string; consume_paise: number };
-
 type SchemaProperty = {
   type?: string;
   enum?: unknown[];
 };
-
-type HandoverModal = { bookingId: string; pin: string; error: string | null };
-type DisputeModal = {
-  bookingId: string;
-  reason: string;
-  consumeRupees: string;
-  error: string | null;
-};
-type CancelModal = { bookingId: string; reason: string; error: string | null };
 
 function schemaPropertyMap(
   schema: Record<string, unknown> | undefined,
@@ -124,20 +81,14 @@ function newLocalId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function statusFilterLabel(status: BookingStatusFilter): string {
-  return BOOKING_STATUS_LABELS[status];
-}
-
-function bookingBadgeTone(
-  status: string,
-): "success" | "warning" | "neutral" | "danger" {
-  const value = status.toUpperCase();
-  if (value === "CANCELLED" || value === "DISPUTED") return "danger";
-  if (value === "PENDING_PAYMENT") return "warning";
-  if (value === "CONFIRMED" || value === "HANDOVER") return "success";
-  return "neutral";
-}
-
+/**
+ * The ad side of the A7 rental workspace.
+ *
+ * Posting an ad and managing the ads already published. Bookings were the card
+ * below this form and are now `/rentals/bookings`; the two had nothing to do
+ * with each other, and the one a host visits daily was the one they had to
+ * scroll past the form to reach.
+ */
 export function PartnerRentalsWorkspace() {
   const qc = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -155,29 +106,6 @@ export function PartnerRentalsWorkspace() {
   const [structuredFields, setStructuredFields] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
 
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-
-  const queryStatus = searchParams?.get("status") ?? "";
-  const bookingStatusFilter = BOOKING_STATUS_FILTERS.includes(queryStatus as BookingStatusFilter)
-    ? (queryStatus as BookingStatusFilter)
-    : "ALL";
-
-  function setBookingStatusFilter(status: BookingStatusFilter) {
-    const params = new URLSearchParams(searchParams?.toString() ?? "");
-    if (status === "ALL") {
-      params.delete("status");
-    } else {
-      params.set("status", status);
-    }
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-  }
-
-  const [handoverModal, setHandoverModal] = useState<HandoverModal | null>(null);
-  const [disputeModal, setDisputeModal] = useState<DisputeModal | null>(null);
-  const [cancelModal, setCancelModal] = useState<CancelModal | null>(null);
-
   const capabilities = usePartnerCapabilities();
   const capabilityVariants = rentalVariantChoices(capabilities.data?.capabilities);
   const taxonomy = useQuery({
@@ -188,18 +116,6 @@ export function PartnerRentalsWorkspace() {
     queryKey: ["partner-rentals", "assets"],
     queryFn: fetchPartnerRentalAssets,
   });
-  const bookings = useQuery({
-    queryKey: ["partner-rentals", "bookings", bookingStatusFilter],
-    queryFn: () =>
-      fetchPartnerRentalBookings(bookingStatusFilter === "ALL" ? undefined : bookingStatusFilter),
-  });
-
-  // Defensive client filter in case the API ignores `?status=` (stays enquiry pattern).
-  const filteredBookings = useMemo(() => {
-    const rows = bookings.data ?? [];
-    if (bookingStatusFilter === "ALL") return rows;
-    return rows.filter((booking) => (booking.status ?? "").toUpperCase() === bookingStatusFilter);
-  }, [bookings.data, bookingStatusFilter]);
 
   const subcategories: RentalTaxonomySubcategory[] = taxonomy.data ?? [];
   const selectedSub = subcategories.find((s) => s.slug === subcategorySlug);
@@ -260,26 +176,8 @@ export function PartnerRentalsWorkspace() {
   });
 
   const act = useMutation({
-    mutationFn: async (
-      input:
-        | { kind: "submit"; id: string }
-        | { kind: "booking"; id: string; action: BookingAction; body?: BookingActionBody },
-    ) => {
-      if (input.kind === "submit") return submitPartnerRentalAsset(input.id);
-      return partnerRentalBookingAction(input.id, input.action, input.body);
-    },
-    onSuccess: () => {
-      setHandoverModal(null);
-      setDisputeModal(null);
-      setCancelModal(null);
-      invalidate();
-    },
-    onError: (err: unknown) => {
-      const message = friendlyErrorMessage(err);
-      setHandoverModal((current) => (current ? { ...current, error: message } : current));
-      setDisputeModal((current) => (current ? { ...current, error: message } : current));
-      setCancelModal((current) => (current ? { ...current, error: message } : current));
-    },
+    mutationFn: (id: string) => submitPartnerRentalAsset(id),
+    onSuccess: invalidate,
   });
 
   function patchPhoto(localId: string, patch: Partial<PhotoDraft>) {
@@ -324,76 +222,6 @@ export function PartnerRentalsWorkspace() {
       const match = current.find((photo) => photo.localId === localId);
       if (match) URL.revokeObjectURL(match.previewUrl);
       return current.filter((photo) => photo.localId !== localId);
-    });
-  }
-
-  function runBookingAction(bookingId: string, action: BookingAction) {
-    if (action === "handover") {
-      setHandoverModal({ bookingId, pin: "", error: null });
-      return;
-    }
-    if (action === "dispute-deposit") {
-      setDisputeModal({ bookingId, reason: "", consumeRupees: "", error: null });
-      return;
-    }
-    if (action === "cancel") {
-      setCancelModal({ bookingId, reason: "", error: null });
-      return;
-    }
-    act.mutate({ kind: "booking", id: bookingId, action, body: { consume_paise: 0 } });
-  }
-
-  function confirmCancel() {
-    if (!cancelModal) return;
-    act.mutate({
-      kind: "booking",
-      id: cancelModal.bookingId,
-      action: "cancel",
-      body: { reason: cancelModal.reason.trim(), consume_paise: 0 },
-    });
-  }
-
-  function confirmHandover() {
-    if (!handoverModal) return;
-    const pin = handoverModal.pin.trim();
-    if (!/^\d{4}$/.test(pin)) {
-      setHandoverModal({ ...handoverModal, error: "Enter the 4-digit handover PIN from the customer." });
-      return;
-    }
-    act.mutate({
-      kind: "booking",
-      id: handoverModal.bookingId,
-      action: "handover",
-      body: { pin, consume_paise: 0 },
-    });
-  }
-
-  function confirmDispute() {
-    if (!disputeModal) return;
-    const reason = disputeModal.reason.trim();
-    if (!reason) {
-      setDisputeModal({ ...disputeModal, error: "Add a reason for the deposit dispute." });
-      return;
-    }
-    // Blank consume = 0 (none). Always send consume_paise so the server never
-    // treats a missing field as full deposit consume.
-    let consumePaise = 0;
-    if (disputeModal.consumeRupees.trim()) {
-      const parsed = rupeesToPaise(disputeModal.consumeRupees);
-      if (parsed == null || parsed < 0) {
-        setDisputeModal({
-          ...disputeModal,
-          error: "Enter a valid consume amount in rupees, or leave blank for none.",
-        });
-        return;
-      }
-      consumePaise = parsed;
-    }
-    act.mutate({
-      kind: "booking",
-      id: disputeModal.bookingId,
-      action: "dispute-deposit",
-      body: { reason, consume_paise: consumePaise },
     });
   }
 
@@ -476,8 +304,11 @@ export function PartnerRentalsWorkspace() {
         <h1 className="mt-1 text-2xl font-extrabold text-navy-900">Post your rental</h1>
         <p className="mt-1 text-sm text-text-secondary">
           Add real photos, a price, and a pickup location. The first photo becomes the cover.
+          Customer bookings have their own section.
         </p>
       </div>
+
+      <SectionNav label="Rental sections" items={RENTAL_SECTIONS} />
 
       <Card padding="lg">
         <form className="flex flex-col gap-6" onSubmit={onCreate}>
@@ -791,7 +622,7 @@ export function PartnerRentalsWorkspace() {
                         size="sm"
                         variant="secondary"
                         disabled={act.isPending}
-                        onClick={() => act.mutate({ kind: "submit", id: asset.id })}
+                        onClick={() => act.mutate(asset.id)}
                       >
                         Submit for review
                       </Button>
@@ -803,253 +634,6 @@ export function PartnerRentalsWorkspace() {
           })}
         </ul>
       </section>
-
-      <Card>
-        <div className="mb-3 flex flex-col gap-3">
-          <h2 className="text-base font-semibold text-navy-900">Bookings</h2>
-          <div className="flex flex-wrap gap-2">
-            {BOOKING_STATUS_FILTERS.map((status) => (
-              <button
-                key={status}
-                type="button"
-                onClick={() => setBookingStatusFilter(status)}
-                className={`rounded-full px-3 py-1 text-xs font-bold transition ${
-                  bookingStatusFilter === status
-                    ? "bg-action text-white"
-                    : "border border-line bg-surface text-text-secondary hover:text-navy-900"
-                }`}
-              >
-                {statusFilterLabel(status)}
-              </button>
-            ))}
-          </div>
-        </div>
-        {bookings.isLoading ? <p className="text-sm text-text-secondary">Loading…</p> : null}
-        {bookings.error ? (
-          <p className="text-sm text-danger-text">{friendlyErrorMessage(bookings.error)}</p>
-        ) : null}
-        {act.isError && !handoverModal && !disputeModal && !cancelModal ? (
-          <p className="mb-3 text-sm text-danger-text">{friendlyErrorMessage(act.error)}</p>
-        ) : null}
-        {!bookings.isLoading && !bookings.error && filteredBookings.length === 0 ? (
-          <EmptyState
-            compact
-            title={
-              bookingStatusFilter === "ALL"
-                ? "No bookings yet"
-                : `No ${statusFilterLabel(bookingStatusFilter).toLowerCase()} bookings`
-            }
-            description={
-              bookingStatusFilter === "ALL"
-                ? "Bookings appear here after a customer reserves an asset."
-                : "Try another status filter to see more."
-            }
-          />
-        ) : null}
-        <ul className="flex flex-col gap-3">
-          {filteredBookings.map((booking) => {
-            const action = partnerBookingAction(booking.status ?? "", booking.deposit?.status);
-            const showDispute = canDisputeDeposit(booking.status ?? "", booking.deposit?.status);
-            const showCancel = canCancelBooking(booking.status ?? "");
-            const statusValue = (booking.status ?? "").toUpperCase();
-            return (
-              <li key={booking.id} className="rounded-card border border-line p-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="font-semibold text-navy-900">{booking.asset.title}</p>
-                  <Badge tone={bookingBadgeTone(statusValue)}>
-                    {BOOKING_STATUS_LABELS[statusValue as BookingStatusFilter] ?? booking.status}
-                  </Badge>
-                </div>
-                <p className="text-sm text-text-secondary">
-                  {formatMoney(booking.price_paise)} · {formatDate(booking.start_date)} –{" "}
-                  {formatDate(booking.end_date)}
-                </p>
-                {action || showDispute || showCancel ? (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {action ? (
-                      <Button
-                        size="sm"
-                        disabled={act.isPending}
-                        onClick={() => runBookingAction(booking.id, action)}
-                      >
-                        {bookingActionLabel(action)}
-                      </Button>
-                    ) : null}
-                    {showDispute ? (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        disabled={act.isPending}
-                        onClick={() => runBookingAction(booking.id, "dispute-deposit")}
-                      >
-                        {bookingActionLabel("dispute-deposit")}
-                      </Button>
-                    ) : null}
-                    {showCancel ? (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        disabled={act.isPending}
-                        onClick={() => runBookingAction(booking.id, "cancel")}
-                      >
-                        {bookingActionLabel("cancel")}
-                      </Button>
-                    ) : null}
-                  </div>
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
-      </Card>
-
-      <Dialog
-        open={Boolean(handoverModal)}
-        onOpenChange={(open) => {
-          if (!open && !act.isPending) setHandoverModal(null);
-        }}
-        title="Confirm handover"
-        description="Ask the customer for their 4-digit handover PIN, then enter it here."
-        footer={
-          <>
-            <Button
-              variant="ghost"
-              disabled={act.isPending}
-              onClick={() => setHandoverModal(null)}
-            >
-              Cancel
-            </Button>
-            <Button loading={act.isPending} loadingLabel="Confirming…" onClick={confirmHandover}>
-              Confirm handover
-            </Button>
-          </>
-        }
-      >
-        <Field
-          label="Handover PIN"
-          required
-          error={handoverModal?.error ?? undefined}
-        >
-          <Input
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            maxLength={4}
-            value={handoverModal?.pin ?? ""}
-            onChange={(e) =>
-              setHandoverModal((current) =>
-                current ? { ...current, pin: e.target.value.replace(/\D/g, "").slice(0, 4), error: null } : current,
-              )
-            }
-            placeholder="4-digit PIN"
-          />
-        </Field>
-      </Dialog>
-
-      <Dialog
-        open={Boolean(disputeModal)}
-        onOpenChange={(open) => {
-          if (!open && !act.isPending) setDisputeModal(null);
-        }}
-        title="Raise deposit dispute"
-        description="Explain the issue. Leave consume blank (or 0) to dispute without taking money from the deposit."
-        footer={
-          <>
-            <Button
-              variant="ghost"
-              disabled={act.isPending}
-              onClick={() => setDisputeModal(null)}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              loading={act.isPending}
-              loadingLabel="Submitting…"
-              onClick={confirmDispute}
-            >
-              Raise dispute
-            </Button>
-          </>
-        }
-      >
-        <div className="flex flex-col gap-3">
-          <Field label="Reason" required error={disputeModal?.error ?? undefined}>
-            <Textarea
-              value={disputeModal?.reason ?? ""}
-              onChange={(e) =>
-                setDisputeModal((current) =>
-                  current ? { ...current, reason: e.target.value, error: null } : current,
-                )
-              }
-              placeholder="e.g. Scratched housing, missing bit set"
-              rows={3}
-            />
-          </Field>
-          <Field
-            label="Amount to consume from deposit"
-            description="Rupees. Leave blank for none (0). Blank never means full deposit."
-            showOptional={false}
-          >
-            <div className="relative">
-              <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-semibold text-text-secondary">
-                ₹
-              </span>
-              <Input
-                className="pl-8"
-                inputMode="decimal"
-                value={disputeModal?.consumeRupees ?? ""}
-                onChange={(e) =>
-                  setDisputeModal((current) =>
-                    current ? { ...current, consumeRupees: e.target.value, error: null } : current,
-                  )
-                }
-                placeholder="0"
-              />
-            </div>
-          </Field>
-        </div>
-      </Dialog>
-
-      <Dialog
-        open={Boolean(cancelModal)}
-        onOpenChange={(open) => {
-          if (!open && !act.isPending) setCancelModal(null);
-        }}
-        title="Cancel booking"
-        description="Cancels before handover. The customer gets a full refund and the asset dates are freed."
-        footer={
-          <>
-            <Button
-              variant="ghost"
-              disabled={act.isPending}
-              onClick={() => setCancelModal(null)}
-            >
-              Keep booking
-            </Button>
-            <Button
-              variant="danger"
-              loading={act.isPending}
-              loadingLabel="Cancelling…"
-              onClick={confirmCancel}
-            >
-              Cancel booking
-            </Button>
-          </>
-        }
-      >
-        <Field label="Reason" showOptional error={cancelModal?.error ?? undefined}>
-          <Textarea
-            value={cancelModal?.reason ?? ""}
-            onChange={(e) =>
-              setCancelModal((current) =>
-                current ? { ...current, reason: e.target.value, error: null } : current,
-              )
-            }
-            placeholder="e.g. Equipment unavailable"
-            rows={3}
-          />
-        </Field>
-      </Dialog>
     </div>
   );
 }

@@ -16,6 +16,7 @@ import { NotificationNavTab } from "@/features/notifications/view/notification-b
 import { usePartnerApplication } from "@/features/application/queries";
 import { homeForApplication } from "@/features/session/model/redirect";
 import {
+  dockNavFor,
   primaryShellNavFor,
   resolveWorkspaces,
   type WorkspaceNavItem,
@@ -43,8 +44,8 @@ export function getPartnerChromeMode(pathname: string): PartnerChromeMode {
     pathname === "/home" ||
     pathname === "/work/all" ||
     pathname === "/listings" ||
-    pathname === "/rentals" ||
-    pathname === "/stays" ||
+    withinTree(pathname, "/rentals") ||
+    withinTree(pathname, "/stays") ||
     pathname === "/money" ||
     pathname === "/me" ||
     pathname.startsWith("/me/")
@@ -52,6 +53,19 @@ export function getPartnerChromeMode(pathname: string): PartnerChromeMode {
     return "full";
   }
   return "focused";
+}
+
+/**
+ * `pathname` is `base` or a route inside it.
+ *
+ * A bare `startsWith("/stays")` also matches `/stays-archive`, which would give
+ * a stranger's route the dock. The trailing slash is what makes it a boundary.
+ * `/listings` is deliberately left out of this helper: its detail route
+ * (`/listings/{id}`) is "focused" on purpose, because the dock over an
+ * applicant inbox is the one thing that page does not need.
+ */
+function withinTree(pathname: string, base: string): boolean {
+  return pathname === base || pathname.startsWith(`${base}/`);
 }
 
 function ShellMessage({ children }: { children: ReactNode }) {
@@ -577,7 +591,19 @@ export function BottomTabBar({
 }) {
   const pathname = usePathname();
 
-  const current = items.reduce<{ href: string; owned: string } | null>((best, item) => {
+  /*
+    The dock is the phone's, so it renders only what fits a thumb: a raised
+    centre Home and two slots either side. `desktopOnly` destinations — Stays'
+    Enquiries and Bookings, Rentals' Bookings — are left out and reached
+    through `SectionNav` inside the workspace instead.
+
+    Filtered before the current-destination pass, not after: `current` is what
+    lights a tab, and a `current` pointing at a tab this bar never draws would
+    leave the whole dock dark while the partner is plainly inside a section.
+  */
+  const dockItems = dockNavFor(items);
+
+  const current = dockItems.reduce<{ href: string; owned: string } | null>((best, item) => {
     if (item.kind === "notifications") return best;
     const owned = item.activePrefix ?? item.href;
     const matches = pathname === owned || pathname.startsWith(`${owned}/`);
@@ -586,8 +612,8 @@ export function BottomTabBar({
   }, null);
   const currentHref = current?.href ?? null;
 
-  const homeItem = items.find((item) => item.href === "/home" || item.label === "Home");
-  const sideItems = items.filter((item) => item.href !== "/home" && item.label !== "Home");
+  const homeItem = dockItems.find((item) => item.href === "/home" || item.label === "Home");
+  const sideItems = dockItems.filter((item) => item.href !== "/home" && item.label !== "Home");
   const midPoint = Math.ceil(sideItems.length / 2);
   const leftItems = sideItems.slice(0, midPoint);
   const rightItems = sideItems.slice(midPoint);

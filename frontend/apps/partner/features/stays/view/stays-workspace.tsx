@@ -11,26 +11,19 @@ import {
   Input,
   Select,
   Textarea,
-  formatDate,
   formatMoney,
 } from "@vsolve/ui";
 import { Camera, MapPin, X } from "lucide-react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 
 import { usePartnerCapabilities } from "@/features/capability/queries";
 import {
-  cancelPartnerStayEnquiry,
   createPartnerStayProperty,
   createPartnerStayUnit,
   fetchPartnerDefaultLocation,
-  fetchPartnerStayEnquiries,
   fetchPartnerStayProperties,
-  fetchPartnerStayReservations,
   fetchStayTaxonomy,
   listPartnerStayUnits,
-  partnerStayReservationAction,
-  respondPartnerStayEnquiry,
   stayVariantChoices,
   submitPartnerStayProperty,
   updatePartnerStayProperty,
@@ -42,37 +35,11 @@ import {
   type StayUnit,
 } from "@/features/stays/queries";
 import { PropertyPhotoCarousel } from "@/features/stays/view/property-photo-carousel";
+import { STAY_SECTIONS } from "@/features/stays/view/stay-sections";
+import { SectionNav } from "@/features/workspace/view/section-nav";
 
 const MAX_PHOTOS = 8;
 const FALLBACK_ROOM_TYPES = ["Standard", "Deluxe", "Shared"];
-
-const ENQUIRY_STATUS_FILTERS = [
-  "ALL",
-  "SUBMITTED",
-  "RESPONDED",
-  "CONFIRMED",
-  "DECLINED",
-  "CANCELLED",
-  "WITHDRAWN",
-  "EXPIRED",
-] as const;
-
-type EnquiryStatusFilter = (typeof ENQUIRY_STATUS_FILTERS)[number];
-
-const ENQUIRY_STATUS_LABELS: Record<EnquiryStatusFilter, string> = {
-  ALL: "All",
-  SUBMITTED: "Submitted",
-  RESPONDED: "Responded",
-  CONFIRMED: "Confirmed",
-  DECLINED: "Declined",
-  CANCELLED: "Cancelled",
-  WITHDRAWN: "Withdrawn",
-  EXPIRED: "Expired",
-};
-
-function enquiryStatusFilterLabel(status: EnquiryStatusFilter): string {
-  return ENQUIRY_STATUS_LABELS[status];
-}
 
 type WorkspaceTab = "properties" | "rooms";
 
@@ -203,9 +170,6 @@ function propertyEditFrom(property: {
 
 export function PartnerStaysWorkspace() {
   const qc = useQueryClient();
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [tab, setTab] = useState<WorkspaceTab>("properties");
   const [title, setTitle] = useState("");
@@ -223,28 +187,11 @@ export function PartnerStaysWorkspace() {
   const [photos, setPhotos] = useState<PhotoDraft[]>([]);
   const [structuredFields, setStructuredFields] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
-  const [responses, setResponses] = useState<Record<string, string>>({});
   const [unitDraft, setUnitDraft] = useState<UnitDraft>(emptyUnitDraft());
   const [unitEdits, setUnitEdits] = useState<Record<string, UnitEditDraft>>({});
   const [editingUnitId, setEditingUnitId] = useState<string | null>(null);
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
   const [propertyEdits, setPropertyEdits] = useState<Record<string, PropertyEditDraft>>({});
-
-  const queryStatus = searchParams?.get("status") ?? "";
-  const enquiryStatusFilter = ENQUIRY_STATUS_FILTERS.includes(queryStatus as EnquiryStatusFilter)
-    ? (queryStatus as EnquiryStatusFilter)
-    : "ALL";
-
-  function setEnquiryStatusFilter(status: EnquiryStatusFilter) {
-    const params = new URLSearchParams(searchParams?.toString() ?? "");
-    if (status === "ALL") {
-      params.delete("status");
-    } else {
-      params.set("status", status);
-    }
-    const qs = params.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  }
 
   const capabilities = usePartnerCapabilities();
   const capabilityVariants = stayVariantChoices(capabilities.data?.capabilities);
@@ -256,20 +203,6 @@ export function PartnerStaysWorkspace() {
     queryKey: ["partner-stays", "properties"],
     queryFn: fetchPartnerStayProperties,
   });
-  const enquiries = useQuery({
-    queryKey: ["partner-stays", "enquiries"],
-    queryFn: fetchPartnerStayEnquiries,
-  });
-  const reservations = useQuery({
-    queryKey: ["partner-stays", "reservations"],
-    queryFn: fetchPartnerStayReservations,
-  });
-
-  const filteredEnquiries = useMemo(() => {
-    const rows = enquiries.data ?? [];
-    if (enquiryStatusFilter === "ALL") return rows;
-    return rows.filter((enquiry) => enquiry.status === enquiryStatusFilter);
-  }, [enquiries.data, enquiryStatusFilter]);
 
   const subcategories: StayTaxonomySubcategory[] = taxonomy.data ?? [];
   const selectedSub = subcategories.find((s) => s.slug === subcategorySlug);
@@ -463,33 +396,6 @@ export function PartnerStaysWorkspace() {
     onError: (err: unknown) => {
       setUnitDraft((current) => ({ ...current, error: friendlyErrorMessage(err) }));
     },
-  });
-
-  const respond = useMutation({
-    mutationFn: ({
-      id,
-      response,
-      decline,
-    }: {
-      id: string;
-      response: string;
-      decline?: boolean;
-    }) => respondPartnerStayEnquiry(id, response, decline ?? false),
-    onSuccess: (_data, vars) => {
-      setResponses((current) => ({ ...current, [vars.id]: "" }));
-      invalidate();
-    },
-  });
-
-  const cancelEnquiry = useMutation({
-    mutationFn: (id: string) => cancelPartnerStayEnquiry(id),
-    onSuccess: invalidate,
-  });
-
-  const reservationAction = useMutation({
-    mutationFn: ({ id, action }: { id: string; action: "check_in" | "check_out" }) =>
-      partnerStayReservationAction(id, action),
-    onSuccess: invalidate,
   });
 
   function patchPhoto(localId: string, patch: Partial<PhotoDraft>) {
@@ -705,9 +611,11 @@ export function PartnerStaysWorkspace() {
         <h1 className="mt-1 text-2xl font-extrabold text-navy-900">List your property</h1>
         <p className="mt-1 text-sm text-text-secondary">
           Register the property with photos first, then add rooms under it. Photos live on the
-          property, not on each room.
+          property, not on each room. Guest enquiries and paid bookings have their own sections.
         </p>
       </div>
+
+      <SectionNav label="Stay sections" items={STAY_SECTIONS} />
 
       <div className="flex flex-wrap gap-2">
         {(
@@ -1448,210 +1356,6 @@ export function PartnerStaysWorkspace() {
           </Card>
         </section>
       )}
-
-      <Card>
-        <div className="mb-3 flex flex-col gap-3">
-          <h2 className="text-base font-semibold text-navy-900">Enquiries</h2>
-          <div className="flex flex-wrap gap-2">
-            {ENQUIRY_STATUS_FILTERS.map((status) => (
-              <button
-                key={status}
-                type="button"
-                onClick={() => setEnquiryStatusFilter(status)}
-                className={`rounded-full px-3 py-1 text-xs font-bold transition ${
-                  enquiryStatusFilter === status
-                    ? "bg-action text-white"
-                    : "border border-line bg-surface text-text-secondary hover:text-navy-900"
-                }`}
-              >
-                {enquiryStatusFilterLabel(status)}
-              </button>
-            ))}
-          </div>
-        </div>
-        {enquiries.isLoading ? <p className="text-sm text-text-secondary">Loading…</p> : null}
-        {enquiries.error ? (
-          <p className="text-sm text-danger-text">{friendlyErrorMessage(enquiries.error)}</p>
-        ) : null}
-        {!enquiries.isLoading && !enquiries.error && filteredEnquiries.length === 0 ? (
-          <EmptyState
-            compact
-            title={
-              enquiryStatusFilter === "ALL"
-                ? "No enquiries yet"
-                : `No ${enquiryStatusFilterLabel(enquiryStatusFilter).toLowerCase()} enquiries`
-            }
-            description={
-              enquiryStatusFilter === "ALL"
-                ? "Guest questions show up here."
-                : "Try another status filter to see more."
-            }
-          />
-        ) : null}
-        <ul className="flex flex-col gap-3">
-          {filteredEnquiries.map((enquiry) => {
-            const draft = responses[enquiry.id] ?? "";
-            const isCancelled =
-              enquiry.status === "CANCELLED" ||
-              enquiry.status === "DECLINED" ||
-              enquiry.status === "EXPIRED" ||
-              enquiry.status === "WITHDRAWN";
-            return (
-              <li key={enquiry.id} className="rounded-card border border-line p-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="font-semibold text-navy-900">{enquiry.property_title}</p>
-                  {isCancelled ? (
-                    <Badge tone="danger">{enquiry.status === "DECLINED" ? "Declined" : "Cancelled"}</Badge>
-                  ) : (
-                    <Badge tone={enquiry.status === "RESPONDED" || enquiry.status === "CONFIRMED" ? "success" : "neutral"}>
-                      {enquiry.status}
-                    </Badge>
-                  )}
-                </div>
-                <p className="text-sm text-text-secondary">
-                  {formatDate(`${enquiry.check_in}T12:00:00`)} –{" "}
-                  {formatDate(`${enquiry.check_out}T12:00:00`)}
-                  {typeof enquiry.total_quote_paise === "number"
-                    ? ` · ${formatMoney(enquiry.total_quote_paise)}`
-                    : ""}
-                </p>
-                {enquiry.message ? <p className="mt-2 text-sm">{enquiry.message}</p> : null}
-                {enquiry.status === "SUBMITTED" ? (
-                  <form
-                    className="mt-3 flex flex-col gap-2"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      if (!draft.trim()) return;
-                      respond.mutate({ id: enquiry.id, response: draft.trim() });
-                    }}
-                  >
-                    <Field label="Your response">
-                      <Textarea
-                        id={`enquiry-${enquiry.id}`}
-                        value={draft}
-                        onChange={(e) =>
-                          setResponses((current) => ({ ...current, [enquiry.id]: e.target.value }))
-                        }
-                      />
-                    </Field>
-                    <div className="flex flex-wrap gap-2">
-                      <Button type="submit" size="sm" disabled={respond.isPending || !draft.trim()}>
-                        Respond
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="secondary"
-                        disabled={respond.isPending || !draft.trim()}
-                        onClick={() => {
-                          if (!draft.trim()) return;
-                          respond.mutate({
-                            id: enquiry.id,
-                            response: draft.trim(),
-                            decline: true,
-                          });
-                        }}
-                      >
-                        Decline
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="danger"
-                        disabled={cancelEnquiry.isPending}
-                        onClick={() => cancelEnquiry.mutate(enquiry.id)}
-                      >
-                        Cancel enquiry
-                      </Button>
-                    </div>
-                  </form>
-                ) : enquiry.host_response ? (
-                  <p className="mt-2 text-sm">{enquiry.host_response}</p>
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
-      </Card>
-
-      <Card>
-        <h2 className="mb-3 text-base font-semibold text-navy-900">Reservations</h2>
-        {reservations.isLoading ? <p className="text-sm text-text-secondary">Loading…</p> : null}
-        {reservations.error ? (
-          <p className="text-sm text-danger-text">{friendlyErrorMessage(reservations.error)}</p>
-        ) : null}
-        {reservations.data && reservations.data.length === 0 ? (
-          <EmptyState
-            compact
-            title="No paid reservations yet"
-            description="Hotel / short-stay bookings that guests pay for appear here."
-          />
-        ) : null}
-        <ul className="flex flex-col gap-3">
-          {reservations.data?.map((reservation) => (
-            <li key={reservation.id} className="rounded-card border border-line p-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="font-semibold text-navy-900">
-                  {reservation.property_title ?? "Stay"} · {reservation.unit_name ?? "Room"}
-                </p>
-                {reservation.status === "CANCELLED" || reservation.status === "NO_SHOW" ? (
-                  <Badge tone="danger">
-                    {reservation.status === "NO_SHOW" ? "No show" : "Cancelled"}
-                  </Badge>
-                ) : (
-                  <Badge
-                    tone={
-                      reservation.status === "CONFIRMED" || reservation.status === "CHECKED_IN"
-                        ? "success"
-                        : "neutral"
-                    }
-                  >
-                    {reservation.status}
-                  </Badge>
-                )}
-              </div>
-              <p className="text-sm text-text-secondary">
-                {formatDate(`${reservation.check_in}T12:00:00`)} –{" "}
-                {formatDate(`${reservation.check_out}T12:00:00`)}
-                {typeof reservation.total_paise === "number"
-                  ? ` · ${formatMoney(reservation.total_paise)}`
-                  : ""}
-              </p>
-              {reservation.customer_name || reservation.customer_phone ? (
-                <p className="mt-1 text-sm text-text-secondary">
-                  Guest: {reservation.customer_name || "—"}
-                  {reservation.customer_phone ? ` · ${reservation.customer_phone}` : ""}
-                </p>
-              ) : null}
-              <div className="mt-3 flex flex-wrap gap-2">
-                {reservation.status === "CONFIRMED" ? (
-                  <Button
-                    size="sm"
-                    disabled={reservationAction.isPending}
-                    onClick={() =>
-                      reservationAction.mutate({ id: reservation.id, action: "check_in" })
-                    }
-                  >
-                    Check in
-                  </Button>
-                ) : null}
-                {reservation.status === "CHECKED_IN" ? (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    disabled={reservationAction.isPending}
-                    onClick={() =>
-                      reservationAction.mutate({ id: reservation.id, action: "check_out" })
-                    }
-                  >
-                    Check out
-                  </Button>
-                ) : null}
-              </div>
-            </li>
-          ))}
-        </ul>
-      </Card>
     </div>
   );
 }
