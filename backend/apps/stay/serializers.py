@@ -102,8 +102,6 @@ class PropertySummarySerializer(serializers.ModelSerializer):
             "variant",
             "structured_fields",
             "min_stay_nights",
-            "available_from",
-            "available_until",
             "media",
             "units",
             "booking_mode",
@@ -157,8 +155,6 @@ class PropertySerializer(serializers.ModelSerializer):
             "cancellation_policy_text",
             "house_rules",
             "min_stay_nights",
-            "available_from",
-            "available_until",
             "media",
             "reviews",
             "units",
@@ -235,8 +231,6 @@ class CreatePropertySerializer(serializers.Serializer):
     cancellation_policy_text = serializers.CharField(required=False, allow_blank=True, default="")
     house_rules = serializers.CharField(required=False, allow_blank=True, default="")
     min_stay_nights = serializers.IntegerField(min_value=1, required=False, default=1)
-    available_from = serializers.DateField(required=False, allow_null=True)
-    available_until = serializers.DateField(required=False, allow_null=True)
     image_urls = serializers.ListField(
         child=serializers.CharField(min_length=1),
         min_length=1,
@@ -252,8 +246,6 @@ class UpdatePropertySerializer(serializers.Serializer):
     cancellation_policy_text = serializers.CharField(required=False, allow_blank=True)
     house_rules = serializers.CharField(required=False, allow_blank=True)
     min_stay_nights = serializers.IntegerField(min_value=1, required=False)
-    available_from = serializers.DateField(required=False, allow_null=True)
-    available_until = serializers.DateField(required=False, allow_null=True)
 
 
 class CreateUnitSerializer(serializers.Serializer):
@@ -313,8 +305,6 @@ class StayQuoteResponseSerializer(serializers.Serializer):
     total_quote_paise = serializers.IntegerField()
     booking_mode = serializers.CharField(required=False)
     min_stay_nights = serializers.IntegerField(required=False)
-    available_from = serializers.DateField(required=False, allow_null=True)
-    available_until = serializers.DateField(required=False, allow_null=True)
     max_guests = serializers.IntegerField(required=False)
 
 

@@ -52,22 +52,6 @@ def _as_uuid(value: UUID | str) -> UUID:
     return value if isinstance(value, UUID) else UUID(str(value))
 
 
-def _validate_availability_bounds(
-    *,
-    available_from: date | None,
-    available_until: date | None,
-) -> None:
-    if (
-        available_from is not None
-        and available_until is not None
-        and available_until < available_from
-    ):
-        raise StayStateError(
-            "available_until must be on or after available_from.",
-            code="stay_state_invalid",
-        )
-
-
 _ACTIVE_HOLD_STATUSES = (UnitReservation.Status.HELD, UnitReservation.Status.CONFIRMED)
 
 
@@ -190,16 +174,6 @@ def _enforce_stay_dates(*, prop: Property, check_in: date, check_out: date) -> i
             f"Maximum stay is {MAX_STAY_NIGHTS} nights.",
             code="max_stay_exceeded",
         )
-    if prop.available_from is not None and check_in < prop.available_from:
-        raise StayStateError(
-            "Not available for these dates.",
-            code="dates_unavailable",
-        )
-    if prop.available_until is not None and check_out > prop.available_until:
-        raise StayStateError(
-            "Not available for these dates.",
-            code="dates_unavailable",
-        )
     return nights
 
 
@@ -249,12 +223,8 @@ def _stay_period(
         )
     if length > limit:
         raise StayStateError(f"Maximum stay is {limit} {unit}s.", code="max_stay_exceeded")
-    if (prop.available_from is not None and check_in < prop.available_from) or (
-        prop.available_until is not None and check_out > prop.available_until
-    ):
-        raise StayStateError(
-            "The host is not taking stays from that date.", code="dates_unavailable"
-        )
+    # No "open from / until" window: a host who is not taking guests pauses the property or
+    # marks the room full. Old window values on existing rows are ignored.
     return check_out, length
 
 
@@ -420,8 +390,6 @@ def create_property(
     cancellation_policy_text: str = "",
     house_rules: str = "",
     min_stay_nights: int = 1,
-    available_from: date | None = None,
-    available_until: date | None = None,
     media: list[dict[str, Any]] | None = None,
     image_urls: list[str] | None = None,
 ) -> Property:
@@ -430,10 +398,6 @@ def create_property(
     config = _require_active_a9(variant_id)
     if min_stay_nights < 1:
         raise StayStateError("Minimum stay must be at least 1 night.")
-    _validate_availability_bounds(
-        available_from=available_from,
-        available_until=available_until,
-    )
     if nightly_rate_paise is not None and nightly_rate_paise <= 0:
         raise StayStateError("Nightly rate must be positive paise.")
     resolved_location = (location_text or "").strip()
@@ -458,8 +422,6 @@ def create_property(
         cancellation_policy_text=cancellation_policy_text,
         house_rules=house_rules,
         min_stay_nights=min_stay_nights,
-        available_from=available_from,
-        available_until=available_until,
     )
     if nightly_rate_paise is not None:
         Unit.objects.create(
@@ -601,7 +563,7 @@ def update_unit(
 
 
 @transaction.atomic
-def update_property_ad(  # noqa: PLR0912
+def update_property_ad(
     *,
     prop: Property,
     host: Any,
@@ -612,10 +574,6 @@ def update_property_ad(  # noqa: PLR0912
     cancellation_policy_text: str | None = None,
     house_rules: str | None = None,
     min_stay_nights: int | None = None,
-    available_from: date | None = None,
-    available_until: date | None = None,
-    clear_available_from: bool = False,
-    clear_available_until: bool = False,
 ) -> Property:
     """Partner updates the published/draft Ad in place (no live event sync)."""
     _require_stay_capability(host)
@@ -652,29 +610,6 @@ def update_property_ad(  # noqa: PLR0912
             raise StayStateError("Minimum stay must be at least 1 night.")
         prop.min_stay_nights = min_stay_nights
         updates.append("min_stay_nights")
-    next_from = (
-        None
-        if clear_available_from
-        else (available_from if available_from is not None else prop.available_from)
-    )
-    next_until = (
-        None
-        if clear_available_until
-        else (available_until if available_until is not None else prop.available_until)
-    )
-    if (
-        clear_available_from
-        or clear_available_until
-        or available_from is not None
-        or available_until is not None
-    ):
-        _validate_availability_bounds(available_from=next_from, available_until=next_until)
-        if clear_available_from or available_from is not None:
-            prop.available_from = next_from
-            updates.append("available_from")
-        if clear_available_until or available_until is not None:
-            prop.available_until = next_until
-            updates.append("available_until")
     if updates:
         updates.append("updated_at")
         prop.save(update_fields=updates)
@@ -1204,8 +1139,6 @@ def calculate_stay_quote(
         "max_guests": unit.max_guests,
         "booking_mode": config.booking_mode,
         "min_stay_nights": prop.min_stay_nights,
-        "available_from": prop.available_from,
-        "available_until": prop.available_until,
     }
 
 
@@ -1270,8 +1203,6 @@ def public_properties(  # noqa: PLR0912
     min_price_paise: int | None = None,
     max_price_paise: int | None = None,
     variant_code: str = "",
-    check_in: date | None = None,
-    check_out: date | None = None,
     sort: str = "newest",
     limit: int | None = None,
     offset: int = 0,
@@ -1346,14 +1277,6 @@ def public_properties(  # noqa: PLR0912
         qs = qs.filter(
             models.Q(structured_fields__food__in=_FOOD_YES)
             | models.Exists(rooms.filter(attributes__food__in=_FOOD_YES))
-        )
-    if check_in is not None:
-        qs = qs.filter(
-            models.Q(available_from__isnull=True) | models.Q(available_from__lte=check_in)
-        )
-    if check_out is not None:
-        qs = qs.filter(
-            models.Q(available_until__isnull=True) | models.Q(available_until__gte=check_out)
         )
     if sort in ("price_asc", "price_desc"):
         cheapest = (

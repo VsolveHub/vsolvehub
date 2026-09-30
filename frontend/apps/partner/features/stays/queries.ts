@@ -131,8 +131,6 @@ export async function createPartnerStayProperty(input: {
   unit_name?: string;
   sharing_count?: number;
   min_stay_nights?: number;
-  available_from?: string | null;
-  available_until?: string | null;
   structured_fields?: Record<string, unknown>;
   cancellation_policy_text?: string;
   house_rules?: string;
@@ -150,8 +148,6 @@ export async function createPartnerStayProperty(input: {
     house_rules: input.house_rules ?? "",
     image_urls: input.image_urls,
     min_stay_nights: input.min_stay_nights ?? 1,
-    available_from: input.available_from ?? null,
-    available_until: input.available_until ?? null,
   };
   // Property-first: only attach a unit when an explicit rate is provided.
   if (input.nightly_rate_paise != null) {

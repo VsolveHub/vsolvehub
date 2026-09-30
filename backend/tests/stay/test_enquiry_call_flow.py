@@ -23,7 +23,7 @@ from apps.identity.models import Role, UserRole
 from apps.notifications.models import NotificationIntent
 from apps.notifications.templates_registry import registered_template_codes
 from apps.partners.models import PartnerApplication, PartnerCapability, PartnerProfile
-from apps.stay.models import StayEnquiry
+from apps.stay.models import Property, StayEnquiry
 from apps.stay.services import (
     StayStateError,
     _add_months,
@@ -33,6 +33,7 @@ from apps.stay.services import (
     create_enquiry,
     create_property,
     get_stay_taxonomy,
+    public_properties,
     respond_enquiry,
     submit_property,
 )
@@ -207,6 +208,25 @@ def test_price_unit_is_published_to_guests_and_hosts(world):
     }
     assert types["call-pg"] == "MONTH"
     assert types["call-hotel"] == "NIGHT"
+
+
+@pytest.mark.django_db
+def test_an_old_open_window_no_longer_blocks_guests(world):
+    """Hosts stop enquiries by pausing or marking a room full, not with a date window.
+
+    A property saved before the window was removed may still carry one; it is ignored.
+    """
+    prop = _live(world, "monthly", rate=MONTHLY_RENT)
+    Property.objects.filter(id=prop.id).update(
+        available_from=_start(100), available_until=timezone.localdate() - timedelta(days=1)
+    )
+
+    enquiry = create_enquiry(
+        customer=world["guest"], property_id=prop.id, check_in=_start(), length=2
+    )
+
+    assert enquiry.status == StayEnquiry.Status.SUBMITTED
+    assert prop.id in {row.id for row in public_properties()}
 
 
 # --- the host sees who is asking ----------------------------------------------------------------

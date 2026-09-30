@@ -24,8 +24,6 @@ export function fetchStays(params?: StayFilterParams) {
           food: params?.food,
           min_price: params?.min_price,
           max_price: params?.max_price,
-          check_in: params?.check_in,
-          check_out: params?.check_out,
           sort: params?.sort,
           limit: params?.limit,
           offset: params?.offset,

@@ -8,7 +8,6 @@ import {
   AlertCircle,
   ArrowLeft,
   Building,
-  Calendar,
   Car,
   CheckCircle2,
   Clock,
@@ -171,17 +170,6 @@ export default function StayDetailPage() {
                 <span>
                   Minimum stay:{" "}
                   {stayLengthLabel(property.min_stay_nights, pricePeriodOf(property.price_period))}
-                </span>
-              </div>
-            )}
-
-            {(property.available_from || property.available_until) && (
-              <div className="mt-2 flex items-center gap-1.5 text-xs text-brand font-medium">
-                <Calendar className="size-3.5 shrink-0" />
-                <span>
-                  Booking window:{" "}
-                  {property.available_from ? `Available from ${property.available_from}` : "Open availability"}
-                  {property.available_until ? ` until ${property.available_until}` : ""}
                 </span>
               </div>
             )}

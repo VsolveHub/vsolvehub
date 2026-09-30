@@ -32,8 +32,6 @@ type DetailsDraft = {
   description: string;
   houseRules: string;
   minStay: string;
-  openFrom: string;
-  openUntil: string;
   answers: Record<string, string>;
 };
 
@@ -44,8 +42,6 @@ function detailsFrom(property: StayProperty): DetailsDraft {
     description: property.description ?? "",
     houseRules: property.house_rules ?? "",
     minStay: String(property.min_stay_nights ?? 1),
-    openFrom: property.available_from ?? "",
-    openUntil: property.available_until ?? "",
     answers: answersFrom(property.structured_fields),
   };
 }
@@ -166,9 +162,6 @@ export function PropertyCard({
     if (!details.location.trim()) return setDetailsError("The property needs a location.");
     const minStay = wholeNumber(details.minStay);
     if (minStay === null) return setDetailsError(`Minimum stay must be 1 ${unitWord} or more.`);
-    if (details.openFrom && details.openUntil && details.openUntil < details.openFrom) {
-      return setDetailsError("“Open until” must be on or after “open from”.");
-    }
     const collected = collectSchemaAnswers(variant?.property_schema, details.answers);
     if ("missing" in collected) return setDetailsError(`Choose ${collected.missing}.`);
     setDetailsError(null);
@@ -178,8 +171,6 @@ export function PropertyCard({
       description: details.description.trim(),
       house_rules: details.houseRules.trim(),
       min_stay_nights: minStay,
-      available_from: details.openFrom || null,
-      available_until: details.openUntil || null,
       structured_fields: collected.values,
     });
   }
@@ -355,26 +346,6 @@ export function PropertyCard({
                 inputMode="numeric"
                 value={details.minStay}
                 onChange={(e) => setDetails({ ...details, minStay: e.target.value })}
-              />
-            </Field>
-            <Field
-              label="Open for bookings from"
-              showOptional
-              description="Leave empty to take bookings any time."
-            >
-              <Input
-                id={`open-from-${property.id}`}
-                type="date"
-                value={details.openFrom}
-                onChange={(e) => setDetails({ ...details, openFrom: e.target.value })}
-              />
-            </Field>
-            <Field label="Open for bookings until" showOptional>
-              <Input
-                id={`open-until-${property.id}`}
-                type="date"
-                value={details.openUntil}
-                onChange={(e) => setDetails({ ...details, openUntil: e.target.value })}
               />
             </Field>
           </div>

@@ -30,7 +30,6 @@ from apps.stay.services import (
     create_stay_review,
     expire_stale_enquiries,
     moderate_property,
-    public_properties,
     respond_enquiry,
     submit_property,
 )
@@ -277,34 +276,6 @@ def test_stay_review_for_reservation_customer(stay_env, client):
     # Since guest already submitted a review above, endpoint should reject duplicate
     assert resp.status_code == status.HTTP_400_BAD_REQUEST
     assert resp.data["code"] == "duplicate_review"
-
-
-@pytest.mark.django_db
-def test_public_properties_date_filtering(stay_env):
-    prop1 = _create_published_prop(
-        stay_env["variant_res"], stay_env["partner"], title="Prop Available"
-    )
-    prop2 = _create_published_prop(
-        stay_env["variant_res"], stay_env["partner"], title="Prop Booked"
-    )
-
-    check_in = timezone.localdate() + timedelta(days=10)
-    check_out = check_in + timedelta(days=3)
-
-    unit2 = prop2.units.first()
-    create_reservation(
-        customer=stay_env["guest"],
-        property_id=prop2.id,
-        unit_id=unit2.id,
-        check_in=check_in,
-        check_out=check_out,
-    )
-
-    # Filter with dates
-    available = public_properties(check_in=check_in, check_out=check_out)
-    available_ids = [p.id for p in available]
-    assert prop1.id in available_ids
-    assert prop2.id not in available_ids
 
 
 @pytest.mark.django_db

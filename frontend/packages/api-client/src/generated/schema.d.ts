@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.66.0)
- * Checksum: 44548d513a4872b8
+ * Checksum: b32d9889bd6a6be0
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -8494,10 +8494,6 @@ export interface components {
             house_rules: string;
             /** @default 1 */
             min_stay_nights: number;
-            /** Format: date */
-            available_from?: string | null;
-            /** Format: date */
-            available_until?: string | null;
             image_urls: string[];
         };
         CreateReservationRequest: {
@@ -11603,10 +11599,6 @@ export interface components {
             cancellation_policy_text?: string;
             house_rules?: string;
             min_stay_nights?: number;
-            /** Format: date */
-            available_from?: string | null;
-            /** Format: date */
-            available_until?: string | null;
             readonly media: components["schemas"]["PropertyMedia"][];
             readonly reviews: components["schemas"]["StayReview"][];
             readonly units: components["schemas"]["PartnerUnit"][];
@@ -11919,10 +11911,6 @@ export interface components {
             cancellation_policy_text?: string;
             house_rules?: string;
             min_stay_nights?: number;
-            /** Format: date */
-            available_from?: string | null;
-            /** Format: date */
-            available_until?: string | null;
         };
         PatchedUpdateUnitRequest: {
             name?: string;
@@ -12558,10 +12546,6 @@ export interface components {
             cancellation_policy_text?: string;
             house_rules?: string;
             min_stay_nights?: number;
-            /** Format: date */
-            available_from?: string | null;
-            /** Format: date */
-            available_until?: string | null;
             readonly media: components["schemas"]["PropertyMedia"][];
             readonly reviews: components["schemas"]["StayReview"][];
             readonly units: components["schemas"]["Unit"][];
@@ -12593,10 +12577,6 @@ export interface components {
             variant: string;
             structured_fields?: unknown;
             min_stay_nights?: number;
-            /** Format: date */
-            available_from?: string | null;
-            /** Format: date */
-            available_until?: string | null;
             readonly media: components["schemas"]["PropertyMedia"][];
             readonly units: components["schemas"]["Unit"][];
             readonly booking_mode: string;
@@ -15094,10 +15074,6 @@ export interface components {
             total_quote_paise: number;
             booking_mode?: string;
             min_stay_nights?: number;
-            /** Format: date */
-            available_from?: string | null;
-            /** Format: date */
-            available_until?: string | null;
             max_guests?: number;
         };
         StayReservation: {
@@ -32789,8 +32765,6 @@ export interface operations {
         parameters: {
             query?: {
                 ac?: boolean;
-                check_in?: string;
-                check_out?: string;
                 food?: boolean;
                 limit?: number;
                 location?: string;

@@ -158,17 +158,15 @@ def test_update_unit_deactivate(stay_world):
 
 
 @pytest.mark.django_db
-def test_min_stay_and_availability_codes(stay_world):
+def test_min_stay_code(stay_world):
     today = timezone.localdate()
     prop = create_property(
         host=stay_world["host"],
         variant_id=stay_world["variant"].id,
-        title="Windowed PG",
+        title="Min stay PG",
         location_text="Gachibowli",
         nightly_rate_paise=90000,
         min_stay_nights=5,
-        available_from=today + timedelta(days=10),
-        available_until=today + timedelta(days=40),
         image_urls=["https://cdn.example.com/cover.jpg"],
     )
     submit_property(prop=prop, host=stay_world["host"])
@@ -184,22 +182,12 @@ def test_min_stay_and_availability_codes(stay_world):
         )
     assert short.value.code == "min_stay_not_met"
 
-    with pytest.raises(StayStateError) as early:
-        calculate_stay_quote(
-            property_id=prop.id,
-            check_in=today + timedelta(days=2),
-            check_out=today + timedelta(days=10),
-        )
-    assert early.value.code == "dates_unavailable"
-
-    with pytest.raises(StayStateError) as late:
-        create_enquiry(
-            customer=stay_world["guest"],
-            property_id=prop.id,
-            check_in=today + timedelta(days=35),
-            check_out=today + timedelta(days=45),
-        )
-    assert late.value.code == "dates_unavailable"
+    # There is no "open from / until" window any more: any future date is accepted.
+    far_in, far_out = today + timedelta(days=200), today + timedelta(days=206)
+    enquiry = create_enquiry(
+        customer=stay_world["guest"], property_id=prop.id, check_in=far_in, check_out=far_out
+    )
+    assert enquiry.nights == (far_out - far_in).days
 
 
 @pytest.mark.django_db
@@ -232,8 +220,8 @@ def test_partner_units_http_collection(stay_world):
     assert props.status_code == status.HTTP_200_OK
     row = next(p for p in props.data if p["id"] == str(prop.id))
     assert row["min_stay_nights"] == 1
-    assert "available_from" in row
-    assert "available_until" in row
+    assert "available_from" not in row
+    assert "available_until" not in row
 
 
 @pytest.mark.django_db
@@ -261,7 +249,7 @@ def test_update_unit_http(stay_world):
 
 
 @pytest.mark.django_db
-def test_enquire_http_min_stay_and_availability_codes(stay_world):
+def test_enquire_http_min_stay_code(stay_world):
     today = timezone.localdate()
     prop = create_property(
         host=stay_world["host"],
@@ -270,8 +258,6 @@ def test_enquire_http_min_stay_and_availability_codes(stay_world):
         location_text="Madhapur",
         nightly_rate_paise=80000,
         min_stay_nights=7,
-        available_from=today + timedelta(days=5),
-        available_until=today + timedelta(days=60),
         image_urls=["https://cdn.example.com/cover.jpg"],
     )
     submit_property(prop=prop, host=stay_world["host"])
@@ -292,7 +278,7 @@ def test_enquire_http_min_stay_and_availability_codes(stay_world):
     assert short.status_code == status.HTTP_400_BAD_REQUEST
     assert short.data["error"]["code"] == "min_stay_not_met"
 
-    early = client.post(
+    soon = client.post(
         "/api/v1/stays/enquire",
         {
             "property_id": str(prop.id),
@@ -301,8 +287,7 @@ def test_enquire_http_min_stay_and_availability_codes(stay_world):
         },
         format="json",
     )
-    assert early.status_code == status.HTTP_400_BAD_REQUEST
-    assert early.data["error"]["code"] == "dates_unavailable"
+    assert soon.status_code == status.HTTP_201_CREATED
 
 
 @pytest.mark.django_db

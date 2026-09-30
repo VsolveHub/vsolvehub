@@ -1,5 +1,3 @@
-import contextlib
-from datetime import date
 from typing import Any
 from uuid import UUID
 
@@ -114,8 +112,6 @@ class StayBrowseView(APIView):
             OpenApiParameter("food", OpenApiTypes.BOOL, OpenApiParameter.QUERY),
             OpenApiParameter("min_price", OpenApiTypes.INT, OpenApiParameter.QUERY),
             OpenApiParameter("max_price", OpenApiTypes.INT, OpenApiParameter.QUERY),
-            OpenApiParameter("check_in", OpenApiTypes.DATE, OpenApiParameter.QUERY),
-            OpenApiParameter("check_out", OpenApiTypes.DATE, OpenApiParameter.QUERY),
             OpenApiParameter("sort", OpenApiTypes.STR, OpenApiParameter.QUERY),
             OpenApiParameter("limit", OpenApiTypes.INT, OpenApiParameter.QUERY),
             OpenApiParameter("offset", OpenApiTypes.INT, OpenApiParameter.QUERY),
@@ -128,20 +124,9 @@ class StayBrowseView(APIView):
         food_param = request.query_params.get("food")
         min_price = request.query_params.get("min_price")
         max_price = request.query_params.get("max_price")
-        check_in_raw = request.query_params.get("check_in")
-        check_out_raw = request.query_params.get("check_out")
         sort_param = request.query_params.get("sort", "newest")
         limit_raw = request.query_params.get("limit")
         offset_raw = request.query_params.get("offset")
-
-        check_in_date = None
-        check_out_date = None
-        if check_in_raw:
-            with contextlib.suppress(ValueError):
-                check_in_date = date.fromisoformat(check_in_raw)
-        if check_out_raw:
-            with contextlib.suppress(ValueError):
-                check_out_date = date.fromisoformat(check_out_raw)
 
         props = public_properties(
             query=request.query_params.get("q", ""),
@@ -158,8 +143,6 @@ class StayBrowseView(APIView):
             min_price_paise=int(min_price) if min_price and min_price.isdigit() else None,
             max_price_paise=int(max_price) if max_price and max_price.isdigit() else None,
             variant_code=request.query_params.get("service", ""),
-            check_in=check_in_date,
-            check_out=check_out_date,
             sort=sort_param,
             limit=int(limit_raw) if limit_raw and limit_raw.isdigit() else None,
             offset=int(offset_raw) if offset_raw and offset_raw.isdigit() else 0,
@@ -379,17 +362,8 @@ class PartnerPropertyDetailView(APIView):
         ser.is_valid(raise_exception=True)
         partner = _partner(request.user)
         prop = get_object_or_404(Property, id=property_id, host=partner)
-        payload = dict(ser.validated_data)
-        clear_available_from = "available_from" in payload and payload["available_from"] is None
-        clear_available_until = "available_until" in payload and payload["available_until"] is None
         try:
-            prop = update_property_ad(
-                prop=prop,
-                host=partner,
-                clear_available_from=clear_available_from,
-                clear_available_until=clear_available_until,
-                **payload,
-            )
+            prop = update_property_ad(prop=prop, host=partner, **ser.validated_data)
         except (StayStateError, PermissionError) as exc:
             _raise_domain_error(exc)
         return Response(PartnerPropertySerializer(prop).data)

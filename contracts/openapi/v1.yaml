@@ -17929,16 +17929,6 @@ paths:
         schema:
           type: boolean
       - in: query
-        name: check_in
-        schema:
-          type: string
-          format: date
-      - in: query
-        name: check_out
-        schema:
-          type: string
-          format: date
-      - in: query
         name: food
         schema:
           type: boolean
@@ -21289,14 +21279,6 @@ components:
           type: integer
           minimum: 1
           default: 1
-        available_from:
-          type: string
-          format: date
-          nullable: true
-        available_until:
-          type: string
-          format: date
-          nullable: true
         image_urls:
           type: array
           items:
@@ -29054,14 +29036,6 @@ components:
           type: integer
           maximum: 32767
           minimum: 0
-        available_from:
-          type: string
-          format: date
-          nullable: true
-        available_until:
-          type: string
-          format: date
-          nullable: true
         media:
           type: array
           items:
@@ -29799,14 +29773,6 @@ components:
         min_stay_nights:
           type: integer
           minimum: 1
-        available_from:
-          type: string
-          format: date
-          nullable: true
-        available_until:
-          type: string
-          format: date
-          nullable: true
     PatchedUpdateUnitRequest:
       type: object
       properties:
@@ -31360,14 +31326,6 @@ components:
           type: integer
           maximum: 32767
           minimum: 0
-        available_from:
-          type: string
-          format: date
-          nullable: true
-        available_until:
-          type: string
-          format: date
-          nullable: true
         media:
           type: array
           items:
@@ -31462,14 +31420,6 @@ components:
           type: integer
           maximum: 32767
           minimum: 0
-        available_from:
-          type: string
-          format: date
-          nullable: true
-        available_until:
-          type: string
-          format: date
-          nullable: true
         media:
           type: array
           items:
@@ -37608,14 +37558,6 @@ components:
           type: string
         min_stay_nights:
           type: integer
-        available_from:
-          type: string
-          format: date
-          nullable: true
-        available_until:
-          type: string
-          format: date
-          nullable: true
         max_guests:
           type: integer
       required:
