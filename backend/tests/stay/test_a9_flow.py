@@ -84,6 +84,7 @@ def test_enquiry_happy_path(stay_world):
         variant_id=stay_world["variant"].id,
         title="Demo PG",
         nightly_rate_paise=90000,
+        image_urls=["https://cdn.example.com/cover.jpg"],
     )
     submit_property(prop=prop, host=stay_world["host"])
     moderate_property(
@@ -118,6 +119,7 @@ def test_stay_quote_calculation_and_filters(stay_world):
         location_text="Banjara Hills, Hyderabad",
         nightly_rate_paise=150000,
         sharing_count=1,
+        image_urls=["https://cdn.example.com/cover.jpg"],
     )
     submit_property(prop=prop, host=stay_world["host"])
     moderate_property(
@@ -245,6 +247,7 @@ def test_stay_reservation_simulated_capture(stay_world, client):
         variant_id=stay_world["variant"].id,
         title="Demo PG",
         nightly_rate_paise=90000,
+        image_urls=["https://cdn.example.com/cover.jpg"],
     )
     submit_property(prop=prop, host=stay_world["host"])
     moderate_property(

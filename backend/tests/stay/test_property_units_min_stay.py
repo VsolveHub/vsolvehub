@@ -111,6 +111,7 @@ def test_submit_property_requires_active_unit(stay_world):
         variant_id=stay_world["variant"].id,
         title="Empty shell",
         location_text="Madhapur",
+        image_urls=["https://cdn.example.com/cover.jpg"],
     )
     with pytest.raises(StayStateError) as exc:
         submit_property(prop=prop, host=stay_world["host"])
@@ -122,7 +123,8 @@ def test_submit_property_requires_active_unit(stay_world):
         nightly_rate_paise=70000,
     )
     submitted = submit_property(prop=prop, host=stay_world["host"])
-    assert submitted.moderation_status == "PENDING"
+    # Enquiry-mode properties go live on publish; only a first paid property waits for review.
+    assert submitted.moderation_status == "APPROVED"
 
 
 @pytest.mark.django_db
@@ -163,6 +165,7 @@ def test_min_stay_and_availability_codes(stay_world):
         min_stay_nights=5,
         available_from=today + timedelta(days=10),
         available_until=today + timedelta(days=40),
+        image_urls=["https://cdn.example.com/cover.jpg"],
     )
     submit_property(prop=prop, host=stay_world["host"])
     moderate_property(
@@ -265,6 +268,7 @@ def test_enquire_http_min_stay_and_availability_codes(stay_world):
         min_stay_nights=7,
         available_from=today + timedelta(days=5),
         available_until=today + timedelta(days=60),
+        image_urls=["https://cdn.example.com/cover.jpg"],
     )
     submit_property(prop=prop, host=stay_world["host"])
     moderate_property(prop=prop, actor=stay_world["host_user"], action="APPROVE", reason="ok")
@@ -320,6 +324,7 @@ def test_confirm_enquiry_holds_unit_reservation(stay_world):
         title="Hold on confirm",
         location_text="Banjara Hills",
         nightly_rate_paise=100000,
+        image_urls=["https://cdn.example.com/cover.jpg"],
     )
     submit_property(prop=prop, host=stay_world["host"])
     moderate_property(prop=prop, actor=stay_world["host_user"], action="APPROVE", reason="ok")

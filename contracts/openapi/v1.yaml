@@ -14045,7 +14045,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Property'
+                  $ref: '#/components/schemas/PartnerProperty'
           description: ''
     post:
       operationId: partner_stays_properties_create
@@ -14070,7 +14070,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Property'
+                $ref: '#/components/schemas/PartnerProperty'
           description: ''
   /api/v1/partner/stays/properties/{property_id}:
     patch:
@@ -14102,7 +14102,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Property'
+                $ref: '#/components/schemas/PartnerProperty'
           description: ''
   /api/v1/partner/stays/properties/{property_id}/{action}:
     post:
@@ -14128,7 +14128,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Property'
+                $ref: '#/components/schemas/PartnerProperty'
           description: ''
   /api/v1/partner/stays/properties/{property_id}/media:
     post:
@@ -28967,6 +28967,87 @@ components:
       - phone_number
       - service_areas
       - skills
+    PartnerProperty:
+      type: object
+      description: 'The host''s own view: adds the Operations note, which guests never
+        see.'
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        title:
+          type: string
+          maxLength: 180
+        description:
+          type: string
+        location_text:
+          type: string
+          maxLength: 180
+        moderation_status:
+          $ref: '#/components/schemas/ModerationStatusEnum'
+        public_state:
+          type: string
+          readOnly: true
+        host_name:
+          type: string
+          readOnly: true
+        variant:
+          type: string
+          format: uuid
+        structured_fields: {}
+        cancellation_policy_text:
+          type: string
+        house_rules:
+          type: string
+        min_stay_nights:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        available_from:
+          type: string
+          format: date
+          nullable: true
+        available_until:
+          type: string
+          format: date
+          nullable: true
+        media:
+          type: array
+          items:
+            $ref: '#/components/schemas/PropertyMedia'
+          readOnly: true
+        reviews:
+          type: array
+          items:
+            $ref: '#/components/schemas/StayReview'
+          readOnly: true
+        units:
+          type: array
+          items:
+            $ref: '#/components/schemas/Unit'
+          readOnly: true
+        booking_mode:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        moderation_reason:
+          type: string
+          maxLength: 480
+      required:
+      - booking_mode
+      - created_at
+      - host_name
+      - id
+      - media
+      - public_state
+      - reviews
+      - title
+      - units
+      - variant
     PartnerRateItem:
       type: object
       properties:

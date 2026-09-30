@@ -18,6 +18,7 @@ from apps.commerce.services.payments import initiate_standalone_payment_attempt
 from apps.foundation.models import OutboxEvent
 from apps.notifications.models import NotificationIntent
 from apps.notifications.services import request_notification
+from apps.partners.models import PartnerProfile
 from apps.stay.models import (
     Property,
     PropertyMedia,
@@ -379,6 +380,16 @@ def update_unit(
         unit.attributes = attributes
         updates.append("attributes")
     if is_active is not None:
+        if (
+            not is_active
+            and unit.is_active
+            and unit.property.moderation_status == Property.ModerationStatus.APPROVED
+            and not unit.property.units.filter(is_active=True).exclude(id=unit.id).exists()
+        ):
+            raise StayStateError(
+                "A live property needs at least one active room. Add another room first.",
+                code="last_active_room",
+            )
         unit.is_active = is_active
         updates.append("is_active")
     if updates:
@@ -670,29 +681,72 @@ def create_stay_review(
     )
 
 
+def _property_booking_mode(prop: Property) -> str | None:
+    """The ACTIVE booking mode for a property's variant, or None when the variant is closed."""
+    config = A9VariantConfiguration.objects.filter(
+        variant_id=prop.variant_id,
+        status=A9VariantConfiguration.Status.ACTIVE,
+    ).first()
+    return None if config is None else str(config.booking_mode)
+
+
+def _assert_publishable(prop: Property) -> None:
+    """Automatic checks every property passes before it can go live, reviewed or not."""
+    if not prop.title.strip():
+        raise StayStateError("Add a property title before publishing.", code="title_required")
+    if not prop.location_text.strip():
+        raise StayStateError(
+            "Add the property location before publishing.", code="location_required"
+        )
+    if not prop.media.exists():
+        raise StayStateError("Add at least one photo before publishing.", code="photo_required")
+    if not prop.units.filter(is_active=True).exists():
+        raise StayStateError("Add at least one room before publishing.", code="room_required")
+
+
+@transaction.atomic
 def submit_property(*, prop: Property, host: Any) -> Property:
+    """Partner publishes a property.
+
+    The partner was verified when their application was approved, so most properties go live at
+    once. The exception is a host's first paid-booking (RESERVATION-mode) property: guests pay the
+    platform upfront there, so Operations reviews it once. Approving it trusts the host
+    (``PartnerProfile.paid_stays_trusted_at``) and their later paid properties publish directly.
+    """
     _require_stay_capability(host)
     if prop.host_id != host.id:
         raise PermissionError("Not your property.")
-    _require_active_a9(prop.variant_id)
+    config = _require_active_a9(prop.variant_id)
+    prop = Property.objects.select_for_update().get(id=prop.id)
     if prop.moderation_status not in (
         Property.ModerationStatus.DRAFT,
         Property.ModerationStatus.REJECTED,
     ):
-        raise StayStateError("Property cannot be submitted from this state.")
-    if not prop.units.filter(is_active=True).exists():
-        raise StayStateError("Add at least one room before submitting for review.")
-    prop.moderation_status = Property.ModerationStatus.PENDING
-    prop.save(update_fields=("moderation_status", "updated_at"))
-    StayModerationEvent.objects.create(
-        property=prop,
-        actor=host.user,
-        action=StayModerationEvent.Action.SUBMITTED,
-        reason="",
+        raise StayStateError("Property cannot be published from this state.")
+    _assert_publishable(prop)
+
+    trusted_at = (
+        PartnerProfile.objects.filter(id=host.id)
+        .values_list("paid_stays_trusted_at", flat=True)
+        .first()
     )
+    needs_review = (
+        config.booking_mode == A9VariantConfiguration.BookingMode.RESERVATION and trusted_at is None
+    )
+    if needs_review:
+        prop.moderation_status = Property.ModerationStatus.PENDING
+        event = StayModerationEvent.Action.SUBMITTED
+    else:
+        prop.moderation_status = Property.ModerationStatus.APPROVED
+        event = StayModerationEvent.Action.PUBLISHED
+    # A fresh publish clears the previous rejection note; the event log keeps the history.
+    prop.moderation_reason = ""
+    prop.save(update_fields=("moderation_status", "moderation_reason", "updated_at"))
+    StayModerationEvent.objects.create(property=prop, actor=host.user, action=event, reason="")
     return prop
 
 
+@transaction.atomic
 def moderate_property(*, prop: Property, actor: Any, action: str, reason: str) -> Property:
     reason = (reason or "").strip()
     if not reason:
@@ -715,6 +769,18 @@ def moderate_property(*, prop: Property, actor: Any, action: str, reason: str) -
     prop.moderation_reason = reason
     prop.save(update_fields=("moderation_status", "moderation_reason", "updated_at"))
     StayModerationEvent.objects.create(property=prop, actor=actor, action=event, reason=reason)
+
+    if (
+        action == "APPROVE"
+        and _property_booking_mode(prop) == A9VariantConfiguration.BookingMode.RESERVATION
+    ):
+        # First paid property passed review: later paid properties from this host skip review.
+        PartnerProfile.objects.filter(id=prop.host_id, paid_stays_trusted_at__isnull=True).update(
+            paid_stays_trusted_at=timezone.now()
+        )
+    elif action == "REMOVE":
+        # A takedown withdraws trust; the host's next paid property is reviewed again.
+        PartnerProfile.objects.filter(id=prop.host_id).update(paid_stays_trusted_at=None)
     return prop
 
 
@@ -1229,6 +1295,12 @@ def add_property_media(
     cleaned_url = url.strip()
     if not cleaned_url:
         raise StayStateError("Image URL is required.")
+    # Listings go live without review, so only photos this partner uploaded may be attached.
+    if not partner_owns_stay_photo(partner=host, url=cleaned_url):
+        raise StayStateError(
+            "Upload photos from this form instead of pasting links.",
+            code="photo_not_uploaded",
+        )
     return PropertyMedia.objects.create(
         property=prop,
         url=cleaned_url,
@@ -1249,6 +1321,14 @@ def remove_property_media(
     media = PropertyMedia.objects.filter(id=_as_uuid(media_id), property=prop).first()
     if not media:
         raise StayStateError("Photo not found on this property.", code="media_not_found")
+    if (
+        prop.moderation_status == Property.ModerationStatus.APPROVED
+        and not prop.media.exclude(id=media.id).exists()
+    ):
+        raise StayStateError(
+            "A live property needs at least one photo. Add another photo first.",
+            code="last_photo",
+        )
     media.delete()
 
 

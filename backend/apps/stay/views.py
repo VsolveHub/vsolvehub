@@ -23,6 +23,7 @@ from apps.stay.serializers import (
     CreateStayReviewSerializer,
     CreateUnitSerializer,
     OpsCancelStayReservationSerializer,
+    PartnerPropertySerializer,
     PropertyMediaSerializer,
     PropertySerializer,
     PropertySummarySerializer,
@@ -311,7 +312,7 @@ class PartnerStayPhotoUploadView(APIView):
 class PartnerPropertyCollectionView(APIView):
     permission_classes = (IsPartnerUser,)
 
-    @extend_schema(responses=PropertySerializer(many=True))
+    @extend_schema(responses=PartnerPropertySerializer(many=True))
     def get(self, request: Any) -> Response:
         partner = _partner(request.user)
         rows = (
@@ -319,9 +320,9 @@ class PartnerPropertyCollectionView(APIView):
             .prefetch_related("units", "media", "reviews", "variant__a9_configurations")
             .select_related("variant")
         )
-        return Response(PropertySerializer(rows, many=True).data)
+        return Response(PartnerPropertySerializer(rows, many=True).data)
 
-    @extend_schema(request=CreatePropertySerializer, responses=PropertySerializer)
+    @extend_schema(request=CreatePropertySerializer, responses=PartnerPropertySerializer)
     def post(self, request: Any) -> Response:
         ser = CreatePropertySerializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -336,7 +337,7 @@ class PartnerPropertyCollectionView(APIView):
             prop = create_property(host=partner, **ser.validated_data)
         except (StayStateError, PermissionError) as exc:
             return _error(exc)
-        return Response(PropertySerializer(prop).data, status=status.HTTP_201_CREATED)
+        return Response(PartnerPropertySerializer(prop).data, status=status.HTTP_201_CREATED)
 
 
 class PartnerPropertyActionView(APIView):
@@ -345,7 +346,7 @@ class PartnerPropertyActionView(APIView):
     @extend_schema(
         operation_id="partner_stays_property_action",
         request=None,
-        responses=PropertySerializer,
+        responses=PartnerPropertySerializer,
     )
     def post(self, request: Any, property_id: UUID, action: str) -> Response:
         partner = _partner(request.user)
@@ -357,13 +358,13 @@ class PartnerPropertyActionView(APIView):
                 raise StayStateError("Unknown action.")
         except (StayStateError, PermissionError) as exc:
             return _error(exc)
-        return Response(PropertySerializer(prop).data)
+        return Response(PartnerPropertySerializer(prop).data)
 
 
 class PartnerPropertyDetailView(APIView):
     permission_classes = (IsPartnerUser,)
 
-    @extend_schema(request=UpdatePropertySerializer, responses=PropertySerializer)
+    @extend_schema(request=UpdatePropertySerializer, responses=PartnerPropertySerializer)
     def patch(self, request: Any, property_id: UUID) -> Response:
         ser = UpdatePropertySerializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -382,7 +383,7 @@ class PartnerPropertyDetailView(APIView):
             )
         except (StayStateError, PermissionError) as exc:
             _raise_domain_error(exc)
-        return Response(PropertySerializer(prop).data)
+        return Response(PartnerPropertySerializer(prop).data)
 
 
 class PartnerUnitCollectionView(APIView):

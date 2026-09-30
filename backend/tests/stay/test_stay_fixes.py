@@ -17,7 +17,7 @@ from apps.catalog.models import (
 from apps.identity.models import Role, UserRole
 from apps.notifications.models import NotificationIntent
 from apps.partners.models import PartnerApplication, PartnerCapability, PartnerProfile
-from apps.stay.models import StayEnquiry, StayReservation, StayReview
+from apps.stay.models import StayEnquiry, StayPhotoUpload, StayReservation, StayReview
 from apps.stay.services import (
     StayStateError,
     check_in_reservation,
@@ -131,6 +131,7 @@ def _create_published_prop(variant, partner, title="Test Prop", nightly_rate_pai
         description="A great place",
         location_text="Koramangala, Bengaluru",
         nightly_rate_paise=nightly_rate_paise,
+        image_urls=["https://cdn.example.com/cover.jpg"],
     )
     submit_property(prop=prop, host=partner)
     moderate_property(prop=prop, actor=partner.user, action="APPROVE", reason="Looks good")
@@ -338,10 +339,20 @@ def test_partner_property_media_management(stay_env, client):
 
     force_role_client(client, stay_env["partner"].user, Role.PARTNER)
 
-    # Add photo
+    # Add photo — only a photo this partner uploaded may be attached.
+    StayPhotoUpload.objects.create(
+        partner=stay_env["partner"],
+        stored_file="stay-ads/test/balcony.jpg",
+        original_name="balcony.jpg",
+        content_type="image/jpeg",
+        size_bytes=1024,
+    )
     add_resp = client.post(
         f"/api/v1/partner/stays/properties/{prop.id}/media",
-        data={"url": "https://example.com/photo1.jpg", "caption": "Balcony view"},
+        data={
+            "url": "https://cdn.example.com/media/stay-ads/test/balcony.jpg",
+            "caption": "Balcony view",
+        },
         content_type="application/json",
     )
     assert add_resp.status_code == status.HTTP_201_CREATED

@@ -2,7 +2,7 @@ import { request, type Schemas } from "@vsolve/api-client";
 
 import { getApiClient } from "@/lib/api/browser";
 
-export type StayProperty = Schemas["Property"];
+export type StayProperty = Schemas["PartnerProperty"];
 export type StayEnquiry = Schemas["StayEnquiry"];
 export type PartnerCapability = Schemas["PartnerCapability"];
 export type StayUnit = Schemas["Unit"];
@@ -240,6 +240,25 @@ export async function partnerStayReservationAction(
     }),
   );
   return data as StayReservation;
+}
+
+/** Where a property stands, in the words a host reads. */
+export function stayListingStatus(property: Pick<StayProperty, "moderation_status">): {
+  label: string;
+  tone: "neutral" | "success" | "warning" | "danger";
+} {
+  switch (property.moderation_status) {
+    case "APPROVED":
+      return { label: "Live", tone: "success" };
+    case "PENDING":
+      return { label: "Under quick review", tone: "warning" };
+    case "REJECTED":
+      return { label: "Changes needed", tone: "danger" };
+    case "REMOVED":
+      return { label: "Removed by VSolve", tone: "danger" };
+    default:
+      return { label: "Draft", tone: "neutral" };
+  }
 }
 
 export function stayVariantChoices(

@@ -130,6 +130,8 @@ class StayEnquiry(models.Model):
 class StayModerationEvent(models.Model):
     class Action(models.TextChoices):
         SUBMITTED = "SUBMITTED", "Submitted"
+        #: Went live on publish without review (enquiry mode, or a trusted paid-stays host).
+        PUBLISHED = "PUBLISHED", "Published"
         APPROVED = "APPROVED", "Approved"
         REJECTED = "REJECTED", "Rejected"
         REMOVED = "REMOVED", "Removed"

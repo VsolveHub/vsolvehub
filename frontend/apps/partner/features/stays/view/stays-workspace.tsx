@@ -24,6 +24,7 @@ import {
   fetchPartnerStayProperties,
   fetchStayTaxonomy,
   listPartnerStayUnits,
+  stayListingStatus,
   stayVariantChoices,
   submitPartnerStayProperty,
   updatePartnerStayProperty,
@@ -962,8 +963,11 @@ export function PartnerStaysWorkspace() {
                                 caption: item.caption || property.title,
                               }))}
                             overlay={
-                              <Badge className="absolute right-2 top-2 z-10">
-                                {property.public_state}
+                              <Badge
+                                tone={stayListingStatus(property).tone}
+                                className="absolute right-2 top-2 z-10"
+                              >
+                                {stayListingStatus(property).label}
                               </Badge>
                             }
                           />
@@ -990,6 +994,20 @@ export function PartnerStaysWorkspace() {
                                 ? ` · ${units.length - activeUnits.length} inactive`
                                 : ""}
                             </p>
+                            {property.moderation_status === "PENDING" ? (
+                              <p className="text-xs text-text-secondary">
+                                Guests pay upfront for this property, so our team checks your first
+                                paid-booking listing once. After that, your listings go live
+                                straight away.
+                              </p>
+                            ) : null}
+                            {(property.moderation_status === "REJECTED" ||
+                              property.moderation_status === "REMOVED") &&
+                            property.moderation_reason ? (
+                              <p className="text-sm text-danger-text">
+                                {property.moderation_reason}
+                              </p>
+                            ) : null}
                           </div>
 
                           <form
@@ -1075,12 +1093,12 @@ export function PartnerStaysWorkspace() {
                                   submit.mutate(property.id);
                                 }}
                               >
-                                Submit for review
+                                {submit.isPending ? "Publishing…" : "Publish"}
                               </Button>
                             ) : property.moderation_status === "DRAFT" ||
                               property.moderation_status === "REJECTED" ? (
                               <p className="text-xs text-text-secondary self-center">
-                                Add at least one room before submitting.
+                                Add at least one room before publishing.
                               </p>
                             ) : null}
                           </div>

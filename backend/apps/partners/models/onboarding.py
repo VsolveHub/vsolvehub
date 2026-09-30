@@ -73,6 +73,10 @@ class PartnerProfile(models.Model):
     #: Free-text default pickup / business address for rental autofill and similar forms.
     #: Stays still keep a per-property ``location_text``; this is the partner-level default.
     default_location_text = models.CharField(max_length=240, blank=True, default="")
+    #: When Operations approved this host's first paid-booking (RESERVATION-mode) stay property.
+    #: Set once a paid property passes review; later paid properties then publish without review.
+    #: Cleared when Operations removes any of the host's properties, so trust must be re-earned.
+    paid_stays_trusted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

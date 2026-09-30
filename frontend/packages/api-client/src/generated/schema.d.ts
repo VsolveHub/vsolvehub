@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.66.0)
- * Checksum: 7a790bce188e3c7d
+ * Checksum: caa0f8cdfbeab53c
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -11569,6 +11569,34 @@ export interface components {
             readonly member_since: string;
             readonly has_payout_account: boolean;
             readonly default_location_text: string;
+        };
+        /** @description The host's own view: adds the Operations note, which guests never see. */
+        PartnerProperty: {
+            /** Format: uuid */
+            readonly id: string;
+            title: string;
+            description?: string;
+            location_text?: string;
+            moderation_status?: components["schemas"]["ModerationStatusEnum"];
+            readonly public_state: string;
+            readonly host_name: string;
+            /** Format: uuid */
+            variant: string;
+            structured_fields?: unknown;
+            cancellation_policy_text?: string;
+            house_rules?: string;
+            min_stay_nights?: number;
+            /** Format: date */
+            available_from?: string | null;
+            /** Format: date */
+            available_until?: string | null;
+            readonly media: components["schemas"]["PropertyMedia"][];
+            readonly reviews: components["schemas"]["StayReview"][];
+            readonly units: components["schemas"]["Unit"][];
+            readonly booking_mode: string;
+            /** Format: date-time */
+            readonly created_at: string;
+            moderation_reason?: string;
         };
         PartnerRateItem: {
             /** Format: uuid */
@@ -29193,7 +29221,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Property"][];
+                    "application/json": components["schemas"]["PartnerProperty"][];
                 };
             };
         };
@@ -29218,7 +29246,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Property"];
+                    "application/json": components["schemas"]["PartnerProperty"];
                 };
             };
         };
@@ -29245,7 +29273,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Property"];
+                    "application/json": components["schemas"]["PartnerProperty"];
                 };
             };
         };
@@ -29267,7 +29295,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Property"];
+                    "application/json": components["schemas"]["PartnerProperty"];
                 };
             };
         };

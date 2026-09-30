@@ -111,7 +111,7 @@ class PropertySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Property
-        fields = (
+        fields: tuple[str, ...] = (
             "id",
             "title",
             "description",
@@ -135,6 +135,13 @@ class PropertySerializer(serializers.ModelSerializer):
 
     def get_booking_mode(self, obj: Property) -> str:
         return _extract_booking_mode(obj)
+
+
+class PartnerPropertySerializer(PropertySerializer):
+    """The host's own view: adds the Operations note, which guests never see."""
+
+    class Meta(PropertySerializer.Meta):
+        fields = (*PropertySerializer.Meta.fields, "moderation_reason")
 
 
 class StayPhotoUploadSerializer(serializers.Serializer):
