@@ -19,6 +19,14 @@ def stay_ad_upload_to(instance: models.Model, filename: str) -> str:
     return f"stay-ads/{partner_key}/{uuid.uuid4().hex}{ext}"
 
 
+def stay_review_upload_to(instance: models.Model, filename: str) -> str:
+    ext = Path(filename).suffix.lower()
+    if ext not in {".jpg", ".jpeg", ".png", ".webp"}:
+        ext = ".jpg"
+    customer_key = getattr(instance, "customer_id", None) or "anon"
+    return f"stay-reviews/{customer_key}/{uuid.uuid4().hex}{ext}"
+
+
 class Property(models.Model):
     class ModerationStatus(models.TextChoices):
         DRAFT = "DRAFT", "Draft"
@@ -221,6 +229,28 @@ class StayPhotoUpload(models.Model):
         related_name="stay_photo_uploads",
     )
     stored_file = models.FileField(upload_to=stay_ad_upload_to)
+    original_name = models.CharField(max_length=180)
+    content_type = models.CharField(max_length=80)
+    size_bytes = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return self.original_name
+
+
+class StayReviewPhoto(models.Model):
+    """A photo a guest uploaded for a review. Reviews may attach only their author's uploads."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    customer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="stay_review_photos",
+    )
+    stored_file = models.FileField(upload_to=stay_review_upload_to)
     original_name = models.CharField(max_length=180)
     content_type = models.CharField(max_length=80)
     size_bytes = models.PositiveIntegerField()

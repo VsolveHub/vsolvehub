@@ -29,6 +29,7 @@ from apps.stay.models import (
     StayPhotoUpload,
     StayReservation,
     StayReview,
+    StayReviewPhoto,
     Unit,
     UnitReservation,
 )
@@ -242,19 +243,41 @@ _STAY_PHOTO_TYPES = {
     "image/png": ".png",
     "image/webp": ".webp",
 }
-_STAY_PHOTO_MAX_BYTES = 8 * 1024 * 1024
+#: The most one photo may weigh, for property photos and review photos alike.
+STAY_PHOTO_MAX_BYTES = 10 * 1024 * 1024
+#: How many photos one review may attach.
+MAX_REVIEW_PHOTOS = 5
+_WEBP_TAG_END = 12
+
+
+def _looks_like_image(head: bytes) -> bool:
+    """The file's first bytes, not its claimed type: a renamed document is not a photo."""
+    return head.startswith((b"\xff\xd8\xff", b"\x89PNG\r\n\x1a\n")) or (
+        head[:4] == b"RIFF" and head[8:_WEBP_TAG_END] == b"WEBP"
+    )
+
+
+def _check_stay_image(upload: Any) -> tuple[str, int]:
+    """Validate an uploaded photo; returns (content_type, size_bytes)."""
+    content_type = (getattr(upload, "content_type", "") or "").split(";")[0].strip().lower()
+    if content_type not in _STAY_PHOTO_TYPES:
+        raise StayStateError("Photo must be a JPEG, PNG, or WebP image.", code="photo_type")
+    size = int(getattr(upload, "size", 0) or 0)
+    if size <= 0:
+        raise StayStateError("Photo file is empty.", code="photo_empty")
+    if size > STAY_PHOTO_MAX_BYTES:
+        raise StayStateError("Each photo must be 10 MB or smaller.", code="photo_too_large")
+    upload.seek(0)
+    head = upload.read(_WEBP_TAG_END)
+    upload.seek(0)
+    if not _looks_like_image(head):
+        raise StayStateError("Photo must be a JPEG, PNG, or WebP image.", code="photo_type")
+    return content_type, size
 
 
 def store_stay_photo(*, partner: Any, upload: Any) -> StayPhotoUpload:
     _require_stay_capability(partner)
-    content_type = (getattr(upload, "content_type", "") or "").split(";")[0].strip().lower()
-    if content_type not in _STAY_PHOTO_TYPES:
-        raise StayStateError("Photo must be a JPEG, PNG, or WebP image.")
-    size = int(getattr(upload, "size", 0) or 0)
-    if size <= 0:
-        raise StayStateError("Photo file is empty.")
-    if size > _STAY_PHOTO_MAX_BYTES:
-        raise StayStateError("Photo must be 8 MB or smaller.")
+    content_type, size = _check_stay_image(upload)
     return StayPhotoUpload.objects.create(
         partner=partner,
         stored_file=upload,
@@ -264,12 +287,36 @@ def store_stay_photo(*, partner: Any, upload: Any) -> StayPhotoUpload:
     )
 
 
-def partner_owns_stay_photo(*, partner: Any, url: str) -> bool:
+def store_stay_review_photo(*, customer: Any, upload: Any) -> StayReviewPhoto:
+    content_type, size = _check_stay_image(upload)
+    return StayReviewPhoto.objects.create(
+        customer=customer,
+        stored_file=upload,
+        original_name=str(getattr(upload, "name", "photo"))[:180],
+        content_type=content_type,
+        size_bytes=size,
+    )
+
+
+def _stored_name_from_url(url: str, folder: str) -> str | None:
     path = urlparse(url).path
     media_prefix = settings.MEDIA_URL.rstrip("/") + "/"
-    if not path.startswith(media_prefix + "stay-ads/"):
+    if not path.startswith(media_prefix + folder):
+        return None
+    return path[len(media_prefix) :]
+
+
+def customer_owns_review_photo(*, customer: Any, url: str) -> bool:
+    stored_name = _stored_name_from_url(url, "stay-reviews/")
+    if stored_name is None:
         return False
-    stored_name = path[len(media_prefix) :] if path.startswith(media_prefix) else path.lstrip("/")
+    return StayReviewPhoto.objects.filter(customer=customer, stored_file=stored_name).exists()
+
+
+def partner_owns_stay_photo(*, partner: Any, url: str) -> bool:
+    stored_name = _stored_name_from_url(url, "stay-ads/")
+    if stored_name is None:
+        return False
     return StayPhotoUpload.objects.filter(partner=partner, stored_file=stored_name).exists()
 
 
@@ -286,6 +333,106 @@ ROOM_DESCRIBED_KEYS = ("occupancy", "sharing", "room_type")
 #: - ``PRIVATE``: one booking takes the whole room, so the host says how many guests it fits.
 #:   "Sharing" means nothing here and is kept at 1.
 #: - ``MIXED``: a type not listed below; the host fills both numbers.
+#: Facilities any host can tick, whatever the stay type, stored as true/false in
+#: ``Property.structured_fields`` under these keys. A category that already asks one of them
+#: (a PG's "Food" question, a hotel's "Breakfast") keeps its own question for it.
+STAY_AMENITIES: tuple[tuple[str, str], ...] = (
+    ("wifi", "WiFi"),
+    ("power_backup", "Power backup"),
+    ("cctv", "CCTV / security"),
+    ("housekeeping", "Housekeeping"),
+    ("laundry", "Laundry"),
+    ("hot_water", "Hot water"),
+    ("parking", "Parking"),
+    ("lift", "Lift"),
+    ("food", "Meals included"),
+    ("breakfast", "Breakfast included"),
+)
+_AMENITY_KEYS = frozenset(key for key, _label in STAY_AMENITIES)
+#: What guests see for each category question, as "For: Ladies" or "Furnishing: Semi furnished".
+_HIGHLIGHT_LABELS = {
+    "furnishing": "Furnishing",
+    "tier": "Tier",
+    "gender": "For",
+    "occupant": "Suited to",
+    "hostel_type": "Hostel type",
+    "layout": "Layout",
+    "property_type": "Property type",
+    "duration": "Duration",
+    "stay_type": "Stay type",
+    "capacity": "Capacity",
+    "listing_type": "Listing type",
+    "star_rating": "Star rating",
+}
+
+
+def _is_yes(value: Any) -> bool:
+    """An answer that means "has it": true, or the yes choice ("AC", "Food included")."""
+    return value is True or value in _AC_YES or value in _FOOD_YES
+
+
+def amenity_options(property_schema: dict[str, Any]) -> list[dict[str, str]]:
+    """The amenity checkboxes for a stay type: the platform list minus what the category asks."""
+    asked = property_schema.get("properties") or {}
+    return [{"key": key, "label": label} for key, label in STAY_AMENITIES if key not in asked]
+
+
+def _validate_amenity_answers(fields: dict[str, Any], property_schema: dict[str, Any]) -> None:
+    asked = property_schema.get("properties") or {}
+    for key in _AMENITY_KEYS:
+        if key in fields and key not in asked and not isinstance(fields[key], bool):
+            raise StayStateError(f"Amenity '{key}' must be true or false.", code="amenity_invalid")
+
+
+def property_amenities(prop: Property) -> list[dict[str, str]]:
+    """What a guest sees under "Amenities": only what the host actually said yes to."""
+    fields = prop.structured_fields if isinstance(prop.structured_fields, dict) else {}
+    rooms = [unit for unit in prop.units.all() if unit.is_active]
+    shown: list[dict[str, str]] = []
+    room_has_ac = any(
+        isinstance(unit.attributes, dict) and unit.attributes.get("ac") in _AC_YES for unit in rooms
+    )
+    if room_has_ac or fields.get("ac") in _AC_YES:
+        shown.append({"key": "ac", "label": "AC rooms"})
+    shown.extend(
+        {"key": key, "label": label} for key, label in STAY_AMENITIES if _is_yes(fields.get(key))
+    )
+    return shown
+
+
+def property_highlights(prop: Property, property_schema: dict[str, Any]) -> list[dict[str, str]]:
+    """The host's answers to the category questions, in the category's order, for guests."""
+    fields = prop.structured_fields if isinstance(prop.structured_fields, dict) else {}
+    asked = property_schema.get("properties") or {}
+    rows: list[dict[str, str]] = []
+    for key in asked:
+        value = fields.get(key)
+        if key in _AMENITY_KEYS or isinstance(value, bool) or value in (None, ""):
+            continue
+        label = _HIGHLIGHT_LABELS.get(key) or key.replace("_", " ").capitalize()
+        rows.append({"label": label, "value": str(value)})
+    return rows
+
+
+def customer_can_review(*, customer: Any, prop: Property) -> bool:
+    """A signed-in guest with a confirmed stay here who has not reviewed it yet."""
+    if customer is None or not getattr(customer, "is_authenticated", False):
+        return False
+    if StayReview.objects.filter(customer=customer, property=prop).exists():
+        return False
+    confirmed_enquiry = StayEnquiry.objects.filter(
+        customer=customer, property=prop, status=StayEnquiry.Status.CONFIRMED
+    ).exists()
+    return (
+        confirmed_enquiry
+        or StayReservation.objects.filter(
+            customer=customer,
+            property=prop,
+            status__in=[StayReservation.Status.CHECKED_OUT, StayReservation.Status.CONFIRMED],
+        ).exists()
+    )
+
+
 ROOM_STYLE_SHARED = "SHARED"
 ROOM_STYLE_PRIVATE = "PRIVATE"
 ROOM_STYLE_MIXED = "MIXED"
@@ -410,6 +557,7 @@ def get_stay_taxonomy() -> list[dict[str, Any]]:
                             "booking_mode": active_cfg.booking_mode,
                             "price_period": active_cfg.price_period,
                             "room_style": room_style_for_subcategory(sub.slug),
+                            "amenity_options": amenity_options(property_schema),
                         }
                     )
             if svc_data["variants"]:
@@ -465,6 +613,7 @@ def create_property(
     fields = structured_fields or {}
     property_schema, _room_schema, _names = split_stay_schema(config.property_schema)
     _validate_against(property_schema, fields, label="structured fields")
+    _validate_amenity_answers(fields, property_schema)
     prop = Property.objects.create(
         host=host,
         variant_id=_as_uuid(variant_id),
@@ -668,6 +817,7 @@ def update_property_ad(
     if structured_fields is not None:
         property_schema, _room_schema, _names = split_stay_schema(config.property_schema)
         _validate_against(property_schema, structured_fields, label="structured fields")
+        _validate_amenity_answers(structured_fields, property_schema)
         prop.structured_fields = structured_fields
         updates.append("structured_fields")
     if cancellation_policy_text is not None:
@@ -919,6 +1069,20 @@ def _notify_enquiry(
         logger.exception("Failed to dispatch stay enquiry notification %s", template_code)
 
 
+def _checked_review_photos(*, customer: Any, image_urls: list[str] | None) -> list[str]:
+    photos = list(image_urls or [])
+    if len(photos) > MAX_REVIEW_PHOTOS:
+        raise StayStateError(
+            f"A review can have up to {MAX_REVIEW_PHOTOS} photos.", code="too_many_review_photos"
+        )
+    # Only photos this guest uploaded here: no outside links, no one else's pictures.
+    if any(not customer_owns_review_photo(customer=customer, url=url) for url in photos):
+        raise StayStateError(
+            "Upload review photos from the review form.", code="review_photo_not_uploaded"
+        )
+    return photos
+
+
 @transaction.atomic
 def create_stay_review(
     *,
@@ -932,6 +1096,7 @@ def create_stay_review(
 ) -> Any:
     if rating < 1 or rating > _MAX_STAY_REVIEW_RATING:
         raise StayStateError("Rating must be between 1 and 5.")
+    photos = _checked_review_photos(customer=customer, image_urls=image_urls)
     prop = Property.objects.get(id=_as_uuid(property_id))
     enquiry = None
 
@@ -992,7 +1157,7 @@ def create_stay_review(
         rating=rating,
         body=body,
         comment=body,
-        image_urls=list(image_urls or []),
+        image_urls=photos,
     )
 
 

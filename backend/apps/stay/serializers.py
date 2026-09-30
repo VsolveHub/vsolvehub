@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.catalog.models import A9VariantConfiguration
@@ -79,6 +80,23 @@ def _extract_price_period(obj: Property) -> str:
     return str(config.price_period)
 
 
+class StayAmenitySerializer(serializers.Serializer[dict[str, object]]):
+    #: Stable key ("wifi", "ac") the app maps to an icon; ``label`` is what guests read.
+    key = serializers.CharField()
+    label = serializers.CharField()  # type: ignore[assignment]
+
+
+class StayHighlightSerializer(serializers.Serializer[dict[str, object]]):
+    label = serializers.CharField()  # type: ignore[assignment]
+    value = serializers.CharField()
+
+
+def _extract_amenities(obj: Property) -> list[dict[str, str]]:
+    from apps.stay.services import property_amenities  # noqa: PLC0415
+
+    return property_amenities(obj)
+
+
 def _extract_room_style(obj: Property) -> str:
     """``SHARED`` (beds), ``PRIVATE`` (whole room) or ``MIXED`` — see ``ROOM_STYLE_*``."""
     from apps.stay.services import room_style_for_property  # noqa: PLC0415
@@ -94,6 +112,7 @@ class PropertySummarySerializer(serializers.ModelSerializer):
     booking_mode = serializers.SerializerMethodField()
     price_period = serializers.SerializerMethodField()
     room_style = serializers.SerializerMethodField()
+    amenities = serializers.SerializerMethodField()
     review_count = serializers.SerializerMethodField()
     average_rating = serializers.SerializerMethodField()
 
@@ -115,6 +134,7 @@ class PropertySummarySerializer(serializers.ModelSerializer):
             "booking_mode",
             "price_period",
             "room_style",
+            "amenities",
             "review_count",
             "average_rating",
             "created_at",
@@ -128,6 +148,10 @@ class PropertySummarySerializer(serializers.ModelSerializer):
 
     def get_room_style(self, obj: Property) -> str:
         return _extract_room_style(obj)
+
+    @extend_schema_field(StayAmenitySerializer(many=True))
+    def get_amenities(self, obj: Property) -> list[dict[str, str]]:
+        return _extract_amenities(obj)
 
     def get_review_count(self, obj: Property) -> int:
         reviews = getattr(obj, "_prefetched_objects_cache", {}).get("reviews")
@@ -152,6 +176,10 @@ class PropertySerializer(serializers.ModelSerializer):
     booking_mode = serializers.SerializerMethodField()
     price_period = serializers.SerializerMethodField()
     room_style = serializers.SerializerMethodField()
+    amenities = serializers.SerializerMethodField()
+    highlights = serializers.SerializerMethodField()
+    #: True only for the signed-in guest with a confirmed stay here and no review yet.
+    can_review = serializers.SerializerMethodField()
 
     class Meta:
         model = Property
@@ -174,6 +202,9 @@ class PropertySerializer(serializers.ModelSerializer):
             "booking_mode",
             "price_period",
             "room_style",
+            "amenities",
+            "highlights",
+            "can_review",
             "created_at",
         )
 
@@ -186,6 +217,26 @@ class PropertySerializer(serializers.ModelSerializer):
     def get_room_style(self, obj: Property) -> str:
         return _extract_room_style(obj)
 
+    @extend_schema_field(StayAmenitySerializer(many=True))
+    def get_amenities(self, obj: Property) -> list[dict[str, str]]:
+        return _extract_amenities(obj)
+
+    @extend_schema_field(StayHighlightSerializer(many=True))
+    def get_highlights(self, obj: Property) -> list[dict[str, str]]:
+        from apps.stay.services import property_highlights, split_stay_schema  # noqa: PLC0415
+
+        config = _active_config(obj)
+        property_schema, _room_schema, _names = split_stay_schema(
+            config.property_schema if config else None
+        )
+        return property_highlights(obj, property_schema)
+
+    def get_can_review(self, obj: Property) -> bool:
+        from apps.stay.services import customer_can_review  # noqa: PLC0415
+
+        request = self.context.get("request")
+        return customer_can_review(customer=getattr(request, "user", None), prop=obj)
+
 
 class PartnerPropertySerializer(PropertySerializer):
     """The host's own view: every room (inactive too), the Operations note and the listing switch.
@@ -197,6 +248,11 @@ class PartnerPropertySerializer(PropertySerializer):
 
     class Meta(PropertySerializer.Meta):
         fields = (*PropertySerializer.Meta.fields, "moderation_reason", "listing_status")
+
+
+class StayReviewPhotoUploadSerializer(serializers.Serializer[dict[str, object]]):
+    upload_id = serializers.UUIDField()
+    url = serializers.URLField()
 
 
 class StayPhotoUploadSerializer(serializers.Serializer):
@@ -221,6 +277,8 @@ class StayTaxonomyVariantSerializer(serializers.Serializer):
     #: ``SHARED`` (host gives people sharing each room), ``PRIVATE`` (host gives guests per
     #: room) or ``MIXED`` (host gives both).
     room_style = serializers.CharField()
+    #: Amenity checkboxes for this type: the platform list minus what the category already asks.
+    amenity_options = StayAmenitySerializer(many=True)
 
 
 class StayTaxonomyServiceSerializer(serializers.Serializer):
@@ -430,7 +488,10 @@ class CreateStayReviewSerializer(serializers.Serializer):
     body = serializers.CharField(max_length=2000, required=False, allow_blank=True)
     enquiry_id = serializers.UUIDField(required=False, allow_null=True)
     reservation_id = serializers.UUIDField(required=False, allow_null=True)
-    image_urls = serializers.ListField(child=serializers.URLField(), required=False, default=list)
+    #: Links returned by ``POST /stays/reviews/photos`` for this guest; at most 5.
+    image_urls = serializers.ListField(
+        child=serializers.URLField(), required=False, default=list, max_length=5
+    )
 
 
 class AddPropertyMediaSerializer(serializers.Serializer):

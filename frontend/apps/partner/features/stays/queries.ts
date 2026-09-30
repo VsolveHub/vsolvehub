@@ -23,6 +23,8 @@ export type StayTaxonomyVariant = {
   booking_mode: string;
   /** "NIGHT" or "MONTH": what room rates for this type are quoted per. */
   price_period: string;
+  /** Amenity checkboxes for this type; the category's own questions are left out. */
+  amenity_options?: { key: string; label: string }[];
 };
 
 /** One choice per property type: the taxonomy flattened, since each type has one variant. */

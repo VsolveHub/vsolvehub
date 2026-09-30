@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Building, Coffee, MapPin, ShieldCheck, Users, Wind, Wifi } from "lucide-react";
-import { Badge, Button } from "@vsolve/ui";
+import { ArrowRight, MapPin, ShieldCheck, Users } from "lucide-react";
+import { Button } from "@vsolve/ui";
 
 import { SaveHeart, useSavedItems } from "@/features/part-a";
 
@@ -10,11 +10,11 @@ import {
   formatPaise,
   pricePeriodOf,
   roomOccupancyLabel,
-  stayFields,
   stayLengthLabel,
   type StayProperty,
   type StayPropertySummary,
 } from "../model";
+import { amenityIcon } from "./amenity-icon";
 
 interface StayCardProps {
   property: StayProperty | StayPropertySummary;
@@ -29,10 +29,8 @@ export function StayCard({ property }: StayCardProps) {
 
   const primaryUnit = property.units[0];
   const occupancy = primaryUnit ? roomOccupancyLabel(primaryUnit, property.room_style) : null;
-  const fields = stayFields(property.structured_fields);
-  const isAc = Boolean(fields.ac);
-  const hasFood = Boolean(fields.food);
-  const hasWifi = Boolean(fields.wifi);
+  // Only what the host said yes to, labelled by the server; the card has room for three.
+  const amenities = (property.amenities ?? []).slice(0, 3);
   const hero =
     Array.isArray((property as { media?: { url?: string }[] }).media) &&
     (property as { media: { url?: string }[] }).media[0]?.url
@@ -64,20 +62,16 @@ export function StayCard({ property }: StayCardProps) {
         </div>
         {/* Top Badges */}
         <div className="flex items-center justify-between gap-2">
-          <Badge tone="brand" className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider">
-            <Building className="size-3" />
-            Verified Stay
-          </Badge>
+          <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700">
+            <ShieldCheck className="size-3.5 text-emerald-600" />
+            Verified host
+          </span>
           <div className="flex items-center gap-2">
             {averageRating ? (
               <span className="inline-flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-xs font-bold text-amber-700 border border-amber-200">
                 ★ {averageRating} {reviewCount ? `(${reviewCount})` : ""}
               </span>
             ) : null}
-            <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700">
-              <ShieldCheck className="size-3.5 text-emerald-600" />
-              Verified Host
-            </span>
           </div>
         </div>
 
@@ -115,26 +109,18 @@ export function StayCard({ property }: StayCardProps) {
             </span>
           ) : null}
 
-          {isAc && (
-            <span className="inline-flex items-center gap-1 rounded-md bg-surface-sunken px-2.5 py-1 text-[11px] font-semibold text-text-secondary border border-line/60">
-              <Wind className="size-3" />
-              AC Room
-            </span>
-          )}
-
-          {hasFood && (
-            <span className="inline-flex items-center gap-1 rounded-md bg-surface-sunken px-2.5 py-1 text-[11px] font-semibold text-text-secondary border border-line/60">
-              <Coffee className="size-3" />
-              Meals Included
-            </span>
-          )}
-
-          {hasWifi && (
-            <span className="inline-flex items-center gap-1 rounded-md bg-surface-sunken px-2.5 py-1 text-[11px] font-semibold text-text-secondary border border-line/60">
-              <Wifi className="size-3" />
-              WiFi
-            </span>
-          )}
+          {amenities.map((amenity) => {
+            const Icon = amenityIcon(amenity.key);
+            return (
+              <span
+                key={amenity.key}
+                className="inline-flex items-center gap-1 rounded-md bg-surface-sunken px-2.5 py-1 text-[11px] font-semibold text-text-secondary border border-line/60"
+              >
+                <Icon className="size-3" aria-hidden />
+                {amenity.label}
+              </span>
+            );
+          })}
         </div>
       </div>
 

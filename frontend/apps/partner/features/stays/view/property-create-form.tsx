@@ -13,8 +13,9 @@ import {
   type StayPropertyType,
 } from "@/features/stays/queries";
 
+import { AmenityChecklist } from "./amenity-checklist";
 import { SchemaQuestions } from "./schema-questions";
-import { collectSchemaAnswers } from "./stay-form-helpers";
+import { collectSchemaAnswers, splitBySize } from "./stay-form-helpers";
 
 const MAX_PHOTOS = 8;
 
@@ -52,6 +53,7 @@ export function PropertyCreateForm({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [variantId, setVariantId] = useState("");
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [amenities, setAmenities] = useState<Record<string, boolean>>({});
   const [title, setTitle] = useState("");
   const [location, setLocation] = useState(defaultLocation);
   const [description, setDescription] = useState("");
@@ -93,14 +95,19 @@ export function PropertyCreateForm({
       setError(`You can add up to ${MAX_PHOTOS} photos.`);
       return;
     }
-    const chosen = Array.from(fileList).slice(0, remaining);
+    const { ok, tooLarge } = splitBySize(Array.from(fileList));
+    const chosen = ok.slice(0, remaining);
+    if (chosen.length === 0) {
+      setError(tooLarge);
+      return;
+    }
     const drafts: PhotoDraft[] = chosen.map((file) => ({
       localId: newLocalId(),
       previewUrl: URL.createObjectURL(file),
       uploading: true,
     }));
     setPhotos((current) => [...current, ...drafts]);
-    setError(null);
+    setError(tooLarge);
     await Promise.all(
       drafts.map(async (draft, index) => {
         const file = chosen[index];
@@ -146,7 +153,7 @@ export function PropertyCreateForm({
       title: title.trim(),
       description: description.trim(),
       location_text: location.trim(),
-      structured_fields: collected.values,
+      structured_fields: { ...collected.values, ...amenities },
       image_urls: urls,
     });
   }
@@ -170,6 +177,7 @@ export function PropertyCreateForm({
             onChange={(e) => {
               setVariantId(e.target.value);
               setAnswers({});
+              setAmenities({});
             }}
           >
             <option value="">Select</option>
@@ -187,6 +195,15 @@ export function PropertyCreateForm({
             schema={selected.variant.property_schema}
             answers={answers}
             onChange={setAnswers}
+          />
+        ) : null}
+
+        {selected ? (
+          <AmenityChecklist
+            idPrefix="stay-amenity"
+            options={selected.variant.amenity_options}
+            value={amenities}
+            onChange={setAmenities}
           />
         ) : null}
 
@@ -213,7 +230,7 @@ export function PropertyCreateForm({
         <Field
           label="Photos"
           required
-          description={`The first photo is the cover. JPEG, PNG or WebP, up to ${MAX_PHOTOS}.`}
+          description={`The first photo is the cover. Up to ${MAX_PHOTOS} photos: JPEG, PNG or WebP, up to 10 MB each.`}
         >
           <input
             ref={fileInputRef}

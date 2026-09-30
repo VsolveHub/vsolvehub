@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { roomOccupancyLabel } from "./model";
+import { reviewPhotoUrls, roomOccupancyLabel } from "./model";
 
 describe("roomOccupancyLabel", () => {
   it("describes a hotel room by the guests it fits, never as shared", () => {
@@ -23,5 +23,12 @@ describe("roomOccupancyLabel", () => {
   it("falls back to the sharing count for an unclassified stay type", () => {
     expect(roomOccupancyLabel({ sharing_count: 3, max_guests: 3 }, "MIXED")).toBe("3 sharing");
     expect(roomOccupancyLabel({}, undefined)).toBe("Private room");
+  });
+});
+
+describe("reviewPhotoUrls", () => {
+  it("keeps only text links", () => {
+    expect(reviewPhotoUrls(["https://a/1.jpg", 3, null])).toEqual(["https://a/1.jpg"]);
+    expect(reviewPhotoUrls({})).toEqual([]);
   });
 });

@@ -35,6 +35,7 @@ from apps.stay.serializers import (
     StayQuoteRequestSerializer,
     StayQuoteResponseSerializer,
     StayReservationSerializer,
+    StayReviewPhotoUploadSerializer,
     StayReviewSerializer,
     StayTaxonomySubcategorySerializer,
     UpdatePropertySerializer,
@@ -66,6 +67,7 @@ from apps.stay.services import (
     respond_enquiry,
     set_property_listing,
     store_stay_photo,
+    store_stay_review_photo,
     submit_property,
     update_property_ad,
     update_unit,
@@ -174,9 +176,9 @@ class StayDetailView(APIView):
     permission_classes = (permissions.AllowAny,)
 
     @extend_schema(responses=PropertySerializer)
-    def get(self, _request: Any, property_id: UUID) -> Response:
+    def get(self, request: Any, property_id: UUID) -> Response:
         prop = get_object_or_404(public_properties(), id=property_id)
-        return Response(PropertySerializer(prop).data)
+        return Response(PropertySerializer(prop, context={"request": request}).data)
 
 
 class StayEnquireView(APIView):
@@ -628,6 +630,30 @@ class StayReviewCreateView(APIView):
         ) as exc:
             return _error(exc)
         return Response(StayReviewSerializer(review).data, status=status.HTTP_201_CREATED)
+
+
+class StayReviewPhotoUploadView(APIView):
+    """A guest uploads one photo for a review (JPEG, PNG or WebP, up to 10 MB)."""
+
+    permission_classes = (permissions.IsAuthenticated,)
+    parser_classes = (MultiPartParser, FormParser)
+
+    @extend_schema(
+        request={"multipart/form-data": {"type": "object"}},
+        responses={201: StayReviewPhotoUploadSerializer},
+    )
+    def post(self, request: Any) -> Response:
+        upload = request.FILES.get("file")
+        if upload is None:
+            return Response({"detail": "Attach a photo file."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            row = store_stay_review_photo(customer=request.user, upload=upload)
+        except StayStateError as exc:
+            return _error(exc)
+        return Response(
+            {"upload_id": str(row.id), "url": request.build_absolute_uri(row.stored_file.url)},
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class PartnerPropertyMediaCreateView(APIView):

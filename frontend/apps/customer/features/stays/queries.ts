@@ -132,6 +132,7 @@ export function submitStayReview(payload: {
   comment?: string;
   enquiry_id?: string | null;
   reservation_id?: string | null;
+  image_urls?: string[];
 }) {
   return request(() =>
     getApiClient().POST("/api/v1/stays/reviews", {
@@ -142,8 +143,26 @@ export function submitStayReview(payload: {
         body: payload.comment ?? "",
         enquiry_id: payload.enquiry_id ?? undefined,
         reservation_id: payload.reservation_id ?? undefined,
+        image_urls: payload.image_urls ?? [],
       },
     }),
   );
 }
 
+
+/** Uploads one review photo (JPEG, PNG or WebP, up to 10 MB); returns its link for the review. */
+export async function uploadStayReviewPhoto(file: File): Promise<{ upload_id: string; url: string }> {
+  const data = await request(() =>
+    getApiClient().POST("/api/v1/stays/reviews/photos", {
+      body: { file },
+      bodySerializer(body) {
+        const form = new FormData();
+        const blob =
+          body && typeof body === "object" && "file" in body ? (body as { file?: Blob }).file : undefined;
+        if (blob) form.append("file", blob, file.name);
+        return form;
+      },
+    }),
+  );
+  return data as { upload_id: string; url: string };
+}

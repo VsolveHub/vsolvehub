@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.66.0)
- * Checksum: 4ae1024e109f8389
+ * Checksum: 1b8b6b098bca7c07
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -7201,6 +7201,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/stays/reviews/photos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description A guest uploads one photo for a review (JPEG, PNG or WebP, up to 10 MB). */
+        post: operations["stays_reviews_photos_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/stays/taxonomy": {
         parameters: {
             query?: never;
@@ -11605,6 +11622,9 @@ export interface components {
             readonly booking_mode: string;
             readonly price_period: string;
             readonly room_style: string;
+            readonly amenities: components["schemas"]["StayAmenity"][];
+            readonly highlights: components["schemas"]["StayHighlight"][];
+            readonly can_review: boolean;
             /** Format: date-time */
             readonly created_at: string;
             moderation_reason?: string;
@@ -12553,6 +12573,9 @@ export interface components {
             readonly booking_mode: string;
             readonly price_period: string;
             readonly room_style: string;
+            readonly amenities: components["schemas"]["StayAmenity"][];
+            readonly highlights: components["schemas"]["StayHighlight"][];
+            readonly can_review: boolean;
             /** Format: date-time */
             readonly created_at: string;
         };
@@ -12584,6 +12607,7 @@ export interface components {
             readonly booking_mode: string;
             readonly price_period: string;
             readonly room_style: string;
+            readonly amenities: components["schemas"]["StayAmenity"][];
             readonly review_count: number;
             /** Format: double */
             readonly average_rating: number | null;
@@ -15011,6 +15035,10 @@ export interface components {
          * @enum {string}
          */
         StatusD1aEnum: "OPEN" | "RESOLVED";
+        StayAmenity: {
+            key: string;
+            label: string;
+        };
         StayEnquiry: {
             /** Format: uuid */
             readonly id: string;
@@ -15051,6 +15079,10 @@ export interface components {
          * @enum {string}
          */
         StayEnquiryStatusEnum: "SUBMITTED" | "RESPONDED" | "DECLINED" | "WITHDRAWN" | "EXPIRED" | "CONFIRMED" | "CANCELLED";
+        StayHighlight: {
+            label: string;
+            value: string;
+        };
         StayModerationRequest: {
             action: components["schemas"]["Action68eEnum"];
             reason: string;
@@ -15134,6 +15166,12 @@ export interface components {
             /** Format: date-time */
             readonly created_at: string;
         };
+        StayReviewPhotoUpload: {
+            /** Format: uuid */
+            upload_id: string;
+            /** Format: uri */
+            url: string;
+        };
         StayTaxonomyService: {
             /** Format: uuid */
             id: string;
@@ -15159,6 +15197,7 @@ export interface components {
             booking_mode: string;
             price_period: string;
             room_style: string;
+            amenity_options: components["schemas"]["StayAmenity"][];
         };
         StepUpSession: {
             /** Format: date-time */
@@ -32913,6 +32952,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StayReview"];
+                };
+            };
+        };
+    };
+    stays_reviews_photos_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": Record<string, unknown>;
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StayReviewPhotoUpload"];
                 };
             };
         };

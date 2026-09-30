@@ -6,12 +6,6 @@ export type StayUnit = Schemas["Unit"];
 export type StayEnquiry = Schemas["StayEnquiry"];
 export type StayQuote = Schemas["StayQuoteResponse"];
 
-export function stayFields(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
-
 export interface StayFilterParams {
   q?: string;
   location?: string;
@@ -24,6 +18,16 @@ export interface StayFilterParams {
   sort?: string;
   limit?: number;
   offset?: number;
+}
+
+/** The server refuses larger photos; checking first spares a slow upload that would fail. */
+export const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
+export const PHOTO_TOO_LARGE = "Each photo must be 10 MB or smaller.";
+export const MAX_REVIEW_PHOTOS = 5;
+
+/** A review's photo links, which the API types loosely (a JSON list). */
+export function reviewPhotoUrls(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((url): url is string => typeof url === "string") : [];
 }
 
 export function formatPaise(paise: number): string {

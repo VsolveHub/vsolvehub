@@ -18130,6 +18130,27 @@ paths:
               schema:
                 $ref: '#/components/schemas/StayReview'
           description: ''
+  /api/v1/stays/reviews/photos:
+    post:
+      operationId: stays_reviews_photos_create
+      description: A guest uploads one photo for a review (JPEG, PNG or WebP, up to
+        10 MB).
+      tags:
+      - stays
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StayReviewPhotoUpload'
+          description: ''
   /api/v1/stays/taxonomy:
     get:
       operationId: stays_taxonomy_list
@@ -21344,6 +21365,7 @@ components:
             type: string
             format: uri
             minLength: 1
+          maxItems: 5
       required:
       - property_id
       - rating
@@ -29060,6 +29082,19 @@ components:
         room_style:
           type: string
           readOnly: true
+        amenities:
+          type: array
+          items:
+            $ref: '#/components/schemas/StayAmenity'
+          readOnly: true
+        highlights:
+          type: array
+          items:
+            $ref: '#/components/schemas/StayHighlight'
+          readOnly: true
+        can_review:
+          type: boolean
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -29070,8 +29105,11 @@ components:
         listing_status:
           $ref: '#/components/schemas/ListingStatusEnum'
       required:
+      - amenities
       - booking_mode
+      - can_review
       - created_at
+      - highlights
       - host_name
       - id
       - media
@@ -31354,13 +31392,29 @@ components:
         room_style:
           type: string
           readOnly: true
+        amenities:
+          type: array
+          items:
+            $ref: '#/components/schemas/StayAmenity'
+          readOnly: true
+        highlights:
+          type: array
+          items:
+            $ref: '#/components/schemas/StayHighlight'
+          readOnly: true
+        can_review:
+          type: boolean
+          readOnly: true
         created_at:
           type: string
           format: date-time
           readOnly: true
       required:
+      - amenities
       - booking_mode
+      - can_review
       - created_at
+      - highlights
       - host_name
       - id
       - media
@@ -31447,6 +31501,11 @@ components:
         room_style:
           type: string
           readOnly: true
+        amenities:
+          type: array
+          items:
+            $ref: '#/components/schemas/StayAmenity'
+          readOnly: true
         review_count:
           type: integer
           readOnly: true
@@ -31460,6 +31519,7 @@ components:
           format: date-time
           readOnly: true
       required:
+      - amenities
       - average_rating
       - booking_mode
       - created_at
@@ -37423,6 +37483,16 @@ components:
       description: |-
         * `OPEN` - Open
         * `RESOLVED` - Resolved
+    StayAmenity:
+      type: object
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+      required:
+      - key
+      - label
     StayEnquiry:
       type: object
       properties:
@@ -37514,6 +37584,16 @@ components:
         * `EXPIRED` - Expired
         * `CONFIRMED` - Confirmed
         * `CANCELLED` - Cancelled
+    StayHighlight:
+      type: object
+      properties:
+        label:
+          type: string
+        value:
+          type: string
+      required:
+      - label
+      - value
     StayModerationRequest:
       type: object
       properties:
@@ -37707,6 +37787,18 @@ components:
       - customer_name
       - id
       - rating
+    StayReviewPhotoUpload:
+      type: object
+      properties:
+        upload_id:
+          type: string
+          format: uuid
+        url:
+          type: string
+          format: uri
+      required:
+      - upload_id
+      - url
     StayTaxonomyService:
       type: object
       properties:
@@ -37767,7 +37859,12 @@ components:
           type: string
         room_style:
           type: string
+        amenity_options:
+          type: array
+          items:
+            $ref: '#/components/schemas/StayAmenity'
       required:
+      - amenity_options
       - booking_mode
       - code
       - id

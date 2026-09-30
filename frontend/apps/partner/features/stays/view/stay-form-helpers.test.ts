@@ -6,7 +6,15 @@ import {
   type StayTaxonomySubcategory,
 } from "@/features/stays/queries";
 
-import { collectSchemaAnswers, rupeesToPaise, wholeNumber } from "./stay-form-helpers";
+import {
+  MAX_PHOTO_BYTES,
+  PHOTO_TOO_LARGE,
+  amenitiesFrom,
+  collectSchemaAnswers,
+  rupeesToPaise,
+  splitBySize,
+  wholeNumber,
+} from "./stay-form-helpers";
 
 function variant(id: string) {
   return {
@@ -101,5 +109,30 @@ describe("collectSchemaAnswers", () => {
     expect(collectSchemaAnswers(schema, { gender: "Ladies", wifi: "true" })).toEqual({
       values: { gender: "Ladies", wifi: true },
     });
+  });
+});
+
+describe("photo size limit", () => {
+  const photo = (size: number) => ({ size }) as File;
+
+  it("keeps photos up to 10 MB and says why the rest were skipped", () => {
+    const small = photo(MAX_PHOTO_BYTES);
+    const big = photo(MAX_PHOTO_BYTES + 1);
+    expect(splitBySize([small, big])).toEqual({ ok: [small], tooLarge: PHOTO_TOO_LARGE });
+    expect(splitBySize([small])).toEqual({ ok: [small], tooLarge: null });
+  });
+});
+
+describe("amenitiesFrom", () => {
+  it("reads only the offered amenities, and only a real true as ticked", () => {
+    const options = [
+      { key: "wifi", label: "WiFi" },
+      { key: "lift", label: "Lift" },
+    ];
+    expect(amenitiesFrom({ wifi: true, lift: "true", gender: "Ladies" }, options)).toEqual({
+      wifi: true,
+      lift: false,
+    });
+    expect(amenitiesFrom(null, undefined)).toEqual({});
   });
 });

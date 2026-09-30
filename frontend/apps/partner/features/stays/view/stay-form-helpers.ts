@@ -48,6 +48,27 @@ export function labelFor(key: string): string {
   return FIELD_LABELS[key] ?? key.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+/** The most one photo may weigh; the server refuses anything larger. */
+export const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
+export const PHOTO_TOO_LARGE = "Each photo must be 10 MB or smaller.";
+
+/** Splits chosen files into those small enough to upload and a message about the rest. */
+export function splitBySize(files: readonly File[]): { ok: File[]; tooLarge: string | null } {
+  const ok = files.filter((file) => file.size <= MAX_PHOTO_BYTES);
+  return { ok, tooLarge: ok.length < files.length ? PHOTO_TOO_LARGE : null };
+}
+
+export type AmenityOption = { key: string; label: string };
+
+/** The ticked amenities already saved on a property, from its answers. */
+export function amenitiesFrom(
+  fields: unknown,
+  options: readonly AmenityOption[] | undefined,
+): Record<string, boolean> {
+  const values = fields && typeof fields === "object" ? (fields as Record<string, unknown>) : {};
+  return Object.fromEntries((options ?? []).map(({ key }) => [key, values[key] === true]));
+}
+
 /** Rupees as typed ("₹1,250.50") to integer paise, or null when it is not a price. */
 export function rupeesToPaise(input: string): number | null {
   const trimmed = input.trim().replace(/,/g, "").replace(/^₹\s*/u, "");

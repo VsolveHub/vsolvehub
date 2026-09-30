@@ -21,8 +21,15 @@ import {
 
 import { PropertyPhotoCarousel } from "./property-photo-carousel";
 import { PropertyRooms } from "./property-rooms";
+import { AmenityChecklist } from "./amenity-checklist";
 import { SchemaQuestions } from "./schema-questions";
-import { answersFrom, collectSchemaAnswers, wholeNumber } from "./stay-form-helpers";
+import {
+  amenitiesFrom,
+  answersFrom,
+  collectSchemaAnswers,
+  splitBySize,
+  wholeNumber,
+} from "./stay-form-helpers";
 
 type Panel = "rooms" | "details" | "photos" | null;
 
@@ -33,9 +40,10 @@ type DetailsDraft = {
   houseRules: string;
   minStay: string;
   answers: Record<string, string>;
+  amenities: Record<string, boolean>;
 };
 
-function detailsFrom(property: StayProperty): DetailsDraft {
+function detailsFrom(property: StayProperty, variant: StayTaxonomyVariant | undefined): DetailsDraft {
   return {
     title: property.title,
     location: property.location_text ?? "",
@@ -43,6 +51,7 @@ function detailsFrom(property: StayProperty): DetailsDraft {
     houseRules: property.house_rules ?? "",
     minStay: String(property.min_stay_nights ?? 1),
     answers: answersFrom(property.structured_fields),
+    amenities: amenitiesFrom(property.structured_fields, variant?.amenity_options),
   };
 }
 
@@ -82,7 +91,7 @@ export function PropertyCard({
   const qc = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [panel, setPanel] = useState<Panel>(initialPanel);
-  const [details, setDetails] = useState<DetailsDraft>(() => detailsFrom(property));
+  const [details, setDetails] = useState<DetailsDraft>(() => detailsFrom(property, variant));
   const [detailsError, setDetailsError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
@@ -138,11 +147,13 @@ export function PropertyCard({
 
   async function addPhotos(files: FileList | null) {
     if (!files?.length) return;
+    const { ok, tooLarge } = splitBySize(Array.from(files));
+    setPhotoError(tooLarge);
+    if (ok.length === 0) return;
     setUploading(true);
-    setPhotoError(null);
     try {
       let order = media.length;
-      for (const file of Array.from(files)) {
+      for (const file of ok) {
         const uploaded = await uploadPartnerStayPhoto(file);
         await addPartnerStayPropertyMedia(property.id, { url: uploaded.url, display_order: order });
         order += 1;
@@ -171,12 +182,12 @@ export function PropertyCard({
       description: details.description.trim(),
       house_rules: details.houseRules.trim(),
       min_stay_nights: minStay,
-      structured_fields: collected.values,
+      structured_fields: { ...collected.values, ...details.amenities },
     });
   }
 
   function toggle(next: Exclude<Panel, null>) {
-    if (next === "details") setDetails(detailsFrom(property));
+    if (next === "details") setDetails(detailsFrom(property, variant));
     setPanel((current) => (current === next ? null : next));
   }
 
@@ -324,6 +335,12 @@ export function PropertyCard({
             answers={details.answers}
             onChange={(answers) => setDetails({ ...details, answers })}
           />
+          <AmenityChecklist
+            idPrefix={`amenity-${property.id}`}
+            options={variant?.amenity_options}
+            value={details.amenities}
+            onChange={(amenities) => setDetails({ ...details, amenities })}
+          />
           <Field label="Description" showOptional>
             <Textarea
               id={`description-${property.id}`}
@@ -410,6 +427,7 @@ export function PropertyCard({
               </button>
             </li>
           </ul>
+          <p className="text-xs text-text-secondary">JPEG, PNG or WebP, up to 10 MB each.</p>
           {photoError ? <p className="text-sm text-danger-text">{photoError}</p> : null}
         </div>
       ) : null}

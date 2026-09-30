@@ -5,34 +5,36 @@ import { useParams } from "next/navigation";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  AlertCircle,
   ArrowLeft,
-  Building,
-  Car,
   CheckCircle2,
   Clock,
-  Coffee,
   FileText,
+  ImagePlus,
   MapPin,
   MessageSquare,
   ShieldCheck,
-  Sparkles,
   Star,
-  Wifi,
-  Wind,
-  Zap,
+  X,
 } from "lucide-react";
 import { Badge, Button, Dialog, ErrorState, Skeleton, Textarea } from "@vsolve/ui";
 
 import {
+  MAX_PHOTO_BYTES,
+  MAX_REVIEW_PHOTOS,
+  PHOTO_TOO_LARGE,
   formatPaise,
   pricePeriodOf,
+  reviewPhotoUrls,
   roomOccupancyLabel,
-  stayFields,
   stayLengthLabel,
 } from "@/features/stays/model";
-import { fetchStayProperty, fetchStays, submitStayReview } from "@/features/stays/queries";
-import { StayCard, StayImageGallery, StayQuotePanel } from "@/features/stays/view";
+import {
+  fetchStayProperty,
+  fetchStays,
+  submitStayReview,
+  uploadStayReviewPhoto,
+} from "@/features/stays/queries";
+import { StayCard, StayImageGallery, StayQuotePanel, amenityIcon } from "@/features/stays/view";
 
 
 export default function StayDetailPage() {
@@ -44,6 +46,8 @@ export default function StayDetailPage() {
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState("");
   const [reviewError, setReviewError] = useState<string | null>(null);
+  const [reviewPhotos, setReviewPhotos] = useState<string[]>([]);
+  const [photoUploading, setPhotoUploading] = useState(false);
 
   const {
     data: property,
@@ -62,10 +66,12 @@ export default function StayDetailPage() {
         property_id: propertyId,
         rating: reviewRating,
         comment: reviewComment,
+        image_urls: reviewPhotos,
       }),
     onSuccess: () => {
       setReviewModalOpen(false);
       setReviewComment("");
+      setReviewPhotos([]);
       setReviewError(null);
       queryClient.invalidateQueries({ queryKey: ["stay-property", propertyId] });
     },
@@ -74,6 +80,33 @@ export default function StayDetailPage() {
       setReviewError(msg);
     },
   });
+
+  async function addReviewPhotos(files: FileList | null) {
+    if (!files?.length) return;
+    const chosen = Array.from(files);
+    const fitting = chosen.filter((file) => file.size <= MAX_PHOTO_BYTES);
+    const room = MAX_REVIEW_PHOTOS - reviewPhotos.length;
+    setReviewError(
+      fitting.length < chosen.length
+        ? PHOTO_TOO_LARGE
+        : fitting.length > room
+          ? `You can add up to ${MAX_REVIEW_PHOTOS} photos.`
+          : null,
+    );
+    const toUpload = fitting.slice(0, Math.max(room, 0));
+    if (toUpload.length === 0) return;
+    setPhotoUploading(true);
+    try {
+      for (const file of toUpload) {
+        const uploaded = await uploadStayReviewPhoto(file);
+        setReviewPhotos((current) => [...current, uploaded.url]);
+      }
+    } catch (err) {
+      setReviewError(err instanceof Error ? err.message : "Could not upload this photo.");
+    } finally {
+      setPhotoUploading(false);
+    }
+  }
 
   if (isLoading) {
     return (
@@ -105,17 +138,8 @@ export default function StayDetailPage() {
     );
   }
 
-  const fields = stayFields(property.structured_fields);
-  const isAc = Boolean(fields.ac);
-  const hasFood = Boolean(fields.food);
-  const hasWifi = Boolean(fields.wifi);
-  const hasPower = Boolean(fields.power_backup);
-  const hasCctv = Boolean(fields.cctv || fields.security);
-  const hasHousekeeping = Boolean(fields.housekeeping || fields.daily_housekeeping);
-  const hasParking = Boolean(fields.parking);
-
-  const hasAnyAmenities = isAc || hasFood || hasWifi || hasPower || hasCctv || hasHousekeeping || hasParking;
-  const isVerified = property.public_state === "PUBLISHED" || property.moderation_status === "APPROVED";
+  const amenities = property.amenities ?? [];
+  const highlights = property.highlights ?? [];
 
   const reviews = property.reviews ?? [];
   const averageRating =
@@ -142,18 +166,11 @@ export default function StayDetailPage() {
           <StayImageGallery media={property.media} title={property.title} />
 
           <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6 shadow-xs">
-            {isVerified && (
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge tone="brand" className="inline-flex items-center gap-1.5 text-xs font-bold">
-                  <Building className="size-3" />
-                  Verified Stay
-                </Badge>
-                <Badge tone="success" className="inline-flex items-center gap-1 text-xs font-bold">
-                  <ShieldCheck className="size-3.5" />
-                  Verified Host
-                </Badge>
-              </div>
-            )}
+            {/* The host's application was reviewed by Operations before any listing went live. */}
+            <Badge tone="success" className="inline-flex items-center gap-1 text-xs font-bold">
+              <ShieldCheck className="size-3.5" />
+              Verified host
+            </Badge>
 
             <h1 className="mt-3 text-2xl font-extrabold text-text sm:text-3xl">
               {property.title}
@@ -180,12 +197,28 @@ export default function StayDetailPage() {
               </div>
             )}
 
-            <div className="mt-6 border-t border-line/70 pt-5">
-              <h2 className="text-sm font-bold text-text">About This Stay</h2>
-              <p className="mt-2 text-sm leading-relaxed text-text-secondary whitespace-pre-line">
-                {property.description || "Clean, verified accommodation designed for comfort and accessibility."}
-              </p>
-            </div>
+            {property.description?.trim() ? (
+              <div className="mt-6 border-t border-line/70 pt-5">
+                <h2 className="text-sm font-bold text-text">About this stay</h2>
+                <p className="mt-2 text-sm leading-relaxed text-text-secondary whitespace-pre-line">
+                  {property.description}
+                </p>
+              </div>
+            ) : null}
+
+            {highlights.length > 0 ? (
+              <div className="mt-6 border-t border-line/70 pt-5">
+                <h2 className="text-sm font-bold text-text">About this place</h2>
+                <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-3">
+                  {highlights.map((row) => (
+                    <div key={row.label}>
+                      <dt className="text-text-secondary">{row.label}</dt>
+                      <dd className="font-semibold text-text">{row.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            ) : null}
 
             {/* Room Units */}
             <div className="mt-6 border-t border-line/70 pt-5">
@@ -215,73 +248,42 @@ export default function StayDetailPage() {
               </div>
             </div>
 
-            {/* Amenities Grid */}
+            {/* Amenities: only what the host said yes to, labelled by the server. */}
             <div className="mt-6 border-t border-line/70 pt-5">
-              <h2 className="text-sm font-bold text-text">Property Amenities</h2>
-              {hasAnyAmenities ? (
-                <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs text-text">
-                  {hasWifi && (
-                    <div className="flex items-center gap-2 rounded-control bg-surface-sunken p-2.5 border border-line/60">
-                      <Wifi className="size-4 text-action" />
-                      <span>High-Speed WiFi</span>
-                    </div>
-                  )}
-                  {isAc && (
-                    <div className="flex items-center gap-2 rounded-control bg-surface-sunken p-2.5 border border-line/60">
-                      <Wind className="size-4 text-action" />
-                      <span>Air Conditioning</span>
-                    </div>
-                  )}
-                  {hasFood && (
-                    <div className="flex items-center gap-2 rounded-control bg-surface-sunken p-2.5 border border-line/60">
-                      <Coffee className="size-4 text-action" />
-                      <span>Home-Style Meals</span>
-                    </div>
-                  )}
-                  {hasPower && (
-                    <div className="flex items-center gap-2 rounded-control bg-surface-sunken p-2.5 border border-line/60">
-                      <Zap className="size-4 text-action" />
-                      <span>24/7 Power Backup</span>
-                    </div>
-                  )}
-                  {hasCctv && (
-                    <div className="flex items-center gap-2 rounded-control bg-surface-sunken p-2.5 border border-line/60">
-                      <ShieldCheck className="size-4 text-emerald-600" />
-                      <span>CCTV & Security</span>
-                    </div>
-                  )}
-                  {hasHousekeeping && (
-                    <div className="flex items-center gap-2 rounded-control bg-surface-sunken p-2.5 border border-line/60">
-                      <Sparkles className="size-4 text-action" />
-                      <span>Daily Housekeeping</span>
-                    </div>
-                  )}
-                  {hasParking && (
-                    <div className="flex items-center gap-2 rounded-control bg-surface-sunken p-2.5 border border-line/60">
-                      <Car className="size-4 text-action" />
-                      <span>Vehicle Parking</span>
-                    </div>
-                  )}
-                </div>
+              <h2 className="text-sm font-bold text-text">Amenities</h2>
+              {amenities.length > 0 ? (
+                <ul className="mt-3 grid grid-cols-2 gap-3 text-xs text-text sm:grid-cols-3">
+                  {amenities.map((amenity) => {
+                    const Icon = amenityIcon(amenity.key);
+                    return (
+                      <li
+                        key={amenity.key}
+                        className="flex items-center gap-2 rounded-control border border-line/60 bg-surface-sunken p-2.5"
+                      >
+                        <Icon className="size-4 text-action" aria-hidden />
+                        <span>{amenity.label}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
               ) : (
                 <p className="mt-2 text-xs text-text-secondary">
-                  Contact host during enquiry to confirm specific amenity availability.
+                  The host hasn&apos;t listed amenities. Ask when they call you.
                 </p>
               )}
             </div>
           </div>
 
-          {/* Cancellation Policy Card — the platform's rule, which is what actually happens,
-              rather than host-written text that could promise something else. */}
+          {/* How enquiries work: every stay is an enquiry; nothing is paid online. */}
           <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6 shadow-xs space-y-3">
             <h3 className="text-sm font-bold text-text flex items-center gap-2">
-              <AlertCircle className="size-4 text-amber-600" />
-              Cancellation Policy
+              <CheckCircle2 className="size-4 text-emerald-600" />
+              How enquiries work
             </h3>
             <p className="text-xs text-text-secondary leading-relaxed">
-              {property.booking_mode === "RESERVATION"
-                ? "Cancel any time before check-in for a full refund. If the host cancels, you are refunded in full. After check-in, contact support."
-                : "No payment is taken for an enquiry. You can withdraw it any time before the host confirms."}
+              Send your dates. The host sees your name and phone number and calls you to
+              confirm. Nothing is paid online, and you can withdraw any time before the host
+              confirms.
             </p>
           </div>
 
@@ -307,15 +309,17 @@ export default function StayDetailPage() {
                   {averageRating ? `${averageRating} · ${reviews.length} Review${reviews.length === 1 ? "" : "s"}` : "Guest Reviews"}
                 </h3>
               </div>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => setReviewModalOpen(true)}
-                className="text-xs font-bold"
-              >
-                <MessageSquare className="size-3.5" />
-                Write a Review
-              </Button>
+              {property.can_review ? (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => setReviewModalOpen(true)}
+                  className="text-xs font-bold"
+                >
+                  <MessageSquare className="size-3.5" />
+                  Write a review
+                </Button>
+              ) : null}
             </div>
 
             {reviews.length > 0 ? (
@@ -337,29 +341,32 @@ export default function StayDetailPage() {
                         {rev.comment}
                       </p>
                     )}
+                    {reviewPhotoUrls(rev.image_urls).length > 0 ? (
+                      <ul className="flex flex-wrap gap-2 pt-1">
+                        {reviewPhotoUrls(rev.image_urls).map((url) => (
+                          <li key={url}>
+                            <a href={url} target="_blank" rel="noreferrer">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={url}
+                                alt="Guest photo"
+                                className="size-16 rounded-control border border-line object-cover"
+                              />
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
                   </div>
                 ))}
               </div>
             ) : (
               <p className="text-xs text-text-secondary py-2">
-                No guest reviews yet. Have you stayed here? Be the first to share your experience!
+                No guest reviews yet.
               </p>
             )}
           </div>
 
-          {/* Enquiry Policy Card */}
-          {(property as Record<string, unknown>).booking_mode !== "RESERVATION" && (
-            <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6 shadow-xs space-y-4">
-              <h3 className="text-sm font-bold text-text flex items-center gap-2">
-                <CheckCircle2 className="size-4 text-emerald-600" />
-                Direct Host Communication Guarantee
-              </h3>
-              <p className="text-xs text-text-secondary leading-relaxed">
-                When you send an enquiry with your check-in dates, the host receives your dates directly.
-                Once the host confirms availability and pricing quote, you will receive a notification to finalize check-in.
-              </p>
-            </div>
-          )}
         </div>
 
         {/* Right Column: Interactive Quote and Enquiry Panel */}
@@ -373,7 +380,7 @@ export default function StayDetailPage() {
         open={reviewModalOpen}
         onOpenChange={setReviewModalOpen}
         title="Review This Stay"
-        description="Share feedback about your stay experience. Reviews are only permitted for guests who have booked and stayed at this property."
+        description="Tell other guests how your stay went."
       >
         <div className="flex flex-col gap-4 py-2">
           {reviewError && (
@@ -419,6 +426,48 @@ export default function StayDetailPage() {
             />
           </div>
 
+          <div>
+            <span className="text-xs font-bold text-text">Photos (optional)</span>
+            <p className="text-[11px] text-text-secondary">
+              Up to {MAX_REVIEW_PHOTOS} photos. JPEG, PNG or WebP, up to 10 MB each.
+            </p>
+            <ul className="mt-2 flex flex-wrap gap-2">
+              {reviewPhotos.map((url) => (
+                <li key={url} className="relative">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={url} alt="" className="size-16 rounded-control border border-line object-cover" />
+                  <button
+                    type="button"
+                    aria-label="Remove photo"
+                    onClick={() => setReviewPhotos((current) => current.filter((item) => item !== url))}
+                    className="absolute -right-1.5 -top-1.5 inline-flex size-5 items-center justify-center rounded-full bg-surface text-text shadow-xs"
+                  >
+                    <X className="size-3" />
+                  </button>
+                </li>
+              ))}
+              {reviewPhotos.length < MAX_REVIEW_PHOTOS ? (
+                <li>
+                  <label className="flex size-16 cursor-pointer flex-col items-center justify-center gap-1 rounded-control border-2 border-dashed border-line-strong text-[10px] font-semibold text-text-secondary hover:text-text">
+                    <ImagePlus className="size-4" />
+                    {photoUploading ? "Uploading…" : "Add"}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      multiple
+                      className="sr-only"
+                      disabled={photoUploading}
+                      onChange={(event) => {
+                        void addReviewPhotos(event.target.files);
+                        event.target.value = "";
+                      }}
+                    />
+                  </label>
+                </li>
+              ) : null}
+            </ul>
+          </div>
+
           <div className="flex justify-end gap-2 pt-2">
             <Button
               variant="secondary"
@@ -430,6 +479,7 @@ export default function StayDetailPage() {
             <Button
               size="sm"
               loading={reviewMutation.isPending}
+              disabled={photoUploading}
               onClick={() => reviewMutation.mutate()}
             >
               Submit Review

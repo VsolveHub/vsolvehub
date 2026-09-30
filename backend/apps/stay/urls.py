@@ -91,6 +91,11 @@ urlpatterns = [
     ),
     path("stays/reviews", views.StayReviewCreateView.as_view(), name="stay-review-create"),
     path(
+        "stays/reviews/photos",
+        views.StayReviewPhotoUploadView.as_view(),
+        name="stay-review-photos",
+    ),
+    path(
         "partner/stays/properties/<uuid:property_id>/media",
         views.PartnerPropertyMediaCreateView.as_view(),
         name="partner-stay-property-media-create",
