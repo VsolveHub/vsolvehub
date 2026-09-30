@@ -27,6 +27,18 @@ class Property(models.Model):
         REJECTED = "REJECTED", "Rejected"
         REMOVED = "REMOVED", "Removed"
 
+    class ListingStatus(models.TextChoices):
+        """The host's own switch, independent of moderation.
+
+        Pausing hides a property from guests without losing anything; existing bookings continue.
+        Archiving is the soft delete: hidden from guests and tucked away for the host, restorable.
+        Operations' ``REMOVED`` stays a separate moderation state the host cannot undo.
+        """
+
+        LIVE = "LIVE", "Live"
+        PAUSED = "PAUSED", "Paused"
+        ARCHIVED = "ARCHIVED", "Archived"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     host = models.ForeignKey(
         "partners.PartnerProfile", on_delete=models.PROTECT, related_name="stay_properties"
@@ -41,6 +53,9 @@ class Property(models.Model):
         max_length=16, choices=ModerationStatus.choices, default=ModerationStatus.DRAFT
     )
     moderation_reason = models.CharField(max_length=480, blank=True)
+    listing_status = models.CharField(
+        max_length=12, choices=ListingStatus.choices, default=ListingStatus.LIVE
+    )
     structured_fields = models.JSONField(default=dict, blank=True)
     cancellation_policy_text = models.TextField(blank=True, default="")
     house_rules = models.TextField(blank=True, default="")
@@ -59,22 +74,35 @@ class Property(models.Model):
 
     @property
     def public_state(self) -> str:
-        if self.moderation_status == self.ModerationStatus.PENDING:
-            return "PENDING_REVIEW"
-        if self.moderation_status == self.ModerationStatus.REJECTED:
-            return "REJECTED"
-        if self.moderation_status == self.ModerationStatus.REMOVED:
-            return "REMOVED"
+        """``PUBLISHED`` only when Operations allows it *and* the host has it switched on."""
         if self.moderation_status == self.ModerationStatus.APPROVED:
-            return "PUBLISHED"
-        return "DRAFT"
+            hidden_by_host: dict[str, str] = {
+                str(self.ListingStatus.PAUSED): "PAUSED",
+                str(self.ListingStatus.ARCHIVED): "ARCHIVED",
+            }
+            return hidden_by_host.get(str(self.listing_status), "PUBLISHED")
+        not_live: dict[str, str] = {
+            str(self.ModerationStatus.PENDING): "PENDING_REVIEW",
+            str(self.ModerationStatus.REJECTED): "REJECTED",
+            str(self.ModerationStatus.REMOVED): "REMOVED",
+        }
+        return not_live.get(str(self.moderation_status), "DRAFT")
 
 
 class Unit(models.Model):
+    """A room type in a property: identical rooms (or beds) sold at one rate.
+
+    ``quantity`` is how many of them can be booked for the same night, so "10 Deluxe rooms" is
+    one row, not ten indistinguishable ones. ``max_guests`` is how many guests one booking of this
+    room may bring; ``sharing_count`` describes how many people share the room.
+    """
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     property = models.ForeignKey(Property, on_delete=models.CASCADE, related_name="units")
     name = models.CharField(max_length=120)
     sharing_count = models.PositiveSmallIntegerField(default=1)
+    quantity = models.PositiveSmallIntegerField(default=1)
+    max_guests = models.PositiveSmallIntegerField(default=1)
     nightly_rate_paise = models.PositiveIntegerField()
     is_active = models.BooleanField(default=True)
     attributes = models.JSONField(default=dict, blank=True)
@@ -83,6 +111,14 @@ class Unit(models.Model):
 
     class Meta:
         ordering = ("name",)
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(quantity__gte=1), name="stay_unit_quantity_positive"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(max_guests__gte=1), name="stay_unit_max_guests_positive"
+            ),
+        ]
 
 
 class StayEnquiry(models.Model):

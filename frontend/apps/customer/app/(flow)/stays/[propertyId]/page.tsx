@@ -274,18 +274,19 @@ export default function StayDetailPage() {
             </div>
           </div>
 
-          {/* Cancellation Policy Card */}
-          {property.cancellation_policy_text && (
-            <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6 shadow-xs space-y-3">
-              <h3 className="text-sm font-bold text-text flex items-center gap-2">
-                <AlertCircle className="size-4 text-amber-600" />
-                Cancellation Policy
-              </h3>
-              <p className="text-xs text-text-secondary leading-relaxed whitespace-pre-line">
-                {property.cancellation_policy_text}
-              </p>
-            </div>
-          )}
+          {/* Cancellation Policy Card — the platform's rule, which is what actually happens,
+              rather than host-written text that could promise something else. */}
+          <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6 shadow-xs space-y-3">
+            <h3 className="text-sm font-bold text-text flex items-center gap-2">
+              <AlertCircle className="size-4 text-amber-600" />
+              Cancellation Policy
+            </h3>
+            <p className="text-xs text-text-secondary leading-relaxed">
+              {property.booking_mode === "RESERVATION"
+                ? "Cancel any time before check-in for a full refund. If the host cancels, you are refunded in full. After check-in, contact support."
+                : "No payment is taken for an enquiry. You can withdraw it any time before the host confirms."}
+            </p>
+          </div>
 
           {/* House Rules Card */}
           {property.house_rules && (

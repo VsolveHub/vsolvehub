@@ -141,6 +141,9 @@ def test_stay_quote_calculation_and_filters(stay_world):
     results = public_properties(query="Luxury", location="Hyderabad")
     assert any(p.id == prop.id for p in results)
 
+    # AC is a room fact now; the title is never searched for it ("ac" matches "Palace").
+    assert not any(p.id == prop.id for p in public_properties(has_ac=True))
+    prop.units.update(attributes={"ac": "AC"})
     results_ac = public_properties(has_ac=True)
     assert any(p.id == prop.id for p in results_ac)
 

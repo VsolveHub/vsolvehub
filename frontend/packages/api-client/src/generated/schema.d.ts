@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.66.0)
- * Checksum: caa0f8cdfbeab53c
+ * Checksum: c740b90167a307b0
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -5832,6 +5832,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** @description `action` is `check_in`, `check_out`, `no_show` or `cancel`. Cancelling needs a `reason`, which is shown to the guest; the guest is refunded in full. */
         post: operations["partner_stays_reservations_create"];
         delete?: never;
         options?: never;
@@ -8527,6 +8528,9 @@ export interface components {
             nightly_rate_paise: number;
             /** @default 1 */
             sharing_count: number;
+            /** @default 1 */
+            quantity: number;
+            max_guests?: number;
             attributes?: unknown;
             /** @default true */
             is_active: boolean;
@@ -10168,6 +10172,13 @@ export interface components {
             /** Format: date-time */
             readonly created_at: string;
         };
+        /**
+         * @description * `LIVE` - Live
+         *     * `PAUSED` - Paused
+         *     * `ARCHIVED` - Archived
+         * @enum {string}
+         */
+        ListingStatusEnum: "LIVE" | "PAUSED" | "ARCHIVED";
         ListingSummary: {
             /** Format: uuid */
             readonly id: string;
@@ -11570,7 +11581,11 @@ export interface components {
             readonly has_payout_account: boolean;
             readonly default_location_text: string;
         };
-        /** @description The host's own view: adds the Operations note, which guests never see. */
+        /**
+         * @description The host's own view: every room (inactive too), the Operations note and the listing switch.
+         *
+         *     Guests never see the note, inactive rooms or a paused/archived property.
+         */
         PartnerProperty: {
             /** Format: uuid */
             readonly id: string;
@@ -11592,11 +11607,12 @@ export interface components {
             available_until?: string | null;
             readonly media: components["schemas"]["PropertyMedia"][];
             readonly reviews: components["schemas"]["StayReview"][];
-            readonly units: components["schemas"]["Unit"][];
+            readonly units: components["schemas"]["PartnerUnit"][];
             readonly booking_mode: string;
             /** Format: date-time */
             readonly created_at: string;
             moderation_reason?: string;
+            listing_status?: components["schemas"]["ListingStatusEnum"];
         };
         PartnerRateItem: {
             /** Format: uuid */
@@ -11612,6 +11628,10 @@ export interface components {
             rate_paise: number;
             /** @default true */
             is_active: boolean;
+        };
+        PartnerReservationActionRequest: {
+            /** @default  */
+            reason: string;
         };
         PartnerSchedule: {
             readonly rules: components["schemas"]["PartnerAvailabilityRule"][];
@@ -11668,6 +11688,19 @@ export interface components {
             readonly code: string;
             readonly name: string;
             readonly description: string;
+        };
+        /** @description The host's view of a room: adds how many bookings still have nights ahead. */
+        PartnerUnit: {
+            /** Format: uuid */
+            readonly id: string;
+            name: string;
+            sharing_count?: number;
+            quantity?: number;
+            max_guests?: number;
+            nightly_rate_paise: number;
+            is_active?: boolean;
+            attributes?: unknown;
+            readonly upcoming_booking_count: number;
         };
         /**
          * @description A case as one of its two parties may read it.
@@ -11855,6 +11888,8 @@ export interface components {
             name?: string;
             nightly_rate_paise?: number;
             sharing_count?: number;
+            quantity?: number;
+            max_guests?: number;
             attributes?: unknown;
             is_active?: boolean;
         };
@@ -15014,6 +15049,7 @@ export interface components {
             available_from?: string | null;
             /** Format: date */
             available_until?: string | null;
+            max_guests?: number;
         };
         StayReservation: {
             /** Format: uuid */
@@ -15090,6 +15126,8 @@ export interface components {
             name: string;
             code: string;
             property_schema: unknown;
+            room_schema: unknown;
+            room_name_suggestions: string[];
             booking_mode: string;
         };
         StepUpSession: {
@@ -15275,6 +15313,8 @@ export interface components {
             readonly id: string;
             name: string;
             sharing_count?: number;
+            quantity?: number;
+            max_guests?: number;
             nightly_rate_paise: number;
             is_active?: boolean;
             attributes?: unknown;
@@ -29364,7 +29404,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Unit"][];
+                    "application/json": components["schemas"]["PartnerUnit"][];
                 };
             };
         };
@@ -29391,7 +29431,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Unit"];
+                    "application/json": components["schemas"]["PartnerUnit"];
                 };
             };
         };
@@ -29425,7 +29465,13 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PartnerReservationActionRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PartnerReservationActionRequest"];
+                "multipart/form-data": components["schemas"]["PartnerReservationActionRequest"];
+            };
+        };
         responses: {
             200: {
                 headers: {
@@ -29459,7 +29505,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Unit"];
+                    "application/json": components["schemas"]["PartnerUnit"];
                 };
             };
         };

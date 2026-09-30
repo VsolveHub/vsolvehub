@@ -526,6 +526,7 @@ class Command(BaseCommand):
                 unit_name="Double sharing AC",
                 nightly_rate_paise=85000,
                 sharing_count=2,
+                image_urls=["https://picsum.photos/seed/stay-demo-1/800/600"],
             )
             prop.structured_fields = {
                 "ac": True,
@@ -597,6 +598,7 @@ class Command(BaseCommand):
                 unit_name="Executive Single AC Room",
                 nightly_rate_paise=160000,
                 sharing_count=1,
+                image_urls=["https://picsum.photos/seed/stay-demo-2/800/600"],
             )
             single_prop.structured_fields = {
                 "ac": True,
@@ -650,6 +652,7 @@ class Command(BaseCommand):
                 unit_name="Deluxe Suite",
                 nightly_rate_paise=450000,
                 sharing_count=2,
+                image_urls=["https://picsum.photos/seed/stay-demo-3/800/600"],
             )
             hotel_prop.structured_fields = {
                 "star_rating": "5 Star",
@@ -695,6 +698,7 @@ class Command(BaseCommand):
                 location_text="Hyderabad",
                 unit_name="Bed",
                 nightly_rate_paise=45000,
+                image_urls=["https://picsum.photos/seed/stay-demo-4/800/600"],
             )
             submit_property(prop=pending, host=profile)
 

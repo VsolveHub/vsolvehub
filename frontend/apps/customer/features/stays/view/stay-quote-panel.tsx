@@ -80,6 +80,9 @@ export function StayQuotePanel({ property }: StayQuotePanelProps) {
 
   const selectedUnit =
     property.units.find((u) => u.id === selectedUnitId) ?? property.units[0];
+  // Guests are capped by the chosen room; switching to a smaller room lowers the count with it.
+  const maxGuests = Math.max(selectedUnit?.max_guests ?? 1, 1);
+  const guests = Math.min(guestCount, maxGuests);
 
   const nights = calculateNights(checkIn, checkOut);
   const minStayNights = property.min_stay_nights;
@@ -149,7 +152,7 @@ export function StayQuotePanel({ property }: StayQuotePanelProps) {
           unit_id: selectedUnitId,
           check_in: checkIn,
           check_out: checkOut,
-          guest_count: guestCount,
+          guest_count: guests,
         });
         return { kind: "reservation" as const, reservation };
       }
@@ -158,7 +161,7 @@ export function StayQuotePanel({ property }: StayQuotePanelProps) {
         unit_id: selectedUnitId || null,
         check_in: checkIn,
         check_out: checkOut,
-        guest_count: guestCount,
+        guest_count: guests,
         message,
       });
       return { kind: "enquiry" as const, reservation: null };
@@ -354,11 +357,11 @@ export function StayQuotePanel({ property }: StayQuotePanelProps) {
             Number of Guests
           </span>
           <select
-            value={guestCount}
+            value={guests}
             onChange={(e) => setGuestCount(Number(e.target.value))}
             className="rounded-control border border-line bg-surface-sunken px-3.5 py-2.5 text-sm font-medium text-text focus:border-line-strong focus:outline-none"
           >
-            {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+            {Array.from({ length: maxGuests }, (_, i) => i + 1).map((n) => (
               <option key={n} value={n}>
                 {n} {n === 1 ? "Guest" : "Guests"}
               </option>

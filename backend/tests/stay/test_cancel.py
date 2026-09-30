@@ -4,6 +4,7 @@ from datetime import date, timedelta
 
 import pytest
 from django.contrib.auth import get_user_model
+from freezegun import freeze_time
 from rest_framework import status
 
 from apps.catalog.models import (
@@ -167,7 +168,9 @@ def test_cancel_reservation_fail_closed_after_checkin():
     unit_res = res.unit_reservation
     unit_res.status = UnitReservation.Status.CONFIRMED
     unit_res.save(update_fields=("status", "updated_at"))
-    check_in_reservation(reservation=res, host=partner)
+    # Guests can only be checked in from the check-in date.
+    with freeze_time(check_in.isoformat()):
+        check_in_reservation(reservation=res, host=partner)
     res.refresh_from_db()
     with pytest.raises(StayStateError, match="after check-in"):
         cancel_reservation(reservation=res, customer=customer)

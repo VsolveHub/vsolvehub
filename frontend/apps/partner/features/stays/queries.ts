@@ -5,7 +5,7 @@ import { getApiClient } from "@/lib/api/browser";
 export type StayProperty = Schemas["PartnerProperty"];
 export type StayEnquiry = Schemas["StayEnquiry"];
 export type PartnerCapability = Schemas["PartnerCapability"];
-export type StayUnit = Schemas["Unit"];
+export type StayUnit = Schemas["PartnerUnit"];
 export type CreateUnitRequest = Schemas["CreateUnitRequest"];
 export type PatchedUpdateUnitRequest = Schemas["PatchedUpdateUnitRequest"];
 export type PatchedUpdatePropertyRequest = Schemas["PatchedUpdatePropertyRequest"];
@@ -14,8 +14,38 @@ export type StayTaxonomyVariant = {
   id: string;
   name: string;
   code: string;
+  /** Questions asked once per property. */
   property_schema: Record<string, unknown>;
+  /** Questions asked per room, such as AC or bathroom. */
+  room_schema: Record<string, unknown>;
+  /** Room names this category suggests; the host may type any name. */
+  room_name_suggestions: string[];
+  booking_mode: string;
 };
+
+/** One choice per property type: the taxonomy flattened, since each type has one variant. */
+export type StayPropertyType = {
+  variant: StayTaxonomyVariant;
+  label: string;
+  group: string;
+};
+
+export function stayPropertyTypes(taxonomy: readonly StayTaxonomySubcategory[]): StayPropertyType[] {
+  const types: StayPropertyType[] = [];
+  for (const sub of taxonomy) {
+    const variants = sub.services.flatMap((service) =>
+      service.variants.map((variant) => ({ service, variant })),
+    );
+    for (const { service, variant } of variants) {
+      types.push({
+        variant,
+        group: sub.name,
+        label: variants.length === 1 ? sub.name : `${sub.name} – ${service.name}`,
+      });
+    }
+  }
+  return types;
+}
 
 export type StayTaxonomyService = {
   id: string;
@@ -161,6 +191,8 @@ export async function createPartnerStayUnit(
     name: string;
     nightly_rate_paise: number;
     sharing_count?: number;
+    quantity?: number;
+    max_guests?: number;
     attributes?: Record<string, unknown>;
     is_active?: boolean;
   },
@@ -172,6 +204,8 @@ export async function createPartnerStayUnit(
         name: input.name,
         nightly_rate_paise: input.nightly_rate_paise,
         sharing_count: input.sharing_count ?? 1,
+        quantity: input.quantity ?? 1,
+        max_guests: input.max_guests,
         attributes: input.attributes ?? {},
         is_active: input.is_active ?? true,
       },
@@ -193,10 +227,15 @@ export async function updatePartnerStayUnit(
   return data as StayUnit;
 }
 
-export async function submitPartnerStayProperty(propertyId: string): Promise<StayProperty> {
+export type StayPropertyAction = "publish" | "pause" | "resume" | "archive" | "restore";
+
+export async function partnerStayPropertyAction(
+  propertyId: string,
+  action: StayPropertyAction,
+): Promise<StayProperty> {
   const data = await request(() =>
     getApiClient().POST("/api/v1/partner/stays/properties/{property_id}/{action}", {
-      params: { path: { property_id: propertyId, action: "submit" } },
+      params: { path: { property_id: propertyId, action } },
     }),
   );
   return data as StayProperty;
@@ -230,26 +269,35 @@ export async function fetchPartnerStayReservations(): Promise<StayReservation[]>
   return Array.isArray(data) ? (data as StayReservation[]) : [];
 }
 
+export type StayReservationAction = "check_in" | "check_out" | "no_show" | "cancel";
+
 export async function partnerStayReservationAction(
   reservationId: string,
-  action: "check_in" | "check_out",
+  action: StayReservationAction,
+  reason = "",
 ): Promise<StayReservation> {
   const data = await request(() =>
     getApiClient().POST("/api/v1/partner/stays/reservations/{reservation_id}/{action}", {
       params: { path: { reservation_id: reservationId, action } },
+      body: { reason },
     }),
   );
   return data as StayReservation;
 }
 
 /** Where a property stands, in the words a host reads. */
-export function stayListingStatus(property: Pick<StayProperty, "moderation_status">): {
+export function stayListingStatus(
+  property: Pick<StayProperty, "moderation_status" | "listing_status">,
+): {
   label: string;
   tone: "neutral" | "success" | "warning" | "danger";
 } {
+  if (property.listing_status === "ARCHIVED") return { label: "Archived", tone: "neutral" };
   switch (property.moderation_status) {
     case "APPROVED":
-      return { label: "Live", tone: "success" };
+      return property.listing_status === "PAUSED"
+        ? { label: "Paused — hidden from guests", tone: "neutral" }
+        : { label: "Live", tone: "success" };
     case "PENDING":
       return { label: "Under quick review", tone: "warning" };
     case "REJECTED":

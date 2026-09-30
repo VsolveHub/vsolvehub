@@ -7,14 +7,30 @@ from apps.stay.models import Property, PropertyMedia, StayEnquiry, StayReservati
 class UnitSerializer(serializers.ModelSerializer):
     class Meta:
         model = Unit
-        fields = (
+        fields: tuple[str, ...] = (
             "id",
             "name",
             "sharing_count",
+            "quantity",
+            "max_guests",
             "nightly_rate_paise",
             "is_active",
             "attributes",
         )
+
+
+class PartnerUnitSerializer(UnitSerializer):
+    """The host's view of a room: adds how many bookings still have nights ahead."""
+
+    upcoming_booking_count = serializers.SerializerMethodField()
+
+    class Meta(UnitSerializer.Meta):
+        fields = (*UnitSerializer.Meta.fields, "upcoming_booking_count")
+
+    def get_upcoming_booking_count(self, obj: Unit) -> int:
+        from apps.stay.services import upcoming_booking_count  # noqa: PLC0415
+
+        return upcoming_booking_count(unit=obj)
 
 
 class PropertyMediaSerializer(serializers.ModelSerializer):
@@ -138,10 +154,15 @@ class PropertySerializer(serializers.ModelSerializer):
 
 
 class PartnerPropertySerializer(PropertySerializer):
-    """The host's own view: adds the Operations note, which guests never see."""
+    """The host's own view: every room (inactive too), the Operations note and the listing switch.
+
+    Guests never see the note, inactive rooms or a paused/archived property.
+    """
+
+    units = PartnerUnitSerializer(many=True, read_only=True)
 
     class Meta(PropertySerializer.Meta):
-        fields = (*PropertySerializer.Meta.fields, "moderation_reason")
+        fields = (*PropertySerializer.Meta.fields, "moderation_reason", "listing_status")
 
 
 class StayPhotoUploadSerializer(serializers.Serializer):
@@ -154,7 +175,12 @@ class StayTaxonomyVariantSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     name = serializers.CharField()
     code = serializers.CharField()
+    #: Questions asked once per property. Room-level facts are split out into ``room_schema``.
     property_schema = serializers.JSONField()
+    #: Questions asked per room (for example AC, bathroom), stored in ``Unit.attributes``.
+    room_schema = serializers.JSONField()
+    #: Room names the category suggests ("Double sharing", "Deluxe"); the host may type any name.
+    room_name_suggestions = serializers.ListField(child=serializers.CharField())
     booking_mode = serializers.CharField()
 
 
@@ -211,6 +237,9 @@ class CreateUnitSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=120)
     nightly_rate_paise = serializers.IntegerField(min_value=1)
     sharing_count = serializers.IntegerField(min_value=1, required=False, default=1)
+    quantity = serializers.IntegerField(min_value=1, max_value=500, required=False, default=1)
+    #: Defaults to the sharing count when omitted.
+    max_guests = serializers.IntegerField(min_value=1, max_value=50, required=False)
     attributes = serializers.JSONField(required=False, default=dict)
     is_active = serializers.BooleanField(required=False, default=True)
 
@@ -219,8 +248,15 @@ class UpdateUnitSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=120, required=False)
     nightly_rate_paise = serializers.IntegerField(min_value=1, required=False)
     sharing_count = serializers.IntegerField(min_value=1, required=False)
+    quantity = serializers.IntegerField(min_value=1, max_value=500, required=False)
+    max_guests = serializers.IntegerField(min_value=1, max_value=50, required=False)
     attributes = serializers.JSONField(required=False)
     is_active = serializers.BooleanField(required=False)
+
+
+class PartnerReservationActionSerializer(serializers.Serializer):
+    #: Required when cancelling: it is the explanation the guest receives.
+    reason = serializers.CharField(max_length=200, required=False, allow_blank=True, default="")
 
 
 class CreateEnquirySerializer(serializers.Serializer):
@@ -250,6 +286,7 @@ class StayQuoteResponseSerializer(serializers.Serializer):
     min_stay_nights = serializers.IntegerField(required=False)
     available_from = serializers.DateField(required=False, allow_null=True)
     available_until = serializers.DateField(required=False, allow_null=True)
+    max_guests = serializers.IntegerField(required=False)
 
 
 class StayEnquirySerializer(serializers.ModelSerializer):

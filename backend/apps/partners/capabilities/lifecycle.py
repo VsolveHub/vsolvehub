@@ -34,6 +34,11 @@ from apps.partners.models import (
 
 from .base import M2_ARCHETYPES
 
+#: Archetypes a Partner can ask to be considered for. A9 stays joined the M2 pair once property
+#: hosting shipped: `capability_options` already offered stay variants, and refusing them here left
+#: every would-be host at a dead end. The approval handler acts on A3 only, so nothing else changes.
+REQUESTABLE_ARCHETYPES = (*M2_ARCHETYPES, ServiceVariant.BookingArchetype.A9_STAY)
+
 #: `REJECTED` is Operations' refusal and is reachable only from a state a reviewer is actually in.
 #: `WITHDRAWN` is the Partner's own exit and is reachable from everywhere. Keeping them apart is
 #: the answer to proposal 0013's first open question: until 12 August both landed on `WITHDRAWN`,
@@ -144,7 +149,7 @@ def request_capability(
     registration_answers: dict[str, object] | None = None,
 ) -> PartnerCapability:
     """Partner asks to be considered for one lifecycle capability."""
-    if variant.booking_archetype not in M2_ARCHETYPES:
+    if variant.booking_archetype not in REQUESTABLE_ARCHETYPES:
         raise LifecycleNotSupportedError(
             "This service is not open for workforce or project vendors yet.",
         )

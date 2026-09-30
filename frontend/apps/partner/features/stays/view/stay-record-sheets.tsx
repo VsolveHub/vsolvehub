@@ -135,19 +135,44 @@ function SheetSection({
   );
 }
 
+/** Today as `YYYY-MM-DD` in the host's local time, to compare with a stay's dates. */
+function localIsoDate(): string {
+  return new Date().toLocaleDateString("en-CA");
+}
+
+const CANCELLABLE_RESERVATION_STATUSES = new Set(["HELD", "PAYMENT_PENDING", "CONFIRMED"]);
+
 export function StayReservationDetailSheet({
   reservation,
   onOpenChange,
   onCheckIn,
   onCheckOut,
+  onNoShow,
+  onCancel,
   isPending,
+  actionError,
 }: {
   reservation: StayReservationRow | null;
   onOpenChange: (open: boolean) => void;
   onCheckIn: (id: string) => void;
   onCheckOut: (id: string) => void;
+  onNoShow: (id: string) => void;
+  onCancel: (id: string, reason: string) => void;
   isPending: boolean;
+  actionError?: string | null;
 }) {
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  const reservationId = reservation?.id ?? null;
+  useEffect(() => {
+    setCancelling(false);
+    setCancelReason("");
+    setCancelError(null);
+  }, [reservationId]);
+
+  const stayHasStarted = reservation ? localIsoDate() >= reservation.check_in : false;
+  const canCancel = reservation ? CANCELLABLE_RESERVATION_STATUSES.has(reservation.status) : false;
   const nights = reservation?.nights ?? 0;
   const total = reservation?.total_paise;
   const perNight =
@@ -183,8 +208,25 @@ export function StayReservationDetailSheet({
             <Button variant="ghost" onClick={() => onOpenChange(false)}>
               Close
             </Button>
+            {canCancel && !cancelling ? (
+              <Button variant="ghost" disabled={isPending} onClick={() => setCancelling(true)}>
+                Cancel booking
+              </Button>
+            ) : null}
+            {reservation.status === "CONFIRMED" && stayHasStarted ? (
+              <Button
+                variant="secondary"
+                disabled={isPending}
+                onClick={() => onNoShow(reservation.id)}
+              >
+                Guest didn’t arrive
+              </Button>
+            ) : null}
             {reservation.status === "CONFIRMED" ? (
-              <Button disabled={isPending} onClick={() => onCheckIn(reservation.id)}>
+              <Button
+                disabled={isPending || !stayHasStarted}
+                onClick={() => onCheckIn(reservation.id)}
+              >
                 Check in
               </Button>
             ) : null}
@@ -203,6 +245,52 @@ export function StayReservationDetailSheet({
     >
       {reservation ? (
         <div className="flex flex-col gap-5 py-3">
+          {actionError ? <p className="text-sm text-danger-text">{actionError}</p> : null}
+          {reservation.status === "CONFIRMED" && !stayHasStarted ? (
+            <p className="text-sm text-text-secondary">
+              You can check the guest in from{" "}
+              {formatDate(`${reservation.check_in}T12:00:00`)}.
+            </p>
+          ) : null}
+
+          {cancelling ? (
+            <SheetSection title="Cancel this booking">
+              <p className="text-sm text-text-secondary">
+                The guest is refunded in full and the room opens up again. Tell them why — they
+                will see this message.
+              </p>
+              <Field label="Reason" required error={cancelError ?? undefined}>
+                <Textarea
+                  rows={3}
+                  value={cancelReason}
+                  onChange={(event) => {
+                    setCancelReason(event.target.value);
+                    setCancelError(null);
+                  }}
+                  placeholder="e.g. Water damage in the room — we can’t host you on these dates."
+                />
+              </Field>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="danger"
+                  disabled={isPending}
+                  onClick={() => {
+                    if (!cancelReason.trim()) {
+                      setCancelError("Add a reason for the guest.");
+                      return;
+                    }
+                    onCancel(reservation.id, cancelReason.trim());
+                  }}
+                >
+                  Cancel and refund guest
+                </Button>
+                <Button variant="ghost" disabled={isPending} onClick={() => setCancelling(false)}>
+                  Keep booking
+                </Button>
+              </div>
+            </SheetSection>
+          ) : null}
+
           <SheetSection title="Guest">
             <GuestBlock
               name={reservation.customer_name}

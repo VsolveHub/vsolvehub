@@ -10,6 +10,7 @@ import {
   fetchPartnerStayReservations,
   partnerStayReservationAction,
   type StayReservation,
+  type StayReservationAction,
 } from "@/features/stays/queries";
 import { STAY_SECTIONS } from "@/features/stays/view/stay-sections";
 import {
@@ -42,8 +43,15 @@ export function PartnerStayBookingsWorkspace() {
   };
 
   const reservationAction = useMutation({
-    mutationFn: ({ id, action }: { id: string; action: "check_in" | "check_out" }) =>
-      partnerStayReservationAction(id, action),
+    mutationFn: ({
+      id,
+      action,
+      reason,
+    }: {
+      id: string;
+      action: StayReservationAction;
+      reason?: string;
+    }) => partnerStayReservationAction(id, action, reason),
     onSuccess: invalidate,
   });
 
@@ -117,11 +125,19 @@ export function PartnerStayBookingsWorkspace() {
       <StayReservationDetailSheet
         reservation={selected}
         onOpenChange={(open) => {
-          if (!open) setSelectedId(null);
+          if (!open) {
+            setSelectedId(null);
+            reservationAction.reset();
+          }
         }}
         onCheckIn={(id) => reservationAction.mutate({ id, action: "check_in" })}
         onCheckOut={(id) => reservationAction.mutate({ id, action: "check_out" })}
+        onNoShow={(id) => reservationAction.mutate({ id, action: "no_show" })}
+        onCancel={(id, reason) => reservationAction.mutate({ id, action: "cancel", reason })}
         isPending={reservationAction.isPending}
+        actionError={
+          reservationAction.error ? friendlyErrorMessage(reservationAction.error) : null
+        }
       />
     </div>
   );

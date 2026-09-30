@@ -5,6 +5,7 @@ from datetime import timedelta
 import pytest
 from django.contrib.auth import get_user_model
 from django.utils import timezone
+from freezegun import freeze_time
 from rest_framework import status
 
 from apps.catalog.models import (
@@ -235,8 +236,9 @@ def test_stay_review_for_reservation_customer(stay_env, client):
     res.status = StayReservation.Status.CONFIRMED
     res.save(update_fields=("status",))
 
-    check_in_reservation(reservation=res, host=stay_env["partner"])
-    check_out_reservation(reservation=res, host=stay_env["partner"])
+    with freeze_time(check_in.isoformat()):
+        check_in_reservation(reservation=res, host=stay_env["partner"])
+        check_out_reservation(reservation=res, host=stay_env["partner"])
 
     # Create review via service
     review = create_stay_review(
