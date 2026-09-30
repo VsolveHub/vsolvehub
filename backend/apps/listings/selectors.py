@@ -6,7 +6,10 @@ from django.utils import timezone
 from apps.listings.models import Listing
 
 
-def public_listings(filters: dict[str, Any] | None = None) -> QuerySet[Listing]:
+def public_listings(  # noqa: PLR0912
+    filters: dict[str, Any] | None = None,
+) -> QuerySet[Listing]:
+
     filters = filters or {}
     qs = (
         Listing.objects.select_related("poster", "variant", "variant__service")
@@ -42,10 +45,25 @@ def public_listings(filters: dict[str, Any] | None = None) -> QuerySet[Listing]:
         value = str(filters.get(key) or "").strip()
         if value:
             qs = qs.filter(**{f"structured_fields__{key}__icontains": value})
+    min_salary = filters.get("min_salary")
+    if min_salary and str(min_salary).isdigit():
+        qs = qs.filter(
+            Q(salary_max_paise__gte=int(min_salary)) | Q(salary_min_paise__gte=int(min_salary))
+        )
+    max_salary = filters.get("max_salary")
+    if max_salary and str(max_salary).isdigit():
+        qs = qs.filter(salary_min_paise__lte=int(max_salary))
     salary_band = str(filters.get("salary_band") or "").strip()
     if salary_band:
-        qs = qs.filter(structured_fields__salary_band=salary_band)
+        qs = qs.filter(
+            Q(structured_fields__salary_band=salary_band)
+            | Q(structured_fields__salary_range=salary_band)
+        )
     sort = str(filters.get("sort") or "latest")
-    if sort == "latest":
+    if sort == "salary_high":
+        qs = qs.order_by("-salary_max_paise", "-published_at", "-created_at")
+    elif sort == "salary_low":
+        qs = qs.order_by("salary_min_paise", "-published_at", "-created_at")
+    else:
         qs = qs.order_by("-published_at", "-created_at")
     return qs

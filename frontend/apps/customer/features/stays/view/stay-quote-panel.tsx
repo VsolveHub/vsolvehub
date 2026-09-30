@@ -243,6 +243,10 @@ export function StayQuotePanel({ property }: StayQuotePanelProps) {
       setError(`Minimum stay is ${minStayNights} night${minStayNights === 1 ? "" : "s"}.`);
       return;
     }
+    if (nights > 90) {
+      setError("Maximum stay duration is 90 nights.");
+      return;
+    }
     if (datesOutsideAvailabilityWindow()) {
       setError("Not available for these dates.");
       return;
@@ -354,10 +358,11 @@ export function StayQuotePanel({ property }: StayQuotePanelProps) {
             onChange={(e) => setGuestCount(Number(e.target.value))}
             className="rounded-control border border-line bg-surface-sunken px-3.5 py-2.5 text-sm font-medium text-text focus:border-line-strong focus:outline-none"
           >
-            <option value={1}>1 Guest</option>
-            <option value={2}>2 Guests</option>
-            <option value={3}>3 Guests</option>
-            <option value={4}>4+ Guests</option>
+            {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+              <option key={n} value={n}>
+                {n} {n === 1 ? "Guest" : "Guests"}
+              </option>
+            ))}
           </select>
         </label>
 

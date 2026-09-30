@@ -45,6 +45,7 @@ from apps.listings.serializers import (
     VendorSubscriptionSerializer,
 )
 from apps.listings.services import (
+    ListingPlanCapError,
     ListingStateError,
     close_listing,
     create_listing,
@@ -98,7 +99,6 @@ def _raise_listing_error(exc: Exception) -> NoReturn:
         raise ApplicationRateLimitApiError from exc
     if message.startswith("This listing is not accepting applications"):
         raise ListingNotAcceptingApplicationsApiError from exc
-    from apps.listings.services import ListingPlanCapError
 
     if isinstance(exc, ListingPlanCapError) or "Active listing limit" in message:
         raise ListingPlanCapApiError from exc
@@ -147,6 +147,8 @@ class ListingBrowseView(APIView):
             OpenApiParameter("work_mode", OpenApiTypes.STR, OpenApiParameter.QUERY),
             OpenApiParameter("experience", OpenApiTypes.STR, OpenApiParameter.QUERY),
             OpenApiParameter("salary_band", OpenApiTypes.STR, OpenApiParameter.QUERY),
+            OpenApiParameter("min_salary", OpenApiTypes.INT, OpenApiParameter.QUERY),
+            OpenApiParameter("max_salary", OpenApiTypes.INT, OpenApiParameter.QUERY),
         ],
         responses=ListingSummarySerializer(many=True),
     )
@@ -161,6 +163,8 @@ class ListingBrowseView(APIView):
                 "work_mode": request.query_params.get("work_mode"),
                 "experience": request.query_params.get("experience"),
                 "salary_band": request.query_params.get("salary_band"),
+                "min_salary": request.query_params.get("min_salary"),
+                "max_salary": request.query_params.get("max_salary"),
             }
         )
         return Response(ListingSummarySerializer(rows, many=True).data)

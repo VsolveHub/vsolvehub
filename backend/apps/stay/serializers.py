@@ -31,6 +31,76 @@ class StayReviewSerializer(serializers.ModelSerializer):
         fields = ("id", "rating", "comment", "image_urls", "customer_name", "created_at")
 
 
+def _extract_booking_mode(obj: Property) -> str:
+    variant = getattr(obj, "variant", None)
+    prefetch_cache = getattr(variant, "_prefetched_objects_cache", {})
+    if variant and "a9_configurations" in prefetch_cache:
+        for cfg in variant.a9_configurations.all():
+            if cfg.status == A9VariantConfiguration.Status.ACTIVE:
+                return str(cfg.booking_mode)
+        return str(A9VariantConfiguration.BookingMode.ENQUIRY)
+
+    config = (
+        A9VariantConfiguration.objects.filter(
+            variant_id=obj.variant_id, status=A9VariantConfiguration.Status.ACTIVE
+        )
+        .order_by("-version")
+        .first()
+    )
+    if config is None:
+        return str(A9VariantConfiguration.BookingMode.ENQUIRY)
+    return str(config.booking_mode)
+
+
+class PropertySummarySerializer(serializers.ModelSerializer):
+    public_state = serializers.CharField(read_only=True)
+    host_name = serializers.CharField(source="host.display_name", read_only=True)
+    media = PropertyMediaSerializer(many=True, read_only=True)
+    units = UnitSerializer(many=True, read_only=True)
+    booking_mode = serializers.SerializerMethodField()
+    review_count = serializers.SerializerMethodField()
+    average_rating = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Property
+        fields = (
+            "id",
+            "title",
+            "description",
+            "location_text",
+            "moderation_status",
+            "public_state",
+            "host_name",
+            "variant",
+            "structured_fields",
+            "min_stay_nights",
+            "available_from",
+            "available_until",
+            "media",
+            "units",
+            "booking_mode",
+            "review_count",
+            "average_rating",
+            "created_at",
+        )
+
+    def get_booking_mode(self, obj: Property) -> str:
+        return _extract_booking_mode(obj)
+
+    def get_review_count(self, obj: Property) -> int:
+        reviews = getattr(obj, "_prefetched_objects_cache", {}).get("reviews")
+        if reviews is not None:
+            return len(reviews)
+        return obj.reviews.count()
+
+    def get_average_rating(self, obj: Property) -> float | None:
+        reviews = getattr(obj, "_prefetched_objects_cache", {}).get("reviews")
+        items = list(reviews) if reviews is not None else list(obj.reviews.all())
+        if not items:
+            return None
+        return round(sum(r.rating for r in items) / len(items), 1)
+
+
 class PropertySerializer(serializers.ModelSerializer):
     public_state = serializers.CharField(read_only=True)
     host_name = serializers.CharField(source="host.display_name", read_only=True)
@@ -64,24 +134,7 @@ class PropertySerializer(serializers.ModelSerializer):
         )
 
     def get_booking_mode(self, obj: Property) -> str:
-        variant = getattr(obj, "variant", None)
-        prefetch_cache = getattr(variant, "_prefetched_objects_cache", {})
-        if variant and "a9_configurations" in prefetch_cache:
-            for cfg in variant.a9_configurations.all():
-                if cfg.status == A9VariantConfiguration.Status.ACTIVE:
-                    return str(cfg.booking_mode)
-            return str(A9VariantConfiguration.BookingMode.ENQUIRY)
-
-        config = (
-            A9VariantConfiguration.objects.filter(
-                variant_id=obj.variant_id, status=A9VariantConfiguration.Status.ACTIVE
-            )
-            .order_by("-version")
-            .first()
-        )
-        if config is None:
-            return str(A9VariantConfiguration.BookingMode.ENQUIRY)
-        return str(config.booking_mode)
+        return _extract_booking_mode(obj)
 
 
 class StayPhotoUploadSerializer(serializers.Serializer):

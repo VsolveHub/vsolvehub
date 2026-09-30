@@ -36,13 +36,20 @@ export function PartAResultHeader({
   noun,
   sort,
   onSort,
+  sortOptions,
 }: {
   count: number;
   place: string;
   noun: string;
   sort: string;
   onSort: (value: string) => void;
+  sortOptions?: { label: string; value: string }[];
 }) {
+  const options = sortOptions ?? [
+    { label: "Latest", value: "latest" },
+    { label: "Salary: High to Low", value: "salary_high" },
+    { label: "Salary: Low to High", value: "salary_low" },
+  ];
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
       <p className="text-sm font-semibold text-navy-900">
@@ -56,12 +63,17 @@ export function PartAResultHeader({
           onChange={(event) => onSort(event.target.value)}
           className="rounded-control border border-line bg-surface px-2 py-1 text-xs font-semibold text-navy-900"
         >
-          <option value="latest">Latest</option>
+          {options.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
         </select>
       </label>
     </div>
   );
 }
+
 
 export function PartADetailLayout({
   main,

@@ -206,6 +206,13 @@ class StayReview(models.Model):
 
     class Meta:
         ordering = ("-created_at",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=["customer", "enquiry"],
+                condition=models.Q(enquiry__isnull=False),
+                name="unique_customer_enquiry_stay_review",
+            ),
+        ]
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         if not self.body and self.comment:

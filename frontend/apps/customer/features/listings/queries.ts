@@ -46,6 +46,8 @@ export function fetchListings(
     work_mode?: string;
     experience?: string;
     salary_band?: string;
+    min_salary?: number;
+    max_salary?: number;
   } = {},
 ) {
   return request(() =>
@@ -60,11 +62,14 @@ export function fetchListings(
           work_mode: filters.work_mode,
           experience: filters.experience,
           salary_band: filters.salary_band,
+          min_salary: filters.min_salary,
+          max_salary: filters.max_salary,
         },
       },
     }),
   );
 }
+
 
 export function uploadListingResume(listingId: string, file: File) {
   return request(() =>

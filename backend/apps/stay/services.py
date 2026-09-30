@@ -1,7 +1,4 @@
-"""A9 stay enquiry-first services. Fail-closed on capability + ACTIVE A9VariantConfiguration."""
-
-from __future__ import annotations
-
+import logging
 from datetime import date, timedelta
 from typing import Any
 from urllib.parse import urlparse
@@ -19,6 +16,8 @@ from apps.commerce.services import _request_automatic_refund
 from apps.commerce.services.base import PAYMENT_FINAL_STATES, _open_exception
 from apps.commerce.services.payments import initiate_standalone_payment_attempt
 from apps.foundation.models import OutboxEvent
+from apps.notifications.models import NotificationIntent
+from apps.notifications.services import request_notification
 from apps.stay.models import (
     Property,
     PropertyMedia,
@@ -30,6 +29,8 @@ from apps.stay.models import (
     Unit,
     UnitReservation,
 )
+
+logger = logging.getLogger(__name__)
 
 _MAX_STAY_REVIEW_RATING = 5
 
@@ -100,6 +101,9 @@ def _verify_unit_availability(
         )
 
 
+MAX_STAY_NIGHTS = 90
+
+
 def _enforce_stay_dates(*, prop: Property, check_in: date, check_out: date) -> int:
     """Validate date order, min nights, and availability window. Returns nights count."""
     today = timezone.localdate()
@@ -113,6 +117,11 @@ def _enforce_stay_dates(*, prop: Property, check_in: date, check_out: date) -> i
         raise StayStateError(
             f"Minimum stay is {min_nights} night{'s' if min_nights != 1 else ''}.",
             code="min_stay_not_met",
+        )
+    if nights > MAX_STAY_NIGHTS:
+        raise StayStateError(
+            f"Maximum stay is {MAX_STAY_NIGHTS} nights.",
+            code="max_stay_exceeded",
         )
     if prop.available_from is not None and check_in < prop.available_from:
         raise StayStateError(
@@ -459,7 +468,7 @@ def update_property_ad(  # noqa: PLR0912
 
 
 @transaction.atomic
-def confirm_enquiry(*, enquiry: StayEnquiry, host: Any) -> StayEnquiry:
+def confirm_enquiry(*, enquiry: StayEnquiry, host: Any) -> StayEnquiry:  # noqa: PLR0912
     """Host confirms an enquiry and holds the unit calendar for those nights."""
     _require_stay_capability(host)
     if enquiry.property.host_id != host.id:
@@ -544,6 +553,22 @@ def confirm_enquiry(*, enquiry: StayEnquiry, host: Any) -> StayEnquiry:
 
     enquiry.status = StayEnquiry.Status.CONFIRMED
     enquiry.save(update_fields=("status", "unit", "unit_reservation", "updated_at"))
+
+    try:
+        request_notification(
+            recipient_id=enquiry.customer_id,
+            purpose="stay.enquiry.confirmed",
+            channel=NotificationIntent.Channel.IN_APP,
+            template_code="stay_enquiry_confirmed",
+            context={
+                "property_title": enquiry.property.title,
+                "host_name": str(getattr(enquiry.property.host, "display_name", "Host")),
+            },
+            idempotency_key=f"stay-enq-conf:{enquiry.id}",
+        )
+    except Exception:
+        logger.exception("Failed to dispatch stay enquiry confirmed notification")
+
     return enquiry
 
 
@@ -808,6 +833,25 @@ def respond_enquiry(
     enquiry.responded_at = timezone.now()
     enquiry.status = StayEnquiry.Status.DECLINED if decline else StayEnquiry.Status.RESPONDED
     enquiry.save(update_fields=("host_response", "responded_at", "status", "updated_at"))
+
+    if not decline and enquiry.customer_id:
+        try:
+            resp_time = enquiry.responded_at.isoformat() if enquiry.responded_at else "1"
+            request_notification(
+                recipient_id=enquiry.customer_id,
+                purpose="stay.enquiry.responded",
+                channel=NotificationIntent.Channel.IN_APP,
+                template_code="stay_enquiry_responded",
+                context={
+                    "property_title": enquiry.property.title,
+                    "host_name": str(getattr(enquiry.property.host, "display_name", "Host")),
+                    "response_text": (enquiry.host_response or "")[:120],
+                },
+                idempotency_key=f"stay-enq-resp:{enquiry.id}:{resp_time}",
+            )
+        except Exception:
+            logger.exception("Failed to dispatch stay enquiry responded notification")
+
     return enquiry
 
 
@@ -823,6 +867,7 @@ def public_properties(  # noqa: PLR0912
     variant_code: str = "",
     check_in: date | None = None,
     check_out: date | None = None,
+    sort: str = "newest",
     limit: int | None = None,
     offset: int = 0,
 ) -> models.QuerySet[Property]:
@@ -891,7 +936,25 @@ def public_properties(  # noqa: PLR0912
         )
         qs = qs.filter(id__in=available_property_ids)
 
-    qs = qs.distinct().order_by("-created_at")
+    if sort == "price_asc":
+        qs = qs.annotate(
+            sort_price=models.Min(
+                "units__nightly_rate_paise", filter=models.Q(units__is_active=True)
+            )
+        ).order_by(models.F("sort_price").asc(nulls_last=True), "-created_at")
+    elif sort == "price_desc":
+        qs = qs.annotate(
+            sort_price=models.Min(
+                "units__nightly_rate_paise", filter=models.Q(units__is_active=True)
+            )
+        ).order_by(models.F("sort_price").desc(nulls_last=True), "-created_at")
+    elif sort == "rating_desc":
+        qs = qs.annotate(sort_rating=models.Avg("reviews__rating")).order_by(
+            models.F("sort_rating").desc(nulls_last=True), "-created_at"
+        )
+    else:
+        qs = qs.distinct().order_by("-created_at")
+
     if offset:
         qs = qs[offset:]
     if limit is not None:

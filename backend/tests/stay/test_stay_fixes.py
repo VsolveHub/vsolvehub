@@ -15,12 +15,14 @@ from apps.catalog.models import (
     Subcategory,
 )
 from apps.identity.models import Role, UserRole
+from apps.notifications.models import NotificationIntent
 from apps.partners.models import PartnerApplication, PartnerCapability, PartnerProfile
-from apps.stay.models import StayEnquiry, StayReservation
+from apps.stay.models import StayEnquiry, StayReservation, StayReview
 from apps.stay.services import (
     StayStateError,
     check_in_reservation,
     check_out_reservation,
+    confirm_enquiry,
     create_enquiry,
     create_property,
     create_reservation,
@@ -28,6 +30,7 @@ from apps.stay.services import (
     expire_stale_enquiries,
     moderate_property,
     public_properties,
+    respond_enquiry,
     submit_property,
 )
 from tests.helpers import force_role_client
@@ -35,6 +38,8 @@ from tests.helpers import force_role_client
 User = get_user_model()
 TARGET_RATING = 5
 ALTERNATIVE_RATING = 4
+RATING_THREE = 3
+EXPECTED_MIN_RESULTS = 2
 
 
 @pytest.fixture
@@ -351,3 +356,155 @@ def test_partner_property_media_management(stay_env, client):
     )
     assert del_resp.status_code == status.HTTP_204_NO_CONTENT
     assert not prop.media.filter(id=media_id).exists()
+
+
+@pytest.mark.django_db
+def test_max_stay_nights_exceeded(stay_env):
+    prop = _create_published_prop(stay_env["variant_res"], stay_env["partner"])
+    unit = prop.units.first()
+    check_in = timezone.localdate() + timedelta(days=1)
+    check_out = check_in + timedelta(days=91)  # Exceeds MAX_STAY_NIGHTS = 90
+
+    with pytest.raises(StayStateError) as exc_info:
+        create_reservation(
+            customer=stay_env["customer"],
+            property_id=prop.id,
+            unit_id=unit.id,
+            check_in=check_in,
+            check_out=check_out,
+        )
+    assert exc_info.value.code == "max_stay_exceeded"
+
+
+@pytest.mark.django_db
+def test_stay_sorting_price_and_rating(stay_env, client):
+    # Prop 1: rate 3000, 1 review of rating 3
+    prop1 = _create_published_prop(
+        stay_env["variant_res"], stay_env["partner"], title="Stay Low Price"
+    )
+    unit1 = prop1.units.first()
+    unit1.nightly_rate_paise = 300000
+    unit1.save()
+
+    # Prop 2: rate 8000, 1 review of rating 5
+    prop2 = _create_published_prop(
+        stay_env["variant_res"], stay_env["partner"], title="Stay High Price"
+    )
+    unit2 = prop2.units.first()
+    unit2.nightly_rate_paise = 800000
+    unit2.save()
+
+    # Ratings
+    StayReview.objects.create(
+        property=prop1, customer=stay_env["customer"], rating=RATING_THREE, body="Average"
+    )
+    StayReview.objects.create(
+        property=prop2, customer=stay_env["customer"], rating=TARGET_RATING, body="Superb"
+    )
+
+    # Price ASC
+    resp_asc = client.get("/api/v1/stays?sort=price_asc")
+    assert resp_asc.status_code == status.HTTP_200_OK
+    items_asc = resp_asc.data
+    assert len(items_asc) >= EXPECTED_MIN_RESULTS
+    assert items_asc[0]["id"] == str(prop1.id)
+    assert items_asc[1]["id"] == str(prop2.id)
+
+    # Price DESC
+    resp_desc = client.get("/api/v1/stays?sort=price_desc")
+    assert resp_desc.status_code == status.HTTP_200_OK
+    items_desc = resp_desc.data
+    assert len(items_desc) >= EXPECTED_MIN_RESULTS
+    assert items_desc[0]["id"] == str(prop2.id)
+    assert items_desc[1]["id"] == str(prop1.id)
+
+    # Rating DESC
+    resp_rating = client.get("/api/v1/stays?sort=rating_desc")
+    assert resp_rating.status_code == status.HTTP_200_OK
+    items_rating = resp_rating.data
+    assert len(items_rating) >= EXPECTED_MIN_RESULTS
+    assert items_rating[0]["id"] == str(prop2.id)
+
+
+@pytest.mark.django_db
+def test_stay_enquiry_notifications(stay_env):
+    prop = _create_published_prop(stay_env["variant_enq"], stay_env["partner"])
+    unit = prop.units.first()
+    check_in = timezone.localdate() + timedelta(days=2)
+    check_out = check_in + timedelta(days=3)
+
+    enq = create_enquiry(
+        customer=stay_env["customer"],
+        property_id=prop.id,
+        unit_id=unit.id,
+        check_in=check_in,
+        check_out=check_out,
+        message="Visiting soon",
+    )
+
+    # Respond to enquiry
+    respond_enquiry(
+        enquiry=enq,
+        host=stay_env["partner"],
+        response="Welcome, room is available!",
+    )
+    enq.refresh_from_db()
+    assert enq.status == StayEnquiry.Status.RESPONDED
+
+    # Check notification intent for responded
+    notif = NotificationIntent.objects.filter(
+        recipient_id=stay_env["customer"].id,
+        template_code="stay_enquiry_responded",
+    ).first()
+    assert notif is not None
+    assert notif.context["response_text"] == "Welcome, room is available!"
+
+    # Confirm enquiry
+    confirm_enquiry(enquiry=enq, host=stay_env["partner"])
+    enq.refresh_from_db()
+    assert enq.status == StayEnquiry.Status.CONFIRMED
+
+    # Check notification intent for confirmed
+    conf_notif = NotificationIntent.objects.filter(
+        recipient_id=stay_env["customer"].id,
+        template_code="stay_enquiry_confirmed",
+    ).first()
+    assert conf_notif is not None
+
+
+@pytest.mark.django_db
+def test_duplicate_stay_review_prevention(stay_env):
+    prop = _create_published_prop(stay_env["variant_enq"], stay_env["partner"])
+    unit = prop.units.first()
+    check_in = timezone.localdate() + timedelta(days=1)
+    check_out = check_in + timedelta(days=2)
+
+    enq = create_enquiry(
+        customer=stay_env["customer"],
+        property_id=prop.id,
+        unit_id=unit.id,
+        check_in=check_in,
+        check_out=check_out,
+    )
+    confirm_enquiry(enquiry=enq, host=stay_env["partner"])
+
+    # First review succeeds
+    rev = create_stay_review(
+        customer=stay_env["customer"],
+        property_id=prop.id,
+        enquiry_id=enq.id,
+        rating=TARGET_RATING,
+        body="First great review!",
+    )
+    assert rev.id is not None
+
+    # Duplicate review fails
+    with pytest.raises(StayStateError) as exc_info:
+        create_stay_review(
+            customer=stay_env["customer"],
+            property_id=prop.id,
+            enquiry_id=enq.id,
+            rating=ALTERNATIVE_RATING,
+            body="Second review attempt!",
+        )
+    assert exc_info.value.code == "duplicate_review"

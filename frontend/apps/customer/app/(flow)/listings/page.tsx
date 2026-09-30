@@ -27,6 +27,8 @@ function ListingsBrowseContent() {
   const [selectedCategory, setSelectedCategory] = useState(initService);
   const [employmentType, setEmploymentType] = useState("");
   const [workMode, setWorkMode] = useState("");
+  const [minSalary, setMinSalary] = useState<number | undefined>(undefined);
+  const [sort, setSort] = useState("latest");
 
   const commitDrafts = useCallback(() => {
     setAppliedQuery(draftQuery);
@@ -44,6 +46,10 @@ function ListingsBrowseContent() {
     setAppliedQuery("");
     setAppliedLocation("");
     setSelectedCategory("");
+    setEmploymentType("");
+    setWorkMode("");
+    setMinSalary(undefined);
+    setSort("latest");
   };
 
   const { data: filtersData } = useQuery({
@@ -58,20 +64,31 @@ function ListingsBrowseContent() {
     isFetching,
     error,
   } = useQuery({
-    queryKey: ["listings", appliedQuery, appliedLocation, selectedCategory, employmentType, workMode],
+    queryKey: [
+      "listings",
+      appliedQuery,
+      appliedLocation,
+      selectedCategory,
+      employmentType,
+      workMode,
+      minSalary,
+      sort,
+    ],
     queryFn: () =>
       fetchListings({
         q: appliedQuery,
         location: appliedLocation,
         service: selectedCategory,
-        sort: "latest",
+        sort,
         employment_type: employmentType,
         work_mode: workMode,
+        min_salary: minSalary,
       }),
     staleTime: 30_000,
     placeholderData: (previous) => previous,
     refetchOnWindowFocus: false,
   });
+
 
   const hasActiveFilters = Boolean(draftQuery || draftLocation || selectedCategory);
 
@@ -120,9 +137,40 @@ function ListingsBrowseContent() {
       </PartAHero>
 
       <div className="flex flex-wrap gap-2">
-        <PartAPill label="All jobs" active={!employmentType && !workMode} onClick={() => { setEmploymentType(""); setWorkMode(""); }} />
-        <PartAPill label="Full-time" active={employmentType === "Full-Time"} onClick={() => setEmploymentType("Full-Time")} />
-        <PartAPill label="On-site" active={workMode === "On-site"} onClick={() => setWorkMode("On-site")} />
+        <PartAPill
+          label="All jobs"
+          active={!employmentType && !workMode && minSalary === undefined}
+          onClick={() => {
+            setEmploymentType("");
+            setWorkMode("");
+            setMinSalary(undefined);
+          }}
+        />
+        <PartAPill
+          label="Full-time"
+          active={employmentType === "Full-Time"}
+          onClick={() => setEmploymentType((v) => (v === "Full-Time" ? "" : "Full-Time"))}
+        />
+        <PartAPill
+          label="On-site"
+          active={workMode === "On-site"}
+          onClick={() => setWorkMode((v) => (v === "On-site" ? "" : "On-site"))}
+        />
+        <PartAPill
+          label="₹20k+ / mo"
+          active={minSalary === 2000000}
+          onClick={() => setMinSalary((v) => (v === 2000000 ? undefined : 2000000))}
+        />
+        <PartAPill
+          label="₹40k+ / mo"
+          active={minSalary === 4000000}
+          onClick={() => setMinSalary((v) => (v === 4000000 ? undefined : 4000000))}
+        />
+        <PartAPill
+          label="₹60k+ / mo"
+          active={minSalary === 6000000}
+          onClick={() => setMinSalary((v) => (v === 6000000 ? undefined : 6000000))}
+        />
       </div>
 
       <ListingFilters
@@ -137,9 +185,10 @@ function ListingsBrowseContent() {
         count={listings.length}
         place={appliedLocation || "Hyderabad"}
         noun="jobs"
-        sort="latest"
-        onSort={() => undefined}
+        sort={sort}
+        onSort={setSort}
       />
+
 
       {/* Error Notice */}
       {error ? (

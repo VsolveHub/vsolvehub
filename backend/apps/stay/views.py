@@ -25,6 +25,7 @@ from apps.stay.serializers import (
     OpsCancelStayReservationSerializer,
     PropertyMediaSerializer,
     PropertySerializer,
+    PropertySummarySerializer,
     RespondEnquirySerializer,
     StayEnquirySerializer,
     StayModerationSerializer,
@@ -109,10 +110,11 @@ class StayBrowseView(APIView):
             OpenApiParameter("max_price", OpenApiTypes.INT, OpenApiParameter.QUERY),
             OpenApiParameter("check_in", OpenApiTypes.DATE, OpenApiParameter.QUERY),
             OpenApiParameter("check_out", OpenApiTypes.DATE, OpenApiParameter.QUERY),
+            OpenApiParameter("sort", OpenApiTypes.STR, OpenApiParameter.QUERY),
             OpenApiParameter("limit", OpenApiTypes.INT, OpenApiParameter.QUERY),
             OpenApiParameter("offset", OpenApiTypes.INT, OpenApiParameter.QUERY),
         ],
-        responses=PropertySerializer(many=True),
+        responses=PropertySummarySerializer(many=True),
     )
     def get(self, request: Any) -> Response:
         sharing_count = request.query_params.get("sharing_count")
@@ -122,6 +124,7 @@ class StayBrowseView(APIView):
         max_price = request.query_params.get("max_price")
         check_in_raw = request.query_params.get("check_in")
         check_out_raw = request.query_params.get("check_out")
+        sort_param = request.query_params.get("sort", "newest")
         limit_raw = request.query_params.get("limit")
         offset_raw = request.query_params.get("offset")
 
@@ -151,10 +154,11 @@ class StayBrowseView(APIView):
             variant_code=request.query_params.get("service", ""),
             check_in=check_in_date,
             check_out=check_out_date,
+            sort=sort_param,
             limit=int(limit_raw) if limit_raw and limit_raw.isdigit() else None,
             offset=int(offset_raw) if offset_raw and offset_raw.isdigit() else 0,
         )
-        return Response(PropertySerializer(props, many=True).data)
+        return Response(PropertySummarySerializer(props, many=True).data)
 
 
 class StayQuoteView(APIView):

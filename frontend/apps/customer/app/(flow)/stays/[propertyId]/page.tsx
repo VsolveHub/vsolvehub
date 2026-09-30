@@ -8,6 +8,7 @@ import {
   AlertCircle,
   ArrowLeft,
   Building,
+  Calendar,
   Car,
   CheckCircle2,
   Clock,
@@ -25,8 +26,9 @@ import {
 import { Badge, Button, Dialog, ErrorState, Skeleton, Textarea } from "@vsolve/ui";
 
 import { formatPaise, stayFields } from "@/features/stays/model";
-import { fetchStayProperty, submitStayReview } from "@/features/stays/queries";
-import { StayImageGallery, StayQuotePanel } from "@/features/stays/view";
+import { fetchStayProperty, fetchStays, submitStayReview } from "@/features/stays/queries";
+import { StayCard, StayImageGallery, StayQuotePanel } from "@/features/stays/view";
+
 
 export default function StayDetailPage() {
   const params = useParams<{ propertyId: string }>();
@@ -167,6 +169,17 @@ export default function StayDetailPage() {
               <div className="mt-2 flex items-center gap-1.5 text-xs text-text-secondary">
                 <Clock className="size-3.5 shrink-0 text-brand" />
                 <span>Minimum stay: {property.min_stay_nights} nights</span>
+              </div>
+            )}
+
+            {(property.available_from || property.available_until) && (
+              <div className="mt-2 flex items-center gap-1.5 text-xs text-brand font-medium">
+                <Calendar className="size-3.5 shrink-0" />
+                <span>
+                  Booking window:{" "}
+                  {property.available_from ? `Available from ${property.available_from}` : "Open availability"}
+                  {property.available_until ? ` until ${property.available_until}` : ""}
+                </span>
               </div>
             )}
 
@@ -426,6 +439,52 @@ export default function StayDetailPage() {
           </div>
         </div>
       </Dialog>
+
+      {/* Similar Stays Recommendations (P3-4) */}
+      <SimilarStaysSection currentPropertyId={property.id} location={property.location_text} />
     </main>
   );
 }
+
+function SimilarStaysSection({
+  currentPropertyId,
+  location,
+}: {
+  currentPropertyId: string;
+  location?: string;
+}) {
+  const city = location ? location.split(",")[0]?.trim() : undefined;
+  const { data: stays = [] } = useQuery({
+    queryKey: ["similar-stays", currentPropertyId, city],
+    queryFn: () => fetchStays({ location: city, limit: 6 }),
+    staleTime: 60_000,
+  });
+
+  const similarStays = stays.filter((s) => s.id !== currentPropertyId).slice(0, 3);
+  if (similarStays.length === 0) return null;
+
+  return (
+    <section className="mt-8 border-t border-line/70 pt-8">
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h2 className="text-xl font-bold text-text">Similar Stays You May Like</h2>
+          <p className="text-xs text-text-secondary mt-0.5">
+            Other verified rooms and accommodation in this area
+          </p>
+        </div>
+        <Link
+          href="/stays"
+          className="text-xs font-bold text-action hover:underline"
+        >
+          View all stays →
+        </Link>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        {similarStays.map((item) => (
+          <StayCard key={item.id} property={item} />
+        ))}
+      </div>
+    </section>
+  );
+}
+

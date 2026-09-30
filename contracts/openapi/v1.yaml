@@ -4886,6 +4886,14 @@ paths:
         schema:
           type: string
       - in: query
+        name: max_salary
+        schema:
+          type: integer
+      - in: query
+        name: min_salary
+        schema:
+          type: integer
+      - in: query
         name: q
         schema:
           type: string
@@ -17954,6 +17962,10 @@ paths:
         name: sharing_count
         schema:
           type: integer
+      - in: query
+        name: sort
+        schema:
+          type: string
       tags:
       - stays
       security:
@@ -17966,7 +17978,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Property'
+                  $ref: '#/components/schemas/PropertySummary'
           description: ''
   /api/v1/stays/{property_id}:
     get:
@@ -31137,6 +31149,82 @@ components:
       - created_at
       - id
       - url
+    PropertySummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        title:
+          type: string
+          maxLength: 180
+        description:
+          type: string
+        location_text:
+          type: string
+          maxLength: 180
+        moderation_status:
+          $ref: '#/components/schemas/ModerationStatusEnum'
+        public_state:
+          type: string
+          readOnly: true
+        host_name:
+          type: string
+          readOnly: true
+        variant:
+          type: string
+          format: uuid
+        structured_fields: {}
+        min_stay_nights:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        available_from:
+          type: string
+          format: date
+          nullable: true
+        available_until:
+          type: string
+          format: date
+          nullable: true
+        media:
+          type: array
+          items:
+            $ref: '#/components/schemas/PropertyMedia'
+          readOnly: true
+        units:
+          type: array
+          items:
+            $ref: '#/components/schemas/Unit'
+          readOnly: true
+        booking_mode:
+          type: string
+          readOnly: true
+        review_count:
+          type: integer
+          readOnly: true
+        average_rating:
+          type: number
+          format: double
+          nullable: true
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - average_rating
+      - booking_mode
+      - created_at
+      - host_name
+      - id
+      - media
+      - public_state
+      - review_count
+      - title
+      - units
+      - variant
     Proposal:
       type: object
       description: A vendor's own quote, read back to that vendor.

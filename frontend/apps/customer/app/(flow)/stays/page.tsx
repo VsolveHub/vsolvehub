@@ -23,6 +23,7 @@ function StaysBrowseContent() {
   const [draftLocation, setDraftLocation] = useState("");
   const [appliedQuery, setAppliedQuery] = useState("");
   const [appliedLocation, setAppliedLocation] = useState("");
+  const [sort, setSort] = useState("newest");
   const [filters, setFilters] = useState<ActiveFilters>(
     initCategory ? { categorySlug: initCategory } : {}
   );
@@ -32,6 +33,7 @@ function StaysBrowseContent() {
     e.preventDefault();
     setAppliedQuery(draftQuery);
     setAppliedLocation(draftLocation);
+    setVisible(6);
   };
 
   const clearFilters = () => {
@@ -40,6 +42,8 @@ function StaysBrowseContent() {
     setAppliedQuery("");
     setAppliedLocation("");
     setFilters({});
+    setSort("newest");
+    setVisible(6);
   };
 
   const {
@@ -59,7 +63,7 @@ function StaysBrowseContent() {
       filters.serviceSlug,
       filters.checkIn,
       filters.checkOut,
-      visible,
+      sort,
     ],
     queryFn: () =>
       fetchStays({
@@ -71,11 +75,15 @@ function StaysBrowseContent() {
         service: filters.serviceSlug || filters.categorySlug,
         check_in: filters.checkIn,
         check_out: filters.checkOut,
-        limit: visible,
+        sort,
+        limit: 100,
         offset: 0,
       }),
     staleTime: 30_000,
   });
+
+  const displayedStays = stays.slice(0, visible);
+
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8">
@@ -147,6 +155,36 @@ function StaysBrowseContent() {
         count={stays.length}
       />
 
+      {/* Results Header with Count & Sort */}
+      {!isLoading && stays.length > 0 ? (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-line pb-3">
+          <p className="text-sm font-semibold text-text">
+            Showing <span className="font-bold text-action">{displayedStays.length}</span> of{" "}
+            <span className="font-bold">{stays.length}</span> {stays.length === 1 ? "stay" : "stays"}
+            {appliedLocation ? ` in "${appliedLocation}"` : ""}
+          </p>
+          <div className="flex items-center gap-2 self-end sm:self-auto">
+            <label htmlFor="stays-sort" className="text-xs font-medium text-text-secondary">
+              Sort by:
+            </label>
+            <select
+              id="stays-sort"
+              value={sort}
+              onChange={(e) => {
+                setSort(e.target.value);
+                setVisible(6);
+              }}
+              className="rounded-control border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-text shadow-xs transition hover:border-line-strong focus:border-line-strong focus:outline-none"
+            >
+              <option value="newest">Newest First</option>
+              <option value="price_asc">Price: Low to High</option>
+              <option value="price_desc">Price: High to Low</option>
+              <option value="rating_desc">Top Rated</option>
+            </select>
+          </div>
+        </div>
+      ) : null}
+
       {/* State Rendering */}
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -178,15 +216,17 @@ function StaysBrowseContent() {
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {stays.map((property) => (
+          {displayedStays.map((property) => (
             <StayCard key={property.id} property={property} />
           ))}
         </div>
       )}
-      {stays.length >= visible ? (
-        <Button type="button" variant="secondary" onClick={() => setVisible((count) => count + 6)}>
-          Load more
-        </Button>
+      {stays.length > visible ? (
+        <div className="flex justify-center pt-4">
+          <Button type="button" variant="secondary" onClick={() => setVisible((count) => count + 6)}>
+            Load more ({stays.length - visible} remaining)
+          </Button>
+        </div>
       ) : null}
     </main>
   );

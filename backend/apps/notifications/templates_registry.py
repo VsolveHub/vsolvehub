@@ -332,6 +332,14 @@ _TEMPLATES: dict[str, tuple[str, str]] = {
         "Your booking is complete",
         "Your booking #{booking_id} is completed. Thank you for choosing V Solve Hub.",
     ),
+    "stay_enquiry_responded": (
+        "Host responded to your enquiry for {property_title}",
+        "{host_name} replied: {response_text}",
+    ),
+    "stay_enquiry_confirmed": (
+        "Your stay enquiry is confirmed!",
+        "{host_name} confirmed your enquiry for {property_title}. Your stay is reserved.",
+    ),
 }
 
 

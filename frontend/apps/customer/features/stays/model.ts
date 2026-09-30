@@ -1,6 +1,7 @@
 import type { Schemas } from "@vsolve/api-client";
 
 export type StayProperty = Schemas["Property"];
+export type StayPropertySummary = Schemas["PropertySummary"];
 export type StayUnit = Schemas["Unit"];
 export type StayEnquiry = Schemas["StayEnquiry"];
 export type StayQuote = Schemas["StayQuoteResponse"];
@@ -22,6 +23,7 @@ export interface StayFilterParams {
   service?: string;
   check_in?: string;
   check_out?: string;
+  sort?: string;
   limit?: number;
   offset?: number;
 }

@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.66.0)
- * Checksum: 3548d4bec8bdef2e
+ * Checksum: 7a790bce188e3c7d
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -12476,6 +12476,32 @@ export interface components {
             /** Format: date-time */
             readonly created_at: string;
         };
+        PropertySummary: {
+            /** Format: uuid */
+            readonly id: string;
+            title: string;
+            description?: string;
+            location_text?: string;
+            moderation_status?: components["schemas"]["ModerationStatusEnum"];
+            readonly public_state: string;
+            readonly host_name: string;
+            /** Format: uuid */
+            variant: string;
+            structured_fields?: unknown;
+            min_stay_nights?: number;
+            /** Format: date */
+            available_from?: string | null;
+            /** Format: date */
+            available_until?: string | null;
+            readonly media: components["schemas"]["PropertyMedia"][];
+            readonly units: components["schemas"]["Unit"][];
+            readonly booking_mode: string;
+            readonly review_count: number;
+            /** Format: double */
+            readonly average_rating: number | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
         /** @description A vendor's own quote, read back to that vendor. */
         Proposal: {
             /** Format: uuid */
@@ -20344,6 +20370,8 @@ export interface operations {
                 employment_type?: string;
                 experience?: string;
                 location?: string;
+                max_salary?: number;
+                min_salary?: number;
                 q?: string;
                 salary_band?: string;
                 service?: string;
@@ -32642,6 +32670,7 @@ export interface operations {
                 q?: string;
                 service?: string;
                 sharing_count?: number;
+                sort?: string;
             };
             header?: never;
             path?: never;
@@ -32654,7 +32683,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Property"][];
+                    "application/json": components["schemas"]["PropertySummary"][];
                 };
             };
         };

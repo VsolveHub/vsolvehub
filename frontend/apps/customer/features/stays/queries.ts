@@ -6,6 +6,7 @@ import { getApiClient } from "@/lib/api/browser";
 import type { StayFilterParams } from "./model";
 
 export type StayProperty = Schemas["Property"];
+export type StayPropertySummary = Schemas["PropertySummary"];
 export type StayEnquiry = Schemas["StayEnquiry"];
 export type StayQuote = Schemas["StayQuoteResponse"];
 export type CreateEnquiryRequest = Schemas["CreateEnquiryRequest"];
@@ -25,6 +26,7 @@ export function fetchStays(params?: StayFilterParams) {
           max_price: params?.max_price,
           check_in: params?.check_in,
           check_out: params?.check_out,
+          sort: params?.sort,
           limit: params?.limit,
           offset: params?.offset,
         },

@@ -6,10 +6,10 @@ import { Badge, Button } from "@vsolve/ui";
 
 import { SaveHeart, useSavedItems } from "@/features/part-a";
 
-import { formatPaise, stayFields, type StayProperty } from "../model";
+import { formatPaise, stayFields, type StayProperty, type StayPropertySummary } from "../model";
 
 interface StayCardProps {
-  property: StayProperty;
+  property: StayProperty | StayPropertySummary;
 }
 
 export function StayCard({ property }: StayCardProps) {
@@ -32,6 +32,8 @@ export function StayCard({ property }: StayCardProps) {
       : null;
 
   const detailHref = `/stays/${property.id}`;
+  const averageRating = (property as StayPropertySummary).average_rating;
+  const reviewCount = (property as StayPropertySummary).review_count;
 
   return (
     <article className="group relative flex flex-col justify-between overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface p-5 shadow-xs transition hover:border-line-strong hover:shadow-raised">
@@ -58,10 +60,17 @@ export function StayCard({ property }: StayCardProps) {
             <Building className="size-3" />
             Verified Stay
           </Badge>
-          <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700">
-            <ShieldCheck className="size-3.5 text-emerald-600" />
-            Verified Host
-          </span>
+          <div className="flex items-center gap-2">
+            {averageRating ? (
+              <span className="inline-flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-xs font-bold text-amber-700 border border-amber-200">
+                ★ {averageRating} {reviewCount ? `(${reviewCount})` : ""}
+              </span>
+            ) : null}
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700">
+              <ShieldCheck className="size-3.5 text-emerald-600" />
+              Verified Host
+            </span>
+          </div>
         </div>
 
         {/* Title and Host */}
