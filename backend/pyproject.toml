@@ -108,6 +108,8 @@ django_settings_module = "config.settings.test"
 
 [[tool.mypy.overrides]]
 module = [
+  "boto3",
+  "botocore.*",
   "celery",
   "environ",
 ]

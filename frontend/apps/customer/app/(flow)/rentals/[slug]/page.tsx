@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -15,10 +15,14 @@ import { Badge, ErrorState, Skeleton } from "@vsolve/ui";
 import { formatPaise } from "@/features/rentals/model";
 import { fetchRentalAsset } from "@/features/rentals/queries";
 import { RentalBookPanel } from "@/features/rentals/view";
+import { RENTALS_HREF } from "@/lib/routes";
+import { useCanonicalSlug } from "@/lib/use-canonical-slug";
 
 export default function RentalDetailPage() {
-  const params = useParams<{ assetId: string }>();
-  const assetId = params.assetId;
+  // The page slug; links shared before slugs carry the asset id, which still resolves.
+  const params = useParams<{ slug: string }>();
+  const pageKey = params.slug;
+  const queryClient = useQueryClient();
 
   const {
     data: asset,
@@ -26,10 +30,13 @@ export default function RentalDetailPage() {
     error,
     refetch,
   } = useQuery({
-    queryKey: ["rental-asset", assetId],
-    queryFn: () => fetchRentalAsset(assetId),
-    enabled: Boolean(assetId),
+    queryKey: ["rental-asset", pageKey],
+    queryFn: () => fetchRentalAsset(pageKey),
+    enabled: Boolean(pageKey),
   });
+  useCanonicalSlug(RENTALS_HREF, pageKey, asset?.slug, () =>
+    queryClient.setQueryData(["rental-asset", asset?.slug], asset),
+  );
 
   if (isLoading) {
     return (

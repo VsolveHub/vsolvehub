@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.66.0)
- * Checksum: 1b8b6b098bca7c07
+ * Checksum: a633f8bcd305e76d
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -2008,13 +2008,14 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/listings/{listing_id}": {
+    "/api/v1/listings/{key}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
+        /** @description ``key`` is the page slug; an old link's listing id still works. */
         get: operations["listings_retrieve"];
         put?: never;
         post?: never;
@@ -2080,6 +2081,28 @@ export interface paths {
             cookie?: never;
         };
         get: operations["listings_filters_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/listings/resume-files/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Opens a résumé from its signed link.
+         *
+         *     The file sits in private storage; each open hands out a fresh link that expires in minutes,
+         *     so a copied storage link stops working while the application's own link keeps working.
+         */
+        get: operations["listings_resume_files_retrieve"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6211,13 +6234,14 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/rentals/{asset_id}": {
+    "/api/v1/rentals/{key}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
+        /** @description ``key`` is the page slug; an old link's asset id still works. */
         get: operations["rentals_retrieve"];
         put?: never;
         post?: never;
@@ -7120,13 +7144,14 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/stays/{property_id}": {
+    "/api/v1/stays/{key}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
+        /** @description ``key`` is the page slug; an old link's property id still works. */
         get: operations["stays_retrieve"];
         put?: never;
         post?: never;
@@ -7433,6 +7458,7 @@ export interface components {
             /** Format: uuid */
             listing: string;
             readonly listing_title: string;
+            readonly listing_slug: string;
             readonly status: components["schemas"]["Status26eEnum"];
             applicant_snapshot?: unknown;
             readonly applicant_name: string;
@@ -10131,6 +10157,7 @@ export interface components {
             description: string;
             /** Format: uuid */
             readonly id: string;
+            readonly slug: string;
             readonly poster_name: string;
             readonly service_name: string;
             readonly variant_name: string;
@@ -10196,6 +10223,7 @@ export interface components {
         ListingSummary: {
             /** Format: uuid */
             readonly id: string;
+            readonly slug: string;
             readonly poster_name: string;
             readonly service_name: string;
             readonly variant_name: string;
@@ -11427,6 +11455,7 @@ export interface components {
             description: string;
             /** Format: uuid */
             readonly id: string;
+            readonly slug: string;
             readonly poster_name: string;
             readonly service_name: string;
             readonly variant_name: string;
@@ -11604,6 +11633,7 @@ export interface components {
         PartnerProperty: {
             /** Format: uuid */
             readonly id: string;
+            readonly slug: string;
             title: string;
             description?: string;
             location_text?: string;
@@ -12555,6 +12585,7 @@ export interface components {
         Property: {
             /** Format: uuid */
             readonly id: string;
+            readonly slug: string;
             title: string;
             description?: string;
             location_text?: string;
@@ -12592,6 +12623,7 @@ export interface components {
         PropertySummary: {
             /** Format: uuid */
             readonly id: string;
+            readonly slug: string;
             title: string;
             description?: string;
             location_text?: string;
@@ -13746,6 +13778,7 @@ export interface components {
         RentalAsset: {
             /** Format: uuid */
             readonly id: string;
+            readonly slug: string;
             readonly title: string;
             readonly description: string;
             readonly location_text: string;
@@ -20542,7 +20575,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                listing_id: string;
+                key: string;
             };
             cookie?: never;
         };
@@ -20655,6 +20688,33 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ListingFiltersTaxonomy"];
                 };
+            };
+        };
+    };
+    listings_resume_files_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No response body */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -30453,7 +30513,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                asset_id: string;
+                key: string;
             };
             cookie?: never;
         };
@@ -32840,7 +32900,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                property_id: string;
+                key: string;
             };
             cookie?: never;
         };

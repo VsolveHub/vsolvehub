@@ -1,8 +1,13 @@
 from typing import Any, NoReturn
 from uuid import UUID
 
+from django.conf import settings
+from django.core import signing
 from django.db.models import Q
+from django.http import FileResponse, Http404, HttpResponseRedirect
+from django.http.response import HttpResponseBase
 from django.shortcuts import get_object_or_404
+from django.urls import reverse
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import permissions, status
@@ -12,6 +17,7 @@ from rest_framework.views import APIView
 
 from apps.catalog.models import Service, ServiceVariant, Subcategory
 from apps.foundation.services import execute_idempotent
+from apps.foundation.slugs import lookup_by_slug_or_id
 from apps.listings.exceptions import (
     ApplicationDuplicateApiError,
     ApplicationRateLimitApiError,
@@ -174,8 +180,9 @@ class ListingDetailView(APIView):
     permission_classes = (permissions.AllowAny,)
 
     @extend_schema(responses=ListingDetailSerializer)
-    def get(self, _request: Any, listing_id: UUID) -> Response:
-        listing = get_object_or_404(public_listings(), id=listing_id)
+    def get(self, _request: Any, key: str) -> Response:
+        """``key`` is the page slug; an old link's listing id still works."""
+        listing = get_object_or_404(public_listings(), **lookup_by_slug_or_id(key))
         return Response(ListingDetailSerializer(listing).data)
 
 
@@ -216,7 +223,9 @@ class ListingResumeUploadView(APIView):
             size_bytes=upload.size,
             stored_file=upload,
         )
-        resume_url = request.build_absolute_uri(row.stored_file.url)
+        resume_url = request.build_absolute_uri(
+            reverse("listing-resume-file", kwargs={"token": resume_link_token(row)})
+        )
         return Response(
             {
                 "upload_id": str(row.id),
@@ -224,6 +233,40 @@ class ListingResumeUploadView(APIView):
                 "original_name": row.original_name,
             },
             status=status.HTTP_201_CREATED,
+        )
+
+
+_RESUME_LINK_SALT = "listings.resume-file"
+
+
+def resume_link_token(row: ListingResumeUpload) -> str:
+    """A tamper-proof reference to one résumé. Holding it is what lets someone open the file."""
+    return signing.dumps(str(row.id), salt=_RESUME_LINK_SALT)
+
+
+class ListingResumeFileView(APIView):
+    """Opens a résumé from its signed link.
+
+    The file sits in private storage; each open hands out a fresh link that expires in minutes,
+    so a copied storage link stops working while the application's own link keeps working.
+    """
+
+    permission_classes = (permissions.AllowAny,)
+
+    @extend_schema(responses={302: None, 404: None})
+    def get(self, _request: Any, token: str) -> HttpResponseBase:
+        try:
+            upload_id = signing.loads(token, salt=_RESUME_LINK_SALT)
+        except signing.BadSignature as exc:
+            raise Http404 from exc
+        row = get_object_or_404(ListingResumeUpload, id=upload_id)
+        if settings.R2_PRIVATE_ENABLED:
+            return HttpResponseRedirect(row.stored_file.url)
+        return FileResponse(
+            row.stored_file.open("rb"),
+            as_attachment=False,
+            filename=row.original_name,
+            content_type=row.content_type,
         )
 
 

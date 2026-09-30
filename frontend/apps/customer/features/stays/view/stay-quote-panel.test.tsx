@@ -36,6 +36,7 @@ function refusal(code: string, message = "Refusal message", status = 400) {
 function mockProperty(overrides: Partial<Schemas["Property"]> = {}): Schemas["Property"] {
   return {
     id: "prop-1",
+    slug: "demo-pg",
     title: "Green Villa PG",
     variant: "variant-1",
     description: "Cozy rooms with all amenities.",

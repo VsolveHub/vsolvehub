@@ -37,11 +37,12 @@ export function fetchStayTaxonomy() {
   return request(() => getApiClient().GET("/api/v1/stays/taxonomy"));
 }
 
-export function fetchStayProperty(propertyId: string) {
+/** `key` is the page slug; an old link's property id works too. */
+export function fetchStayProperty(key: string) {
   return request(() =>
-    getApiClient().GET("/api/v1/stays/{property_id}", {
+    getApiClient().GET("/api/v1/stays/{key}", {
       params: {
-        path: { property_id: propertyId },
+        path: { key },
       },
     }),
   );

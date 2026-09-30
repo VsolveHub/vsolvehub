@@ -29,11 +29,12 @@ export function fetchRentals(params?: RentalFilterParams) {
   );
 }
 
-export function fetchRentalAsset(assetId: string) {
+/** `key` is the page slug; an old link's asset id works too. */
+export function fetchRentalAsset(key: string) {
   return request(() =>
-    getApiClient().GET("/api/v1/rentals/{asset_id}", {
+    getApiClient().GET("/api/v1/rentals/{key}", {
       params: {
-        path: { asset_id: assetId },
+        path: { key },
       },
     }),
   );

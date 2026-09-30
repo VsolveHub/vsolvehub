@@ -140,6 +140,71 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
+# --- Cloudflare R2 --------------------------------------------------------------------------------
+# Every stored file lives in R2 once these are set. Two buckets:
+# - public:  photos guests see (stays, rentals, reviews), served from R2_PUBLIC_BASE_URL unsigned.
+# - private: résumés and every private document (KYC, crew IDs, job evidence, attachments), only
+#            ever reached through short-lived signed links. The document "buckets" named further
+#            down become folders inside it.
+# Unset (local development, tests), files stay on this machine's disk exactly as before.
+R2_ACCOUNT_ID = env("R2_ACCOUNT_ID", default="")
+R2_ACCESS_KEY_ID = env("R2_ACCESS_KEY_ID", default="")
+R2_SECRET_ACCESS_KEY = env("R2_SECRET_ACCESS_KEY", default="")
+R2_PUBLIC_BUCKET = env("R2_PUBLIC_BUCKET", default="")
+R2_PUBLIC_BASE_URL = env("R2_PUBLIC_BASE_URL", default="").rstrip("/")
+R2_PRIVATE_BUCKET = env("R2_PRIVATE_BUCKET", default="")
+R2_ENDPOINT_URL = f"https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com" if R2_ACCOUNT_ID else ""
+R2_CREDENTIALS_CONFIGURED = bool(R2_ACCOUNT_ID and R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY)
+R2_PUBLIC_ENABLED = R2_CREDENTIALS_CONFIGURED and bool(R2_PUBLIC_BUCKET and R2_PUBLIC_BASE_URL)
+R2_PRIVATE_ENABLED = R2_CREDENTIALS_CONFIGURED and bool(R2_PRIVATE_BUCKET)
+#: How long a signed link to a private file stays valid.
+R2_PRIVATE_URL_TTL_SECONDS = env.int("R2_PRIVATE_URL_TTL_SECONDS", default=300)
+
+_R2_CONNECTION = {
+    "access_key": R2_ACCESS_KEY_ID,
+    "secret_key": R2_SECRET_ACCESS_KEY,
+    "endpoint_url": R2_ENDPOINT_URL,
+    "region_name": "auto",
+    "signature_version": "s3v4",
+    # Never overwrite: every upload gets a fresh random name, and a clash must not replace a photo.
+    "file_overwrite": False,
+    "default_acl": None,
+}
+STORAGES = {
+    "default": (
+        {
+            "BACKEND": "storages.backends.s3.S3Storage",
+            "OPTIONS": {
+                **_R2_CONNECTION,
+                "bucket_name": R2_PUBLIC_BUCKET,
+                "custom_domain": R2_PUBLIC_BASE_URL.split("://", 1)[-1],
+                "url_protocol": "https:",
+                "querystring_auth": False,
+            },
+        }
+        if R2_PUBLIC_ENABLED
+        else {"BACKEND": "django.core.files.storage.FileSystemStorage"}
+    ),
+    "private": (
+        {
+            "BACKEND": "storages.backends.s3.S3Storage",
+            "OPTIONS": {
+                **_R2_CONNECTION,
+                "bucket_name": R2_PRIVATE_BUCKET,
+                "location": "files",
+                "querystring_auth": True,
+                "querystring_expire": R2_PRIVATE_URL_TTL_SECONDS,
+            },
+        }
+        if R2_PRIVATE_ENABLED
+        else {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+            "OPTIONS": {"location": BASE_DIR / "private-media", "base_url": "/private-media/"},
+        }
+    ),
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+}
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "identity.User"
 
@@ -628,6 +693,7 @@ GEOCODING_CACHE_COORDINATE_PRECISION = env.int(
 )
 
 PARTNER_REQUIRED_DOCUMENT_KINDS = ("GOVERNMENT_ID",)
+# "r2" (Cloudflare, uses R2_PRIVATE_BUCKET above), "supabase", or "unconfigured".
 DOCUMENT_STORAGE_PROVIDER = env("DOCUMENT_STORAGE_PROVIDER", default="unconfigured")
 SUPABASE_STORAGE_URL = env("SUPABASE_STORAGE_URL", default="")
 SUPABASE_SERVICE_ROLE_KEY = env("SUPABASE_SERVICE_ROLE_KEY", default="")

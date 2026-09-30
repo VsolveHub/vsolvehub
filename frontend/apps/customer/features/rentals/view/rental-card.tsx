@@ -5,6 +5,7 @@ import { ArrowRight, MapPin, Wrench } from "lucide-react";
 import { Badge, Button } from "@vsolve/ui";
 
 import { SaveHeart, useSavedItems } from "@/features/part-a";
+import { rentalHref } from "@/lib/routes";
 
 import { formatPaise, type RentalAsset } from "../model";
 
@@ -86,7 +87,7 @@ export function RentalCard({ asset }: RentalCardProps) {
             </p>
           </div>
 
-          <Link href={`/rentals/${asset.id}`}>
+          <Link href={rentalHref(asset.slug)}>
             <Button size="sm" className="inline-flex items-center gap-1.5 font-bold">
               Rent Now
               <ArrowRight className="size-3.5 transition group-hover:translate-x-0.5" />

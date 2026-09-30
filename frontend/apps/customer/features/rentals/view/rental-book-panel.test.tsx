@@ -43,6 +43,7 @@ function errorResponse(code: string, message: string, status = 400) {
 function mockAsset(overrides: Partial<Schemas["RentalAsset"]> = {}): Schemas["RentalAsset"] {
   return {
     id: "asset-1",
+    slug: "demo-mixer",
     partner_name: "Tool Master Rentals",
     variant: "variant-1",
     title: "Heavy Duty Rotary Hammer Drill",

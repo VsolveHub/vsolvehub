@@ -35,11 +35,14 @@ import {
   uploadStayReviewPhoto,
 } from "@/features/stays/queries";
 import { StayCard, StayImageGallery, StayQuotePanel, amenityIcon } from "@/features/stays/view";
+import { STAYS_HREF } from "@/lib/routes";
+import { useCanonicalSlug } from "@/lib/use-canonical-slug";
 
 
 export default function StayDetailPage() {
-  const params = useParams<{ propertyId: string }>();
-  const propertyId = params.propertyId;
+  // The page slug; links shared before slugs carry the property id, which still resolves.
+  const params = useParams<{ slug: string }>();
+  const pageKey = params.slug;
   const queryClient = useQueryClient();
 
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
@@ -55,15 +58,18 @@ export default function StayDetailPage() {
     error,
     refetch,
   } = useQuery({
-    queryKey: ["stay-property", propertyId],
-    queryFn: () => fetchStayProperty(propertyId),
-    enabled: Boolean(propertyId),
+    queryKey: ["stay-property", pageKey],
+    queryFn: () => fetchStayProperty(pageKey),
+    enabled: Boolean(pageKey),
   });
+  useCanonicalSlug(STAYS_HREF, pageKey, property?.slug, () =>
+    queryClient.setQueryData(["stay-property", property?.slug], property),
+  );
 
   const reviewMutation = useMutation({
     mutationFn: () =>
       submitStayReview({
-        property_id: propertyId,
+        property_id: property?.id ?? "",
         rating: reviewRating,
         comment: reviewComment,
         image_urls: reviewPhotos,
@@ -73,7 +79,7 @@ export default function StayDetailPage() {
       setReviewComment("");
       setReviewPhotos([]);
       setReviewError(null);
-      queryClient.invalidateQueries({ queryKey: ["stay-property", propertyId] });
+      queryClient.invalidateQueries({ queryKey: ["stay-property", pageKey] });
     },
     onError: (err: unknown) => {
       const msg = err instanceof Error ? err.message : "Failed to submit review.";

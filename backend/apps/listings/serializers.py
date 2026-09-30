@@ -52,6 +52,7 @@ class ListingSummarySerializer(serializers.ModelSerializer[Listing]):
         model = Listing
         fields: tuple[str, ...] = (
             "id",
+            "slug",
             "poster_name",
             "service_name",
             "variant_name",
@@ -292,6 +293,8 @@ class ApplicationStatusEventSerializer(serializers.ModelSerializer[ApplicationSt
 
 class ApplicationSerializer(serializers.ModelSerializer[Application]):
     listing_title = serializers.CharField(source="listing.title", read_only=True)
+    #: For the "view listing" link: /listings/<listing_slug>.
+    listing_slug = serializers.CharField(source="listing.slug", read_only=True)
     applicant_name = serializers.SerializerMethodField()
     applicant_phone = serializers.SerializerMethodField()
     applicant_email = serializers.SerializerMethodField()
@@ -304,6 +307,7 @@ class ApplicationSerializer(serializers.ModelSerializer[Application]):
             "id",
             "listing",
             "listing_title",
+            "listing_slug",
             "status",
             "applicant_snapshot",
             "applicant_name",

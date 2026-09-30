@@ -5,6 +5,7 @@ import { ArrowRight, MapPin, ShieldCheck, Users } from "lucide-react";
 import { Button } from "@vsolve/ui";
 
 import { SaveHeart, useSavedItems } from "@/features/part-a";
+import { stayHref } from "@/lib/routes";
 
 import {
   formatPaise,
@@ -37,7 +38,7 @@ export function StayCard({ property }: StayCardProps) {
       ? (property as { media: { url: string }[] }).media[0].url
       : null;
 
-  const detailHref = `/stays/${property.id}`;
+  const detailHref = stayHref(property.slug);
   const averageRating = (property as StayPropertySummary).average_rating;
   const reviewCount = (property as StayPropertySummary).review_count;
 

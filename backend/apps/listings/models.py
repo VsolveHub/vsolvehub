@@ -1,9 +1,13 @@
 import uuid
 from datetime import datetime, timedelta
+from typing import Any
 
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
+
+from apps.foundation.slugs import slug_base, unique_slug
+from apps.foundation.storage import private_file_storage
 
 
 class Listing(models.Model):
@@ -30,6 +34,8 @@ class Listing(models.Model):
         "catalog.ServiceVariant", on_delete=models.PROTECT, related_name="listings"
     )
     title = models.CharField(max_length=180)
+    #: The page address: /listings/<slug>. Set once on first save; never follows title edits.
+    slug = models.SlugField(max_length=100, unique=True, editable=False)
     description = models.TextField()
     structured_fields = models.JSONField(default=dict, blank=True)
     salary_min_paise = models.PositiveIntegerField(default=0)
@@ -68,6 +74,15 @@ class Listing(models.Model):
 
     def __str__(self) -> str:
         return self.title
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        # A readable, stable web address, set once (see apps.foundation.slugs).
+        if not self.slug:
+            base = slug_base(self.title, self.location_text, fallback="listing")
+            self.slug = unique_slug(type(self), base, exclude_pk=self.pk)
+            if kwargs.get("update_fields") is not None:
+                kwargs["update_fields"] = {*kwargs["update_fields"], "slug"}
+        super().save(*args, **kwargs)
 
     @property
     def public_state(self) -> str:
@@ -346,5 +361,6 @@ class ListingResumeUpload(models.Model):
     original_name = models.CharField(max_length=180)
     content_type = models.CharField(max_length=80)
     size_bytes = models.PositiveIntegerField()
-    stored_file = models.FileField(upload_to="listing-resumes/")
+    # Private: never on the public photo bucket. Opened through a signed link only.
+    stored_file = models.FileField(upload_to="listing-resumes/", storage=private_file_storage)
     created_at = models.DateTimeField(auto_now_add=True)

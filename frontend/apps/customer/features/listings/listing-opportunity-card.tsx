@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Building, MapPin } from "lucide-react";
 
 import { SaveHeart, useSavedItems } from "@/features/part-a";
+import { listingHref } from "@/lib/routes";
 import { formatMoneyText } from "@vsolve/ui";
 import { listingFields, type Listing } from "./queries";
 
@@ -21,7 +22,7 @@ export function ListingOpportunityCard({ listing }: { listing: Listing }) {
       <div className="absolute top-4 right-4">
         <SaveHeart saved={saved.isSaved(listing.id)} onToggle={() => saved.toggle(listing.id)} />
       </div>
-      <Link href={`/listings/${listing.id}`} className="block pr-12">
+      <Link href={listingHref(listing.slug)} className="block pr-12">
         <div className="flex items-start gap-3">
           <span className="grid size-10 place-items-center rounded-control bg-surface-sunken text-navy-900">
             <Building className="size-4" />
@@ -46,7 +47,7 @@ export function ListingOpportunityCard({ listing }: { listing: Listing }) {
       </Link>
       <div className="mt-3 flex justify-end">
         <Link
-          href={`/listings/${listing.id}#apply-panel`}
+          href={`${listingHref(listing.slug)}#apply-panel`}
           className="rounded-control bg-action px-4 py-2 text-xs font-bold text-action-text"
         >
           Apply

@@ -117,6 +117,32 @@ export const LISTINGS_HREF = "/listings";
 export const RENTALS_HREF = "/rentals";
 export const STAYS_HREF = "/stays";
 
+/** A public page's readable address: /stays/sunrise-pg-madhapur. */
+export function stayHref(slug: string): string {
+  return `${STAYS_HREF}/${encodeURIComponent(slug)}`;
+}
+
+export function rentalHref(slug: string): string {
+  return `${RENTALS_HREF}/${encodeURIComponent(slug)}`;
+}
+
+export function listingHref(slug: string): string {
+  return `${LISTINGS_HREF}/${encodeURIComponent(slug)}`;
+}
+
+/**
+ * Where an old address should go. Links shared before slugs carry an id; once the page has
+ * loaded and knows its slug, the address is swapped for the readable one. Null when it already is.
+ */
+export function canonicalDetailPath(
+  basePath: string,
+  current: string | undefined,
+  slug: string | undefined,
+): string | null {
+  if (!slug || !current || decodeURIComponent(current) === slug) return null;
+  return `${basePath}/${encodeURIComponent(slug)}`;
+}
+
 /** Whether a catalog category slug is the A10 Career/Jobs entry. */
 export function isCareerJobsCategory(categorySlug: string): boolean {
   return categorySlug === CAREER_JOBS_CATEGORY_SLUG;

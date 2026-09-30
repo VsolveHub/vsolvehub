@@ -5,7 +5,11 @@ from apps.listings import views
 urlpatterns = [
     path("listings", views.ListingBrowseView.as_view(), name="listing-browse"),
     path("listings/filters", views.ListingFiltersView.as_view(), name="listing-filters"),
-    path("listings/<uuid:listing_id>", views.ListingDetailView.as_view(), name="listing-detail"),
+    path(
+        "listings/resume-files/<str:token>",
+        views.ListingResumeFileView.as_view(),
+        name="listing-resume-file",
+    ),
     path(
         "listings/<uuid:listing_id>/resume-uploads",
         views.ListingResumeUploadView.as_view(),
@@ -108,4 +112,6 @@ urlpatterns = [
         views.OpsVendorSubscriptionPlanDetailView.as_view(),
         name="ops-vendor-subscription-plan-detail",
     ),
+    # Last: "listings/<key>" would otherwise swallow fixed addresses such as "listings/filters".
+    path("listings/<str:key>", views.ListingDetailView.as_view(), name="listing-detail"),
 ]

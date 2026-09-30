@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 from typing import Any
-from urllib.parse import urlparse
 from uuid import UUID
 
 import jsonschema
@@ -15,6 +14,7 @@ from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 
 from apps.catalog.models import A7VariantConfiguration, Category, Service, Subcategory
 from apps.commerce.models import PaymentAttempt
+from apps.foundation.storage import public_stored_name
 from apps.rental.models import (
     AssetReservation,
     RentalAsset,
@@ -109,11 +109,9 @@ def store_rental_photo(
 
 
 def partner_owns_rental_photo(*, partner: Any, url: str) -> bool:
-    path = urlparse(url).path
-    media_prefix = settings.MEDIA_URL.rstrip("/") + "/"
-    if not path.startswith(media_prefix + "rental-ads/"):
+    stored_name = public_stored_name(url, folder="rental-ads/")
+    if stored_name is None:
         return False
-    stored_name = path[len(media_prefix) :] if path.startswith(media_prefix) else path.lstrip("/")
     return RentalPhotoUpload.objects.filter(partner=partner, stored_file=stored_name).exists()
 
 

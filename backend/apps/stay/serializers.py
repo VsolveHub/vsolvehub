@@ -120,6 +120,7 @@ class PropertySummarySerializer(serializers.ModelSerializer):
         model = Property
         fields = (
             "id",
+            "slug",
             "title",
             "description",
             "location_text",
@@ -185,6 +186,7 @@ class PropertySerializer(serializers.ModelSerializer):
         model = Property
         fields: tuple[str, ...] = (
             "id",
+            "slug",
             "title",
             "description",
             "location_text",

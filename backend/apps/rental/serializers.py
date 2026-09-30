@@ -22,6 +22,7 @@ class RentalAssetSerializer(serializers.ModelSerializer):
         model = RentalAsset
         fields = (
             "id",
+            "slug",
             "title",
             "description",
             "location_text",

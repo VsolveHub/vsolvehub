@@ -52,11 +52,23 @@ if GEOCODING_PROVIDER == "unconfigured":
     raise ImproperlyConfigured("GEOCODING_PROVIDER must be configured in production.")
 if "configure-production-contact" in GEOCODING_USER_AGENT:
     raise ImproperlyConfigured("GEOCODING_USER_AGENT must identify a production contact.")
-if DOCUMENT_STORAGE_PROVIDER != "supabase":
-    raise ImproperlyConfigured("DOCUMENT_STORAGE_PROVIDER must be supabase in production.")
-if not SUPABASE_STORAGE_URL.startswith("https://"):
+# Files on a server's own disk vanish when it is replaced: production keeps every file in R2.
+if not R2_PUBLIC_ENABLED:
+    raise ImproperlyConfigured(
+        "R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_PUBLIC_BUCKET and "
+        "R2_PUBLIC_BASE_URL must be configured in production."
+    )
+if not R2_PUBLIC_BASE_URL.startswith("https://"):
+    raise ImproperlyConfigured("R2_PUBLIC_BASE_URL must be an https:// address.")
+if not R2_PRIVATE_ENABLED:
+    raise ImproperlyConfigured("R2_PRIVATE_BUCKET must be configured in production.")
+if R2_PRIVATE_BUCKET == R2_PUBLIC_BUCKET:
+    raise ImproperlyConfigured("R2_PRIVATE_BUCKET must not be the public photo bucket.")
+if DOCUMENT_STORAGE_PROVIDER not in {"r2", "supabase"}:
+    raise ImproperlyConfigured("DOCUMENT_STORAGE_PROVIDER must be r2 or supabase in production.")
+if DOCUMENT_STORAGE_PROVIDER == "supabase" and not SUPABASE_STORAGE_URL.startswith("https://"):
     raise ImproperlyConfigured("SUPABASE_STORAGE_URL must be an HTTPS Storage API URL.")
-if not SUPABASE_SERVICE_ROLE_KEY:
+if DOCUMENT_STORAGE_PROVIDER == "supabase" and not SUPABASE_SERVICE_ROLE_KEY:
     raise ImproperlyConfigured("SUPABASE_SERVICE_ROLE_KEY must be configured in production.")
 if not PARTNER_DOCUMENT_BUCKET:
     raise ImproperlyConfigured("PARTNER_DOCUMENT_BUCKET must be configured in production.")

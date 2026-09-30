@@ -28,17 +28,25 @@ import {
   RoleHeader,
 } from "@/features/listings/view";
 import { useCustomerSession } from "@/features/session/queries";
+import { LISTINGS_HREF } from "@/lib/routes";
+import { useCanonicalSlug } from "@/lib/use-canonical-slug";
 
 export default function ListingDetailPage() {
-  const params = useParams<{ listingId: string }>();
-  const listingId = params.listingId;
+  // The page slug; links shared before slugs carry the listing id, which still resolves.
+  const params = useParams<{ slug: string }>();
+  const pageKey = params.slug;
   const queryClient = useQueryClient();
   const session = useCustomerSession();
 
   const { data: listing, isLoading, error } = useQuery({
-    queryKey: ["listing", listingId],
-    queryFn: () => fetchListing(listingId),
+    queryKey: ["listing", pageKey],
+    queryFn: () => fetchListing(pageKey),
   });
+  // Actions (apply, report, résumé upload) address the listing by its id.
+  const listingId = listing?.id ?? "";
+  useCanonicalSlug(LISTINGS_HREF, pageKey, listing?.slug, () =>
+    queryClient.setQueryData(["listing", listing?.slug], listing),
+  );
 
   const myApplicationsQuery = useQuery({
     queryKey: ["my-listing-applications"],
@@ -79,7 +87,7 @@ export default function ListingDetailPage() {
       }),
     onSuccess: () => {
       setFieldErrors({});
-      queryClient.invalidateQueries({ queryKey: ["listing", listingId] });
+      queryClient.invalidateQueries({ queryKey: ["listing", pageKey] });
       queryClient.invalidateQueries({ queryKey: ["my-listing-applications"] });
     },
     onError: (err) => setFieldErrors(serverFieldErrors(err)),

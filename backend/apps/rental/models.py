@@ -5,10 +5,13 @@ from __future__ import annotations
 import uuid
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 from django.conf import settings
 from django.db import models
 from django.db.models import Q, QuerySet
+
+from apps.foundation.slugs import slug_base, unique_slug
 
 
 def rental_ad_upload_to(instance: models.Model, filename: str) -> str:
@@ -38,6 +41,8 @@ class RentalAsset(models.Model):
         "catalog.ServiceVariant", on_delete=models.PROTECT, related_name="rental_assets"
     )
     title = models.CharField(max_length=180)
+    #: The page address: /rentals/<slug>. Set once on first save; never follows title edits.
+    slug = models.SlugField(max_length=100, unique=True, editable=False)
     description = models.TextField(blank=True)
     asset_identifier = models.CharField(max_length=80, blank=True)
     is_serialized = models.BooleanField(default=True)
@@ -84,6 +89,15 @@ class RentalAsset(models.Model):
 
     def __str__(self) -> str:
         return self.title
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        # A readable, stable web address, set once (see apps.foundation.slugs).
+        if not self.slug:
+            base = slug_base(self.title, self.location_text, fallback="rental")
+            self.slug = unique_slug(type(self), base, exclude_pk=self.pk)
+            if kwargs.get("update_fields") is not None:
+                kwargs["update_fields"] = {*kwargs["update_fields"], "slug"}
+        super().save(*args, **kwargs)
 
     @property
     def public_state(self) -> str:

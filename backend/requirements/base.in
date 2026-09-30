@@ -15,4 +15,8 @@ psycopg[binary,pool]>=3.2,<4
 # problem for a financial feature.
 reportlab>=4,<6
 requests>=2.34,<3
+# Cloudflare R2 (S3-compatible) for every stored file: public photos through django-storages,
+# private documents through signed links from boto3 directly.
+boto3>=1.40,<2
+django-storages[s3]>=1.14,<2
 structlog>=25,<26

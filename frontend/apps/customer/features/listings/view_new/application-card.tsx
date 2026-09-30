@@ -7,6 +7,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { Badge, Card, StatusChip, formatDate } from "@vsolve/ui";
+import { listingHref } from "@/lib/routes";
 
 import { formatStatusEventKind } from "../model";
 import {
@@ -53,7 +54,7 @@ export function ApplicationCard({
 
           <h2 className="text-lg font-bold text-text">
             <Link
-              href={`/listings/${app.listing}`}
+              href={listingHref(app.listing_slug)}
               className="inline-flex items-center gap-1.5 transition hover:text-text-link hover:underline"
             >
               {app.listing_title || "Job Listing"}

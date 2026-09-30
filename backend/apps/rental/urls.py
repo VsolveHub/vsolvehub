@@ -6,7 +6,6 @@ urlpatterns = [
     path("rentals", views.RentalBrowseView.as_view(), name="rental-browse"),
     path("rentals/taxonomy", views.RentalTaxonomyView.as_view(), name="rental-taxonomy"),
     path("rentals/book", views.RentalBookView.as_view(), name="rental-book"),
-    path("rentals/<uuid:asset_id>", views.RentalDetailView.as_view(), name="rental-detail"),
     path("me/rentals", views.MyRentalsView.as_view(), name="my-rentals"),
     path(
         "me/rentals/<uuid:booking_id>/cancel",
@@ -49,4 +48,6 @@ urlpatterns = [
         views.OpsRentalBookingCancelView.as_view(),
         name="ops-rental-booking-cancel",
     ),
+    # Last: "rentals/<key>" would otherwise swallow fixed addresses such as "rentals/book".
+    path("rentals/<str:key>", views.RentalDetailView.as_view(), name="rental-detail"),
 ]

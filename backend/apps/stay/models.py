@@ -10,6 +10,8 @@ from typing import Any
 from django.conf import settings
 from django.db import models
 
+from apps.foundation.slugs import slug_base, unique_slug
+
 
 def stay_ad_upload_to(instance: models.Model, filename: str) -> str:
     ext = Path(filename).suffix.lower()
@@ -55,6 +57,8 @@ class Property(models.Model):
         "catalog.ServiceVariant", on_delete=models.PROTECT, related_name="stay_properties"
     )
     title = models.CharField(max_length=180)
+    #: The page address: /stays/<slug>. Set once on first save; never follows title edits.
+    slug = models.SlugField(max_length=100, unique=True, editable=False)
     description = models.TextField(blank=True)
     location_text = models.CharField(max_length=180, blank=True)
     moderation_status = models.CharField(
@@ -79,6 +83,15 @@ class Property(models.Model):
 
     def __str__(self) -> str:
         return self.title
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        # A readable, stable web address, set once (see apps.foundation.slugs).
+        if not self.slug:
+            base = slug_base(self.title, self.location_text, fallback="stay")
+            self.slug = unique_slug(type(self), base, exclude_pk=self.pk)
+            if kwargs.get("update_fields") is not None:
+                kwargs["update_fields"] = {*kwargs["update_fields"], "slug"}
+        super().save(*args, **kwargs)
 
     @property
     def public_state(self) -> str:

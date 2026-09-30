@@ -2,7 +2,6 @@ import calendar
 import logging
 from datetime import date, timedelta
 from typing import Any
-from urllib.parse import urlparse
 from uuid import UUID
 
 import jsonschema
@@ -17,6 +16,7 @@ from apps.commerce.services import _request_automatic_refund
 from apps.commerce.services.base import PAYMENT_FINAL_STATES, _open_exception
 from apps.commerce.services.payments import initiate_standalone_payment_attempt
 from apps.foundation.models import OutboxEvent
+from apps.foundation.storage import public_stored_name
 from apps.notifications.models import NotificationIntent
 from apps.notifications.services import request_notification
 from apps.partners.capabilities import is_approved_stay_host
@@ -299,11 +299,7 @@ def store_stay_review_photo(*, customer: Any, upload: Any) -> StayReviewPhoto:
 
 
 def _stored_name_from_url(url: str, folder: str) -> str | None:
-    path = urlparse(url).path
-    media_prefix = settings.MEDIA_URL.rstrip("/") + "/"
-    if not path.startswith(media_prefix + folder):
-        return None
-    return path[len(media_prefix) :]
+    return public_stored_name(url, folder=folder)
 
 
 def customer_owns_review_photo(*, customer: Any, url: str) -> bool:

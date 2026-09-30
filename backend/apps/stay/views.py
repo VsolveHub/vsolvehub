@@ -9,6 +9,7 @@ from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.foundation.slugs import lookup_by_slug_or_id
 from apps.partners.models import PartnerProfile
 from apps.partners.permissions import IsOperationsUser, IsPartnerUser
 from apps.stay.exceptions import StayStateApiError
@@ -176,8 +177,9 @@ class StayDetailView(APIView):
     permission_classes = (permissions.AllowAny,)
 
     @extend_schema(responses=PropertySerializer)
-    def get(self, request: Any, property_id: UUID) -> Response:
-        prop = get_object_or_404(public_properties(), id=property_id)
+    def get(self, request: Any, key: str) -> Response:
+        """``key`` is the page slug; an old link's property id still works."""
+        prop = get_object_or_404(public_properties(), **lookup_by_slug_or_id(key))
         return Response(PropertySerializer(prop, context={"request": request}).data)
 
 

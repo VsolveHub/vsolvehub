@@ -9,6 +9,7 @@ import {
   Users,
 } from "lucide-react";
 import { Badge, Card, formatMoney, formatMoneyText, formatDate } from "@vsolve/ui";
+import { listingHref } from "@/lib/routes";
 
 import { listingFields, type Listing } from "../queries";
 
@@ -40,7 +41,7 @@ export function ListingRow({ listing }: ListingRowProps) {
   const shift = fields.shift || fields.work_mode;
 
   return (
-    <Link href={`/listings/${listing.id}`} className="group block focus-visible:outline-none">
+    <Link href={listingHref(listing.slug)} className="group block focus-visible:outline-none">
       <Card
         className={`relative transition duration-fast hover:-translate-y-0.5 hover:shadow-raised ${
           listing.is_premium

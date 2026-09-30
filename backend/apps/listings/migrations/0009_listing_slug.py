@@ -1,0 +1,30 @@
+"""Readable page addresses: add ``slug`` and fill it for existing rows."""
+
+from typing import Any
+
+from django.db import migrations, models
+
+from apps.foundation.slugs import slug_base, unique_slug
+
+
+def fill_slugs(apps: Any, _schema_editor: Any) -> None:
+    model = apps.get_model("listings", "Listing")
+    for row in model.objects.filter(slug__isnull=True).order_by("created_at").iterator():
+        base = slug_base(row.title, row.location_text, fallback="listing")
+        row.slug = unique_slug(model, base, exclude_pk=row.pk)
+        row.save(update_fields=["slug"])
+
+
+class Migration(migrations.Migration):
+    dependencies = [
+        ("listings", "0008_resume_private_storage"),
+    ]
+
+    operations = [
+        migrations.AddField(
+            model_name="listing",
+            name="slug",
+            field=models.SlugField(editable=False, max_length=100, null=True, unique=True),
+        ),
+        migrations.RunPython(fill_slugs, migrations.RunPython.noop),
+    ]

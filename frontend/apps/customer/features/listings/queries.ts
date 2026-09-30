@@ -86,10 +86,11 @@ export function uploadListingResume(listingId: string, file: File) {
   );
 }
 
-export function fetchListing(id: string) {
+/** `key` is the page slug; an old link's listing id works too. */
+export function fetchListing(key: string) {
   return request(() =>
-    getApiClient().GET("/api/v1/listings/{listing_id}", {
-      params: { path: { listing_id: id } },
+    getApiClient().GET("/api/v1/listings/{key}", {
+      params: { path: { key } },
     }),
   );
 }

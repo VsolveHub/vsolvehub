@@ -11,6 +11,7 @@ from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.foundation.slugs import lookup_by_slug_or_id
 from apps.partners.models import PartnerProfile
 from apps.partners.permissions import IsOperationsUser, IsPartnerUser
 from apps.rental.exceptions import RentalStateApiError
@@ -115,8 +116,9 @@ class RentalDetailView(APIView):
     permission_classes = (permissions.AllowAny,)
 
     @extend_schema(responses=RentalAssetSerializer)
-    def get(self, _request: Any, asset_id: UUID) -> Response:
-        asset = get_object_or_404(public_assets(), id=asset_id)
+    def get(self, _request: Any, key: str) -> Response:
+        """``key`` is the page slug; an old link's asset id still works."""
+        asset = get_object_or_404(public_assets(), **lookup_by_slug_or_id(key))
         return Response(RentalAssetSerializer(asset).data)
 
 

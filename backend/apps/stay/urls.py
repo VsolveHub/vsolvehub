@@ -12,7 +12,6 @@ urlpatterns = [
     ),
     path("stays/quote", views.StayQuoteView.as_view(), name="stay-quote"),
     path("stays/enquire", views.StayEnquireView.as_view(), name="stay-enquire"),
-    path("stays/<uuid:property_id>", views.StayDetailView.as_view(), name="stay-detail"),
     path("me/stay-enquiries", views.MyStayEnquiriesView.as_view(), name="my-stay-enquiries"),
     path(
         "me/stay-enquiries/<uuid:enquiry_id>/cancel",
@@ -116,4 +115,6 @@ urlpatterns = [
         views.OpsStayReservationCancelView.as_view(),
         name="ops-stay-reservation-cancel",
     ),
+    # Last: "stays/<key>" would otherwise swallow fixed addresses such as "stays/reviews".
+    path("stays/<str:key>", views.StayDetailView.as_view(), name="stay-detail"),
 ]

@@ -63,6 +63,7 @@ backend/**/__pycache__/
 backend/**/*.py[cod]
 backend/staticfiles/
 backend/media/
+backend/private-media/
 
 # Local, non-authoritative planning history
 Django_Next.js_Plan/archive/
