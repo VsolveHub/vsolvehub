@@ -76,6 +76,43 @@ Both agents are working the same tree concurrently. Two practical rules learned 
 way here: never `git add -A` (it swept six of Codex's live backend edits into a frontend
 commit, which had to be split back out), and stage explicit paths only.
 
+### Mobile apps (Customer + Partner) — owner directive, 30 September 2026
+
+The owner assigned the native mobile apps, **including the backend work they need**, to the
+**Mobile developer** (a person working through Cursor or Antigravity). The complete, step-by-step
+guide is `frontend/mobile/README.md`; the agent rules are `frontend/mobile/AGENTS.md`. Any agent
+working on mobile reads both before its first edit.
+
+The Mobile developer owns:
+
+- `frontend/mobile/**` — the two Expo apps and the two mobile-only packages.
+- `backend/apps/mobile/**` and `backend/tests/mobile/**` — a new Django app for mobile sign-in,
+  push devices, push delivery and the app-version gate.
+- These **exact** registration points in otherwise non-owned files, and nothing else in them:
+  - `backend/config/settings/base.py`: the `apps.mobile` line in `INSTALLED_APPS`, the session
+    middleware line in `MIDDLEWARE`, the `MOBILE_*` / `EXPO_*` settings block, the mobile
+    entries in `CELERY_BEAT_SCHEDULE`, and a one-minor bump of `SPECTACULAR_SETTINGS["VERSION"]`
+    (with its `contracts/openapi/CHANGELOG.md` entry).
+  - `backend/config/urls.py`: the one `include("apps.mobile.urls")` line.
+  - `contracts/openapi/v1.yaml` and `frontend/packages/api-client/src/generated/schema.d.ts`:
+    regenerated with the published commands, never hand-edited.
+  - `frontend/packages/api-client/src/client.ts`: the opt-in bearer mode described in
+    `frontend/mobile/guide/05-backend.md`. Cookie mode stays the default and stays unchanged.
+  - `frontend/packages/query/package.json` and a new `frontend/packages/query/src/native.ts`: a
+    `./native` export that re-exports the platform-neutral modules only. The web entry is
+    unchanged.
+  - `frontend/pnpm-workspace.yaml` (two `mobile/*` lines), `frontend/eslint.config.mjs`
+    (one `mobile/**` ignore) and `frontend/pnpm-lock.yaml` (as updated by `pnpm install`).
+  - `frontend/apps/customer/public/.well-known/**` and `frontend/apps/partner/public/.well-known/**`
+    (app-link verification files).
+
+Mobile work does not change web screens. A web bug found while porting is reported to the owner,
+not fixed inside a mobile commit.
+
+Test execution: the owner authorized the Mobile developer's agent to **run** the mobile Jest
+suites, and the backend pytest modules under `backend/tests/mobile/`, plus lint, typecheck and
+`backend\scripts\quality-static.cmd`. Report exact commands and real results.
+
 ## Python environment
 
 - Use Python 3.13.
