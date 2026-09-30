@@ -24,7 +24,13 @@ import {
 } from "lucide-react";
 import { Badge, Button, Dialog, ErrorState, Skeleton, Textarea } from "@vsolve/ui";
 
-import { formatPaise, pricePeriodOf, stayFields, stayLengthLabel } from "@/features/stays/model";
+import {
+  formatPaise,
+  pricePeriodOf,
+  roomOccupancyLabel,
+  stayFields,
+  stayLengthLabel,
+} from "@/features/stays/model";
 import { fetchStayProperty, fetchStays, submitStayReview } from "@/features/stays/queries";
 import { StayCard, StayImageGallery, StayQuotePanel } from "@/features/stays/view";
 
@@ -193,9 +199,7 @@ export default function StayDetailPage() {
                     <div>
                       <div className="text-sm font-bold text-text">{unit.name}</div>
                       <div className="text-xs text-text-secondary">
-                        {unit.sharing_count === 1
-                          ? "Single occupancy / Private"
-                          : `${unit.sharing_count} Persons Sharing`}
+                        {roomOccupancyLabel(unit, property.room_style)}
                       </div>
                     </div>
                     <div className="text-right">

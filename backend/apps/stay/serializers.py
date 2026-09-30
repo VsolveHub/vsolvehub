@@ -79,6 +79,13 @@ def _extract_price_period(obj: Property) -> str:
     return str(config.price_period)
 
 
+def _extract_room_style(obj: Property) -> str:
+    """``SHARED`` (beds), ``PRIVATE`` (whole room) or ``MIXED`` — see ``ROOM_STYLE_*``."""
+    from apps.stay.services import room_style_for_property  # noqa: PLC0415
+
+    return room_style_for_property(obj)
+
+
 class PropertySummarySerializer(serializers.ModelSerializer):
     public_state = serializers.CharField(read_only=True)
     host_name = serializers.CharField(source="host.display_name", read_only=True)
@@ -86,6 +93,7 @@ class PropertySummarySerializer(serializers.ModelSerializer):
     units = UnitSerializer(many=True, read_only=True)
     booking_mode = serializers.SerializerMethodField()
     price_period = serializers.SerializerMethodField()
+    room_style = serializers.SerializerMethodField()
     review_count = serializers.SerializerMethodField()
     average_rating = serializers.SerializerMethodField()
 
@@ -106,6 +114,7 @@ class PropertySummarySerializer(serializers.ModelSerializer):
             "units",
             "booking_mode",
             "price_period",
+            "room_style",
             "review_count",
             "average_rating",
             "created_at",
@@ -116,6 +125,9 @@ class PropertySummarySerializer(serializers.ModelSerializer):
 
     def get_price_period(self, obj: Property) -> str:
         return _extract_price_period(obj)
+
+    def get_room_style(self, obj: Property) -> str:
+        return _extract_room_style(obj)
 
     def get_review_count(self, obj: Property) -> int:
         reviews = getattr(obj, "_prefetched_objects_cache", {}).get("reviews")
@@ -139,6 +151,7 @@ class PropertySerializer(serializers.ModelSerializer):
     units = UnitSerializer(many=True, read_only=True)
     booking_mode = serializers.SerializerMethodField()
     price_period = serializers.SerializerMethodField()
+    room_style = serializers.SerializerMethodField()
 
     class Meta:
         model = Property
@@ -160,6 +173,7 @@ class PropertySerializer(serializers.ModelSerializer):
             "units",
             "booking_mode",
             "price_period",
+            "room_style",
             "created_at",
         )
 
@@ -168,6 +182,9 @@ class PropertySerializer(serializers.ModelSerializer):
 
     def get_price_period(self, obj: Property) -> str:
         return _extract_price_period(obj)
+
+    def get_room_style(self, obj: Property) -> str:
+        return _extract_room_style(obj)
 
 
 class PartnerPropertySerializer(PropertySerializer):
@@ -201,6 +218,9 @@ class StayTaxonomyVariantSerializer(serializers.Serializer):
     booking_mode = serializers.CharField()
     #: ``NIGHT`` or ``MONTH`` — what room rates for this type are quoted per.
     price_period = serializers.CharField()
+    #: ``SHARED`` (host gives people sharing each room), ``PRIVATE`` (host gives guests per
+    #: room) or ``MIXED`` (host gives both).
+    room_style = serializers.CharField()
 
 
 class StayTaxonomyServiceSerializer(serializers.Serializer):

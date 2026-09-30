@@ -29057,6 +29057,9 @@ components:
         price_period:
           type: string
           readOnly: true
+        room_style:
+          type: string
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -29075,6 +29078,7 @@ components:
       - price_period
       - public_state
       - reviews
+      - room_style
       - title
       - units
       - variant
@@ -31347,6 +31351,9 @@ components:
         price_period:
           type: string
           readOnly: true
+        room_style:
+          type: string
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -31360,6 +31367,7 @@ components:
       - price_period
       - public_state
       - reviews
+      - room_style
       - title
       - units
       - variant
@@ -31436,6 +31444,9 @@ components:
         price_period:
           type: string
           readOnly: true
+        room_style:
+          type: string
+          readOnly: true
         review_count:
           type: integer
           readOnly: true
@@ -31458,6 +31469,7 @@ components:
       - price_period
       - public_state
       - review_count
+      - room_style
       - title
       - units
       - variant
@@ -37753,6 +37765,8 @@ components:
           type: string
         price_period:
           type: string
+        room_style:
+          type: string
       required:
       - booking_mode
       - code
@@ -37762,6 +37776,7 @@ components:
       - property_schema
       - room_name_suggestions
       - room_schema
+      - room_style
     StepUpSession:
       type: object
       properties:

@@ -308,7 +308,7 @@ class PartnerPropertyCollectionView(APIView):
         rows = (
             Property.objects.filter(host=partner)
             .prefetch_related("units", "media", "reviews", "variant__a9_configurations")
-            .select_related("variant")
+            .select_related("variant__service__subcategory")
         )
         return Response(PartnerPropertySerializer(rows, many=True).data)
 

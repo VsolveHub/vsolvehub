@@ -9,6 +9,7 @@ import { SaveHeart, useSavedItems } from "@/features/part-a";
 import {
   formatPaise,
   pricePeriodOf,
+  roomOccupancyLabel,
   stayFields,
   stayLengthLabel,
   type StayProperty,
@@ -27,7 +28,7 @@ export function StayCard({ property }: StayCardProps) {
   );
 
   const primaryUnit = property.units[0];
-  const sharingCount = primaryUnit?.sharing_count ?? 1;
+  const occupancy = primaryUnit ? roomOccupancyLabel(primaryUnit, property.room_style) : null;
   const fields = stayFields(property.structured_fields);
   const isAc = Boolean(fields.ac);
   const hasFood = Boolean(fields.food);
@@ -107,10 +108,12 @@ export function StayCard({ property }: StayCardProps) {
 
         {/* Amenities & Sharing Tags */}
         <div className="flex flex-wrap gap-1.5 pt-1">
-          <span className="inline-flex items-center gap-1 rounded-md bg-surface-sunken px-2.5 py-1 text-[11px] font-semibold text-text-secondary border border-line/60">
-            <Users className="size-3" />
-            {sharingCount === 1 ? "Private Single" : `${sharingCount} Sharing`}
-          </span>
+          {occupancy ? (
+            <span className="inline-flex items-center gap-1 rounded-md bg-surface-sunken px-2.5 py-1 text-[11px] font-semibold text-text-secondary border border-line/60">
+              <Users className="size-3" />
+              {occupancy}
+            </span>
+          ) : null}
 
           {isAc && (
             <span className="inline-flex items-center gap-1 rounded-md bg-surface-sunken px-2.5 py-1 text-[11px] font-semibold text-text-secondary border border-line/60">

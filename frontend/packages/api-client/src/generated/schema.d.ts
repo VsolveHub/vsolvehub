@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.66.0)
- * Checksum: b32d9889bd6a6be0
+ * Checksum: 4ae1024e109f8389
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -11604,6 +11604,7 @@ export interface components {
             readonly units: components["schemas"]["PartnerUnit"][];
             readonly booking_mode: string;
             readonly price_period: string;
+            readonly room_style: string;
             /** Format: date-time */
             readonly created_at: string;
             moderation_reason?: string;
@@ -12551,6 +12552,7 @@ export interface components {
             readonly units: components["schemas"]["Unit"][];
             readonly booking_mode: string;
             readonly price_period: string;
+            readonly room_style: string;
             /** Format: date-time */
             readonly created_at: string;
         };
@@ -12581,6 +12583,7 @@ export interface components {
             readonly units: components["schemas"]["Unit"][];
             readonly booking_mode: string;
             readonly price_period: string;
+            readonly room_style: string;
             readonly review_count: number;
             /** Format: double */
             readonly average_rating: number | null;
@@ -15155,6 +15158,7 @@ export interface components {
             room_name_suggestions: string[];
             booking_mode: string;
             price_period: string;
+            room_style: string;
         };
         StepUpSession: {
             /** Format: date-time */

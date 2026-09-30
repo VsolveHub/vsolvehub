@@ -280,6 +280,59 @@ ROOM_ATTRIBUTE_KEYS = ("ac", "bathroom")
 #: asking for them again on the property would be the same question twice.
 ROOM_DESCRIBED_KEYS = ("occupancy", "sharing", "room_type")
 
+#: How a stay type's rooms are let, which decides the one number a host gives per room:
+#: - ``SHARED``: guests rent a bed, so the host says how many people share the room
+#:   (1 = single, 2 = double sharing). One enquiry may bring up to that many people.
+#: - ``PRIVATE``: one booking takes the whole room, so the host says how many guests it fits.
+#:   "Sharing" means nothing here and is kept at 1.
+#: - ``MIXED``: a type not listed below; the host fills both numbers.
+ROOM_STYLE_SHARED = "SHARED"
+ROOM_STYLE_PRIVATE = "PRIVATE"
+ROOM_STYLE_MIXED = "MIXED"
+SHARED_ROOM_SUBCATEGORIES = frozenset(
+    {
+        "rooms",
+        "pg-accommodation",
+        "hostels",
+        "bed-space",
+        "co-living-spaces",
+        "student-accommodation",
+        "worker-accommodation",
+    }
+)
+PRIVATE_ROOM_SUBCATEGORIES = frozenset(
+    {
+        "hotels",
+        "short-stay",
+        "apartments",
+        "rental-properties",
+        "property-listing",
+        "premium-stays",
+    }
+)
+
+
+def room_style_for_subcategory(slug: str | None) -> str:
+    if slug in SHARED_ROOM_SUBCATEGORIES:
+        return ROOM_STYLE_SHARED
+    if slug in PRIVATE_ROOM_SUBCATEGORIES:
+        return ROOM_STYLE_PRIVATE
+    return ROOM_STYLE_MIXED
+
+
+def room_style_for_property(prop: Property) -> str:
+    """``SHARED``, ``PRIVATE`` or ``MIXED`` for this property's stay type."""
+    return room_style_for_subcategory(prop.variant.service.subcategory.slug)
+
+
+def _normalize_room_numbers(*, style: str, sharing_count: int, max_guests: int) -> tuple[int, int]:
+    """Keep (sharing_count, max_guests) consistent with how the stay type lets its rooms."""
+    if style == ROOM_STYLE_SHARED:
+        return sharing_count, sharing_count
+    if style == ROOM_STYLE_PRIVATE:
+        return 1, max_guests
+    return sharing_count, max_guests
+
 
 def split_stay_schema(
     schema: dict[str, Any] | None,
@@ -356,6 +409,7 @@ def get_stay_taxonomy() -> list[dict[str, Any]]:
                             "room_name_suggestions": room_names,
                             "booking_mode": active_cfg.booking_mode,
                             "price_period": active_cfg.price_period,
+                            "room_style": room_style_for_subcategory(sub.slug),
                         }
                     )
             if svc_data["variants"]:
@@ -424,11 +478,16 @@ def create_property(
         min_stay_nights=min_stay_nights,
     )
     if nightly_rate_paise is not None:
+        seeded_sharing, seeded_guests = _normalize_room_numbers(
+            style=room_style_for_property(prop),
+            sharing_count=sharing_count,
+            max_guests=max(sharing_count, 1),
+        )
         Unit.objects.create(
             property=prop,
             name=(unit_name or "Standard room").strip() or "Standard room",
-            sharing_count=sharing_count,
-            max_guests=max(sharing_count, 1),
+            sharing_count=seeded_sharing,
+            max_guests=seeded_guests,
             nightly_rate_paise=nightly_rate_paise,
         )
     items: list[dict[str, Any]] = list(media or [])
@@ -473,6 +532,11 @@ def create_unit(
     resolved_max_guests = max(sharing_count, 1) if max_guests is None else max_guests
     _validate_room_numbers(
         sharing_count=sharing_count, quantity=quantity, max_guests=resolved_max_guests
+    )
+    sharing_count, resolved_max_guests = _normalize_room_numbers(
+        style=room_style_for_property(prop),
+        sharing_count=sharing_count,
+        max_guests=resolved_max_guests,
     )
     _property_schema, room_schema, _names = split_stay_schema(config.property_schema)
     _validate_against(room_schema, attributes or {}, label="room details")
@@ -537,6 +601,13 @@ def update_unit(
         if value is not None:
             setattr(unit, field, value)
             updates.append(field)
+    if sharing_count is not None or max_guests is not None:
+        unit.sharing_count, unit.max_guests = _normalize_room_numbers(
+            style=room_style_for_property(unit.property),
+            sharing_count=unit.sharing_count,
+            max_guests=unit.max_guests,
+        )
+        updates.extend(f for f in ("sharing_count", "max_guests") if f not in updates)
     if attributes is not None:
         config = _require_active_a9(unit.property.variant_id)
         _property_schema, room_schema, _names = split_stay_schema(config.property_schema)
@@ -1246,7 +1317,7 @@ def public_properties(  # noqa: PLR0912
             "reviews",
             "variant__a9_configurations",
         )
-        .select_related("host", "variant")
+        .select_related("host", "variant__service__subcategory")
     )
 
     if query:

@@ -44,6 +44,7 @@ function mockProperty(overrides: Partial<Schemas["Property"]> = {}): Schemas["Pr
     min_stay_nights: 1,
     booking_mode: "ENQUIRY",
     price_period: "MONTH",
+    room_style: "SHARED",
     public_state: "PUBLISHED",
     media: [],
     reviews: [],

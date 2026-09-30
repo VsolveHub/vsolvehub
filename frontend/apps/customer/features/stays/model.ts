@@ -42,6 +42,23 @@ export function formatRate(paise: number, period: PricePeriod): string {
   return `${formatPaise(paise)} / ${period === "NIGHT" ? "night" : "month"}`;
 }
 
+/**
+ * What a guest needs to know about who is in a room, by how the stay type lets its rooms:
+ * a hotel room is taken whole ("Up to 3 guests"); a PG room is let by the bed
+ * ("2 sharing", or "Private room" when nobody shares it).
+ */
+export function roomOccupancyLabel(
+  unit: { sharing_count?: number; max_guests?: number },
+  roomStyle: string | undefined | null,
+): string {
+  if (roomStyle === "PRIVATE") {
+    const guests = unit.max_guests ?? 1;
+    return `Up to ${guests} guest${guests === 1 ? "" : "s"}`;
+  }
+  const sharing = unit.sharing_count ?? 1;
+  return sharing === 1 ? "Private room" : `${sharing} sharing`;
+}
+
 /** "3 months", "1 night". */
 export function stayLengthLabel(length: number, period: PricePeriod): string {
   const unit = period === "NIGHT" ? "night" : "month";

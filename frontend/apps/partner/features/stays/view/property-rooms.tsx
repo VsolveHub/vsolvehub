@@ -43,6 +43,21 @@ const EMPTY_ROOM: RoomDraft = {
   attributes: {},
 };
 
+/**
+ * How the stay type lets its rooms, which decides the one number the host gives per room.
+ * SHARED (PG, hostel): people sharing the room. PRIVATE (hotel, apartment): guests per room.
+ * MIXED (a type the server does not classify): both. The server applies the same rule.
+ */
+type RoomStyle = "SHARED" | "PRIVATE" | "MIXED";
+
+function roomStyleOf(value: string | undefined): RoomStyle {
+  return value === "SHARED" || value === "PRIVATE" ? value : "MIXED";
+}
+
+function plural(count: number, word: string): string {
+  return `${count} ${word}${count === 1 ? "" : "s"}`;
+}
+
 function draftFrom(unit: StayUnit): RoomDraft {
   return {
     name: unit.name,
@@ -67,15 +82,16 @@ function parseRoom(
   draft: RoomDraft,
   roomSchema: Record<string, unknown> | undefined,
   priceLabel: string,
+  style: RoomStyle,
 ): ParsedRoom | string {
   if (!draft.name.trim()) return "Name the room, for example “Deluxe” or “Double sharing”.";
   const rate = rupeesToPaise(draft.rate);
   if (rate === null) return `Enter the ${priceLabel.toLowerCase()} in rupees.`;
   const quantity = wholeNumber(draft.quantity);
   if (quantity === null) return "Number of rooms must be 1 or more.";
-  const maxGuests = wholeNumber(draft.maxGuests);
-  if (maxGuests === null) return "Guests per booking must be 1 or more.";
-  const sharing = wholeNumber(draft.sharing);
+  const maxGuests = style === "SHARED" ? 1 : wholeNumber(draft.maxGuests);
+  if (maxGuests === null) return "Guests per room must be 1 or more.";
+  const sharing = style === "PRIVATE" ? 1 : wholeNumber(draft.sharing);
   if (sharing === null) return "People sharing must be 1 or more.";
   const collected = collectSchemaAnswers(roomSchema, draft.attributes);
   if ("missing" in collected) return `Choose ${collected.missing}.`;
@@ -83,18 +99,22 @@ function parseRoom(
     name: draft.name.trim(),
     nightly_rate_paise: rate,
     quantity,
-    max_guests: maxGuests,
+    // A shared room fits as many people as share it; a private room is never "shared".
+    max_guests: style === "SHARED" ? sharing : maxGuests,
     sharing_count: sharing,
     attributes: collected.values,
   };
 }
 
-function roomSummary(unit: StayUnit): string {
-  const parts = [
-    `${unit.quantity ?? 1} room${(unit.quantity ?? 1) === 1 ? "" : "s"}`,
-    `up to ${unit.max_guests ?? 1} guest${(unit.max_guests ?? 1) === 1 ? "" : "s"}`,
-  ];
-  if ((unit.sharing_count ?? 1) > 1) parts.push(`${unit.sharing_count} sharing`);
+function roomSummary(unit: StayUnit, style: RoomStyle): string {
+  const sharing = unit.sharing_count ?? 1;
+  const parts = [plural(unit.quantity ?? 1, "room")];
+  if (style === "SHARED") {
+    parts.push(sharing === 1 ? "single" : `${sharing} sharing`);
+  } else {
+    parts.push(`up to ${plural(unit.max_guests ?? 1, "guest")}`);
+    if (style === "MIXED" && sharing > 1) parts.push(`${sharing} sharing`);
+  }
   const attributes = answersFrom(unit.attributes);
   parts.push(...Object.values(attributes).filter(Boolean));
   return parts.join(" · ");
@@ -107,6 +127,7 @@ function RoomFields({
   roomSchema,
   suggestions,
   priceLabel,
+  style,
 }: {
   idPrefix: string;
   draft: RoomDraft;
@@ -114,6 +135,7 @@ function RoomFields({
   roomSchema: Record<string, unknown> | undefined;
   suggestions: readonly string[];
   priceLabel: string;
+  style: RoomStyle;
 }) {
   const listId = `${idPrefix}-names`;
   return (
@@ -149,7 +171,7 @@ function RoomFields({
           </div>
         </Field>
       </div>
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className={`grid gap-3 ${style === "MIXED" ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
         <Field
           label="How many of these rooms"
           required
@@ -162,22 +184,34 @@ function RoomFields({
             onChange={(e) => onChange({ ...draft, quantity: e.target.value })}
           />
         </Field>
-        <Field label="Guests per booking" required>
-          <Input
-            id={`${idPrefix}-guests`}
-            inputMode="numeric"
-            value={draft.maxGuests}
-            onChange={(e) => onChange({ ...draft, maxGuests: e.target.value })}
-          />
-        </Field>
-        <Field label="People sharing the room" required>
-          <Input
-            id={`${idPrefix}-sharing`}
-            inputMode="numeric"
-            value={draft.sharing}
-            onChange={(e) => onChange({ ...draft, sharing: e.target.value })}
-          />
-        </Field>
+        {style !== "SHARED" ? (
+          <Field
+            label="Guests per room"
+            required
+            description="Most people one booking of this room can bring."
+          >
+            <Input
+              id={`${idPrefix}-guests`}
+              inputMode="numeric"
+              value={draft.maxGuests}
+              onChange={(e) => onChange({ ...draft, maxGuests: e.target.value })}
+            />
+          </Field>
+        ) : null}
+        {style !== "PRIVATE" ? (
+          <Field
+            label="People sharing this room"
+            required
+            description="1 for a single room, 2 for double sharing, and so on."
+          >
+            <Input
+              id={`${idPrefix}-sharing`}
+              inputMode="numeric"
+              value={draft.sharing}
+              onChange={(e) => onChange({ ...draft, sharing: e.target.value })}
+            />
+          </Field>
+        ) : null}
       </div>
       <SchemaQuestions
         idPrefix={`${idPrefix}-attr`}
@@ -216,6 +250,7 @@ export function PropertyRooms({
   const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null);
 
   const roomSchema = variant?.room_schema;
+  const style = roomStyleOf(property.room_style);
   const priceLabel = property.price_period === "NIGHT" ? "Price per night" : "Rent per month";
   const hasRoomQuestions = Object.keys(schemaPropertyMap(roomSchema)).length > 0;
   const suggestions = variant?.room_name_suggestions?.length
@@ -252,7 +287,7 @@ export function PropertyRooms({
 
   function onAdd(event: FormEvent) {
     event.preventDefault();
-    const parsed = parseRoom(newRoom, roomSchema, priceLabel);
+    const parsed = parseRoom(newRoom, roomSchema, priceLabel, style);
     if (typeof parsed === "string") return setNewError(parsed);
     setNewError(null);
     create.mutate(parsed);
@@ -260,7 +295,7 @@ export function PropertyRooms({
 
   function onSave(event: FormEvent, unit: StayUnit) {
     event.preventDefault();
-    const parsed = parseRoom(editDraft, roomSchema, priceLabel);
+    const parsed = parseRoom(editDraft, roomSchema, priceLabel, style);
     if (typeof parsed === "string") return setEditError(parsed);
     setEditError(null);
     update.mutate({ id: unit.id, patch: parsed });
@@ -296,6 +331,7 @@ export function PropertyRooms({
                     roomSchema={roomSchema}
                     suggestions={suggestions}
                     priceLabel={priceLabel}
+                    style={style}
                   />
                   <p className="text-xs text-text-secondary">
                     New prices apply to new bookings. Guests already booked keep their price.
@@ -333,7 +369,7 @@ export function PropertyRooms({
                       · {formatMoney(unit.nightly_rate_paise)} {ratePeriodSuffix(property.price_period)}
                     </span>
                   </p>
-                  <p className="text-xs text-text-secondary">{roomSummary(unit)}</p>
+                  <p className="text-xs text-text-secondary">{roomSummary(unit, style)}</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   {inactive ? <Badge>Full</Badge> : null}
@@ -412,7 +448,8 @@ export function PropertyRooms({
             onChange={setNewRoom}
             roomSchema={roomSchema}
             suggestions={suggestions}
-                    priceLabel={priceLabel}
+            priceLabel={priceLabel}
+            style={style}
           />
           {!hasRoomQuestions ? null : (
             <p className="text-xs text-text-secondary">
