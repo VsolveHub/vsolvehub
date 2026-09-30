@@ -195,6 +195,82 @@ def test_handover_pin_required_and_dispute(rental_world):
 
 
 @pytest.mark.django_db
+def test_backfill_handover_pin_hash_for_in_flight_bookings(rental_world):
+    """0006 blank default left in-flight rows without a PIN; 0007 must restore handover."""
+    import importlib
+
+    from django.apps import apps as django_apps
+
+    from apps.rental.services import verify_handover_pin
+
+    backfill_mod = importlib.import_module(
+        "apps.rental.migrations.0007_backfill_handover_pin_hash"
+    )
+    backfill_handover_pin_hashes = backfill_mod.backfill_handover_pin_hashes
+
+    asset = _publish_asset(rental_world, deposit_paise=50000)
+    start = timezone.localdate() + timedelta(days=1)
+    confirmed = create_booking(
+        customer=rental_world["customer"],
+        asset_id=asset.id,
+        start_date=start,
+        end_date=start + timedelta(days=1),
+        hold_deposit_for_demo=True,
+    )
+    kept_pin = confirmed.handover_pin_hash
+    assert kept_pin
+
+    # Simulate post-0006 rows that never received a PIN.
+    empty_confirmed = create_booking(
+        customer=rental_world["customer"],
+        asset_id=asset.id,
+        start_date=start + timedelta(days=3),
+        end_date=start + timedelta(days=4),
+        hold_deposit_for_demo=True,
+    )
+    RentalBooking.objects.filter(pk=empty_confirmed.pk).update(handover_pin_hash="")
+    empty_confirmed.refresh_from_db()
+    assert empty_confirmed.handover_pin_hash == ""
+    assert verify_handover_pin(booking=empty_confirmed, pin="") is False
+    with pytest.raises(RentalStateError) as blocked:
+        handover_booking(booking=empty_confirmed, partner=rental_world["partner"], pin="1234")
+    assert blocked.value.code == "handover_pin_invalid"
+
+    cancelled = create_booking(
+        customer=rental_world["customer2"],
+        asset_id=asset.id,
+        start_date=start + timedelta(days=6),
+        end_date=start + timedelta(days=7),
+        hold_deposit_for_demo=True,
+    )
+    cancel_booking(booking=cancelled, customer=rental_world["customer2"])
+    cancelled.refresh_from_db()
+    RentalBooking.objects.filter(pk=cancelled.pk).update(handover_pin_hash="")
+    cancelled.refresh_from_db()
+    assert cancelled.status == RentalBooking.Status.CANCELLED
+    assert cancelled.handover_pin_hash == ""
+
+    backfill_handover_pin_hashes(django_apps, None)
+
+    confirmed.refresh_from_db()
+    assert confirmed.handover_pin_hash == kept_pin
+
+    empty_confirmed.refresh_from_db()
+    assert len(empty_confirmed.handover_pin_hash) == 4
+    assert empty_confirmed.handover_pin_hash.isdigit()
+    handover_booking(
+        booking=empty_confirmed,
+        partner=rental_world["partner"],
+        pin=empty_confirmed.handover_pin_hash,
+    )
+    empty_confirmed.refresh_from_db()
+    assert empty_confirmed.status == RentalBooking.Status.HANDOVER
+
+    cancelled.refresh_from_db()
+    assert cancelled.handover_pin_hash == ""
+
+
+@pytest.mark.django_db
 def test_partner_bookings_status_filter_and_dispute_http(rental_world):
     asset = _publish_asset(rental_world, deposit_paise=60000)
     start = timezone.localdate() + timedelta(days=3)
