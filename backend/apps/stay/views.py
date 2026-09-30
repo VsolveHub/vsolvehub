@@ -1,3 +1,5 @@
+import contextlib
+from datetime import date
 from typing import Any
 from uuid import UUID
 
@@ -14,10 +16,14 @@ from apps.partners.permissions import IsOperationsUser, IsPartnerUser
 from apps.stay.exceptions import StayStateApiError
 from apps.stay.models import Property, StayEnquiry, StayReservation, Unit
 from apps.stay.serializers import (
+    AddPropertyMediaSerializer,
     CreateEnquirySerializer,
     CreatePropertySerializer,
     CreateReservationSerializer,
+    CreateStayReviewSerializer,
     CreateUnitSerializer,
+    OpsCancelStayReservationSerializer,
+    PropertyMediaSerializer,
     PropertySerializer,
     RespondEnquirySerializer,
     StayEnquirySerializer,
@@ -26,6 +32,7 @@ from apps.stay.serializers import (
     StayQuoteRequestSerializer,
     StayQuoteResponseSerializer,
     StayReservationSerializer,
+    StayReviewSerializer,
     StayTaxonomySubcategorySerializer,
     UnitSerializer,
     UpdatePropertySerializer,
@@ -33,21 +40,25 @@ from apps.stay.serializers import (
 )
 from apps.stay.services import (
     StayStateError,
+    add_property_media,
     calculate_stay_quote,
     cancel_enquiry,
     cancel_reservation,
+    cancel_reservation_ops,
     check_in_reservation,
     check_out_reservation,
     confirm_enquiry,
     create_enquiry,
     create_property,
     create_reservation,
+    create_stay_review,
     create_unit,
     get_stay_taxonomy,
     initiate_reservation_payment,
     moderate_property,
     partner_owns_stay_photo,
     public_properties,
+    remove_property_media,
     respond_enquiry,
     store_stay_photo,
     submit_property,
@@ -96,6 +107,8 @@ class StayBrowseView(APIView):
             OpenApiParameter("food", OpenApiTypes.BOOL, OpenApiParameter.QUERY),
             OpenApiParameter("min_price", OpenApiTypes.INT, OpenApiParameter.QUERY),
             OpenApiParameter("max_price", OpenApiTypes.INT, OpenApiParameter.QUERY),
+            OpenApiParameter("check_in", OpenApiTypes.DATE, OpenApiParameter.QUERY),
+            OpenApiParameter("check_out", OpenApiTypes.DATE, OpenApiParameter.QUERY),
             OpenApiParameter("limit", OpenApiTypes.INT, OpenApiParameter.QUERY),
             OpenApiParameter("offset", OpenApiTypes.INT, OpenApiParameter.QUERY),
         ],
@@ -107,8 +120,19 @@ class StayBrowseView(APIView):
         food_param = request.query_params.get("food")
         min_price = request.query_params.get("min_price")
         max_price = request.query_params.get("max_price")
+        check_in_raw = request.query_params.get("check_in")
+        check_out_raw = request.query_params.get("check_out")
         limit_raw = request.query_params.get("limit")
         offset_raw = request.query_params.get("offset")
+
+        check_in_date = None
+        check_out_date = None
+        if check_in_raw:
+            with contextlib.suppress(ValueError):
+                check_in_date = date.fromisoformat(check_in_raw)
+        if check_out_raw:
+            with contextlib.suppress(ValueError):
+                check_out_date = date.fromisoformat(check_out_raw)
 
         props = public_properties(
             query=request.query_params.get("q", ""),
@@ -125,6 +149,8 @@ class StayBrowseView(APIView):
             min_price_paise=int(min_price) if min_price and min_price.isdigit() else None,
             max_price_paise=int(max_price) if max_price and max_price.isdigit() else None,
             variant_code=request.query_params.get("service", ""),
+            check_in=check_in_date,
+            check_out=check_out_date,
             limit=int(limit_raw) if limit_raw and limit_raw.isdigit() else None,
             offset=int(offset_raw) if offset_raw and offset_raw.isdigit() else 0,
         )
@@ -284,7 +310,11 @@ class PartnerPropertyCollectionView(APIView):
     @extend_schema(responses=PropertySerializer(many=True))
     def get(self, request: Any) -> Response:
         partner = _partner(request.user)
-        rows = Property.objects.filter(host=partner).prefetch_related("units", "media")
+        rows = (
+            Property.objects.filter(host=partner)
+            .prefetch_related("units", "media", "reviews", "variant__a9_configurations")
+            .select_related("variant")
+        )
         return Response(PropertySerializer(rows, many=True).data)
 
     @extend_schema(request=CreatePropertySerializer, responses=PropertySerializer)
@@ -427,8 +457,8 @@ class OpsStayCollectionView(APIView):
     def get(self, _request: Any) -> Response:
         rows = (
             Property.objects.all()
-            .prefetch_related("units", "media", "reviews")
-            .select_related("host")
+            .prefetch_related("units", "media", "reviews", "variant__a9_configurations")
+            .select_related("host", "variant")
         )
         return Response(PropertySerializer(rows, many=True).data)
 
@@ -560,3 +590,96 @@ class OpsStayReservationsView(APIView):
     def get(self, _request: Any) -> Response:
         rows = StayReservation.objects.all().select_related("property", "unit", "customer")
         return Response(StayReservationSerializer(rows, many=True).data)
+
+
+class StayReviewCreateView(APIView):
+    """Customer submits a review for a stay they experienced."""
+
+    permission_classes = (permissions.IsAuthenticated,)
+
+    @extend_schema(
+        request=CreateStayReviewSerializer,
+        responses={201: StayReviewSerializer},
+    )
+    def post(self, request: Any) -> Response:
+        ser = CreateStayReviewSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        data = ser.validated_data
+        try:
+            review = create_stay_review(
+                customer=request.user,
+                property_id=data["property_id"],
+                rating=data["rating"],
+                body=data.get("body") or data.get("comment") or "",
+                enquiry_id=data.get("enquiry_id"),
+                reservation_id=data.get("reservation_id"),
+                image_urls=data.get("image_urls"),
+            )
+        except (
+            StayStateError,
+            Property.DoesNotExist,
+            StayEnquiry.DoesNotExist,
+            StayReservation.DoesNotExist,
+        ) as exc:
+            return _error(exc)
+        return Response(StayReviewSerializer(review).data, status=status.HTTP_201_CREATED)
+
+
+class PartnerPropertyMediaCreateView(APIView):
+    """Partner adds photos to an existing property."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(request=AddPropertyMediaSerializer, responses={201: PropertyMediaSerializer})
+    def post(self, request: Any, property_id: UUID) -> Response:
+        partner = _partner(request.user)
+        prop = get_object_or_404(Property, id=property_id)
+        ser = AddPropertyMediaSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        try:
+            media = add_property_media(
+                prop=prop,
+                host=partner,
+                url=ser.validated_data["url"],
+                caption=ser.validated_data.get("caption", ""),
+                display_order=ser.validated_data.get("display_order", 0),
+            )
+        except (StayStateError, PermissionError) as exc:
+            return _error(exc)
+        return Response(PropertyMediaSerializer(media).data, status=status.HTTP_201_CREATED)
+
+
+class PartnerPropertyMediaDeleteView(APIView):
+    """Partner removes a photo from an existing property."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(responses={204: None})
+    def delete(self, request: Any, property_id: UUID, media_id: UUID) -> Response:
+        partner = _partner(request.user)
+        prop = get_object_or_404(Property, id=property_id)
+        try:
+            remove_property_media(prop=prop, host=partner, media_id=media_id)
+        except (StayStateError, PermissionError) as exc:
+            return _error(exc)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class OpsStayReservationCancelView(APIView):
+    """Operations cancels an active stay reservation with full refund and audit trail."""
+
+    permission_classes = (IsOperationsUser,)
+
+    @extend_schema(request=OpsCancelStayReservationSerializer, responses=StayReservationSerializer)
+    def post(self, request: Any, reservation_id: UUID) -> Response:
+        ser = OpsCancelStayReservationSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        try:
+            res = cancel_reservation_ops(
+                reservation_id=reservation_id,
+                actor=request.user,
+                reason=ser.validated_data.get("reason", ""),
+            )
+        except (StayStateError, StayReservation.DoesNotExist) as exc:
+            return _error(exc)
+        return Response(StayReservationSerializer(res).data)

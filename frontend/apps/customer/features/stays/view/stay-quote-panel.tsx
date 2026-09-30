@@ -422,7 +422,7 @@ export function StayQuotePanel({ property }: StayQuotePanelProps) {
           {isReservation ? (
             <>
               <Check className="size-4" />
-              Pay &amp; Reserve
+              Pay & Reserve
             </>
           ) : (
             "Send Stay Enquiry"

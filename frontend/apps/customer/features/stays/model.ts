@@ -20,6 +20,8 @@ export interface StayFilterParams {
   min_price?: number;
   max_price?: number;
   service?: string;
+  check_in?: string;
+  check_out?: string;
   limit?: number;
   offset?: number;
 }

@@ -250,3 +250,33 @@ export function stayVariantChoices(
     .filter((cap) => cap.workspace_key === "A9_STAY" && cap.status === "APPROVED")
     .map((cap) => ({ id: cap.variant_id, name: cap.variant_name }));
 }
+
+export async function addPartnerStayPropertyMedia(
+  propertyId: string,
+  payload: { url: string; caption?: string; display_order?: number },
+) {
+  return request(() =>
+    getApiClient().POST("/api/v1/partner/stays/properties/{property_id}/media", {
+      params: { path: { property_id: propertyId } },
+      body: {
+        url: payload.url,
+        caption: payload.caption ?? "",
+        display_order: payload.display_order ?? 0,
+      },
+    }),
+  );
+}
+
+export async function deletePartnerStayPropertyMedia(
+  propertyId: string,
+  mediaId: string,
+) {
+  return request(() =>
+    getApiClient().DELETE(
+      "/api/v1/partner/stays/properties/{property_id}/media/{media_id}",
+      {
+        params: { path: { property_id: propertyId, media_id: mediaId } },
+      },
+    ),
+  );
+}

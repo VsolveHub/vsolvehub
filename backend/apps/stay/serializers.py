@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from apps.catalog.models import A9VariantConfiguration
 from apps.stay.models import Property, PropertyMedia, StayEnquiry, StayReservation, StayReview, Unit
 
 
@@ -63,7 +64,13 @@ class PropertySerializer(serializers.ModelSerializer):
         )
 
     def get_booking_mode(self, obj: Property) -> str:
-        from apps.catalog.models import A9VariantConfiguration
+        variant = getattr(obj, "variant", None)
+        prefetch_cache = getattr(variant, "_prefetched_objects_cache", {})
+        if variant and "a9_configurations" in prefetch_cache:
+            for cfg in variant.a9_configurations.all():
+                if cfg.status == A9VariantConfiguration.Status.ACTIVE:
+                    return str(cfg.booking_mode)
+            return str(A9VariantConfiguration.BookingMode.ENQUIRY)
 
         config = (
             A9VariantConfiguration.objects.filter(
@@ -73,8 +80,8 @@ class PropertySerializer(serializers.ModelSerializer):
             .first()
         )
         if config is None:
-            return A9VariantConfiguration.BookingMode.ENQUIRY
-        return config.booking_mode
+            return str(A9VariantConfiguration.BookingMode.ENQUIRY)
+        return str(config.booking_mode)
 
 
 class StayPhotoUploadSerializer(serializers.Serializer):
@@ -262,3 +269,23 @@ class CreateReservationSerializer(serializers.Serializer):
     check_in = serializers.DateField()
     check_out = serializers.DateField()
     guest_count = serializers.IntegerField(min_value=1, required=False, default=1)
+
+
+class CreateStayReviewSerializer(serializers.Serializer):
+    property_id = serializers.UUIDField()
+    rating = serializers.IntegerField(min_value=1, max_value=5)
+    comment = serializers.CharField(max_length=2000, required=False, allow_blank=True)
+    body = serializers.CharField(max_length=2000, required=False, allow_blank=True)
+    enquiry_id = serializers.UUIDField(required=False, allow_null=True)
+    reservation_id = serializers.UUIDField(required=False, allow_null=True)
+    image_urls = serializers.ListField(child=serializers.URLField(), required=False, default=list)
+
+
+class AddPropertyMediaSerializer(serializers.Serializer):
+    url = serializers.URLField()
+    caption = serializers.CharField(max_length=240, required=False, allow_blank=True, default="")
+    display_order = serializers.IntegerField(min_value=0, required=False, default=0)
+
+
+class OpsCancelStayReservationSerializer(serializers.Serializer):
+    reason = serializers.CharField(max_length=240, required=False, allow_blank=True, default="")

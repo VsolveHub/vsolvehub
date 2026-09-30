@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.66.0)
- * Checksum: c4b816dda129fdd3
+ * Checksum: 3548d4bec8bdef2e
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -4152,6 +4152,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ops/stays/reservations/{reservation_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Operations cancels an active stay reservation with full refund and audit trail. */
+        post: operations["ops_stays_reservations_cancel_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ops/vendor-subscription-plans": {
         parameters: {
             query?: never;
@@ -5740,6 +5757,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/partner/stays/properties/{property_id}/media": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Partner adds photos to an existing property. */
+        post: operations["partner_stays_properties_media_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/stays/properties/{property_id}/media/{media_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Partner removes a photo from an existing property. */
+        delete: operations["partner_stays_properties_media_destroy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/partner/stays/properties/{property_id}/units": {
         parameters: {
             query?: never;
@@ -7132,6 +7183,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/stays/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Customer submits a review for a stay they experienced. */
+        post: operations["stays_reviews_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/stays/taxonomy": {
         parameters: {
             query?: never;
@@ -7253,6 +7321,14 @@ export interface components {
         };
         ActiveRole: {
             readonly active_role: string | null;
+        };
+        AddPropertyMediaRequest: {
+            /** Format: uri */
+            url: string;
+            /** @default  */
+            caption: string;
+            /** @default 0 */
+            display_order: number;
         };
         Address: {
             /** Format: uuid */
@@ -8433,6 +8509,18 @@ export interface components {
             check_out: string;
             /** @default 1 */
             guest_count: number;
+        };
+        CreateStayReviewRequest: {
+            /** Format: uuid */
+            property_id: string;
+            rating: number;
+            comment?: string;
+            body?: string;
+            /** Format: uuid */
+            enquiry_id?: string | null;
+            /** Format: uuid */
+            reservation_id?: string | null;
+            image_urls?: string[];
         };
         CreateUnitRequest: {
             name: string;
@@ -10692,6 +10780,10 @@ export interface components {
             expected_version: number;
             target_status: components["schemas"]["TargetStatusEnum"];
             reason?: string;
+        };
+        OpsCancelStayReservationRequest: {
+            /** @default  */
+            reason: string;
         };
         OpsCreateVendorSubscriptionPlanRequest: {
             /** Format: uuid */
@@ -25341,6 +25433,33 @@ export interface operations {
             };
         };
     };
+    ops_stays_reservations_cancel_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reservation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["OpsCancelStayReservationRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["OpsCancelStayReservationRequest"];
+                "multipart/form-data": components["schemas"]["OpsCancelStayReservationRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StayReservation"];
+                };
+            };
+        };
+    };
     ops_vendor_subscription_plans_retrieve: {
         parameters: {
             query?: never;
@@ -29125,6 +29244,54 @@ export interface operations {
             };
         };
     };
+    partner_stays_properties_media_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                property_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddPropertyMediaRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AddPropertyMediaRequest"];
+                "multipart/form-data": components["schemas"]["AddPropertyMediaRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PropertyMedia"];
+                };
+            };
+        };
+    };
+    partner_stays_properties_media_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                media_id: string;
+                property_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     partner_stays_properties_units_list: {
         parameters: {
             query?: never;
@@ -32464,6 +32631,8 @@ export interface operations {
         parameters: {
             query?: {
                 ac?: boolean;
+                check_in?: string;
+                check_out?: string;
                 food?: boolean;
                 limit?: number;
                 location?: string;
@@ -32581,6 +32750,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StayReservation"];
+                };
+            };
+        };
+    };
+    stays_reviews_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateStayReviewRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CreateStayReviewRequest"];
+                "multipart/form-data": components["schemas"]["CreateStayReviewRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StayReview"];
                 };
             };
         };

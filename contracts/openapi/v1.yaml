@@ -10180,6 +10180,40 @@ paths:
                 items:
                   $ref: '#/components/schemas/StayReservation'
           description: ''
+  /api/v1/ops/stays/reservations/{reservation_id}/cancel:
+    post:
+      operationId: ops_stays_reservations_cancel_create
+      description: Operations cancels an active stay reservation with full refund
+        and audit trail.
+      parameters:
+      - in: path
+        name: reservation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - ops
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpsCancelStayReservationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OpsCancelStayReservationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OpsCancelStayReservationRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StayReservation'
+          description: ''
   /api/v1/ops/vendor-subscription-plans:
     get:
       operationId: ops_vendor_subscription_plans_retrieve
@@ -14088,6 +14122,64 @@ paths:
               schema:
                 $ref: '#/components/schemas/Property'
           description: ''
+  /api/v1/partner/stays/properties/{property_id}/media:
+    post:
+      operationId: partner_stays_properties_media_create
+      description: Partner adds photos to an existing property.
+      parameters:
+      - in: path
+        name: property_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddPropertyMediaRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AddPropertyMediaRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AddPropertyMediaRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PropertyMedia'
+          description: ''
+  /api/v1/partner/stays/properties/{property_id}/media/{media_id}:
+    delete:
+      operationId: partner_stays_properties_media_destroy
+      description: Partner removes a photo from an existing property.
+      parameters:
+      - in: path
+        name: media_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: property_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/v1/partner/stays/properties/{property_id}/units:
     get:
       operationId: partner_stays_properties_units_list
@@ -17817,6 +17909,16 @@ paths:
         schema:
           type: boolean
       - in: query
+        name: check_in
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: check_out
+        schema:
+          type: string
+          format: date
+      - in: query
         name: food
         schema:
           type: boolean
@@ -17979,6 +18081,33 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/StayReservation'
+          description: ''
+  /api/v1/stays/reviews:
+    post:
+      operationId: stays_reviews_create
+      description: Customer submits a review for a stay they experienced.
+      tags:
+      - stays
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateStayReviewRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CreateStayReviewRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CreateStayReviewRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StayReview'
           description: ''
   /api/v1/stays/taxonomy:
     get:
@@ -18193,6 +18322,23 @@ components:
           nullable: true
       required:
       - active_role
+    AddPropertyMediaRequest:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+          minLength: 1
+        caption:
+          type: string
+          default: ''
+          maxLength: 240
+        display_order:
+          type: integer
+          minimum: 0
+          default: 0
+      required:
+      - url
     Address:
       type: object
       properties:
@@ -21150,6 +21296,39 @@ components:
       - check_out
       - property_id
       - unit_id
+    CreateStayReviewRequest:
+      type: object
+      properties:
+        property_id:
+          type: string
+          format: uuid
+        rating:
+          type: integer
+          maximum: 5
+          minimum: 1
+        comment:
+          type: string
+          maxLength: 2000
+        body:
+          type: string
+          maxLength: 2000
+        enquiry_id:
+          type: string
+          format: uuid
+          nullable: true
+        reservation_id:
+          type: string
+          format: uuid
+          nullable: true
+        image_urls:
+          type: array
+          items:
+            type: string
+            format: uri
+            minLength: 1
+      required:
+      - property_id
+      - rating
     CreateUnitRequest:
       type: object
       properties:
@@ -26704,6 +26883,13 @@ components:
       required:
       - expected_version
       - target_status
+    OpsCancelStayReservationRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          default: ''
+          maxLength: 240
     OpsCreateVendorSubscriptionPlanRequest:
       type: object
       properties:

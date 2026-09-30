@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 from urllib.parse import urlparse
 from uuid import UUID
@@ -14,14 +14,21 @@ from django.utils import timezone
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 
 from apps.catalog.models import A9VariantConfiguration, Category, Service, Subcategory
+from apps.commerce.models import FinancialException, PaymentAttempt
+from apps.commerce.services import _request_automatic_refund
+from apps.commerce.services.base import PAYMENT_FINAL_STATES, _open_exception
+from apps.commerce.services.payments import initiate_standalone_payment_attempt
+from apps.foundation.models import OutboxEvent
 from apps.stay.models import (
     Property,
     PropertyMedia,
     StayEnquiry,
     StayModerationEvent,
     StayPhotoUpload,
+    StayReservation,
     StayReview,
     Unit,
+    UnitReservation,
 )
 
 _MAX_STAY_REVIEW_RATING = 5
@@ -64,8 +71,6 @@ def _verify_unit_availability(
     exclude_reservation_id: Any = None,
     for_update: bool = False,
 ) -> None:
-    from apps.stay.models import StayEnquiry, UnitReservation
-
     res_qs = UnitReservation.objects.filter(
         unit=unit,
         check_in__lt=check_out,
@@ -97,6 +102,9 @@ def _verify_unit_availability(
 
 def _enforce_stay_dates(*, prop: Property, check_in: date, check_out: date) -> int:
     """Validate date order, min nights, and availability window. Returns nights count."""
+    today = timezone.localdate()
+    if check_in < today:
+        raise StayStateError("Check-in date cannot be in the past.", code="check_in_in_past")
     if check_out <= check_in:
         raise StayStateError("Check-out must be after check-in.")
     nights = (check_out - check_in).days
@@ -371,7 +379,7 @@ def update_unit(
 
 
 @transaction.atomic
-def update_property_ad(
+def update_property_ad(  # noqa: PLR0912
     *,
     prop: Property,
     host: Any,
@@ -453,8 +461,6 @@ def update_property_ad(
 @transaction.atomic
 def confirm_enquiry(*, enquiry: StayEnquiry, host: Any) -> StayEnquiry:
     """Host confirms an enquiry and holds the unit calendar for those nights."""
-    from apps.stay.models import UnitReservation
-
     _require_stay_capability(host)
     if enquiry.property.host_id != host.id:
         raise PermissionError("Not your enquiry.")
@@ -530,9 +536,7 @@ def confirm_enquiry(*, enquiry: StayEnquiry, host: Any) -> StayEnquiry:
     # ENQUIRY mode does not need a hold. Document clearly and prevent conflicting double-book
     # by verifying availability (done above via _verify_unit_availability).
     elif enquiry.unit_reservation_id is not None:
-        unit_res = UnitReservation.objects.select_for_update().get(
-            id=enquiry.unit_reservation_id
-        )
+        unit_res = UnitReservation.objects.select_for_update().get(id=enquiry.unit_reservation_id)
         if unit_res.status != UnitReservation.Status.RELEASED:
             unit_res.status = UnitReservation.Status.RELEASED
             unit_res.save(update_fields=("status", "updated_at"))
@@ -545,8 +549,6 @@ def confirm_enquiry(*, enquiry: StayEnquiry, host: Any) -> StayEnquiry:
 
 @transaction.atomic
 def cancel_enquiry(*, enquiry: StayEnquiry, actor: Any, as_host: bool = False) -> StayEnquiry:
-    from apps.stay.models import UnitReservation
-
     if as_host:
         _require_stay_capability(actor)
         if enquiry.property.host_id != actor.id:
@@ -575,19 +577,30 @@ def create_stay_review(
     body: str = "",
     image_urls: list[str] | None = None,
     enquiry_id: UUID | str | None = None,
+    reservation_id: UUID | str | None = None,
 ) -> Any:
     if rating < 1 or rating > _MAX_STAY_REVIEW_RATING:
         raise StayStateError("Rating must be between 1 and 5.")
     prop = Property.objects.get(id=_as_uuid(property_id))
     enquiry = None
+
     if enquiry_id:
         enquiry = StayEnquiry.objects.get(id=_as_uuid(enquiry_id), customer=customer)
         if enquiry.property_id != prop.id:
             raise StayStateError("Enquiry does not match property.")
         if enquiry.status != StayEnquiry.Status.CONFIRMED:
             raise StayStateError("Reviews require a confirmed stay.")
+    elif reservation_id:
+        reservation = StayReservation.objects.get(id=_as_uuid(reservation_id), customer=customer)
+        if reservation.property_id != prop.id:
+            raise StayStateError("Reservation does not match property.")
+        if reservation.status not in (
+            StayReservation.Status.CHECKED_OUT,
+            StayReservation.Status.CONFIRMED,
+        ):
+            raise StayStateError("Reviews require a completed stay.")
     else:
-        # Allow review when customer has at least one confirmed enquiry on property.
+        # Check if customer has either a confirmed enquiry or a completed/confirmed reservation
         enquiry = (
             StayEnquiry.objects.filter(
                 customer=customer,
@@ -597,8 +610,30 @@ def create_stay_review(
             .order_by("-created_at")
             .first()
         )
-        if enquiry is None:
-            raise StayStateError("Reviews require a confirmed stay.")
+        has_reservation = StayReservation.objects.filter(
+            customer=customer,
+            property=prop,
+            status__in=[
+                StayReservation.Status.CHECKED_OUT,
+                StayReservation.Status.CONFIRMED,
+            ],
+        ).exists()
+        if enquiry is None and not has_reservation:
+            raise StayStateError(
+                "Reviews require a confirmed or completed stay.",
+                code="stay_not_completed",
+            )
+
+    # Prevent duplicate reviews from the same customer on this property
+    existing_review = StayReview.objects.filter(customer=customer, property=prop)
+    if enquiry:
+        existing_review = existing_review.filter(enquiry=enquiry)
+    if existing_review.exists():
+        raise StayStateError(
+            "You have already submitted a review for this stay.",
+            code="duplicate_review",
+        )
+
     return StayReview.objects.create(
         property=prop,
         enquiry=enquiry,
@@ -680,6 +715,20 @@ def create_enquiry(
     if prop.public_state != "PUBLISHED":
         raise StayStateError("Property is not open for enquiries.")
     nights = _enforce_stay_dates(prop=prop, check_in=check_in, check_out=check_out)
+
+    duplicate_enquiry = StayEnquiry.objects.filter(
+        customer=customer,
+        property=prop,
+        status__in=[StayEnquiry.Status.SUBMITTED, StayEnquiry.Status.RESPONDED],
+        check_in__lt=check_out,
+        check_out__gt=check_in,
+    ).first()
+    if duplicate_enquiry is not None:
+        raise StayStateError(
+            "An active enquiry already exists for this property and dates.",
+            code="duplicate_enquiry",
+        )
+
     unit = None
     if unit_id is not None:
         unit = Unit.objects.get(id=_as_uuid(unit_id), property=prop, is_active=True)
@@ -762,7 +811,7 @@ def respond_enquiry(
     return enquiry
 
 
-def public_properties(
+def public_properties(  # noqa: PLR0912
     *,
     query: str = "",
     location: str = "",
@@ -772,12 +821,14 @@ def public_properties(
     min_price_paise: int | None = None,
     max_price_paise: int | None = None,
     variant_code: str = "",
+    check_in: date | None = None,
+    check_out: date | None = None,
     limit: int | None = None,
     offset: int = 0,
-):
+) -> models.QuerySet[Property]:
     qs = (
         Property.objects.filter(moderation_status=Property.ModerationStatus.APPROVED)
-        .prefetch_related("units")
+        .prefetch_related("units", "media", "reviews", "variant__a9_configurations")
         .select_related("host", "variant")
     )
 
@@ -819,6 +870,26 @@ def public_properties(
             | models.Q(description__icontains="food")
             | models.Q(description__icontains="meal")
         )
+    if check_in is not None:
+        qs = qs.filter(
+            models.Q(available_from__isnull=True) | models.Q(available_from__lte=check_in)
+        )
+    if check_out is not None:
+        qs = qs.filter(
+            models.Q(available_until__isnull=True) | models.Q(available_until__gte=check_out)
+        )
+    if check_in is not None and check_out is not None and check_out > check_in:
+        booked_unit_ids = UnitReservation.objects.filter(
+            status__in=[UnitReservation.Status.HELD, UnitReservation.Status.CONFIRMED],
+            check_in__lt=check_out,
+            check_out__gt=check_in,
+        ).values_list("unit_id", flat=True)
+        available_property_ids = (
+            Unit.objects.filter(is_active=True)
+            .exclude(id__in=booked_unit_ids)
+            .values_list("property_id", flat=True)
+        )
+        qs = qs.filter(id__in=available_property_ids)
 
     qs = qs.distinct().order_by("-created_at")
     if offset:
@@ -838,8 +909,6 @@ def create_reservation(
     check_out: date,
     guest_count: int = 1,
 ) -> Any:
-    from apps.stay.models import StayReservation, UnitReservation
-
     prop = Property.objects.select_related("variant").get(id=_as_uuid(property_id))
     config = _require_active_a9(prop.variant_id)
     if config.booking_mode != A9VariantConfiguration.BookingMode.RESERVATION:
@@ -877,18 +946,9 @@ def create_reservation(
 
 @transaction.atomic
 def initiate_reservation_payment(reservation_id: UUID | str) -> Any:
-    from datetime import timedelta
-
-    from django.conf import settings
-
-    from apps.commerce.models import PaymentAttempt
-    from apps.stay.models import StayReservation
-
     res = StayReservation.objects.get(id=_as_uuid(reservation_id))
     if res.status != StayReservation.Status.HELD:
         raise StayStateError("Reservation is not in HELD state.")
-
-    from apps.commerce.services.payments import initiate_standalone_payment_attempt
 
     attempt = initiate_standalone_payment_attempt(
         purpose=PaymentAttempt.Purpose.A9_STAY_RESERVATION,
@@ -904,9 +964,6 @@ def initiate_reservation_payment(reservation_id: UUID | str) -> Any:
 
 @transaction.atomic
 def confirm_reservation_payment(payment_attempt_id: UUID | str) -> Any:
-    from apps.commerce.models import PaymentAttempt
-    from apps.stay.models import StayReservation, UnitReservation
-
     attempt = PaymentAttempt.objects.get(id=_as_uuid(payment_attempt_id))
     res = StayReservation.objects.get(payment_attempt=attempt)
 
@@ -935,11 +992,6 @@ def cancel_reservation(
     When a captured payment exists, requests a full automatic refund; otherwise
     cancels without promising money movement.
     """
-    from apps.commerce.models import PaymentAttempt
-    from apps.commerce.services import _request_automatic_refund
-    from apps.commerce.services.base import PAYMENT_FINAL_STATES
-    from apps.stay.models import StayReservation, UnitReservation
-
     if reservation.customer_id != getattr(customer, "id", None):
         raise PermissionError("Not your reservation.")
 
@@ -986,8 +1038,6 @@ def cancel_reservation(
 
 @transaction.atomic
 def check_in_reservation(*, reservation: Any, host: Any) -> Any:
-    from apps.stay.models import StayReservation
-
     _require_stay_capability(host)
     if reservation.property.host_id != host.id:
         raise PermissionError("Not your reservation.")
@@ -1002,9 +1052,6 @@ def check_in_reservation(*, reservation: Any, host: Any) -> Any:
 
 @transaction.atomic
 def check_out_reservation(*, reservation: Any, host: Any) -> Any:
-    from apps.foundation.models import OutboxEvent
-    from apps.stay.models import StayReservation, UnitReservation
-
     _require_stay_capability(host)
     if reservation.property.host_id != host.id:
         raise PermissionError("Not your reservation.")
@@ -1037,35 +1084,109 @@ def check_out_reservation(*, reservation: Any, host: Any) -> Any:
     return reservation
 
 
-def checkout_reservation(*, reservation_id: UUID, host: Any) -> Any:
-    from apps.foundation.models import OutboxEvent
-    from apps.stay.models import StayReservation
+@transaction.atomic
+def cancel_reservation_ops(
+    *,
+    reservation_id: UUID | str,
+    actor: Any,
+    reason: str = "",
+) -> StayReservation:
+    """Operations cancels a stay reservation with full automatic refund and releases unit hold."""
+    from apps.commerce.services import _request_automatic_refund  # noqa: PLC0415
+    from apps.commerce.services.base import PAYMENT_FINAL_STATES  # noqa: PLC0415
 
-    reservation = StayReservation.objects.select_for_update().get(id=reservation_id)
-    _require_stay_capability(host)
-    if reservation.property.host_id != host.id:
-        raise PermissionError("Not your reservation.")
-
-    if reservation.status != StayReservation.Status.CHECKED_IN:
-        raise StayStateError("Reservation must be CHECKED_IN to checkout.")
-
-    reservation.status = StayReservation.Status.CHECKED_OUT
-    reservation.save(update_fields=("status", "updated_at"))
-
-    OutboxEvent.objects.create(
-        aggregate_type="stay_reservation",
-        aggregate_id=reservation.id,
-        event_type="customer.fulfilment.completed",
-        idempotency_key=f"stay-checked-out:{reservation.id}",
-        payload={
-            "event_version": 1,
-            "customer_id": str(reservation.customer_id),
-            "source_type": "STAY_CHECKED_OUT",
-            "source_id": str(reservation.id),
-            "completed_at": timezone.now().isoformat(),
-        },
+    reservation = (
+        StayReservation.objects.select_for_update()
+        .select_related("unit_reservation", "payment_attempt", "property")
+        .get(id=_as_uuid(reservation_id))
     )
+
+    if reservation.status == StayReservation.Status.CANCELLED:
+        return reservation
+
+    attempt = reservation.payment_attempt
+    if attempt is not None and attempt.status in PAYMENT_FINAL_STATES:
+        _request_automatic_refund(
+            attempt=attempt,
+            reason_code="ops_cancelled_stay_reservation",
+        )
+
+    actor_name = getattr(actor, "username", "operations")
+    reservation.status = StayReservation.Status.CANCELLED
+    reservation.cancelled_at = timezone.now()
+    reservation.cancellation_reason = f"Cancelled by {actor_name}: {(reason or '').strip()}"[:240]
+    reservation.save(update_fields=("status", "cancelled_at", "cancellation_reason", "updated_at"))
+
+    unit_res = reservation.unit_reservation
+    if unit_res:
+        unit_res.status = UnitReservation.Status.RELEASED
+        unit_res.save(update_fields=("status", "updated_at"))
+
     return reservation
+
+
+@transaction.atomic
+def expire_stale_enquiries(*, older_than_days: int = 7) -> int:
+    """Expire unconfirmed enquiries whose check_in has passed or are older than older_than_days.
+
+    Releases any held UnitReservation.
+    """
+    now = timezone.now()
+    today = timezone.localdate()
+    cutoff = now - timedelta(days=older_than_days)
+
+    stale_qs = StayEnquiry.objects.filter(
+        status__in=[StayEnquiry.Status.SUBMITTED, StayEnquiry.Status.RESPONDED],
+    ).filter(models.Q(check_in__lt=today) | models.Q(created_at__lt=cutoff))
+
+    expired_count = 0
+    for enq in stale_qs.select_for_update():
+        enq.status = StayEnquiry.Status.EXPIRED
+        enq.save(update_fields=("status", "updated_at"))
+        if enq.unit_reservation_id:
+            unit_res = enq.unit_reservation
+            if unit_res and unit_res.status == UnitReservation.Status.HELD:
+                unit_res.status = UnitReservation.Status.RELEASED
+                unit_res.save(update_fields=("status", "updated_at"))
+        expired_count += 1
+    return expired_count
+
+
+def add_property_media(
+    *,
+    prop: Property,
+    host: Any,
+    url: str,
+    caption: str = "",
+    display_order: int = 0,
+) -> PropertyMedia:
+    _require_stay_capability(host)
+    if prop.host_id != host.id:
+        raise PermissionError("Not your property.")
+    cleaned_url = url.strip()
+    if not cleaned_url:
+        raise StayStateError("Image URL is required.")
+    return PropertyMedia.objects.create(
+        property=prop,
+        url=cleaned_url,
+        caption=caption.strip(),
+        display_order=display_order,
+    )
+
+
+def remove_property_media(
+    *,
+    prop: Property,
+    host: Any,
+    media_id: UUID | str,
+) -> None:
+    _require_stay_capability(host)
+    if prop.host_id != host.id:
+        raise PermissionError("Not your property.")
+    media = PropertyMedia.objects.filter(id=_as_uuid(media_id), property=prop).first()
+    if not media:
+        raise StayStateError("Photo not found on this property.", code="media_not_found")
+    media.delete()
 
 
 @transaction.atomic
@@ -1075,8 +1196,6 @@ def release_reservation_for_expired_payment(*, payment_attempt_id: UUID) -> None
     Mirrors A7 ``release_booking_for_expired_payment``: cancel the stay reservation
     and release the UnitReservation so the dates become bookable again.
     """
-    from apps.stay.models import StayReservation, UnitReservation
-
     res = (
         StayReservation.objects.select_for_update()
         .select_related("unit_reservation")
@@ -1103,10 +1222,6 @@ def release_reservation_for_expired_payment(*, payment_attempt_id: UUID) -> None
 
 def cancel_reservation_on_refund(*, payment_attempt_id: UUID) -> None:
     """Cancel stay capacity after a full gateway refund — never requests another refund."""
-    from apps.commerce.models import FinancialException, PaymentAttempt
-    from apps.commerce.services.base import _open_exception
-    from apps.stay.models import StayReservation, UnitReservation
-
     try:
         reservation = (
             StayReservation.objects.select_for_update()
@@ -1141,9 +1256,7 @@ def cancel_reservation_on_refund(*, payment_attempt_id: UUID) -> None:
     reservation.status = StayReservation.Status.CANCELLED
     reservation.cancelled_at = timezone.now()
     reservation.cancellation_reason = "full_refund"
-    reservation.save(
-        update_fields=("status", "cancelled_at", "cancellation_reason", "updated_at")
-    )
+    reservation.save(update_fields=("status", "cancelled_at", "cancellation_reason", "updated_at"))
 
     unit_reservation = UnitReservation.objects.select_for_update().get(
         id=reservation.unit_reservation_id
@@ -1164,26 +1277,25 @@ def repair_stay_ghost_holds() -> int:
     OneToOne ``stay_reservation`` is a LEFT OUTER JOIN, and Postgres rejects
     ``FOR UPDATE`` on the nullable side of an outer join.
     """
-    from django.db.models import Q
-
-    from apps.commerce.models import PaymentAttempt
-    from apps.stay.models import StayReservation, UnitReservation
-
-    ghost_filter = Q(stay_reservation__status=StayReservation.Status.CANCELLED) | Q(
-        stay_reservation__status__in=(
-            StayReservation.Status.HELD,
-            StayReservation.Status.PAYMENT_PENDING,
-        ),
-        stay_reservation__payment_attempt__isnull=True,
-    ) | Q(
-        stay_reservation__status__in=(
-            StayReservation.Status.HELD,
-            StayReservation.Status.PAYMENT_PENDING,
-        ),
-        stay_reservation__payment_attempt__status__in=(
-            PaymentAttempt.Status.FAILED,
-            PaymentAttempt.Status.EXPIRED,
-        ),
+    ghost_filter = (
+        models.Q(stay_reservation__status=StayReservation.Status.CANCELLED)
+        | models.Q(
+            stay_reservation__status__in=(
+                StayReservation.Status.HELD,
+                StayReservation.Status.PAYMENT_PENDING,
+            ),
+            stay_reservation__payment_attempt__isnull=True,
+        )
+        | models.Q(
+            stay_reservation__status__in=(
+                StayReservation.Status.HELD,
+                StayReservation.Status.PAYMENT_PENDING,
+            ),
+            stay_reservation__payment_attempt__status__in=(
+                PaymentAttempt.Status.FAILED,
+                PaymentAttempt.Status.EXPIRED,
+            ),
+        )
     )
     candidate_ids = list(
         UnitReservation.objects.filter(

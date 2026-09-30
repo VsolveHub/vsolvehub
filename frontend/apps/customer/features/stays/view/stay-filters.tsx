@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Building2, Coffee, Layers, Wind } from "lucide-react";
+import { Building2, Calendar, Coffee, Layers, Wind } from "lucide-react";
 import { cn, Skeleton } from "@vsolve/ui";
 
 import { fetchStayTaxonomy } from "../queries";
@@ -12,6 +12,8 @@ export interface ActiveFilters {
   maxPrice?: number;
   categorySlug?: string;
   serviceSlug?: string;
+  checkIn?: string;
+  checkOut?: string;
 }
 
 interface StayFiltersProps {
@@ -161,6 +163,61 @@ export function StayFilters({
             ))}
           </div>
         )}
+
+        {/* Row 3: Travel Dates Filter */}
+        <div className="flex flex-wrap items-center gap-3 rounded-control border border-line bg-surface p-2.5">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-text">
+            <Calendar className="size-3.5 text-action" />
+            <span>Stay Dates:</span>
+          </div>
+          <div className="flex items-center gap-3 flex-wrap">
+            <label className="flex items-center gap-1.5 text-xs text-text-secondary">
+              <span className="font-semibold text-text">Check-in:</span>
+              <input
+                type="date"
+                value={activeFilters.checkIn ?? ""}
+                min={new Date().toISOString().split("T")[0]}
+                onChange={(e) =>
+                  onChangeFilter({
+                    ...activeFilters,
+                    checkIn: e.target.value || undefined,
+                  })
+                }
+                className="rounded-control border border-line bg-surface-sunken px-2.5 py-1 text-xs text-text focus:outline-none"
+              />
+            </label>
+            <label className="flex items-center gap-1.5 text-xs text-text-secondary">
+              <span className="font-semibold text-text">Check-out:</span>
+              <input
+                type="date"
+                value={activeFilters.checkOut ?? ""}
+                min={activeFilters.checkIn || new Date().toISOString().split("T")[0]}
+                onChange={(e) =>
+                  onChangeFilter({
+                    ...activeFilters,
+                    checkOut: e.target.value || undefined,
+                  })
+                }
+                className="rounded-control border border-line bg-surface-sunken px-2.5 py-1 text-xs text-text focus:outline-none"
+              />
+            </label>
+            {(activeFilters.checkIn || activeFilters.checkOut) && (
+              <button
+                type="button"
+                onClick={() =>
+                  onChangeFilter({
+                    ...activeFilters,
+                    checkIn: undefined,
+                    checkOut: undefined,
+                  })
+                }
+                className="text-xs font-semibold text-text-secondary hover:text-danger underline transition"
+              >
+                Clear Dates
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="flex items-center justify-between text-xs text-text-secondary font-medium px-1">

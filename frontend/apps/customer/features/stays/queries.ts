@@ -23,6 +23,8 @@ export function fetchStays(params?: StayFilterParams) {
           food: params?.food,
           min_price: params?.min_price,
           max_price: params?.max_price,
+          check_in: params?.check_in,
+          check_out: params?.check_out,
           limit: params?.limit,
           offset: params?.offset,
         },
@@ -121,5 +123,26 @@ export function canCancelStayEnquiry(status?: string): boolean {
 export function canCancelStayReservation(status?: string): boolean {
   const value = (status ?? "").toUpperCase();
   return ["HELD", "PAYMENT_PENDING", "CONFIRMED"].includes(value);
+}
+
+export function submitStayReview(payload: {
+  property_id: string;
+  rating: number;
+  comment?: string;
+  enquiry_id?: string | null;
+  reservation_id?: string | null;
+}) {
+  return request(() =>
+    getApiClient().POST("/api/v1/stays/reviews", {
+      body: {
+        property_id: payload.property_id,
+        rating: payload.rating,
+        comment: payload.comment ?? "",
+        body: payload.comment ?? "",
+        enquiry_id: payload.enquiry_id ?? undefined,
+        reservation_id: payload.reservation_id ?? undefined,
+      },
+    }),
+  );
 }
 

@@ -89,10 +89,26 @@ urlpatterns = [
         views.PartnerReservationActionView.as_view(),
         name="partner-stay-reservation-action",
     ),
+    path("stays/reviews", views.StayReviewCreateView.as_view(), name="stay-review-create"),
+    path(
+        "partner/stays/properties/<uuid:property_id>/media",
+        views.PartnerPropertyMediaCreateView.as_view(),
+        name="partner-stay-property-media-create",
+    ),
+    path(
+        "partner/stays/properties/<uuid:property_id>/media/<uuid:media_id>",
+        views.PartnerPropertyMediaDeleteView.as_view(),
+        name="partner-stay-property-media-delete",
+    ),
     path("ops/stays/enquiries", views.OpsStayEnquiriesView.as_view(), name="ops-stay-enquiries"),
     path(
         "ops/stays/reservations",
         views.OpsStayReservationsView.as_view(),
         name="ops-stay-reservations",
+    ),
+    path(
+        "ops/stays/reservations/<uuid:reservation_id>/cancel",
+        views.OpsStayReservationCancelView.as_view(),
+        name="ops-stay-reservation-cancel",
     ),
 ]

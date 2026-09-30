@@ -57,6 +57,8 @@ function StaysBrowseContent() {
       filters.maxPrice,
       filters.categorySlug,
       filters.serviceSlug,
+      filters.checkIn,
+      filters.checkOut,
       visible,
     ],
     queryFn: () =>
@@ -67,6 +69,8 @@ function StaysBrowseContent() {
         food: filters.food,
         max_price: filters.maxPrice,
         service: filters.serviceSlug || filters.categorySlug,
+        check_in: filters.checkIn,
+        check_out: filters.checkOut,
         limit: visible,
         offset: 0,
       }),
