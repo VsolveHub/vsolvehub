@@ -2,59 +2,51 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { friendlyErrorMessage } from "@vsolve/query";
-import { Badge, Card, EmptyState, formatDate, formatMoney } from "@vsolve/ui";
-import { ChevronRight } from "lucide-react";
+import { Badge, Card, EmptyState, formatDate } from "@vsolve/ui";
+import { ChevronRight, Phone } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import {
   cancelPartnerStayEnquiry,
+  confirmPartnerStayEnquiry,
   fetchPartnerStayEnquiries,
   respondPartnerStayEnquiry,
+  stayLengthLabel,
 } from "@/features/stays/queries";
 import { STAY_SECTIONS } from "@/features/stays/view/stay-sections";
-import { StayEnquiryDetailSheet } from "@/features/stays/view/stay-record-sheets";
+import {
+  StayEnquiryDetailSheet,
+  stayEnquiryStatusLabel,
+  stayEnquiryTone,
+} from "@/features/stays/view/stay-record-sheets";
 import { SectionNav } from "@/features/workspace/view/section-nav";
 
-const ENQUIRY_STATUS_FILTERS = [
-  "ALL",
-  "SUBMITTED",
-  "RESPONDED",
-  "CONFIRMED",
-  "DECLINED",
-  "CANCELLED",
-  "WITHDRAWN",
-  "EXPIRED",
-] as const;
+const ENQUIRY_FILTERS = ["OPEN", "CONFIRMED", "CLOSED", "ALL"] as const;
+type EnquiryFilter = (typeof ENQUIRY_FILTERS)[number];
 
-type EnquiryStatusFilter = (typeof ENQUIRY_STATUS_FILTERS)[number];
-
-const ENQUIRY_STATUS_LABELS: Record<EnquiryStatusFilter, string> = {
+const FILTER_LABELS: Record<EnquiryFilter, string> = {
+  OPEN: "To call",
+  CONFIRMED: "Booked",
+  CLOSED: "Closed",
   ALL: "All",
-  SUBMITTED: "Submitted",
-  RESPONDED: "Responded",
-  CONFIRMED: "Confirmed",
-  DECLINED: "Declined",
-  CANCELLED: "Cancelled",
-  WITHDRAWN: "Withdrawn",
-  EXPIRED: "Expired",
 };
 
-function enquiryStatusFilterLabel(status: EnquiryStatusFilter): string {
-  return ENQUIRY_STATUS_LABELS[status];
+const OPEN = new Set(["SUBMITTED", "RESPONDED"]);
+
+function matches(filter: EnquiryFilter, status: string | undefined): boolean {
+  if (filter === "ALL") return true;
+  if (filter === "OPEN") return OPEN.has(status ?? "");
+  if (filter === "CONFIRMED") return status === "CONFIRMED";
+  return !OPEN.has(status ?? "") && status !== "CONFIRMED";
 }
 
 /**
- * Guest enquiries — the unpaid half of a stay host's inbox.
+ * The host's stay inbox. Every stay starts as an enquiry: the host sees who is asking,
+ * calls them, and marks the enquiry Booked or Not available. The guest is told either way.
  *
- * Lifted out of `stays-workspace.tsx`, where it was a card below the property
- * form. Nothing about it was about properties: a host with a week of enquiries
- * scrolled past their own listing to find out who was asking.
- *
- * The status filter still rides in `?status=`, so a filtered view stays a link a
- * host can send to themselves. Only `filteredEnquiries` is filtered; the detail
- * sheet looks its record up in the unfiltered list, so changing the filter while
- * a sheet is open cannot blank it mid-sentence.
+ * The filter rides in `?status=`, so a filtered view is a link a host can keep. The sheet
+ * looks its record up in the unfiltered list, so changing the filter cannot blank it.
  */
 export function PartnerStayEnquiriesWorkspace() {
   const qc = useQueryClient();
@@ -64,17 +56,14 @@ export function PartnerStayEnquiriesWorkspace() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const queryStatus = searchParams?.get("status") ?? "";
-  const enquiryStatusFilter = ENQUIRY_STATUS_FILTERS.includes(queryStatus as EnquiryStatusFilter)
-    ? (queryStatus as EnquiryStatusFilter)
-    : "ALL";
+  const filter = ENQUIRY_FILTERS.includes(queryStatus as EnquiryFilter)
+    ? (queryStatus as EnquiryFilter)
+    : "OPEN";
 
-  function setEnquiryStatusFilter(status: EnquiryStatusFilter) {
+  function setFilter(next: EnquiryFilter) {
     const params = new URLSearchParams(searchParams?.toString() ?? "");
-    if (status === "ALL") {
-      params.delete("status");
-    } else {
-      params.set("status", status);
-    }
+    if (next === "OPEN") params.delete("status");
+    else params.set("status", next);
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }
@@ -84,33 +73,30 @@ export function PartnerStayEnquiriesWorkspace() {
     queryFn: fetchPartnerStayEnquiries,
   });
 
-  const invalidate = () => {
-    void qc.invalidateQueries({ queryKey: ["partner-stays"] });
-  };
+  const invalidate = () => void qc.invalidateQueries({ queryKey: ["partner-stays"] });
 
-  const respond = useMutation({
+  const act = useMutation({
     mutationFn: ({
       id,
-      response,
-      decline,
+      action,
+      note,
     }: {
       id: string;
-      response: string;
-      decline?: boolean;
-    }) => respondPartnerStayEnquiry(id, response, decline ?? false),
+      action: "booked" | "not_available" | "cancel";
+      note?: string;
+    }) => {
+      if (action === "booked") return confirmPartnerStayEnquiry(id);
+      if (action === "not_available") return respondPartnerStayEnquiry(id, note ?? "", true);
+      return cancelPartnerStayEnquiry(id);
+    },
     onSuccess: invalidate,
   });
 
-  const cancelEnquiry = useMutation({
-    mutationFn: (id: string) => cancelPartnerStayEnquiry(id),
-    onSuccess: invalidate,
-  });
-
-  const filteredEnquiries = useMemo(() => {
-    const rows = enquiries.data ?? [];
-    if (enquiryStatusFilter === "ALL") return rows;
-    return rows.filter((enquiry) => enquiry.status === enquiryStatusFilter);
-  }, [enquiries.data, enquiryStatusFilter]);
+  const rows = useMemo(
+    () => (enquiries.data ?? []).filter((enquiry) => matches(filter, enquiry.status)),
+    [enquiries.data, filter],
+  );
+  const openCount = (enquiries.data ?? []).filter((e) => OPEN.has(e.status ?? "")).length;
 
   const selected = selectedId
     ? (enquiries.data ?? []).find((enquiry) => enquiry.id === selectedId) ?? null
@@ -122,8 +108,8 @@ export function PartnerStayEnquiriesWorkspace() {
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-action">Stays</p>
         <h1 className="mt-1 text-2xl font-extrabold text-navy-900">Guest enquiries</h1>
         <p className="mt-1 text-sm text-text-secondary">
-          Guests asking about your properties. Reply to confirm the dates and the rate before
-          they can book.
+          Call the guest, agree the room and dates, then mark the enquiry Booked or Not
+          available. The guest is told either way.
         </p>
       </div>
 
@@ -131,18 +117,19 @@ export function PartnerStayEnquiriesWorkspace() {
 
       <Card>
         <div className="flex flex-wrap gap-2">
-          {ENQUIRY_STATUS_FILTERS.map((status) => (
+          {ENQUIRY_FILTERS.map((option) => (
             <button
-              key={status}
+              key={option}
               type="button"
-              onClick={() => setEnquiryStatusFilter(status)}
+              onClick={() => setFilter(option)}
               className={`rounded-full px-3 py-1 text-xs font-bold transition ${
-                enquiryStatusFilter === status
+                filter === option
                   ? "bg-action text-white"
                   : "border border-line bg-surface text-text-secondary hover:text-navy-900"
               }`}
             >
-              {enquiryStatusFilterLabel(status)}
+              {FILTER_LABELS[option]}
+              {option === "OPEN" && openCount > 0 ? ` (${openCount})` : ""}
             </button>
           ))}
         </div>
@@ -151,85 +138,75 @@ export function PartnerStayEnquiriesWorkspace() {
         {enquiries.error ? (
           <p className="mt-3 text-sm text-danger-text">{friendlyErrorMessage(enquiries.error)}</p>
         ) : null}
-        {!enquiries.isLoading && !enquiries.error && filteredEnquiries.length === 0 ? (
+        {!enquiries.isLoading && !enquiries.error && rows.length === 0 ? (
           <EmptyState
             compact
             className="mt-3"
-            title={
-              enquiryStatusFilter === "ALL"
-                ? "No enquiries yet"
-                : `No ${enquiryStatusFilterLabel(enquiryStatusFilter).toLowerCase()} enquiries`
-            }
-            description={
-              enquiryStatusFilter === "ALL"
-                ? "Guest questions show up here."
-                : "Try another status filter to see more."
-            }
+            title={filter === "OPEN" ? "Nobody to call right now" : "Nothing here"}
+            description="New enquiries appear here, with the guest's number."
           />
         ) : null}
 
         <ul className="mt-3 flex flex-col gap-3">
-          {filteredEnquiries.map((enquiry) => {
-            const isCancelled =
-              enquiry.status === "CANCELLED" ||
-              enquiry.status === "DECLINED" ||
-              enquiry.status === "EXPIRED" ||
-              enquiry.status === "WITHDRAWN";
-            return (
-              <li key={enquiry.id}>
+          {rows.map((enquiry) => (
+            <li key={enquiry.id}>
+              <div className="flex flex-col gap-2 rounded-card border border-line p-3 sm:flex-row sm:items-center sm:justify-between">
                 <button
                   type="button"
                   onClick={() => setSelectedId(enquiry.id)}
-                  className="w-full rounded-card border border-line p-3 text-left transition hover:border-line-strong hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+                  className="flex-1 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
                 >
                   <span className="flex flex-wrap items-center gap-2">
-                    <span className="font-semibold text-navy-900">{enquiry.property_title}</span>
-                    {isCancelled ? (
-                      <Badge tone="danger">
-                        {enquiry.status === "DECLINED" ? "Declined" : "Cancelled"}
-                      </Badge>
-                    ) : (
-                      <Badge
-                        tone={
-                          enquiry.status === "RESPONDED" || enquiry.status === "CONFIRMED"
-                            ? "success"
-                            : "neutral"
-                        }
-                      >
-                        {enquiry.status}
-                      </Badge>
-                    )}
+                    <span className="font-semibold text-navy-900">
+                      {enquiry.customer_name || "Guest"}
+                    </span>
+                    <Badge tone={stayEnquiryTone(enquiry.status)}>
+                      {stayEnquiryStatusLabel(enquiry.status)}
+                    </Badge>
                   </span>
                   <span className="block text-sm text-text-secondary">
-                    {formatDate(`${enquiry.check_in}T12:00:00`)} –{" "}
-                    {formatDate(`${enquiry.check_out}T12:00:00`)}
-                    {typeof enquiry.total_quote_paise === "number"
-                      ? ` · ${formatMoney(enquiry.total_quote_paise)}`
-                      : ""}
+                    {enquiry.property_title} · {enquiry.unit_name ?? "Room"}
                   </span>
-                  {enquiry.message ? (
-                    <span className="mt-2 block line-clamp-2 text-sm">{enquiry.message}</span>
-                  ) : null}
-                  <span className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-text-link">
-                    View enquiry
+                  <span className="block text-sm text-text-secondary">
+                    From {formatDate(`${enquiry.check_in}T12:00:00`)}
+                    {enquiry.stay_length
+                      ? ` · ${stayLengthLabel(enquiry.stay_length, enquiry.price_period)}`
+                      : ""}
+                    {` · ${enquiry.guest_count ?? 1} guest${(enquiry.guest_count ?? 1) === 1 ? "" : "s"}`}
+                  </span>
+                  <span className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-text-link">
+                    Details
                     <ChevronRight className="size-3.5" aria-hidden />
                   </span>
                 </button>
-              </li>
-            );
-          })}
+                {enquiry.customer_phone && OPEN.has(enquiry.status ?? "") ? (
+                  <a
+                    href={`tel:${enquiry.customer_phone}`}
+                    className="inline-flex items-center justify-center gap-2 rounded-control bg-action px-4 py-2 text-sm font-bold text-action-text shadow-sm hover:bg-action-hover"
+                  >
+                    <Phone className="size-4" aria-hidden />
+                    Call
+                  </a>
+                ) : null}
+              </div>
+            </li>
+          ))}
         </ul>
       </Card>
 
       <StayEnquiryDetailSheet
         enquiry={selected}
         onOpenChange={(open) => {
-          if (!open) setSelectedId(null);
+          if (!open) {
+            setSelectedId(null);
+            act.reset();
+          }
         }}
-        onRespond={(id, response) => respond.mutate({ id, response })}
-        onDecline={(id, response) => respond.mutate({ id, response, decline: true })}
-        onCancel={(id) => cancelEnquiry.mutate(id)}
-        isPending={respond.isPending || cancelEnquiry.isPending}
+        onBooked={(id) => act.mutate({ id, action: "booked" })}
+        onNotAvailable={(id, note) => act.mutate({ id, action: "not_available", note })}
+        onCancelBooking={(id) => act.mutate({ id, action: "cancel" })}
+        isPending={act.isPending}
+        actionError={act.error ? friendlyErrorMessage(act.error) : null}
       />
     </div>
   );

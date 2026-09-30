@@ -17,6 +17,7 @@ function variant(id: string) {
     room_schema: {},
     room_name_suggestions: [],
     booking_mode: "ENQUIRY",
+    price_period: "MONTH",
   };
 }
 

@@ -220,6 +220,7 @@ class PartnerApplicationView(APIView):
                 consents=data.get("consents"),
                 request_ip=_request_ip(request),
                 device_identifier=data.get("device_identifier", ""),
+                track=data.get("track"),
             )
         except PartnerDomainError as exc:
             _raise_api_error(exc)

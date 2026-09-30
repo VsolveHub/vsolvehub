@@ -33,6 +33,8 @@ class PartnerConsentInputSerializer(serializers.Serializer[dict[str, object]]):
 
 class PartnerApplicationUpdateSerializer(serializers.Serializer[dict[str, object]]):
     expected_version = serializers.IntegerField(required=False, min_value=1)
+    #: ``STAY_HOST`` for partners who list their own property; they skip trades, areas and hours.
+    track = serializers.ChoiceField(choices=PartnerApplication.Track.choices, required=False)
     display_name = serializers.CharField(required=False, max_length=120, trim_whitespace=True)
     biography = serializers.CharField(required=False, allow_blank=True, max_length=2000)
     experience_years = serializers.IntegerField(required=False, min_value=0, max_value=80)
@@ -391,6 +393,7 @@ class PartnerApplicationSerializer(serializers.ModelSerializer[PartnerApplicatio
             "id",
             "partner_id",
             "status",
+            "track",
             "version",
             "display_name",
             "biography",

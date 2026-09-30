@@ -313,6 +313,7 @@ def update_partner_application(
     consents: Sequence[dict[str, str]] | None,
     request_ip: str,
     device_identifier: str,
+    track: str | None = None,
 ) -> PartnerApplication:
     partner, application = _draft_application_for_update(
         user=user,
@@ -321,6 +322,8 @@ def update_partner_application(
         biography=biography,
         experience_years=experience_years,
     )
+    if track is not None:
+        application.track = PartnerApplication.Track(track)
     skills = _resolve_application_skills(partner=partner, skill_codes=skill_codes)
     variants = _resolve_application_variants(
         partner=partner,
@@ -357,7 +360,7 @@ def update_partner_application(
     )
 
     application.version += 1
-    application.save(update_fields=("version", "updated_at"))
+    application.save(update_fields=("track", "version", "updated_at"))
     return application
 
 
@@ -393,12 +396,13 @@ def submit_partner_application(
             partner_links__is_active=True,
         ),
     )
-    _validate_service_configuration(
-        skills=skills,
-        variants=variants,
-        service_areas=service_areas,
-        require_complete=True,
-    )
+    if application.track != PartnerApplication.Track.STAY_HOST:
+        _validate_service_configuration(
+            skills=skills,
+            variants=variants,
+            service_areas=service_areas,
+            require_complete=True,
+        )
     if not _base_application_is_complete(application):
         raise PartnerApplicationIncompleteError(
             "Complete your profile, services, areas, skills, and required consents "

@@ -363,6 +363,9 @@ SPECTACULAR_SETTINGS = {
         "WorkEvidenceKindEnum": "apps.fulfilment.models.WorkEvidence.Kind",
         "WorkOutcomeEnum": "apps.fulfilment.models.WorkOutcome.Outcome",
         "BookingStatusEnum": "apps.commerce.models.Booking.Status",
+        # Pinned when the host's enquiry view (with the guest's contact) became a second
+        # serializer over `StayEnquiry`; without it the enum was renamed to a positional name.
+        "StayEnquiryStatusEnum": "apps.stay.models.StayEnquiry.Status",
         # Named so the *existing* `DecisionEnum` keeps its name. Adding a second `decision`
         # field made the generator disambiguate both, silently renaming a component the admin
         # app already imported — a published rename is a breaking change, and a new model is

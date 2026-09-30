@@ -797,6 +797,12 @@ class A9VariantConfiguration(models.Model):
         RESERVATION = "RESERVATION", "Reservation (paid)"
         ENQUIRY = "ENQUIRY", "Enquiry (visit-first)"
 
+    class PricePeriod(models.TextChoices):
+        """What a room's rate is quoted per. Display and estimate only — stays take no payment."""
+
+        NIGHT = "NIGHT", "Per night"
+        MONTH = "MONTH", "Per month"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     variant = models.ForeignKey(
         ServiceVariant,
@@ -805,10 +811,17 @@ class A9VariantConfiguration(models.Model):
     )
     version = models.PositiveIntegerField(default=1)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.ACTIVE)
+    #: Every stay is enquiry-first: the guest enquires, the host calls. ``RESERVATION`` (paid
+    #: online) is retained for rows created before that decision and is not offered any more.
     booking_mode = models.CharField(
         max_length=16,
         choices=BookingMode.choices,
         default=BookingMode.ENQUIRY,
+    )
+    price_period = models.CharField(
+        max_length=8,
+        choices=PricePeriod.choices,
+        default=PricePeriod.MONTH,
     )
     property_schema = models.JSONField(default=dict, blank=True)
     enquiry_schema = models.JSONField(default=dict, blank=True)

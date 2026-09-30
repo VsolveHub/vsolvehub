@@ -73,6 +73,7 @@ def _variant(service: Service, code: str, mode: str, schema: dict | None = None)
         version=1,
         status=A9VariantConfiguration.Status.ACTIVE,
         booking_mode=mode,
+        price_period=A9VariantConfiguration.PricePeriod.NIGHT,
         property_schema=schema or {},
     )
     return variant
@@ -254,23 +255,23 @@ def test_partner_listing_actions_over_http(world):
 
 
 @pytest.mark.django_db
-def test_room_type_with_two_rooms_takes_two_overlapping_stays(world):
-    prop = _live(world, quantity=2)
+def test_booked_enquiries_do_not_block_new_ones(world):
+    """Stays are arranged by phone: the host decides, the calendar does not refuse guests."""
+    prop = _live(world, quantity=1)
     check_in, check_out = _dates()
-    second_guest = User.objects.create(phone_number="+919955550003", full_name="Guest Two")
-    third_guest = User.objects.create(phone_number="+919955550004", full_name="Guest Three")
+    first = create_enquiry(
+        customer=world["guest"], property_id=prop.id, check_in=check_in, check_out=check_out
+    )
+    confirm_enquiry(enquiry=first, host=world["host"])
+    other = User.objects.create(phone_number="+919955550003", full_name="Guest Two")
 
-    for guest in (world["guest"], second_guest):
-        enquiry = create_enquiry(
-            customer=guest, property_id=prop.id, check_in=check_in, check_out=check_out
-        )
-        confirm_enquiry(enquiry=enquiry, host=world["host"])
+    second = create_enquiry(
+        customer=other, property_id=prop.id, check_in=check_in, check_out=check_out
+    )
+    confirm_enquiry(enquiry=second, host=world["host"])
 
-    with pytest.raises(StayStateError) as exc:
-        create_enquiry(
-            customer=third_guest, property_id=prop.id, check_in=check_in, check_out=check_out
-        )
-    assert exc.value.code == "dates_unavailable"
+    second.refresh_from_db()
+    assert second.status == StayEnquiry.Status.CONFIRMED
 
 
 @pytest.mark.django_db
@@ -294,17 +295,15 @@ def test_back_to_back_stays_do_not_block_each_other(world):
 
 
 @pytest.mark.django_db
-def test_search_hides_properties_sold_out_by_confirmed_enquiries(world):
-    prop = _live(world, quantity=1)
-    check_in, check_out = _dates()
-    enquiry = create_enquiry(
-        customer=world["guest"], property_id=prop.id, check_in=check_in, check_out=check_out
-    )
-    confirm_enquiry(enquiry=enquiry, host=world["host"])
+def test_host_hides_a_full_room_type_by_marking_it_full(world):
+    prop = _live(world)
+    create_unit(prop=prop, host=world["host"], name="Deluxe", nightly_rate_paise=150000)
+    standard = prop.units.get(name="Standard room")
 
-    assert prop.id not in _ids(public_properties(check_in=check_in, check_out=check_out))
-    later_in, later_out = _dates(offset=30)
-    assert prop.id in _ids(public_properties(check_in=later_in, check_out=later_out))
+    update_unit(unit=standard, host=world["host"], is_active=False)
+
+    detail = APIClient().get(f"/api/v1/stays/{prop.id}")
+    assert [room["name"] for room in detail.data["units"]] == ["Deluxe"]
 
 
 # --- P0-4: guest count ---------------------------------------------------------------------------

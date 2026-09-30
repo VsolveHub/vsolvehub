@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { APPLICATION_STEPS, isLastStep, nextStep, stepIndexOf } from "./steps";
+import {
+  APPLICATION_STEPS,
+  applicationSteps,
+  isLastStep,
+  nextStep,
+  stepIndexOf,
+} from "./steps";
 
 /**
  * The step sequence, and the two bugs it exists to prevent.
@@ -80,5 +86,27 @@ describe("the list itself", () => {
       expect(step.label.length).toBeGreaterThan(0);
       expect(step.href.startsWith("/apply")).toBe(true);
     }
+  });
+});
+
+describe("the stay host path", () => {
+  it("skips trades, areas and hours", () => {
+    expect(applicationSteps("STAY_HOST").map((step) => step.href)).toEqual([
+      "/apply",
+      "/apply/about",
+      "/apply/consent",
+      "/apply/documents",
+      "/apply/review",
+    ]);
+  });
+
+  it("continues from About you straight to the agreements", () => {
+    expect(nextStep("/apply/about", "STAY_HOST")?.href).toBe("/apply/consent");
+    expect(isLastStep("/apply/review", "STAY_HOST")).toBe(true);
+  });
+
+  it("leaves the services path unchanged", () => {
+    expect(applicationSteps("SERVICES")).toBe(APPLICATION_STEPS);
+    expect(applicationSteps(undefined)).toBe(APPLICATION_STEPS);
   });
 });

@@ -41,6 +41,7 @@ from .eligibility import (
     expired_required_document_kinds,
     gate_refusal_detail,
     gate_states,
+    is_approved_stay_host,
     partner_unavailable_on,
     workspace_grants,
 )
@@ -104,6 +105,7 @@ __all__ = [
     "expired_required_document_kinds",
     "gate_refusal_detail",
     "gate_states",
+    "is_approved_stay_host",
     "is_sole_agency_for",
     "language_subtag",
     "link_partner_by_signal",

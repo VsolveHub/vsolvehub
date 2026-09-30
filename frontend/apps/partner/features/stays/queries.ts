@@ -3,7 +3,7 @@ import { request, type Schemas } from "@vsolve/api-client";
 import { getApiClient } from "@/lib/api/browser";
 
 export type StayProperty = Schemas["PartnerProperty"];
-export type StayEnquiry = Schemas["StayEnquiry"];
+export type StayEnquiry = Schemas["PartnerStayEnquiry"];
 export type PartnerCapability = Schemas["PartnerCapability"];
 export type StayUnit = Schemas["PartnerUnit"];
 export type CreateUnitRequest = Schemas["CreateUnitRequest"];
@@ -21,6 +21,8 @@ export type StayTaxonomyVariant = {
   /** Room names this category suggests; the host may type any name. */
   room_name_suggestions: string[];
   booking_mode: string;
+  /** "NIGHT" or "MONTH": what room rates for this type are quoted per. */
+  price_period: string;
 };
 
 /** One choice per property type: the taxonomy flattened, since each type has one variant. */
@@ -253,6 +255,27 @@ export async function respondPartnerStayEnquiry(
     }),
   );
   return data as StayEnquiry;
+}
+
+/** The host spoke to the guest and the stay is agreed. */
+export async function confirmPartnerStayEnquiry(enquiryId: string): Promise<StayEnquiry> {
+  const data = await request(() =>
+    getApiClient().POST("/api/v1/partner/stays/enquiries/{enquiry_id}/confirm", {
+      params: { path: { enquiry_id: enquiryId } },
+    }),
+  );
+  return data as StayEnquiry;
+}
+
+/** "3 months", "1 night" — how long the guest asked to stay. */
+export function stayLengthLabel(length: number, period: string | undefined | null): string {
+  const unit = period === "NIGHT" ? "night" : "month";
+  return `${length} ${unit}${length === 1 ? "" : "s"}`;
+}
+
+/** "₹9,000 / month". */
+export function ratePeriodSuffix(period: string | undefined | null): string {
+  return period === "NIGHT" ? "/ night" : "/ month";
 }
 
 export async function cancelPartnerStayEnquiry(enquiryId: string): Promise<StayEnquiry> {

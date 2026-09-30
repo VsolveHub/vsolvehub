@@ -2,12 +2,13 @@
 
 import { ApiRequestError, type Schemas } from "@vsolve/api-client";
 import { ErrorState, Skeleton, cn } from "@vsolve/ui";
-import { ArrowRight, Check, Sparkles } from "lucide-react";
+import { ArrowRight, BedDouble, Check, Sparkles, Wrench } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import { progressSummary, stepProgress, type StepProgress } from "../model/progress";
 import { canSubmit, isEditable, rejectedDocuments } from "../model/readiness";
-import { usePartnerApplication } from "../queries";
+import { usePartnerApplication, useUpdateApplication } from "../queries";
 import { ApplicationStatusBanner } from "./status-banner";
 
 /**
@@ -73,9 +74,14 @@ export function ApplicationOverview() {
  * Nobody has applied yet.
  *
  * The only screen in this tree that is allowed to be a pitch, and it stays a
- * short one: what it costs, what it does not commit you to, and one button.
+ * short one. The first question decides the path: someone listing their own
+ * property skips the trades, areas and hours that only matter for people who
+ * travel to a customer.
  */
 function NotStarted() {
+  const router = useRouter();
+  const start = useUpdateApplication();
+
   return (
     <section className="flex flex-col gap-5">
       <div className="flex flex-col items-center gap-3 rounded-card bg-[linear-gradient(160deg,var(--color-navy-700)_0%,var(--color-navy-900)_100%)] px-5 py-7 text-center">
@@ -91,19 +97,43 @@ function NotStarted() {
         </p>
       </div>
 
+      <h2 className="text-base font-bold text-navy-900">What will you do on VSolve?</h2>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Link
+          href="/apply/about"
+          className="flex flex-col gap-1.5 rounded-card border border-line bg-surface p-4 text-left hover:border-action focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+        >
+          <Wrench size={22} aria-hidden className="text-action" />
+          <span className="font-bold text-navy-900">Offer services</span>
+          <span className="text-sm text-text-secondary">
+            Repairs, cleaning and other work at customers&rsquo; homes. You choose your areas
+            and hours.
+          </span>
+        </Link>
+        <button
+          type="button"
+          disabled={start.isPending}
+          onClick={() =>
+            start.mutate({ track: "STAY_HOST" }, { onSuccess: () => router.push("/apply/about") })
+          }
+          className="flex flex-col gap-1.5 rounded-card border border-line bg-surface p-4 text-left hover:border-action focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:opacity-60"
+        >
+          <BedDouble size={22} aria-hidden className="text-action" />
+          <span className="font-bold text-navy-900">List my property</span>
+          <span className="text-sm text-text-secondary">
+            PG, rooms, hostel or hotel. Just your details, the agreements and an ID — about
+            three minutes.
+          </span>
+        </button>
+      </div>
+      {start.isError ? (
+        <p className="text-sm text-danger-text">We could not start that. Please try again.</p>
+      ) : null}
+
       <ul className="flex list-none flex-col gap-2 p-0">
-        <Promise>You choose which areas you travel to</Promise>
-        <Promise>You choose the hours you work</Promise>
+        <Promise>Nothing is sent for review until you choose to send it</Promise>
         <Promise>Nothing is shared with customers until you are approved</Promise>
       </ul>
-
-      <Link
-        href="/apply/about"
-        className="flex h-13 items-center justify-center gap-2 rounded-control bg-action px-7 text-[1.0625rem] font-bold text-action-text hover:bg-action-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-      >
-        Begin
-        <ArrowRight size={19} aria-hidden />
-      </Link>
     </section>
   );
 }
@@ -167,28 +197,32 @@ function Standing({ application }: { application: Application }) {
       {/* Structured Steps Checklist */}
       <StepList steps={steps} />
 
-      {/* Specialist & Contractor Option */}
-      <section className="rounded-3xl border border-line bg-white p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-base font-bold text-navy-900">Contractor & Multi-Crew Supply</h2>
-            <span className="rounded-full bg-surface-sunken px-2.5 py-0.5 text-[10px] font-bold text-text-muted border border-line">
-              Optional
-            </span>
+      {/* Specialist & Contractor Option — not for someone listing their own property. */}
+      {application.track === "STAY_HOST" ? null : (
+        <section className="rounded-3xl border border-line bg-white p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-bold text-navy-900">Contractor & Multi-Crew Supply</h2>
+              <span className="rounded-full bg-surface-sunken px-2.5 py-0.5 text-[10px] font-bold text-text-muted border border-line">
+                Optional
+              </span>
+            </div>
+            <p className="text-xs text-text-secondary mt-1 max-w-md leading-relaxed">
+              Have a crew of 3+ technicians? Dispatch work teams and bid for custom corporate contracts.
+            </p>
           </div>
-          <p className="text-xs text-text-secondary mt-1 max-w-md leading-relaxed">
-            Have a crew of 3+ technicians? Dispatch work teams and bid for custom corporate contracts.
-          </p>
-        </div>
-        <Link
-          href="/apply/capabilities"
-          className="inline-flex h-11 items-center justify-center rounded-full border border-line-strong bg-surface hover:bg-surface-sunken px-5 text-xs font-bold text-navy-900 transition-colors shadow-xs shrink-0"
-        >
-          <span>Explore Crew Rates</span>
-        </Link>
-      </section>
+          <Link
+            href="/apply/capabilities"
+            className="inline-flex h-11 items-center justify-center rounded-full border border-line-strong bg-surface hover:bg-surface-sunken px-5 text-xs font-bold text-navy-900 transition-colors shadow-xs shrink-0"
+          >
+            <span>Explore Crew Rates</span>
+          </Link>
+        </section>
+      )}
 
-      {application.status === "APPROVED" ? <Approved /> : null}
+      {application.status === "APPROVED" ? (
+        <Approved stayHost={application.track === "STAY_HOST"} />
+      ) : null}
 
       <History transitions={application.transitions} />
     </section>
@@ -391,7 +425,24 @@ function StepList({ steps }: { steps: readonly StepProgress[] }) {
  * a banner and a history — and the banner's own "publish the hours you want to
  * work" pointed at nothing.
  */
-function Approved() {
+function Approved({ stayHost }: { stayHost: boolean }) {
+  if (stayHost) {
+    return (
+      <div className="flex flex-col gap-2.5 rounded-card border border-success-line bg-success-surface p-4">
+        <p className="text-[0.9375rem] font-bold text-success-text">You are approved</p>
+        <p className="text-[0.875rem] leading-relaxed text-success-text/85">
+          Add your property and rooms, publish, and guest enquiries will come to you.
+        </p>
+        <Link
+          href="/stays"
+          className="mt-1 flex h-12 items-center justify-center gap-2 rounded-control bg-success-text px-6 text-[0.9375rem] font-bold text-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+        >
+          List your property
+          <ArrowRight size={18} aria-hidden />
+        </Link>
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col gap-2.5 rounded-card border border-success-line bg-success-surface p-4">
       <p className="text-[0.9375rem] font-bold text-success-text">You are approved</p>

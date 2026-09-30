@@ -5,7 +5,13 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Calendar, Clock, MessageSquare } from "lucide-react";
 import { Badge, Button, formatDate } from "@vsolve/ui";
 
-import { formatPaise, getEnquiryStatusBadge, type StayEnquiry } from "../model";
+import {
+  formatPaise,
+  getEnquiryStatusBadge,
+  pricePeriodOf,
+  stayLengthLabel,
+  type StayEnquiry,
+} from "../model";
 import { canCancelStayEnquiry, cancelStayEnquiry } from "../queries";
 
 interface StayEnquiryCardProps {
@@ -45,12 +51,14 @@ export function StayEnquiryCard({ enquiry }: StayEnquiryCardProps) {
         </div>
 
         <div className="rounded-control border border-line/60 bg-surface-sunken p-3 text-right sm:min-w-40">
-          <div className="text-xs text-text-secondary">Quoted Estimate</div>
+          <div className="text-xs text-text-secondary">Estimate</div>
           <div className="text-lg font-extrabold text-action">
             {formatPaise(enquiry.total_quote_paise ?? 0)}
           </div>
           <div className="mt-0.5 text-[11px] text-text-secondary">
-            {enquiry.nights ?? 1} night{(enquiry.nights ?? 1) === 1 ? "" : "s"}
+            {enquiry.stay_length
+              ? stayLengthLabel(enquiry.stay_length, pricePeriodOf(enquiry.price_period))
+              : `${enquiry.nights ?? 1} night${(enquiry.nights ?? 1) === 1 ? "" : "s"}`}
           </div>
         </div>
       </div>

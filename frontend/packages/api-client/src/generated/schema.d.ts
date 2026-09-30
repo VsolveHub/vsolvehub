@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.66.0)
- * Checksum: c740b90167a307b0
+ * Checksum: 44548d513a4872b8
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -5669,7 +5669,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Host confirms an enquiry and holds the unit calendar. */
+        /** @description Host marks an enquiry as booked after calling the guest. */
         post: operations["partner_stays_enquiries_confirm_create"];
         delete?: never;
         options?: never;
@@ -8466,8 +8466,9 @@ export interface components {
             unit_id?: string | null;
             /** Format: date */
             check_in: string;
+            length?: number | null;
             /** Format: date */
-            check_out: string;
+            check_out?: string | null;
             /** @default 1 */
             guest_count: number;
             /** @default  */
@@ -10953,6 +10954,7 @@ export interface components {
             /** Format: uuid */
             readonly partner_id: string;
             readonly status: components["schemas"]["PartnerApplicationStatusEnum"];
+            readonly track: components["schemas"]["TrackEnum"];
             readonly version: number;
             readonly display_name: string;
             readonly biography: string;
@@ -11609,6 +11611,7 @@ export interface components {
             readonly reviews: components["schemas"]["StayReview"][];
             readonly units: components["schemas"]["PartnerUnit"][];
             readonly booking_mode: string;
+            readonly price_period: string;
             /** Format: date-time */
             readonly created_at: string;
             moderation_reason?: string;
@@ -11688,6 +11691,42 @@ export interface components {
             readonly code: string;
             readonly name: string;
             readonly description: string;
+        };
+        /**
+         * @description The host's view: the guest's name and number, so the host can call them.
+         *
+         *     The guest is told on the enquiry form that these are shared with the host.
+         */
+        PartnerStayEnquiry: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            property: string;
+            readonly property_title: string;
+            /** Format: uuid */
+            unit?: string | null;
+            /** @default Standard room */
+            readonly unit_name: string;
+            /** @default 0 */
+            readonly nightly_rate_paise: number;
+            status?: components["schemas"]["StayEnquiryStatusEnum"];
+            /** Format: date */
+            check_in: string;
+            /** Format: date */
+            check_out: string;
+            nights?: number;
+            stay_length?: number;
+            price_period?: string;
+            total_quote_paise?: number;
+            guest_count?: number;
+            message?: string;
+            host_response?: string;
+            /** Format: date-time */
+            responded_at?: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            readonly customer_name: string;
+            readonly customer_phone: string;
         };
         /** @description The host's view of a room: adds how many bookings still have nights ahead. */
         PartnerUnit: {
@@ -11822,6 +11861,7 @@ export interface components {
         };
         PatchedPartnerApplicationUpdateRequest: {
             expected_version?: number;
+            track?: components["schemas"]["TrackEnum"];
             display_name?: string;
             biography?: string;
             experience_years?: number;
@@ -12526,6 +12566,7 @@ export interface components {
             readonly reviews: components["schemas"]["StayReview"][];
             readonly units: components["schemas"]["Unit"][];
             readonly booking_mode: string;
+            readonly price_period: string;
             /** Format: date-time */
             readonly created_at: string;
         };
@@ -12559,6 +12600,7 @@ export interface components {
             readonly media: components["schemas"]["PropertyMedia"][];
             readonly units: components["schemas"]["Unit"][];
             readonly booking_mode: string;
+            readonly price_period: string;
             readonly review_count: number;
             /** Format: double */
             readonly average_rating: number | null;
@@ -14102,6 +14144,7 @@ export interface components {
             note: string;
         };
         RespondEnquiryRequest: {
+            /** @default  */
             response: string;
             /** @default false */
             decline: boolean;
@@ -15003,6 +15046,8 @@ export interface components {
             /** Format: date */
             check_out: string;
             nights?: number;
+            stay_length?: number;
+            price_period?: string;
             total_quote_paise?: number;
             guest_count?: number;
             message?: string;
@@ -15040,7 +15085,11 @@ export interface components {
             /** Format: uuid */
             unit_id: string | null;
             unit_name: string;
+            /** Format: date */
+            check_out?: string;
             nights: number;
+            stay_length?: number;
+            price_period?: string;
             nightly_rate_paise: number;
             total_quote_paise: number;
             booking_mode?: string;
@@ -15129,6 +15178,7 @@ export interface components {
             room_schema: unknown;
             room_name_suggestions: string[];
             booking_mode: string;
+            price_period: string;
         };
         StepUpSession: {
             /** Format: date-time */
@@ -15294,6 +15344,12 @@ export interface components {
             /** Format: date-time */
             server_now: string;
         };
+        /**
+         * @description * `SERVICES` - Offer services
+         *     * `STAY_HOST` - List my property
+         * @enum {string}
+         */
+        TrackEnum: "SERVICES" | "STAY_HOST";
         /** @description The replacement's price for one unfinished milestone. */
         TransferQuoteRequest: {
             /** Format: uuid */
@@ -29150,7 +29206,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["StayEnquiry"][];
+                    "application/json": components["schemas"]["PartnerStayEnquiry"][];
                 };
             };
         };
@@ -29171,7 +29227,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["StayEnquiry"];
+                    "application/json": components["schemas"]["PartnerStayEnquiry"];
                 };
             };
         };
@@ -29192,7 +29248,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["StayEnquiry"];
+                    "application/json": components["schemas"]["PartnerStayEnquiry"];
                 };
             };
         };
@@ -29206,7 +29262,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: {
+        requestBody?: {
             content: {
                 "application/json": components["schemas"]["RespondEnquiryRequest"];
                 "application/x-www-form-urlencoded": components["schemas"]["RespondEnquiryRequest"];
@@ -29219,7 +29275,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["StayEnquiry"];
+                    "application/json": components["schemas"]["PartnerStayEnquiry"];
                 };
             };
         };
@@ -32812,7 +32868,8 @@ export interface operations {
         parameters: {
             query: {
                 check_in: string;
-                check_out: string;
+                check_out?: string | null;
+                length?: number | null;
                 property_id: string;
                 unit_id?: string | null;
             };

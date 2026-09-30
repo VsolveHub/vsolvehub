@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { Schemas } from "@vsolve/api-client";
 import { ToastProvider } from "@vsolve/ui";
 import type { ReactNode } from "react";
@@ -14,10 +14,11 @@ const client = {
   PUT: vi.fn(),
   DELETE: vi.fn(),
 };
+const push = vi.fn();
 
 vi.mock("@/lib/api/browser", () => ({ getApiClient: () => client }));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ back: vi.fn(), push: vi.fn(), replace: vi.fn() }),
+  useRouter: () => ({ back: vi.fn(), push, replace: vi.fn() }),
 }));
 
 function ok<T>(data: T, status = 200) {
@@ -41,7 +42,8 @@ function mockProperty(overrides: Partial<Schemas["Property"]> = {}): Schemas["Pr
     host_name: "Ramesh Rao",
     location_text: "Gachibowli, Hyderabad",
     min_stay_nights: 1,
-    booking_mode: "RESERVATION",
+    booking_mode: "ENQUIRY",
+    price_period: "MONTH",
     public_state: "PUBLISHED",
     media: [],
     reviews: [],
@@ -50,9 +52,10 @@ function mockProperty(overrides: Partial<Schemas["Property"]> = {}): Schemas["Pr
     units: [
       {
         id: "unit-1",
-        name: "Deluxe Single Room",
-        sharing_count: 1,
-        nightly_rate_paise: 150_000,
+        name: "Double sharing",
+        sharing_count: 2,
+        max_guests: 2,
+        nightly_rate_paise: 900_000,
         is_active: true,
       },
     ],
@@ -72,185 +75,69 @@ function wrapper({ children }: { children: ReactNode }) {
 
 beforeEach(() => {
   queryClient = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false },
-      mutations: { retry: false },
-    },
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   for (const method of Object.values(client)) method.mockReset();
+  push.mockReset();
 });
 
 afterEach(() => {
   queryClient.clear();
 });
 
-describe("StayQuotePanel error presentations", () => {
-  it("shows Minimum stay is N nights when client dates violate property min_stay_nights", async () => {
+describe("StayQuotePanel", () => {
+  it("asks a monthly stay in months and shows the rent estimate", async () => {
     client.GET.mockResolvedValue(
-      ok({
-        nightly_rate_paise: 150_000,
-        total_quote_paise: 450_000,
-        nights: 3,
-        min_stay_nights: 5,
-        available: true,
-      }),
+      ok({ nightly_rate_paise: 900_000, total_quote_paise: 900_000, stay_length: 1 }),
     );
 
-    const prop = mockProperty({ min_stay_nights: 5 });
-    render(<StayQuotePanel property={prop} />, { wrapper });
+    render(<StayQuotePanel property={mockProperty()} />, { wrapper });
 
-    expect(await screen.findByText("Minimum stay is 5 nights.")).toBeInTheDocument();
-    const submitBtn = screen.getByRole("button", { name: /Pay & Reserve/i });
-    expect(submitBtn).toBeDisabled();
+    expect(screen.getByText("Move-in date")).toBeInTheDocument();
+    expect(screen.getByText("For how many months")).toBeInTheDocument();
+    expect(await screen.findByText("about ₹9,000")).toBeInTheDocument();
   });
 
-  it("shows Minimum stay is N nights when quote query returns min_stay_not_met code", async () => {
-    client.GET.mockResolvedValue(refusal("min_stay_not_met", "Minimum stay is 4 nights."));
+  it("asks a nightly stay in nights", () => {
+    client.GET.mockResolvedValue(ok({ nightly_rate_paise: 250_000, total_quote_paise: 250_000 }));
 
-    const prop = mockProperty({ min_stay_nights: 4 });
-    render(<StayQuotePanel property={prop} />, { wrapper });
+    render(<StayQuotePanel property={mockProperty({ price_period: "NIGHT" })} />, { wrapper });
 
-    expect(await screen.findByText("Minimum stay is 4 nights.")).toBeInTheDocument();
-    const submitBtn = screen.getByRole("button", { name: /Pay & Reserve/i });
-    expect(submitBtn).toBeDisabled();
+    expect(screen.getByText("Check-in date")).toBeInTheDocument();
+    expect(screen.getByText("For how many nights")).toBeInTheDocument();
   });
 
-  it("shows Not available for these dates when client dates fall outside available_from/until", async () => {
-    client.GET.mockResolvedValue(
-      ok({
-        nightly_rate_paise: 150_000,
-        total_quote_paise: 450_000,
-        nights: 3,
-        min_stay_nights: 1,
-        available: true,
-      }),
-    );
+  it("tells the guest their number goes to the host and nothing is paid", () => {
+    client.GET.mockResolvedValue(ok({ nightly_rate_paise: 900_000, total_quote_paise: 900_000 }));
 
-    const prop = mockProperty({
-      min_stay_nights: 1,
-      available_from: "2099-01-01",
-      available_until: "2099-12-31",
-    });
-    render(<StayQuotePanel property={prop} />, { wrapper });
-
-    expect(await screen.findByText("Not available for these dates.")).toBeInTheDocument();
-    const submitBtn = screen.getByRole("button", { name: /Pay & Reserve/i });
-    expect(submitBtn).toBeDisabled();
-  });
-
-  it("shows Not available for these dates when quote query returns dates_unavailable code", async () => {
-    client.GET.mockResolvedValue(refusal("dates_unavailable", "Not available for these dates."));
-
-    const prop = mockProperty({ min_stay_nights: 1 });
-    render(<StayQuotePanel property={prop} />, { wrapper });
-
-    expect(await screen.findByText("Not available for these dates.")).toBeInTheDocument();
-    const submitBtn = screen.getByRole("button", { name: /Pay & Reserve/i });
-    expect(submitBtn).toBeDisabled();
-  });
-
-  it("shows friendlyErrorMessage fallback when quote query returns an unexpected error code", async () => {
-    client.GET.mockResolvedValue(refusal("rate_unavailable", "Could not calculate quote at this time."));
-
-    const prop = mockProperty({ min_stay_nights: 1 });
-    render(<StayQuotePanel property={prop} />, { wrapper });
+    render(<StayQuotePanel property={mockProperty()} />, { wrapper });
 
     expect(
-      await screen.findByText("Could not calculate quote at this time."),
+      screen.getByText(/name and phone number are shared with the host/i),
     ).toBeInTheDocument();
-    const submitBtn = screen.getByRole("button", { name: /Pay & Reserve/i });
-    expect(submitBtn).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /pay/i })).not.toBeInTheDocument();
   });
 
-  it("shows Minimum stay is N nights when reservation mutation fails with min_stay_not_met code", async () => {
-    client.GET.mockResolvedValue(
-      ok({
-        nightly_rate_paise: 150_000,
-        total_quote_paise: 450_000,
-        nights: 3,
-        min_stay_nights: 3,
-        available: true,
-      }),
-    );
-    client.POST.mockResolvedValue(refusal("min_stay_not_met", "Minimum stay is 3 nights."));
+  it("sends the length, not a check-out date", async () => {
+    client.GET.mockResolvedValue(ok({ nightly_rate_paise: 900_000, total_quote_paise: 900_000 }));
+    client.POST.mockResolvedValue(ok({ id: "enq-1" }, 201));
 
-    const prop = mockProperty({ min_stay_nights: 3 });
-    render(<StayQuotePanel property={prop} />, { wrapper });
+    render(<StayQuotePanel property={mockProperty()} />, { wrapper });
+    fireEvent.click(await screen.findByRole("button", { name: /Send enquiry/i }));
 
-    const submitBtn = await screen.findByRole("button", { name: /Pay & Reserve/i });
-    expect(submitBtn).not.toBeDisabled();
-
-    fireEvent.click(submitBtn);
-
-    expect(await screen.findByText("Minimum stay is 3 nights.")).toBeInTheDocument();
+    await waitFor(() => expect(client.POST).toHaveBeenCalled());
+    const body = client.POST.mock.calls[0]![1].body;
+    expect(body).toMatchObject({ property_id: "prop-1", unit_id: "unit-1", length: 1 });
+    expect(body).not.toHaveProperty("check_out");
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/stays/mine"));
   });
 
-  it("shows Not available for these dates when reservation mutation fails with dates_unavailable code", async () => {
-    client.GET.mockResolvedValue(
-      ok({
-        nightly_rate_paise: 150_000,
-        total_quote_paise: 450_000,
-        nights: 3,
-        min_stay_nights: 1,
-        available: true,
-      }),
-    );
-    client.POST.mockResolvedValue(refusal("dates_unavailable", "Dates are no longer available."));
+  it("explains a minimum stay in the property's unit", async () => {
+    client.GET.mockResolvedValue(refusal("min_stay_not_met"));
 
-    const prop = mockProperty({ min_stay_nights: 1 });
-    render(<StayQuotePanel property={prop} />, { wrapper });
+    render(<StayQuotePanel property={mockProperty({ min_stay_nights: 3 })} />, { wrapper });
 
-    const submitBtn = await screen.findByRole("button", { name: /Pay & Reserve/i });
-    expect(submitBtn).not.toBeDisabled();
-
-    fireEvent.click(submitBtn);
-
-    expect(await screen.findByText("Not available for these dates.")).toBeInTheDocument();
-  });
-
-  it("shows friendlyErrorMessage fallback when reservation mutation fails with generic error", async () => {
-    client.GET.mockResolvedValue(
-      ok({
-        nightly_rate_paise: 150_000,
-        total_quote_paise: 450_000,
-        nights: 3,
-        min_stay_nights: 1,
-        available: true,
-      }),
-    );
-    client.POST.mockResolvedValue(refusal("internal_error", "Server encountered an issue."));
-
-    const prop = mockProperty({ min_stay_nights: 1 });
-    render(<StayQuotePanel property={prop} />, { wrapper });
-
-    const submitBtn = await screen.findByRole("button", { name: /Pay & Reserve/i });
-    expect(submitBtn).not.toBeDisabled();
-
-    fireEvent.click(submitBtn);
-
-    expect(await screen.findByText("Server encountered an issue.")).toBeInTheDocument();
-  });
-
-  it("handles ENQUIRY mode error codes for min_stay_not_met and dates_unavailable", async () => {
-    client.GET.mockResolvedValue(
-      ok({
-        nightly_rate_paise: 150_000,
-        total_quote_paise: 450_000,
-        nights: 3,
-        min_stay_nights: 1,
-        available: true,
-      }),
-    );
-    client.POST.mockResolvedValue(refusal("dates_unavailable"));
-
-    const prop = mockProperty({ min_stay_nights: 1, booking_mode: "ENQUIRY" });
-    render(<StayQuotePanel property={prop} />, { wrapper });
-
-    const submitBtn = await screen.findByRole("button", { name: /Send Stay Enquiry/i });
-    expect(submitBtn).not.toBeDisabled();
-
-    fireEvent.click(submitBtn);
-
-    expect(await screen.findByText("Not available for these dates.")).toBeInTheDocument();
+    expect(await screen.findByText("Minimum stay is 3 months.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Send enquiry/i })).toBeDisabled();
   });
 });

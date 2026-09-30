@@ -28,6 +28,23 @@ export const APPLICATION_STEPS: readonly ApplicationStep[] = [
 ] as const;
 
 /**
+ * What the partner signed up to do, as the server records it on the application.
+ *
+ * `STAY_HOST` lists their own property. Trades, service areas and working hours
+ * describe travelling to a customer, so a host never sees those steps.
+ */
+export type ApplicationTrack = "SERVICES" | "STAY_HOST";
+
+const STAY_HOST_STEPS = new Set(["/apply", "/apply/about", "/apply/consent", "/apply/documents", "/apply/review"]);
+
+/** The step sequence for this partner. Every caller goes through here, never the constant. */
+export function applicationSteps(track?: string | null): readonly ApplicationStep[] {
+  return track === "STAY_HOST"
+    ? APPLICATION_STEPS.filter((step) => STAY_HOST_STEPS.has(step.href))
+    : APPLICATION_STEPS;
+}
+
+/**
  * The specialist-work routes added by M2 (`M2-FE-103..106`, `M2-FE-109`).
  *
  * A separate list, and deliberately **not** appended to `APPLICATION_STEPS`.
@@ -54,8 +71,8 @@ export const CAPABILITY_STEPS: readonly ApplicationStep[] = [
  * step, so a `startsWith` check would report the overview for all of them. A
  * trailing slash is tolerated because Next can produce either form.
  */
-export function stepIndexOf(pathname: string): number {
-  return APPLICATION_STEPS.findIndex((step) => step.href === normalise(pathname));
+export function stepIndexOf(pathname: string, track?: string | null): number {
+  return applicationSteps(track).findIndex((step) => step.href === normalise(pathname));
 }
 
 function normalise(pathname: string): string {
@@ -68,12 +85,12 @@ export function capabilityStepIndexOf(pathname: string): number {
 }
 
 /** The step after `pathname`, or null at the end of the sequence or off it. */
-export function nextStep(pathname: string): ApplicationStep | null {
-  const index = stepIndexOf(pathname);
+export function nextStep(pathname: string, track?: string | null): ApplicationStep | null {
+  const index = stepIndexOf(pathname, track);
   if (index === -1) return null;
-  return APPLICATION_STEPS[index + 1] ?? null;
+  return applicationSteps(track)[index + 1] ?? null;
 }
 
-export function isLastStep(pathname: string): boolean {
-  return stepIndexOf(pathname) === APPLICATION_STEPS.length - 1;
+export function isLastStep(pathname: string, track?: string | null): boolean {
+  return stepIndexOf(pathname, track) === applicationSteps(track).length - 1;
 }

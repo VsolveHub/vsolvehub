@@ -1,7 +1,7 @@
 import type { Schemas } from "@vsolve/api-client";
 
 import { requirements, type Requirement } from "./readiness";
-import { APPLICATION_STEPS, type ApplicationStep } from "./steps";
+import { applicationSteps, type ApplicationStep } from "./steps";
 
 /**
  * How far through the application somebody actually is.
@@ -78,7 +78,7 @@ export function stepProgress(application: Application | null): StepProgress[] {
   */
   const met = requirements(application);
 
-  return APPLICATION_STEPS.map((step) => {
+  return applicationSteps(application?.track).map((step) => {
     const mine = met.filter((requirement) => requirement.href === step.href);
     const outstanding = mine.filter((requirement) => !requirement.isMet).length;
 
@@ -134,10 +134,11 @@ export function progressSummary(application: Application | null): ProgressSummar
  * they mistyped something on the previous screen was the one gesture the flow
  * did not offer.
  */
-export function previousStep(pathname: string): ApplicationStep | null {
+export function previousStep(pathname: string, track?: string | null): ApplicationStep | null {
   const normalised =
     pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
-  const index = APPLICATION_STEPS.findIndex((step) => step.href === normalised);
+  const steps = applicationSteps(track);
+  const index = steps.findIndex((step) => step.href === normalised);
   if (index <= 0) return null;
-  return APPLICATION_STEPS[index - 1] ?? null;
+  return steps[index - 1] ?? null;
 }

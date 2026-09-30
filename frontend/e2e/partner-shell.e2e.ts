@@ -148,10 +148,11 @@ test.describe("the home for each application state", () => {
     await expect(
       page.getByRole("heading", { level: 1, name: /start your application/i }),
     ).toBeVisible();
-    await expect(page.getByRole("link", { name: "Begin" })).toHaveAttribute(
+    await expect(page.getByRole("link", { name: /Offer services/ })).toHaveAttribute(
       "href",
       "/apply/about",
     );
+    await expect(page.getByRole("button", { name: /List my property/ })).toBeVisible();
   });
 
   for (const status of ["DRAFT", "CHANGES_REQUIRED"] as const) {

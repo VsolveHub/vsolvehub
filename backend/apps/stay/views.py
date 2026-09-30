@@ -25,6 +25,7 @@ from apps.stay.serializers import (
     OpsCancelStayReservationSerializer,
     PartnerPropertySerializer,
     PartnerReservationActionSerializer,
+    PartnerStayEnquirySerializer,
     PartnerUnitSerializer,
     PropertyMediaSerializer,
     PropertySerializer,
@@ -178,7 +179,8 @@ class StayQuoteView(APIView):
                 property_id=ser.validated_data["property_id"],
                 unit_id=ser.validated_data.get("unit_id"),
                 check_in=ser.validated_data["check_in"],
-                check_out=ser.validated_data["check_out"],
+                check_out=ser.validated_data.get("check_out"),
+                length=ser.validated_data.get("length"),
             )
         except (StayStateError, Property.DoesNotExist) as exc:
             return _error(exc)
@@ -208,7 +210,8 @@ class StayEnquireView(APIView):
                 property_id=data["property_id"],
                 unit_id=data.get("unit_id"),
                 check_in=data["check_in"],
-                check_out=data["check_out"],
+                check_out=data.get("check_out"),
+                length=data.get("length"),
                 guest_count=data.get("guest_count", 1),
                 message=data.get("message", ""),
             )
@@ -250,7 +253,7 @@ class PartnerEnquiryCancelView(APIView):
 
     permission_classes = (IsPartnerUser,)
 
-    @extend_schema(request=None, responses=StayEnquirySerializer)
+    @extend_schema(request=None, responses=PartnerStayEnquirySerializer)
     def post(self, request: Any, enquiry_id: UUID) -> Response:
         partner = _partner(request.user)
         enquiry = get_object_or_404(
@@ -262,15 +265,15 @@ class PartnerEnquiryCancelView(APIView):
             enquiry = cancel_enquiry(enquiry=enquiry, actor=partner, as_host=True)
         except (StayStateError, PermissionError) as exc:
             return _error(exc)
-        return Response(StayEnquirySerializer(enquiry).data)
+        return Response(PartnerStayEnquirySerializer(enquiry).data)
 
 
 class PartnerEnquiryConfirmView(APIView):
-    """Host confirms an enquiry and holds the unit calendar."""
+    """Host marks an enquiry as booked after calling the guest."""
 
     permission_classes = (IsPartnerUser,)
 
-    @extend_schema(request=None, responses=StayEnquirySerializer)
+    @extend_schema(request=None, responses=PartnerStayEnquirySerializer)
     def post(self, request: Any, enquiry_id: UUID) -> Response:
         partner = _partner(request.user)
         enquiry = get_object_or_404(
@@ -282,7 +285,7 @@ class PartnerEnquiryConfirmView(APIView):
             enquiry = confirm_enquiry(enquiry=enquiry, host=partner)
         except (StayStateError, PermissionError) as exc:
             return _error(exc)
-        return Response(StayEnquirySerializer(enquiry).data)
+        return Response(PartnerStayEnquirySerializer(enquiry).data)
 
 
 class PartnerStayPhotoUploadView(APIView):
@@ -435,17 +438,19 @@ class PartnerUnitDetailView(APIView):
 class PartnerEnquiryCollectionView(APIView):
     permission_classes = (IsPartnerUser,)
 
-    @extend_schema(responses=StayEnquirySerializer(many=True))
+    @extend_schema(responses=PartnerStayEnquirySerializer(many=True))
     def get(self, request: Any) -> Response:
         partner = _partner(request.user)
-        rows = StayEnquiry.objects.filter(property__host=partner).select_related("property")
-        return Response(StayEnquirySerializer(rows, many=True).data)
+        rows = StayEnquiry.objects.filter(property__host=partner).select_related(
+            "property", "unit", "customer"
+        )
+        return Response(PartnerStayEnquirySerializer(rows, many=True).data)
 
 
 class PartnerEnquiryRespondView(APIView):
     permission_classes = (IsPartnerUser,)
 
-    @extend_schema(request=RespondEnquirySerializer, responses=StayEnquirySerializer)
+    @extend_schema(request=RespondEnquirySerializer, responses=PartnerStayEnquirySerializer)
     def post(self, request: Any, enquiry_id: UUID) -> Response:
         ser = RespondEnquirySerializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -460,7 +465,7 @@ class PartnerEnquiryRespondView(APIView):
             )
         except (StayStateError, PermissionError) as exc:
             return _error(exc)
-        return Response(StayEnquirySerializer(enquiry).data)
+        return Response(PartnerStayEnquirySerializer(enquiry).data)
 
 
 class OpsStayCollectionView(APIView):

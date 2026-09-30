@@ -47,25 +47,36 @@ class StayReviewSerializer(serializers.ModelSerializer):
         fields = ("id", "rating", "comment", "image_urls", "customer_name", "created_at")
 
 
-def _extract_booking_mode(obj: Property) -> str:
-    variant = getattr(obj, "variant", None)
+def _active_config(obj: Property) -> A9VariantConfiguration | None:
+    variant = obj.variant
     prefetch_cache = getattr(variant, "_prefetched_objects_cache", {})
-    if variant and "a9_configurations" in prefetch_cache:
+    if "a9_configurations" in prefetch_cache:
         for cfg in variant.a9_configurations.all():
             if cfg.status == A9VariantConfiguration.Status.ACTIVE:
-                return str(cfg.booking_mode)
-        return str(A9VariantConfiguration.BookingMode.ENQUIRY)
-
-    config = (
+                return cfg
+        return None
+    return (
         A9VariantConfiguration.objects.filter(
             variant_id=obj.variant_id, status=A9VariantConfiguration.Status.ACTIVE
         )
         .order_by("-version")
         .first()
     )
+
+
+def _extract_booking_mode(obj: Property) -> str:
+    config = _active_config(obj)
     if config is None:
         return str(A9VariantConfiguration.BookingMode.ENQUIRY)
     return str(config.booking_mode)
+
+
+def _extract_price_period(obj: Property) -> str:
+    """What room rates are quoted per: ``NIGHT`` or ``MONTH``."""
+    config = _active_config(obj)
+    if config is None:
+        return str(A9VariantConfiguration.PricePeriod.MONTH)
+    return str(config.price_period)
 
 
 class PropertySummarySerializer(serializers.ModelSerializer):
@@ -74,6 +85,7 @@ class PropertySummarySerializer(serializers.ModelSerializer):
     media = PropertyMediaSerializer(many=True, read_only=True)
     units = UnitSerializer(many=True, read_only=True)
     booking_mode = serializers.SerializerMethodField()
+    price_period = serializers.SerializerMethodField()
     review_count = serializers.SerializerMethodField()
     average_rating = serializers.SerializerMethodField()
 
@@ -95,6 +107,7 @@ class PropertySummarySerializer(serializers.ModelSerializer):
             "media",
             "units",
             "booking_mode",
+            "price_period",
             "review_count",
             "average_rating",
             "created_at",
@@ -102,6 +115,9 @@ class PropertySummarySerializer(serializers.ModelSerializer):
 
     def get_booking_mode(self, obj: Property) -> str:
         return _extract_booking_mode(obj)
+
+    def get_price_period(self, obj: Property) -> str:
+        return _extract_price_period(obj)
 
     def get_review_count(self, obj: Property) -> int:
         reviews = getattr(obj, "_prefetched_objects_cache", {}).get("reviews")
@@ -124,6 +140,7 @@ class PropertySerializer(serializers.ModelSerializer):
     reviews = StayReviewSerializer(many=True, read_only=True)
     units = UnitSerializer(many=True, read_only=True)
     booking_mode = serializers.SerializerMethodField()
+    price_period = serializers.SerializerMethodField()
 
     class Meta:
         model = Property
@@ -146,11 +163,15 @@ class PropertySerializer(serializers.ModelSerializer):
             "reviews",
             "units",
             "booking_mode",
+            "price_period",
             "created_at",
         )
 
     def get_booking_mode(self, obj: Property) -> str:
         return _extract_booking_mode(obj)
+
+    def get_price_period(self, obj: Property) -> str:
+        return _extract_price_period(obj)
 
 
 class PartnerPropertySerializer(PropertySerializer):
@@ -182,6 +203,8 @@ class StayTaxonomyVariantSerializer(serializers.Serializer):
     #: Room names the category suggests ("Double sharing", "Deluxe"); the host may type any name.
     room_name_suggestions = serializers.ListField(child=serializers.CharField())
     booking_mode = serializers.CharField()
+    #: ``NIGHT`` or ``MONTH`` — what room rates for this type are quoted per.
+    price_period = serializers.CharField()
 
 
 class StayTaxonomyServiceSerializer(serializers.Serializer):
@@ -263,7 +286,9 @@ class CreateEnquirySerializer(serializers.Serializer):
     property_id = serializers.UUIDField()
     unit_id = serializers.UUIDField(required=False, allow_null=True)
     check_in = serializers.DateField()
-    check_out = serializers.DateField()
+    #: How long, in the property's ``price_period`` (nights or months). Send this or check_out.
+    length = serializers.IntegerField(min_value=1, max_value=366, required=False, allow_null=True)
+    check_out = serializers.DateField(required=False, allow_null=True)
     guest_count = serializers.IntegerField(min_value=1, required=False, default=1)
     message = serializers.CharField(required=False, allow_blank=True, default="")
 
@@ -272,14 +297,18 @@ class StayQuoteRequestSerializer(serializers.Serializer):
     property_id = serializers.UUIDField()
     unit_id = serializers.UUIDField(required=False, allow_null=True)
     check_in = serializers.DateField()
-    check_out = serializers.DateField()
+    length = serializers.IntegerField(min_value=1, max_value=366, required=False, allow_null=True)
+    check_out = serializers.DateField(required=False, allow_null=True)
 
 
 class StayQuoteResponseSerializer(serializers.Serializer):
     property_id = serializers.UUIDField()
     unit_id = serializers.UUIDField(allow_null=True)
     unit_name = serializers.CharField()
+    check_out = serializers.DateField(required=False)
     nights = serializers.IntegerField()
+    stay_length = serializers.IntegerField(required=False)
+    price_period = serializers.CharField(required=False)
     nightly_rate_paise = serializers.IntegerField()
     total_quote_paise = serializers.IntegerField()
     booking_mode = serializers.CharField(required=False)
@@ -298,7 +327,7 @@ class StayEnquirySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = StayEnquiry
-        fields = (
+        fields: tuple[str, ...] = (
             "id",
             "property",
             "property_title",
@@ -309,6 +338,8 @@ class StayEnquirySerializer(serializers.ModelSerializer):
             "check_in",
             "check_out",
             "nights",
+            "stay_length",
+            "price_period",
             "total_quote_paise",
             "guest_count",
             "message",
@@ -318,8 +349,22 @@ class StayEnquirySerializer(serializers.ModelSerializer):
         )
 
 
+class PartnerStayEnquirySerializer(StayEnquirySerializer):
+    """The host's view: the guest's name and number, so the host can call them.
+
+    The guest is told on the enquiry form that these are shared with the host.
+    """
+
+    customer_name = serializers.CharField(source="customer.full_name", read_only=True)
+    customer_phone = serializers.CharField(source="customer.phone_number", read_only=True)
+
+    class Meta(StayEnquirySerializer.Meta):
+        fields = (*StayEnquirySerializer.Meta.fields, "customer_name", "customer_phone")
+
+
 class RespondEnquirySerializer(serializers.Serializer):
-    response = serializers.CharField(max_length=4000)
+    #: Required for a reply; optional when marking the enquiry "Not available" (decline).
+    response = serializers.CharField(max_length=4000, required=False, allow_blank=True, default="")
     decline = serializers.BooleanField(required=False, default=False)
 
 

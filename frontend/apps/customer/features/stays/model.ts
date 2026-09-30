@@ -32,6 +32,24 @@ export function formatPaise(paise: number): string {
   return `₹${Math.round(paise / 100).toLocaleString("en-IN")}`;
 }
 
+/** What a stay's rate is quoted per. Stays are never paid online; this is for display. */
+export type PricePeriod = "NIGHT" | "MONTH";
+
+export function pricePeriodOf(value: string | undefined | null): PricePeriod {
+  return value === "NIGHT" ? "NIGHT" : "MONTH";
+}
+
+/** "₹9,000 / month" or "₹2,500 / night". */
+export function formatRate(paise: number, period: PricePeriod): string {
+  return `${formatPaise(paise)} / ${period === "NIGHT" ? "night" : "month"}`;
+}
+
+/** "3 months", "1 night". */
+export function stayLengthLabel(length: number, period: PricePeriod): string {
+  const unit = period === "NIGHT" ? "night" : "month";
+  return `${length} ${unit}${length === 1 ? "" : "s"}`;
+}
+
 export function calculateNights(checkIn: string, checkOut: string): number {
   if (!checkIn || !checkOut) return 1;
   const s = new Date(checkIn);
@@ -47,15 +65,15 @@ export function getEnquiryStatusBadge(status?: string): {
 } {
   switch ((status ?? "").toUpperCase()) {
     case "SUBMITTED":
-      return { label: "Enquiry Sent · Awaiting Host", tone: "brand" };
+      return { label: "Sent · The host will call you", tone: "brand" };
     case "RESPONDED":
       return { label: "Host Responded", tone: "success" };
     case "DECLINED":
-      return { label: "Declined by Host", tone: "danger" };
+      return { label: "Not available", tone: "danger" };
     case "CANCELLED":
       return { label: "Cancelled", tone: "danger" };
     case "CONFIRMED":
-      return { label: "Confirmed", tone: "success" };
+      return { label: "Booked", tone: "success" };
     case "WITHDRAWN":
       return { label: "Withdrawn", tone: "neutral" };
     case "EXPIRED":

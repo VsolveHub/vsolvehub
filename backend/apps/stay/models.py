@@ -151,6 +151,12 @@ class StayEnquiry(models.Model):
     check_out = models.DateField()
     guest_count = models.PositiveSmallIntegerField(default=1)
     nights = models.PositiveIntegerField(default=1)
+    #: How long the guest asked for, in ``price_period`` units ("3" months or "4" nights).
+    #: Recorded on the enquiry so the host sees what the guest asked even if the category's
+    #: pricing unit changes later. 0 on enquiries made before this was asked.
+    stay_length = models.PositiveSmallIntegerField(default=0)
+    price_period = models.CharField(max_length=8, blank=True, default="")
+    #: An estimate for the guest (rate times length). Stays take no payment.
     total_quote_paise = models.PositiveIntegerField(default=0)
     message = models.TextField(blank=True)
     host_response = models.TextField(blank=True)

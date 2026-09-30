@@ -13933,7 +13933,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/StayEnquiry'
+                  $ref: '#/components/schemas/PartnerStayEnquiry'
           description: ''
   /api/v1/partner/stays/enquiries/{enquiry_id}/cancel:
     post:
@@ -13955,12 +13955,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StayEnquiry'
+                $ref: '#/components/schemas/PartnerStayEnquiry'
           description: ''
   /api/v1/partner/stays/enquiries/{enquiry_id}/confirm:
     post:
       operationId: partner_stays_enquiries_confirm_create
-      description: Host confirms an enquiry and holds the unit calendar.
+      description: Host marks an enquiry as booked after calling the guest.
       parameters:
       - in: path
         name: enquiry_id
@@ -13977,7 +13977,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StayEnquiry'
+                $ref: '#/components/schemas/PartnerStayEnquiry'
           description: ''
   /api/v1/partner/stays/enquiries/{enquiry_id}/respond:
     post:
@@ -14002,7 +14002,6 @@ paths:
           multipart/form-data:
             schema:
               $ref: '#/components/schemas/RespondEnquiryRequest'
-        required: true
       security:
       - cookieAuth: []
       responses:
@@ -14010,7 +14009,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StayEnquiry'
+                $ref: '#/components/schemas/PartnerStayEnquiry'
           description: ''
   /api/v1/partner/stays/photos:
     post:
@@ -18056,7 +18055,14 @@ paths:
         schema:
           type: string
           format: date
-        required: true
+          nullable: true
+      - in: query
+        name: length
+        schema:
+          type: integer
+          maximum: 366
+          minimum: 1
+          nullable: true
       - in: query
         name: property_id
         schema:
@@ -21225,9 +21231,15 @@ components:
         check_in:
           type: string
           format: date
+        length:
+          type: integer
+          maximum: 366
+          minimum: 1
+          nullable: true
         check_out:
           type: string
           format: date
+          nullable: true
         guest_count:
           type: integer
           minimum: 1
@@ -21237,7 +21249,6 @@ components:
           default: ''
       required:
       - check_in
-      - check_out
       - property_id
     CreatePropertyRequest:
       type: object
@@ -27344,6 +27355,10 @@ components:
           allOf:
           - $ref: '#/components/schemas/PartnerApplicationStatusEnum'
           readOnly: true
+        track:
+          allOf:
+          - $ref: '#/components/schemas/TrackEnum'
+          readOnly: true
         version:
           type: integer
           readOnly: true
@@ -27435,6 +27450,7 @@ components:
       - skill_codes
       - status
       - submitted_at
+      - track
       - transitions
       - updated_at
       - version
@@ -29064,6 +29080,9 @@ components:
         booking_mode:
           type: string
           readOnly: true
+        price_period:
+          type: string
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -29079,6 +29098,7 @@ components:
       - host_name
       - id
       - media
+      - price_period
       - public_state
       - reviews
       - title
@@ -29262,6 +29282,91 @@ components:
       - description
       - id
       - name
+    PartnerStayEnquiry:
+      type: object
+      description: |-
+        The host's view: the guest's name and number, so the host can call them.
+
+        The guest is told on the enquiry form that these are shared with the host.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        property:
+          type: string
+          format: uuid
+        property_title:
+          type: string
+          readOnly: true
+        unit:
+          type: string
+          format: uuid
+          nullable: true
+        unit_name:
+          type: string
+          readOnly: true
+          default: Standard room
+        nightly_rate_paise:
+          type: integer
+          readOnly: true
+          default: 0
+        status:
+          $ref: '#/components/schemas/StayEnquiryStatusEnum'
+        check_in:
+          type: string
+          format: date
+        check_out:
+          type: string
+          format: date
+        nights:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        stay_length:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        price_period:
+          type: string
+          maxLength: 8
+        total_quote_paise:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        guest_count:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        message:
+          type: string
+        host_response:
+          type: string
+        responded_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        customer_name:
+          type: string
+          readOnly: true
+        customer_phone:
+          type: string
+          readOnly: true
+      required:
+      - check_in
+      - check_out
+      - created_at
+      - customer_name
+      - customer_phone
+      - id
+      - nightly_rate_paise
+      - property
+      - property_title
+      - unit_name
     PartnerUnit:
       type: object
       description: 'The host''s view of a room: adds how many bookings still have
@@ -29568,6 +29673,8 @@ components:
         expected_version:
           type: integer
           minimum: 1
+        track:
+          $ref: '#/components/schemas/TrackEnum'
         display_name:
           type: string
           minLength: 1
@@ -31279,6 +31386,9 @@ components:
         booking_mode:
           type: string
           readOnly: true
+        price_period:
+          type: string
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -31289,6 +31399,7 @@ components:
       - host_name
       - id
       - media
+      - price_period
       - public_state
       - reviews
       - title
@@ -31372,6 +31483,9 @@ components:
         booking_mode:
           type: string
           readOnly: true
+        price_period:
+          type: string
+          readOnly: true
         review_count:
           type: integer
           readOnly: true
@@ -31391,6 +31505,7 @@ components:
       - host_name
       - id
       - media
+      - price_period
       - public_state
       - review_count
       - title
@@ -35209,13 +35324,11 @@ components:
       properties:
         response:
           type: string
-          minLength: 1
+          default: ''
           maxLength: 4000
         decline:
           type: boolean
           default: false
-      required:
-      - response
     ReverseGeocodeRequestRequest:
       type: object
       properties:
@@ -37385,6 +37498,13 @@ components:
           type: integer
           maximum: 2147483647
           minimum: 0
+        stay_length:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        price_period:
+          type: string
+          maxLength: 8
         total_quote_paise:
           type: integer
           maximum: 2147483647
@@ -37471,8 +37591,15 @@ components:
           nullable: true
         unit_name:
           type: string
+        check_out:
+          type: string
+          format: date
         nights:
           type: integer
+        stay_length:
+          type: integer
+        price_period:
+          type: string
         nightly_rate_paise:
           type: integer
         total_quote_paise:
@@ -37682,11 +37809,14 @@ components:
             type: string
         booking_mode:
           type: string
+        price_period:
+          type: string
       required:
       - booking_mode
       - code
       - id
       - name
+      - price_period
       - property_schema
       - room_name_suggestions
       - room_schema
@@ -38073,6 +38203,14 @@ components:
       - server_now
       - since
       - total_touches
+    TrackEnum:
+      enum:
+      - SERVICES
+      - STAY_HOST
+      type: string
+      description: |-
+        * `SERVICES` - Offer services
+        * `STAY_HOST` - List my property
     TransferQuoteRequest:
       type: object
       description: The replacement's price for one unfinished milestone.

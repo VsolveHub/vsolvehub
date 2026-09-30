@@ -15,6 +15,6 @@ import type { SectionNavItem } from "@/features/workspace/view/section-nav";
  */
 export const STAY_SECTIONS: readonly SectionNavItem[] = [
   { href: "/stays", label: "Properties" },
+  // Stays are enquiry-only now; the old paid "Bookings" page is reachable by URL only.
   { href: "/stays/enquiries", label: "Enquiries" },
-  { href: "/stays/bookings", label: "Bookings" },
 ];

@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  Badge,
   Button,
   FactList,
   Field,
@@ -15,10 +14,11 @@ import {
   formatDateTime,
   formatMoney,
 } from "@vsolve/ui";
+import { Phone } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { InvoiceNotice } from "@/features/workspace/view/invoice-notice";
-import type { StayEnquiry } from "@/features/stays/queries";
+import { stayLengthLabel, type StayEnquiry } from "@/features/stays/queries";
 
 export interface StayReservationRow {
   id: string;
@@ -351,64 +351,111 @@ export function StayReservationDetailSheet({
   );
 }
 
+/** Words for an enquiry's status, shared by the inbox list and the sheet. */
+export const STAY_ENQUIRY_STATUS_LABELS: Record<string, string> = {
+  SUBMITTED: "New",
+  RESPONDED: "Replied",
+  CONFIRMED: "Booked",
+  DECLINED: "Not available",
+  CANCELLED: "Cancelled",
+  WITHDRAWN: "Withdrawn by guest",
+  EXPIRED: "Expired",
+};
+
+export function stayEnquiryStatusLabel(status: string | undefined): string {
+  if (!status) return "Unknown";
+  return STAY_ENQUIRY_STATUS_LABELS[status] ?? status;
+}
+
+export function stayEnquiryTone(status: string | undefined): "success" | "neutral" | "danger" | "info" {
+  if (status === "SUBMITTED") return "info";
+  if (status === "CONFIRMED") return "success";
+  if (status === "DECLINED" || status === "CANCELLED") return "danger";
+  return "neutral";
+}
+
+const OPEN_ENQUIRY_STATUSES = new Set(["SUBMITTED", "RESPONDED"]);
+
+/**
+ * One guest enquiry: who is asking, what they want, and a number to call.
+ *
+ * Stays are agreed on the phone. The host calls, then records the outcome — Booked or
+ * Not available — and the guest is told either way. No money moves here.
+ */
 export function StayEnquiryDetailSheet({
   enquiry,
   onOpenChange,
-  onRespond,
-  onDecline,
-  onCancel,
+  onBooked,
+  onNotAvailable,
+  onCancelBooking,
   isPending,
+  actionError,
 }: {
   enquiry: StayEnquiry | null;
   onOpenChange: (open: boolean) => void;
-  onRespond: (id: string, response: string) => void;
-  onDecline: (id: string, response: string) => void;
-  onCancel: (id: string) => void;
+  onBooked: (id: string) => void;
+  onNotAvailable: (id: string, note: string) => void;
+  onCancelBooking: (id: string) => void;
   isPending: boolean;
+  actionError?: string | null;
 }) {
-  const [draft, setDraft] = useState("");
+  const [declining, setDeclining] = useState(false);
+  const [note, setNote] = useState("");
 
-  // A reply typed against one enquiry must not follow the reader to the next.
+  // A note typed against one enquiry must not follow the reader to the next.
   useEffect(() => {
-    setDraft("");
+    setDeclining(false);
+    setNote("");
   }, [enquiry?.id]);
 
-  const canReply = enquiry?.status === "SUBMITTED";
+  const isOpen = enquiry ? OPEN_ENQUIRY_STATUSES.has(enquiry.status ?? "") : false;
+  const length = enquiry?.stay_length
+    ? stayLengthLabel(enquiry.stay_length, enquiry.price_period)
+    : `${enquiry?.nights ?? 0} nights`;
 
   return (
     <Sheet
       side="end"
       open={enquiry !== null}
       onOpenChange={onOpenChange}
-      title={enquiry?.property_title ?? "Enquiry"}
-      description={enquiry ? `${enquiry.status} · ${enquiry.unit_name ?? "Room"}` : undefined}
+      title={enquiry?.customer_name || "Guest enquiry"}
+      description={
+        enquiry
+          ? `${stayEnquiryStatusLabel(enquiry.status)} · ${enquiry.property_title} · ${enquiry.unit_name ?? "Room"}`
+          : undefined
+      }
       footer={
-        canReply ? (
+        enquiry && isOpen && !declining ? (
           <>
             <Button
               type="button"
-              variant="danger"
-              disabled={isPending}
-              onClick={() => enquiry && onCancel(enquiry.id)}
-            >
-              Cancel enquiry
-            </Button>
-            <Button
-              type="button"
               variant="secondary"
-              disabled={isPending || !draft.trim()}
-              onClick={() => enquiry && draft.trim() && onDecline(enquiry.id, draft.trim())}
+              disabled={isPending}
+              onClick={() => setDeclining(true)}
             >
-              Decline
+              Not available
             </Button>
             <Button
               type="button"
               loading={isPending}
-              loadingLabel="Sending…"
-              disabled={!draft.trim()}
-              onClick={() => enquiry && draft.trim() && onRespond(enquiry.id, draft.trim())}
+              loadingLabel="Saving…"
+              onClick={() => onBooked(enquiry.id)}
             >
-              Respond
+              Booked
+            </Button>
+          </>
+        ) : enquiry && enquiry.status === "CONFIRMED" ? (
+          <>
+            <Button variant="ghost" onClick={() => onOpenChange(false)}>
+              Close
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              disabled={isPending}
+              onClick={() => onCancelBooking(enquiry.id)}
+            >
+              Cancel booking
             </Button>
           </>
         ) : (
@@ -420,85 +467,98 @@ export function StayEnquiryDetailSheet({
     >
       {enquiry ? (
         <div className="flex flex-col gap-5 py-3">
-          <SheetSection title="Guest">
-            <GuestBlock
-              note="An enquiry does not carry the guest's name or number today, so there is nobody to call before you respond."
-            />
-          </SheetSection>
+          {actionError ? <p className="text-sm text-danger-text">{actionError}</p> : null}
 
-          <SheetSection title="Requested stay">
+          <SheetSection title="Guest">
             <FactList
               items={[
-                { label: "Check in", value: formatDate(`${enquiry.check_in}T12:00:00`) },
-                { label: "Check out", value: formatDate(`${enquiry.check_out}T12:00:00`) },
-                { label: "Nights", value: String(enquiry.nights ?? 0) },
-                { label: "Guests", value: String(enquiry.guest_count ?? 0) },
+                { label: "Name", value: enquiry.customer_name || "—" },
+                { label: "Phone", value: enquiry.customer_phone || "—" },
+              ]}
+            />
+            {enquiry.customer_phone ? (
+              <a
+                href={`tel:${enquiry.customer_phone}`}
+                className="inline-flex items-center justify-center gap-2 rounded-control bg-action px-4 py-2.5 text-sm font-bold text-action-text shadow-sm hover:bg-action-hover"
+              >
+                <Phone className="size-4" aria-hidden />
+                Call {enquiry.customer_name?.split(" ")[0] || "guest"}
+              </a>
+            ) : null}
+            {isOpen ? (
+              <p className="text-xs text-text-secondary">
+                Call to agree the room, dates and payment, then mark the outcome below.
+              </p>
+            ) : null}
+          </SheetSection>
+
+          <SheetSection title="Wants to stay">
+            <FactList
+              items={[
+                { label: "From", value: formatDate(`${enquiry.check_in}T12:00:00`) },
+                { label: "For", value: length },
+                { label: "Guests", value: String(enquiry.guest_count ?? 1) },
+                { label: "Room", value: enquiry.unit_name ?? "—" },
+                {
+                  label: "Estimate",
+                  value:
+                    typeof enquiry.total_quote_paise === "number" && enquiry.total_quote_paise > 0
+                      ? formatMoney(enquiry.total_quote_paise)
+                      : "—",
+                },
               ]}
             />
           </SheetSection>
 
-          <SheetSection title="Quote">
-            <Readout
-              label="Quoted total"
-              value={
-                typeof enquiry.total_quote_paise === "number"
-                  ? formatMoney(enquiry.total_quote_paise)
-                  : "—"
-              }
-              tone="active"
-              size="sm"
-            />
-            {typeof enquiry.nightly_rate_paise === "number" ? (
-              <FactList
-                items={[
-                  { label: "Nightly rate", value: formatMoney(enquiry.nightly_rate_paise) },
-                ]}
-              />
-            ) : null}
-            <InvoiceNotice>
-              An enquiry has no invoice. A tax invoice is raised on the booking, and Partner accounts cannot read it yet.
-            </InvoiceNotice>
-          </SheetSection>
-
           {enquiry.message ? (
-            <SheetSection title="Guest message">
+            <SheetSection title="Message">
               <p className="text-sm text-text">{enquiry.message}</p>
             </SheetSection>
           ) : null}
 
-          {canReply ? (
-            <SheetSection title="Your response">
-              <Field label="Reply to the guest" required>
+          {declining ? (
+            <SheetSection title="Not available">
+              <Field label="Note for the guest" showOptional>
                 <Textarea
-                  value={draft}
-                  rows={4}
-                  onChange={(event) => setDraft(event.target.value)}
-                  placeholder="Confirm the dates, the rate and anything they should know before booking."
+                  value={note}
+                  rows={3}
+                  onChange={(event) => setNote(event.target.value)}
+                  placeholder="e.g. The room is taken until March."
                 />
               </Field>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="danger"
+                  disabled={isPending}
+                  onClick={() => onNotAvailable(enquiry.id, note.trim())}
+                >
+                  Tell the guest
+                </Button>
+                <Button variant="ghost" disabled={isPending} onClick={() => setDeclining(false)}>
+                  Back
+                </Button>
+              </div>
             </SheetSection>
-          ) : enquiry.host_response ? (
-            <SheetSection title="Your response">
+          ) : null}
+
+          {enquiry.host_response && !isOpen ? (
+            <SheetSection title="Your note">
               <p className="text-sm text-text">{enquiry.host_response}</p>
             </SheetSection>
           ) : null}
 
           <SheetSection title="History">
             <Timeline label="Enquiry history">
-              <TimelineEvent title="Enquiry sent" timestamp={formatDateTime(enquiry.created_at)} />
+              <TimelineEvent title="Enquiry received" timestamp={formatDateTime(enquiry.created_at)} />
               {enquiry.responded_at ? (
                 <TimelineEvent
-                  title={enquiry.status === "DECLINED" ? "Declined" : "Responded"}
+                  title={stayEnquiryStatusLabel(enquiry.status)}
                   timestamp={formatDateTime(enquiry.responded_at)}
                   tone={enquiry.status === "DECLINED" ? "danger" : "success"}
                 />
               ) : null}
             </Timeline>
           </SheetSection>
-
-          <Badge tone="neutral" className="self-start">
-            {enquiry.status}
-          </Badge>
         </div>
       ) : null}
     </Sheet>

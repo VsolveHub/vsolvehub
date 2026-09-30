@@ -337,8 +337,20 @@ _TEMPLATES: dict[str, tuple[str, str]] = {
         "{host_name} replied: {response_text}",
     ),
     "stay_enquiry_confirmed": (
-        "Your stay enquiry is confirmed!",
-        "{host_name} confirmed your enquiry for {property_title}. Your stay is reserved.",
+        "Your stay is booked",
+        "{host_name} marked your enquiry for {property_title} as booked from {check_in}.",
+    ),
+    "stay_enquiry_received": (
+        "New enquiry for {property_title}",
+        "{guest_name} wants to stay from {check_in}. Open the enquiry to call them.",
+    ),
+    "stay_enquiry_declined": (
+        "{property_title} isn't available",
+        "{host_name} can't host you from {check_in}.{host_note}",
+    ),
+    "stay_enquiry_withdrawn": (
+        "An enquiry was withdrawn",
+        "{guest_name} withdrew their enquiry for {property_title}.",
     ),
 }
 

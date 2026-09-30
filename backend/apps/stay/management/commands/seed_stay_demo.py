@@ -23,6 +23,9 @@ from apps.stay.services import create_enquiry, create_property, moderate_propert
 
 User = get_user_model()
 
+#: Stay types rented by the night. Everything else is rented by the month.
+_NIGHTLY_SUBCATEGORIES = frozenset({"Hotels", "Short Stay", "Premium Stays", "Hostels"})
+
 
 class Command(BaseCommand):
     help = "Seeds A9 stay taxonomy, ACTIVE configs, and demo enquiry E2E data."
@@ -446,38 +449,24 @@ class Command(BaseCommand):
                     },
                 )
 
+                # Every stay is enquiry-first: the host calls the guest, nothing is paid online.
+                # Hotel-style stays are priced by the night, everything else by the month.
                 A9VariantConfiguration.objects.update_or_create(
                     variant=variant,
                     version=1,
                     defaults={
                         "status": A9VariantConfiguration.Status.ACTIVE,
                         "property_schema": svc_def["schema"],
-                        # Default to ENQUIRY during creation, we'll force-update below
                         "booking_mode": A9VariantConfiguration.BookingMode.ENQUIRY,
+                        "price_period": (
+                            A9VariantConfiguration.PricePeriod.NIGHT
+                            if sub_name in _NIGHTLY_SUBCATEGORIES
+                            else A9VariantConfiguration.PricePeriod.MONTH
+                        ),
                     },
                 )
                 if first_variant is None:
                     first_variant = variant
-
-        # Force-update all active A9VariantConfigurations based on subcategory name
-        A9VariantConfiguration.objects.filter(
-            status=A9VariantConfiguration.Status.ACTIVE,
-            variant__service__subcategory__name__in=[
-                "Hotels",
-                "Short Stay",
-                "Premium Stays",
-                "Hostels",
-            ],
-        ).update(booking_mode=A9VariantConfiguration.BookingMode.RESERVATION)
-
-        A9VariantConfiguration.objects.filter(status=A9VariantConfiguration.Status.ACTIVE).exclude(
-            variant__service__subcategory__name__in=[
-                "Hotels",
-                "Short Stay",
-                "Premium Stays",
-                "Hostels",
-            ]
-        ).update(booking_mode=A9VariantConfiguration.BookingMode.ENQUIRY)
         Service.objects.filter(subcategory__category=category).exclude(
             id__in=keep_service_ids
         ).update(status=Service.Status.RETIRED)

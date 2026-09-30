@@ -7,6 +7,7 @@ import { useId, useState, type FormEvent } from "react";
 
 import {
   createPartnerStayUnit,
+  ratePeriodSuffix,
   updatePartnerStayUnit,
   type StayProperty,
   type StayTaxonomyVariant,
@@ -65,10 +66,11 @@ type ParsedRoom = {
 function parseRoom(
   draft: RoomDraft,
   roomSchema: Record<string, unknown> | undefined,
+  priceLabel: string,
 ): ParsedRoom | string {
   if (!draft.name.trim()) return "Name the room, for example “Deluxe” or “Double sharing”.";
   const rate = rupeesToPaise(draft.rate);
-  if (rate === null) return "Enter the price per night in rupees.";
+  if (rate === null) return `Enter the ${priceLabel.toLowerCase()} in rupees.`;
   const quantity = wholeNumber(draft.quantity);
   if (quantity === null) return "Number of rooms must be 1 or more.";
   const maxGuests = wholeNumber(draft.maxGuests);
@@ -104,12 +106,14 @@ function RoomFields({
   onChange,
   roomSchema,
   suggestions,
+  priceLabel,
 }: {
   idPrefix: string;
   draft: RoomDraft;
   onChange: (next: RoomDraft) => void;
   roomSchema: Record<string, unknown> | undefined;
   suggestions: readonly string[];
+  priceLabel: string;
 }) {
   const listId = `${idPrefix}-names`;
   return (
@@ -130,7 +134,7 @@ function RoomFields({
             ))}
           </datalist>
         </Field>
-        <Field label="Price per night" required>
+        <Field label={priceLabel} required>
           <div className="relative">
             <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-semibold text-text-secondary">
               ₹
@@ -212,6 +216,7 @@ export function PropertyRooms({
   const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null);
 
   const roomSchema = variant?.room_schema;
+  const priceLabel = property.price_period === "NIGHT" ? "Price per night" : "Rent per month";
   const hasRoomQuestions = Object.keys(schemaPropertyMap(roomSchema)).length > 0;
   const suggestions = variant?.room_name_suggestions?.length
     ? variant.room_name_suggestions
@@ -247,7 +252,7 @@ export function PropertyRooms({
 
   function onAdd(event: FormEvent) {
     event.preventDefault();
-    const parsed = parseRoom(newRoom, roomSchema);
+    const parsed = parseRoom(newRoom, roomSchema, priceLabel);
     if (typeof parsed === "string") return setNewError(parsed);
     setNewError(null);
     create.mutate(parsed);
@@ -255,7 +260,7 @@ export function PropertyRooms({
 
   function onSave(event: FormEvent, unit: StayUnit) {
     event.preventDefault();
-    const parsed = parseRoom(editDraft, roomSchema);
+    const parsed = parseRoom(editDraft, roomSchema, priceLabel);
     if (typeof parsed === "string") return setEditError(parsed);
     setEditError(null);
     update.mutate({ id: unit.id, patch: parsed });
@@ -290,6 +295,7 @@ export function PropertyRooms({
                     onChange={setEditDraft}
                     roomSchema={roomSchema}
                     suggestions={suggestions}
+                    priceLabel={priceLabel}
                   />
                   <p className="text-xs text-text-secondary">
                     New prices apply to new bookings. Guests already booked keep their price.
@@ -324,13 +330,13 @@ export function PropertyRooms({
                   <p className="font-semibold text-navy-900">
                     {unit.name}{" "}
                     <span className="font-normal text-text-secondary">
-                      · {formatMoney(unit.nightly_rate_paise)} / night
+                      · {formatMoney(unit.nightly_rate_paise)} {ratePeriodSuffix(property.price_period)}
                     </span>
                   </p>
                   <p className="text-xs text-text-secondary">{roomSummary(unit)}</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  {inactive ? <Badge>Not bookable</Badge> : null}
+                  {inactive ? <Badge>Full</Badge> : null}
                   {upcoming > 0 ? (
                     <Badge tone="info">
                       {upcoming} upcoming booking{upcoming === 1 ? "" : "s"}
@@ -342,7 +348,7 @@ export function PropertyRooms({
                 <div className="flex flex-col gap-2 rounded-card border border-warning-line bg-warning-surface p-2">
                   <p className="text-sm text-warning-text">
                     {upcoming} booking{upcoming === 1 ? " is" : "s are"} still coming for this
-                    room. They stay booked; guests just can’t book it again.
+                    room. They stay as they are; new guests just won’t see this room.
                   </p>
                   <div className="flex flex-wrap gap-2">
                     <Button
@@ -351,10 +357,10 @@ export function PropertyRooms({
                       disabled={update.isPending}
                       onClick={() => update.mutate({ id: unit.id, patch: { is_active: false } })}
                     >
-                      Stop taking bookings
+                      Mark full
                     </Button>
                     <Button size="sm" variant="ghost" onClick={() => setConfirmingDeactivate(null)}>
-                      Keep it bookable
+                      Keep it open
                     </Button>
                   </div>
                 </div>
@@ -383,7 +389,7 @@ export function PropertyRooms({
                       update.mutate({ id: unit.id, patch: { is_active: inactive } });
                     }}
                   >
-                    {inactive ? "Make bookable again" : "Stop taking bookings"}
+                    {inactive ? "Available again" : "Mark full"}
                   </Button>
                 </div>
               )}
@@ -406,6 +412,7 @@ export function PropertyRooms({
             onChange={setNewRoom}
             roomSchema={roomSchema}
             suggestions={suggestions}
+                    priceLabel={priceLabel}
           />
           {!hasRoomQuestions ? null : (
             <p className="text-xs text-text-secondary">

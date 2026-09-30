@@ -191,3 +191,17 @@ describe("submission", () => {
     expect(canSubmit(completeApplication({ status: "CHANGES_REQUIRED" }))).toBe(true);
   });
 });
+
+describe("a stay host", () => {
+  it("is never asked for trades, areas or years of experience", () => {
+    const codes = requirements(application({ track: "STAY_HOST" })).map((item) => item.code);
+
+    expect(codes).not.toContain("SKILLS");
+    expect(codes).not.toContain("SERVICES");
+    expect(codes).not.toContain("SERVICE_AREAS");
+    expect(codes).not.toContain("EXPERIENCE_YEARS");
+    expect(codes).toContain("DISPLAY_NAME");
+    expect(codes).toContain("CONSENTS");
+    expect(codes).toContain("GOVERNMENT_ID");
+  });
+});

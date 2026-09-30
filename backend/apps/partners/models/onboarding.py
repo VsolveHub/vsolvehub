@@ -108,6 +108,18 @@ class PartnerProfile(models.Model):
 
 
 class PartnerApplication(models.Model):
+    class Track(models.TextChoices):
+        """What the partner signs up to do, chosen on the first screen of the application.
+
+        ``STAY_HOST`` lists their own property. They are asked who they are, agree to the terms
+        and upload identity documents — not trades, service areas or working hours, which only
+        matter for people who travel to a customer. Approving a stay-host application is what
+        lets them list stays: one review, not a second capability review.
+        """
+
+        SERVICES = "SERVICES", "Offer services"
+        STAY_HOST = "STAY_HOST", "List my property"
+
     class Status(models.TextChoices):
         DRAFT = "DRAFT", "Draft"
         SUBMITTED = "SUBMITTED", "Submitted"
@@ -124,6 +136,7 @@ class PartnerApplication(models.Model):
         related_name="application",
     )
     status = models.CharField(max_length=24, choices=Status.choices, default=Status.DRAFT)
+    track = models.CharField(max_length=16, choices=Track.choices, default=Track.SERVICES)
     version = models.PositiveIntegerField(default=1)
     change_request_message = models.TextField(blank=True)
     submitted_at = models.DateTimeField(null=True, blank=True)

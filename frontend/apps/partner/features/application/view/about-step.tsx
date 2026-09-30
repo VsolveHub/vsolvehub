@@ -1,18 +1,39 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
+import { request } from "@vsolve/api-client";
 import { Field, Input, Textarea } from "@vsolve/ui";
+import { useEffect } from "react";
+
+import { getApiClient } from "@/lib/api/browser";
+
 import { useApplicationEditor, useProceedDisabled } from "./application-editor";
 
 export function AboutStep() {
-  const { draft, update, isReadOnly } = useApplicationEditor();
+  const { draft, update, isReadOnly, application } = useApplicationEditor();
+  const isStayHost = application?.track === "STAY_HOST";
+
+  // The name given at sign-up. Offered as the starting value so nobody types it twice.
+  const profile = useQuery({
+    queryKey: ["auth", "profile"],
+    queryFn: () => request(() => getApiClient().GET("/api/v1/auth/profile/")),
+    staleTime: 5 * 60 * 1000,
+  });
+  const signUpName = (profile.data?.full_name ?? "").trim();
+  useEffect(() => {
+    if (!isReadOnly && signUpName && !draft.displayName.trim()) {
+      update({ displayName: signUpName });
+    }
+    // Only when the sign-up name arrives; never overwrite what the partner typed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signUpName]);
 
   const isNameInvalid =
     draft.displayName.trim().length > 0 && draft.displayName.trim().length < 2;
-  const isExperienceMissing = draft.experienceYears <= 0;
+  // Years of experience is for people who travel to do work; a host lists a property.
+  const isExperienceMissing = !isStayHost && draft.experienceYears <= 0;
 
-  useProceedDisabled(
-    draft.displayName.trim().length < 2 || isExperienceMissing,
-  );
+  useProceedDisabled(draft.displayName.trim().length < 2 || isExperienceMissing);
 
   return (
     <div className="flex flex-col gap-5">
@@ -35,34 +56,39 @@ export function AboutStep() {
           />
         </Field>
 
-        {/* Years of Experience */}
-        <Field required label="Years of Experience">
-          <Input
-            name="experience_years"
-            type="number"
-            inputMode="numeric"
-            min={1}
-            max={80}
-            placeholder="e.g. 5"
-            value={draft.experienceYears === 0 ? "" : String(draft.experienceYears)}
-            disabled={isReadOnly}
-            onChange={(event) => {
-              const parsed = Number.parseInt(event.target.value, 10);
-              update({
-                experienceYears: Number.isNaN(parsed) ? 0 : Math.min(80, Math.max(0, parsed)),
-              });
-            }}
-          />
-        </Field>
+        {isStayHost ? null : (
+          <Field required label="Years of Experience">
+            <Input
+              name="experience_years"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={80}
+              placeholder="e.g. 5"
+              value={draft.experienceYears === 0 ? "" : String(draft.experienceYears)}
+              disabled={isReadOnly}
+              onChange={(event) => {
+                const parsed = Number.parseInt(event.target.value, 10);
+                update({
+                  experienceYears: Number.isNaN(parsed) ? 0 : Math.min(80, Math.max(0, parsed)),
+                });
+              }}
+            />
+          </Field>
+        )}
       </div>
 
       {/* Bio / About Your Work */}
-      <Field label="About Your Work (Bio)">
+      <Field label={isStayHost ? "About you (optional)" : "About Your Work (Bio)"}>
         <Textarea
           name="biography"
           maxLength={2000}
           rows={4}
-          placeholder="Briefly describe your skills, specialities, or certifications (e.g. Certified electrician specializing in home wiring and switchboard repair)."
+          placeholder={
+            isStayHost
+              ? "A line guests will see, e.g. Running this PG for working women since 2018."
+              : "Briefly describe your skills, specialities, or certifications (e.g. Certified electrician specializing in home wiring and switchboard repair)."
+          }
           value={draft.biography}
           disabled={isReadOnly}
           onChange={(event) => update({ biography: event.target.value })}

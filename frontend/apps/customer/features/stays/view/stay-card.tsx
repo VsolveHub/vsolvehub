@@ -6,7 +6,14 @@ import { Badge, Button } from "@vsolve/ui";
 
 import { SaveHeart, useSavedItems } from "@/features/part-a";
 
-import { formatPaise, stayFields, type StayProperty, type StayPropertySummary } from "../model";
+import {
+  formatPaise,
+  pricePeriodOf,
+  stayFields,
+  stayLengthLabel,
+  type StayProperty,
+  type StayPropertySummary,
+} from "../model";
 
 interface StayCardProps {
   property: StayProperty | StayPropertySummary;
@@ -136,13 +143,15 @@ export function StayCard({ property }: StayCardProps) {
               <span className="text-xl font-extrabold text-text">
                 {formatPaise(minRate)}
               </span>
-              <span className="text-xs font-medium text-text-secondary">/ night</span>
+              <span className="text-xs font-medium text-text-secondary">
+                / {pricePeriodOf(property.price_period) === "NIGHT" ? "night" : "month"}
+              </span>
             </div>
             <p className="mt-0.5 text-[11px] font-medium text-text-secondary">
               {typeof property.min_stay_nights === "number" && property.min_stay_nights > 1
-                ? `Minimum stay ${property.min_stay_nights} nights · `
+                ? `Minimum stay ${stayLengthLabel(property.min_stay_nights, pricePeriodOf(property.price_period))} · `
                 : ""}
-              Enquiry-first booking · Instant date quote
+              Enquire and the host calls you
             </p>
           </div>
 

@@ -142,6 +142,10 @@ def _required_consents_exist(partner: PartnerProfile) -> bool:
 
 def _base_application_is_complete(application: PartnerApplication) -> bool:
     partner = application.partner
+    if application.track == PartnerApplication.Track.STAY_HOST:
+        # A stay host lists their own property: who they are and the agreements are enough.
+        # Trades, services and areas describe travelling to a customer and are not asked.
+        return bool(partner.display_name.strip()) and _required_consents_exist(partner)
     return all(
         (
             bool(partner.display_name.strip()),

@@ -139,7 +139,7 @@ export function StayFilters({
             )}
           >
             <Building2 className="size-3.5" />
-            Budget (&lt; ₹1,000/night)
+            Budget (under ₹1,000)
           </button>
         </div>
 

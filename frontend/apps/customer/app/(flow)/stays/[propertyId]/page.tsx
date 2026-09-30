@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { Badge, Button, Dialog, ErrorState, Skeleton, Textarea } from "@vsolve/ui";
 
-import { formatPaise, stayFields } from "@/features/stays/model";
+import { formatPaise, pricePeriodOf, stayFields, stayLengthLabel } from "@/features/stays/model";
 import { fetchStayProperty, fetchStays, submitStayReview } from "@/features/stays/queries";
 import { StayCard, StayImageGallery, StayQuotePanel } from "@/features/stays/view";
 
@@ -168,7 +168,10 @@ export default function StayDetailPage() {
             {property.min_stay_nights && property.min_stay_nights > 1 && (
               <div className="mt-2 flex items-center gap-1.5 text-xs text-text-secondary">
                 <Clock className="size-3.5 shrink-0 text-brand" />
-                <span>Minimum stay: {property.min_stay_nights} nights</span>
+                <span>
+                  Minimum stay:{" "}
+                  {stayLengthLabel(property.min_stay_nights, pricePeriodOf(property.price_period))}
+                </span>
               </div>
             )}
 
@@ -211,7 +214,9 @@ export default function StayDetailPage() {
                       <div className="text-base font-extrabold text-action">
                         {formatPaise(unit.nightly_rate_paise)}
                       </div>
-                      <div className="text-[10px] text-text-secondary">per night</div>
+                      <div className="text-[10px] text-text-secondary">
+                        {pricePeriodOf(property.price_period) === "NIGHT" ? "per night" : "per month"}
+                      </div>
                     </div>
                   </div>
                 ))}

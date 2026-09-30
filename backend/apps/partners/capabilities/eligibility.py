@@ -25,12 +25,14 @@ from apps.partners.exceptions import (
 )
 from apps.partners.gates import GATE_BLOCKS, GATE_COPY, GateState
 from apps.partners.models import (
+    PartnerApplication,
     PartnerAvailabilityException,
     PartnerAvailabilityRule,
     PartnerCapability,
     PartnerDocument,
     PartnerProfile,
     PartnerServiceArea,
+    commercial_mode_for_archetype,
 )
 
 from .base import WORKSPACE_ACTIONS, WorkspaceGrant
@@ -264,7 +266,29 @@ def workspace_grants(partner: PartnerProfile) -> list[WorkspaceGrant]:
                 actions=list(actions),
             )
         )
+    stay_key = ServiceVariant.BookingArchetype.A9_STAY
+    if stay_key not in seen and is_approved_stay_host(partner):
+        grants.append(
+            WorkspaceGrant(
+                workspace_key=stay_key,
+                commercial_mode=commercial_mode_for_archetype(stay_key),
+                actions=list(WORKSPACE_ACTIONS[stay_key]),
+            )
+        )
     return grants
+
+
+def is_approved_stay_host(partner: PartnerProfile) -> bool:
+    """A partner who signed up to list their property and whose application was approved.
+
+    For stay hosts the application review *is* the stay permission; they never request a
+    separate A9 capability.
+    """
+    return PartnerApplication.objects.filter(
+        partner=partner,
+        status=PartnerApplication.Status.APPROVED,
+        track=PartnerApplication.Track.STAY_HOST,
+    ).exists()
 
 
 def gate_states(partner: PartnerProfile) -> list[GateState]:

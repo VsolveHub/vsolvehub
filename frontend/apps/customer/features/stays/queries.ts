@@ -49,10 +49,11 @@ export function fetchStayProperty(propertyId: string) {
   );
 }
 
+/** `length` is in the property's price unit: nights or months. */
 export function fetchStayQuote(params: {
   property_id: string;
   check_in: string;
-  check_out: string;
+  length: number;
   unit_id?: string | null;
 }) {
   return request(() =>
@@ -61,7 +62,7 @@ export function fetchStayQuote(params: {
         query: {
           property_id: params.property_id,
           check_in: params.check_in,
-          check_out: params.check_out,
+          length: params.length,
           unit_id: params.unit_id ?? undefined,
         },
       },
@@ -72,7 +73,7 @@ export function fetchStayQuote(params: {
 export function createStayEnquiry(payload: {
   property_id: string;
   check_in: string;
-  check_out: string;
+  length: number;
   guest_count?: number;
   message?: string;
   unit_id?: string | null;
@@ -82,7 +83,7 @@ export function createStayEnquiry(payload: {
       body: {
         property_id: payload.property_id,
         check_in: payload.check_in,
-        check_out: payload.check_out,
+        length: payload.length,
         guest_count: payload.guest_count ?? 1,
         message: payload.message ?? "",
         unit_id: payload.unit_id ?? undefined,

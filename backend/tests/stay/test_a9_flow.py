@@ -49,7 +49,11 @@ def stay_world(db):
         tax_category_code="stay",
     )
     A9VariantConfiguration.objects.create(
-        variant=variant, version=1, status=A9VariantConfiguration.Status.ACTIVE
+        variant=variant,
+        version=1,
+        status=A9VariantConfiguration.Status.ACTIVE,
+        # These tests describe nightly stays; monthly stays are covered in test_enquiry_call_flow.
+        price_period=A9VariantConfiguration.PricePeriod.NIGHT,
     )
     host_user = User.objects.create(phone_number="+919922220001", full_name="Host")
     host = PartnerProfile.objects.create(user=host_user, display_name="Host PG")

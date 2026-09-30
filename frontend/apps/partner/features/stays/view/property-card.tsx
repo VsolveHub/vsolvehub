@@ -10,6 +10,7 @@ import {
   addPartnerStayPropertyMedia,
   deletePartnerStayPropertyMedia,
   partnerStayPropertyAction,
+  ratePeriodSuffix,
   stayListingStatus,
   updatePartnerStayProperty,
   uploadPartnerStayPhoto,
@@ -104,6 +105,7 @@ export function PropertyCard({
     null,
   );
   const approved = property.moderation_status === "APPROVED";
+  const unitWord = property.price_period === "NIGHT" ? "night" : "month";
   const archived = property.listing_status === "ARCHIVED";
   const canPublish =
     !archived &&
@@ -163,7 +165,7 @@ export function PropertyCard({
     if (!details.title.trim()) return setDetailsError("The property needs a name.");
     if (!details.location.trim()) return setDetailsError("The property needs a location.");
     const minStay = wholeNumber(details.minStay);
-    if (minStay === null) return setDetailsError("Minimum stay must be 1 night or more.");
+    if (minStay === null) return setDetailsError(`Minimum stay must be 1 ${unitWord} or more.`);
     if (details.openFrom && details.openUntil && details.openUntil < details.openFrom) {
       return setDetailsError("“Open until” must be on or after “open from”.");
     }
@@ -214,7 +216,9 @@ export function PropertyCard({
               </p>
             ) : null}
             <p className="text-sm text-text-secondary">
-              {cheapest !== null ? `From ${formatMoney(cheapest)} / night · ` : ""}
+              {cheapest !== null
+                ? `From ${formatMoney(cheapest)} ${ratePeriodSuffix(property.price_period)} · `
+                : ""}
               {activeRooms.length} room type{activeRooms.length === 1 ? "" : "s"} open for booking
             </p>
             {note ? <p className="text-xs text-text-secondary">{note}</p> : null}
@@ -345,7 +349,7 @@ export function PropertyCard({
             />
           </Field>
           <div className="grid gap-3 sm:grid-cols-3">
-            <Field label="Minimum stay (nights)" required>
+            <Field label={`Minimum stay (${unitWord}s)`} required>
               <Input
                 id={`min-stay-${property.id}`}
                 inputMode="numeric"

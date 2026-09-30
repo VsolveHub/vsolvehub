@@ -1,3 +1,4 @@
+import calendar
 import logging
 from datetime import date, timedelta
 from typing import Any
@@ -7,7 +8,6 @@ from uuid import UUID
 import jsonschema
 from django.conf import settings
 from django.db import models, transaction
-from django.db.models.functions import Coalesce
 from django.utils import timezone
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 
@@ -19,7 +19,8 @@ from apps.commerce.services.payments import initiate_standalone_payment_attempt
 from apps.foundation.models import OutboxEvent
 from apps.notifications.models import NotificationIntent
 from apps.notifications.services import request_notification
-from apps.partners.models import PartnerCapability, PartnerProfile
+from apps.partners.capabilities import is_approved_stay_host
+from apps.partners.models import PartnerApplication, PartnerCapability, PartnerProfile
 from apps.stay.models import (
     Property,
     PropertyMedia,
@@ -202,7 +203,65 @@ def _enforce_stay_dates(*, prop: Property, check_in: date, check_out: date) -> i
     return nights
 
 
+MAX_STAY_MONTHS = 24
+
+
+def _add_months(start: date, months: int) -> date:
+    """``start`` moved ``months`` calendar months on, clamped to the month's last day."""
+    month_index = start.month - 1 + months
+    year, month = start.year + month_index // 12, month_index % 12 + 1
+    last_day = calendar.monthrange(year, month)[1]
+    return start.replace(year=year, month=month, day=min(start.day, last_day))
+
+
+def _stay_period(
+    *,
+    prop: Property,
+    price_period: str,
+    check_in: date,
+    check_out: date | None,
+    length: int | None,
+) -> tuple[date, int]:
+    """Validate an enquiry's dates. Returns (check_out, length in the property's price unit).
+
+    A monthly stay is asked as "move in on X for N months"; a nightly one as "arrive on X for N
+    nights". Either may also arrive as an explicit check-out date. The host confirms by phone,
+    so this only checks the request is sensible — it does not hold the room.
+    """
+    monthly = price_period == A9VariantConfiguration.PricePeriod.MONTH
+    unit, limit = ("month", MAX_STAY_MONTHS) if monthly else ("night", MAX_STAY_NIGHTS)
+    if check_in < timezone.localdate():
+        raise StayStateError("The start date cannot be in the past.", code="check_in_in_past")
+    if length is None:
+        if check_out is None or check_out <= check_in:
+            raise StayStateError("Tell the host how long you want to stay.", code="length_required")
+        days = (check_out - check_in).days
+        length = max(1, -(-days // 30)) if monthly else days
+    elif length < 1:
+        raise StayStateError("Tell the host how long you want to stay.", code="length_required")
+    else:
+        check_out = _add_months(check_in, length) if monthly else check_in + timedelta(days=length)
+    minimum = int(prop.min_stay_nights or 1)
+    if length < minimum:
+        raise StayStateError(
+            f"Minimum stay is {minimum} {unit}{'s' if minimum != 1 else ''}.",
+            code="min_stay_not_met",
+        )
+    if length > limit:
+        raise StayStateError(f"Maximum stay is {limit} {unit}s.", code="max_stay_exceeded")
+    if (prop.available_from is not None and check_in < prop.available_from) or (
+        prop.available_until is not None and check_out > prop.available_until
+    ):
+        raise StayStateError(
+            "The host is not taking stays from that date.", code="dates_unavailable"
+        )
+    return check_out, length
+
+
 def _require_stay_capability(partner: Any) -> None:
+    """Approved as a stay host (the short sign-up) or holding an approved A9 capability."""
+    if is_approved_stay_host(partner):
+        return
     if not partner.capabilities.filter(archetype="A9_STAY", status="APPROVED").exists():
         raise PermissionError("Partner does not have an approved A9 stay capability.")
 
@@ -326,6 +385,7 @@ def get_stay_taxonomy() -> list[dict[str, Any]]:
                             "room_schema": room_schema,
                             "room_name_suggestions": room_names,
                             "booking_mode": active_cfg.booking_mode,
+                            "price_period": active_cfg.price_period,
                         }
                     )
             if svc_data["variants"]:
@@ -688,7 +748,7 @@ def set_property_listing(*, prop: Property, host: Any, action: str) -> Property:
 
 @transaction.atomic
 def confirm_enquiry(*, enquiry: StayEnquiry, host: Any) -> StayEnquiry:  # noqa: PLR0912
-    """Host confirms an enquiry and holds the unit calendar for those nights."""
+    """Host marks an enquiry as booked after speaking to the guest."""
     _require_stay_capability(host)
     if enquiry.property.host_id != host.id:
         raise PermissionError("Not your enquiry.")
@@ -728,14 +788,18 @@ def confirm_enquiry(*, enquiry: StayEnquiry, host: Any) -> StayEnquiry:  # noqa:
     config = _require_active_a9(enquiry.property.variant_id)
     needs_hold = config.booking_mode == A9VariantConfiguration.BookingMode.RESERVATION
 
-    _verify_unit_availability(
-        unit=unit,
-        check_in=enquiry.check_in,
-        check_out=enquiry.check_out,
-        exclude_enquiry_id=enquiry.id,
-        exclude_reservation_id=enquiry.unit_reservation_id,
-        for_update=True,
-    )
+    # Enquiry stays are arranged on the phone: the host knows whether the room is free, so
+    # "Booked" records their decision rather than checking a calendar. Only the legacy paid
+    # mode holds the room and must refuse an overlap.
+    if needs_hold:
+        _verify_unit_availability(
+            unit=unit,
+            check_in=enquiry.check_in,
+            check_out=enquiry.check_out,
+            exclude_enquiry_id=enquiry.id,
+            exclude_reservation_id=enquiry.unit_reservation_id,
+            for_update=True,
+        )
 
     if needs_hold:
         if enquiry.unit_reservation_id is None:
@@ -773,21 +837,12 @@ def confirm_enquiry(*, enquiry: StayEnquiry, host: Any) -> StayEnquiry:  # noqa:
     enquiry.status = StayEnquiry.Status.CONFIRMED
     enquiry.save(update_fields=("status", "unit", "unit_reservation", "updated_at"))
 
-    try:
-        request_notification(
-            recipient_id=enquiry.customer_id,
-            purpose="stay.enquiry.confirmed",
-            channel=NotificationIntent.Channel.IN_APP,
-            template_code="stay_enquiry_confirmed",
-            context={
-                "property_title": enquiry.property.title,
-                "host_name": str(getattr(enquiry.property.host, "display_name", "Host")),
-            },
-            idempotency_key=f"stay-enq-conf:{enquiry.id}",
-        )
-    except Exception:
-        logger.exception("Failed to dispatch stay enquiry confirmed notification")
-
+    _notify_enquiry(
+        enquiry,
+        to_host=False,
+        template_code="stay_enquiry_confirmed",
+        purpose="stay.enquiry.confirmed",
+    )
     return enquiry
 
 
@@ -809,7 +864,53 @@ def cancel_enquiry(*, enquiry: StayEnquiry, actor: Any, as_host: bool = False) -
         if unit_res.status != UnitReservation.Status.RELEASED:
             unit_res.status = UnitReservation.Status.RELEASED
             unit_res.save(update_fields=("status", "updated_at"))
+    if as_host:
+        _notify_enquiry(
+            enquiry,
+            to_host=False,
+            template_code="stay_enquiry_declined",
+            purpose="stay.enquiry.cancelled_by_host",
+            context={"host_note": ""},
+        )
+    else:
+        _notify_enquiry(
+            enquiry,
+            to_host=True,
+            template_code="stay_enquiry_withdrawn",
+            purpose="stay.enquiry.withdrawn",
+        )
     return enquiry
+
+
+def _notify_enquiry(
+    enquiry: StayEnquiry,
+    *,
+    to_host: bool,
+    template_code: str,
+    purpose: str,
+    context: dict[str, Any] | None = None,
+) -> None:
+    """One in-app notice about an enquiry. Never blocks the action it reports on."""
+    prop = enquiry.property
+    recipient_id = prop.host.user_id if to_host else enquiry.customer_id
+    guest_name = str(getattr(enquiry.customer, "full_name", "") or "A guest")
+    try:
+        request_notification(
+            recipient_id=recipient_id,
+            purpose=purpose,
+            channel=NotificationIntent.Channel.IN_APP,
+            template_code=template_code,
+            context={
+                "property_title": prop.title,
+                "host_name": str(getattr(prop.host, "display_name", "") or "The host"),
+                "guest_name": guest_name,
+                "check_in": enquiry.check_in.strftime("%d %b %Y"),
+                **(context or {}),
+            },
+            idempotency_key=f"{purpose}:{enquiry.id}",
+        )
+    except Exception:
+        logger.exception("Failed to dispatch stay enquiry notification %s", template_code)
 
 
 @transaction.atomic
@@ -1004,18 +1105,30 @@ def create_enquiry(
     customer: Any,
     property_id: UUID | str,
     check_in: date,
-    check_out: date,
+    check_out: date | None = None,
+    length: int | None = None,
     guest_count: int = 1,
     message: str = "",
     unit_id: UUID | str | None = None,
 ) -> StayEnquiry:
-    prop = Property.objects.select_related("variant").get(id=_as_uuid(property_id))
+    """A guest asks to stay. The host sees their name and number and calls them.
+
+    ``length`` is in the property's price unit (nights or months); ``check_out`` may be sent
+    instead. No room is held — the host confirms on the phone and marks the outcome.
+    """
+    prop = Property.objects.select_related("variant", "host").get(id=_as_uuid(property_id))
     config = _require_active_a9(prop.variant_id)
     if config.booking_mode != A9VariantConfiguration.BookingMode.ENQUIRY:
         raise StayStateError("This property requires a reservation, not an enquiry.")
     if prop.public_state != "PUBLISHED":
         raise StayStateError("Property is not open for enquiries.")
-    nights = _enforce_stay_dates(prop=prop, check_in=check_in, check_out=check_out)
+    check_out, length = _stay_period(
+        prop=prop,
+        price_period=config.price_period,
+        check_in=check_in,
+        check_out=check_out,
+        length=length,
+    )
 
     duplicate_enquiry = StayEnquiry.objects.filter(
         customer=customer,
@@ -1032,45 +1145,62 @@ def create_enquiry(
 
     unit = _resolve_bookable_unit(prop=prop, unit_id=unit_id)
     _enforce_guest_count(unit=unit, guest_count=guest_count)
-    _verify_unit_availability(unit=unit, check_in=check_in, check_out=check_out)
-    total_quote_paise = nights * unit.nightly_rate_paise
 
-    return StayEnquiry.objects.create(
+    enquiry = StayEnquiry.objects.create(
         property=prop,
         unit=unit,
         customer=customer,
         check_in=check_in,
         check_out=check_out,
         guest_count=guest_count,
-        nights=nights,
-        total_quote_paise=total_quote_paise,
+        nights=(check_out - check_in).days,
+        stay_length=length,
+        price_period=config.price_period,
+        total_quote_paise=length * unit.nightly_rate_paise,
         message=message,
         status=StayEnquiry.Status.SUBMITTED,
     )
+    _notify_enquiry(
+        enquiry,
+        to_host=True,
+        template_code="stay_enquiry_received",
+        purpose="stay.enquiry.received",
+    )
+    return enquiry
 
 
 def calculate_stay_quote(
     *,
     property_id: UUID | str,
     check_in: date,
-    check_out: date,
+    check_out: date | None = None,
+    length: int | None = None,
     unit_id: UUID | str | None = None,
 ) -> dict[str, Any]:
+    """An estimate for the guest: the room's rate times the length. Nothing is charged."""
     prop = Property.objects.select_related("variant").get(id=_as_uuid(property_id))
     config = _require_active_a9(prop.variant_id)
     if prop.public_state != "PUBLISHED":
         raise StayStateError("Property is not open.")
-    nights = _enforce_stay_dates(prop=prop, check_in=check_in, check_out=check_out)
+    check_out, length = _stay_period(
+        prop=prop,
+        price_period=config.price_period,
+        check_in=check_in,
+        check_out=check_out,
+        length=length,
+    )
     unit = _resolve_bookable_unit(prop=prop, unit_id=unit_id)
-    _verify_unit_availability(unit=unit, check_in=check_in, check_out=check_out)
 
     return {
         "property_id": prop.id,
         "unit_id": unit.id,
         "unit_name": unit.name,
-        "nights": nights,
+        "check_out": check_out,
+        "nights": (check_out - check_in).days,
+        "stay_length": length,
+        "price_period": config.price_period,
         "nightly_rate_paise": unit.nightly_rate_paise,
-        "total_quote_paise": nights * unit.nightly_rate_paise,
+        "total_quote_paise": length * unit.nightly_rate_paise,
         "max_guests": unit.max_guests,
         "booking_mode": config.booking_mode,
         "min_stay_nights": prop.min_stay_nights,
@@ -1082,20 +1212,34 @@ def calculate_stay_quote(
 def respond_enquiry(
     *, enquiry: StayEnquiry, host: Any, response: str, decline: bool = False
 ) -> StayEnquiry:
+    """Host replies, or marks the enquiry "Not available" (``decline``, note optional)."""
     _require_stay_capability(host)
     if enquiry.property.host_id != host.id:
         raise PermissionError("Not your enquiry.")
-    if enquiry.status != StayEnquiry.Status.SUBMITTED:
+    open_statuses = (
+        (StayEnquiry.Status.SUBMITTED, StayEnquiry.Status.RESPONDED)
+        if decline
+        else (StayEnquiry.Status.SUBMITTED,)
+    )
+    if enquiry.status not in open_statuses:
         raise StayStateError("Enquiry is not awaiting a response.")
     response = (response or "").strip()
-    if not response:
+    if not response and not decline:
         raise StayStateError("A response message is required.")
     enquiry.host_response = response
     enquiry.responded_at = timezone.now()
     enquiry.status = StayEnquiry.Status.DECLINED if decline else StayEnquiry.Status.RESPONDED
     enquiry.save(update_fields=("host_response", "responded_at", "status", "updated_at"))
 
-    if not decline and enquiry.customer_id:
+    if decline:
+        _notify_enquiry(
+            enquiry,
+            to_host=False,
+            template_code="stay_enquiry_declined",
+            purpose="stay.enquiry.declined",
+            context={"host_note": f" {response}" if response else ""},
+        )
+    elif enquiry.customer_id:
         try:
             resp_time = enquiry.responded_at.isoformat() if enquiry.responded_at else "1"
             request_notification(
@@ -1145,40 +1289,26 @@ def public_properties(  # noqa: PLR0912
         rooms = rooms.filter(nightly_rate_paise__gte=min_price_paise)
     if max_price_paise is not None:
         rooms = rooms.filter(nightly_rate_paise__lte=max_price_paise)
-    if check_in is not None and check_out is not None and check_out > check_in:
-        # Conservative: counts every booking that touches the range, so a room type is shown
-        # only when it clearly has space. Booking itself runs the exact night-by-night check.
-        holds, enquiries = _unit_bookings_query(
-            unit_ref=models.OuterRef("pk"), check_in=check_in, check_out=check_out
-        )
-        rooms = rooms.annotate(
-            booked=Coalesce(
-                models.Subquery(
-                    holds.order_by().values("unit").annotate(n=models.Count("id")).values("n"),
-                    output_field=models.IntegerField(),
-                ),
-                0,
-            )
-            + Coalesce(
-                models.Subquery(
-                    enquiries.order_by().values("unit").annotate(n=models.Count("id")).values("n"),
-                    output_field=models.IntegerField(),
-                ),
-                0,
-            )
-        ).filter(booked__lt=models.F("quantity"))
+    # No per-date "sold out" filter: stays are arranged by phone, and the host keeps a room
+    # type out of search by marking it full (inactive) or pausing the property.
 
-    host_approved = PartnerCapability.objects.filter(
+    host_capability = PartnerCapability.objects.filter(
         partner=models.OuterRef("host"),
         archetype="A9_STAY",
         status=PartnerCapability.Status.APPROVED,
     )
+    host_application = PartnerApplication.objects.filter(
+        partner=models.OuterRef("host"),
+        status=PartnerApplication.Status.APPROVED,
+        track=PartnerApplication.Track.STAY_HOST,
+    )
+    host_approved = models.Exists(host_capability) | models.Exists(host_application)
     qs = (
         Property.objects.filter(
             moderation_status=Property.ModerationStatus.APPROVED,
             listing_status=Property.ListingStatus.LIVE,
         )
-        .filter(models.Exists(rooms), models.Exists(host_approved))
+        .filter(models.Exists(rooms), host_approved)
         .prefetch_related(
             models.Prefetch("units", queryset=Unit.objects.filter(is_active=True)),
             "media",
@@ -1225,9 +1355,6 @@ def public_properties(  # noqa: PLR0912
         qs = qs.filter(
             models.Q(available_until__isnull=True) | models.Q(available_until__gte=check_out)
         )
-    if check_in is not None and check_out is not None and check_out > check_in:
-        qs = qs.filter(min_stay_nights__lte=(check_out - check_in).days)
-
     if sort in ("price_asc", "price_desc"):
         cheapest = (
             Unit.objects.filter(property=models.OuterRef("pk"), is_active=True)

@@ -252,13 +252,12 @@ describe("the specialty nav is specialised per workspace", () => {
   });
 
   it("gives each host their own Bookings, never the other's", () => {
-    // Both navs have a Bookings item and they point at different routes. One
-    // shared label over two record sets is how a rental host ends up reading a
-    // stay's reservations.
+    // Rentals have a paid Bookings list; stays are enquiry-only and have none. A stay
+    // host must never be offered the rental one.
     const stayHrefs = STAY_TAP_FIRST_NAV.map((item) => item.href);
     const rentalHrefs = RENTAL_TAP_FIRST_NAV.map((item) => item.href);
 
-    expect(stayHrefs).toContain("/stays/bookings");
+    expect(stayHrefs).not.toContain("/stays/bookings");
     expect(stayHrefs).not.toContain("/rentals/bookings");
     expect(rentalHrefs).toContain("/rentals/bookings");
     expect(rentalHrefs).not.toContain("/stays/bookings");
@@ -281,7 +280,6 @@ describe("the specialty nav is specialised per workspace", () => {
       "/home",
       "/stays",
       "/stays/enquiries",
-      "/stays/bookings",
       "/money",
       "#notifications",
       "/me",

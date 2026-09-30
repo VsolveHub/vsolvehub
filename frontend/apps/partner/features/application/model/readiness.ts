@@ -128,8 +128,20 @@ export function requirements(application: Application | null): Requirement[] {
     },
   ];
 
+  // A stay host lists their own property: trades, areas and experience are for people who
+  // travel to a customer, and the server does not ask a host for them.
+  if (application?.track === "STAY_HOST") {
+    return list.filter((requirement) => !SERVICE_ONLY_REQUIREMENTS.has(requirement.code));
+  }
   return list;
 }
+
+const SERVICE_ONLY_REQUIREMENTS: ReadonlySet<RequirementCode> = new Set([
+  "EXPERIENCE_YEARS",
+  "SKILLS",
+  "SERVICES",
+  "SERVICE_AREAS",
+]);
 
 export function outstandingRequirements(application: Application | null): Requirement[] {
   return requirements(application).filter((requirement) => !requirement.isMet);
