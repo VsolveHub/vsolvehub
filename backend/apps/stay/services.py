@@ -24,12 +24,14 @@ from apps.partners.models import PartnerApplication, PartnerCapability, PartnerP
 from apps.stay.models import (
     Property,
     PropertyMedia,
+    Room,
     StayEnquiry,
     StayModerationEvent,
     StayPhotoUpload,
     StayReservation,
     StayReview,
     StayReviewPhoto,
+    StayVisit,
     Unit,
     UnitReservation,
 )
@@ -628,13 +630,15 @@ def create_property(
             sharing_count=sharing_count,
             max_guests=max(sharing_count, 1),
         )
-        Unit.objects.create(
+        seeded = Unit.objects.create(
             property=prop,
             name=(unit_name or "Standard room").strip() or "Standard room",
             sharing_count=seeded_sharing,
             max_guests=seeded_guests,
             nightly_rate_paise=nightly_rate_paise,
         )
+        _create_rooms(unit=seeded, numbers=_next_room_numbers(prop, 1))
+        sync_unit_rooms(seeded)
     items: list[dict[str, Any]] = list(media or [])
     if image_urls:
         for idx, url in enumerate(image_urls):
@@ -664,11 +668,20 @@ def create_unit(
     max_guests: int | None = None,
     attributes: dict[str, Any] | None = None,
     is_active: bool = True,
+    room_numbers: list[str] | None = None,
 ) -> Unit:
+    """A new room type and its numbered rooms.
+
+    ``room_numbers`` ("101", "102") name each room; without them the type gets ``quantity``
+    rooms numbered "Room N" for the host to rename.
+    """
     _require_stay_capability(host)
     if prop.host_id != host.id:
         raise PermissionError("Not your property.")
     config = _require_active_a9(prop.variant_id)
+    numbers = _clean_new_room_numbers(prop=prop, numbers=room_numbers or [])
+    if numbers:
+        quantity = len(numbers)
     if nightly_rate_paise <= 0:
         raise StayStateError("Nightly rate must be positive paise.")
     name = (name or "").strip()
@@ -685,7 +698,7 @@ def create_unit(
     )
     _property_schema, room_schema, _names = split_stay_schema(config.property_schema)
     _validate_against(room_schema, attributes or {}, label="room details")
-    return Unit.objects.create(
+    unit = Unit.objects.create(
         property=prop,
         name=name,
         sharing_count=sharing_count,
@@ -695,6 +708,12 @@ def create_unit(
         attributes=attributes or {},
         is_active=is_active,
     )
+    _create_rooms(
+        unit=unit,
+        numbers=numbers or _next_room_numbers(prop, quantity),
+        status=Room.Status.AVAILABLE if is_active else Room.Status.UNAVAILABLE,
+    )
+    return sync_unit_rooms(unit)
 
 
 def _validate_room_numbers(
@@ -709,7 +728,7 @@ def _validate_room_numbers(
 
 
 @transaction.atomic
-def update_unit(
+def update_unit(  # noqa: PLR0912
     *,
     unit: Unit,
     host: Any,
@@ -721,7 +740,12 @@ def update_unit(
     attributes: dict[str, Any] | None = None,
     is_active: bool | None = None,
 ) -> Unit:
-    """Edit a room type. Price and count changes apply to new bookings; existing ones keep theirs"""
+    """Edit a room type. Price and count changes apply to new bookings; existing ones keep theirs.
+
+    ``quantity`` adds or removes numbered rooms (never a booked one). ``is_active`` switches every
+    room that is not booked on or off. When no room of a live property is available it simply
+    stops appearing to guests.
+    """
     _require_stay_capability(host)
     if unit.property.host_id != host.id:
         raise PermissionError("Not your property.")
@@ -740,7 +764,6 @@ def update_unit(
         updates.append("nightly_rate_paise")
     for field, value in (
         ("sharing_count", sharing_count),
-        ("quantity", quantity),
         ("max_guests", max_guests),
     ):
         if value is not None:
@@ -759,22 +782,16 @@ def update_unit(
         _validate_against(room_schema, attributes, label="room details")
         unit.attributes = attributes
         updates.append("attributes")
-    if is_active is not None:
-        if (
-            not is_active
-            and unit.is_active
-            and unit.property.public_state == "PUBLISHED"
-            and not unit.property.units.filter(is_active=True).exclude(id=unit.id).exists()
-        ):
-            raise StayStateError(
-                "A live property needs at least one active room. Add another room first.",
-                code="last_active_room",
-            )
-        unit.is_active = is_active
-        updates.append("is_active")
     if updates:
         updates.append("updated_at")
         unit.save(update_fields=updates)
+    # Counts and the on/off switch live on the numbered rooms; the type follows them.
+    if quantity is not None:
+        _resize_unit_rooms(unit=unit, quantity=quantity)
+    if is_active is not None:
+        _switch_unit_rooms(unit=unit, on=is_active)
+    if quantity is not None or is_active is not None:
+        sync_unit_rooms(unit)
     return unit
 
 
@@ -899,8 +916,15 @@ def set_property_listing(*, prop: Property, host: Any, action: str) -> Property:
 
 
 @transaction.atomic
-def confirm_enquiry(*, enquiry: StayEnquiry, host: Any) -> StayEnquiry:  # noqa: PLR0912
-    """Host marks an enquiry as booked after speaking to the guest."""
+def confirm_enquiry(  # noqa: PLR0912, PLR0915
+    *, enquiry: StayEnquiry, host: Any, room_id: UUID | str | None = None
+) -> StayEnquiry:
+    """Host marks an enquiry as booked after speaking to the guest.
+
+    With ``room_id`` the chosen numbered room is marked Booked as well, which takes it out of
+    its type's available count. The room may be of another type in the same property (the guest
+    settled on a different room on the call); the enquiry then follows that room.
+    """
     _require_stay_capability(host)
     if enquiry.property.host_id != host.id:
         raise PermissionError("Not your enquiry.")
@@ -922,6 +946,19 @@ def confirm_enquiry(*, enquiry: StayEnquiry, host: Any) -> StayEnquiry:  # noqa:
         StayEnquiry.Status.RESPONDED,
     ):
         raise StayStateError("Enquiry cannot be confirmed from this state.")
+
+    room: Room | None = None
+    if room_id is not None:
+        room = (
+            Room.objects.select_for_update()
+            .filter(id=_as_uuid(room_id), property_id=enquiry.property_id)
+            .first()
+        )
+        if room is None:
+            raise StayStateError("Choose a room in this property.", code="room_not_found")
+        if room.status == Room.Status.BOOKED:
+            raise StayStateError(f"{room.number} is already booked.", code="room_already_booked")
+        enquiry.unit_id = room.unit_id
 
     unit = None
     if enquiry.unit_id is not None:
@@ -988,6 +1025,12 @@ def confirm_enquiry(*, enquiry: StayEnquiry, host: Any) -> StayEnquiry:  # noqa:
 
     enquiry.status = StayEnquiry.Status.CONFIRMED
     enquiry.save(update_fields=("status", "unit", "unit_reservation", "updated_at"))
+    if room is not None:
+        _book_room(
+            room=room,
+            occupant_name=str(getattr(enquiry.customer, "full_name", "") or ""),
+            enquiry=enquiry,
+        )
 
     _notify_enquiry(
         enquiry,
@@ -1011,6 +1054,11 @@ def cancel_enquiry(*, enquiry: StayEnquiry, actor: Any, as_host: bool = False) -
         raise StayStateError("Enquiry is already closed.")
     enquiry.status = StayEnquiry.Status.CANCELLED
     enquiry.save(update_fields=("status", "updated_at"))
+    # A booking that falls through frees the room it had taken.
+    for booked in Room.objects.select_for_update().filter(
+        booked_enquiry=enquiry, status=Room.Status.BOOKED
+    ):
+        _free_room(booked)
     if enquiry.unit_reservation_id is not None:
         unit_res = UnitReservation.objects.select_for_update().get(id=enquiry.unit_reservation_id)
         if unit_res.status != UnitReservation.Status.RELEASED:
@@ -2073,3 +2121,330 @@ def repair_stay_ghost_holds() -> int:
 
         repaired += 1
     return repaired
+
+
+# --- numbered rooms -------------------------------------------------------------------------
+#
+# Guests see room *types* ("Single room · ₹8,500/month · 2 available"). The host manages each
+# physical room under a type by its own number and marks it Available, Not available or Booked.
+# The type's ``quantity``, ``available_count`` and ``is_active`` always follow its rooms, so a
+# booked-out type drops out of guest search without anyone touching it.
+
+ROOM_NUMBER_MAX_LENGTH = 40
+MAX_ROOMS_PER_TYPE = 500
+
+
+def _clean_room_number(number: str) -> str:
+    cleaned = " ".join((number or "").split())
+    if not cleaned:
+        raise StayStateError(
+            "Give the room a number or name, for example 101.", code="room_number_required"
+        )
+    if len(cleaned) > ROOM_NUMBER_MAX_LENGTH:
+        raise StayStateError(
+            f"Keep room numbers under {ROOM_NUMBER_MAX_LENGTH} characters.",
+            code="room_number_too_long",
+        )
+    return cleaned
+
+
+def _assert_room_number_free(
+    *, prop: Property, number: str, exclude_room_id: UUID | None = None
+) -> None:
+    taken = Room.objects.filter(property=prop, number__iexact=number)
+    if exclude_room_id is not None:
+        taken = taken.exclude(id=exclude_room_id)
+    if taken.exists():
+        raise StayStateError(
+            f"{number} is already used in this property.", code="room_number_taken"
+        )
+
+
+def _clean_new_room_numbers(*, prop: Property, numbers: list[str]) -> list[str]:
+    """Clean, de-duplicate (ignoring case) and check numbers are not already used here."""
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for raw in numbers:
+        number = _clean_room_number(raw)
+        if number.lower() in seen:
+            raise StayStateError(f"{number} is listed twice.", code="room_number_taken")
+        seen.add(number.lower())
+        _assert_room_number_free(prop=prop, number=number)
+        cleaned.append(number)
+    if len(cleaned) > MAX_ROOMS_PER_TYPE:
+        raise StayStateError("That is too many rooms for one type.", code="quantity_invalid")
+    return cleaned
+
+
+def _next_room_numbers(prop: Property, count: int) -> list[str]:
+    """Placeholder numbers ("Room 4", "Room 5") not yet used in the property."""
+    taken = {n.lower() for n in Room.objects.filter(property=prop).values_list("number", flat=True)}
+    result: list[str] = []
+    candidate = 1
+    while len(result) < count:
+        number = f"Room {candidate}"
+        if number.lower() not in taken:
+            result.append(number)
+            taken.add(number.lower())
+        candidate += 1
+    return result
+
+
+def _create_rooms(
+    *, unit: Unit, numbers: list[str], status: str = Room.Status.AVAILABLE
+) -> list[Room]:
+    return Room.objects.bulk_create(
+        [
+            Room(property_id=unit.property_id, unit=unit, number=number, status=status)
+            for number in numbers
+        ]
+    )
+
+
+def sync_unit_rooms(unit: Unit) -> Unit:
+    """Make the room type's counts and switch match its numbered rooms."""
+    counts = Room.objects.filter(unit=unit).aggregate(
+        total=models.Count("id"),
+        available=models.Count("id", filter=models.Q(status=Room.Status.AVAILABLE)),
+    )
+    total = int(counts["total"] or 0)
+    available = int(counts["available"] or 0)
+    # A type always keeps at least one room (``delete_room`` refuses the last one).
+    unit.quantity = max(total, 1)
+    unit.available_count = available
+    unit.is_active = available > 0
+    unit.save(update_fields=("quantity", "available_count", "is_active", "updated_at"))
+    return unit
+
+
+def _resize_unit_rooms(*, unit: Unit, quantity: int) -> None:
+    """Add placeholder rooms, or remove rooms that are not booked (newest first)."""
+    Unit.objects.select_for_update().filter(id=unit.id).first()
+    rooms = list(Room.objects.select_for_update().filter(unit=unit).order_by("-created_at"))
+    if quantity > len(rooms):
+        status = Room.Status.AVAILABLE if unit.is_active else Room.Status.UNAVAILABLE
+        _create_rooms(
+            unit=unit,
+            numbers=_next_room_numbers(unit.property, quantity - len(rooms)),
+            status=status,
+        )
+        return
+    surplus = len(rooms) - quantity
+    removable = [room for room in rooms if room.status != Room.Status.BOOKED][:surplus]
+    if len(removable) < surplus:
+        raise StayStateError(
+            "Some of these rooms are booked. Mark them available before removing them.",
+            code="quantity_below_booked",
+        )
+    Room.objects.filter(id__in=[room.id for room in removable]).delete()
+
+
+def _switch_unit_rooms(*, unit: Unit, on: bool) -> None:
+    """Switch every room of the type that is not booked on or off."""
+    Unit.objects.select_for_update().filter(id=unit.id).first()
+    source, target = (
+        (Room.Status.UNAVAILABLE, Room.Status.AVAILABLE)
+        if on
+        else (Room.Status.AVAILABLE, Room.Status.UNAVAILABLE)
+    )
+    Room.objects.filter(unit=unit, status=source).update(status=target, updated_at=timezone.now())
+
+
+def _own_room(*, room: Room, host: Any) -> None:
+    _require_stay_capability(host)
+    if room.property.host_id != host.id:
+        raise PermissionError("Not your property.")
+
+
+def _locked_room(room: Room) -> Room:
+    # Lock the type first, then the room, so every change to a type's counts queues in one order.
+    Unit.objects.select_for_update().filter(id=room.unit_id).first()
+    return Room.objects.select_for_update().select_related("property", "unit").get(id=room.id)
+
+
+def _book_room(
+    *,
+    room: Room,
+    occupant_name: str = "",
+    enquiry: StayEnquiry | None = None,
+    visit: StayVisit | None = None,
+) -> Room:
+    room.status = Room.Status.BOOKED
+    room.occupant_name = occupant_name.strip()[:120]
+    room.booked_enquiry = enquiry
+    room.booked_visit = visit
+    room.booked_at = timezone.now()
+    room.save(
+        update_fields=(
+            "status",
+            "occupant_name",
+            "booked_enquiry",
+            "booked_visit",
+            "booked_at",
+            "updated_at",
+        )
+    )
+    sync_unit_rooms(room.unit)
+    return room
+
+
+def _free_room(room: Room) -> Room:
+    room.status = Room.Status.AVAILABLE
+    room.occupant_name = ""
+    room.booked_enquiry = None
+    room.booked_visit = None
+    room.booked_at = None
+    room.save(
+        update_fields=(
+            "status",
+            "occupant_name",
+            "booked_enquiry",
+            "booked_visit",
+            "booked_at",
+            "updated_at",
+        )
+    )
+    sync_unit_rooms(room.unit)
+    return room
+
+
+@transaction.atomic
+def add_room(*, unit: Unit, host: Any, number: str, available: bool = True) -> Room:
+    """The host adds one numbered room to a room type."""
+    _require_stay_capability(host)
+    if unit.property.host_id != host.id:
+        raise PermissionError("Not your property.")
+    Unit.objects.select_for_update().filter(id=unit.id).first()
+    if Room.objects.filter(unit=unit).count() >= MAX_ROOMS_PER_TYPE:
+        raise StayStateError("That is too many rooms for one type.", code="quantity_invalid")
+    cleaned = _clean_room_number(number)
+    _assert_room_number_free(prop=unit.property, number=cleaned)
+    room = Room.objects.create(
+        property_id=unit.property_id,
+        unit=unit,
+        number=cleaned,
+        status=Room.Status.AVAILABLE if available else Room.Status.UNAVAILABLE,
+    )
+    sync_unit_rooms(unit)
+    return room
+
+
+@transaction.atomic
+def rename_room(*, room: Room, host: Any, number: str) -> Room:
+    _own_room(room=room, host=host)
+    room = _locked_room(room)
+    cleaned = _clean_room_number(number)
+    _assert_room_number_free(prop=room.property, number=cleaned, exclude_room_id=room.id)
+    room.number = cleaned
+    room.save(update_fields=("number", "updated_at"))
+    return room
+
+
+@transaction.atomic
+def set_room_available(*, room: Room, host: Any, available: bool) -> Room:
+    """The ON / OFF switch. Off hides the room from guests; a booked room uses ``release_room``."""
+    _own_room(room=room, host=host)
+    room = _locked_room(room)
+    if room.status == Room.Status.BOOKED:
+        raise StayStateError(
+            f"{room.number} is booked. Mark it available when the guest moves out.",
+            code="room_booked",
+        )
+    room.status = Room.Status.AVAILABLE if available else Room.Status.UNAVAILABLE
+    room.save(update_fields=("status", "updated_at"))
+    sync_unit_rooms(room.unit)
+    return room
+
+
+@transaction.atomic
+def mark_room_booked(
+    *,
+    room: Room,
+    host: Any,
+    occupant_name: str = "",
+    visit: StayVisit | None = None,
+) -> Room:
+    """The host confirms a booking agreed directly with a guest (a walk-in, or after a visit).
+
+    Bookings that came through an enquiry go through ``confirm_enquiry(room_id=...)`` instead,
+    so the guest is told and the enquiry is closed as booked.
+    """
+    _own_room(room=room, host=host)
+    room = _locked_room(room)
+    if room.status == Room.Status.BOOKED:
+        raise StayStateError(f"{room.number} is already booked.", code="room_already_booked")
+    if visit is not None:
+        if visit.property_id != room.property_id:
+            raise StayStateError("This visit is for another property.", code="visit_mismatch")
+        if not occupant_name:
+            occupant_name = str(getattr(visit.customer, "full_name", "") or "")
+    return _book_room(room=room, occupant_name=occupant_name, visit=visit)
+
+
+@transaction.atomic
+def release_room(*, room: Room, host: Any) -> Room:
+    """The guest moved out (or the booking fell through): the room is available again."""
+    _own_room(room=room, host=host)
+    room = _locked_room(room)
+    if room.status != Room.Status.BOOKED:
+        raise StayStateError(f"{room.number} is not booked.", code="room_not_booked")
+    return _free_room(room)
+
+
+@transaction.atomic
+def delete_room(*, room: Room, host: Any) -> None:
+    _own_room(room=room, host=host)
+    room = _locked_room(room)
+    if room.status == Room.Status.BOOKED:
+        raise StayStateError(
+            f"{room.number} is booked. Mark it available before removing it.",
+            code="room_booked",
+        )
+    if Room.objects.filter(unit_id=room.unit_id).count() <= 1:
+        raise StayStateError(
+            "A room type needs at least one room. Switch it off instead.",
+            code="last_room_of_type",
+        )
+    unit = room.unit
+    room.delete()
+    sync_unit_rooms(unit)
+
+
+def host_stay_summary(*, host: Any) -> dict[str, Any]:
+    """The numbers at the top of the host's stays dashboard. Archived properties are left out."""
+    today = timezone.localdate()
+    properties = Property.objects.filter(host=host).exclude(
+        listing_status=Property.ListingStatus.ARCHIVED
+    )
+    rooms = Room.objects.filter(property__in=properties).aggregate(
+        total=models.Count("id"),
+        available=models.Count("id", filter=models.Q(status=Room.Status.AVAILABLE)),
+        booked=models.Count("id", filter=models.Q(status=Room.Status.BOOKED)),
+        unavailable=models.Count("id", filter=models.Q(status=Room.Status.UNAVAILABLE)),
+    )
+    reviews = StayReview.objects.filter(property__in=properties).aggregate(
+        count=models.Count("id"), average=models.Avg("rating")
+    )
+    average = reviews["average"]
+    return {
+        "total_properties": properties.count(),
+        "live_properties": properties.filter(
+            moderation_status=Property.ModerationStatus.APPROVED,
+            listing_status=Property.ListingStatus.LIVE,
+        ).count(),
+        "total_rooms": int(rooms["total"] or 0),
+        "available_rooms": int(rooms["available"] or 0),
+        "booked_rooms": int(rooms["booked"] or 0),
+        "unavailable_rooms": int(rooms["unavailable"] or 0),
+        "review_count": int(reviews["count"] or 0),
+        "average_rating": round(float(average), 1) if average is not None else None,
+        "new_enquiries": StayEnquiry.objects.filter(
+            property__host=host, status=StayEnquiry.Status.SUBMITTED
+        ).count(),
+        "pending_visits": StayVisit.objects.filter(
+            property__host=host, status=StayVisit.Status.REQUESTED, visit_date__gte=today
+        ).count(),
+        "upcoming_visits": StayVisit.objects.filter(
+            property__host=host, status=StayVisit.Status.ACCEPTED, visit_date__gte=today
+        ).count(),
+    }

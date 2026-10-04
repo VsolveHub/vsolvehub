@@ -24,8 +24,8 @@ from apps.stay.services import (
     StayStateError,
     add_property_media,
     create_property,
-    create_unit,
     moderate_property,
+    public_properties,
     remove_property_media,
     submit_property,
     update_unit,
@@ -241,18 +241,21 @@ def test_publish_requires_an_active_room(world):
 
 
 @pytest.mark.django_db
-def test_live_property_keeps_at_least_one_active_room(world):
+def test_switching_off_the_only_room_hides_a_live_property(world):
+    """Rooms switch off freely; with nothing available the property simply leaves search.
+
+    (Before numbered rooms this was refused with ``last_active_room``. Owners now switch rooms
+    off and mark them booked as they fill up, so a full property must be allowed to disappear.)
+    """
     prop = _property(world, "enquiry")
     submit_property(prop=prop, host=world["host"])
     only_room = prop.units.get()
 
-    with pytest.raises(StayStateError) as exc:
-        update_unit(unit=only_room, host=world["host"], is_active=False)
-    assert exc.value.code == "last_active_room"
-
-    create_unit(prop=prop, host=world["host"], name="Second room", nightly_rate_paise=90000)
-    only_room.refresh_from_db()
     assert update_unit(unit=only_room, host=world["host"], is_active=False).is_active is False
+    assert not public_properties().filter(id=prop.id).exists()
+
+    update_unit(unit=only_room, host=world["host"], is_active=True)
+    assert public_properties().filter(id=prop.id).exists()
 
 
 @pytest.mark.django_db

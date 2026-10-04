@@ -5197,6 +5197,43 @@ paths:
               schema:
                 $ref: '#/components/schemas/StayReservation'
           description: ''
+  /api/v1/me/stay-visits:
+    get:
+      operationId: me_stay_visits_list
+      tags:
+      - me
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StayVisit'
+          description: ''
+  /api/v1/me/stay-visits/{visit_id}/cancel:
+    post:
+      operationId: me_stay_visits_cancel_create
+      parameters:
+      - in: path
+        name: visit_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - me
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StayVisit'
+          description: ''
   /api/v1/my/listing-applications:
     get:
       operationId: my_listing_applications_list
@@ -14124,7 +14161,8 @@ paths:
   /api/v1/partner/stays/enquiries/{enquiry_id}/confirm:
     post:
       operationId: partner_stays_enquiries_confirm_create
-      description: Host marks an enquiry as booked after calling the guest.
+      description: Host marks an enquiry as booked after calling the guest, optionally
+        naming the room.
       parameters:
       - in: path
         name: enquiry_id
@@ -14134,6 +14172,17 @@ paths:
         required: true
       tags:
       - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmEnquiryRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ConfirmEnquiryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ConfirmEnquiryRequest'
       security:
       - cookieAuth: []
       responses:
@@ -14406,6 +14455,41 @@ paths:
               schema:
                 $ref: '#/components/schemas/PartnerUnit'
           description: ''
+  /api/v1/partner/stays/properties/{property_id}/visiting-hours:
+    put:
+      operationId: partner_stays_properties_visiting_hours_update
+      description: Replace a property's weekly visiting slots, blocked days and visits
+        switch.
+      parameters:
+      - in: path
+        name: property_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetVisitingHoursRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SetVisitingHoursRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SetVisitingHoursRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerProperty'
+          description: ''
   /api/v1/partner/stays/reservations:
     get:
       operationId: partner_stays_reservations_list
@@ -14461,6 +14545,110 @@ paths:
               schema:
                 $ref: '#/components/schemas/StayReservation'
           description: ''
+  /api/v1/partner/stays/rooms/{room_id}:
+    patch:
+      operationId: partner_stays_rooms_partial_update
+      description: Rename a room, switch it on or off, or remove it.
+      parameters:
+      - in: path
+        name: room_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateRoomRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateRoomRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateRoomRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Room'
+          description: ''
+    delete:
+      operationId: partner_stays_rooms_destroy
+      description: Rename a room, switch it on or off, or remove it.
+      parameters:
+      - in: path
+        name: room_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/partner/stays/rooms/{room_id}/{action}:
+    post:
+      operationId: partner_stays_room_action
+      description: '``book``: mark the room Booked. ``release``: the guest left; it
+        is available again.'
+      parameters:
+      - in: path
+        name: action
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: room_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MarkRoomBookedRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MarkRoomBookedRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MarkRoomBookedRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Room'
+          description: ''
+  /api/v1/partner/stays/summary:
+    get:
+      operationId: partner_stays_summary_retrieve
+      description: The numbers at the top of the host's stays dashboard.
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HostStaySummary'
+          description: ''
   /api/v1/partner/stays/units/{unit_id}:
     patch:
       operationId: partner_stays_units_partial_update
@@ -14492,6 +14680,94 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PartnerUnit'
+          description: ''
+  /api/v1/partner/stays/units/{unit_id}/rooms:
+    post:
+      operationId: partner_stays_units_rooms_create
+      description: Add one numbered room to a room type.
+      parameters:
+      - in: path
+        name: unit_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddRoomRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AddRoomRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AddRoomRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Room'
+          description: ''
+  /api/v1/partner/stays/visits:
+    get:
+      operationId: partner_stays_visits_list
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PartnerStayVisit'
+          description: ''
+  /api/v1/partner/stays/visits/{visit_id}/{action}:
+    post:
+      operationId: partner_stays_visit_action
+      description: '``accept`` or ``decline`` (with an optional reason) a visit request.'
+      parameters:
+      - in: path
+        name: action
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: visit_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeclineVisitRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DeclineVisitRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DeclineVisitRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerStayVisit'
           description: ''
   /api/v1/partner/workspaces/:
     get:
@@ -18185,6 +18461,36 @@ paths:
               schema:
                 $ref: '#/components/schemas/Property'
           description: ''
+  /api/v1/stays/{property_id}/visit-slots:
+    get:
+      operationId: stays_visit_slots_list
+      description: The days and slots a guest can pick for a visit, for the next two
+        weeks by default.
+      parameters:
+      - in: query
+        name: days
+        schema:
+          type: integer
+      - in: path
+        name: property_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - stays
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VisitAvailabilityDay'
+          description: ''
   /api/v1/stays/enquire:
     post:
       operationId: stays_enquire_create
@@ -18350,6 +18656,32 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/StayTaxonomySubcategory'
+          description: ''
+  /api/v1/stays/visits:
+    post:
+      operationId: stays_visits_create
+      tags:
+      - stays
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateVisitRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CreateVisitRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CreateVisitRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StayVisit'
           description: ''
   /api/v1/tax-documents/{document_id}/:
     get:
@@ -18562,6 +18894,18 @@ components:
           default: 0
       required:
       - url
+    AddRoomRequest:
+      type: object
+      properties:
+        number:
+          type: string
+          minLength: 1
+          maxLength: 40
+        available:
+          type: boolean
+          default: true
+      required:
+      - number
     Address:
       type: object
       properties:
@@ -21279,6 +21623,13 @@ components:
         * `NEW` - New
         * `GOOD` - Good
         * `FAIR` - Fair
+    ConfirmEnquiryRequest:
+      type: object
+      properties:
+        room_id:
+          type: string
+          format: uuid
+          nullable: true
     ConfirmationPolicyEnum:
       enum:
       - ALL_OR_NOTHING
@@ -21581,9 +21932,40 @@ components:
         is_active:
           type: boolean
           default: true
+        room_numbers:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 40
+          maxItems: 500
       required:
       - name
       - nightly_rate_paise
+    CreateVisitRequest:
+      type: object
+      properties:
+        property_id:
+          type: string
+          format: uuid
+        slot_id:
+          type: string
+          format: uuid
+        visit_date:
+          type: string
+          format: date
+        unit_id:
+          type: string
+          format: uuid
+          nullable: true
+        message:
+          type: string
+          default: ''
+          maxLength: 1000
+      required:
+      - property_id
+      - slot_id
+      - visit_date
     CrewAssignRequest:
       type: object
       description: |-
@@ -23122,6 +23504,18 @@ components:
         * `SUPERVISOR_CLAIMED` - Only the supervisor has confirmed
         * `CUSTOMER_CLAIMED` - Only the Customer has confirmed
         * `SETTLED` - Both sides confirmed
+    DeclineVisitRequest:
+      type: object
+      properties:
+        reason:
+          default: ''
+          oneOf:
+          - $ref: '#/components/schemas/StayVisitDeclineReasonEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        note:
+          type: string
+          default: ''
+          maxLength: 240
     DelayClaimCreateRequest:
       type: object
       description: Raise a delay claim. Deliberately carries no amount — see `ProjectDelayClaimSerializer`.
@@ -25207,6 +25601,45 @@ components:
             $ref: '#/components/schemas/DeliverableInputRequest'
       required:
       - items
+    HostStaySummary:
+      type: object
+      properties:
+        total_properties:
+          type: integer
+        live_properties:
+          type: integer
+        total_rooms:
+          type: integer
+        available_rooms:
+          type: integer
+        booked_rooms:
+          type: integer
+        unavailable_rooms:
+          type: integer
+        review_count:
+          type: integer
+        average_rating:
+          type: number
+          format: double
+          nullable: true
+        new_enquiries:
+          type: integer
+        pending_visits:
+          type: integer
+        upcoming_visits:
+          type: integer
+      required:
+      - available_rooms
+      - average_rating
+      - booked_rooms
+      - live_properties
+      - new_enquiries
+      - pending_visits
+      - review_count
+      - total_properties
+      - total_rooms
+      - unavailable_rooms
+      - upcoming_visits
     IconKeyEnum:
       enum:
       - service
@@ -25728,6 +26161,17 @@ components:
         all:
           type: boolean
           default: false
+    MarkRoomBookedRequest:
+      type: object
+      properties:
+        occupant_name:
+          type: string
+          default: ''
+          maxLength: 120
+        visit_id:
+          type: string
+          format: uuid
+          nullable: true
     MatchingStatusEnum:
       enum:
       - SEARCHING
@@ -29305,6 +29749,9 @@ components:
         can_review:
           type: boolean
           readOnly: true
+        visits_offered:
+          type: boolean
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -29314,6 +29761,20 @@ components:
           maxLength: 480
         listing_status:
           $ref: '#/components/schemas/ListingStatusEnum'
+        visits_enabled:
+          type: boolean
+        visit_slots:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+          readOnly: true
+        visit_blocked_dates:
+          type: array
+          items:
+            type: string
+            format: date
+          readOnly: true
       required:
       - amenities
       - booking_mode
@@ -29331,6 +29792,9 @@ components:
       - title
       - units
       - variant
+      - visit_blocked_dates
+      - visit_slots
+      - visits_offered
     PartnerRateItem:
       type: object
       properties:
@@ -29650,6 +30114,15 @@ components:
           type: string
           format: date-time
           readOnly: true
+        property_slug:
+          type: string
+          readOnly: true
+        host_name:
+          type: string
+          readOnly: true
+        host_phone:
+          type: string
+          readOnly: true
         customer_name:
           type: string
           readOnly: true
@@ -29662,15 +30135,103 @@ components:
       - created_at
       - customer_name
       - customer_phone
+      - host_name
+      - host_phone
       - id
       - nightly_rate_paise
       - property
+      - property_slug
       - property_title
       - unit_name
+    PartnerStayVisit:
+      type: object
+      description: 'The host''s view: who is coming, with their number, and the reason
+        the host gave.'
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        property:
+          type: string
+          format: uuid
+        property_title:
+          type: string
+          readOnly: true
+        property_slug:
+          type: string
+          readOnly: true
+        unit:
+          type: string
+          format: uuid
+          nullable: true
+        unit_name:
+          type: string
+          readOnly: true
+          default: ''
+        visit_date:
+          type: string
+          format: date
+        start_time:
+          type: string
+          format: time
+        end_time:
+          type: string
+          format: time
+        message:
+          type: string
+        status:
+          $ref: '#/components/schemas/StayVisitStatusEnum'
+        reason_text:
+          type: string
+          readOnly: true
+        host_name:
+          type: string
+          readOnly: true
+        host_phone:
+          type: string
+          readOnly: true
+        responded_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        customer_name:
+          type: string
+          readOnly: true
+        customer_phone:
+          type: string
+          readOnly: true
+        decline_reason:
+          oneOf:
+          - $ref: '#/components/schemas/StayVisitDeclineReasonEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        decline_note:
+          type: string
+          maxLength: 240
+      required:
+      - created_at
+      - customer_name
+      - customer_phone
+      - end_time
+      - host_name
+      - host_phone
+      - id
+      - property
+      - property_slug
+      - property_title
+      - reason_text
+      - start_time
+      - unit_name
+      - visit_date
     PartnerUnit:
       type: object
-      description: 'The host''s view of a room: adds how many bookings still have
-        nights ahead.'
+      description: |-
+        The host's view of a room type: its numbered rooms, and bookings that still have nights
+        ahead.
       properties:
         id:
           type: string
@@ -29684,6 +30245,10 @@ components:
           maximum: 32767
           minimum: 0
         quantity:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        available_count:
           type: integer
           maximum: 32767
           minimum: 0
@@ -29701,10 +30266,16 @@ components:
         upcoming_booking_count:
           type: integer
           readOnly: true
+        rooms:
+          type: array
+          items:
+            $ref: '#/components/schemas/Room'
+          readOnly: true
       required:
       - id
       - name
       - nightly_rate_paise
+      - rooms
       - upcoming_booking_count
     PartyCase:
       type: object
@@ -30124,6 +30695,15 @@ components:
         min_stay_nights:
           type: integer
           minimum: 1
+    PatchedUpdateRoomRequest:
+      type: object
+      properties:
+        number:
+          type: string
+          minLength: 1
+          maxLength: 40
+        available:
+          type: boolean
     PatchedUpdateUnitRequest:
       type: object
       properties:
@@ -31718,6 +32298,9 @@ components:
         can_review:
           type: boolean
           readOnly: true
+        visits_offered:
+          type: boolean
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -31739,6 +32322,7 @@ components:
       - title
       - units
       - variant
+      - visits_offered
     PropertyMedia:
       type: object
       properties:
@@ -35958,6 +36542,38 @@ components:
           pattern: ^[-a-zA-Z0-9_]+$
       required:
       - role
+    Room:
+      type: object
+      description: One numbered room, as the host manages it. Guests never see room
+        numbers.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        number:
+          type: string
+          maxLength: 40
+        status:
+          $ref: '#/components/schemas/StayRoomStatusEnum'
+        occupant_name:
+          type: string
+          maxLength: 120
+        booked_enquiry:
+          type: string
+          format: uuid
+          nullable: true
+        booked_visit:
+          type: string
+          format: uuid
+          nullable: true
+        booked_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - id
+      - number
     SafetyIncident:
       type: object
       description: |-
@@ -36992,6 +37608,23 @@ components:
       - active_role
       - session_expires_at
       - user
+    SetVisitingHoursRequest:
+      type: object
+      properties:
+        visits_enabled:
+          type: boolean
+        slots:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisitSlotInputRequest'
+        blocked_dates:
+          type: array
+          items:
+            type: string
+            format: date
+      required:
+      - slots
+      - visits_enabled
     ShiftAttendance:
       type: object
       description: |-
@@ -37867,6 +38500,11 @@ components:
       - label
     StayEnquiry:
       type: object
+      description: |-
+        The guest's view of their enquiry, with the owner's name and number to call.
+
+        The guest's details go to the owner the moment they enquire; the owner's number comes back
+        the same way, so either side can make the call.
       properties:
         id:
           type: string
@@ -37929,13 +38567,25 @@ components:
           type: string
           format: date-time
           readOnly: true
+        property_slug:
+          type: string
+          readOnly: true
+        host_name:
+          type: string
+          readOnly: true
+        host_phone:
+          type: string
+          readOnly: true
       required:
       - check_in
       - check_out
       - created_at
+      - host_name
+      - host_phone
       - id
       - nightly_rate_paise
       - property
+      - property_slug
       - property_title
       - unit_name
     StayEnquiryStatusEnum:
@@ -38171,6 +38821,16 @@ components:
       required:
       - upload_id
       - url
+    StayRoomStatusEnum:
+      enum:
+      - AVAILABLE
+      - UNAVAILABLE
+      - BOOKED
+      type: string
+      description: |-
+        * `AVAILABLE` - Available
+        * `UNAVAILABLE` - Not available
+        * `BOOKED` - Booked
     StayTaxonomyService:
       type: object
       properties:
@@ -38246,6 +38906,102 @@ components:
       - room_name_suggestions
       - room_schema
       - room_style
+    StayVisit:
+      type: object
+      description: |-
+        The guest's view of a visit. The owner's number appears once the visit is accepted;
+        a reason for a declined visit appears only when the owner chose one.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        property:
+          type: string
+          format: uuid
+        property_title:
+          type: string
+          readOnly: true
+        property_slug:
+          type: string
+          readOnly: true
+        unit:
+          type: string
+          format: uuid
+          nullable: true
+        unit_name:
+          type: string
+          readOnly: true
+          default: ''
+        visit_date:
+          type: string
+          format: date
+        start_time:
+          type: string
+          format: time
+        end_time:
+          type: string
+          format: time
+        message:
+          type: string
+        status:
+          $ref: '#/components/schemas/StayVisitStatusEnum'
+        reason_text:
+          type: string
+          readOnly: true
+        host_name:
+          type: string
+          readOnly: true
+        host_phone:
+          type: string
+          readOnly: true
+        responded_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - end_time
+      - host_name
+      - host_phone
+      - id
+      - property
+      - property_slug
+      - property_title
+      - reason_text
+      - start_time
+      - unit_name
+      - visit_date
+    StayVisitDeclineReasonEnum:
+      enum:
+      - ROOM_UNAVAILABLE
+      - DATE_MISMATCH
+      - ALREADY_OCCUPIED
+      - OTHER
+      type: string
+      description: |-
+        * `ROOM_UNAVAILABLE` - Room unavailable
+        * `DATE_MISMATCH` - Date doesn't match
+        * `ALREADY_OCCUPIED` - Already occupied
+        * `OTHER` - Other
+    StayVisitStatusEnum:
+      enum:
+      - REQUESTED
+      - ACCEPTED
+      - DECLINED
+      - CANCELLED
+      - EXPIRED
+      type: string
+      description: |-
+        * `REQUESTED` - Requested
+        * `ACCEPTED` - Accepted
+        * `DECLINED` - Not accepted
+        * `CANCELLED` - Cancelled
+        * `EXPIRED` - Expired
     StepUpSession:
       type: object
       properties:
@@ -38679,6 +39435,10 @@ components:
           maximum: 32767
           minimum: 0
         quantity:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        available_count:
           type: integer
           maximum: 32767
           minimum: 0
@@ -39153,6 +39913,35 @@ components:
       description: |-
         * `NON_OTP_FALLBACK` - Confirmed without an OTP
         * `START_OTP` - Confirmed with a start OTP
+    VisitAvailabilityDay:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        slots:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisitAvailabilitySlot'
+      required:
+      - date
+      - slots
+    VisitAvailabilitySlot:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        start_time:
+          type: string
+          format: time
+        end_time:
+          type: string
+          format: time
+      required:
+      - end_time
+      - id
+      - start_time
     VisitNoShowPartyEnum:
       enum:
       - VENDOR
@@ -39545,6 +40334,23 @@ components:
       - timezone
       - turnaround_minutes
       - visit_duration_minutes
+    VisitSlotInputRequest:
+      type: object
+      properties:
+        weekday:
+          type: integer
+          maximum: 6
+          minimum: 0
+        start_time:
+          type: string
+          format: time
+        end_time:
+          type: string
+          format: time
+      required:
+      - end_time
+      - start_time
+      - weekday
     VisitVendor:
       type: object
       description: |-

@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.66.0)
- * Checksum: 1b8a68f0cdb72d00
+ * Checksum: 5ecab3df6b49df8e
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -2204,6 +2204,38 @@ export interface paths {
         put?: never;
         /** @description Customer cancel pre-check-in. Paid reservations trigger an automatic refund path. */
         post: operations["me_stay_reservations_cancel_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/stay-visits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["me_stay_visits_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/stay-visits/{visit_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["me_stay_visits_cancel_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5775,7 +5807,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Host marks an enquiry as booked after calling the guest. */
+        /** @description Host marks an enquiry as booked after calling the guest, optionally naming the room. */
         post: operations["partner_stays_enquiries_confirm_create"];
         delete?: never;
         options?: never;
@@ -5913,6 +5945,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/partner/stays/properties/{property_id}/visiting-hours": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Replace a property's weekly visiting slots, blocked days and visits switch. */
+        put: operations["partner_stays_properties_visiting_hours_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/partner/stays/reservations": {
         parameters: {
             query?: never;
@@ -5946,6 +5995,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/partner/stays/rooms/{room_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Rename a room, switch it on or off, or remove it. */
+        delete: operations["partner_stays_rooms_destroy"];
+        options?: never;
+        head?: never;
+        /** @description Rename a room, switch it on or off, or remove it. */
+        patch: operations["partner_stays_rooms_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/partner/stays/rooms/{room_id}/{action}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description ``book``: mark the room Booked. ``release``: the guest left; it is available again. */
+        post: operations["partner_stays_room_action"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/stays/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The numbers at the top of the host's stays dashboard. */
+        get: operations["partner_stays_summary_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/partner/stays/units/{unit_id}": {
         parameters: {
             query?: never;
@@ -5960,6 +6061,56 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["partner_stays_units_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/partner/stays/units/{unit_id}/rooms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Add one numbered room to a room type. */
+        post: operations["partner_stays_units_rooms_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/stays/visits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["partner_stays_visits_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/stays/visits/{visit_id}/{action}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description ``accept`` or ``decline`` (with an optional reason) a visit request. */
+        post: operations["partner_stays_visit_action"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/partner/workspaces/": {
@@ -7261,6 +7412,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/stays/{property_id}/visit-slots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The days and slots a guest can pick for a visit, for the next two weeks by default. */
+        get: operations["stays_visit_slots_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/stays/enquire": {
         parameters: {
             query?: never;
@@ -7354,6 +7522,22 @@ export interface paths {
         get: operations["stays_taxonomy_list"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/stays/visits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["stays_visits_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7472,6 +7656,11 @@ export interface components {
             caption: string;
             /** @default 0 */
             display_order: number;
+        };
+        AddRoomRequest: {
+            number: string;
+            /** @default true */
+            available: boolean;
         };
         Address: {
             /** Format: uuid */
@@ -8542,6 +8731,10 @@ export interface components {
          * @enum {string}
          */
         ConditionGradeEnum: "NEW" | "GOOD" | "FAIR";
+        ConfirmEnquiryRequest: {
+            /** Format: uuid */
+            room_id?: string | null;
+        };
         /**
          * @description * `ALL_OR_NOTHING` - All or nothing
          * @enum {string}
@@ -8674,6 +8867,19 @@ export interface components {
             attributes?: unknown;
             /** @default true */
             is_active: boolean;
+            room_numbers?: string[];
+        };
+        CreateVisitRequest: {
+            /** Format: uuid */
+            property_id: string;
+            /** Format: uuid */
+            slot_id: string;
+            /** Format: date */
+            visit_date: string;
+            /** Format: uuid */
+            unit_id?: string | null;
+            /** @default  */
+            message: string;
         };
         /**
          * @description The **whole** crew for this shift-day, every time (`M2-BE-522`, `528`).
@@ -9290,6 +9496,12 @@ export interface components {
          * @enum {string}
          */
         DaySettlementStatusEnum: "AWAITING_BOTH" | "SUPERVISOR_CLAIMED" | "CUSTOMER_CLAIMED" | "SETTLED";
+        DeclineVisitRequest: {
+            /** @default  */
+            reason: components["schemas"]["StayVisitDeclineReasonEnum"] | components["schemas"]["BlankEnum"];
+            /** @default  */
+            note: string;
+        };
         /** @description Raise a delay claim. Deliberately carries no amount — see `ProjectDelayClaimSerializer`. */
         DelayClaimCreateRequest: {
             reason_code: string;
@@ -10108,6 +10320,20 @@ export interface components {
             note: string;
             items: components["schemas"]["DeliverableInputRequest"][];
         };
+        HostStaySummary: {
+            total_properties: number;
+            live_properties: number;
+            total_rooms: number;
+            available_rooms: number;
+            booked_rooms: number;
+            unavailable_rooms: number;
+            review_count: number;
+            /** Format: double */
+            average_rating: number | null;
+            new_enquiries: number;
+            pending_visits: number;
+            upcoming_visits: number;
+        };
         /**
          * @description * `service` - Generic service
          *     * `electrical` - Electrical
@@ -10360,6 +10586,12 @@ export interface components {
             notification_id?: string;
             /** @default false */
             all: boolean;
+        };
+        MarkRoomBookedRequest: {
+            /** @default  */
+            occupant_name: string;
+            /** Format: uuid */
+            visit_id?: string | null;
         };
         /**
          * @description * `SEARCHING` - Searching
@@ -11756,10 +11988,16 @@ export interface components {
             readonly amenities: components["schemas"]["StayAmenity"][];
             readonly highlights: components["schemas"]["StayHighlight"][];
             readonly can_review: boolean;
+            readonly visits_offered: boolean;
             /** Format: date-time */
             readonly created_at: string;
             moderation_reason?: string;
             listing_status?: components["schemas"]["ListingStatusEnum"];
+            visits_enabled?: boolean;
+            readonly visit_slots: {
+                [key: string]: unknown;
+            }[];
+            readonly visit_blocked_dates: string[];
         };
         PartnerRateItem: {
             /** Format: uuid */
@@ -11893,21 +12131,61 @@ export interface components {
             responded_at?: string | null;
             /** Format: date-time */
             readonly created_at: string;
+            readonly property_slug: string;
+            readonly host_name: string;
+            readonly host_phone: string;
             readonly customer_name: string;
             readonly customer_phone: string;
         };
-        /** @description The host's view of a room: adds how many bookings still have nights ahead. */
+        /** @description The host's view: who is coming, with their number, and the reason the host gave. */
+        PartnerStayVisit: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            property: string;
+            readonly property_title: string;
+            readonly property_slug: string;
+            /** Format: uuid */
+            unit?: string | null;
+            /** @default  */
+            readonly unit_name: string;
+            /** Format: date */
+            visit_date: string;
+            /** Format: time */
+            start_time: string;
+            /** Format: time */
+            end_time: string;
+            message?: string;
+            status?: components["schemas"]["StayVisitStatusEnum"];
+            readonly reason_text: string;
+            readonly host_name: string;
+            readonly host_phone: string;
+            /** Format: date-time */
+            responded_at?: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            readonly customer_name: string;
+            readonly customer_phone: string;
+            decline_reason?: components["schemas"]["StayVisitDeclineReasonEnum"] | components["schemas"]["BlankEnum"];
+            decline_note?: string;
+        };
+        /**
+         * @description The host's view of a room type: its numbered rooms, and bookings that still have nights
+         *     ahead.
+         */
         PartnerUnit: {
             /** Format: uuid */
             readonly id: string;
             name: string;
             sharing_count?: number;
             quantity?: number;
+            available_count?: number;
             max_guests?: number;
             nightly_rate_paise: number;
             is_active?: boolean;
             attributes?: unknown;
             readonly upcoming_booking_count: number;
+            readonly rooms: components["schemas"]["Room"][];
         };
         /**
          * @description A case as one of its two parties may read it.
@@ -12097,6 +12375,10 @@ export interface components {
             cancellation_policy_text?: string;
             house_rules?: string;
             min_stay_nights?: number;
+        };
+        PatchedUpdateRoomRequest: {
+            number?: string;
+            available?: boolean;
         };
         PatchedUpdateUnitRequest: {
             name?: string;
@@ -12742,6 +13024,7 @@ export interface components {
             readonly amenities: components["schemas"]["StayAmenity"][];
             readonly highlights: components["schemas"]["StayHighlight"][];
             readonly can_review: boolean;
+            readonly visits_offered: boolean;
             /** Format: date-time */
             readonly created_at: string;
         };
@@ -14439,6 +14722,20 @@ export interface components {
         RoleSwitchRequest: {
             role: string;
         };
+        /** @description One numbered room, as the host manages it. Guests never see room numbers. */
+        Room: {
+            /** Format: uuid */
+            readonly id: string;
+            number: string;
+            status?: components["schemas"]["StayRoomStatusEnum"];
+            occupant_name?: string;
+            /** Format: uuid */
+            booked_enquiry?: string | null;
+            /** Format: uuid */
+            booked_visit?: string | null;
+            /** Format: date-time */
+            booked_at?: string | null;
+        };
         /**
          * @description A first-class safety record (`M2-BE-530`). **Never a cancellation reason.**
          *
@@ -14819,6 +15116,11 @@ export interface components {
             readonly active_role: string | null;
             /** Format: date-time */
             readonly session_expires_at: string | null;
+        };
+        SetVisitingHoursRequest: {
+            visits_enabled: boolean;
+            slots: components["schemas"]["VisitSlotInputRequest"][];
+            blocked_dates?: string[];
         };
         /**
          * @description What the supervisor said, and what the Customer answered (`M2-BE-524` to `527`).
@@ -15227,6 +15529,12 @@ export interface components {
             key: string;
             label: string;
         };
+        /**
+         * @description The guest's view of their enquiry, with the owner's name and number to call.
+         *
+         *     The guest's details go to the owner the moment they enquire; the owner's number comes back
+         *     the same way, so either side can make the call.
+         */
         StayEnquiry: {
             /** Format: uuid */
             readonly id: string;
@@ -15255,6 +15563,9 @@ export interface components {
             responded_at?: string | null;
             /** Format: date-time */
             readonly created_at: string;
+            readonly property_slug: string;
+            readonly host_name: string;
+            readonly host_phone: string;
         };
         /**
          * @description * `SUBMITTED` - Submitted
@@ -15360,6 +15671,13 @@ export interface components {
             /** Format: uri */
             url: string;
         };
+        /**
+         * @description * `AVAILABLE` - Available
+         *     * `UNAVAILABLE` - Not available
+         *     * `BOOKED` - Booked
+         * @enum {string}
+         */
+        StayRoomStatusEnum: "AVAILABLE" | "UNAVAILABLE" | "BOOKED";
         StayTaxonomyService: {
             /** Format: uuid */
             id: string;
@@ -15387,6 +15705,54 @@ export interface components {
             room_style: string;
             amenity_options: components["schemas"]["StayAmenity"][];
         };
+        /**
+         * @description The guest's view of a visit. The owner's number appears once the visit is accepted;
+         *     a reason for a declined visit appears only when the owner chose one.
+         */
+        StayVisit: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            property: string;
+            readonly property_title: string;
+            readonly property_slug: string;
+            /** Format: uuid */
+            unit?: string | null;
+            /** @default  */
+            readonly unit_name: string;
+            /** Format: date */
+            visit_date: string;
+            /** Format: time */
+            start_time: string;
+            /** Format: time */
+            end_time: string;
+            message?: string;
+            status?: components["schemas"]["StayVisitStatusEnum"];
+            readonly reason_text: string;
+            readonly host_name: string;
+            readonly host_phone: string;
+            /** Format: date-time */
+            responded_at?: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        /**
+         * @description * `ROOM_UNAVAILABLE` - Room unavailable
+         *     * `DATE_MISMATCH` - Date doesn't match
+         *     * `ALREADY_OCCUPIED` - Already occupied
+         *     * `OTHER` - Other
+         * @enum {string}
+         */
+        StayVisitDeclineReasonEnum: "ROOM_UNAVAILABLE" | "DATE_MISMATCH" | "ALREADY_OCCUPIED" | "OTHER";
+        /**
+         * @description * `REQUESTED` - Requested
+         *     * `ACCEPTED` - Accepted
+         *     * `DECLINED` - Not accepted
+         *     * `CANCELLED` - Cancelled
+         *     * `EXPIRED` - Expired
+         * @enum {string}
+         */
+        StayVisitStatusEnum: "REQUESTED" | "ACCEPTED" | "DECLINED" | "CANCELLED" | "EXPIRED";
         StepUpSession: {
             /** Format: date-time */
             readonly stepped_up_at: string;
@@ -15578,6 +15944,7 @@ export interface components {
             name: string;
             sharing_count?: number;
             quantity?: number;
+            available_count?: number;
             max_guests?: number;
             nightly_rate_paise: number;
             is_active?: boolean;
@@ -15792,6 +16159,19 @@ export interface components {
          * @enum {string}
          */
         VisitArrivalMethodEnum: "NON_OTP_FALLBACK" | "START_OTP";
+        VisitAvailabilityDay: {
+            /** Format: date */
+            date: string;
+            slots: components["schemas"]["VisitAvailabilitySlot"][];
+        };
+        VisitAvailabilitySlot: {
+            /** Format: uuid */
+            id: string;
+            /** Format: time */
+            start_time: string;
+            /** Format: time */
+            end_time: string;
+        };
         /**
          * @description * `VENDOR` - Vendor
          *     * `CUSTOMER` - Customer
@@ -15964,6 +16344,13 @@ export interface components {
             readonly availability_is_preliminary: boolean;
             readonly timezone: string;
             readonly days: components["schemas"]["VisitSlotDay"][];
+        };
+        VisitSlotInputRequest: {
+            weekday: number;
+            /** Format: time */
+            start_time: string;
+            /** Format: time */
+            end_time: string;
         };
         /**
          * @description Who is coming to the Customer's home.
@@ -20990,6 +21377,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StayReservation"];
+                };
+            };
+        };
+    };
+    me_stay_visits_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StayVisit"][];
+                };
+            };
+        };
+    };
+    me_stay_visits_cancel_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                visit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StayVisit"];
                 };
             };
         };
@@ -29626,7 +30053,13 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ConfirmEnquiryRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ConfirmEnquiryRequest"];
+                "multipart/form-data": components["schemas"]["ConfirmEnquiryRequest"];
+            };
+        };
         responses: {
             200: {
                 headers: {
@@ -29877,6 +30310,33 @@ export interface operations {
             };
         };
     };
+    partner_stays_properties_visiting_hours_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                property_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetVisitingHoursRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SetVisitingHoursRequest"];
+                "multipart/form-data": components["schemas"]["SetVisitingHoursRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerProperty"];
+                };
+            };
+        };
+    };
     partner_stays_reservations_list: {
         parameters: {
             query?: never;
@@ -29924,6 +30384,100 @@ export interface operations {
             };
         };
     };
+    partner_stays_rooms_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                room_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    partner_stays_rooms_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                room_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedUpdateRoomRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedUpdateRoomRequest"];
+                "multipart/form-data": components["schemas"]["PatchedUpdateRoomRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
+    partner_stays_room_action: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                action: string;
+                room_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["MarkRoomBookedRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["MarkRoomBookedRequest"];
+                "multipart/form-data": components["schemas"]["MarkRoomBookedRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
+    partner_stays_summary_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HostStaySummary"];
+                };
+            };
+        };
+    };
     partner_stays_units_partial_update: {
         parameters: {
             query?: never;
@@ -29947,6 +30501,80 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PartnerUnit"];
+                };
+            };
+        };
+    };
+    partner_stays_units_rooms_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                unit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddRoomRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AddRoomRequest"];
+                "multipart/form-data": components["schemas"]["AddRoomRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
+    partner_stays_visits_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerStayVisit"][];
+                };
+            };
+        };
+    };
+    partner_stays_visit_action: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                action: string;
+                visit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["DeclineVisitRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["DeclineVisitRequest"];
+                "multipart/form-data": components["schemas"]["DeclineVisitRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerStayVisit"];
                 };
             };
         };
@@ -33241,6 +33869,29 @@ export interface operations {
             };
         };
     };
+    stays_visit_slots_list: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: never;
+            path: {
+                property_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VisitAvailabilityDay"][];
+                };
+            };
+        };
+    };
     stays_enquire_create: {
         parameters: {
             query?: never;
@@ -33379,6 +34030,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StayTaxonomySubcategory"][];
+                };
+            };
+        };
+    };
+    stays_visits_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateVisitRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CreateVisitRequest"];
+                "multipart/form-data": components["schemas"]["CreateVisitRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StayVisit"];
                 };
             };
         };

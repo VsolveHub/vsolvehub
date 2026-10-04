@@ -74,6 +74,9 @@ class Property(models.Model):
     min_stay_nights = models.PositiveSmallIntegerField(default=1)
     available_from = models.DateField(null=True, blank=True)
     available_until = models.DateField(null=True, blank=True)
+    #: The host's switch for "Schedule a visit". Guests can only ask for a visit when this is on
+    #: and the property has at least one visiting slot.
+    visits_enabled = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -113,9 +116,12 @@ class Property(models.Model):
 class Unit(models.Model):
     """A room type in a property: identical rooms (or beds) sold at one rate.
 
-    ``quantity`` is how many of them can be booked for the same night, so "10 Deluxe rooms" is
-    one row, not ten indistinguishable ones. ``max_guests`` is how many guests one booking of this
-    room may bring; ``sharing_count`` describes how many people share the room.
+    Guests see one card per room type. The host manages each physical room under it as a
+    :class:`Room` with its own number ("Room 101") and status. ``quantity``, ``available_count``
+    and ``is_active`` are kept in step with those rooms by ``services.sync_unit_rooms``: a type
+    with no available room is inactive and drops out of guest search on its own.
+    ``max_guests`` is how many guests one booking of this room may bring; ``sharing_count``
+    describes how many people share the room.
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -123,6 +129,8 @@ class Unit(models.Model):
     name = models.CharField(max_length=120)
     sharing_count = models.PositiveSmallIntegerField(default=1)
     quantity = models.PositiveSmallIntegerField(default=1)
+    #: Rooms of this type a guest can ask for right now (status AVAILABLE).
+    available_count = models.PositiveSmallIntegerField(default=1)
     max_guests = models.PositiveSmallIntegerField(default=1)
     nightly_rate_paise = models.PositiveIntegerField()
     is_active = models.BooleanField(default=True)
@@ -140,6 +148,58 @@ class Unit(models.Model):
                 condition=models.Q(max_guests__gte=1), name="stay_unit_max_guests_positive"
             ),
         ]
+
+
+class Room(models.Model):
+    """One physical room (or bed) of a room type, numbered by the host: "Room 101".
+
+    Guests never see room numbers; they see the type and how many are available. The host turns
+    each room on or off, and marks it Booked once a guest has agreed. Booking a room takes it out
+    of the type's available count; when none is left the type stops appearing to guests.
+    """
+
+    class Status(models.TextChoices):
+        AVAILABLE = "AVAILABLE", "Available"
+        #: The host switched it off (repairs, kept for family, ...). Not shown to guests.
+        UNAVAILABLE = "UNAVAILABLE", "Not available"
+        BOOKED = "BOOKED", "Booked"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    #: Denormalised from ``unit`` so room numbers can be unique per property.
+    property = models.ForeignKey(Property, on_delete=models.CASCADE, related_name="rooms")
+    unit = models.ForeignKey(Unit, on_delete=models.CASCADE, related_name="rooms")
+    number = models.CharField(max_length=40)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.AVAILABLE)
+    #: Who is in the room, for the host's own reference. Filled from the enquiry or visit.
+    occupant_name = models.CharField(max_length=120, blank=True, default="")
+    booked_enquiry = models.ForeignKey(
+        "StayEnquiry",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="booked_rooms",
+    )
+    booked_visit = models.ForeignKey(
+        "StayVisit",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="booked_rooms",
+    )
+    booked_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("created_at", "number")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("property", "number"), name="stay_room_number_unique_per_property"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return self.number
 
 
 class StayEnquiry(models.Model):
@@ -188,6 +248,126 @@ class StayEnquiry(models.Model):
     class Meta:
         ordering = ("-created_at",)
         verbose_name_plural = "stay enquiries"
+
+
+class VisitSlot(models.Model):
+    """A weekly visiting window the host offers for one property, e.g. Saturday 5 to 6 PM.
+
+    Slots of one property never overlap on the same weekday (enforced in services). Several
+    guests may ask for the same slot; the host accepts or declines each one.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    property = models.ForeignKey(Property, on_delete=models.CASCADE, related_name="visit_slots")
+    #: 0 = Monday ... 6 = Sunday, matching ``date.weekday()``.
+    weekday = models.PositiveSmallIntegerField()
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("weekday", "start_time")
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(weekday__lte=6), name="stay_visit_slot_weekday_range"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(end_time__gt=models.F("start_time")),
+                name="stay_visit_slot_ends_after_start",
+            ),
+            models.UniqueConstraint(
+                fields=("property", "weekday", "start_time"),
+                name="stay_visit_slot_unique_start",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.weekday} {self.start_time}-{self.end_time}"
+
+
+class VisitBlockedDate(models.Model):
+    """A day the host takes no visits (a holiday), whatever the weekly slots say."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    property = models.ForeignKey(
+        Property, on_delete=models.CASCADE, related_name="visit_blocked_dates"
+    )
+    date = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("date",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=("property", "date"), name="stay_visit_blocked_date_unique"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return str(self.date)
+
+
+class StayVisit(models.Model):
+    """A guest asks to see a property in one of the host's visiting slots.
+
+    The slot's day and times are copied onto the visit, so a host editing their hours later
+    never moves a visit somebody already asked for.
+    """
+
+    class Status(models.TextChoices):
+        REQUESTED = "REQUESTED", "Requested"
+        ACCEPTED = "ACCEPTED", "Accepted"
+        DECLINED = "DECLINED", "Not accepted"
+        CANCELLED = "CANCELLED", "Cancelled"
+        EXPIRED = "EXPIRED", "Expired"
+
+    class DeclineReason(models.TextChoices):
+        ROOM_UNAVAILABLE = "ROOM_UNAVAILABLE", "Room unavailable"
+        DATE_MISMATCH = "DATE_MISMATCH", "Date doesn't match"
+        ALREADY_OCCUPIED = "ALREADY_OCCUPIED", "Already occupied"
+        OTHER = "OTHER", "Other"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    property = models.ForeignKey(Property, on_delete=models.PROTECT, related_name="visits")
+    unit = models.ForeignKey(
+        Unit, null=True, blank=True, on_delete=models.SET_NULL, related_name="visits"
+    )
+    customer = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="stay_visits"
+    )
+    slot = models.ForeignKey(
+        VisitSlot, null=True, blank=True, on_delete=models.SET_NULL, related_name="visits"
+    )
+    visit_date = models.DateField()
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    message = models.TextField(blank=True, default="")
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.REQUESTED)
+    #: Optional. Guests see a reason only when the host chose one.
+    decline_reason = models.CharField(
+        max_length=20, choices=DeclineReason.choices, blank=True, default=""
+    )
+    decline_note = models.CharField(max_length=240, blank=True, default="")
+    responded_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        indexes = [models.Index(fields=("property", "visit_date", "status"))]
+        constraints = [
+            # One open visit per guest, property and day; a declined or cancelled one may be
+            # asked again.
+            models.UniqueConstraint(
+                fields=("customer", "property", "visit_date"),
+                condition=models.Q(status__in=("REQUESTED", "ACCEPTED")),
+                name="stay_visit_one_open_per_day",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return str(self.id)
 
 
 class StayModerationEvent(models.Model):

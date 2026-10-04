@@ -18,6 +18,54 @@ urlpatterns = [
         views.MyStayEnquiryCancelView.as_view(),
         name="my-stay-enquiry-cancel",
     ),
+    path("stays/visits", views.StayVisitCreateView.as_view(), name="stay-visit-create"),
+    path(
+        "stays/<uuid:property_id>/visit-slots",
+        views.StayVisitAvailabilityView.as_view(),
+        name="stay-visit-slots",
+    ),
+    path("me/stay-visits", views.MyStayVisitsView.as_view(), name="my-stay-visits"),
+    path(
+        "me/stay-visits/<uuid:visit_id>/cancel",
+        views.MyStayVisitCancelView.as_view(),
+        name="my-stay-visit-cancel",
+    ),
+    path(
+        "partner/stays/summary",
+        views.PartnerStaySummaryView.as_view(),
+        name="partner-stay-summary",
+    ),
+    path(
+        "partner/stays/units/<uuid:unit_id>/rooms",
+        views.PartnerUnitRoomCollectionView.as_view(),
+        name="partner-stay-unit-rooms",
+    ),
+    path(
+        "partner/stays/rooms/<uuid:room_id>",
+        views.PartnerRoomDetailView.as_view(),
+        name="partner-stay-room-detail",
+    ),
+    path(
+        "partner/stays/rooms/<uuid:room_id>/<slug:action>",
+        views.PartnerRoomActionView.as_view(),
+        name="partner-stay-room-action",
+    ),
+    # Before ".../properties/<id>/<action>", which would otherwise take "visiting-hours".
+    path(
+        "partner/stays/properties/<uuid:property_id>/visiting-hours",
+        views.PartnerVisitingHoursView.as_view(),
+        name="partner-stay-visiting-hours",
+    ),
+    path(
+        "partner/stays/visits",
+        views.PartnerVisitCollectionView.as_view(),
+        name="partner-stay-visits",
+    ),
+    path(
+        "partner/stays/visits/<uuid:visit_id>/<slug:action>",
+        views.PartnerVisitActionView.as_view(),
+        name="partner-stay-visit-action",
+    ),
     path(
         "partner/stays/properties",
         views.PartnerPropertyCollectionView.as_view(),

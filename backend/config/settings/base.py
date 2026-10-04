@@ -414,6 +414,10 @@ SPECTACULAR_SETTINGS = {
         # app's documents step — the same silent-rename trap as `CompletionResponseDecisionEnum`
         # below.
         "PartnerDocumentStatusEnum": "apps.partners.models.PartnerDocument.Status",
+        # Stay rooms and visits: named so new status sets elsewhere cannot rename them.
+        "StayRoomStatusEnum": "apps.stay.models.Room.Status",
+        "StayVisitStatusEnum": "apps.stay.models.StayVisit.Status",
+        "StayVisitDeclineReasonEnum": "apps.stay.models.StayVisit.DeclineReason",
         # Crew identity documents, added with the crew-verification surface. `kind` and `status`
         # each already existed on several models, so without these the generator emits positional
         # `Kind461Enum` / `StatusD62Enum` — names that shift the next time any unrelated model
@@ -873,6 +877,10 @@ OUTBOX_RETRY_BACKOFF_MAX_SECONDS = env.int("OUTBOX_RETRY_BACKOFF_MAX_SECONDS", d
 OUTBOX_RECOVERY_BATCH_SIZE = env.int("OUTBOX_RECOVERY_BATCH_SIZE", default=200)
 
 CELERY_BEAT_SCHEDULE = {
+    "expire-stale-stay-visits": {
+        "task": "apps.stay.tasks.expire_stale_stay_visits",
+        "schedule": 60.0 * 15,
+    },
     "recover-outbox-events": {
         "task": "apps.foundation.tasks.recover_outbox_events",
         "schedule": 30.0,

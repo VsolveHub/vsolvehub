@@ -1,8 +1,22 @@
+from datetime import date
+from typing import Any
+
+from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.catalog.models import A9VariantConfiguration
-from apps.stay.models import Property, PropertyMedia, StayEnquiry, StayReservation, StayReview, Unit
+from apps.stay.models import (
+    Property,
+    PropertyMedia,
+    Room,
+    StayEnquiry,
+    StayReservation,
+    StayReview,
+    StayVisit,
+    Unit,
+    VisitSlot,
+)
 
 
 class UnitSerializer(serializers.ModelSerializer):
@@ -13,6 +27,8 @@ class UnitSerializer(serializers.ModelSerializer):
             "name",
             "sharing_count",
             "quantity",
+            #: Rooms of this type a guest can ask for right now.
+            "available_count",
             "max_guests",
             "nightly_rate_paise",
             "is_active",
@@ -20,13 +36,31 @@ class UnitSerializer(serializers.ModelSerializer):
         )
 
 
+class RoomSerializer(serializers.ModelSerializer[Room]):
+    """One numbered room, as the host manages it. Guests never see room numbers."""
+
+    class Meta:
+        model = Room
+        fields = (
+            "id",
+            "number",
+            "status",
+            "occupant_name",
+            "booked_enquiry",
+            "booked_visit",
+            "booked_at",
+        )
+
+
 class PartnerUnitSerializer(UnitSerializer):
-    """The host's view of a room: adds how many bookings still have nights ahead."""
+    """The host's view of a room type: its numbered rooms, and bookings that still have nights
+    ahead."""
 
     upcoming_booking_count = serializers.SerializerMethodField()
+    rooms = RoomSerializer(many=True, read_only=True)
 
     class Meta(UnitSerializer.Meta):
-        fields = (*UnitSerializer.Meta.fields, "upcoming_booking_count")
+        fields = (*UnitSerializer.Meta.fields, "upcoming_booking_count", "rooms")
 
     def get_upcoming_booking_count(self, obj: Unit) -> int:
         from apps.stay.services import upcoming_booking_count  # noqa: PLC0415
@@ -181,6 +215,8 @@ class PropertySerializer(serializers.ModelSerializer):
     highlights = serializers.SerializerMethodField()
     #: True only for the signed-in guest with a confirmed stay here and no review yet.
     can_review = serializers.SerializerMethodField()
+    #: Whether guests can "Schedule a visit": the host switched visits on and set slots.
+    visits_offered = serializers.SerializerMethodField()
 
     class Meta:
         model = Property
@@ -207,6 +243,7 @@ class PropertySerializer(serializers.ModelSerializer):
             "amenities",
             "highlights",
             "can_review",
+            "visits_offered",
             "created_at",
         )
 
@@ -239,6 +276,11 @@ class PropertySerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         return customer_can_review(customer=getattr(request, "user", None), prop=obj)
 
+    def get_visits_offered(self, obj: Property) -> bool:
+        from apps.stay.visits import visits_offered  # noqa: PLC0415
+
+        return visits_offered(obj)
+
 
 class PartnerPropertySerializer(PropertySerializer):
     """The host's own view: every room (inactive too), the Operations note and the listing switch.
@@ -247,9 +289,27 @@ class PartnerPropertySerializer(PropertySerializer):
     """
 
     units = PartnerUnitSerializer(many=True, read_only=True)
+    visit_slots = serializers.SerializerMethodField()
+    visit_blocked_dates = serializers.SerializerMethodField()
 
     class Meta(PropertySerializer.Meta):
-        fields = (*PropertySerializer.Meta.fields, "moderation_reason", "listing_status")
+        fields = (
+            *PropertySerializer.Meta.fields,
+            "moderation_reason",
+            "listing_status",
+            "visits_enabled",
+            "visit_slots",
+            "visit_blocked_dates",
+        )
+
+    @extend_schema_field(serializers.ListField(child=serializers.DictField()))
+    def get_visit_slots(self, obj: Property) -> list[dict[str, Any]]:
+        return list(VisitSlotSerializer(obj.visit_slots.all(), many=True).data)
+
+    @extend_schema_field(serializers.ListField(child=serializers.DateField()))
+    def get_visit_blocked_dates(self, obj: Property) -> list[date]:
+        today = timezone.localdate()
+        return list(obj.visit_blocked_dates.filter(date__gte=today).values_list("date", flat=True))
 
 
 class StayReviewPhotoUploadSerializer(serializers.Serializer[dict[str, object]]):
@@ -337,6 +397,13 @@ class CreateUnitSerializer(serializers.Serializer):
     max_guests = serializers.IntegerField(min_value=1, max_value=50, required=False)
     attributes = serializers.JSONField(required=False, default=dict)
     is_active = serializers.BooleanField(required=False, default=True)
+    #: Numbers for each room ("101", "102"). When given, ``quantity`` is their count.
+    room_numbers = serializers.ListField(
+        child=serializers.CharField(max_length=40),
+        required=False,
+        default=list,
+        max_length=500,
+    )
 
 
 class UpdateUnitSerializer(serializers.Serializer):
@@ -388,12 +455,27 @@ class StayQuoteResponseSerializer(serializers.Serializer):
     max_guests = serializers.IntegerField(required=False)
 
 
+#: Enquiries the guest walked away from: the owner's number is no longer shown on them.
+_HOST_CONTACT_HIDDEN = frozenset(
+    {StayEnquiry.Status.CANCELLED, StayEnquiry.Status.WITHDRAWN, StayEnquiry.Status.EXPIRED}
+)
+
+
 class StayEnquirySerializer(serializers.ModelSerializer):
+    """The guest's view of their enquiry, with the owner's name and number to call.
+
+    The guest's details go to the owner the moment they enquire; the owner's number comes back
+    the same way, so either side can make the call.
+    """
+
     property_title = serializers.CharField(source="property.title", read_only=True)
+    property_slug = serializers.CharField(source="property.slug", read_only=True)
     unit_name = serializers.CharField(source="unit.name", read_only=True, default="Standard room")
     nightly_rate_paise = serializers.IntegerField(
         source="unit.nightly_rate_paise", read_only=True, default=0
     )
+    host_name = serializers.CharField(source="property.host.display_name", read_only=True)
+    host_phone = serializers.SerializerMethodField()
 
     class Meta:
         model = StayEnquiry
@@ -416,7 +498,15 @@ class StayEnquirySerializer(serializers.ModelSerializer):
             "host_response",
             "responded_at",
             "created_at",
+            "property_slug",
+            "host_name",
+            "host_phone",
         )
+
+    def get_host_phone(self, obj: StayEnquiry) -> str:
+        if obj.status in _HOST_CONTACT_HIDDEN:
+            return ""
+        return str(obj.property.host.user.phone_number or "")
 
 
 class PartnerStayEnquirySerializer(StayEnquirySerializer):
@@ -430,6 +520,11 @@ class PartnerStayEnquirySerializer(StayEnquirySerializer):
 
     class Meta(StayEnquirySerializer.Meta):
         fields = (*StayEnquirySerializer.Meta.fields, "customer_name", "customer_phone")
+
+
+class ConfirmEnquirySerializer(serializers.Serializer[dict[str, Any]]):
+    #: The numbered room the guest is taking; it is marked Booked. Optional.
+    room_id = serializers.UUIDField(required=False, allow_null=True)
 
 
 class RespondEnquirySerializer(serializers.Serializer):
@@ -504,3 +599,150 @@ class AddPropertyMediaSerializer(serializers.Serializer):
 
 class OpsCancelStayReservationSerializer(serializers.Serializer):
     reason = serializers.CharField(max_length=240, required=False, allow_blank=True, default="")
+
+
+# --- numbered rooms -------------------------------------------------------------------------
+
+
+class AddRoomSerializer(serializers.Serializer[dict[str, Any]]):
+    number = serializers.CharField(max_length=40)
+    available = serializers.BooleanField(required=False, default=True)
+
+
+class UpdateRoomSerializer(serializers.Serializer[dict[str, Any]]):
+    number = serializers.CharField(max_length=40, required=False)
+    #: The ON / OFF switch. Not for booked rooms: use the "release" action.
+    available = serializers.BooleanField(required=False)
+
+
+class MarkRoomBookedSerializer(serializers.Serializer[dict[str, Any]]):
+    occupant_name = serializers.CharField(
+        max_length=120, required=False, allow_blank=True, default=""
+    )
+    #: The accepted visit this booking came from, if any.
+    visit_id = serializers.UUIDField(required=False, allow_null=True)
+
+
+class HostStaySummarySerializer(serializers.Serializer[dict[str, Any]]):
+    total_properties = serializers.IntegerField()
+    live_properties = serializers.IntegerField()
+    total_rooms = serializers.IntegerField()
+    available_rooms = serializers.IntegerField()
+    booked_rooms = serializers.IntegerField()
+    unavailable_rooms = serializers.IntegerField()
+    review_count = serializers.IntegerField()
+    average_rating = serializers.FloatField(allow_null=True)
+    new_enquiries = serializers.IntegerField()
+    pending_visits = serializers.IntegerField()
+    upcoming_visits = serializers.IntegerField()
+
+
+# --- visits ---------------------------------------------------------------------------------
+
+
+class VisitSlotSerializer(serializers.ModelSerializer[VisitSlot]):
+    class Meta:
+        model = VisitSlot
+        fields = ("id", "weekday", "start_time", "end_time")
+
+
+class VisitSlotInputSerializer(serializers.Serializer[dict[str, Any]]):
+    #: 0 = Monday ... 6 = Sunday.
+    weekday = serializers.IntegerField(min_value=0, max_value=6)
+    start_time = serializers.TimeField()
+    end_time = serializers.TimeField()
+
+
+class SetVisitingHoursSerializer(serializers.Serializer[dict[str, Any]]):
+    visits_enabled = serializers.BooleanField()
+    slots = VisitSlotInputSerializer(many=True)
+    blocked_dates = serializers.ListField(
+        child=serializers.DateField(), required=False, default=list
+    )
+
+
+class VisitAvailabilitySlotSerializer(serializers.Serializer[dict[str, Any]]):
+    id = serializers.UUIDField()
+    start_time = serializers.TimeField()
+    end_time = serializers.TimeField()
+
+
+class VisitAvailabilityDaySerializer(serializers.Serializer[dict[str, Any]]):
+    date = serializers.DateField()
+    slots = VisitAvailabilitySlotSerializer(many=True)
+
+
+class CreateVisitSerializer(serializers.Serializer[dict[str, Any]]):
+    property_id = serializers.UUIDField()
+    slot_id = serializers.UUIDField()
+    visit_date = serializers.DateField()
+    unit_id = serializers.UUIDField(required=False, allow_null=True)
+    message = serializers.CharField(max_length=1000, required=False, allow_blank=True, default="")
+
+
+class DeclineVisitSerializer(serializers.Serializer[dict[str, Any]]):
+    #: Optional. ROOM_UNAVAILABLE, DATE_MISMATCH, ALREADY_OCCUPIED or OTHER.
+    reason = serializers.ChoiceField(
+        choices=StayVisit.DeclineReason.choices, required=False, allow_blank=True, default=""
+    )
+    #: Shown to the guest only with OTHER.
+    note = serializers.CharField(max_length=240, required=False, allow_blank=True, default="")
+
+
+class StayVisitSerializer(serializers.ModelSerializer[StayVisit]):
+    """The guest's view of a visit. The owner's number appears once the visit is accepted;
+    a reason for a declined visit appears only when the owner chose one."""
+
+    property_title = serializers.CharField(source="property.title", read_only=True)
+    property_slug = serializers.CharField(source="property.slug", read_only=True)
+    unit_name = serializers.CharField(source="unit.name", read_only=True, default="")
+    host_name = serializers.CharField(source="property.host.display_name", read_only=True)
+    host_phone = serializers.SerializerMethodField()
+    reason_text = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StayVisit
+        fields: tuple[str, ...] = (
+            "id",
+            "property",
+            "property_title",
+            "property_slug",
+            "unit",
+            "unit_name",
+            "visit_date",
+            "start_time",
+            "end_time",
+            "message",
+            "status",
+            "reason_text",
+            "host_name",
+            "host_phone",
+            "responded_at",
+            "created_at",
+        )
+
+    def get_host_phone(self, obj: StayVisit) -> str:
+        if obj.status != StayVisit.Status.ACCEPTED:
+            return ""
+        return str(obj.property.host.user.phone_number or "")
+
+    def get_reason_text(self, obj: StayVisit) -> str:
+        from apps.stay.visits import guest_reason_text  # noqa: PLC0415
+
+        return guest_reason_text(obj) if obj.status == StayVisit.Status.DECLINED else ""
+
+
+class PartnerStayVisitSerializer(StayVisitSerializer):
+    """The host's view: who is coming, with their number, and the reason the host gave."""
+
+    customer_name = serializers.CharField(source="customer.full_name", read_only=True)
+    customer_phone = serializers.CharField(source="customer.phone_number", read_only=True)
+
+    class Meta(StayVisitSerializer.Meta):
+        fields = (
+            *StayVisitSerializer.Meta.fields,
+            "customer_name",
+            "customer_phone",
+            "decline_reason",
+            "decline_note",
+        )

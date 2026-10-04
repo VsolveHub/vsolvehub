@@ -352,6 +352,22 @@ _TEMPLATES: dict[str, tuple[str, str]] = {
         "An enquiry was withdrawn",
         "{guest_name} withdrew their enquiry for {property_title}.",
     ),
+    "stay_visit_requested": (
+        "New visit request for {property_title}",
+        "{guest_name} wants to visit on {visit_date}, {visit_time}. Accept or decline it.",
+    ),
+    "stay_visit_accepted": (
+        "Your visit has been accepted",
+        "{host_name} accepted your visit to {property_title} on {visit_date}, {visit_time}.",
+    ),
+    "stay_visit_declined": (
+        "Schedule not accepted",
+        "The owner has not accepted your visit to {property_title} on {visit_date}.{reason_text}",
+    ),
+    "stay_visit_cancelled": (
+        "A visit was cancelled",
+        "{guest_name} cancelled their visit to {property_title} on {visit_date}, {visit_time}.",
+    ),
     # ---- A7: rentals -----------------------------------------------------------------
     #: Owner notifications
     "rental_new_booking": (
