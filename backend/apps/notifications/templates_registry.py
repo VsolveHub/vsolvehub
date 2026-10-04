@@ -352,6 +352,78 @@ _TEMPLATES: dict[str, tuple[str, str]] = {
         "An enquiry was withdrawn",
         "{guest_name} withdrew their enquiry for {property_title}.",
     ),
+    # ---- A7: rentals -----------------------------------------------------------------
+    #: Owner notifications
+    "rental_new_booking": (
+        "New booking: {asset_title}",
+        "{customer_name} booked {asset_title} from {start_date} to {end_date}. "
+        "Check the booking for their contact details.",
+    ),
+    "rental_new_enquiry": (
+        "New rental enquiry",
+        "{customer_name} wants to rent {asset_title} from {start_date} to {end_date}. "
+        "Open the enquiry to call them.",
+    ),
+    "rental_quote_paid": (
+        "Quote accepted — booking confirmed",
+        "{customer_name} paid your quote for {asset_title}. Check the booking for details.",
+    ),
+    "rental_customer_claim_reply": (
+        "Customer replied to your damage claim",
+        "The customer replied to the damage claim on {asset_title}. Admin will review both sides.",
+    ),
+    "rental_admin_claim_decision_owner": (
+        "Damage claim decided",
+        "Admin approved ₹{approved_amount} from the deposit on {asset_title}. "
+        "The amount has been credited to your earnings.",
+    ),
+    "rental_overdue_return_owner": (
+        "Please confirm return",
+        "{asset_title} was due back on {end_date}. Tap to confirm the return or report damage.",
+    ),
+    #: Customer notifications
+    "rental_booking_confirmed": (
+        "Booking confirmed",
+        "Your rental of {asset_title} is confirmed from {start_date} to {end_date}. "
+        "Your handover PIN is {pin}.",
+    ),
+    "rental_quote_received": (
+        "You've received a quote",
+        "The owner quoted ₹{total_amount} for {asset_title}. Tap to review and pay.",
+    ),
+    "rental_owner_not_available": (
+        "Owner is not available",
+        "The owner of {asset_title} is not available for your requested dates.",
+    ),
+    "rental_return_confirmed": (
+        "Return confirmed — deposit refunded",
+        "The owner confirmed the return of {asset_title}. Your deposit of ₹{deposit_amount} "
+        "has been refunded.",
+    ),
+    "rental_claim_raised": (
+        "The owner reported damage",
+        "The owner of {asset_title} reported damage and is asking ₹{amount_asked}. "
+        "You can reply with your own photos and note. Admin will make the final decision.",
+    ),
+    "rental_claim_decided_customer": (
+        "Damage claim resolved",
+        "₹{refund_amount} of your deposit on {asset_title} has been refunded. "
+        "₹{deducted_amount} was approved for damage.",
+    ),
+    "rental_overdue_return_customer": (
+        "Return overdue",
+        "Your rental of {asset_title} was due back on {end_date}. If the return is not "
+        "confirmed soon, your deposit will be refunded automatically.",
+    ),
+    #: Admin notifications
+    "rental_new_claim": (
+        "New damage claim to review",
+        "A damage claim has been raised on {asset_title}. The owner is asking ₹{amount_asked}.",
+    ),
+    "rental_overdue_for_admin": (
+        "Overdue rental return",
+        "{asset_title} was due back on {end_date} and the owner has not confirmed the return.",
+    ),
 }
 
 

@@ -4,6 +4,11 @@ from apps.rental import views
 
 urlpatterns = [
     path("rentals", views.RentalBrowseView.as_view(), name="rental-browse"),
+    path(
+        "rentals/platform-fee",
+        views.RentalPlatformFeeView.as_view(),
+        name="rental-platform-fee",
+    ),
     path("rentals/taxonomy", views.RentalTaxonomyView.as_view(), name="rental-taxonomy"),
     path("rentals/book", views.RentalBookView.as_view(), name="rental-book"),
     path("me/rentals", views.MyRentalsView.as_view(), name="my-rentals"),
@@ -23,9 +28,19 @@ urlpatterns = [
         name="partner-rental-assets",
     ),
     path(
+        "partner/rentals/assets/<uuid:asset_id>",
+        views.PartnerAssetDetailView.as_view(),
+        name="partner-rental-asset-detail",
+    ),
+    path(
         "partner/rentals/assets/<uuid:asset_id>/<slug:action>",
         views.PartnerAssetActionView.as_view(),
         name="partner-rental-asset-action",
+    ),
+    path(
+        "partner/rentals/assets/<uuid:asset_id>/media/<uuid:media_id>",
+        views.PartnerAssetMediaDeleteView.as_view(),
+        name="partner-rental-asset-media-delete",
     ),
     path(
         "partner/rentals/bookings",
@@ -38,6 +53,21 @@ urlpatterns = [
         name="partner-rental-booking-action",
     ),
     path("ops/rentals", views.OpsRentalCollectionView.as_view(), name="ops-rentals"),
+    path(
+        "ops/rentals/platform-fee",
+        views.OpsRentalPlatformFeeView.as_view(),
+        name="ops-rental-platform-fee",
+    ),
+    path(
+        "ops/rentals/disputes",
+        views.OpsRentalDisputeCollectionView.as_view(),
+        name="ops-rental-disputes",
+    ),
+    path(
+        "ops/rentals/disputes/<uuid:booking_id>/decision",
+        views.OpsRentalDisputeDecisionView.as_view(),
+        name="ops-rental-dispute-decision",
+    ),
     path(
         "ops/rentals/<uuid:asset_id>/moderate",
         views.OpsRentalModerateView.as_view(),

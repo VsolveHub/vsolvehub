@@ -99,7 +99,8 @@ describe("StayQuotePanel", () => {
     render(<StayQuotePanel property={mockProperty()} />, { wrapper });
 
     expect(screen.getByText("Move-in date")).toBeInTheDocument();
-    expect(screen.getByText("For how many months")).toBeInTheDocument();
+    expect(screen.getByRole("spinbutton", { name: "For how many months" })).toHaveValue(1);
+    expect(screen.queryByRole("combobox", { name: "For how many months" })).not.toBeInTheDocument();
     expect(await screen.findByText("about ₹9,000")).toBeInTheDocument();
   });
 
@@ -109,7 +110,7 @@ describe("StayQuotePanel", () => {
     render(<StayQuotePanel property={mockProperty({ price_period: "NIGHT" })} />, { wrapper });
 
     expect(screen.getByText("Check-in date")).toBeInTheDocument();
-    expect(screen.getByText("For how many nights")).toBeInTheDocument();
+    expect(screen.getByRole("spinbutton", { name: "For how many nights" })).toBeInTheDocument();
   });
 
   it("tells the guest their number goes to the host and nothing is paid", () => {

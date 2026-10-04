@@ -104,8 +104,18 @@ export function RentalBookingCard({ booking }: RentalBookingCardProps) {
         </div>
 
         <div className="rounded-control border border-line/60 bg-surface-sunken p-3 text-right sm:min-w-40">
-          <div className="text-xs text-text-secondary">Total Rental Fee</div>
-          <div className="text-lg font-extrabold text-action">{formatPaise(booking.price_paise)}</div>
+          <div className="text-xs text-text-secondary">
+            {(booking.platform_fee_paise ?? 0) > 0 ? "Rental and platform fee" : "Total Rental Fee"}
+          </div>
+          <div className="text-lg font-extrabold text-action">
+            {formatPaise(booking.price_paise + (booking.platform_fee_paise ?? 0))}
+          </div>
+          {(booking.platform_fee_paise ?? 0) > 0 ? (
+            <div className="mt-0.5 text-[11px] text-text-secondary">
+              Platform fee ({booking.platform_fee_percent ?? 0}%):{" "}
+              {formatPaise(booking.platform_fee_paise ?? 0)}
+            </div>
+          ) : null}
           <div className="mt-0.5 text-[11px] text-text-secondary">
             Deposit: {formatPaise(booking.deposit?.amount_paise ?? 0)}
           </div>

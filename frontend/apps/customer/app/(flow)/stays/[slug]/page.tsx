@@ -51,6 +51,7 @@ export default function StayDetailPage() {
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [reviewPhotos, setReviewPhotos] = useState<string[]>([]);
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [selectedUnitId, setSelectedUnitId] = useState<string>("");
 
   const {
     data: property,
@@ -166,17 +167,25 @@ export default function StayDetailPage() {
         </Link>
       </nav>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        {/* Left Column: Property Details & Amenities */}
-        <div className="lg:col-span-7 flex flex-col gap-6">
-          <StayImageGallery media={property.media} title={property.title} />
+      {(() => {
+        const currentUnitId = selectedUnitId || property.units[0]?.id || "";
+        const currentUnit = property.units.find((u) => u.id === currentUnitId);
+        const unitMedia = (currentUnit as { media?: Array<{ id: string; url: string; display_order?: number; caption?: string }> })?.media;
+        const activeMedia = unitMedia && unitMedia.length > 0 ? (unitMedia as typeof property.media) : property.media;
+        const galleryTitle = currentUnit?.name ? `${property.title} · ${currentUnit.name}` : property.title;
 
-          <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6 shadow-xs">
-            {/* The host's application was reviewed by Operations before any listing went live. */}
-            <Badge tone="success" className="inline-flex items-center gap-1 text-xs font-bold">
-              <ShieldCheck className="size-3.5" />
-              Verified host
-            </Badge>
+        return (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            {/* Left Column: Property Details & Amenities */}
+            <div className="lg:col-span-7 flex flex-col gap-6">
+              <StayImageGallery media={activeMedia} title={galleryTitle} />
+
+              <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6 shadow-xs">
+                {/* The host's application was reviewed by Operations before any listing went live. */}
+                <Badge tone="success" className="inline-flex items-center gap-1 text-xs font-bold">
+                  <ShieldCheck className="size-3.5" />
+                  Verified host
+                </Badge>
 
             <h1 className="mt-3 text-2xl font-extrabold text-text sm:text-3xl">
               {property.title}
@@ -377,9 +386,11 @@ export default function StayDetailPage() {
 
         {/* Right Column: Interactive Quote and Enquiry Panel */}
         <div className="lg:col-span-5 sticky top-24">
-          <StayQuotePanel property={property} />
+          <StayQuotePanel property={property} onSelectUnit={setSelectedUnitId} />
         </div>
       </div>
+    );
+  })()}
 
       {/* Review Submission Dialog */}
       <Dialog

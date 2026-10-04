@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  clearAllIdempotencyKeys,
   clearIdempotencyKey,
   createIdempotencyKey,
   getStableIdempotencyKey,
@@ -142,6 +143,21 @@ describe("when sessionStorage refuses to hold the key", () => {
       getSpy.mockRestore();
       setSpy.mockRestore();
     }
+  });
+});
+
+describe("clearAllIdempotencyKeys", () => {
+  it("forgets every stored attempt so the next sign-in starts clean", () => {
+    const first = getStableIdempotencyKey("checkout:abc");
+    window.sessionStorage.setItem("vsolve.idem.other", "kept-until-sign-out");
+    window.sessionStorage.setItem("vsh-partner-locale", "hi-IN");
+
+    clearAllIdempotencyKeys();
+
+    expect(hasIdempotencyKey("checkout:abc")).toBe(false);
+    expect(getStableIdempotencyKey("checkout:abc")).not.toBe(first);
+    expect(window.sessionStorage.getItem("vsolve.idem.other")).toBeNull();
+    expect(window.sessionStorage.getItem("vsh-partner-locale")).toBe("hi-IN");
   });
 });
 

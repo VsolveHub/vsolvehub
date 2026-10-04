@@ -66,19 +66,35 @@ export type RentalPhotoUpload = {
   original_name: string;
 };
 
+function rentalPhotoForm(file: File, kind: "ad" | "dispute"): FormData {
+  const form = new FormData();
+  form.append("file", file, file.name);
+  form.append("kind", kind);
+  return form;
+}
+
 export async function uploadPartnerRentalPhoto(file: File): Promise<RentalPhotoUpload> {
   const data = await request(() =>
     getApiClient().POST("/api/v1/partner/rentals/photos", {
       body: { file },
-      bodySerializer(body) {
-        const form = new FormData();
-        const blob = body && typeof body === "object" && "file" in body ? (body as { file?: Blob }).file : undefined;
-        if (blob) form.append("file", blob, file.name);
-        return form;
+      bodySerializer() {
+        return rentalPhotoForm(file, "ad");
       },
     }),
   );
   return data as RentalPhotoUpload;
+}
+
+export async function uploadPartnerDisputePhoto(file: File): Promise<{ upload_id: string }> {
+  const data = await request(() =>
+    getApiClient().POST("/api/v1/partner/rentals/photos", {
+      body: { file },
+      bodySerializer() {
+        return rentalPhotoForm(file, "dispute");
+      },
+    }),
+  );
+  return data as { upload_id: string };
 }
 
 export async function createPartnerRentalAsset(body: CreateAssetRequest): Promise<RentalAsset> {
@@ -100,18 +116,19 @@ export async function submitPartnerRentalAsset(assetId: string): Promise<RentalA
 export async function partnerRentalBookingAction(
   bookingId: string,
   action: "handover" | "return" | "release-deposit" | "dispute-deposit" | "cancel",
-  body?: Partial<PartnerBookingActionRequest>,
+  body?: Partial<PartnerBookingActionRequest> & { photo_ids?: string[] },
 ): Promise<RentalBooking> {
-  const payload: PartnerBookingActionRequest = {
+  const payload = {
     pin: body?.pin ?? "",
     reason: body?.reason ?? "",
     // Always send consume_paise so blank never becomes full-deposit consume on the server.
     consume_paise: body?.consume_paise ?? 0,
+    photo_ids: body?.photo_ids ?? [],
   };
   const data = await request(() =>
     getApiClient().POST("/api/v1/partner/rentals/bookings/{booking_id}/{action}", {
       params: { path: { booking_id: bookingId, action } },
-      body: payload,
+      body: payload as PartnerBookingActionRequest,
     }),
   );
   return data as RentalBooking;

@@ -67,9 +67,9 @@ export function bookingActionLabel(action: BookingAction): string {
     case "return":
       return "Return";
     case "release-deposit":
-      return "Release deposit";
+      return "Return deposit";
     case "dispute-deposit":
-      return "Raise deposit dispute";
+      return "Raise dispute";
     case "cancel":
       return "Cancel booking";
   }

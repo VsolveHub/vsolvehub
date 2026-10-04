@@ -61,8 +61,8 @@ describe("bookingActionLabel", () => {
   it("labels each action for the button", () => {
     expect(bookingActionLabel("handover")).toBe("Handover");
     expect(bookingActionLabel("return")).toBe("Return");
-    expect(bookingActionLabel("release-deposit")).toBe("Release deposit");
-    expect(bookingActionLabel("dispute-deposit")).toBe("Raise deposit dispute");
+    expect(bookingActionLabel("release-deposit")).toBe("Return deposit");
+    expect(bookingActionLabel("dispute-deposit")).toBe("Raise dispute");
     expect(bookingActionLabel("cancel")).toBe("Cancel booking");
   });
 });

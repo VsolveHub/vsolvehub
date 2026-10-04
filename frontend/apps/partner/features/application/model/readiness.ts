@@ -128,9 +128,10 @@ export function requirements(application: Application | null): Requirement[] {
     },
   ];
 
-  // A stay host lists their own property: trades, areas and experience are for people who
-  // travel to a customer, and the server does not ask a host for them.
-  if (application?.track === "STAY_HOST") {
+  // A stay host or rental owner lists something they own. Trades, areas and
+  // experience are for people who travel to a customer, and the server does not
+  // ask either listing track for them.
+  if (application?.track === "STAY_HOST" || application?.track === "RENTAL_OWNER") {
     return list.filter((requirement) => !SERVICE_ONLY_REQUIREMENTS.has(requirement.code));
   }
   return list;

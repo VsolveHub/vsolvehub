@@ -128,6 +128,14 @@ TRANSACTIONAL_PURPOSES = frozenset(
         "m2.shift.attendance_confirmed",
         "m2.shift.attendance_disputed",
         "m2.vendor.cash_demand_reported",
+        # A7 Rentals. A booking confirmation has the handover PIN. A claim decision moves
+        # deposit money. An overdue return starts a countdown to auto-refund. All three have
+        # the same test: a reader who muted this would lose money or be left guessing.
+        "rental.booking.confirmed",
+        "rental.claim.raised",
+        "rental.claim.decided",
+        "rental.overdue",
+        "rental.enquiry.quoted",
     }
 )
 

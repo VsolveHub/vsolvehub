@@ -275,6 +275,15 @@ def workspace_grants(partner: PartnerProfile) -> list[WorkspaceGrant]:
                 actions=list(WORKSPACE_ACTIONS[stay_key]),
             )
         )
+    rental_key = ServiceVariant.BookingArchetype.A7_RENTAL
+    if rental_key not in seen and is_approved_rental_owner(partner):
+        grants.append(
+            WorkspaceGrant(
+                workspace_key=rental_key,
+                commercial_mode=commercial_mode_for_archetype(rental_key),
+                actions=list(WORKSPACE_ACTIONS[rental_key]),
+            )
+        )
     return grants
 
 
@@ -288,6 +297,19 @@ def is_approved_stay_host(partner: PartnerProfile) -> bool:
         partner=partner,
         status=PartnerApplication.Status.APPROVED,
         track=PartnerApplication.Track.STAY_HOST,
+    ).exists()
+
+
+def is_approved_rental_owner(partner: PartnerProfile) -> bool:
+    """A partner who signed up to rent out items and whose application was approved.
+
+    For rental owners the application review *is* the rental permission; they never request
+    a separate A7 capability. Mirrors ``is_approved_stay_host``.
+    """
+    return PartnerApplication.objects.filter(
+        partner=partner,
+        status=PartnerApplication.Status.APPROVED,
+        track=PartnerApplication.Track.RENTAL_OWNER,
     ).exists()
 
 

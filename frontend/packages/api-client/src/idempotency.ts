@@ -140,6 +140,23 @@ export function getStableIdempotencyKey(operationId: string): string {
  * Never clear a key while an outcome is still pending or unknown — that is
  * exactly when the stored key is doing its job.
  */
+/** Drops every stored key. Sign-out must not hand the next account a previous attempt. */
+export function clearAllIdempotencyKeys(): void {
+  memoryKeys.clear();
+  try {
+    const store = storage();
+    if (!store) return;
+    const keys: string[] = [];
+    for (let index = 0; index < store.length; index += 1) {
+      const key = store.key(index);
+      if (key?.startsWith(STORAGE_PREFIX)) keys.push(key);
+    }
+    for (const key of keys) store.removeItem(key);
+  } catch {
+    // Storage can throw in private mode. The in-memory map is already empty.
+  }
+}
+
 export function clearIdempotencyKey(operationId: string): void {
   const storageKey = `${STORAGE_PREFIX}${operationId}`;
   // Both layers, unconditionally. Clearing one and leaving the other is how a

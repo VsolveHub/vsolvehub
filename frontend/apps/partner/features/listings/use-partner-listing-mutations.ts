@@ -8,7 +8,7 @@ import {
   serverErrorMessage,
   serverFieldErrors,
   SUCCESS_MESSAGES,
-  rupeesToPaise,
+  payPaise,
   type CreateListingFormState,
   type EditListingFormState,
 } from "./model";
@@ -77,11 +77,10 @@ export function usePartnerListingMutations({
         },
       };
 
-      const minP = rupeesToPaise(editForm.salary_min_rupees);
-      const maxP = rupeesToPaise(editForm.salary_max_rupees);
-      if (minP != null && maxP != null) {
-        payload.salary_min_paise = minP;
-        payload.salary_max_paise = maxP;
+      const pay = payPaise(editForm);
+      if (pay) {
+        payload.salary_min_paise = pay.min;
+        payload.salary_max_paise = pay.max;
         payload.salary_period = editForm.salary_period;
       }
 
@@ -112,11 +111,10 @@ export function usePartnerListingMutations({
         },
       };
 
-      const minP = rupeesToPaise(form.salary_min_rupees);
-      const maxP = rupeesToPaise(form.salary_max_rupees);
-      if (minP != null && maxP != null) {
-        payload.salary_min_paise = minP;
-        payload.salary_max_paise = maxP;
+      const pay = payPaise(form);
+      if (pay) {
+        payload.salary_min_paise = pay.min;
+        payload.salary_max_paise = pay.max;
         payload.salary_period = form.salary_period;
       }
 

@@ -10,25 +10,70 @@ export function rupeesToPaise(input: string): number | null {
   return Math.round(rupees * 100);
 }
 
+export type PayMode = "range" | "exact";
+
+export function payModeForSavedPay(
+  minPaise: number | undefined,
+  maxPaise: number | undefined,
+): PayMode {
+  const min = minPaise ?? 0;
+  const max = maxPaise ?? 0;
+  if (min > 0 && min === max) return "exact";
+  return "range";
+}
+
+/** Rupee text for a stored paise amount, suitable for the pay inputs. */
+export function paiseToRupeeInput(paise: number | undefined): string {
+  if (!paise) return "";
+  const rupees = paise / 100;
+  return Number.isInteger(rupees) ? String(rupees) : rupees.toFixed(2);
+}
+
+/**
+ * Exact pay is stored as equal minimum and maximum. A range keeps both bounds.
+ */
+export function payPaise(form: {
+  pay_mode: string;
+  salary_min_rupees: string;
+  salary_max_rupees: string;
+}): { min: number; max: number } | null {
+  const minP = rupeesToPaise(form.salary_min_rupees);
+  if (minP == null) return null;
+  if (form.pay_mode === "exact") return { min: minP, max: minP };
+  const maxP = rupeesToPaise(form.salary_max_rupees);
+  if (maxP == null) return null;
+  return { min: minP, max: maxP };
+}
+
 function refinePay(
-  data: { salary_min_rupees: string; salary_max_rupees: string; salary_period: string },
+  data: {
+    pay_mode: string;
+    salary_min_rupees: string;
+    salary_max_rupees: string;
+    salary_period: string;
+  },
   ctx: z.RefinementCtx,
 ) {
+  const exact = data.pay_mode === "exact";
   const minP = rupeesToPaise(data.salary_min_rupees);
-  const maxP = rupeesToPaise(data.salary_max_rupees);
   if (minP == null || minP < 1) {
     ctx.addIssue({
       path: ["salary_min_rupees"],
       code: "custom",
-      message: "Enter a minimum pay in rupees, for example 25000 or 8,00,000.",
+      message: exact
+        ? "Enter the pay in rupees, for example 25000 or 8,00,000."
+        : "Enter a minimum pay in rupees, for example 25000 or 8,00,000.",
     });
   }
-  if (maxP == null || (minP != null && maxP < minP)) {
-    ctx.addIssue({
-      path: ["salary_max_rupees"],
-      code: "custom",
-      message: "Enter a maximum pay in rupees that is at least the minimum.",
-    });
+  if (!exact) {
+    const maxP = rupeesToPaise(data.salary_max_rupees);
+    if (maxP == null || (minP != null && maxP < minP)) {
+      ctx.addIssue({
+        path: ["salary_max_rupees"],
+        code: "custom",
+        message: "Enter a maximum pay in rupees that is at least the minimum.",
+      });
+    }
   }
   if (!["MONTHLY", "YEARLY", "HOURLY"].includes(data.salary_period)) {
     ctx.addIssue({ path: ["salary_period"], code: "custom", message: "Select a pay period." });
@@ -60,8 +105,8 @@ export const listingShape = {
   title: z
     .string()
     .trim()
-    .min(5, "Title must be at least 5 characters.")
-    .max(180, "Title must be 180 characters or fewer."),
+    .min(5, "Job title must be at least 5 characters.")
+    .max(180, "Job title must be 180 characters or fewer."),
   description: z
     .string()
     .trim()
@@ -69,6 +114,7 @@ export const listingShape = {
     .max(5000, "Description must be 5000 characters or fewer."),
   contact_phone: phoneRule,
   contact_email: emailRule,
+  pay_mode: z.enum(["range", "exact"]),
   salary_min_rupees: z.string().trim(),
   salary_max_rupees: z.string().trim(),
   salary_period: z.string().trim(),
@@ -175,6 +221,7 @@ export interface CreateListingFormState {
   contact_phone: string;
   contact_email: string;
   role_type: string;
+  pay_mode: PayMode;
   salary_min_rupees: string;
   salary_max_rupees: string;
   salary_period: string;
@@ -189,6 +236,7 @@ export interface EditListingFormState {
   contact_phone: string;
   contact_email: string;
   role_type: string;
+  pay_mode: PayMode;
   salary_min_rupees: string;
   salary_max_rupees: string;
   salary_period: string;

@@ -38,6 +38,10 @@ const devOrigins = [
   // The LAN address a phone on the same wifi would use.
   "192.168.*.*",
   "10.*.*.*",
+  "127.0.0.1",
+  "127.0.0.1:3000",
+  "localhost",
+  "localhost:3000",
   ...(process.env.NEXT_PUBLIC_DEV_ORIGINS ?? "")
     .split(",")
     .map((origin) => origin.trim())

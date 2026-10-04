@@ -2,7 +2,7 @@
 
 import { ApiRequestError, type Schemas } from "@vsolve/api-client";
 import { ErrorState, Skeleton, cn } from "@vsolve/ui";
-import { ArrowRight, BedDouble, Check, Sparkles, Wrench } from "lucide-react";
+import { ArrowRight, BedDouble, Check, Package, Sparkles, Wrench } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -98,7 +98,7 @@ function NotStarted() {
       </div>
 
       <h2 className="text-base font-bold text-navy-900">What will you do on VSolve?</h2>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Link
           href="/apply/about"
           className="flex flex-col gap-1.5 rounded-card border border-line bg-surface p-4 text-left hover:border-action focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
@@ -119,10 +119,24 @@ function NotStarted() {
           className="flex flex-col gap-1.5 rounded-card border border-line bg-surface p-4 text-left hover:border-action focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:opacity-60"
         >
           <BedDouble size={22} aria-hidden className="text-action" />
-          <span className="font-bold text-navy-900">List my property</span>
+          <span className="font-bold text-navy-900">Stays</span>
           <span className="text-sm text-text-secondary">
-            PG, rooms, hostel or hotel. Just your details, the agreements and an ID — about
+            Rooms, PG, hostel or hotel. Just your details, the agreements and an ID — about
             three minutes.
+          </span>
+        </button>
+        <button
+          type="button"
+          disabled={start.isPending}
+          onClick={() =>
+            start.mutate({ track: "RENTAL_OWNER" }, { onSuccess: () => router.push("/apply/about") })
+          }
+          className="flex flex-col gap-1.5 rounded-card border border-line bg-surface p-4 text-left hover:border-action focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:opacity-60"
+        >
+          <Package size={22} aria-hidden className="text-action" />
+          <span className="font-bold text-navy-900">Rent out items</span>
+          <span className="text-sm text-text-secondary">
+            Tools and equipment. Same short application: your details, the agreements and an ID.
           </span>
         </button>
       </div>
@@ -198,7 +212,7 @@ function Standing({ application }: { application: Application }) {
       <StepList steps={steps} />
 
       {/* Specialist & Contractor Option — not for someone listing their own property. */}
-      {application.track === "STAY_HOST" ? null : (
+      {application.track === "STAY_HOST" || application.track === "RENTAL_OWNER" ? null : (
         <section className="rounded-3xl border border-line bg-white p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
@@ -221,7 +235,7 @@ function Standing({ application }: { application: Application }) {
       )}
 
       {application.status === "APPROVED" ? (
-        <Approved stayHost={application.track === "STAY_HOST"} />
+        <Approved track={application.track} />
       ) : null}
 
       <History transitions={application.transitions} />
@@ -425,8 +439,25 @@ function StepList({ steps }: { steps: readonly StepProgress[] }) {
  * a banner and a history — and the banner's own "publish the hours you want to
  * work" pointed at nothing.
  */
-function Approved({ stayHost }: { stayHost: boolean }) {
-  if (stayHost) {
+function Approved({ track }: { track: Application["track"] }) {
+  if (track === "RENTAL_OWNER") {
+    return (
+      <div className="flex flex-col gap-2.5 rounded-card border border-success-line bg-success-surface p-4">
+        <p className="text-[0.9375rem] font-bold text-success-text">You are approved</p>
+        <p className="text-[0.875rem] leading-relaxed text-success-text/85">
+          Add the items you rent out. Customers can book them once an ad is live.
+        </p>
+        <Link
+          href="/rentals"
+          className="mt-1 flex h-12 items-center justify-center gap-2 rounded-control bg-success-text px-6 text-[0.9375rem] font-bold text-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+        >
+          List an item
+          <ArrowRight size={18} aria-hidden />
+        </Link>
+      </div>
+    );
+  }
+  if (track === "STAY_HOST") {
     return (
       <div className="flex flex-col gap-2.5 rounded-card border border-success-line bg-success-surface p-4">
         <p className="text-[0.9375rem] font-bold text-success-text">You are approved</p>

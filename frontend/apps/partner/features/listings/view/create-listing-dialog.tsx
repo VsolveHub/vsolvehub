@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { PhoneField } from "@vsolve/ui";
 
@@ -5,6 +8,7 @@ import type { CatalogServiceItem, JsonSchemaObject } from "../queries";
 import type { CreateListingFormState } from "../model";
 import { FieldError } from "./field-error";
 import { ListingExtraFields } from "./listing-extra-fields";
+import { ListingPreview } from "./listing-preview";
 
 export interface CreateListingDialogProps {
   isOpen: boolean;
@@ -23,7 +27,8 @@ export interface CreateListingDialogProps {
   }>;
   onFieldChange: (key: string, value: string) => void;
   onServiceChange: (serviceId: string) => void;
-  onSubmit: () => void;
+  onValidate: () => boolean;
+  onSubmit: () => boolean;
   serverError?: string;
 }
 
@@ -36,10 +41,22 @@ export function CreateListingDialog({
   services,
   onFieldChange,
   onServiceChange,
+  onValidate,
   onSubmit,
   serverError,
 }: CreateListingDialogProps) {
+  const [step, setStep] = useState<"form" | "preview">("form");
+
+  useEffect(() => {
+    if (!isOpen) setStep("form");
+  }, [isOpen]);
+
   if (!isOpen) return null;
+
+  const serviceName = services.find((svc) => svc.id === form.service_id)?.name;
+  const openPreview = () => {
+    if (onValidate()) setStep("preview");
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 overflow-y-auto">
@@ -48,8 +65,9 @@ export function CreateListingDialog({
           <div>
             <h2 className="text-lg font-bold text-navy-900">Post a job</h2>
             <p className="text-xs text-text-muted">
-              Designation, location, experience, and pay — the same facts applicants see on Naukri or Indeed.
-              Pay is entered in rupees and stored as paise.
+              {step === "preview"
+                ? "Check the posting, then save. It stays a draft until you submit it for review."
+                : "Designation, location, experience, and pay — the same facts applicants see on Naukri or Indeed. Pay is entered in rupees."}
             </p>
           </div>
           <button
@@ -61,12 +79,53 @@ export function CreateListingDialog({
           </button>
         </div>
 
+        {step === "preview" ? (
+          <div className="mt-5 space-y-4">
+            <ListingPreview
+              title={form.title}
+              serviceName={serviceName}
+              location={form.location_text}
+              description={form.description}
+              payMode={form.pay_mode}
+              salaryMin={form.salary_min_rupees}
+              salaryMax={form.salary_max_rupees}
+              salaryPeriod={form.salary_period}
+              experience={form.experience_years}
+              roleType={form.role_type}
+              shift={form.shift}
+            />
+            {serverError ? (
+              <p role="alert" className="text-xs text-danger-text">
+                {serverError}
+              </p>
+            ) : null}
+            <div className="flex items-center justify-end gap-3 border-t border-line pt-3">
+              <button
+                type="button"
+                onClick={() => setStep("form")}
+                className="rounded-control border border-line px-4 py-2 text-xs font-semibold text-text-secondary hover:bg-surface-hover"
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={() => {
+                  if (!onSubmit()) setStep("form");
+                }}
+                className="inline-flex items-center gap-2 rounded-control bg-action px-5 py-2 text-xs font-semibold text-action-text shadow-card transition hover:bg-action-hover active:bg-action-active disabled:opacity-50"
+              >
+                {isPending ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        ) : (
         <form
           className="mt-5 space-y-4"
           noValidate
           onSubmit={(e) => {
             e.preventDefault();
-            onSubmit();
+            openPreview();
           }}
         >
           <div>
@@ -95,7 +154,7 @@ export function CreateListingDialog({
 
           <div>
             <label className="block text-xs font-semibold text-text-secondary">
-              Listing Title <span className="text-danger-text">*</span>
+              Job Title <span className="text-danger-text">*</span>
             </label>
             <input
               value={form.title}
@@ -171,6 +230,7 @@ export function CreateListingDialog({
 
             <ListingExtraFields
               roleType={form.role_type}
+              payMode={form.pay_mode}
               salaryMin={form.salary_min_rupees}
               salaryMax={form.salary_max_rupees}
               salaryPeriod={form.salary_period}
@@ -205,10 +265,11 @@ export function CreateListingDialog({
               disabled={isPending || !form.variant}
               className="inline-flex items-center gap-2 rounded-control bg-action px-5 py-2 text-xs font-semibold text-action-text shadow-card transition hover:bg-action-hover active:bg-action-active disabled:opacity-50"
             >
-              {isPending ? "Creating..." : "Save Draft"}
+              Preview
             </button>
           </div>
         </form>
+        )}
       </div>
     </div>
   );

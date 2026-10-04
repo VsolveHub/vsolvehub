@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { PhoneField } from "@vsolve/ui";
 
@@ -5,6 +8,7 @@ import type { EditListingFormState } from "../model";
 import type { PartnerListing } from "../queries";
 import { FieldError } from "./field-error";
 import { ListingExtraFields } from "./listing-extra-fields";
+import { ListingPreview } from "./listing-preview";
 
 export interface EditListingDialogProps {
   listing: PartnerListing | null;
@@ -13,7 +17,8 @@ export interface EditListingDialogProps {
   errors: Record<string, string>;
   isPending: boolean;
   onFieldChange: (key: string, value: string) => void;
-  onSubmit: () => void;
+  onValidate: () => boolean;
+  onSubmit: () => boolean;
   serverError?: string;
 }
 
@@ -24,10 +29,21 @@ export function EditListingDialog({
   errors,
   isPending,
   onFieldChange,
+  onValidate,
   onSubmit,
   serverError,
 }: EditListingDialogProps) {
+  const [step, setStep] = useState<"form" | "preview">("form");
+
+  useEffect(() => {
+    setStep("form");
+  }, [listing?.id]);
+
   if (!listing) return null;
+
+  const openPreview = () => {
+    if (onValidate()) setStep("preview");
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 overflow-y-auto">
@@ -36,7 +52,9 @@ export function EditListingDialog({
           <div>
             <h2 className="text-lg font-bold text-text">Edit Career Opening</h2>
             <p className="text-xs text-text-muted">
-              Update details for this opening ({listing.title}).
+              {step === "preview"
+                ? "Check the posting, then save your changes."
+                : `Update details for this opening (${listing.title}).`}
             </p>
           </div>
           <button
@@ -48,17 +66,58 @@ export function EditListingDialog({
           </button>
         </div>
 
+        {step === "preview" ? (
+          <div className="mt-5 space-y-4">
+            <ListingPreview
+              title={form.title}
+              serviceName={listing.service_name}
+              location={form.location_text}
+              description={form.description}
+              payMode={form.pay_mode}
+              salaryMin={form.salary_min_rupees}
+              salaryMax={form.salary_max_rupees}
+              salaryPeriod={form.salary_period}
+              experience={form.experience_years}
+              roleType={form.role_type}
+              shift={form.shift}
+            />
+            {serverError ? (
+              <p role="alert" className="text-xs text-danger-text">
+                {serverError}
+              </p>
+            ) : null}
+            <div className="flex items-center justify-end gap-3 border-t border-line pt-3">
+              <button
+                type="button"
+                onClick={() => setStep("form")}
+                className="rounded-control border border-line px-4 py-2 text-xs font-semibold text-text-secondary hover:bg-surface-hover"
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={() => {
+                  if (!onSubmit()) setStep("form");
+                }}
+                className="inline-flex items-center gap-2 rounded-control bg-action px-5 py-2 text-xs font-semibold text-action-text shadow-card transition hover:bg-action-hover active:bg-action-active disabled:opacity-50"
+              >
+                {isPending ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        ) : (
         <form
           className="mt-5 space-y-4"
           noValidate
           onSubmit={(e) => {
             e.preventDefault();
-            onSubmit();
+            openPreview();
           }}
         >
           <div>
             <label className="block text-xs font-semibold text-text-secondary">
-              Listing Title <span className="text-danger-text">*</span>
+              Job Title <span className="text-danger-text">*</span>
             </label>
             <input
               value={form.title}
@@ -134,6 +193,7 @@ export function EditListingDialog({
 
             <ListingExtraFields
               roleType={form.role_type}
+              payMode={form.pay_mode}
               salaryMin={form.salary_min_rupees}
               salaryMax={form.salary_max_rupees}
               salaryPeriod={form.salary_period}
@@ -164,10 +224,11 @@ export function EditListingDialog({
               disabled={isPending}
               className="inline-flex items-center gap-2 rounded-control bg-action px-5 py-2 text-xs font-semibold text-action-text shadow-card transition hover:bg-action-hover active:bg-action-active disabled:opacity-50"
             >
-              {isPending ? "Saving..." : "Save Changes"}
+              Preview
             </button>
           </div>
         </form>
+        )}
       </div>
     </div>
   );

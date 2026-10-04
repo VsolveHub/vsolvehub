@@ -15,32 +15,45 @@ from apps.foundation.slugs import lookup_by_slug_or_id
 from apps.partners.models import PartnerProfile
 from apps.partners.permissions import IsOperationsUser, IsPartnerUser
 from apps.rental.exceptions import RentalStateApiError
-from apps.rental.models import RentalAsset, RentalBooking
+from apps.rental.models import RentalAsset, RentalBooking, RentalDeposit
 from apps.rental.serializers import (
     CreateAssetSerializer,
     CreateBookingSerializer,
+    OpsRentalDisputeDecisionSerializer,
     PartnerBookingActionSerializer,
+    PartnerRentalBookingSerializer,
     RentalAssetSerializer,
     RentalBookingSerializer,
     RentalModerationSerializer,
     RentalPhotoUploadSerializer,
+    RentalPlatformFeeSerializer,
     RentalTaxonomySubcategorySerializer,
+    UpdateAssetSerializer,
 )
 from apps.rental.services import (
     RentalStateError,
+    auto_publish_asset,
     cancel_booking,
-    create_asset,
     create_booking,
+    current_platform_fee_percent,
+    decide_deposit_dispute,
+    delete_asset,
     dispute_deposit,
     get_rental_taxonomy,
     handover_booking,
     moderate_asset,
     partner_owns_rental_photo,
+    pause_asset,
     public_assets,
     release_deposit,
+    remove_media,
+    resume_asset,
     return_booking,
+    save_platform_fee,
+    store_rental_dispute_photo,
     store_rental_photo,
     submit_asset,
+    update_asset,
 )
 
 
@@ -66,6 +79,16 @@ class RentalTaxonomyView(APIView):
     @extend_schema(responses=RentalTaxonomySubcategorySerializer(many=True))
     def get(self, request: Any) -> Response:  # noqa: ARG002
         return Response(get_rental_taxonomy())
+
+
+class RentalPlatformFeeView(APIView):
+    """The live platform-fee percent. Customers use it to show the charge before they book."""
+
+    permission_classes = (permissions.AllowAny,)
+
+    @extend_schema(responses=RentalPlatformFeeSerializer)
+    def get(self, _request: Any) -> Response:
+        return Response({"percent": current_platform_fee_percent()})
 
 
 class RentalBrowseView(APIView):
@@ -195,11 +218,18 @@ class PartnerRentalPhotoUploadView(APIView):
         if upload is None:
             raise ValidationError({"file": "Attach a photo file."})
         partner = _partner(request.user)
+        kind = str(request.data.get("kind") or "").strip().lower()
         try:
-            row = store_rental_photo(partner=partner, upload=upload)
+            if kind == "dispute":
+                row = store_rental_dispute_photo(partner=partner, upload=upload)
+            elif kind in {"", "ad"}:
+                row = store_rental_photo(partner=partner, upload=upload)
+            else:
+                raise RentalStateError("Unknown photo kind.")
         except (RentalStateError, PermissionError) as exc:
             _raise_domain_error(exc)
-        photo_url = request.build_absolute_uri(row.stored_file.url)
+        # Dispute evidence stays private. Ad photos keep a public URL.
+        photo_url = "" if kind == "dispute" else request.build_absolute_uri(row.stored_file.url)
         return Response(
             {
                 "upload_id": str(row.id),
@@ -234,10 +264,38 @@ class PartnerAssetCollectionView(APIView):
                 reason="Upload photos from this form instead of pasting links."
             )
         try:
-            asset = create_asset(partner=partner, **ser.validated_data)
+            asset = auto_publish_asset(partner=partner, **ser.validated_data)
         except (RentalStateError, PermissionError) as exc:
             _raise_domain_error(exc)
         return Response(RentalAssetSerializer(asset).data, status=status.HTTP_201_CREATED)
+
+
+class PartnerAssetDetailView(APIView):
+    """PATCH to edit, DELETE to archive."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(request=UpdateAssetSerializer, responses=RentalAssetSerializer)
+    def patch(self, request: Any, asset_id: UUID) -> Response:
+        partner = _partner(request.user)
+        asset = get_object_or_404(RentalAsset, id=asset_id, partner=partner)
+        ser = UpdateAssetSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        try:
+            asset = update_asset(asset=asset, partner=partner, **ser.validated_data)
+        except (RentalStateError, PermissionError) as exc:
+            _raise_domain_error(exc)
+        return Response(RentalAssetSerializer(asset).data)
+
+    @extend_schema(responses=RentalAssetSerializer)
+    def delete(self, request: Any, asset_id: UUID) -> Response:
+        partner = _partner(request.user)
+        asset = get_object_or_404(RentalAsset, id=asset_id, partner=partner)
+        try:
+            asset = delete_asset(asset=asset, partner=partner)
+        except (RentalStateError, PermissionError) as exc:
+            _raise_domain_error(exc)
+        return Response(RentalAssetSerializer(asset).data)
 
 
 class PartnerAssetActionView(APIView):
@@ -254,11 +312,31 @@ class PartnerAssetActionView(APIView):
         try:
             if action == "submit":
                 asset = submit_asset(asset=asset, partner=partner)
+            elif action == "pause":
+                asset = pause_asset(asset=asset, partner=partner)
+            elif action == "resume":
+                asset = resume_asset(asset=asset, partner=partner)
             else:
                 raise RentalStateError("Unknown action.")
         except (RentalStateError, PermissionError) as exc:
             _raise_domain_error(exc)
         return Response(RentalAssetSerializer(asset).data)
+
+
+class PartnerAssetMediaDeleteView(APIView):
+    """Remove a single photo from an ad."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(responses={204: None})
+    def delete(self, request: Any, asset_id: UUID, media_id: UUID) -> Response:
+        partner = _partner(request.user)
+        asset = get_object_or_404(RentalAsset, id=asset_id, partner=partner)
+        try:
+            remove_media(asset=asset, partner=partner, media_id=media_id)
+        except (RentalStateError, PermissionError) as exc:
+            _raise_domain_error(exc)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class PartnerBookingCollectionView(APIView):
@@ -268,7 +346,7 @@ class PartnerBookingCollectionView(APIView):
         parameters=[
             OpenApiParameter("status", OpenApiTypes.STR, OpenApiParameter.QUERY),
         ],
-        responses=RentalBookingSerializer(many=True),
+        responses=PartnerRentalBookingSerializer(many=True),
     )
     def get(self, request: Any) -> Response:
         partner = _partner(request.user)
@@ -280,13 +358,15 @@ class PartnerBookingCollectionView(APIView):
         status_filter = (request.query_params.get("status") or "").strip().upper()
         if status_filter:
             rows = rows.filter(status=status_filter)
-        return Response(RentalBookingSerializer(rows, many=True, context={"request": request}).data)
+        return Response(
+            PartnerRentalBookingSerializer(rows, many=True, context={"request": request}).data
+        )
 
 
 class PartnerBookingActionView(APIView):
     permission_classes = (IsPartnerUser,)
 
-    @extend_schema(request=PartnerBookingActionSerializer, responses=RentalBookingSerializer)
+    @extend_schema(request=PartnerBookingActionSerializer, responses=PartnerRentalBookingSerializer)
     def post(self, request: Any, booking_id: UUID, action: str) -> Response:
         partner = _partner(request.user)
         booking = get_object_or_404(
@@ -316,6 +396,7 @@ class PartnerBookingActionView(APIView):
                     partner=partner,
                     reason=str(body.get("reason") or ""),
                     consume_paise=int(body.get("consume_paise") or 0),
+                    photo_ids=list(body.get("photo_ids") or []),
                 )
             elif action == "cancel":
                 booking = cancel_booking(
@@ -327,7 +408,85 @@ class PartnerBookingActionView(APIView):
                 raise RentalStateError("Unknown action.")
         except (RentalStateError, PermissionError) as exc:
             _raise_domain_error(exc)
-        return Response(RentalBookingSerializer(booking, context={"request": request}).data)
+        return Response(PartnerRentalBookingSerializer(booking, context={"request": request}).data)
+
+
+def _ops_dispute_row(booking: RentalBooking, request: Any) -> dict[str, Any]:
+    deposit = booking.deposit
+    held = deposit.status in (RentalDeposit.Status.HELD, RentalDeposit.Status.AUTHORIZED)
+    photos: list[dict[str, str]] = []
+    for photo in booking.dispute_photos.all():
+        url = photo.stored_file.url
+        if url.startswith("/"):
+            url = request.build_absolute_uri(url)
+        photos.append({"id": str(photo.id), "url": url})
+    partner = booking.asset.partner
+    return {
+        "booking_id": str(booking.id),
+        "asset_title": booking.asset.title,
+        "partner_name": partner.display_name,
+        "reason": deposit.provider_note,
+        "deposit_amount_paise": deposit.amount_paise,
+        "requested_consume_paise": deposit.requested_consume_paise or 0,
+        "consumed_paise": deposit.consumed_paise,
+        "deposit_status": deposit.status,
+        "awaiting_decision": booking.status == RentalBooking.Status.DISPUTED and held,
+        "photos": photos,
+    }
+
+
+class OpsRentalDisputeCollectionView(APIView):
+    permission_classes = (IsOperationsUser,)
+
+    def get(self, request: Any) -> Response:
+        rows = (
+            RentalBooking.objects.filter(status=RentalBooking.Status.DISPUTED)
+            .select_related("asset", "asset__partner", "deposit")
+            .prefetch_related("dispute_photos")
+            .order_by("-updated_at")
+        )
+        return Response([_ops_dispute_row(booking, request) for booking in rows])
+
+
+class OpsRentalDisputeDecisionView(APIView):
+    permission_classes = (IsOperationsUser,)
+
+    def post(self, request: Any, booking_id: UUID) -> Response:
+        serializer = OpsRentalDisputeDecisionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        booking = get_object_or_404(
+            RentalBooking.objects.select_related("asset", "asset__partner", "deposit"),
+            id=booking_id,
+        )
+        try:
+            booking = decide_deposit_dispute(
+                booking=booking,
+                actor=request.user,
+                decision=serializer.validated_data["decision"],
+            )
+        except RentalStateError as exc:
+            _raise_domain_error(exc)
+        booking = (
+            RentalBooking.objects.select_related("asset", "asset__partner", "deposit")
+            .prefetch_related("dispute_photos")
+            .get(id=booking.id)
+        )
+        return Response(_ops_dispute_row(booking, request))
+
+
+class OpsRentalPlatformFeeView(APIView):
+    permission_classes = (IsOperationsUser,)
+
+    @extend_schema(responses=RentalPlatformFeeSerializer)
+    def get(self, _request: Any) -> Response:
+        return Response({"percent": current_platform_fee_percent()})
+
+    @extend_schema(request=RentalPlatformFeeSerializer, responses=RentalPlatformFeeSerializer)
+    def put(self, request: Any) -> Response:
+        serializer = RentalPlatformFeeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        row = save_platform_fee(percent=serializer.validated_data["percent"], actor=request.user)
+        return Response({"percent": row.percent})
 
 
 class OpsRentalCollectionView(APIView):

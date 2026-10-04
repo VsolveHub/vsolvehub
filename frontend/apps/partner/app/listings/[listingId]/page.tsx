@@ -37,24 +37,69 @@ export default function PartnerListingLeadsPage() {
     queryFn: () => fetchPartnerListingDetail(listingId),
   });
 
+  const queryKey = ["partner-listing-applications", listingId] as const;
+
   const { data: applications = [], isLoading } = useQuery({
-    queryKey: ["partner-listing-applications", listingId],
+    queryKey,
     queryFn: () => fetchListingApplications(listingId),
   });
 
+  const tabCounts = {
+    ALL: applications.length,
+    NEW: applications.filter((app) => app.status === "SUBMITTED" || app.status === "UNDER_REVIEW").length,
+    SHORTLISTED: applications.filter((app) => app.status === "SHORTLISTED").length,
+    CONTACTED: applications.filter((app) => app.status === "CONTACTED").length,
+    CLOSED: applications.filter((app) => ["REJECTED", "WITHDRAWN", "EXPIRED"].includes(app.status)).length,
+  };
+
   const reveal = useMutation({
     mutationFn: revealApplicationContact,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["partner-listing-applications", listingId] });
+    onMutate: async (id: string) => {
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData<PartnerApplication[]>(queryKey);
+      if (previous) {
+        queryClient.setQueryData<PartnerApplication[]>(
+          queryKey,
+          previous.map((app) =>
+            app.id === id ? { ...app, contact_revealed_at: new Date().toISOString() } : app,
+          ),
+        );
+      }
+      return { previous };
+    },
+    onError: (_err, _id, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(queryKey, context.previous);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey });
     },
   });
 
   const statusMutation = useMutation({
     mutationFn: ({ id, next }: { id: string; next: ApplicationStatus }) =>
       updateApplicationStatus(id, next),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["partner-listing-applications", listingId] });
+    onMutate: async ({ id, next }) => {
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData<PartnerApplication[]>(queryKey);
+      if (previous) {
+        queryClient.setQueryData<PartnerApplication[]>(
+          queryKey,
+          previous.map((app) => (app.id === id ? { ...app, status: next } : app)),
+        );
+      }
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(queryKey, context.previous);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey });
       queryClient.invalidateQueries({ queryKey: ["partner-listing-home"] });
+      queryClient.invalidateQueries({ queryKey: ["partner-listings"] });
     },
   });
 
@@ -70,7 +115,7 @@ export default function PartnerListingLeadsPage() {
     onSuccess: () => {
       setReportingApp(null);
       setReportDetail("");
-      queryClient.invalidateQueries({ queryKey: ["partner-listing-applications", listingId] });
+      queryClient.invalidateQueries({ queryKey });
     },
   });
 
@@ -110,20 +155,32 @@ export default function PartnerListingLeadsPage() {
 
       {/* Filter Tabs */}
       <div className="flex flex-wrap items-center gap-2 border-b border-line pb-3">
-        {FILTER_TABS.map((tab) => (
-          <button
-            type="button"
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`rounded-full px-4 py-1.5 text-xs font-semibold transition ${
-              activeTab === tab.key
-                ? "bg-navy-900 text-warm-0 shadow-xs"
-                : "border border-line bg-surface text-text-secondary hover:border-line-strong hover:bg-surface-hover"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+        {FILTER_TABS.map((tab) => {
+          const count = tabCounts[tab.key as keyof typeof tabCounts] ?? 0;
+          return (
+            <button
+              type="button"
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold transition ${
+                activeTab === tab.key
+                  ? "bg-navy-900 text-warm-0 shadow-xs"
+                  : "border border-line bg-surface text-text-secondary hover:border-line-strong hover:bg-surface-hover"
+              }`}
+            >
+              <span>{tab.label}</span>
+              <span
+                className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
+                  activeTab === tab.key
+                    ? "bg-warm-0/20 text-warm-0"
+                    : "bg-surface-sunken text-text-muted"
+                }`}
+              >
+                {count}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Action mutation errors */}

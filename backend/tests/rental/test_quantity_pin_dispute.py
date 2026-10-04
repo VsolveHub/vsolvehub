@@ -4,6 +4,7 @@ from datetime import timedelta
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 from rest_framework import status
 
@@ -16,7 +17,7 @@ from apps.catalog.models import (
 )
 from apps.identity.models import Role, UserRole
 from apps.partners.models import PartnerApplication, PartnerCapability, PartnerProfile
-from apps.rental.models import AssetReservation, RentalBooking, RentalDeposit
+from apps.rental.models import AssetReservation, RentalBooking, RentalDeposit, RentalDisputePhoto
 from apps.rental.services import (
     RentalStateError,
     cancel_booking,
@@ -29,6 +30,7 @@ from apps.rental.services import (
     public_assets,
     repair_ghost_asset_holds,
     return_booking,
+    store_rental_dispute_photo,
     submit_asset,
 )
 from tests.helpers import force_role_client
@@ -190,8 +192,96 @@ def test_handover_pin_required_and_dispute(rental_world):
     )
     assert disputed.status == RentalBooking.Status.DISPUTED
     disputed.deposit.refresh_from_db()
-    assert disputed.deposit.status == RentalDeposit.Status.PARTIALLY_CONSUMED
-    assert disputed.deposit.consumed_paise == 30000
+    assert disputed.deposit.status == RentalDeposit.Status.HELD
+    assert disputed.deposit.consumed_paise == 0
+    assert disputed.deposit.requested_consume_paise == 30000
+
+
+def _jpeg() -> SimpleUploadedFile:
+    payload = b"\xff\xd8\xff" + b"\x00" * 16
+    return SimpleUploadedFile("damage.jpg", payload, content_type="image/jpeg")
+
+
+@pytest.mark.django_db
+def test_dispute_attaches_up_to_five_private_photos(rental_world):
+    asset = _publish_asset(rental_world, deposit_paise=80000)
+    start = timezone.localdate() + timedelta(days=1)
+    booking = create_booking(
+        customer=rental_world["customer"],
+        asset_id=asset.id,
+        start_date=start,
+        end_date=start + timedelta(days=2),
+        hold_deposit_for_demo=True,
+    )
+    pin = booking.handover_pin_hash
+    handover_booking(booking=booking, partner=rental_world["partner"], pin=pin)
+    return_booking(booking=booking, partner=rental_world["partner"])
+    photos = [
+        store_rental_dispute_photo(partner=rental_world["partner"], upload=_jpeg())
+        for _ in range(6)
+    ]
+    with pytest.raises(RentalStateError) as too_many:
+        dispute_deposit(
+            booking=booking,
+            partner=rental_world["partner"],
+            reason="Cracked housing",
+            consume_paise=0,
+            photo_ids=[photo.id for photo in photos],
+        )
+    assert too_many.value.code == "dispute_photo_limit"
+    booking.refresh_from_db()
+    assert booking.status == RentalBooking.Status.RETURNED
+
+    attached = photos[:5]
+    disputed = dispute_deposit(
+        booking=booking,
+        partner=rental_world["partner"],
+        reason="Cracked housing",
+        consume_paise=0,
+        photo_ids=[photo.id for photo in attached],
+    )
+    attached_count = len(attached)
+    assert disputed.dispute_photos.count() == attached_count
+    stored = RentalDisputePhoto.objects.filter(
+        booking=disputed, partner=rental_world["partner"]
+    ).count()
+    assert stored == attached_count
+
+
+@pytest.mark.django_db
+def test_ops_lists_dispute_photos_and_approves_the_claim(rental_world):
+    booking = _returned_booking(rental_world, deposit_paise=80000)
+    photo = store_rental_dispute_photo(partner=rental_world["partner"], upload=_jpeg())
+    dispute_deposit(
+        booking=booking,
+        partner=rental_world["partner"],
+        reason="Cracked housing",
+        consume_paise=20000,
+        photo_ids=[photo.id],
+    )
+    ops = User.objects.create(phone_number="+919944440099", full_name="Ops Review")
+    role, _ = Role.objects.get_or_create(code="operations", defaults={"name": "Operations"})
+    UserRole.objects.get_or_create(user=ops, role=role, revoked_at=None)
+    client = force_role_client(user=ops, role_code="operations")
+
+    listed = client.get("/api/v1/ops/rentals/disputes")
+    assert listed.status_code == status.HTTP_200_OK
+    row = next(item for item in listed.data if item["booking_id"] == str(booking.id))
+    assert row["awaiting_decision"] is True
+    assert row["requested_consume_paise"] == 20000
+    assert row["reason"] == "Cracked housing"
+    assert len(row["photos"]) == 1
+    assert "rental-disputes/" in row["photos"][0]["url"]
+
+    decided = client.post(
+        f"/api/v1/ops/rentals/disputes/{booking.id}/decision",
+        {"decision": "APPROVE"},
+        format="json",
+    )
+    assert decided.status_code == status.HTTP_200_OK
+    assert decided.data["awaiting_decision"] is False
+    assert decided.data["consumed_paise"] == 20000
+    assert decided.data["deposit_status"] == RentalDeposit.Status.PARTIALLY_CONSUMED
 
 
 @pytest.mark.django_db
@@ -310,7 +400,9 @@ def test_partner_bookings_status_filter_and_dispute_http(rental_world):
     )
     assert disp.status_code == status.HTTP_200_OK
     assert disp.data["status"] == RentalBooking.Status.DISPUTED
-    assert disp.data["deposit"]["status"] == RentalDeposit.Status.FULLY_CONSUMED
+    assert disp.data["deposit"]["status"] == RentalDeposit.Status.HELD
+    assert disp.data["deposit"]["requested_consume_paise"] == 60000
+    assert disp.data["deposit"]["consumed_paise"] == 0
 
 
 def _returned_booking(world, *, deposit_paise: int = 50000):
@@ -342,7 +434,8 @@ def test_dispute_omitted_consume_paise_does_not_full_consume(rental_world):
     assert disputed.status == RentalBooking.Status.DISPUTED
     disputed.deposit.refresh_from_db()
     assert disputed.deposit.consumed_paise == 0
-    assert disputed.deposit.status == RentalDeposit.Status.RELEASED
+    assert disputed.deposit.requested_consume_paise == 0
+    assert disputed.deposit.status == RentalDeposit.Status.HELD
 
 
 @pytest.mark.django_db
@@ -357,7 +450,8 @@ def test_dispute_http_omitted_consume_paise_is_zero(rental_world):
     assert disp.status_code == status.HTTP_200_OK
     assert disp.data["status"] == RentalBooking.Status.DISPUTED
     assert disp.data["deposit"]["consumed_paise"] == 0
-    assert disp.data["deposit"]["status"] == RentalDeposit.Status.RELEASED
+    assert disp.data["deposit"]["requested_consume_paise"] == 0
+    assert disp.data["deposit"]["status"] == RentalDeposit.Status.HELD
 
 
 @pytest.mark.django_db
@@ -371,7 +465,8 @@ def test_dispute_explicit_zero_consume_paise(rental_world):
     )
     disputed.deposit.refresh_from_db()
     assert disputed.deposit.consumed_paise == 0
-    assert disputed.deposit.status == RentalDeposit.Status.RELEASED
+    assert disputed.deposit.requested_consume_paise == 0
+    assert disputed.deposit.status == RentalDeposit.Status.HELD
 
 
 @pytest.mark.django_db

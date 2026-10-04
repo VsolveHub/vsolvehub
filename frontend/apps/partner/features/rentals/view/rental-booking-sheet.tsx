@@ -212,6 +212,19 @@ export function RentalBookingDetailSheet({
           <SheetSection title="Refundable deposit">
             {deposit ? (
               <>
+                {status === "RETURNED" &&
+                (deposit.status === "HELD" || deposit.status === "AUTHORIZED") ? (
+                  <p className="text-sm text-text-secondary">
+                    The item is back. Return the deposit, or raise a dispute if something is wrong.
+                  </p>
+                ) : null}
+                {status === "DISPUTED" &&
+                (deposit.status === "HELD" || deposit.status === "AUTHORIZED") ? (
+                  <p className="text-sm text-text-secondary">
+                    Operations is reviewing this dispute. The deposit stays held until they approve
+                    the amount you asked to keep, or send it all back to the customer.
+                  </p>
+                ) : null}
                 <Readout
                   label="Deposit held"
                   value={formatMoney(deposit.amount_paise)}

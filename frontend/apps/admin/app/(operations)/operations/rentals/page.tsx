@@ -1,11 +1,19 @@
 "use client";
 
 import { factEntries, MarketplaceQueue, moneyLine } from "@/features/moderation/marketplace-queue";
+import { RentalDisputeQueue } from "@/features/moderation/rental-disputes";
+import { RentalPlatformFeeForm } from "@/features/moderation/rental-platform-fee";
 import { fetchOpsRentals, moderateOpsRental } from "@/features/moderation/queries";
 
 export default function OpsRentalsPage() {
   return (
     <MarketplaceQueue
+      leading={
+        <>
+          <RentalPlatformFeeForm />
+          <RentalDisputeQueue />
+        </>
+      }
       heading="Rental assets"
       queryKey="ops-rentals"
       load={async () => {

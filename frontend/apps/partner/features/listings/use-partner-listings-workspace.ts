@@ -5,6 +5,8 @@ import {
   createListingSchema,
   editListingSchema,
   issuesToFieldErrors,
+  paiseToRupeeInput,
+  payModeForSavedPay,
   type CreateListingFormState,
   type EditListingFormState,
   type TabKey,
@@ -28,6 +30,7 @@ const INITIAL_FORM: CreateListingFormState = {
   contact_phone: "",
   contact_email: "",
   role_type: "",
+  pay_mode: "range",
   salary_min_rupees: "",
   salary_max_rupees: "",
   salary_period: "",
@@ -71,9 +74,9 @@ export function usePartnerListingsWorkspace() {
     setEditingListing(listing);
     const fields = listingFields(listing.structured_fields);
     const shiftVal = String(fields.shift || fields.work_mode || "");
-    const minR = listing.salary_min_paise ? String(listing.salary_min_paise / 100) : "";
-    const maxR = listing.salary_max_paise ? String(listing.salary_max_paise / 100) : "";
-    
+    const minR = paiseToRupeeInput(listing.salary_min_paise);
+    const maxR = paiseToRupeeInput(listing.salary_max_paise);
+
     setEditForm({
       title: listing.title || "",
       description: listing.description || "",
@@ -81,6 +84,7 @@ export function usePartnerListingsWorkspace() {
       contact_phone: listing.contact_phone || "",
       contact_email: listing.contact_email || "",
       role_type: String(fields.role_type || ""),
+      pay_mode: payModeForSavedPay(listing.salary_min_paise, listing.salary_max_paise),
       salary_min_rupees: minR,
       salary_max_rupees: maxR,
       salary_period: listing.salary_period || "",
@@ -117,24 +121,36 @@ export function usePartnerListingsWorkspace() {
     setActionError,
   });
 
-  const handleCreate = () => {
+  const validateCreate = () => {
     const parsed = createListingSchema.safeParse(form);
     if (!parsed.success) {
       setCreateErrors(issuesToFieldErrors(parsed.error));
-      return;
+      return false;
     }
     setCreateErrors({});
-    create.mutate();
+    return true;
   };
 
-  const handleEdit = () => {
+  const validateEdit = () => {
     const parsed = editListingSchema.safeParse(editForm);
     if (!parsed.success) {
       setEditErrors(issuesToFieldErrors(parsed.error));
-      return;
+      return false;
     }
     setEditErrors({});
+    return true;
+  };
+
+  const handleCreate = () => {
+    if (!validateCreate()) return false;
+    create.mutate();
+    return true;
+  };
+
+  const handleEdit = () => {
+    if (!validateEdit()) return false;
     update.mutate();
+    return true;
   };
 
   const handleServiceChange = (serviceId: string) => {
@@ -147,14 +163,23 @@ export function usePartnerListingsWorkspace() {
     }));
   };
 
+  const clearPayErrors = (current: Record<string, string>, key: string) => {
+    if (key !== "pay_mode") return current[key] ? { ...current, [key]: "" } : current;
+    const next = { ...current };
+    delete next.pay_mode;
+    delete next.salary_min_rupees;
+    delete next.salary_max_rupees;
+    return next;
+  };
+
   const handleCreateFieldChange = (key: string, val: string) => {
     setForm((c) => ({ ...c, [key]: val }));
-    setCreateErrors((c) => (c[key] ? { ...c, [key]: "" } : c));
+    setCreateErrors((c) => clearPayErrors(c, key));
   };
 
   const handleEditFieldChange = (key: string, val: string) => {
     setEditForm((c) => ({ ...c, [key]: val }));
-    setEditErrors((c) => (c[key] ? { ...c, [key]: "" } : c));
+    setEditErrors((c) => clearPayErrors(c, key));
   };
 
   const filteredListings = listings.filter((item) => {
@@ -196,6 +221,8 @@ export function usePartnerListingsWorkspace() {
     subscribePending: subscribe.isPending,
     subscribeError: subscribe.error,
     handleStartEdit,
+    validateCreate,
+    validateEdit,
     handleCreate,
     handleEdit,
     handleServiceChange,

@@ -233,7 +233,7 @@ paths:
       tags:
       - Authentication
       security:
-      - cookieAuth: []
+      - {}
       responses:
         '204':
           description: The current session was revoked.
@@ -9956,6 +9956,72 @@ paths:
               schema:
                 $ref: '#/components/schemas/RentalBooking'
           description: ''
+  /api/v1/ops/rentals/disputes:
+    get:
+      operationId: ops_rentals_disputes_retrieve
+      tags:
+      - ops
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/ops/rentals/disputes/{booking_id}/decision:
+    post:
+      operationId: ops_rentals_disputes_decision_create
+      parameters:
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - ops
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/ops/rentals/platform-fee:
+    get:
+      operationId: ops_rentals_platform_fee_retrieve
+      tags:
+      - ops
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RentalPlatformFee'
+          description: ''
+    put:
+      operationId: ops_rentals_platform_fee_update
+      tags:
+      - ops
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RentalPlatformFeeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RentalPlatformFeeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RentalPlatformFeeRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RentalPlatformFee'
+          description: ''
   /api/v1/ops/reports/:
     get:
       operationId: ops_reports_list
@@ -13742,6 +13808,56 @@ paths:
               schema:
                 $ref: '#/components/schemas/RentalAsset'
           description: ''
+  /api/v1/partner/rentals/assets/{asset_id}:
+    patch:
+      operationId: partner_rentals_assets_partial_update
+      description: PATCH to edit, DELETE to archive.
+      parameters:
+      - in: path
+        name: asset_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateAssetRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateAssetRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateAssetRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RentalAsset'
+          description: ''
+    delete:
+      operationId: partner_rentals_assets_destroy
+      description: PATCH to edit, DELETE to archive.
+      parameters:
+      - in: path
+        name: asset_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/v1/partner/rentals/assets/{asset_id}/{action}:
     post:
       operationId: partner_rentals_asset_action
@@ -13768,6 +13884,30 @@ paths:
               schema:
                 $ref: '#/components/schemas/RentalAsset'
           description: ''
+  /api/v1/partner/rentals/assets/{asset_id}/media/{media_id}:
+    delete:
+      operationId: partner_rentals_assets_media_destroy
+      description: Remove a single photo from an ad.
+      parameters:
+      - in: path
+        name: asset_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: media_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/v1/partner/rentals/bookings:
     get:
       operationId: partner_rentals_bookings_list
@@ -13787,7 +13927,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/RentalBooking'
+                  $ref: '#/components/schemas/PartnerRentalBooking'
           description: ''
   /api/v1/partner/rentals/bookings/{booking_id}/{action}:
     post:
@@ -13824,7 +13964,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RentalBooking'
+                $ref: '#/components/schemas/PartnerRentalBooking'
           description: ''
   /api/v1/partner/rentals/photos:
     post:
@@ -15367,6 +15507,23 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RentalBooking'
+          description: ''
+  /api/v1/rentals/platform-fee:
+    get:
+      operationId: rentals_platform_fee_retrieve
+      description: The live platform-fee percent. Customers use it to show the charge
+        before they book.
+      tags:
+      - rentals
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RentalPlatformFee'
           description: ''
   /api/v1/rentals/taxonomy:
     get:
@@ -27846,6 +28003,12 @@ components:
           type: integer
           minimum: 0
           default: 0
+        photo_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          maxItems: 5
     PartnerBookingEarning:
       type: object
       description: One Partner's own money for one job — never the Customer's invoice.
@@ -29206,6 +29369,79 @@ components:
           default: true
       required:
       - rate_paise
+    PartnerRentalBooking:
+      type: object
+      description: 'The owner''s view of the booking: includes renter''s name and
+        phone to coordinate.'
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/StatusD8aEnum'
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        quantity:
+          type: integer
+          readOnly: true
+        price_paise:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        platform_fee_percent:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        platform_fee_paise:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        pickup_or_delivery_mode:
+          type: string
+          maxLength: 32
+        notes:
+          type: string
+        asset:
+          allOf:
+          - $ref: '#/components/schemas/RentalAsset'
+          readOnly: true
+        deposit:
+          allOf:
+          - $ref: '#/components/schemas/RentalDeposit'
+          readOnly: true
+        handover_pin:
+          type: string
+          nullable: true
+          description: Plaintext PIN for the customer only, once the booking is paid/active.
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        customer_name:
+          type: string
+          readOnly: true
+        customer_phone:
+          type: string
+          nullable: true
+          readOnly: true
+      required:
+      - asset
+      - created_at
+      - customer_name
+      - customer_phone
+      - deposit
+      - end_date
+      - handover_pin
+      - id
+      - price_paise
+      - quantity
+      - start_date
     PartnerReservationActionRequest:
       type: object
       properties:
@@ -29842,6 +30078,31 @@ components:
           writeOnly: true
           minLength: 1
           maxLength: 16
+    PatchedUpdateAssetRequest:
+      type: object
+      description: Fields the owner can edit on an existing ad. All optional — only
+        sent fields change.
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 180
+        description:
+          type: string
+        daily_rate_paise:
+          type: integer
+          minimum: 1
+        deposit_paise:
+          type: integer
+          minimum: 0
+        location_text:
+          type: string
+          minLength: 1
+          maxLength: 180
+        quantity_available:
+          type: integer
+          minimum: 1
+        structured_fields: {}
     PatchedUpdatePropertyRequest:
       type: object
       properties:
@@ -34450,7 +34711,7 @@ components:
           readOnly: true
         moderation_status:
           allOf:
-          - $ref: '#/components/schemas/ModerationStatusEnum'
+          - $ref: '#/components/schemas/RentalAssetModerationStatusEnum'
           readOnly: true
         public_state:
           type: string
@@ -34525,6 +34786,22 @@ components:
       - image_url
       - sort_order
       - url
+    RentalAssetModerationStatusEnum:
+      enum:
+      - DRAFT
+      - PENDING
+      - APPROVED
+      - REJECTED
+      - REMOVED
+      - PAUSED
+      type: string
+      description: |-
+        * `DRAFT` - Draft
+        * `PENDING` - Pending
+        * `APPROVED` - Approved
+        * `REJECTED` - Rejected
+        * `REMOVED` - Removed
+        * `PAUSED` - Paused
     RentalBooking:
       type: object
       properties:
@@ -34533,7 +34810,7 @@ components:
           format: uuid
           readOnly: true
         status:
-          $ref: '#/components/schemas/RentalBookingStatusEnum'
+          $ref: '#/components/schemas/StatusD8aEnum'
         start_date:
           type: string
           format: date
@@ -34544,6 +34821,14 @@ components:
           type: integer
           readOnly: true
         price_paise:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        platform_fee_percent:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        platform_fee_paise:
           type: integer
           maximum: 2147483647
           minimum: 0
@@ -34579,22 +34864,6 @@ components:
       - price_paise
       - quantity
       - start_date
-    RentalBookingStatusEnum:
-      enum:
-      - PENDING_PAYMENT
-      - CONFIRMED
-      - HANDOVER
-      - RETURNED
-      - CANCELLED
-      - DISPUTED
-      type: string
-      description: |-
-        * `PENDING_PAYMENT` - Pending payment
-        * `CONFIRMED` - Confirmed
-        * `HANDOVER` - Handed over
-        * `RETURNED` - Returned
-        * `CANCELLED` - Cancelled
-        * `DISPUTED` - Disputed
     RentalDeposit:
       type: object
       properties:
@@ -34612,6 +34881,12 @@ components:
           type: integer
           maximum: 2147483647
           minimum: 0
+        requested_consume_paise:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          nullable: true
+          description: Partner claim, in paise. Empty until a dispute is raised.
         provider_note:
           type: string
           description: Operator note. A live hold is recorded only after payment capture.
@@ -34672,6 +34947,24 @@ components:
       - original_name
       - upload_id
       - url
+    RentalPlatformFee:
+      type: object
+      properties:
+        percent:
+          type: integer
+          maximum: 100
+          minimum: 0
+      required:
+      - percent
+    RentalPlatformFeeRequest:
+      type: object
+      properties:
+        percent:
+          type: integer
+          maximum: 100
+          minimum: 0
+      required:
+      - percent
     RentalTaxonomyService:
       type: object
       properties:
@@ -37546,6 +37839,22 @@ components:
       description: |-
         * `OPEN` - Open
         * `RESOLVED` - Resolved
+    StatusD8aEnum:
+      enum:
+      - PENDING_PAYMENT
+      - CONFIRMED
+      - HANDOVER
+      - RETURNED
+      - CANCELLED
+      - DISPUTED
+      type: string
+      description: |-
+        * `PENDING_PAYMENT` - Pending payment
+        * `CONFIRMED` - Confirmed
+        * `HANDOVER` - Handed over
+        * `RETURNED` - Returned
+        * `CANCELLED` - Cancelled
+        * `DISPUTED` - Disputed
     StayAmenity:
       type: object
       properties:
@@ -38324,10 +38633,12 @@ components:
       enum:
       - SERVICES
       - STAY_HOST
+      - RENTAL_OWNER
       type: string
       description: |-
         * `SERVICES` - Offer services
         * `STAY_HOST` - List my property
+        * `RENTAL_OWNER` - Rent out items
     TransferQuoteRequest:
       type: object
       description: The replacement's price for one unfinished milestone.

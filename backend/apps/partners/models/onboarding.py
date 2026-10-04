@@ -115,10 +115,15 @@ class PartnerApplication(models.Model):
         and upload identity documents — not trades, service areas or working hours, which only
         matter for people who travel to a customer. Approving a stay-host application is what
         lets them list stays: one review, not a second capability review.
+
+        ``RENTAL_OWNER`` rents out items. Same simplified onboarding as ``STAY_HOST``: name,
+        agreements and identity documents. Approving the application grants A7_RENTAL capability
+        — one review, not a separate capability review and per-ad approval.
         """
 
         SERVICES = "SERVICES", "Offer services"
         STAY_HOST = "STAY_HOST", "List my property"
+        RENTAL_OWNER = "RENTAL_OWNER", "Rent out items"
 
     class Status(models.TextChoices):
         DRAFT = "DRAFT", "Draft"

@@ -16,6 +16,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.identity.auth_cookies import mark_auth_cookies_for_clearing
 from apps.identity.delivery import OtpDeliveryError
 from apps.identity.exceptions import (
     InvalidOtpApiError,
@@ -226,7 +227,12 @@ class CurrentSessionView(APIView):
 
 
 class LogoutView(APIView):
-    permission_classes = (IsAuthenticated,)
+    # Not ``RevocableSessionAuthentication``. A dead session record raises before
+    # this view would run, so Sign Out could never flush the cookie that is
+    # causing the failure. Django's own session user is enough to revoke, and
+    # an already-anonymous caller still needs the cookies expired.
+    authentication_classes = ()
+    permission_classes = (AllowAny,)
 
     @extend_schema(
         tags=["Authentication"],
@@ -235,6 +241,7 @@ class LogoutView(APIView):
     )
     def post(self, request: Request) -> Response:
         revoke_current_session(request._request)
+        mark_auth_cookies_for_clearing(request._request)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 

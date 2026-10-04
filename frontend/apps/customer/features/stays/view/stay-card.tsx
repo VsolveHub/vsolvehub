@@ -42,6 +42,20 @@ export function StayCard({ property }: StayCardProps) {
   const averageRating = (property as StayPropertySummary).average_rating;
   const reviewCount = (property as StayPropertySummary).review_count;
 
+  const rawPref =
+    (property as { tenant_preference?: string }).tenant_preference ||
+    (property as { structured_fields?: { tenant_preference?: string } }).structured_fields?.tenant_preference;
+  const tenantLabel =
+    rawPref === "BACHELOR_MALE"
+      ? "Bachelor (M)"
+      : rawPref === "BACHELOR_FEMALE"
+        ? "Ladies Only"
+        : rawPref === "FAMILY"
+          ? "Family Only"
+          : rawPref === "WORKING_PROFESSIONAL"
+            ? "Professionals"
+            : null;
+
   return (
     <article className="group relative flex flex-col justify-between overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface p-5 shadow-xs transition hover:border-line-strong hover:shadow-raised">
       {/* Stretched link under content. Content is pointer-events-none so clicks
@@ -103,6 +117,12 @@ export function StayCard({ property }: StayCardProps) {
 
         {/* Amenities & Sharing Tags */}
         <div className="flex flex-wrap gap-1.5 pt-1">
+          {tenantLabel ? (
+            <span className="inline-flex items-center gap-1 rounded-md bg-navy-50 px-2.5 py-1 text-[11px] font-semibold text-navy-900 border border-navy-200">
+              {tenantLabel}
+            </span>
+          ) : null}
+
           {occupancy ? (
             <span className="inline-flex items-center gap-1 rounded-md bg-surface-sunken px-2.5 py-1 text-[11px] font-semibold text-text-secondary border border-line/60">
               <Users className="size-3" />

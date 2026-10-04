@@ -14,6 +14,7 @@ export interface StayFilterParams {
   food?: boolean;
   min_price?: number;
   max_price?: number;
+  tenant_preference?: string;
   service?: string;
   sort?: string;
   limit?: number;

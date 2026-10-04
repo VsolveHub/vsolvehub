@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { ListingStepGuard } from "@/features/application/view/listing-step-guard";
 import { ScheduleStep } from "@/features/application/view/schedule-step";
 
 export const metadata: Metadata = { title: "Working Hours" };
@@ -17,7 +18,9 @@ export default function SchedulePage() {
           </p>
         </header>
 
-        <ScheduleStep />
+        <ListingStepGuard redirectTo="/apply/review">
+          <ScheduleStep />
+        </ListingStepGuard>
       </div>
     </section>
   );

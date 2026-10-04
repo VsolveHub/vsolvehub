@@ -137,24 +137,50 @@ function RoomFields({
   priceLabel: string;
   style: RoomStyle;
 }) {
-  const listId = `${idPrefix}-names`;
+  // No datalist needed — replaced by styled select + custom reveal below.
   return (
     <div className="flex flex-col gap-3">
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Room name" required>
-          <Input
-            id={`${idPrefix}-name`}
-            list={listId}
-            value={draft.name}
-            maxLength={120}
-            placeholder="e.g. Deluxe, Double sharing"
-            onChange={(e) => onChange({ ...draft, name: e.target.value })}
-          />
-          <datalist id={listId}>
-            {suggestions.map((name) => (
-              <option key={name} value={name} />
-            ))}
-          </datalist>
+          {(() => {
+            // If the current name is not in the suggestions list it was typed custom.
+            const isCustom = draft.name !== "" && !suggestions.includes(draft.name);
+            const selectValue = isCustom ? "__custom__" : draft.name;
+            return (
+              <div className="flex flex-col gap-2">
+                <select
+                  id={`${idPrefix}-name`}
+                  value={selectValue}
+                  onChange={(e) => {
+                    if (e.target.value === "__custom__") {
+                      onChange({ ...draft, name: "" });
+                    } else {
+                      onChange({ ...draft, name: e.target.value });
+                    }
+                  }}
+                  className="w-full rounded-control border border-line bg-surface-sunken px-3.5 py-2.5 text-sm text-text focus:border-line-strong focus:outline-none"
+                >
+                  <option value="">— pick a room type —</option>
+                  {suggestions.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                  <option value="__custom__">Other (type below) ↓</option>
+                </select>
+                {(selectValue === "__custom__" || isCustom) && (
+                  <Input
+                    id={`${idPrefix}-name-custom`}
+                    value={draft.name}
+                    maxLength={120}
+                    placeholder="e.g. Loft Suite, Balcony Room"
+                    autoFocus
+                    onChange={(e) => onChange({ ...draft, name: e.target.value })}
+                  />
+                )}
+              </div>
+            );
+          })()}
         </Field>
         <Field label={priceLabel} required>
           <div className="relative">

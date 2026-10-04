@@ -16,14 +16,12 @@ import {
 import { Camera, MapPin, X } from "lucide-react";
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 
-import { usePartnerCapabilities } from "@/features/capability/queries";
 import { canSubmitAsset } from "@/features/rentals/booking-actions";
 import {
   createPartnerRentalAsset,
   fetchPartnerDefaultLocation,
   fetchPartnerRentalAssets,
   fetchRentalTaxonomy,
-  rentalVariantChoices,
   submitPartnerRentalAsset,
   uploadPartnerRentalPhoto,
   type RentalTaxonomySubcategory,
@@ -106,8 +104,6 @@ export function PartnerRentalsWorkspace() {
   const [structuredFields, setStructuredFields] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
 
-  const capabilities = usePartnerCapabilities();
-  const capabilityVariants = rentalVariantChoices(capabilities.data?.capabilities);
   const taxonomy = useQuery({
     queryKey: ["partner-rentals", "taxonomy"],
     queryFn: fetchRentalTaxonomy,
@@ -234,7 +230,7 @@ export function PartnerRentalsWorkspace() {
         : rupeesToPaise(deposit);
     const quantityAvailable = Number.parseInt(quantity.trim(), 10);
     if (!variantId || !title.trim()) {
-      setFormError("Choose a category, service, variant, and a title.");
+      setFormError("Choose what you are renting, and add a title.");
       return;
     }
     if (!location.trim()) {
@@ -246,7 +242,7 @@ export function PartnerRentalsWorkspace() {
       return;
     }
     if (depositPaise == null) {
-      setFormError("Choose a variant so the refundable deposit can load from its category policy.");
+      setFormError("Choose what you are renting so the refundable deposit can load.");
       return;
     }
     if (!Number.isFinite(quantityAvailable) || quantityAvailable < 1) {
@@ -378,8 +374,8 @@ export function PartnerRentalsWorkspace() {
             </Field>
           </section>
 
-          <section className="grid gap-3 sm:grid-cols-3">
-            <Field label="Category" required>
+          <section className="grid gap-3 sm:grid-cols-2">
+            <Field label="Type" required>
               <Select
                 id="rental-subcategory"
                 value={subcategorySlug}
@@ -391,7 +387,7 @@ export function PartnerRentalsWorkspace() {
                   setDepositOverride(null);
                 }}
               >
-                <option value="">Select category</option>
+                <option value="">Select a type</option>
                 {subcategories.map((sub) => (
                   <option key={sub.id} value={sub.slug}>
                     {sub.name}
@@ -399,7 +395,7 @@ export function PartnerRentalsWorkspace() {
                 ))}
               </Select>
             </Field>
-            <Field label="Service" required>
+            <Field label="What are you renting?" required>
               <Select
                 id="rental-service"
                 value={serviceId}
@@ -416,7 +412,7 @@ export function PartnerRentalsWorkspace() {
                   }
                 }}
               >
-                <option value="">Select service</option>
+                <option value="">Select an item</option>
                 {selectedSub?.services.map((svc) => (
                   <option key={svc.id} value={svc.id}>
                     {svc.name}
@@ -424,27 +420,26 @@ export function PartnerRentalsWorkspace() {
                 ))}
               </Select>
             </Field>
-            <Field label="Variant" required>
-              <Select
-                id="rental-variant"
-                value={variantId}
-                onChange={(e) => {
-                  setVariantId(e.target.value);
-                  setStructuredFields({});
-                  setDepositOverride(null);
-                }}
-              >
-                <option value="">Select a variant</option>
-                {(selectedService?.variants.length
-                  ? selectedService.variants.map((v) => ({ id: v.id, name: v.name }))
-                  : capabilityVariants
-                ).map((variant) => (
-                  <option key={variant.id} value={variant.id}>
-                    {variant.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
+            {(selectedService?.variants.length ?? 0) > 1 ? (
+              <Field label="Option" required>
+                <Select
+                  id="rental-variant"
+                  value={variantId}
+                  onChange={(e) => {
+                    setVariantId(e.target.value);
+                    setStructuredFields({});
+                    setDepositOverride(null);
+                  }}
+                >
+                  <option value="">Select an option</option>
+                  {selectedService?.variants.map((variant) => (
+                    <option key={variant.id} value={variant.id}>
+                      {variant.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            ) : null}
           </section>
 
           <section className="flex flex-col gap-3">
@@ -470,24 +465,53 @@ export function PartnerRentalsWorkspace() {
               const enums = Array.isArray(spec.enum) ? spec.enum.map(String) : null;
               const required = requiredSchemaKeys.has(key);
               const label = key.replace(/_/g, " ");
+              const currentValue = structuredFields[key] ?? "";
+
               if (enums || spec.type === "boolean") {
                 const options = enums ?? ["true", "false"];
+                // Determine whether the current value is one of the known enum options.
+                const isOtherSelected = currentValue !== "" && !options.includes(currentValue);
+                const selectValue = isOtherSelected ? "__other__" : currentValue;
+
                 return (
                   <Field key={key} label={label} required={required} showOptional={false}>
-                    <Select
-                      id={`rental-field-${key}`}
-                      value={structuredFields[key] ?? ""}
-                      onChange={(e) =>
-                        setStructuredFields((current) => ({ ...current, [key]: e.target.value }))
-                      }
-                    >
-                      <option value="">Select {label}</option>
-                      {options.map((option) => (
-                        <option key={option} value={option}>
-                          {spec.type === "boolean" ? (option === "true" ? "Yes" : "No") : option}
-                        </option>
-                      ))}
-                    </Select>
+                    <div className="flex flex-col gap-2">
+                      <Select
+                        id={`rental-field-${key}`}
+                        value={selectValue}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === "__other__") {
+                            // Clear stored value so user types in the text input below
+                            setStructuredFields((current) => ({ ...current, [key]: "" }));
+                          } else {
+                            setStructuredFields((current) => ({ ...current, [key]: val }));
+                          }
+                        }}
+                      >
+                        <option value="">Select {label}</option>
+                        {options.map((option) => (
+                          <option key={option} value={option}>
+                            {spec.type === "boolean" ? (option === "true" ? "Yes" : "No") : option}
+                          </option>
+                        ))}
+                        {/* Boolean fields don't need an Other option */}
+                        {spec.type !== "boolean" && (
+                          <option value="__other__">Other…</option>
+                        )}
+                      </Select>
+                      {(selectValue === "__other__" || isOtherSelected) && (
+                        <Input
+                          id={`rental-field-${key}-other`}
+                          value={currentValue}
+                          placeholder={`Describe the ${label.toLowerCase()}`}
+                          autoFocus
+                          onChange={(e) =>
+                            setStructuredFields((current) => ({ ...current, [key]: e.target.value }))
+                          }
+                        />
+                      )}
+                    </div>
                   </Field>
                 );
               }
@@ -496,7 +520,7 @@ export function PartnerRentalsWorkspace() {
                   <Input
                     id={`rental-field-${key}`}
                     inputMode={spec.type === "number" ? "numeric" : "text"}
-                    value={structuredFields[key] ?? ""}
+                    value={currentValue}
                     onChange={(e) =>
                       setStructuredFields((current) => ({ ...current, [key]: e.target.value }))
                     }

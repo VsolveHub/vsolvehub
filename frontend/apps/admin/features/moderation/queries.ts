@@ -6,6 +6,57 @@ export type OpsRentalAsset = Schemas["RentalAsset"];
 export type OpsStayProperty = Schemas["Property"];
 export type ModerationAction = "APPROVE" | "REJECT" | "REMOVE" | "REINSTATE";
 
+export type OpsRentalDisputePhoto = {
+  id: string;
+  url: string;
+};
+
+export type OpsRentalDispute = {
+  booking_id: string;
+  asset_title: string;
+  partner_name: string;
+  reason: string;
+  deposit_amount_paise: number;
+  requested_consume_paise: number;
+  consumed_paise: number;
+  deposit_status: string;
+  awaiting_decision: boolean;
+  photos: OpsRentalDisputePhoto[];
+};
+
+type OpsClientResult<T> = {
+  data?: T;
+  error?: unknown;
+  response: Response;
+};
+
+function opsGet<T>(path: string): Promise<OpsClientResult<T>> {
+  const get = getApiClient().GET as unknown as (url: string) => Promise<OpsClientResult<T>>;
+  return get(path);
+}
+
+function opsPost<T>(path: string, body: unknown): Promise<OpsClientResult<T>> {
+  const post = getApiClient().POST as unknown as (
+    url: string,
+    init: { body: unknown },
+  ) => Promise<OpsClientResult<T>>;
+  return post(path, { body });
+}
+
+export async function fetchOpsRentalDisputes(): Promise<OpsRentalDispute[]> {
+  const data = await request(() => opsGet<OpsRentalDispute[]>("/api/v1/ops/rentals/disputes"));
+  return Array.isArray(data) ? data : [];
+}
+
+export async function decideOpsRentalDispute(
+  bookingId: string,
+  decision: "APPROVE" | "REJECT",
+): Promise<OpsRentalDispute> {
+  return request(() =>
+    opsPost<OpsRentalDispute>(`/api/v1/ops/rentals/disputes/${bookingId}/decision`, { decision }),
+  );
+}
+
 export async function fetchOpsRentals(): Promise<OpsRentalAsset[]> {
   const data = await request(() => getApiClient().GET("/api/v1/ops/rentals"));
   return Array.isArray(data) ? data : [];
@@ -27,6 +78,18 @@ export async function moderateOpsRental(
 export async function fetchOpsStays(): Promise<OpsStayProperty[]> {
   const data = await request(() => getApiClient().GET("/api/v1/ops/stays"));
   return Array.isArray(data) ? data : [];
+}
+
+export function fetchOpsRentalPlatformFee() {
+  return request(() => getApiClient().GET("/api/v1/ops/rentals/platform-fee"));
+}
+
+export function saveOpsRentalPlatformFee(percent: number) {
+  return request(() =>
+    getApiClient().PUT("/api/v1/ops/rentals/platform-fee", {
+      body: { percent },
+    }),
+  );
 }
 
 export async function moderateOpsStay(

@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-query";
 import {
   ApiRequestError,
+  clearAllIdempotencyKeys,
   request,
   type ApiClient,
   type Schemas,
@@ -450,14 +451,39 @@ export function useVerifyOtp(
   });
 }
 
+/**
+ * Drops browser state that would otherwise follow the next person into a new
+ * application. The CSRF token lives in a module variable, so a client-side
+ * route change keeps it; a full navigation is what actually forgets it.
+ */
+function leaveSignedInApp(): void {
+  clearAllIdempotencyKeys();
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem("vsolve.partner.presence");
+  } catch {
+    // Storage can be blocked. The cookie expiry is the credential.
+  }
+  const path = window.location.pathname;
+  if (path === "/login" || path.startsWith("/login/")) return;
+  try {
+    window.location.assign("/login");
+  } catch {
+    // jsdom has no navigation. The cache clear above still stands.
+  }
+}
+
 export function useLogout(apiClient: ApiClient): UseMutationResult<void, Error, void> {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: () => request(() => apiClient.POST("/api/v1/auth/logout/")),
-    onSuccess: () => {
+    // Settled, not only success. A revoked session answers 403 before the old
+    // handler could flush, and stopping there left the cookie in the browser.
+    onSettled: () => {
       queryClient.clear();
       publishToTabs({ type: "session.logout" });
+      leaveSignedInApp();
     },
     retry: false,
   });

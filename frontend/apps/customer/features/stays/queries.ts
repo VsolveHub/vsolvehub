@@ -24,10 +24,11 @@ export function fetchStays(params?: StayFilterParams) {
           food: params?.food,
           min_price: params?.min_price,
           max_price: params?.max_price,
+          tenant_preference: params?.tenant_preference,
           sort: params?.sort,
           limit: params?.limit,
           offset: params?.offset,
-        },
+        } as Record<string, unknown>,
       },
     }),
   );
@@ -74,6 +75,8 @@ export function createStayEnquiry(payload: {
   check_in: string;
   length: number;
   guest_count?: number;
+  adult_count?: number;
+  child_count?: number;
   message?: string;
   unit_id?: string | null;
 }) {
@@ -84,6 +87,10 @@ export function createStayEnquiry(payload: {
         check_in: payload.check_in,
         length: payload.length,
         guest_count: payload.guest_count ?? 1,
+        // Forward adult/child breakdown when the server supports it.
+        // The backend will ignore unknown fields gracefully until the migration lands.
+        ...(payload.adult_count !== undefined && { adult_count: payload.adult_count }),
+        ...(payload.child_count !== undefined && { child_count: payload.child_count }),
         message: payload.message ?? "",
         unit_id: payload.unit_id ?? undefined,
       },

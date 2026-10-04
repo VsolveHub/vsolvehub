@@ -172,7 +172,7 @@ export function PartnerStayEnquiriesWorkspace() {
                     {enquiry.stay_length
                       ? ` · ${stayLengthLabel(enquiry.stay_length, enquiry.price_period)}`
                       : ""}
-                    {` · ${enquiry.guest_count ?? 1} guest${(enquiry.guest_count ?? 1) === 1 ? "" : "s"}`}
+                    {` · ${(enquiry as { adult_count?: number }).adult_count !== undefined ? `${(enquiry as { adult_count?: number }).adult_count} adult${(enquiry as { adult_count?: number }).adult_count === 1 ? "" : "s"}${(enquiry as { child_count?: number }).child_count ? `, ${(enquiry as { child_count?: number }).child_count} child${(enquiry as { child_count?: number }).child_count === 1 ? "" : "ren"}` : ""}` : `${enquiry.guest_count ?? 1} guest${(enquiry.guest_count ?? 1) === 1 ? "" : "s"}`}`}
                   </span>
                   <span className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-text-link">
                     Details

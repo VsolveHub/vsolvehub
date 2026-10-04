@@ -311,7 +311,15 @@ export function StayReservationDetailSheet({
                   value: formatDate(`${reservation.check_out}T12:00:00`),
                 },
                 { label: "Nights", value: String(nights) },
-                { label: "Guests", value: String(reservation.guest_count ?? 0) },
+                {
+                  label: "Guests",
+                  value:
+                    (reservation as { adult_count?: number }).adult_count !== undefined
+                      ? `${(reservation as { adult_count?: number }).adult_count} adult${
+                          (reservation as { adult_count?: number }).adult_count === 1 ? "" : "s"
+                        }${(reservation as { child_count?: number }).child_count ? `, ${(reservation as { child_count?: number }).child_count} child${(reservation as { child_count?: number }).child_count === 1 ? "" : "ren"}` : ""}`
+                      : String(reservation.guest_count ?? 0),
+                },
                 { label: "Room", value: reservation.unit_name ?? "—" },
               ]}
             />
@@ -497,7 +505,15 @@ export function StayEnquiryDetailSheet({
               items={[
                 { label: "From", value: formatDate(`${enquiry.check_in}T12:00:00`) },
                 { label: "For", value: length },
-                { label: "Guests", value: String(enquiry.guest_count ?? 1) },
+                {
+                  label: "Guests",
+                  value:
+                    (enquiry as { adult_count?: number }).adult_count !== undefined
+                      ? `${(enquiry as { adult_count?: number }).adult_count} adult${
+                          (enquiry as { adult_count?: number }).adult_count === 1 ? "" : "s"
+                        }${(enquiry as { child_count?: number }).child_count ? `, ${(enquiry as { child_count?: number }).child_count} child${(enquiry as { child_count?: number }).child_count === 1 ? "" : "ren"}` : ""} (${enquiry.guest_count ?? ((enquiry as { adult_count?: number }).adult_count! + ((enquiry as { child_count?: number }).child_count ?? 0))} total)`
+                      : `${enquiry.guest_count ?? 1} guest${(enquiry.guest_count ?? 1) === 1 ? "" : "s"}`,
+                },
                 { label: "Room", value: enquiry.unit_name ?? "—" },
                 {
                   label: "Estimate",

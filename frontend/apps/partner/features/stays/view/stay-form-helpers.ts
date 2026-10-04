@@ -121,4 +121,12 @@ export function answersFrom(values: unknown): Record<string, string> {
   );
 }
 
-export const FALLBACK_ROOM_NAMES = ["Standard room", "Deluxe room", "Single", "Double sharing"];
+export const FALLBACK_ROOM_NAMES = [
+  "Single Room",
+  "Double Sharing",
+  "Triple Sharing",
+  "Deluxe Room",
+  "Dormitory Bed",
+  "Studio",
+  "Executive Room",
+];

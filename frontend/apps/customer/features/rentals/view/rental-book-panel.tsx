@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Calendar, ShieldCheck, Store, Info, AlertCircle } from "lucide-react";
 import { isApiRequestError } from "@vsolve/api-client";
 import { friendlyErrorMessage } from "@vsolve/query";
@@ -10,7 +10,7 @@ import { Button, IsoDateField, useToast } from "@vsolve/ui";
 
 import { completeOrOpenCheckout } from "../../payment/standalone-handoff";
 import { calculateRentalDays, formatPaise, type RentalAsset } from "../model";
-import { bookRental } from "../queries";
+import { bookRental, fetchRentalPlatformFee } from "../queries";
 
 const BUSINESS_NAME = "Vsolve Hub";
 
@@ -53,7 +53,14 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
   const days = calculateRentalDays(startDate, endDate);
   const rentalChargePaise = days * asset.daily_rate_paise * clampedQty;
   const depositPaise = asset.deposit_paise * clampedQty;
-  const totalDuePaise = rentalChargePaise + depositPaise;
+  const platformFee = useQuery({
+    queryKey: ["rental-platform-fee"],
+    queryFn: fetchRentalPlatformFee,
+    staleTime: 30_000,
+  });
+  const feePercent = platformFee.data?.percent ?? 0;
+  const platformFeePaise = Math.floor((rentalChargePaise * feePercent) / 100);
+  const totalDuePaise = rentalChargePaise + platformFeePaise + depositPaise;
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -268,6 +275,13 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
             </span>
             <span className="font-semibold text-text">{formatPaise(rentalChargePaise)}</span>
           </div>
+
+          {feePercent > 0 ? (
+            <div className="flex justify-between items-center text-text-secondary">
+              <span>Platform fee ({feePercent}%)</span>
+              <span className="font-semibold text-text">{formatPaise(platformFeePaise)}</span>
+            </div>
+          ) : null}
 
           <div className="flex justify-between items-center text-text-secondary">
             <span className="flex items-center gap-1">

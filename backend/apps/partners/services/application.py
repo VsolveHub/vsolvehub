@@ -396,7 +396,10 @@ def submit_partner_application(
             partner_links__is_active=True,
         ),
     )
-    if application.track != PartnerApplication.Track.STAY_HOST:
+    if application.track not in (
+        PartnerApplication.Track.STAY_HOST,
+        PartnerApplication.Track.RENTAL_OWNER,
+    ):
         _validate_service_configuration(
             skills=skills,
             variants=variants,

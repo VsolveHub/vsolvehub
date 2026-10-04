@@ -4,6 +4,7 @@ import { ApiRequestError, type Schemas } from "@vsolve/api-client";
 import { Badge, Button, ErrorState, Spinner } from "@vsolve/ui";
 import Link from "next/link";
 
+import { isListingTrack } from "../model/steps";
 import { usePartnerApplication } from "../queries";
 import { DocumentUpload } from "./document-upload";
 
@@ -158,9 +159,9 @@ export function DocumentsStep() {
             Back
           </Button>
         </Link>
-        <Link href="/apply/schedule">
+        <Link href={isListingTrack(query.data?.track) ? "/apply/review" : "/apply/schedule"}>
           <Button size="lg" className="font-bold text-sm h-12 px-5 shadow-md">
-            Continue to Working Hours
+            {isListingTrack(query.data?.track) ? "Continue to review" : "Continue to Working Hours"}
           </Button>
         </Link>
       </div>

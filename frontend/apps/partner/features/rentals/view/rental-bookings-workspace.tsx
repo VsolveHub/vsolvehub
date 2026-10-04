@@ -11,6 +11,7 @@ import type { BookingAction } from "@/features/rentals/booking-actions";
 import {
   fetchPartnerRentalBookings,
   partnerRentalBookingAction,
+  uploadPartnerDisputePhoto,
 } from "@/features/rentals/queries";
 import { RentalBookingDetailSheet, rentalBookingStatusLabel, rentalBookingTone } from "@/features/rentals/view/rental-booking-sheet";
 import { RENTAL_SECTIONS } from "@/features/rentals/view/rental-sections";
@@ -28,16 +29,25 @@ const BOOKING_STATUS_FILTERS = [
 
 type BookingStatusFilter = (typeof BOOKING_STATUS_FILTERS)[number];
 
-type BookingActionBody = { pin?: string; reason?: string; consume_paise: number };
+type BookingActionBody = {
+  pin?: string;
+  reason?: string;
+  consume_paise: number;
+  photo_ids?: string[];
+};
 
 type HandoverModal = { bookingId: string; pin: string; error: string | null };
+const MAX_DISPUTE_PHOTOS = 5;
+
 type DisputeModal = {
   bookingId: string;
   reason: string;
   consumeRupees: string;
+  photos: File[];
   error: string | null;
 };
 type CancelModal = { bookingId: string; reason: string; error: string | null };
+type DepositChoice = { bookingId: string };
 
 function rupeesToPaise(input: string): number | null {
   const trimmed = input.trim().replace(/,/g, "").replace(/^₹\s*/u, "");
@@ -81,6 +91,7 @@ export function PartnerRentalBookingsWorkspace() {
   const [handoverModal, setHandoverModal] = useState<HandoverModal | null>(null);
   const [disputeModal, setDisputeModal] = useState<DisputeModal | null>(null);
   const [cancelModal, setCancelModal] = useState<CancelModal | null>(null);
+  const [depositChoice, setDepositChoice] = useState<DepositChoice | null>(null);
 
   const queryStatus = searchParams?.get("status") ?? "";
   const bookingStatusFilter = BOOKING_STATUS_FILTERS.includes(queryStatus as BookingStatusFilter)
@@ -109,12 +120,33 @@ export function PartnerRentalBookingsWorkspace() {
   };
 
   const act = useMutation({
-    mutationFn: (input: { id: string; action: BookingAction; body?: BookingActionBody }) =>
-      partnerRentalBookingAction(input.id, input.action, input.body),
-    onSuccess: () => {
+    mutationFn: async (input: {
+      id: string;
+      action: BookingAction;
+      body?: BookingActionBody;
+      photos?: File[];
+    }) => {
+      const photoIds: string[] = [];
+      for (const file of input.photos ?? []) {
+        const uploaded = await uploadPartnerDisputePhoto(file);
+        photoIds.push(uploaded.upload_id);
+      }
+      return partnerRentalBookingAction(input.id, input.action, {
+        ...input.body,
+        consume_paise: input.body?.consume_paise ?? 0,
+        ...(photoIds.length > 0 ? { photo_ids: photoIds } : {}),
+      });
+    },
+    onSuccess: (_data, variables) => {
       setHandoverModal(null);
       setDisputeModal(null);
       setCancelModal(null);
+      if (variables.action === "return") {
+        setSelectedId(null);
+        setDepositChoice({ bookingId: variables.id });
+      } else {
+        setDepositChoice(null);
+      }
       invalidate();
     },
     onError: (err: unknown) => {
@@ -146,7 +178,7 @@ export function PartnerRentalBookingsWorkspace() {
     }
     if (action === "dispute-deposit") {
       setSelectedId(null);
-      setDisputeModal({ bookingId, reason: "", consumeRupees: "", error: null });
+      setDisputeModal({ bookingId, reason: "", consumeRupees: "", photos: [], error: null });
       return;
     }
     if (action === "cancel") {
@@ -195,10 +227,32 @@ export function PartnerRentalBookingsWorkspace() {
       }
       consumePaise = parsed;
     }
+    if (disputeModal.photos.length > MAX_DISPUTE_PHOTOS) {
+      setDisputeModal({ ...disputeModal, error: "Attach at most 5 photos." });
+      return;
+    }
     act.mutate({
       id: disputeModal.bookingId,
       action: "dispute-deposit",
       body: { reason, consume_paise: consumePaise },
+      photos: disputeModal.photos,
+    });
+  }
+
+  function chooseDispute() {
+    if (!depositChoice) return;
+    const bookingId = depositChoice.bookingId;
+    setDepositChoice(null);
+    setSelectedId(null);
+    setDisputeModal({ bookingId, reason: "", consumeRupees: "", photos: [], error: null });
+  }
+
+  function chooseReturnDeposit() {
+    if (!depositChoice) return;
+    act.mutate({
+      id: depositChoice.bookingId,
+      action: "release-deposit",
+      body: { consume_paise: 0 },
     });
   }
 
@@ -344,12 +398,43 @@ export function PartnerRentalBookingsWorkspace() {
       </Dialog>
 
       <Dialog
+        open={Boolean(depositChoice)}
+        onOpenChange={(open) => {
+          if (!open && !act.isPending) setDepositChoice(null);
+        }}
+        title="Item is back"
+        description="Return the deposit to the customer, or raise a dispute if something is damaged or missing."
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              disabled={act.isPending}
+              onClick={chooseDispute}
+            >
+              Raise dispute
+            </Button>
+            <Button
+              loading={act.isPending}
+              loadingLabel="Returning deposit…"
+              onClick={chooseReturnDeposit}
+            >
+              Return deposit
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-text-secondary">
+          Returning the deposit sends the full amount back. A dispute is for damage or something missing.
+        </p>
+      </Dialog>
+
+      <Dialog
         open={Boolean(disputeModal)}
         onOpenChange={(open) => {
           if (!open && !act.isPending) setDisputeModal(null);
         }}
         title="Raise deposit dispute"
-        description="Explain the issue. Leave consume blank (or 0) to dispute without taking money from the deposit."
+        description="Say what is wrong and add up to 5 photos. Operations reviews this before any money moves. Leave the amount blank if you are not asking to keep any of the deposit."
         footer={
           <>
             <Button variant="ghost" disabled={act.isPending} onClick={() => setDisputeModal(null)}>
@@ -380,8 +465,8 @@ export function PartnerRentalBookingsWorkspace() {
             />
           </Field>
           <Field
-            label="Amount to consume from deposit"
-            description="Rupees. Leave blank for none (0). Blank never means full deposit."
+            label="Amount to keep"
+            description="Optional. The rest of the deposit goes back to the customer."
             showOptional={false}
           >
             <div className="relative">
@@ -400,6 +485,57 @@ export function PartnerRentalBookingsWorkspace() {
                 placeholder="0"
               />
             </div>
+          </Field>
+          <Field
+            label="Photos"
+            description="JPEG, PNG or WebP. Up to 5. These stay private."
+            showOptional
+          >
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              multiple
+              className="block w-full text-sm text-text-secondary file:mr-3 file:rounded-control file:border-0 file:bg-surface-sunken file:px-3 file:py-2 file:text-sm file:font-semibold file:text-navy-900"
+              onChange={(e) => {
+                const picked = Array.from(e.target.files ?? []);
+                setDisputeModal((current) => {
+                  if (!current) return current;
+                  const photos = [...current.photos, ...picked].slice(0, MAX_DISPUTE_PHOTOS);
+                  const error =
+                    current.photos.length + picked.length > MAX_DISPUTE_PHOTOS
+                      ? "Attach at most 5 photos."
+                      : null;
+                  return { ...current, photos, error };
+                });
+                e.target.value = "";
+              }}
+            />
+            {disputeModal && disputeModal.photos.length > 0 ? (
+              <ul className="mt-2 flex flex-col gap-1 text-sm text-text-secondary">
+                {disputeModal.photos.map((file, index) => (
+                  <li key={`${file.name}-${index}`} className="flex items-center justify-between gap-2">
+                    <span className="truncate">{file.name}</span>
+                    <button
+                      type="button"
+                      className="shrink-0 font-semibold text-text-link"
+                      onClick={() =>
+                        setDisputeModal((current) =>
+                          current
+                            ? {
+                                ...current,
+                                photos: current.photos.filter((_, photoIndex) => photoIndex !== index),
+                                error: null,
+                              }
+                            : current,
+                        )
+                      }
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </Field>
         </div>
       </Dialog>

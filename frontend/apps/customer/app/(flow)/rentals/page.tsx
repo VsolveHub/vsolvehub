@@ -4,12 +4,7 @@ import Link from "next/link";
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import {
-  FileCheck2,
-  MapPin,
-  Search,
-  Wrench,
-} from "lucide-react";
+import { FileCheck2, MapPin, Search, Wrench } from "lucide-react";
 import { Button, EmptyState, ErrorState, Skeleton } from "@vsolve/ui";
 
 import { fetchRentals } from "@/features/rentals/queries";
@@ -24,7 +19,7 @@ function RentalsBrowseContent() {
   const [appliedQuery, setAppliedQuery] = useState("");
   const [appliedLocation, setAppliedLocation] = useState("");
   const [filters, setFilters] = useState<ActiveRentalFilters>(
-    initCategory ? { categorySlug: initCategory } : {}
+    initCategory ? { categorySlug: initCategory } : {},
   );
 
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -53,8 +48,8 @@ function RentalsBrowseContent() {
       appliedLocation,
       filters.categorySlug,
       filters.serviceSlug,
-      filters.startDate,
-      filters.endDate,
+      filters.minPrice,
+      filters.maxPrice,
     ],
     queryFn: () =>
       fetchRentals({
@@ -62,8 +57,8 @@ function RentalsBrowseContent() {
         location: appliedLocation,
         service: filters.serviceSlug,
         category: filters.categorySlug,
-        start_date: filters.startDate,
-        end_date: filters.endDate,
+        min_price: filters.minPrice,
+        max_price: filters.maxPrice,
       }),
     staleTime: 30_000,
   });
@@ -76,10 +71,10 @@ function RentalsBrowseContent() {
           <div className="max-w-2xl space-y-2">
             <div className="inline-flex items-center gap-2 rounded-full border border-navy-300/30 bg-navy-500/15 px-3 py-1 text-xs font-semibold text-navy-200">
               <Wrench className="size-3.5" />
-              Verified Tools & Equipment Rentals
+              Verified Tools &amp; Equipment Rentals
             </div>
             <h1 className="text-3xl font-extrabold tracking-tight text-warm-0 sm:text-4xl lg:text-5xl">
-              Rent Tools & Equipment
+              Rent Tools &amp; Equipment
             </h1>
             <p className="text-sm text-warm-200 sm:text-base">
               Rent certified power tools, carpentry kits, and equipment with verified partners.
@@ -132,11 +127,7 @@ function RentalsBrowseContent() {
       </section>
 
       {/* Filter Chips */}
-      <RentalFilters
-        activeFilters={filters}
-        onChangeFilter={setFilters}
-        count={rentals.length}
-      />
+      <RentalFilters activeFilters={filters} onChangeFilter={setFilters} count={rentals.length} />
 
       {/* State Rendering */}
       {isLoading ? (

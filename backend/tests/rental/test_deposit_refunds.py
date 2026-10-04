@@ -20,6 +20,7 @@ from apps.rental.models import RentalBooking, RentalDeposit
 from apps.rental.services import (
     create_asset,
     create_booking,
+    decide_deposit_dispute,
     dispute_deposit,
     handover_booking,
     mark_deposit_held,
@@ -157,11 +158,21 @@ def test_dispute_partial_refunds_residual_and_ledgers_consume(rental_world):
     consume = 30000
     residual = 50000
 
-    disputed = dispute_deposit(
+    opened = dispute_deposit(
         booking=booking,
         partner=rental_world["partner"],
         reason="Scratched barrel",
         consume_paise=consume,
+    )
+    assert opened.status == RentalBooking.Status.DISPUTED
+    opened.deposit.refresh_from_db()
+    assert opened.deposit.status == RentalDeposit.Status.HELD
+    assert not attempt.refunds.exclude(status=Refund.Status.FAILED).exists()
+
+    disputed = decide_deposit_dispute(
+        booking=opened,
+        actor=rental_world["owner"],
+        decision="APPROVE",
     )
     assert disputed.status == RentalBooking.Status.DISPUTED
     disputed.deposit.refresh_from_db()
@@ -186,11 +197,16 @@ def test_dispute_zero_consume_refunds_full_deposit(rental_world):
     booking = _returned_paid_booking(rental_world, deposit_paise=45000)
     attempt = booking.deposit.payment_attempt
 
-    disputed = dispute_deposit(
+    opened = dispute_deposit(
         booking=booking,
         partner=rental_world["partner"],
         reason="Flag only",
         consume_paise=0,
+    )
+    disputed = decide_deposit_dispute(
+        booking=opened,
+        actor=rental_world["owner"],
+        decision="APPROVE",
     )
     disputed.deposit.refresh_from_db()
     assert disputed.deposit.status == RentalDeposit.Status.RELEASED
@@ -209,11 +225,16 @@ def test_dispute_full_consume_no_gateway_refund(rental_world):
     booking = _returned_paid_booking(rental_world, deposit_paise=60000)
     attempt = booking.deposit.payment_attempt
 
-    disputed = dispute_deposit(
+    opened = dispute_deposit(
         booking=booking,
         partner=rental_world["partner"],
         reason="Lost charger and hood",
         consume_paise=60000,
+    )
+    disputed = decide_deposit_dispute(
+        booking=opened,
+        actor=rental_world["owner"],
+        decision="APPROVE",
     )
     disputed.deposit.refresh_from_db()
     assert disputed.deposit.status == RentalDeposit.Status.FULLY_CONSUMED
@@ -252,3 +273,29 @@ def test_release_without_payment_attempt_still_releases(rental_world):
     assert deposit.status == RentalDeposit.Status.RELEASED
     assert deposit.payment_attempt_id is None
     assert Refund.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_ops_reject_returns_the_full_deposit(rental_world):
+    booking = _returned_paid_booking(rental_world, deposit_paise=70000)
+    attempt = booking.deposit.payment_attempt
+    opened = dispute_deposit(
+        booking=booking,
+        partner=rental_world["partner"],
+        reason="Scuff on the case",
+        consume_paise=25000,
+    )
+    decided = decide_deposit_dispute(
+        booking=opened,
+        actor=rental_world["owner"],
+        decision="REJECT",
+    )
+    decided.deposit.refresh_from_db()
+    assert decided.deposit.status == RentalDeposit.Status.RELEASED
+    assert decided.deposit.consumed_paise == 0
+    refund = attempt.refunds.exclude(status=Refund.Status.FAILED).get()
+    assert refund.amount_paise == 70000
+    assert refund.reason_code == "rental_deposit_dispute_rejected"
+    assert not PartnerLedgerEntry.objects.filter(
+        idempotency_key=f"rental-deposit-consume:{booking.deposit_id}"
+    ).exists()

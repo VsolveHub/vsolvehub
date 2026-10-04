@@ -30,17 +30,23 @@ export const APPLICATION_STEPS: readonly ApplicationStep[] = [
 /**
  * What the partner signed up to do, as the server records it on the application.
  *
- * `STAY_HOST` lists their own property. Trades, service areas and working hours
- * describe travelling to a customer, so a host never sees those steps.
+ * `STAY_HOST` lists a property. `RENTAL_OWNER` lists items for rent. Trades,
+ * service areas and working hours describe travelling to a customer, so neither
+ * listing path sees those steps.
  */
-export type ApplicationTrack = "SERVICES" | "STAY_HOST";
+export type ApplicationTrack = "SERVICES" | "STAY_HOST" | "RENTAL_OWNER";
 
-const STAY_HOST_STEPS = new Set(["/apply", "/apply/about", "/apply/consent", "/apply/documents", "/apply/review"]);
+const LISTING_STEPS = new Set(["/apply", "/apply/about", "/apply/consent", "/apply/documents", "/apply/review"]);
+
+/** Stays and rentals share the short application. Services walk the full list. */
+export function isListingTrack(track?: string | null): boolean {
+  return track === "STAY_HOST" || track === "RENTAL_OWNER";
+}
 
 /** The step sequence for this partner. Every caller goes through here, never the constant. */
 export function applicationSteps(track?: string | null): readonly ApplicationStep[] {
-  return track === "STAY_HOST"
-    ? APPLICATION_STEPS.filter((step) => STAY_HOST_STEPS.has(step.href))
+  return isListingTrack(track)
+    ? APPLICATION_STEPS.filter((step) => LISTING_STEPS.has(step.href))
     : APPLICATION_STEPS;
 }
 

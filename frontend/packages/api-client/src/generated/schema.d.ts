@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.66.0)
- * Checksum: a633f8bcd305e76d
+ * Checksum: 1b8a68f0cdb72d00
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -4045,6 +4045,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ops/rentals/disputes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ops_rentals_disputes_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/rentals/disputes/{booking_id}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ops_rentals_disputes_decision_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/rentals/platform-fee": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ops_rentals_platform_fee_retrieve"];
+        put: operations["ops_rentals_platform_fee_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ops/reports/": {
         parameters: {
             query?: never;
@@ -5537,6 +5585,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/partner/rentals/assets/{asset_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description PATCH to edit, DELETE to archive. */
+        delete: operations["partner_rentals_assets_destroy"];
+        options?: never;
+        head?: never;
+        /** @description PATCH to edit, DELETE to archive. */
+        patch: operations["partner_rentals_assets_partial_update"];
+        trace?: never;
+    };
     "/api/v1/partner/rentals/assets/{asset_id}/{action}": {
         parameters: {
             query?: never;
@@ -5548,6 +5614,23 @@ export interface paths {
         put?: never;
         post: operations["partner_rentals_asset_action"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/rentals/assets/{asset_id}/media/{media_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Remove a single photo from an ad. */
+        delete: operations["partner_rentals_assets_media_destroy"];
         options?: never;
         head?: never;
         patch?: never;
@@ -6261,6 +6344,23 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["rentals_book_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rentals/platform-fee": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The live platform-fee percent. Customers use it to show the charge before they book. */
+        get: operations["rentals_platform_fee_retrieve"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -11158,6 +11258,7 @@ export interface components {
             reason: string;
             /** @default 0 */
             consume_paise: number;
+            photo_ids?: string[];
         };
         /** @description One Partner's own money for one job — never the Customer's invoice. */
         PartnerBookingEarning: {
@@ -11675,6 +11776,30 @@ export interface components {
             /** @default true */
             is_active: boolean;
         };
+        /** @description The owner's view of the booking: includes renter's name and phone to coordinate. */
+        PartnerRentalBooking: {
+            /** Format: uuid */
+            readonly id: string;
+            status?: components["schemas"]["StatusD8aEnum"];
+            /** Format: date */
+            start_date: string;
+            /** Format: date */
+            end_date: string;
+            readonly quantity: number;
+            price_paise: number;
+            platform_fee_percent?: number;
+            platform_fee_paise?: number;
+            pickup_or_delivery_mode?: string;
+            notes?: string;
+            readonly asset: components["schemas"]["RentalAsset"];
+            readonly deposit: components["schemas"]["RentalDeposit"];
+            /** @description Plaintext PIN for the customer only, once the booking is paid/active. */
+            readonly handover_pin: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            readonly customer_name: string;
+            readonly customer_phone: string | null;
+        };
         PartnerReservationActionRequest: {
             /** @default  */
             reason: string;
@@ -11953,6 +12078,16 @@ export interface components {
             budget_max_paise?: number | null;
             additional_details?: string;
             language?: string;
+        };
+        /** @description Fields the owner can edit on an existing ad. All optional — only sent fields change. */
+        PatchedUpdateAssetRequest: {
+            title?: string;
+            description?: string;
+            daily_rate_paise?: number;
+            deposit_paise?: number;
+            location_text?: string;
+            quantity_available?: number;
+            structured_fields?: unknown;
         };
         PatchedUpdatePropertyRequest: {
             title?: string;
@@ -13787,7 +13922,7 @@ export interface components {
             readonly quantity_available: number;
             readonly condition_grade: components["schemas"]["ConditionGradeEnum"];
             readonly current_status: components["schemas"]["CurrentStatusEnum"];
-            readonly moderation_status: components["schemas"]["ModerationStatusEnum"];
+            readonly moderation_status: components["schemas"]["RentalAssetModerationStatusEnum"];
             readonly public_state: string;
             readonly partner_name: string;
             /** Format: uuid */
@@ -13809,16 +13944,28 @@ export interface components {
             /** Format: date-time */
             readonly created_at: string;
         };
+        /**
+         * @description * `DRAFT` - Draft
+         *     * `PENDING` - Pending
+         *     * `APPROVED` - Approved
+         *     * `REJECTED` - Rejected
+         *     * `REMOVED` - Removed
+         *     * `PAUSED` - Paused
+         * @enum {string}
+         */
+        RentalAssetModerationStatusEnum: "DRAFT" | "PENDING" | "APPROVED" | "REJECTED" | "REMOVED" | "PAUSED";
         RentalBooking: {
             /** Format: uuid */
             readonly id: string;
-            status?: components["schemas"]["RentalBookingStatusEnum"];
+            status?: components["schemas"]["StatusD8aEnum"];
             /** Format: date */
             start_date: string;
             /** Format: date */
             end_date: string;
             readonly quantity: number;
             price_paise: number;
+            platform_fee_percent?: number;
+            platform_fee_paise?: number;
             pickup_or_delivery_mode?: string;
             notes?: string;
             readonly asset: components["schemas"]["RentalAsset"];
@@ -13828,22 +13975,14 @@ export interface components {
             /** Format: date-time */
             readonly created_at: string;
         };
-        /**
-         * @description * `PENDING_PAYMENT` - Pending payment
-         *     * `CONFIRMED` - Confirmed
-         *     * `HANDOVER` - Handed over
-         *     * `RETURNED` - Returned
-         *     * `CANCELLED` - Cancelled
-         *     * `DISPUTED` - Disputed
-         * @enum {string}
-         */
-        RentalBookingStatusEnum: "PENDING_PAYMENT" | "CONFIRMED" | "HANDOVER" | "RETURNED" | "CANCELLED" | "DISPUTED";
         RentalDeposit: {
             /** Format: uuid */
             readonly id: string;
             amount_paise: number;
             status?: components["schemas"]["RentalDepositStatusEnum"];
             consumed_paise?: number;
+            /** @description Partner claim, in paise. Empty until a dispute is raised. */
+            requested_consume_paise?: number | null;
             /** @description Operator note. A live hold is recorded only after payment capture. */
             provider_note?: string;
             /** Format: uuid */
@@ -13870,6 +14009,12 @@ export interface components {
             /** Format: uri */
             url: string;
             original_name: string;
+        };
+        RentalPlatformFee: {
+            percent: number;
+        };
+        RentalPlatformFeeRequest: {
+            percent: number;
         };
         RentalTaxonomyService: {
             /** Format: uuid */
@@ -15068,6 +15213,16 @@ export interface components {
          * @enum {string}
          */
         StatusD1aEnum: "OPEN" | "RESOLVED";
+        /**
+         * @description * `PENDING_PAYMENT` - Pending payment
+         *     * `CONFIRMED` - Confirmed
+         *     * `HANDOVER` - Handed over
+         *     * `RETURNED` - Returned
+         *     * `CANCELLED` - Cancelled
+         *     * `DISPUTED` - Disputed
+         * @enum {string}
+         */
+        StatusD8aEnum: "PENDING_PAYMENT" | "CONFIRMED" | "HANDOVER" | "RETURNED" | "CANCELLED" | "DISPUTED";
         StayAmenity: {
             key: string;
             label: string;
@@ -15399,9 +15554,10 @@ export interface components {
         /**
          * @description * `SERVICES` - Offer services
          *     * `STAY_HOST` - List my property
+         *     * `RENTAL_OWNER` - Rent out items
          * @enum {string}
          */
-        TrackEnum: "SERVICES" | "STAY_HOST";
+        TrackEnum: "SERVICES" | "STAY_HOST" | "RENTAL_OWNER";
         /** @description The replacement's price for one unfinished milestone. */
         TransferQuoteRequest: {
             /** Format: uuid */
@@ -25401,6 +25557,88 @@ export interface operations {
             };
         };
     };
+    ops_rentals_disputes_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ops_rentals_disputes_decision_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ops_rentals_platform_fee_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RentalPlatformFee"];
+                };
+            };
+        };
+    };
+    ops_rentals_platform_fee_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RentalPlatformFeeRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["RentalPlatformFeeRequest"];
+                "multipart/form-data": components["schemas"]["RentalPlatformFeeRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RentalPlatformFee"];
+                };
+            };
+        };
+    };
     ops_reports_list: {
         parameters: {
             query?: never;
@@ -29084,6 +29322,53 @@ export interface operations {
             };
         };
     };
+    partner_rentals_assets_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    partner_rentals_assets_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedUpdateAssetRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedUpdateAssetRequest"];
+                "multipart/form-data": components["schemas"]["PatchedUpdateAssetRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RentalAsset"];
+                };
+            };
+        };
+    };
     partner_rentals_asset_action: {
         parameters: {
             query?: never;
@@ -29106,6 +29391,27 @@ export interface operations {
             };
         };
     };
+    partner_rentals_assets_media_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+                media_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     partner_rentals_bookings_list: {
         parameters: {
             query?: {
@@ -29122,7 +29428,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RentalBooking"][];
+                    "application/json": components["schemas"]["PartnerRentalBooking"][];
                 };
             };
         };
@@ -29150,7 +29456,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RentalBooking"];
+                    "application/json": components["schemas"]["PartnerRentalBooking"];
                 };
             };
         };
@@ -30550,6 +30856,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RentalBooking"];
+                };
+            };
+        };
+    };
+    rentals_platform_fee_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RentalPlatformFee"];
                 };
             };
         };

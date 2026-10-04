@@ -12,6 +12,7 @@ from django.db import models
 from django.db.models import Q, QuerySet
 
 from apps.foundation.slugs import slug_base, unique_slug
+from apps.foundation.storage import private_file_storage
 
 
 def rental_ad_upload_to(instance: models.Model, filename: str) -> str:
@@ -54,6 +55,7 @@ class RentalAsset(models.Model):
         APPROVED = "APPROVED", "Approved"
         REJECTED = "REJECTED", "Rejected"
         REMOVED = "REMOVED", "Removed"
+        PAUSED = "PAUSED", "Paused"
 
     condition_grade = models.CharField(
         max_length=16, choices=ConditionGrade.choices, default=ConditionGrade.GOOD
@@ -103,12 +105,14 @@ class RentalAsset(models.Model):
     def public_state(self) -> str:
         if self.current_status == self.Status.RETIRED:
             return "RETIRED"
-        if self.moderation_status == "PENDING":
-            return "PENDING_REVIEW"
-        if self.moderation_status == "REJECTED":
-            return "REJECTED"
-        if self.moderation_status == "REMOVED":
-            return "REMOVED"
+        status_map = {
+            "PENDING": "PENDING_REVIEW",
+            "REJECTED": "REJECTED",
+            "REMOVED": "REMOVED",
+            "PAUSED": "PAUSED",
+        }
+        if self.moderation_status in status_map:
+            return status_map[self.moderation_status]
         if self.moderation_status == "APPROVED" and self.current_status == self.Status.ACTIVE:
             return "PUBLISHED"
         return "DRAFT"
@@ -150,6 +154,11 @@ class RentalDeposit(models.Model):
     amount_paise = models.PositiveIntegerField()
     status = models.CharField(max_length=24, choices=Status.choices, default=Status.REQUESTED)
     consumed_paise = models.PositiveIntegerField(default=0)
+    requested_consume_paise = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Partner claim, in paise. Empty until a dispute is raised.",
+    )
     provider_note = models.CharField(
         max_length=240,
         blank=True,
@@ -188,6 +197,9 @@ class RentalBooking(models.Model):
     start_date = models.DateField()
     end_date = models.DateField()
     price_paise = models.PositiveIntegerField()
+    #: Snapshot of the platform fee at booking time. Later rate changes do not rewrite it.
+    platform_fee_percent = models.PositiveSmallIntegerField(default=0)
+    platform_fee_paise = models.PositiveIntegerField(default=0)
     pickup_or_delivery_mode = models.CharField(max_length=32, default="PICKUP")
     notes = models.TextField(blank=True)
     handover_pin_hash = models.CharField(max_length=255, blank=True, default="")
@@ -196,6 +208,36 @@ class RentalBooking(models.Model):
 
     class Meta:
         ordering = ("-created_at",)
+
+
+class RentalPlatformFee(models.Model):
+    """The one percentage added on top of every rental fee. The deposit is excluded."""
+
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+    percent = models.PositiveSmallIntegerField(default=0)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(id=1),
+                name="rental_platform_fee_singleton",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(percent__lte=100),
+                name="rental_platform_fee_percent_range",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.percent}%"
 
 
 class RentalBookingLine(models.Model):
@@ -304,6 +346,50 @@ class RentalPhotoUpload(models.Model):
 
     class Meta:
         ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return self.original_name
+
+
+def rental_dispute_upload_to(instance: models.Model, filename: str) -> str:
+    ext = Path(filename).suffix.lower()
+    if ext not in {".jpg", ".jpeg", ".png", ".webp"}:
+        ext = ".jpg"
+    partner_key = getattr(instance, "partner_id", None) or "anon"
+    return f"rental-disputes/{partner_key}/{uuid.uuid4().hex}{ext}"
+
+
+class RentalDisputePhoto(models.Model):
+    """Damage evidence attached when a partner raises a deposit dispute.
+
+    Stored with the private file backend, so it lands in the Cloudflare R2
+    private bucket once R2 is configured, and on local disk until then.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    partner = models.ForeignKey(
+        "partners.PartnerProfile",
+        on_delete=models.CASCADE,
+        related_name="rental_dispute_photos",
+    )
+    booking = models.ForeignKey(
+        RentalBooking,
+        on_delete=models.CASCADE,
+        related_name="dispute_photos",
+        null=True,
+        blank=True,
+    )
+    stored_file = models.FileField(
+        upload_to=rental_dispute_upload_to,
+        storage=private_file_storage,
+    )
+    original_name = models.CharField(max_length=180)
+    content_type = models.CharField(max_length=80)
+    size_bytes = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("created_at",)
 
     def __str__(self) -> str:
         return self.original_name

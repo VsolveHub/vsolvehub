@@ -41,6 +41,8 @@ export default function PartnerListingsPage() {
     subscribePending,
     subscribeError,
     handleStartEdit,
+    validateCreate,
+    validateEdit,
     handleCreate,
     handleEdit,
     handleServiceChange,
@@ -129,6 +131,7 @@ export default function PartnerListingsPage() {
         services={services}
         onFieldChange={handleCreateFieldChange}
         onServiceChange={handleServiceChange}
+        onValidate={validateCreate}
         onSubmit={handleCreate}
         serverError={
           createError && Object.keys(createErrors).length === 0
@@ -144,6 +147,7 @@ export default function PartnerListingsPage() {
         errors={editErrors}
         isPending={updatePending}
         onFieldChange={handleEditFieldChange}
+        onValidate={validateEdit}
         onSubmit={handleEdit}
         serverError={
           updateError && Object.keys(editErrors).length === 0

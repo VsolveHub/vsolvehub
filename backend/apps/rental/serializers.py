@@ -111,12 +111,34 @@ class CreateBookingSerializer(serializers.Serializer):
         return "PICKUP"
 
 
+class OpsRentalDisputeDecisionSerializer(serializers.Serializer):
+    decision = serializers.ChoiceField(choices=["APPROVE", "REJECT"])
+
+
 class PartnerBookingActionSerializer(serializers.Serializer):
     pin = serializers.CharField(required=False, allow_blank=True, default="")
     reason = serializers.CharField(required=False, allow_blank=True, default="")
     # Optional partial deposit consume for dispute-deposit. Default 0 = dispute
     # without consuming; only amounts > 0 consume held deposit (never silent full).
     consume_paise = serializers.IntegerField(min_value=0, required=False, default=0)
+    photo_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        default=list,
+        max_length=5,
+    )
+
+
+class UpdateAssetSerializer(serializers.Serializer):
+    """Fields the owner can edit on an existing ad. All optional — only sent fields change."""
+
+    title = serializers.CharField(max_length=180, required=False)
+    description = serializers.CharField(required=False, allow_blank=True)
+    daily_rate_paise = serializers.IntegerField(min_value=1, required=False)
+    deposit_paise = serializers.IntegerField(min_value=0, required=False)
+    location_text = serializers.CharField(max_length=180, required=False)
+    quantity_available = serializers.IntegerField(min_value=1, required=False)
+    structured_fields = serializers.JSONField(required=False)
 
 
 class RentalDepositSerializer(serializers.ModelSerializer):
@@ -130,6 +152,7 @@ class RentalDepositSerializer(serializers.ModelSerializer):
             "amount_paise",
             "status",
             "consumed_paise",
+            "requested_consume_paise",
             "provider_note",
             "payment_attempt_id",
             "simulated_capture_available",
@@ -158,6 +181,8 @@ class RentalBookingSerializer(serializers.ModelSerializer):
             "end_date",
             "quantity",
             "price_paise",
+            "platform_fee_percent",
+            "platform_fee_paise",
             "pickup_or_delivery_mode",
             "notes",
             "asset",
@@ -186,6 +211,36 @@ class RentalBookingSerializer(serializers.ModelSerializer):
         ):
             return None
         return booking.handover_pin_hash or None
+
+
+class PartnerRentalBookingSerializer(RentalBookingSerializer):
+    """The owner's view of the booking: includes renter's name and phone to coordinate."""
+
+    customer_name = serializers.SerializerMethodField()
+    customer_phone = serializers.SerializerMethodField()
+
+    class Meta(RentalBookingSerializer.Meta):
+        fields = (
+            *RentalBookingSerializer.Meta.fields,
+            "customer_name",
+            "customer_phone",
+        )
+
+    def get_customer_name(self, booking: RentalBooking) -> str:
+        customer = booking.customer
+        return (
+            getattr(customer, "display_name", "")
+            or getattr(customer, "full_name", "")
+            or getattr(customer, "first_name", "Customer")
+        )
+
+    def get_customer_phone(self, booking: RentalBooking) -> str | None:
+        customer = booking.customer
+        return getattr(customer, "phone", None) or getattr(customer, "phone_number", None)
+
+
+class RentalPlatformFeeSerializer(serializers.Serializer):
+    percent = serializers.IntegerField(min_value=0, max_value=100)
 
 
 class RentalModerationSerializer(serializers.Serializer):

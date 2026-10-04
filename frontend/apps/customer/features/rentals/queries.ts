@@ -48,6 +48,11 @@ export function fetchRentalTaxonomy() {
   return request(() => getApiClient().GET("/api/v1/rentals/taxonomy"));
 }
 
+/** The live percent added on top of the rental fee. Zero means no platform fee. */
+export function fetchRentalPlatformFee() {
+  return request(() => getApiClient().GET("/api/v1/rentals/platform-fee"));
+}
+
 export function bookRental(payload: {
   asset_id: string;
   start_date: string;

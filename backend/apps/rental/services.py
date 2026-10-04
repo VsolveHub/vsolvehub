@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import date, timedelta
 from typing import Any
 from uuid import UUID
@@ -11,6 +12,8 @@ from django.conf import settings
 from django.db import models, transaction
 from django.utils import timezone
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
+
+logger = logging.getLogger(__name__)
 
 from apps.catalog.models import A7VariantConfiguration, Category, Service, Subcategory
 from apps.commerce.models import PaymentAttempt
@@ -22,8 +25,10 @@ from apps.rental.models import (
     RentalBooking,
     RentalBookingLine,
     RentalDeposit,
+    RentalDisputePhoto,
     RentalModerationEvent,
     RentalPhotoUpload,
+    RentalPlatformFee,
     overlapping_reservations,
     overlapping_reserved_quantity,
 )
@@ -82,7 +87,8 @@ _RENTAL_PHOTO_TYPES = {
     "image/png": ".png",
     "image/webp": ".webp",
 }
-_RENTAL_PHOTO_MAX_BYTES = 8 * 1024 * 1024
+_RENTAL_PHOTO_MAX_BYTES = 10 * 1024 * 1024
+MAX_DISPUTE_PHOTOS = 5
 
 
 def store_rental_photo(
@@ -98,7 +104,9 @@ def store_rental_photo(
     if size <= 0:
         raise RentalStateError("Photo file is empty.")
     if size > _RENTAL_PHOTO_MAX_BYTES:
-        raise RentalStateError("Photo must be 8 MB or smaller.")
+        raise RentalStateError("Photo must be 10 MB or smaller.")
+    # Real image header check — do not trust the Content-Type alone.
+    _validate_image_header(upload)
     return RentalPhotoUpload.objects.create(
         partner=partner,
         stored_file=upload,
@@ -106,6 +114,88 @@ def store_rental_photo(
         content_type=content_type,
         size_bytes=size,
     )
+
+
+def _validate_image_header(upload: Any) -> None:
+    """Read the first bytes and check for a real image magic number.
+
+    Trusted Content-Type headers let a user upload arbitrary files that
+    then live on our CDN with an image extension. This check looks at
+    what the file actually starts with.
+    """
+    import io
+
+    position = upload.tell() if hasattr(upload, "tell") else 0
+    header = upload.read(32)
+    if hasattr(upload, "seek"):
+        upload.seek(position)
+
+    if isinstance(header, str):
+        header = header.encode("latin-1")
+    if len(header) < 8:
+        raise RentalStateError("File is too small to be an image.")
+
+    # JPEG: FF D8 FF
+    if header[:3] == b"\xff\xd8\xff":
+        return
+    # PNG: 89 50 4E 47 0D 0A 1A 0A
+    if header[:8] == b"\x89PNG\r\n\x1a\n":
+        return
+    # WebP: RIFF....WEBP
+    if header[:4] == b"RIFF" and header[8:12] == b"WEBP":
+        return
+    raise RentalStateError("File does not appear to be a valid JPEG, PNG or WebP image.")
+
+
+def store_rental_dispute_photo(*, partner: Any, upload: Any) -> RentalDisputePhoto:
+    """Same image rules as ad photos, saved as private dispute evidence."""
+    _require_rental_capability(partner)
+    content_type = (getattr(upload, "content_type", "") or "").split(";")[0].strip().lower()
+    if content_type not in _RENTAL_PHOTO_TYPES:
+        raise RentalStateError("Photo must be a JPEG, PNG, or WebP image.")
+    size = int(getattr(upload, "size", 0) or 0)
+    if size <= 0:
+        raise RentalStateError("Photo file is empty.")
+    if size > _RENTAL_PHOTO_MAX_BYTES:
+        raise RentalStateError("Photo must be 10 MB or smaller.")
+    _validate_image_header(upload)
+    return RentalDisputePhoto.objects.create(
+        partner=partner,
+        stored_file=upload,
+        original_name=str(getattr(upload, "name", "photo"))[:180],
+        content_type=content_type,
+        size_bytes=size,
+    )
+
+
+def _attach_dispute_photos(
+    *,
+    partner: Any,
+    booking: RentalBooking,
+    photo_ids: list[UUID | str] | None,
+) -> None:
+    ids = list(dict.fromkeys(photo_ids or []))
+    if len(ids) > MAX_DISPUTE_PHOTOS:
+        raise RentalStateError(
+            "Attach at most 5 photos.",
+            code="dispute_photo_limit",
+        )
+    if not ids:
+        return
+    rows = list(
+        RentalDisputePhoto.objects.select_for_update().filter(id__in=ids, partner=partner)
+    )
+    if len(rows) != len(ids):
+        raise RentalStateError(
+            "One of those photos is not yours.",
+            code="dispute_photo_invalid",
+        )
+    if any(row.booking_id is not None for row in rows):
+        raise RentalStateError(
+            "One of those photos is already attached to a dispute.",
+            code="dispute_photo_invalid",
+        )
+    RentalDisputePhoto.objects.filter(id__in=ids, partner=partner).update(booking=booking)
 
 
 def partner_owns_rental_photo(*, partner: Any, url: str) -> bool:
@@ -126,8 +216,8 @@ def create_asset(
     location_text: str = "",
     asset_identifier: str = "",
     quantity_available: int = 1,
-    structured_fields: dict | None = None,
-    media: list[dict] | None = None,
+    structured_fields: dict[str, Any] | None = None,
+    media: list[dict[str, Any]] | None = None,
     image_urls: list[str] | None = None,
 ) -> RentalAsset:
     _require_rental_capability(partner)
@@ -159,7 +249,7 @@ def create_asset(
         moderation_status="DRAFT",
         structured_fields=structured_fields or {},
     )
-    items: list[dict] = list(media or [])
+    items: list[dict[str, Any]] = list(media or [])
     if image_urls:
         for idx, u in enumerate(image_urls):
             items.append({"url": u, "caption": "", "display_order": idx})
@@ -173,6 +263,201 @@ def create_asset(
                 display_order=item.get("display_order", item.get("sort_order", idx)),
             )
     return asset
+
+
+def auto_publish_asset(
+    *,
+    partner: Any,
+    variant_id: UUID | str,
+    title: str,
+    daily_rate_paise: int,
+    deposit_paise: int = 0,
+    description: str = "",
+    location_text: str = "",
+    asset_identifier: str = "",
+    quantity_available: int = 1,
+    structured_fields: dict[str, Any] | None = None,
+    media: list[dict[str, Any]] | None = None,
+    image_urls: list[str] | None = None,
+) -> RentalAsset:
+    """Create and immediately publish an ad after automatic checks.
+
+    Replaces the old submit → admin-approve flow. The ad goes live if:
+    - at least 1 photo is attached
+    - title is non-empty
+    - daily rate > 0
+    - location is present (explicitly or from partner profile)
+    Ops keeps Remove/Reinstate for moderation after the fact.
+    """
+    asset = create_asset(
+        partner=partner,
+        variant_id=variant_id,
+        title=title,
+        daily_rate_paise=daily_rate_paise,
+        deposit_paise=deposit_paise,
+        description=description,
+        location_text=location_text,
+        asset_identifier=asset_identifier,
+        quantity_available=quantity_available,
+        structured_fields=structured_fields,
+        media=media,
+        image_urls=image_urls,
+    )
+    # Automatic checks for publish readiness.
+    errors: list[str] = []
+    if not asset.media.exists():
+        errors.append("At least one photo is required.")
+    if not asset.title.strip():
+        errors.append("A title is required.")
+    if asset.daily_rate_paise <= 0:
+        errors.append("Daily rate must be positive.")
+    if not asset.location_text.strip():
+        errors.append("A pickup location is required.")
+    if errors:
+        # Leave as DRAFT rather than rejecting; let the partner fix and re-submit.
+        asset.moderation_reason = "; ".join(errors)
+        asset.save(update_fields=("moderation_reason", "updated_at"))
+        return asset
+    # Auto-publish: set APPROVED + ACTIVE.
+    asset.moderation_status = RentalAsset.ModerationStatus.APPROVED
+    asset.current_status = RentalAsset.Status.ACTIVE
+    asset.moderation_reason = "Auto-published"
+    asset.save(
+        update_fields=("moderation_status", "current_status", "moderation_reason", "updated_at")
+    )
+    RentalModerationEvent.objects.create(
+        asset=asset,
+        actor=partner.user,
+        action=RentalModerationEvent.Action.APPROVED,
+        reason="Auto-published: all checks passed.",
+    )
+    return asset
+
+
+def update_asset(
+    *,
+    asset: RentalAsset,
+    partner: Any,
+    title: str | None = None,
+    description: str | None = None,
+    daily_rate_paise: int | None = None,
+    deposit_paise: int | None = None,
+    location_text: str | None = None,
+    quantity_available: int | None = None,
+    structured_fields: dict[str, Any] | None = None,
+) -> RentalAsset:
+    """Edit an existing ad. Only the owner can edit, and only non-REMOVED/RETIRED ads."""
+    _require_rental_capability(partner)
+    if asset.partner_id != partner.id:
+        raise PermissionError("Not your asset.")
+    if asset.moderation_status in ("REMOVED",):
+        raise RentalStateError("A removed ad cannot be edited. Contact support.")
+    if asset.current_status == RentalAsset.Status.RETIRED:
+        raise RentalStateError("A deleted ad cannot be edited.")
+
+    update_fields: list[str] = ["updated_at"]
+    if title is not None:
+        asset.title = title.strip()
+        update_fields.append("title")
+    if description is not None:
+        asset.description = description
+        update_fields.append("description")
+    if daily_rate_paise is not None:
+        if daily_rate_paise <= 0:
+            raise RentalStateError("Daily rate must be positive paise.")
+        asset.daily_rate_paise = daily_rate_paise
+        update_fields.append("daily_rate_paise")
+    if deposit_paise is not None:
+        if deposit_paise < 0:
+            raise RentalStateError("Deposit cannot be negative.")
+        asset.deposit_paise = deposit_paise
+        update_fields.append("deposit_paise")
+    if location_text is not None:
+        asset.location_text = location_text.strip()
+        update_fields.append("location_text")
+    if quantity_available is not None:
+        if quantity_available < 1:
+            raise RentalStateError("Quantity must be at least 1.")
+        asset.quantity_available = quantity_available
+        update_fields.append("quantity_available")
+    if structured_fields is not None:
+        asset.structured_fields = structured_fields
+        update_fields.append("structured_fields")
+
+    asset.save(update_fields=update_fields)
+    return asset
+
+
+def pause_asset(*, asset: RentalAsset, partner: Any) -> RentalAsset:
+    """Owner temporarily hides an ad. Active bookings continue unaffected."""
+    _require_rental_capability(partner)
+    if asset.partner_id != partner.id:
+        raise PermissionError("Not your asset.")
+    if asset.moderation_status != RentalAsset.ModerationStatus.APPROVED:
+        raise RentalStateError("Only published ads can be paused.")
+    asset.moderation_status = RentalAsset.ModerationStatus.PAUSED
+    asset.save(update_fields=("moderation_status", "updated_at"))
+    return asset
+
+
+def resume_asset(*, asset: RentalAsset, partner: Any) -> RentalAsset:
+    """Owner un-pauses an ad. Brings it back to APPROVED (published)."""
+    _require_rental_capability(partner)
+    if asset.partner_id != partner.id:
+        raise PermissionError("Not your asset.")
+    if asset.moderation_status != RentalAsset.ModerationStatus.PAUSED:
+        raise RentalStateError("Only paused ads can be resumed.")
+    asset.moderation_status = RentalAsset.ModerationStatus.APPROVED
+    asset.save(update_fields=("moderation_status", "updated_at"))
+    return asset
+
+
+def delete_asset(*, asset: RentalAsset, partner: Any) -> RentalAsset:
+    """Soft-delete (archive) an ad. Existing bookings are unaffected."""
+    _require_rental_capability(partner)
+    if asset.partner_id != partner.id:
+        raise PermissionError("Not your asset.")
+    if asset.current_status == RentalAsset.Status.RETIRED:
+        raise RentalStateError("Ad is already deleted.")
+    asset.current_status = RentalAsset.Status.RETIRED
+    asset.save(update_fields=("current_status", "updated_at"))
+    return asset
+
+
+def remove_media(*, asset: RentalAsset, partner: Any, media_id: UUID | str) -> None:
+    """Remove one photo from an ad."""
+    _require_rental_capability(partner)
+    if asset.partner_id != partner.id:
+        raise PermissionError("Not your asset.")
+    deleted, _ = RentalAssetMedia.objects.filter(asset=asset, id=_as_uuid(media_id)).delete()
+    if not deleted:
+        raise RentalStateError("Photo not found on this ad.")
+
+
+def _notify_rental(
+    *,
+    recipient_id: UUID,
+    purpose: str,
+    template_code: str,
+    context: dict[str, Any],
+    idempotency_key: str,
+) -> None:
+    """Fire an in-app rental notification. Best-effort: never breaks the caller."""
+    try:
+        from apps.notifications.models import NotificationIntent
+        from apps.notifications.services import request_notification
+
+        request_notification(
+            recipient_id=recipient_id,
+            purpose=purpose,
+            channel=NotificationIntent.Channel.IN_APP,
+            template_code=template_code,
+            context=context,
+            idempotency_key=idempotency_key,
+        )
+    except Exception:
+        # Notification failure must never block a booking or return.
+        logger.warning("Failed to dispatch rental notification %s", template_code, exc_info=True)
 
 
 def attach_asset_media(
@@ -289,6 +574,37 @@ def moderate_asset(
     return asset
 
 
+PLATFORM_FEE_PERCENT_MAX = 100
+
+
+def current_platform_fee_percent() -> int:
+    """The live rate. No saved row means customers are not charged a platform fee."""
+    row = RentalPlatformFee.objects.filter(pk=1).only("percent").first()
+    if row is None:
+        return 0
+    return int(row.percent)
+
+
+def rental_platform_fee_paise(rental_fee_paise: int, percent: int) -> int:
+    """Whole percent of the rental fee, floored to paise. The deposit is not included."""
+    if percent <= 0 or rental_fee_paise <= 0:
+        return 0
+    return rental_fee_paise * percent // 100
+
+
+def save_platform_fee(*, percent: int, actor: Any) -> RentalPlatformFee:
+    if percent < 0 or percent > PLATFORM_FEE_PERCENT_MAX:
+        raise RentalStateError(
+            "Platform fee must be a whole number from 0 to 100.",
+            code="platform_fee_invalid",
+        )
+    row, _created = RentalPlatformFee.objects.update_or_create(
+        pk=1,
+        defaults={"percent": percent, "updated_by": actor},
+    )
+    return row
+
+
 @transaction.atomic
 def create_booking(
     *,
@@ -361,8 +677,11 @@ def create_booking(
         provider_note="" if not hold_deposit_for_demo else "Seed hold without a live capture.",
     )
     price = asset.daily_rate_paise * days * quantity
-    # Always charge rental fee + deposit in one attempt when money is due.
-    amount_due = price + (asset.deposit_paise * quantity if asset.deposit_paise > 0 else 0)
+    fee_percent = current_platform_fee_percent()
+    fee_paise = rental_platform_fee_paise(price, fee_percent)
+    deposit_charge = asset.deposit_paise * quantity if asset.deposit_paise > 0 else 0
+    # Rental fee + platform fee + deposit. The percentage never applies to the deposit.
+    amount_due = price + fee_paise + deposit_charge
     needs_payment = amount_due > 0 and not hold_deposit_for_demo
     booking = RentalBooking.objects.create(
         customer=customer,
@@ -377,6 +696,8 @@ def create_booking(
         start_date=start_date,
         end_date=end_date,
         price_paise=price,
+        platform_fee_percent=fee_percent,
+        platform_fee_paise=fee_paise,
         pickup_or_delivery_mode=mode,
         notes=notes,
         handover_pin_hash=handover_pin,
@@ -399,6 +720,35 @@ def create_booking(
         )
         deposit.payment_attempt = attempt
         deposit.save(update_fields=("payment_attempt", "updated_at"))
+
+    # Notify the owner of the new booking (best-effort, outside the txn lock).
+    _notify_rental(
+        recipient_id=asset.partner.user_id,
+        purpose="rental.booking.confirmed",
+        template_code="rental_new_booking",
+        context={
+            "customer_name": (
+                getattr(customer, "display_name", "") or getattr(customer, "full_name", "Customer")
+            ),
+            "asset_title": asset.title,
+            "start_date": str(start_date),
+            "end_date": str(end_date),
+        },
+        idempotency_key=f"rental-new-booking:{booking.id}",
+    )
+    # Notify the customer with confirmation and their PIN.
+    _notify_rental(
+        recipient_id=customer.id,
+        purpose="rental.booking.confirmed",
+        template_code="rental_booking_confirmed",
+        context={
+            "asset_title": asset.title,
+            "pin": handover_pin,
+            "start_date": str(start_date),
+            "end_date": str(end_date),
+        },
+        idempotency_key=f"rental-booking-confirmed:{booking.id}",
+    )
     return booking
 
 
@@ -476,16 +826,15 @@ def _refund_deposit_residual(
 def _record_deposit_consume_claim(
     *,
     booking: RentalBooking,
-    partner: Any,
     consume_paise: int,
     reason: str,
+    actor: Any,
 ) -> None:
-    """Ledger ADJUSTMENT claiming withheld deposit (minimal Ops-visible claim)."""
+    """Ledger ADJUSTMENT claiming withheld deposit after Operations approves it."""
     if consume_paise <= 0:
         return
     from apps.payouts.services import record_adjustment
 
-    actor = getattr(partner, "user", None)
     if actor is None:
         return
     record_adjustment(
@@ -505,19 +854,14 @@ def dispute_deposit(
     partner: Any,
     reason: str,
     consume_paise: int = 0,
+    photo_ids: list[UUID | str] | None = None,
 ) -> RentalBooking:
-    """Partner raises a deposit dispute after return (before or instead of full release).
+    """Partner raises a deposit dispute after return.
 
-    ``consume_paise`` is optional partial consume (proposal 0025):
-    - omitted / default ``0`` → dispute without consuming any deposit (RELEASED)
-    - ``0 < consume_paise < held`` → PARTIALLY_CONSUMED
-    - ``consume_paise == held`` → FULLY_CONSUMED
-
-    Blank/omit must NOT silently full-consume; callers must pass an explicit
-    amount ``>= 0``. There is no implicit "None means full" path.
-
-    Residual ``amount - consume`` is gateway-refunded when a captured payment
-    exists. Consumed paise is recorded as a partner ledger ADJUSTMENT claim.
+    This does not move money. The requested ``consume_paise`` and the reason
+    wait on the deposit until Operations approves or rejects them. Blank or
+    omitted consume means the partner is asking to keep nothing; that is still
+    a review, not a silent full consume and not an immediate refund.
     """
     _require_rental_capability(partner)
     if booking.asset.partner_id != partner.id:
@@ -540,30 +884,88 @@ def dispute_deposit(
     consume = int(consume_paise)
     if consume < 0 or consume > amount:
         raise RentalStateError("Consumed amount must be between 0 and the held deposit.")
+    _attach_dispute_photos(partner=partner, booking=booking, photo_ids=photo_ids)
 
+    deposit.requested_consume_paise = consume
+    deposit.provider_note = note[:240]
+    deposit.save(update_fields=("requested_consume_paise", "provider_note", "updated_at"))
+    booking.status = RentalBooking.Status.DISPUTED
+    booking.save(update_fields=("status", "updated_at"))
+    return booking
+
+
+def _apply_deposit_decision(
+    *,
+    booking: RentalBooking,
+    deposit: RentalDeposit,
+    consume_paise: int,
+    reason: str,
+    actor: Any,
+    reason_code: str,
+) -> None:
+    amount = deposit.amount_paise
     _refund_deposit_residual(
         deposit=deposit,
-        residual_paise=amount - consume,
-        reason_code="rental_deposit_dispute_residual",
+        residual_paise=amount - consume_paise,
+        reason_code=reason_code,
     )
     _record_deposit_consume_claim(
         booking=booking,
-        partner=partner,
-        consume_paise=consume,
-        reason=note,
+        consume_paise=consume_paise,
+        reason=reason,
+        actor=actor,
     )
-
-    deposit.consumed_paise = consume
-    if consume <= 0:
+    deposit.consumed_paise = consume_paise
+    if consume_paise <= 0:
         deposit.status = RentalDeposit.Status.RELEASED
-    elif consume >= amount:
+    elif consume_paise >= amount:
         deposit.status = RentalDeposit.Status.FULLY_CONSUMED
     else:
         deposit.status = RentalDeposit.Status.PARTIALLY_CONSUMED
-    deposit.provider_note = note[:240]
-    deposit.save(update_fields=("consumed_paise", "status", "provider_note", "updated_at"))
-    booking.status = RentalBooking.Status.DISPUTED
-    booking.save(update_fields=("status", "updated_at"))
+    deposit.save(update_fields=("consumed_paise", "status", "updated_at"))
+
+
+@transaction.atomic
+def decide_deposit_dispute(
+    *,
+    booking: RentalBooking,
+    actor: Any,
+    decision: str,
+) -> RentalBooking:
+    """Operations approves the partner's claim, or returns the full deposit."""
+    booking = (
+        RentalBooking.objects.select_for_update(of=("self",))
+        .select_related("deposit", "asset", "asset__partner")
+        .get(id=booking.id)
+    )
+    if booking.status != RentalBooking.Status.DISPUTED:
+        raise RentalStateError("Only a disputed booking can be decided.")
+    deposit = RentalDeposit.objects.select_for_update(of=("self",)).get(id=booking.deposit_id)
+    if deposit.status not in (RentalDeposit.Status.HELD, RentalDeposit.Status.AUTHORIZED):
+        raise RentalStateError("This dispute has already been decided.")
+    if deposit.requested_consume_paise is None:
+        raise RentalStateError("This dispute has no amount waiting for review.")
+    reason = (deposit.provider_note or "").strip() or "Rental deposit dispute"
+    if decision == "APPROVE":
+        _apply_deposit_decision(
+            booking=booking,
+            deposit=deposit,
+            consume_paise=int(deposit.requested_consume_paise),
+            reason=reason,
+            actor=actor,
+            reason_code="rental_deposit_dispute_residual",
+        )
+    elif decision == "REJECT":
+        _apply_deposit_decision(
+            booking=booking,
+            deposit=deposit,
+            consume_paise=0,
+            reason=reason,
+            actor=actor,
+            reason_code="rental_deposit_dispute_rejected",
+        )
+    else:
+        raise RentalStateError("Decision must approve or reject the dispute.")
     return booking
 
 
@@ -763,7 +1165,7 @@ def public_assets(
     category_slug: str = "",
     start_date: date | None = None,
     end_date: date | None = None,
-):
+) -> models.QuerySet[RentalAsset]:
     qs = (
         RentalAsset.objects.filter(
             moderation_status="APPROVED",
@@ -837,13 +1239,11 @@ def public_assets(
 def initiate_rental_booking_payment(*, booking: RentalBooking) -> Any:
     from apps.commerce.services.payments import initiate_standalone_payment_attempt
 
-    asset = booking.asset
-    days = (booking.end_date - booking.start_date).days
-    line = booking.lines.order_by("id").first()
-    quantity = int(line.quantity) if line is not None else 1
-    rental_fee = asset.daily_rate_paise * days * quantity
-    deposit_amount = asset.deposit_paise * quantity
-    amount_paise = rental_fee + deposit_amount
+    # Stored amounts, not the live rate: a retry must not change what the customer was shown.
+    deposit_amount = int(booking.deposit.amount_paise) if booking.deposit_id else 0
+    amount_paise = (
+        int(booking.price_paise) + int(booking.platform_fee_paise) + deposit_amount
+    )
 
     attempt = initiate_standalone_payment_attempt(
         purpose=PaymentAttempt.Purpose.A7_RENTAL_BOOKING,

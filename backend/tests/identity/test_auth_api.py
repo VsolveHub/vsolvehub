@@ -5,6 +5,7 @@ import pytest
 from django.conf import settings
 from django.core.cache import cache
 from django.test import override_settings
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.identity.models import AccessAuditEvent, OtpChallenge, User, UserSession
@@ -328,6 +329,12 @@ def test_credentialed_browser_csrf_bootstrap_rotation_and_revoke() -> None:
         HTTP_X_CSRFTOKEN=refreshed_token,
     )
     assert rejected.status_code in {HTTPStatus.FORBIDDEN, HTTPStatus.UNAUTHORIZED}
+    session_cookie = logged_out.cookies[settings.SESSION_COOKIE_NAME]
+    csrf_cookie = logged_out.cookies[settings.CSRF_COOKIE_NAME]
+    assert session_cookie["max-age"] == 0
+    assert session_cookie["secure"]
+    assert csrf_cookie["max-age"] == 0
+    assert csrf_cookie["secure"]
 
 
 @override_settings(
@@ -378,3 +385,48 @@ def test_cors_preflight_allows_idempotency_header_for_browser_commands() -> None
     assert response.headers["Access-Control-Allow-Origin"] == origin
     assert response.headers["Access-Control-Allow-Credentials"] == "true"
     assert {"content-type", "idempotency-key", "x-csrftoken"}.issubset(allowed_headers)
+
+
+def _verify(client: APIClient) -> None:
+    issued = _issue_otp(client)
+    verified = client.post(
+        "/api/v1/auth/otp/verify/",
+        {
+            "challenge_id": issued["challenge_id"],
+            "phone_number": "+919876543210",
+            "code": issued["development_code"],
+        },
+        format="json",
+    )
+    assert verified.status_code == HTTPStatus.OK
+
+
+def test_logout_clears_cookies_when_the_session_record_is_already_revoked() -> None:
+    client = APIClient()
+    _verify(client)
+    UserSession.objects.update(revoked_at=timezone.now())
+
+    logged_out = client.post("/api/v1/auth/logout/", format="json")
+
+    assert logged_out.status_code == HTTPStatus.NO_CONTENT
+    assert logged_out.cookies[settings.SESSION_COOKIE_NAME]["max-age"] == 0
+    assert logged_out.cookies[settings.CSRF_COOKIE_NAME]["max-age"] == 0
+    session = client.get("/api/v1/auth/session/")
+    assert session.status_code == HTTPStatus.OK
+    assert session.json()["user"] is None
+
+
+def test_dead_session_record_expires_the_browser_cookie() -> None:
+    client = APIClient()
+    _verify(client)
+    UserSession.objects.update(revoked_at=timezone.now())
+
+    denied = client.get("/api/v1/auth/sessions/")
+
+    assert denied.status_code == HTTPStatus.FORBIDDEN
+    assert denied.json()["error"]["code"] == "session_expired"
+    assert denied.cookies[settings.SESSION_COOKIE_NAME]["max-age"] == 0
+    assert denied.cookies[settings.CSRF_COOKIE_NAME]["max-age"] == 0
+    follow = client.get("/api/v1/auth/session/")
+    assert follow.status_code == HTTPStatus.OK
+    assert follow.json()["user"] is None

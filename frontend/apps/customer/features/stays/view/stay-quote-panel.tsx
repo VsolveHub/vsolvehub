@@ -19,10 +19,11 @@ import { createStayEnquiry, fetchStayQuote } from "../queries";
 
 interface StayQuotePanelProps {
   property: StayProperty;
+  onSelectUnit?: (unitId: string) => void;
 }
 
-/** How long a guest can ask for, in the property's unit. */
-const LENGTH_CHOICES = { MONTH: 24, NIGHT: 30 } as const;
+/** Server limits, in the property's unit: 24 months or 90 nights. */
+const LENGTH_CHOICES = { MONTH: 24, NIGHT: 90 } as const;
 
 function todayIso(): string {
   const d = new Date();
@@ -56,28 +57,30 @@ function refusalMessage(err: unknown, minimumLabel: string): string {
  * estimate is the room's rate times that length, so the guest knows roughly what to expect
  * before the call.
  */
-export function StayQuotePanel({ property }: StayQuotePanelProps) {
+export function StayQuotePanel({ property, onSelectUnit }: StayQuotePanelProps) {
   const router = useRouter();
   const period = pricePeriodOf(property.price_period);
   const monthly = period === "MONTH";
   const minimum = Math.max(property.min_stay_nights ?? 1, 1);
   const minimumLabel = stayLengthLabel(minimum, period);
 
+  const maxLength = LENGTH_CHOICES[period];
   const [checkIn, setCheckIn] = useState(addDaysIso(todayIso(), 7));
   const [length, setLength] = useState(minimum);
+  const [lengthText, setLengthText] = useState(String(minimum));
   const [selectedUnitId, setSelectedUnitId] = useState<string>(property.units[0]?.id ?? "");
-  const [guestCount, setGuestCount] = useState(1);
+  const [adultCount, setAdultCount] = useState(1);
+  const [childCount, setChildCount] = useState(0);
   const [message, setMessage] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const selectedUnit = property.units.find((u) => u.id === selectedUnitId) ?? property.units[0];
-  // Guests are capped by the chosen room; switching to a smaller room lowers the count with it.
+  // Room capacity gates the total headcount.
   const maxGuests = Math.max(selectedUnit?.max_guests ?? 1, 1);
-  const guests = Math.min(guestCount, maxGuests);
-  const lengthOptions = Array.from(
-    { length: LENGTH_CHOICES[period] - minimum + 1 },
-    (_, index) => minimum + index,
-  );
+  // Clamp adults to stay within capacity minus children.
+  const adults = Math.min(Math.max(adultCount, 1), Math.max(maxGuests - childCount, 1));
+  const children = Math.min(childCount, Math.max(maxGuests - adults, 0));
+  const totalGuests = adults + children;
 
   const quote = useQuery({
     queryKey: ["stay-quote", property.id, selectedUnitId, checkIn, length],
@@ -103,7 +106,9 @@ export function StayQuotePanel({ property }: StayQuotePanelProps) {
         unit_id: selectedUnitId || null,
         check_in: checkIn,
         length,
-        guest_count: guests,
+        guest_count: totalGuests,
+        adult_count: adults,
+        child_count: children,
         message,
       }),
     onSuccess: () => router.push("/stays/mine"),
@@ -127,6 +132,16 @@ export function StayQuotePanel({ property }: StayQuotePanelProps) {
   const reset = () => {
     setError(null);
     mutation.reset();
+  };
+
+  const commitLength = (raw: string) => {
+    const next = Number(raw);
+    const clamped = Number.isInteger(next)
+      ? Math.min(maxLength, Math.max(minimum, next))
+      : minimum;
+    setLength(clamped);
+    setLengthText(String(clamped));
+    reset();
   };
 
   return (
@@ -153,6 +168,7 @@ export function StayQuotePanel({ property }: StayQuotePanelProps) {
                   type="button"
                   onClick={() => {
                     setSelectedUnitId(unit.id);
+                    onSelectUnit?.(unit.id);
                     reset();
                   }}
                   className={`flex items-center justify-between rounded-control border p-3 text-left transition ${
@@ -192,40 +208,103 @@ export function StayQuotePanel({ property }: StayQuotePanelProps) {
             <span className="text-xs font-bold text-text">
               {monthly ? "For how many months" : "For how many nights"}
             </span>
-            <select
-              value={length}
-              onChange={(e) => {
-                setLength(Number(e.target.value));
-                reset();
+            <input
+              type="number"
+              inputMode="numeric"
+              min={minimum}
+              max={maxLength}
+              step={1}
+              required
+              value={lengthText}
+              onChange={(event) => {
+                const raw = event.target.value;
+                setLengthText(raw);
+                const next = Number(raw);
+                if (raw !== "" && Number.isInteger(next) && next >= 1) {
+                  setLength(next);
+                  reset();
+                }
               }}
+              onBlur={() => commitLength(lengthText)}
               className="rounded-control border border-line bg-surface-sunken px-3.5 py-2.5 text-sm font-medium text-text focus:border-line-strong focus:outline-none"
-            >
-              {lengthOptions.map((n) => (
-                <option key={n} value={n}>
-                  {stayLengthLabel(n, period)}
-                </option>
-              ))}
-            </select>
+            />
           </label>
         </div>
 
-        <label className="flex flex-col gap-1.5">
+        {/* Adults + Children breakdown */}
+        <div className="flex flex-col gap-2">
           <span className="flex items-center gap-1.5 text-xs font-bold text-text">
             <Users className="size-3.5 text-text-secondary" />
             Guests
           </span>
-          <select
-            value={guests}
-            onChange={(e) => setGuestCount(Number(e.target.value))}
-            className="rounded-control border border-line bg-surface-sunken px-3.5 py-2.5 text-sm font-medium text-text focus:border-line-strong focus:outline-none"
-          >
-            {Array.from({ length: maxGuests }, (_, i) => i + 1).map((n) => (
-              <option key={n} value={n}>
-                {n} {n === 1 ? "guest" : "guests"}
-              </option>
-            ))}
-          </select>
-        </label>
+
+          {/* Adults row */}
+          <div className="flex items-center justify-between rounded-control border border-line bg-surface-sunken px-3.5 py-2">
+            <div>
+              <p className="text-sm font-semibold text-text">Adults</p>
+              <p className="text-[11px] text-text-secondary">Age 13+</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                disabled={adultCount <= 1}
+                onClick={() => setAdultCount((n) => Math.max(1, n - 1))}
+                className="flex size-7 items-center justify-center rounded-full border border-line bg-surface text-text transition hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Decrease adults"
+              >
+                –
+              </button>
+              <span className="w-4 text-center text-sm font-bold tabular-nums">{adultCount}</span>
+              <button
+                type="button"
+                disabled={adultCount + childCount >= maxGuests}
+                onClick={() => setAdultCount((n) => Math.min(n + 1, maxGuests - childCount))}
+                className="flex size-7 items-center justify-center rounded-full border border-line bg-surface text-text transition hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Increase adults"
+              >
+                +
+              </button>
+            </div>
+          </div>
+
+          {/* Children row */}
+          <div className="flex items-center justify-between rounded-control border border-line bg-surface-sunken px-3.5 py-2">
+            <div>
+              <p className="text-sm font-semibold text-text">Children</p>
+              <p className="text-[11px] text-text-secondary">Under 13</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                disabled={childCount <= 0}
+                onClick={() => setChildCount((n) => Math.max(0, n - 1))}
+                className="flex size-7 items-center justify-center rounded-full border border-line bg-surface text-text transition hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Decrease children"
+              >
+                –
+              </button>
+              <span className="w-4 text-center text-sm font-bold tabular-nums">{childCount}</span>
+              <button
+                type="button"
+                disabled={adultCount + childCount >= maxGuests}
+                onClick={() => setChildCount((n) => Math.min(n + 1, maxGuests - adultCount))}
+                className="flex size-7 items-center justify-center rounded-full border border-line bg-surface text-text transition hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Increase children"
+              >
+                +
+              </button>
+            </div>
+          </div>
+
+          {/* Total summary */}
+          <p className="px-1 text-[11px] text-text-secondary">
+            <span className="font-semibold text-text">{totalGuests}</span> guest
+            {totalGuests === 1 ? "" : "s"} total{" "}
+            {maxGuests > 1 && (
+              <span className="text-text-secondary/70">· room fits up to {maxGuests}</span>
+            )}
+          </p>
+        </div>
 
         <label className="flex flex-col gap-1.5">
           <span className="text-xs font-bold text-text">Message to the host (optional)</span>

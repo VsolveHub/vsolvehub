@@ -12,6 +12,8 @@ import { useApplicationEditor, useProceedDisabled } from "./application-editor";
 export function AboutStep() {
   const { draft, update, isReadOnly, application } = useApplicationEditor();
   const isStayHost = application?.track === "STAY_HOST";
+  const isRentalOwner = application?.track === "RENTAL_OWNER";
+  const isListing = isStayHost || isRentalOwner;
 
   // The name given at sign-up. Offered as the starting value so nobody types it twice.
   const profile = useQuery({
@@ -31,7 +33,7 @@ export function AboutStep() {
   const isNameInvalid =
     draft.displayName.trim().length > 0 && draft.displayName.trim().length < 2;
   // Years of experience is for people who travel to do work; a host lists a property.
-  const isExperienceMissing = !isStayHost && draft.experienceYears <= 0;
+  const isExperienceMissing = !isListing && draft.experienceYears <= 0;
 
   useProceedDisabled(draft.displayName.trim().length < 2 || isExperienceMissing);
 
@@ -56,7 +58,7 @@ export function AboutStep() {
           />
         </Field>
 
-        {isStayHost ? null : (
+        {isListing ? null : (
           <Field required label="Years of Experience">
             <Input
               name="experience_years"
@@ -79,7 +81,7 @@ export function AboutStep() {
       </div>
 
       {/* Bio / About Your Work */}
-      <Field label={isStayHost ? "About you (optional)" : "About Your Work (Bio)"}>
+      <Field label={isListing ? "About you (optional)" : "About Your Work (Bio)"}>
         <Textarea
           name="biography"
           maxLength={2000}
@@ -87,7 +89,9 @@ export function AboutStep() {
           placeholder={
             isStayHost
               ? "A line guests will see, e.g. Running this PG for working women since 2018."
-              : "Briefly describe your skills, specialities, or certifications (e.g. Certified electrician specializing in home wiring and switchboard repair)."
+              : isRentalOwner
+                ? "A line customers will see, e.g. Tools and equipment for site work in Hyderabad."
+                : "Briefly describe your skills, specialities, or certifications (e.g. Certified electrician specializing in home wiring and switchboard repair)."
           }
           value={draft.biography}
           disabled={isReadOnly}

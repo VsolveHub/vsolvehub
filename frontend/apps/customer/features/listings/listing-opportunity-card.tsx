@@ -17,8 +17,15 @@ export function ListingOpportunityCard({ listing }: { listing: Listing }) {
   const roleType = fields.role_type || fields.employment_type || "Full-time";
   const mode = fields.shift || fields.work_mode || "On-site";
 
+  const isFeatured =
+    (listing as { is_featured?: boolean }).is_featured ||
+    (listing as { tier?: string }).tier === "SPOTLIGHT" ||
+    (listing as { tier?: string }).tier === "PRIORITY" ||
+    fields.is_featured === "true" ||
+    fields.featured === "true";
+
   return (
-    <article className="relative rounded-card border border-line bg-surface p-4 shadow-card">
+    <article className={`relative rounded-card border bg-surface p-4 shadow-card ${isFeatured ? "border-amber-300 ring-1 ring-amber-200" : "border-line"}`}>
       <div className="absolute top-4 right-4">
         <SaveHeart saved={saved.isSaved(listing.id)} onToggle={() => saved.toggle(listing.id)} />
       </div>
@@ -28,7 +35,14 @@ export function ListingOpportunityCard({ listing }: { listing: Listing }) {
             <Building className="size-4" />
           </span>
           <div>
-            <h2 className="text-base font-bold text-navy-900">{listing.title}</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-bold text-navy-900">{listing.title}</h2>
+              {isFeatured && (
+                <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800 border border-amber-200">
+                  Featured
+                </span>
+              )}
+            </div>
             <p className="text-xs text-text-secondary">
               {listing.poster_name || "Verified employer"} · Verified employer
             </p>

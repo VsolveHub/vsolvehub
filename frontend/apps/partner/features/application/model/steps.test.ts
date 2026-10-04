@@ -110,3 +110,12 @@ describe("the stay host path", () => {
     expect(applicationSteps(undefined)).toBe(APPLICATION_STEPS);
   });
 });
+
+describe("the rental owner path", () => {
+  it("uses the same short sequence as a stay host", () => {
+    expect(applicationSteps("RENTAL_OWNER").map((step) => step.href)).toEqual(
+      applicationSteps("STAY_HOST").map((step) => step.href),
+    );
+    expect(nextStep("/apply/about", "RENTAL_OWNER")?.href).toBe("/apply/consent");
+  });
+});

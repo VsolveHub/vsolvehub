@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Card, EmptyState, Field, Textarea, formatMoney } from "@vsolve/ui";
 import { MapPin } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 import type { ModerationAction } from "./queries";
 
@@ -89,11 +89,13 @@ export function MarketplaceQueue({
   queryKey,
   load,
   moderate,
+  leading,
 }: {
   heading: string;
   queryKey: string;
   load: () => Promise<MarketplaceQueueRow[]>;
   moderate: (id: string, action: ModerationAction, reason: string) => Promise<void>;
+  leading?: ReactNode;
 }) {
   const qc = useQueryClient();
   const [filter, setFilter] = useState<QueueFilter>("PENDING");
@@ -138,6 +140,7 @@ export function MarketplaceQueue({
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-6">
+      {leading}
       <div>
         <h1 className="text-xl font-bold text-navy-900">{heading}</h1>
         <p className="text-sm text-text-secondary">

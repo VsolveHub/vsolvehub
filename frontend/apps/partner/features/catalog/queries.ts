@@ -45,6 +45,9 @@ export interface MainCategory {
 /** Partner onboarding only surfaces main categories when the catalog publishes fewer than ten. */
 const MAX_MAIN_CATEGORIES = 10;
 
+/** Stays and rentals are signup paths, not trades on /apply/work. */
+const NOT_A_TRADE = new Set(["rooms-pg-hostel", "rental-services"]);
+
 export function visibleMainCategories(
   categories: readonly {
     id: string;
@@ -54,7 +57,7 @@ export function visibleMainCategories(
     image_url: string;
   }[],
 ): MainCategory[] {
-  const ordered = categories.map((category) => ({
+  const ordered = categories.filter((category) => !NOT_A_TRADE.has(category.slug)).map((category) => ({
     id: category.id,
     slug: category.slug,
     name: category.name,

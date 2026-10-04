@@ -134,10 +134,10 @@ test.describe("Careers (A10) — employer posts, Operations approves, applicant 
       await expect(employer.getByRole("button", { name: "Post New Opening" })).toBeVisible();
 
       await employer.getByRole("button", { name: "Post New Opening" }).click();
-      const modal = employer.locator("form").filter({ hasText: "Save Draft" });
+      const modal = employer.locator("form").filter({ hasText: "Job Title" });
       await expect(modal).toBeVisible();
 
-      // The role drives the variant, and "Save Draft" stays disabled until one is
+      // The role drives the variant, and Preview stays disabled until one is
       // chosen — so this has to happen before anything else in the form.
       await modal.getByRole("combobox").first().selectOption({ label: "App Developers" });
 
@@ -149,12 +149,16 @@ test.describe("Careers (A10) — employer posts, Operations approves, applicant 
       await modal.getByPlaceholder("e.g. Indiranagar, Bengaluru / Remote").fill(location);
       // The field renders a fixed +91 chip, so the value is national digits only.
       await modal.getByLabel("Contact phone").fill("9900000088");
-      await modal.getByRole("button", { name: "Save Draft" }).click();
-      await expect(employer.getByText("Title must be at least 5 characters.")).toBeVisible();
+      await modal.getByRole("button", { name: "Preview" }).click();
+      await expect(employer.getByText("Job title must be at least 5 characters.")).toBeVisible();
       await capture(employer, testInfo, "01-employer-create-validation");
 
       await modal.getByPlaceholder("e.g. Senior Python / React Developer").fill(title);
-      await modal.getByRole("button", { name: "Save Draft" }).click();
+      await modal.getByLabel("Minimum pay").fill("25000");
+      await modal.getByLabel("Maximum pay").fill("40000");
+      await modal.getByLabel("Pay period").selectOption({ label: "Monthly" });
+      await modal.getByRole("button", { name: "Preview" }).click();
+      await employer.getByRole("button", { name: "Save Changes" }).click();
 
       await expect(employer.getByRole("heading", { name: title })).toBeVisible();
       await capture(employer, testInfo, "02-employer-draft-created");

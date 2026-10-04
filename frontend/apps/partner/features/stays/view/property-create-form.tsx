@@ -54,6 +54,7 @@ export function PropertyCreateForm({
   const [variantId, setVariantId] = useState("");
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [amenities, setAmenities] = useState<Record<string, boolean>>({});
+  const [tenantPreference, setTenantPreference] = useState("ANY");
   const [title, setTitle] = useState("");
   const [location, setLocation] = useState(defaultLocation);
   const [description, setDescription] = useState("");
@@ -153,7 +154,12 @@ export function PropertyCreateForm({
       title: title.trim(),
       description: description.trim(),
       location_text: location.trim(),
-      structured_fields: { ...collected.values, ...amenities },
+      structured_fields: {
+        ...collected.values,
+        ...amenities,
+        // tenant_preference is forwarded here until the dedicated model column lands.
+        ...(tenantPreference && tenantPreference !== "ANY" ? { tenant_preference: tenantPreference } : {}),
+      },
       image_urls: urls,
     });
   }
@@ -205,6 +211,25 @@ export function PropertyCreateForm({
             value={amenities}
             onChange={setAmenities}
           />
+        ) : null}
+
+        {selected ? (
+          <Field
+            label="Who can stay here?"
+            description="Helps guests self-filter before enquiring. Choose 'Anyone' if you welcome all."
+          >
+            <Select
+              id="stay-tenant-preference"
+              value={tenantPreference}
+              onChange={(e) => setTenantPreference(e.target.value)}
+            >
+              <option value="ANY">Anyone</option>
+              <option value="BACHELOR_MALE">Bachelor (male)</option>
+              <option value="BACHELOR_FEMALE">Bachelor (female / ladies)</option>
+              <option value="FAMILY">Family</option>
+              <option value="WORKING_PROFESSIONAL">Working professional</option>
+            </Select>
+          </Field>
         ) : null}
 
         <Field label="Property name" required>

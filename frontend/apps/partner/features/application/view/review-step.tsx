@@ -17,6 +17,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { canSubmit, isEditable, outstandingRequirements } from "../model/readiness";
+import { isListingTrack } from "../model/steps";
 import { isVersionConflict, usePartnerApplication, useSubmitApplication } from "../queries";
 import { useApplicationReference } from "../reference-queries";
 import { ApplicationStatusBanner } from "./status-banner";
@@ -80,6 +81,7 @@ export function ReviewStep() {
     );
   }
 
+  const listing = isListingTrack(application.track);
   const outstanding = outstandingRequirements(application);
   const ready = canSubmit(application);
   const activeConsents = application.consents.filter(
@@ -150,12 +152,14 @@ export function ReviewStep() {
               {application.display_name || <span className="text-text-muted italic">Not set</span>}
             </p>
           </div>
-          <div>
-            <span className="text-xs font-bold text-text-muted uppercase">Experience</span>
-            <p className="font-bold text-text mt-0.5">
-              {application.experience_years} {application.experience_years === 1 ? "Year" : "Years"}
-            </p>
-          </div>
+          {listing ? null : (
+            <div>
+              <span className="text-xs font-bold text-text-muted uppercase">Experience</span>
+              <p className="font-bold text-text mt-0.5">
+                {application.experience_years} {application.experience_years === 1 ? "Year" : "Years"}
+              </p>
+            </div>
+          )}
           <div className="sm:col-span-2">
             <span className="text-xs font-bold text-text-muted uppercase">Biography / About</span>
             <p className="text-xs leading-relaxed text-text-secondary mt-1 whitespace-pre-line bg-surface-sunken p-3 rounded-control border border-line">
@@ -165,6 +169,8 @@ export function ReviewStep() {
         </div>
       </div>
 
+      {listing ? null : (
+      <>
       {/* Section 2: Trades & Services */}
       <div className="rounded-card border border-line bg-surface p-5 shadow-sm">
         <div className="flex items-center justify-between border-b border-line pb-3">
@@ -235,6 +241,8 @@ export function ReviewStep() {
           )}
         </div>
       </div>
+      </>
+      )}
 
       {/* Section 4: Documents */}
       <div className="rounded-card border border-line bg-surface p-5 shadow-sm">
@@ -337,7 +345,7 @@ export function ReviewStep() {
             </label>
 
             <div className="flex items-center gap-3">
-              <Link href="/apply/schedule" className="shrink-0">
+              <Link href={listing ? "/apply/documents" : "/apply/schedule"} className="shrink-0">
                 <Button variant="outline" size="lg" className="font-bold text-sm h-12 px-5">
                   Back
                 </Button>

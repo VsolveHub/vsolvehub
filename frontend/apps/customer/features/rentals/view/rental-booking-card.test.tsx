@@ -190,6 +190,18 @@ describe("RentalBookingCard", () => {
     expect(screen.queryByRole("button", { name: "Cancel booking" })).not.toBeInTheDocument();
   });
 
+  it("shows the platform fee that was charged with the rental", () => {
+    const booking = mockBooking({
+      price_paise: 150000,
+      platform_fee_percent: 10,
+      platform_fee_paise: 15000,
+    });
+    render(<RentalBookingCard booking={booking} />, { wrapper });
+
+    expect(screen.getByText("Platform fee (10%): ₹150")).toBeInTheDocument();
+    expect(screen.getByText("₹1,650")).toBeInTheDocument();
+  });
+
   it("shows Pay Now for pending payment bookings", () => {
     const booking = mockBooking({ status: "PENDING_PAYMENT" });
     render(<RentalBookingCard booking={booking} />, { wrapper });

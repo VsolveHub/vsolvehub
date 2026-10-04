@@ -120,7 +120,18 @@ describe("RentalBookPanel", () => {
     expect(screen.getByText("Self pickup")).toBeInTheDocument();
     expect(screen.getByText("Refundable Security Deposit")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Confirm Rental Booking" })).toBeInTheDocument();
+    expect(screen.queryByText(/Platform fee/)).not.toBeInTheDocument();
     expect(window.alert).not.toHaveBeenCalled();
+  });
+
+  it("shows the platform fee on top of the rental and adds it to the total", async () => {
+    client.GET.mockResolvedValue(ok({ percent: 10 }));
+
+    render(<RentalBookPanel asset={mockAsset()} />, { wrapper });
+
+    expect(await screen.findByText("Platform fee (10%)")).toBeInTheDocument();
+    // Two days at ₹500, plus 10% (₹100), plus the ₹2,000 deposit.
+    expect(screen.getByText("₹3,100")).toBeInTheDocument();
   });
 
   it("shows permanently out of stock banner and disables button when quantity_available is 0", () => {

@@ -204,4 +204,10 @@ describe("a stay host", () => {
     expect(codes).toContain("CONSENTS");
     expect(codes).toContain("GOVERNMENT_ID");
   });
+
+  it("asks a rental owner for the same short set", () => {
+    const stay = requirements(application({ track: "STAY_HOST" })).map((item) => item.code);
+    const rental = requirements(application({ track: "RENTAL_OWNER" })).map((item) => item.code);
+    expect(rental).toEqual(stay);
+  });
 });
