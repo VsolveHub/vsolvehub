@@ -102,3 +102,63 @@ export function getEnquiryStatusBadge(status?: string): {
       return { label: status ?? "Submitted", tone: "neutral" };
   }
 }
+
+/** "2 rooms available" / "1 bed available" — what a guest reads under a room type. */
+export function availabilityLabel(count: number | undefined, roomStyle?: string | null): string {
+  const n = Math.max(count ?? 0, 0);
+  const word = roomStyle === "SHARED" ? "bed" : "room";
+  return `${n} ${word}${n === 1 ? "" : "s"} available`;
+}
+
+/** "17:00:00" → "5 PM", "10:30:00" → "10:30 AM". */
+export function formatVisitTime(value: string | undefined | null): string {
+  if (!value) return "";
+  const [h = "0", m = "0"] = value.split(":");
+  const hour = Number(h);
+  const minute = Number(m);
+  const suffix = hour < 12 ? "AM" : "PM";
+  const display = hour % 12 || 12;
+  return minute ? `${display}:${String(minute).padStart(2, "0")} ${suffix}` : `${display} ${suffix}`;
+}
+
+export function visitWindowLabel(start?: string | null, end?: string | null): string {
+  return `${formatVisitTime(start)} – ${formatVisitTime(end)}`;
+}
+
+/** "2026-10-12" → "Sat, 12 Oct". Read as a local calendar day, never shifted by time zone. */
+export function visitDayLabel(isoDate: string): string {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  const date = new Date(y!, m! - 1, d!, 12);
+  return date.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
+}
+
+export function getVisitStatusBadge(status?: string): {
+  label: string;
+  tone: "success" | "neutral" | "info" | "danger";
+} {
+  switch (status) {
+    case "REQUESTED":
+      return { label: "Waiting for the owner", tone: "info" };
+    case "ACCEPTED":
+      return { label: "🟢 Visit accepted", tone: "success" };
+    case "DECLINED":
+      return { label: "🔴 Schedule not accepted", tone: "danger" };
+    case "CANCELLED":
+      return { label: "Cancelled", tone: "neutral" };
+    case "EXPIRED":
+      return { label: "Expired", tone: "neutral" };
+    default:
+      return { label: status ?? "Requested", tone: "neutral" };
+  }
+}
+
+/** Shown wherever money comes up: stays are paid to the owner, never to V Solve Hub. */
+export const DIRECT_PAYMENT_NOTE =
+  "Payment is made directly to the property owner. V Solve Hub does not collect the room rent.";
+
+/** "+919955550001" → "+91 99555 50001"; anything else is shown as given. */
+export function formatPhone(value: string | undefined | null): string {
+  const raw = (value ?? "").trim();
+  const match = /^\+91(\d{5})(\d{5})$/.exec(raw);
+  return match ? `+91 ${match[1]} ${match[2]}` : raw;
+}

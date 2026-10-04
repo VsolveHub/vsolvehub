@@ -14,11 +14,78 @@ import {
   formatDateTime,
   formatMoney,
 } from "@vsolve/ui";
+import { useQuery } from "@tanstack/react-query";
 import { Phone } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { InvoiceNotice } from "@/features/workspace/view/invoice-notice";
-import { stayLengthLabel, type StayEnquiry } from "@/features/stays/queries";
+import {
+  byRoomNumber,
+  fetchPartnerStayProperties,
+  stayLengthLabel,
+  type StayEnquiry,
+} from "@/features/stays/queries";
+
+/**
+ * "Which room?" for Mark as Booked. Lists the property's rooms that aren't booked, grouped by
+ * type, with the enquired type first.
+ */
+export function useBookableRooms(propertyId: string | undefined, preferUnitId?: string | null) {
+  const properties = useQuery({
+    queryKey: ["partner-stays", "properties"],
+    queryFn: fetchPartnerStayProperties,
+    enabled: Boolean(propertyId),
+  });
+  return useMemo(() => {
+    const property = properties.data?.find((row) => row.id === propertyId);
+    const units = [...(property?.units ?? [])].sort((a, b) =>
+      a.id === preferUnitId ? -1 : b.id === preferUnitId ? 1 : 0,
+    );
+    return units.flatMap((unit) =>
+      [...(unit.rooms ?? [])]
+        .filter((room) => room.status !== "BOOKED")
+        .sort(byRoomNumber)
+        .map((room) => ({
+          id: room.id,
+          label: `${room.number} · ${unit.name}${room.status === "UNAVAILABLE" ? " (switched off)" : ""}`,
+        })),
+    );
+  }, [properties.data, propertyId, preferUnitId]);
+}
+
+export function RoomChoice({
+  rooms,
+  value,
+  onChange,
+}: {
+  rooms: Array<{ id: string; label: string }>;
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  if (rooms.length === 0) {
+    return (
+      <p className="text-xs text-text-secondary">
+        Every room is already marked booked. The booking is still recorded.
+      </p>
+    );
+  }
+  return (
+    <label className="flex flex-col gap-1.5">
+      <span className="text-sm font-semibold text-navy-900">Which room?</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-11 rounded-control border border-line bg-surface px-3 text-sm text-text"
+      >
+        {rooms.map((room) => (
+          <option key={room.id} value={room.id}>
+            {room.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
 
 export interface StayReservationRow {
   id: string;
@@ -401,20 +468,27 @@ export function StayEnquiryDetailSheet({
 }: {
   enquiry: StayEnquiry | null;
   onOpenChange: (open: boolean) => void;
-  onBooked: (id: string) => void;
+  onBooked: (id: string, roomId: string | null) => void;
   onNotAvailable: (id: string, note: string) => void;
   onCancelBooking: (id: string) => void;
   isPending: boolean;
   actionError?: string | null;
 }) {
   const [declining, setDeclining] = useState(false);
+  const [booking, setBooking] = useState(false);
+  const [roomId, setRoomId] = useState("");
   const [note, setNote] = useState("");
+  const rooms = useBookableRooms(enquiry?.property, enquiry?.unit);
 
   // A note typed against one enquiry must not follow the reader to the next.
   useEffect(() => {
     setDeclining(false);
+    setBooking(false);
     setNote("");
   }, [enquiry?.id]);
+  useEffect(() => {
+    if (booking && !rooms.some((room) => room.id === roomId)) setRoomId(rooms[0]?.id ?? "");
+  }, [booking, rooms, roomId]);
 
   const isOpen = enquiry ? OPEN_ENQUIRY_STATUSES.has(enquiry.status ?? "") : false;
   const length = enquiry?.stay_length
@@ -433,7 +507,21 @@ export function StayEnquiryDetailSheet({
           : undefined
       }
       footer={
-        enquiry && isOpen && !declining ? (
+        enquiry && isOpen && booking ? (
+          <>
+            <Button type="button" variant="ghost" disabled={isPending} onClick={() => setBooking(false)}>
+              Not yet
+            </Button>
+            <Button
+              type="button"
+              loading={isPending}
+              loadingLabel="Saving…"
+              onClick={() => onBooked(enquiry.id, roomId || null)}
+            >
+              Yes – Mark Room Booked
+            </Button>
+          </>
+        ) : enquiry && isOpen && !declining ? (
           <>
             <Button
               type="button"
@@ -447,9 +535,9 @@ export function StayEnquiryDetailSheet({
               type="button"
               loading={isPending}
               loadingLabel="Saving…"
-              onClick={() => onBooked(enquiry.id)}
+              onClick={() => setBooking(true)}
             >
-              Booked
+              Mark as Booked
             </Button>
           </>
         ) : enquiry && enquiry.status === "CONFIRMED" ? (
@@ -529,6 +617,15 @@ export function StayEnquiryDetailSheet({
           {enquiry.message ? (
             <SheetSection title="Message">
               <p className="text-sm text-text">{enquiry.message}</p>
+            </SheetSection>
+          ) : null}
+
+          {booking && isOpen ? (
+            <SheetSection title="Booking confirmed?">
+              <p className="text-sm text-text-secondary">
+                The room is marked Booked and stops appearing as available. The guest is told.
+              </p>
+              <RoomChoice rooms={rooms} value={roomId} onChange={setRoomId} />
             </SheetSection>
           ) : null}
 

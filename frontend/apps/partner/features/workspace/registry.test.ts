@@ -280,6 +280,7 @@ describe("the specialty nav is specialised per workspace", () => {
       "/home",
       "/stays",
       "/stays/enquiries",
+      "/stays/visits",
       "/money",
       "#notifications",
       "/me",

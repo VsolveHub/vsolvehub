@@ -9,6 +9,10 @@ export type StayUnit = Schemas["PartnerUnit"];
 export type CreateUnitRequest = Schemas["CreateUnitRequest"];
 export type PatchedUpdateUnitRequest = Schemas["PatchedUpdateUnitRequest"];
 export type PatchedUpdatePropertyRequest = Schemas["PatchedUpdatePropertyRequest"];
+export type StayRoom = Schemas["Room"];
+export type HostStaySummary = Schemas["HostStaySummary"];
+export type PartnerStayVisit = Schemas["PartnerStayVisit"];
+export type StayVisitSlot = Schemas["StayVisitSlot"];
 
 export type StayTaxonomyVariant = {
   id: string;
@@ -195,6 +199,8 @@ export async function createPartnerStayUnit(
     max_guests?: number;
     attributes?: Record<string, unknown>;
     is_active?: boolean;
+    /** "101", "102" — one per room. When given, the count is their number. */
+    room_numbers?: string[];
   },
 ): Promise<StayUnit> {
   const data = await request(() =>
@@ -208,6 +214,7 @@ export async function createPartnerStayUnit(
         max_guests: input.max_guests,
         attributes: input.attributes ?? {},
         is_active: input.is_active ?? true,
+        room_numbers: input.room_numbers ?? [],
       },
     }),
   );
@@ -255,11 +262,15 @@ export async function respondPartnerStayEnquiry(
   return data as StayEnquiry;
 }
 
-/** The host spoke to the guest and the stay is agreed. */
-export async function confirmPartnerStayEnquiry(enquiryId: string): Promise<StayEnquiry> {
+/** The host spoke to the guest and the stay is agreed; `roomId` is the room they take. */
+export async function confirmPartnerStayEnquiry(
+  enquiryId: string,
+  roomId?: string | null,
+): Promise<StayEnquiry> {
   const data = await request(() =>
     getApiClient().POST("/api/v1/partner/stays/enquiries/{enquiry_id}/confirm", {
       params: { path: { enquiry_id: enquiryId } },
+      body: { room_id: roomId ?? null },
     }),
   );
   return data as StayEnquiry;
@@ -367,4 +378,142 @@ export async function deletePartnerStayPropertyMedia(
       },
     ),
   );
+}
+
+
+// --- dashboard summary ----------------------------------------------------------------------
+
+export async function fetchPartnerStaySummary(): Promise<HostStaySummary> {
+  return request(() => getApiClient().GET("/api/v1/partner/stays/summary"));
+}
+
+// --- numbered rooms -------------------------------------------------------------------------
+
+export async function addPartnerStayRoom(
+  unitId: string,
+  input: { number: string; available?: boolean },
+): Promise<StayRoom> {
+  return request(() =>
+    getApiClient().POST("/api/v1/partner/stays/units/{unit_id}/rooms", {
+      params: { path: { unit_id: unitId } },
+      body: { number: input.number, available: input.available ?? true },
+    }),
+  );
+}
+
+export async function updatePartnerStayRoom(
+  roomId: string,
+  input: { number?: string; available?: boolean },
+): Promise<StayRoom> {
+  return request(() =>
+    getApiClient().PATCH("/api/v1/partner/stays/rooms/{room_id}", {
+      params: { path: { room_id: roomId } },
+      body: input,
+    }),
+  );
+}
+
+export async function deletePartnerStayRoom(roomId: string): Promise<void> {
+  await request(() =>
+    getApiClient().DELETE("/api/v1/partner/stays/rooms/{room_id}", {
+      params: { path: { room_id: roomId } },
+    }),
+  );
+}
+
+/** `book` marks the room Booked; `release` makes a booked room available again. */
+export async function partnerStayRoomAction(
+  roomId: string,
+  action: "book" | "release",
+  input: { occupant_name?: string; visit_id?: string | null } = {},
+): Promise<StayRoom> {
+  return request(() =>
+    getApiClient().POST("/api/v1/partner/stays/rooms/{room_id}/{action}", {
+      params: { path: { room_id: roomId, action } },
+      body: { occupant_name: input.occupant_name ?? "", visit_id: input.visit_id ?? null },
+    }),
+  );
+}
+
+// --- visiting hours and visits ----------------------------------------------------------------
+
+export type VisitSlotInput = { weekday: number; start_time: string; end_time: string };
+
+export async function setPartnerVisitingHours(
+  propertyId: string,
+  input: { visits_enabled: boolean; slots: VisitSlotInput[]; blocked_dates: string[] },
+): Promise<StayProperty> {
+  return request(() =>
+    getApiClient().PUT("/api/v1/partner/stays/properties/{property_id}/visiting-hours", {
+      params: { path: { property_id: propertyId } },
+      body: input,
+    }),
+  );
+}
+
+export async function fetchPartnerStayVisits(): Promise<PartnerStayVisit[]> {
+  const data = await request(() => getApiClient().GET("/api/v1/partner/stays/visits"));
+  return Array.isArray(data) ? data : [];
+}
+
+export type VisitDeclineReason = "ROOM_UNAVAILABLE" | "DATE_MISMATCH" | "ALREADY_OCCUPIED" | "OTHER";
+
+export const VISIT_DECLINE_REASONS: ReadonlyArray<{ value: VisitDeclineReason; label: string }> = [
+  { value: "ROOM_UNAVAILABLE", label: "Room unavailable" },
+  { value: "DATE_MISMATCH", label: "Date doesn't match" },
+  { value: "ALREADY_OCCUPIED", label: "Already occupied" },
+  { value: "OTHER", label: "Other" },
+];
+
+export async function partnerStayVisitAction(
+  visitId: string,
+  action: "accept" | "decline",
+  input: { reason?: VisitDeclineReason | ""; note?: string } = {},
+): Promise<PartnerStayVisit> {
+  return request(() =>
+    getApiClient().POST("/api/v1/partner/stays/visits/{visit_id}/{action}", {
+      params: { path: { visit_id: visitId, action } },
+      body: { reason: input.reason ?? "", note: input.note ?? "" },
+    }),
+  );
+}
+
+export const WEEKDAY_NAMES = [
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
+] as const;
+
+/** "17:00:00" or "17:00" → "5 PM". */
+export function formatClock(value: string | undefined | null): string {
+  if (!value) return "";
+  const [h = "0", m = "0"] = value.split(":");
+  const hour = Number(h);
+  const minute = Number(m);
+  const display = hour % 12 || 12;
+  const suffix = hour < 12 ? "AM" : "PM";
+  return minute ? `${display}:${String(minute).padStart(2, "0")} ${suffix}` : `${display} ${suffix}`;
+}
+
+export function clockWindow(start?: string | null, end?: string | null): string {
+  return `${formatClock(start)} – ${formatClock(end)}`;
+}
+
+/** "2026-10-12" → "Sat, 12 Oct", read as a local calendar day. */
+export function dayLabel(isoDate: string): string {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  return new Date(y!, m! - 1, d!, 12).toLocaleDateString("en-IN", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
+}
+
+/** Numbers sort as people read them: Room 2 before Room 10. */
+export function byRoomNumber(a: { number: string }, b: { number: string }): number {
+  return a.number.localeCompare(b.number, undefined, { numeric: true, sensitivity: "base" });
 }

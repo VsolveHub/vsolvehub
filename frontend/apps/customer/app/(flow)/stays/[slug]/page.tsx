@@ -22,6 +22,7 @@ import {
   MAX_PHOTO_BYTES,
   MAX_REVIEW_PHOTOS,
   PHOTO_TOO_LARGE,
+  availabilityLabel,
   formatPaise,
   pricePeriodOf,
   reviewPhotoUrls,
@@ -34,7 +35,13 @@ import {
   submitStayReview,
   uploadStayReviewPhoto,
 } from "@/features/stays/queries";
-import { StayCard, StayImageGallery, StayQuotePanel, amenityIcon } from "@/features/stays/view";
+import {
+  StayActionPanel,
+  StayCard,
+  StayImageGallery,
+  StayPaymentNote,
+  amenityIcon,
+} from "@/features/stays/view";
 import { STAYS_HREF } from "@/lib/routes";
 import { useCanonicalSlug } from "@/lib/use-canonical-slug";
 
@@ -177,7 +184,7 @@ export default function StayDetailPage() {
         return (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
             {/* Left Column: Property Details & Amenities */}
-            <div className="lg:col-span-7 flex flex-col gap-6">
+            <div id="property-details" className="lg:col-span-7 flex flex-col gap-6 scroll-mt-24">
               <StayImageGallery media={activeMedia} title={galleryTitle} />
 
               <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6 shadow-xs">
@@ -249,6 +256,9 @@ export default function StayDetailPage() {
                       <div className="text-xs text-text-secondary">
                         {roomOccupancyLabel(unit, property.room_style)}
                       </div>
+                      <div className="mt-0.5 text-[11px] font-semibold text-emerald-700">
+                        {availabilityLabel(unit.available_count, property.room_style)}
+                      </div>
                     </div>
                     <div className="text-right">
                       <div className="text-base font-extrabold text-action">
@@ -296,11 +306,13 @@ export default function StayDetailPage() {
               How enquiries work
             </h3>
             <p className="text-xs text-text-secondary leading-relaxed">
-              Send your dates. The host sees your name and phone number and calls you to
-              confirm. Nothing is paid online, and you can withdraw any time before the host
-              confirms.
+              Send your dates, or schedule a visit to see the place first. The owner gets your
+              name and number, and you see theirs straight away. Nothing is paid online, and you
+              can withdraw any time before the owner confirms.
             </p>
           </div>
+
+          <StayPaymentNote />
 
           {/* House Rules Card */}
           {property.house_rules && (
@@ -386,7 +398,15 @@ export default function StayDetailPage() {
 
         {/* Right Column: Interactive Quote and Enquiry Panel */}
         <div className="lg:col-span-5 sticky top-24">
-          <StayQuotePanel property={property} onSelectUnit={setSelectedUnitId} />
+          <StayActionPanel
+            property={property}
+            onSelectUnit={setSelectedUnitId}
+            onViewProperty={() =>
+              document
+                .getElementById("property-details")
+                ?.scrollIntoView({ behavior: "smooth", block: "start" })
+            }
+          />
         </div>
       </div>
     );

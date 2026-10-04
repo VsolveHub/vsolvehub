@@ -80,12 +80,14 @@ export function PartnerStayEnquiriesWorkspace() {
       id,
       action,
       note,
+      roomId,
     }: {
       id: string;
       action: "booked" | "not_available" | "cancel";
       note?: string;
+      roomId?: string | null;
     }) => {
-      if (action === "booked") return confirmPartnerStayEnquiry(id);
+      if (action === "booked") return confirmPartnerStayEnquiry(id, roomId);
       if (action === "not_available") return respondPartnerStayEnquiry(id, note ?? "", true);
       return cancelPartnerStayEnquiry(id);
     },
@@ -108,8 +110,8 @@ export function PartnerStayEnquiriesWorkspace() {
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-action">Stays</p>
         <h1 className="mt-1 text-2xl font-extrabold text-navy-900">Guest enquiries</h1>
         <p className="mt-1 text-sm text-text-secondary">
-          Call the guest, agree the room and dates, then mark the enquiry Booked or Not
-          available. The guest is told either way.
+          Call the guest, agree the room and dates, then mark the enquiry Booked (pick the room) or
+          Not available. The guest is told either way.
         </p>
       </div>
 
@@ -202,7 +204,7 @@ export function PartnerStayEnquiriesWorkspace() {
             act.reset();
           }
         }}
-        onBooked={(id) => act.mutate({ id, action: "booked" })}
+        onBooked={(id, roomId) => act.mutate({ id, action: "booked", roomId })}
         onNotAvailable={(id, note) => act.mutate({ id, action: "not_available", note })}
         onCancelBooking={(id) => act.mutate({ id, action: "cancel" })}
         isPending={act.isPending}

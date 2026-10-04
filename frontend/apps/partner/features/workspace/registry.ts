@@ -2,6 +2,7 @@ import {
   Bell,
   Briefcase,
   CalendarCheck,
+  CalendarClock,
   ClipboardList,
   FolderKanban,
   HardHat,
@@ -255,6 +256,7 @@ export const STAY_TAP_FIRST_NAV: readonly WorkspaceNavItem[] = [
   // Every stay is an enquiry the host follows up by phone, so there is no paid "Bookings"
   // list to show. `/stays/bookings` still opens for reservations made before that change.
   { href: "/stays/enquiries", label: "Enquiries", icon: ClipboardList, desktopOnly: true },
+  { href: "/stays/visits", label: "Visits", icon: CalendarClock, desktopOnly: true },
   { href: "/money", label: "Money", icon: Wallet },
   { href: "#notifications", label: "Alerts", icon: Bell, kind: "notifications" },
   { href: "/me", label: "Me", icon: UserCircle2 },
@@ -398,6 +400,7 @@ export const WORKSPACE_REGISTRY: Record<string, WorkspaceDefinition> = {
       { href: "/home", label: "Home", icon: Home },
       { href: "/stays", label: "Stays", icon: FolderKanban, activePrefix: "/stays" },
       { href: "/stays/enquiries", label: "Enquiries", icon: ClipboardList, desktopOnly: true },
+      { href: "/stays/visits", label: "Visits", icon: CalendarClock, desktopOnly: true },
       { href: "/me", label: "Me", icon: UserCircle2, activePrefix: "/me" },
     ],
   },

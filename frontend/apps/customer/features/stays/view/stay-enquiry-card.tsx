@@ -13,6 +13,8 @@ import {
   type StayEnquiry,
 } from "../model";
 import { canCancelStayEnquiry, cancelStayEnquiry } from "../queries";
+import { OwnerContact } from "./owner-contact";
+import { StayPaymentNote } from "./stay-payment-note";
 
 interface StayEnquiryCardProps {
   enquiry: StayEnquiry;
@@ -87,6 +89,22 @@ export function StayEnquiryCard({ enquiry }: StayEnquiryCardProps) {
         </div>
       </div>
 
+      {enquiry.host_phone ? (
+        <div className="mt-4 flex flex-col gap-2">
+          {enquiry.status === "SUBMITTED" ? (
+            <p className="text-xs font-medium text-text">
+              Your details have been sent to the owner. They will contact you shortly.
+            </p>
+          ) : null}
+          <OwnerContact
+            hostName={enquiry.host_name}
+            hostPhone={enquiry.host_phone}
+            propertySlug={enquiry.property_slug}
+          />
+          <StayPaymentNote compact />
+        </div>
+      ) : null}
+
       {enquiry.message ? (
         <div className="mt-3 rounded-control bg-surface-sunken p-3 text-xs text-text-secondary">
           <span className="font-semibold text-text">Your Note: </span>
@@ -102,10 +120,10 @@ export function StayEnquiryCard({ enquiry }: StayEnquiryCardProps) {
           </div>
           <p className="whitespace-pre-line leading-relaxed">{enquiry.host_response}</p>
         </div>
-      ) : enquiry.status !== "CANCELLED" ? (
+      ) : enquiry.status === "SUBMITTED" && !enquiry.host_phone ? (
         <div className="mt-3 flex items-center gap-2 text-xs text-text-secondary">
           <Clock className="size-3.5 text-text-secondary" />
-          <span>Awaiting host reply. You will be notified when the host responds.</span>
+          <span>The owner will call you shortly.</span>
         </div>
       ) : null}
 

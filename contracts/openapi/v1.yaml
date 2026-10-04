@@ -29766,8 +29766,7 @@ components:
         visit_slots:
           type: array
           items:
-            type: object
-            additionalProperties: {}
+            $ref: '#/components/schemas/StayVisitSlot'
           readOnly: true
         visit_blocked_dates:
           type: array
@@ -38988,6 +38987,28 @@ components:
         * `DATE_MISMATCH` - Date doesn't match
         * `ALREADY_OCCUPIED` - Already occupied
         * `OTHER` - Other
+    StayVisitSlot:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        weekday:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        start_time:
+          type: string
+          format: time
+        end_time:
+          type: string
+          format: time
+      required:
+      - end_time
+      - id
+      - start_time
+      - weekday
     StayVisitStatusEnum:
       enum:
       - REQUESTED

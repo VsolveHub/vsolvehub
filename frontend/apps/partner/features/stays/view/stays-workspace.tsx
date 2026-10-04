@@ -17,6 +17,7 @@ import { SectionNav } from "@/features/workspace/view/section-nav";
 
 import { PropertyCard } from "./property-card";
 import { PropertyCreateForm } from "./property-create-form";
+import { StaySummaryCards } from "./stay-summary-cards";
 
 /**
  * A host's properties, each with its rooms, details, photos and visibility on its own card.
@@ -68,7 +69,7 @@ export function PartnerStaysWorkspace() {
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-action">
             Stay listings
           </p>
-          <h1 className="mt-1 text-2xl font-extrabold text-navy-900">Your properties</h1>
+          <h1 className="mt-1 text-2xl font-extrabold text-navy-900">Your stays dashboard</h1>
           <p className="mt-1 text-sm text-text-secondary">
             Add a property, add its rooms and prices, then publish. Pause any time to hide it —
             existing bookings go ahead.
@@ -78,6 +79,8 @@ export function PartnerStaysWorkspace() {
       </div>
 
       <SectionNav label="Stay sections" items={STAY_SECTIONS} />
+
+      {properties.isSuccess && all.length > 0 ? <StaySummaryCards /> : null}
 
       {showForm ? (
         <PropertyCreateForm

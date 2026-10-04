@@ -21,6 +21,7 @@ import {
 
 import { PropertyPhotoCarousel } from "./property-photo-carousel";
 import { PropertyRooms } from "./property-rooms";
+import { VisitingHours } from "./visiting-hours";
 import { AmenityChecklist } from "./amenity-checklist";
 import { SchemaQuestions } from "./schema-questions";
 import {
@@ -31,7 +32,7 @@ import {
   wholeNumber,
 } from "./stay-form-helpers";
 
-type Panel = "rooms" | "details" | "photos" | null;
+type Panel = "rooms" | "details" | "photos" | "visits" | null;
 
 type DetailsDraft = {
   title: string;
@@ -221,7 +222,8 @@ export function PropertyCard({
               {cheapest !== null
                 ? `From ${formatMoney(cheapest)} ${ratePeriodSuffix(property.price_period)} · `
                 : ""}
-              {activeRooms.length} room type{activeRooms.length === 1 ? "" : "s"} open for booking
+              {rooms.reduce((n, unit) => n + (unit.available_count ?? 0), 0)} of{" "}
+              {rooms.reduce((n, unit) => n + (unit.quantity ?? 0), 0)} rooms available
             </p>
             {note ? <p className="text-xs text-text-secondary">{note}</p> : null}
             {(property.moderation_status === "REJECTED" ||
@@ -278,6 +280,13 @@ export function PropertyCard({
                   onClick={() => toggle("photos")}
                 >
                   Photos
+                </Button>
+                <Button
+                  size="sm"
+                  variant={panel === "visits" ? "secondary" : "outline"}
+                  onClick={() => toggle("visits")}
+                >
+                  Visiting hours
                 </Button>
                 <Button
                   size="sm"
@@ -379,6 +388,12 @@ export function PropertyCard({
             </Button>
           </div>
         </form>
+      ) : null}
+
+      {panel === "visits" ? (
+        <div className="border-t border-line p-4">
+          <VisitingHours property={property} />
+        </div>
       ) : null}
 
       {panel === "photos" ? (

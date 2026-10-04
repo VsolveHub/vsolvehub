@@ -2,18 +2,18 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { friendlyErrorMessage } from "@vsolve/query";
-import { Badge, Button, Field, Input, formatMoney } from "@vsolve/ui";
+import { Button, Field, Input, Textarea } from "@vsolve/ui";
 import { useId, useState, type FormEvent } from "react";
 
 import {
   createPartnerStayUnit,
-  ratePeriodSuffix,
   updatePartnerStayUnit,
   type StayProperty,
   type StayTaxonomyVariant,
   type StayUnit,
 } from "@/features/stays/queries";
 
+import { RoomTypeBlock } from "./room-type-block";
 import { SchemaQuestions } from "./schema-questions";
 import {
   FALLBACK_ROOM_NAMES,
@@ -29,6 +29,8 @@ type RoomDraft = {
   name: string;
   rate: string;
   quantity: string;
+  /** "101, 102, 103" — optional; when given, the count is how many are listed. */
+  roomNumbers: string;
   maxGuests: string;
   sharing: string;
   attributes: Record<string, string>;
@@ -38,6 +40,7 @@ const EMPTY_ROOM: RoomDraft = {
   name: "",
   rate: "",
   quantity: "1",
+  roomNumbers: "",
   maxGuests: "1",
   sharing: "1",
   attributes: {},
@@ -63,6 +66,7 @@ function draftFrom(unit: StayUnit): RoomDraft {
     name: unit.name,
     rate: paiseToRupeeInput(unit.nightly_rate_paise),
     quantity: String(unit.quantity ?? 1),
+    roomNumbers: "",
     maxGuests: String(unit.max_guests ?? 1),
     sharing: String(unit.sharing_count ?? 1),
     attributes: answersFrom(unit.attributes),
@@ -73,6 +77,7 @@ type ParsedRoom = {
   name: string;
   nightly_rate_paise: number;
   quantity: number;
+  room_numbers: string[];
   max_guests: number;
   sharing_count: number;
   attributes: Record<string, string | number | boolean>;
@@ -87,7 +92,11 @@ function parseRoom(
   if (!draft.name.trim()) return "Name the room, for example “Deluxe” or “Double sharing”.";
   const rate = rupeesToPaise(draft.rate);
   if (rate === null) return `Enter the ${priceLabel.toLowerCase()} in rupees.`;
-  const quantity = wholeNumber(draft.quantity);
+  const roomNumbers = splitRoomNumbers(draft.roomNumbers);
+  const lower = roomNumbers.map((n) => n.toLowerCase());
+  const repeated = roomNumbers.find((n, i) => lower.indexOf(n.toLowerCase()) !== i);
+  if (repeated) return `${repeated} is listed twice.`;
+  const quantity = roomNumbers.length > 0 ? roomNumbers.length : wholeNumber(draft.quantity);
   if (quantity === null) return "Number of rooms must be 1 or more.";
   const maxGuests = style === "SHARED" ? 1 : wholeNumber(draft.maxGuests);
   if (maxGuests === null) return "Guests per room must be 1 or more.";
@@ -99,6 +108,7 @@ function parseRoom(
     name: draft.name.trim(),
     nightly_rate_paise: rate,
     quantity,
+    room_numbers: roomNumbers,
     // A shared room fits as many people as share it; a private room is never "shared".
     max_guests: style === "SHARED" ? sharing : maxGuests,
     sharing_count: sharing,
@@ -106,9 +116,17 @@ function parseRoom(
   };
 }
 
+/** "101, 102 103" or one per line → ["101", "102", "103"]. */
+function splitRoomNumbers(input: string): string[] {
+  return input
+    .split(/[,\n]+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
 function roomSummary(unit: StayUnit, style: RoomStyle): string {
   const sharing = unit.sharing_count ?? 1;
-  const parts = [plural(unit.quantity ?? 1, "room")];
+  const parts: string[] = [];
   if (style === "SHARED") {
     parts.push(sharing === 1 ? "single" : `${sharing} sharing`);
   } else {
@@ -128,7 +146,9 @@ function RoomFields({
   suggestions,
   priceLabel,
   style,
+  mode,
 }: {
+  mode: "new" | "edit";
   idPrefix: string;
   draft: RoomDraft;
   onChange: (next: RoomDraft) => void;
@@ -197,19 +217,46 @@ function RoomFields({
           </div>
         </Field>
       </div>
-      <div className={`grid gap-3 ${style === "MIXED" ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
-        <Field
-          label="How many of these rooms"
-          required
-          description="Identical rooms you rent at this price."
-        >
-          <Input
-            id={`${idPrefix}-quantity`}
-            inputMode="numeric"
-            value={draft.quantity}
-            onChange={(e) => onChange({ ...draft, quantity: e.target.value })}
-          />
-        </Field>
+      {mode === "new" ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field
+            label="Room numbers"
+            showOptional
+            description="One per room, separated by commas — e.g. 101, 102, 103. You can rename them later."
+          >
+            <Textarea
+              id={`${idPrefix}-numbers`}
+              rows={2}
+              value={draft.roomNumbers}
+              placeholder="101, 102, 103"
+              onChange={(e) => onChange({ ...draft, roomNumbers: e.target.value })}
+            />
+          </Field>
+          {splitRoomNumbers(draft.roomNumbers).length === 0 ? (
+            <Field
+              label="How many of these rooms"
+              required
+              description="Identical rooms you rent at this price. They're numbered Room 1, Room 2… until you rename them."
+            >
+              <Input
+                id={`${idPrefix}-quantity`}
+                inputMode="numeric"
+                value={draft.quantity}
+                onChange={(e) => onChange({ ...draft, quantity: e.target.value })}
+              />
+            </Field>
+          ) : (
+            <p className="self-center text-sm text-text-secondary">
+              {plural(splitRoomNumbers(draft.roomNumbers).length, "room")} of this type.
+            </p>
+          )}
+        </div>
+      ) : (
+        <p className="text-xs text-text-secondary">
+          Add, rename or remove individual rooms in the list below.
+        </p>
+      )}
+      <div className={`grid gap-3 ${style === "MIXED" ? "sm:grid-cols-2" : "sm:grid-cols-1"}`}>
         {style !== "SHARED" ? (
           <Field
             label="Guests per room"
@@ -251,11 +298,11 @@ function RoomFields({
 }
 
 /**
- * Room types under one property: what a guest actually books.
+ * Room types under one property, and the numbered rooms under each type.
  *
- * One row per *kind* of room — "10 Deluxe rooms" is one entry with a count of 10,
- * not ten identical rows. Deactivating a room that still has guests coming asks
- * first, and says those bookings stay.
+ * Guests book a *type* ("Single room"). The owner manages each physical room under it by its
+ * own number, switching it on or off and marking it Booked. A type with nothing available
+ * stops appearing to guests on its own.
  */
 export function PropertyRooms({
   property,
@@ -272,8 +319,6 @@ export function PropertyRooms({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<RoomDraft>(EMPTY_ROOM);
   const [editError, setEditError] = useState<string | null>(null);
-  const [confirmingDeactivate, setConfirmingDeactivate] = useState<string | null>(null);
-  const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null);
 
   const roomSchema = variant?.room_schema;
   const style = roomStyleOf(property.room_style);
@@ -282,8 +327,7 @@ export function PropertyRooms({
   const suggestions = variant?.room_name_suggestions?.length
     ? variant.room_name_suggestions
     : FALLBACK_ROOM_NAMES;
-  const rooms: StayUnit[] = property.units ?? [];
-
+  const units: StayUnit[] = property.units ?? [];
   const invalidate = () => void qc.invalidateQueries({ queryKey: ["partner-stays"] });
 
   const create = useMutation({
@@ -295,20 +339,14 @@ export function PropertyRooms({
     },
     onError: (err: unknown) => setNewError(friendlyErrorMessage(err)),
   });
-
   const update = useMutation({
-    mutationFn: ({ id, patch }: { id: string; patch: Partial<ParsedRoom> & { is_active?: boolean } }) =>
+    mutationFn: ({ id, patch }: { id: string; patch: Parameters<typeof updatePartnerStayUnit>[1] }) =>
       updatePartnerStayUnit(id, patch),
     onSuccess: () => {
       setEditingId(null);
-      setConfirmingDeactivate(null);
-      setRowError(null);
       invalidate();
     },
-    onError: (err: unknown, vars) => {
-      if (editingId === vars.id) setEditError(friendlyErrorMessage(err));
-      else setRowError({ id: vars.id, message: friendlyErrorMessage(err) });
-    },
+    onError: (err: unknown) => setEditError(friendlyErrorMessage(err)),
   });
 
   function onAdd(event: FormEvent) {
@@ -324,143 +362,81 @@ export function PropertyRooms({
     const parsed = parseRoom(editDraft, roomSchema, priceLabel, style);
     if (typeof parsed === "string") return setEditError(parsed);
     setEditError(null);
-    update.mutate({ id: unit.id, patch: parsed });
+    // The count is managed room by room below, so an edit never sends it.
+    update.mutate({
+      id: unit.id,
+      patch: {
+        name: parsed.name,
+        nightly_rate_paise: parsed.nightly_rate_paise,
+        max_guests: parsed.max_guests,
+        sharing_count: parsed.sharing_count,
+        attributes: parsed.attributes,
+      },
+    });
   }
 
   return (
     <section className="flex flex-col gap-3 rounded-card border border-line bg-surface-sunken p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="font-bold text-navy-900">Rooms and prices</h3>
+        <div>
+          <h3 className="font-bold text-navy-900">Rooms and availability</h3>
+          <p className="text-xs text-text-secondary">
+            🟢 Available · ⚪ Not available (switched off) · 🔴 Booked
+          </p>
+        </div>
         {!adding ? (
           <Button size="sm" variant="secondary" onClick={() => setAdding(true)}>
             Add a room type
           </Button>
         ) : null}
       </div>
-
-      {rooms.length === 0 && !adding ? (
+      {units.length === 0 && !adding ? (
         <p className="text-sm text-text-secondary">No rooms yet. Add one to publish.</p>
       ) : null}
 
-      <ul className="flex flex-col gap-2">
-        {rooms.map((unit) => {
-          const upcoming = unit.upcoming_booking_count ?? 0;
-          const inactive = unit.is_active === false;
-          if (editingId === unit.id) {
-            return (
-              <li key={unit.id} className="rounded-card border border-line bg-surface p-3">
-                <form className="flex flex-col gap-3" onSubmit={(event) => onSave(event, unit)}>
-                  <RoomFields
-                    idPrefix={`${idBase}-edit-${unit.id}`}
-                    draft={editDraft}
-                    onChange={setEditDraft}
-                    roomSchema={roomSchema}
-                    suggestions={suggestions}
-                    priceLabel={priceLabel}
-                    style={style}
-                  />
-                  <p className="text-xs text-text-secondary">
-                    New prices apply to new bookings. Guests already booked keep their price.
-                  </p>
-                  {editError ? <p className="text-sm text-danger-text">{editError}</p> : null}
-                  <div className="flex flex-wrap gap-2">
-                    <Button type="submit" size="sm" disabled={update.isPending}>
-                      {update.isPending ? "Saving…" : "Save room"}
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setEditingId(null)}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </form>
-              </li>
-            );
-          }
-          return (
-            <li
-              key={unit.id}
-              className={`flex flex-col gap-2 rounded-card border border-line bg-surface p-3 ${
-                inactive ? "opacity-70" : ""
-              }`}
-            >
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <p className="font-semibold text-navy-900">
-                    {unit.name}{" "}
-                    <span className="font-normal text-text-secondary">
-                      · {formatMoney(unit.nightly_rate_paise)} {ratePeriodSuffix(property.price_period)}
-                    </span>
-                  </p>
-                  <p className="text-xs text-text-secondary">{roomSummary(unit, style)}</p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {inactive ? <Badge>Full</Badge> : null}
-                  {upcoming > 0 ? (
-                    <Badge tone="info">
-                      {upcoming} upcoming booking{upcoming === 1 ? "" : "s"}
-                    </Badge>
-                  ) : null}
-                </div>
-              </div>
-              {confirmingDeactivate === unit.id ? (
-                <div className="flex flex-col gap-2 rounded-card border border-warning-line bg-warning-surface p-2">
-                  <p className="text-sm text-warning-text">
-                    {upcoming} booking{upcoming === 1 ? " is" : "s are"} still coming for this
-                    room. They stay as they are; new guests just won’t see this room.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      size="sm"
-                      variant="danger"
-                      disabled={update.isPending}
-                      onClick={() => update.mutate({ id: unit.id, patch: { is_active: false } })}
-                    >
-                      Mark full
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setConfirmingDeactivate(null)}>
-                      Keep it open
-                    </Button>
-                  </div>
-                </div>
-              ) : (
+      <ul className="flex flex-col gap-3">
+        {units.map((unit) =>
+          editingId === unit.id ? (
+            <li key={unit.id} className="rounded-card border border-line bg-surface p-3">
+              <form className="flex flex-col gap-3" onSubmit={(event) => onSave(event, unit)}>
+                <RoomFields
+                  mode="edit"
+                  idPrefix={`${idBase}-edit-${unit.id}`}
+                  draft={editDraft}
+                  onChange={setEditDraft}
+                  roomSchema={roomSchema}
+                  suggestions={suggestions}
+                  priceLabel={priceLabel}
+                  style={style}
+                />
+                <p className="text-xs text-text-secondary">
+                  New prices apply to new bookings. Guests already booked keep their price.
+                </p>
+                {editError ? <p className="text-sm text-danger-text">{editError}</p> : null}
                 <div className="flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setEditingId(unit.id);
-                      setEditDraft(draftFrom(unit));
-                      setEditError(null);
-                    }}
-                  >
-                    Edit
+                  <Button type="submit" size="sm" disabled={update.isPending}>
+                    {update.isPending ? "Saving…" : "Save room type"}
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={update.isPending}
-                    onClick={() => {
-                      if (!inactive && upcoming > 0) {
-                        setConfirmingDeactivate(unit.id);
-                        return;
-                      }
-                      update.mutate({ id: unit.id, patch: { is_active: inactive } });
-                    }}
-                  >
-                    {inactive ? "Available again" : "Mark full"}
+                  <Button type="button" size="sm" variant="ghost" onClick={() => setEditingId(null)}>
+                    Cancel
                   </Button>
                 </div>
-              )}
-              {rowError?.id === unit.id ? (
-                <p className="text-sm text-danger-text">{rowError.message}</p>
-              ) : null}
+              </form>
             </li>
-          );
-        })}
+          ) : (
+            <RoomTypeBlock
+              key={unit.id}
+              unit={unit}
+              pricePeriod={property.price_period}
+              summary={roomSummary(unit, style)}
+              onEdit={() => {
+                setEditingId(unit.id);
+                setEditDraft(draftFrom(unit));
+                setEditError(null);
+              }}
+            />
+          ),
+        )}
       </ul>
 
       {adding ? (
@@ -469,6 +445,7 @@ export function PropertyRooms({
           onSubmit={onAdd}
         >
           <RoomFields
+            mode="new"
             idPrefix={`${idBase}-new`}
             draft={newRoom}
             onChange={setNewRoom}
@@ -479,15 +456,15 @@ export function PropertyRooms({
           />
           {!hasRoomQuestions ? null : (
             <p className="text-xs text-text-secondary">
-              Room details like AC are asked per room, so one property can have both kinds.
+              Room details like AC are asked per room type, so one property can have both kinds.
             </p>
           )}
           {newError ? <p className="text-sm text-danger-text">{newError}</p> : null}
           <div className="flex flex-wrap gap-2">
             <Button type="submit" size="sm" disabled={create.isPending}>
-              {create.isPending ? "Adding…" : "Add room"}
+              {create.isPending ? "Adding…" : "Add room type"}
             </Button>
-            {rooms.length > 0 ? (
+            {units.length > 0 ? (
               <Button type="button" size="sm" variant="ghost" onClick={() => setAdding(false)}>
                 Cancel
               </Button>

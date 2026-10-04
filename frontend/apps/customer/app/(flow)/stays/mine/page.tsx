@@ -1,59 +1,70 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import { Button, EmptyState, ErrorState, Skeleton } from "@vsolve/ui";
 
-import { fetchMyStayEnquiries, fetchMyStayReservations } from "@/features/stays/queries";
-import { StayEnquiryCard, StayReservationCard } from "@/features/stays/view";
+import {
+  fetchMyStayEnquiries,
+  fetchMyStayReservations,
+  fetchMyStayVisits,
+} from "@/features/stays/queries";
+import { StayEnquiryCard, StayReservationCard, StayVisitCard } from "@/features/stays/view";
 
-export default function MyStayEnquiriesPage() {
-  const [activeTab, setActiveTab] = useState<"ALL" | "PENDING" | "RESPONDED" | "RESERVATIONS">("RESERVATIONS");
+type Tab = "enquiries" | "visits" | "reservations";
 
-  const {
-    data: enquiries = [],
-    isLoading: enquiriesLoading,
-    error: enquiriesError,
-    refetch: refetchEnquiries,
-  } = useQuery({
-    queryKey: ["my-stay-enquiries"],
-    queryFn: fetchMyStayEnquiries,
-  });
+function MyStays() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const requested = searchParams?.get("tab");
+  const activeTab: Tab =
+    requested === "visits" || requested === "reservations" ? requested : "enquiries";
 
-  const {
-    data: reservations = [],
-    isLoading: reservationsLoading,
-    error: reservationsError,
-    refetch: refetchReservations,
-  } = useQuery({
+  const enquiries = useQuery({ queryKey: ["my-stay-enquiries"], queryFn: fetchMyStayEnquiries });
+  const visits = useQuery({ queryKey: ["my-stay-visits"], queryFn: fetchMyStayVisits });
+  // Paid reservations are a legacy mode; the tab only appears for guests who have one.
+  const reservations = useQuery({
     queryKey: ["my-stay-reservations"],
     queryFn: fetchMyStayReservations,
   });
 
-  const filteredEnquiries = enquiries.filter((e) => {
-    const s = (e.status ?? "").toUpperCase();
-    if (activeTab === "PENDING") {
-      return s === "SUBMITTED";
-    }
-    if (activeTab === "RESPONDED") {
-      return ["RESPONDED", "DECLINED", "WITHDRAWN", "EXPIRED"].includes(s);
-    }
-    return true;
-  });
+  const enquiryRows = enquiries.data ?? [];
+  const visitRows = visits.data ?? [];
+  const reservationRows = reservations.data ?? [];
+  const openVisits = visitRows.filter((v) => v.status === "REQUESTED" || v.status === "ACCEPTED");
 
-  const isLoading = activeTab === "RESERVATIONS" ? reservationsLoading : enquiriesLoading;
-  const error = activeTab === "RESERVATIONS" ? reservationsError : enquiriesError;
-  const refetch = activeTab === "RESERVATIONS" ? refetchReservations : refetchEnquiries;
+  const tabs: Array<{ key: Tab; label: string }> = [
+    { key: "enquiries", label: `Enquiries (${enquiryRows.length})` },
+    { key: "visits", label: `Visits (${openVisits.length})` },
+    ...(reservationRows.length > 0
+      ? [{ key: "reservations" as const, label: `Reservations (${reservationRows.length})` }]
+      : []),
+  ];
+
+  const current =
+    activeTab === "visits" ? visits : activeTab === "reservations" ? reservations : enquiries;
+
+  function setTab(next: Tab) {
+    router.replace(next === "enquiries" ? "/stays/mine" : `/stays/mine?tab=${next}`, {
+      scroll: false,
+    });
+  }
+
+  const explore = (
+    <Link href="/stays">
+      <Button className="font-bold">Explore Rooms & Stays</Button>
+    </Link>
+  );
 
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8">
-      {/* Navigation and Header */}
       <div className="flex flex-col gap-2">
         <Link
           href="/stays"
-          className="inline-flex items-center gap-1.5 text-xs font-bold text-text-secondary hover:text-text transition"
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-text-secondary transition hover:text-text"
         >
           <ArrowLeft className="size-3.5" />
           Back to Stays & PG
@@ -62,7 +73,7 @@ export default function MyStayEnquiriesPage() {
           <div>
             <h1 className="text-2xl font-extrabold text-text sm:text-3xl">My Stays</h1>
             <p className="mt-0.5 text-xs text-text-secondary">
-              Track your reservations, host responses, and availability.
+              Your enquiries and visits, with the owner&apos;s number to call.
             </p>
           </div>
           <Link href="/stays">
@@ -73,107 +84,71 @@ export default function MyStayEnquiriesPage() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-line pb-2 flex-wrap">
-        <button
-          type="button"
-          onClick={() => setActiveTab("RESERVATIONS")}
-          className={`rounded-full px-4 py-1.5 text-xs font-bold transition ${
-            activeTab === "RESERVATIONS"
-              ? "bg-action text-white"
-              : "bg-surface border border-line text-text-secondary hover:text-text"
-          }`}
-        >
-          Reservations ({reservations.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("ALL")}
-          className={`rounded-full px-4 py-1.5 text-xs font-bold transition ${
-            activeTab === "ALL"
-              ? "bg-action text-white"
-              : "bg-surface border border-line text-text-secondary hover:text-text"
-          }`}
-        >
-          All Enquiries ({enquiries.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("PENDING")}
-          className={`rounded-full px-4 py-1.5 text-xs font-bold transition ${
-            activeTab === "PENDING"
-              ? "bg-action text-white"
-              : "bg-surface border border-line text-text-secondary hover:text-text"
-          }`}
-        >
-          Awaiting Host Response
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("RESPONDED")}
-          className={`rounded-full px-4 py-1.5 text-xs font-bold transition ${
-            activeTab === "RESPONDED"
-              ? "bg-action text-white"
-              : "bg-surface border border-line text-text-secondary hover:text-text"
-          }`}
-        >
-          Host Responded
-        </button>
+      <div className="flex flex-wrap items-center gap-2 border-b border-line pb-2" role="tablist">
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab.key}
+            onClick={() => setTab(tab.key)}
+            className={`rounded-full px-4 py-1.5 text-xs font-bold transition ${
+              activeTab === tab.key
+                ? "bg-action text-white"
+                : "border border-line bg-surface text-text-secondary hover:text-text"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      {/* Content State */}
-      {isLoading ? (
+      {current.isLoading ? (
         <div className="flex flex-col gap-4">
           {Array.from({ length: 2 }).map((_, idx) => (
-            <div key={idx} className="rounded-[var(--radius-card)] border border-line p-5 space-y-3">
+            <div key={idx} className="space-y-3 rounded-[var(--radius-card)] border border-line p-5">
               <Skeleton className="h-6 w-48" />
               <Skeleton className="h-8 w-1/3" />
               <Skeleton className="h-10 w-full" />
             </div>
           ))}
         </div>
-      ) : error ? (
+      ) : current.error ? (
         <ErrorState
-          title="Could not load your data"
-          message={(error as Error).message}
+          title="Could not load your stays"
+          message={(current.error as Error).message}
           actionLabel="Retry"
-          onAction={() => refetch()}
+          onAction={() => void current.refetch()}
         />
-      ) : activeTab === "RESERVATIONS" ? (
-        reservations.length === 0 ? (
+      ) : activeTab === "visits" ? (
+        visitRows.length === 0 ? (
           <EmptyState
-            title="No stay reservations found"
-            description="You don't have any confirmed stay reservations yet."
-            action={
-              <Link href="/stays">
-                <Button className="font-bold">Explore Rooms & Stays</Button>
-              </Link>
-            }
+            title="No visits yet"
+            description="Open a property and choose “Schedule a visit” to see it in person."
+            action={explore}
           />
         ) : (
           <div className="flex flex-col gap-4">
-            {reservations.map((reservation) => (
-              <StayReservationCard key={reservation.id} reservation={reservation} />
+            {visitRows.map((visit) => (
+              <StayVisitCard key={visit.id} visit={visit} />
             ))}
           </div>
         )
-      ) : filteredEnquiries.length === 0 ? (
+      ) : activeTab === "reservations" ? (
+        <div className="flex flex-col gap-4">
+          {reservationRows.map((reservation) => (
+            <StayReservationCard key={reservation.id} reservation={reservation} />
+          ))}
+        </div>
+      ) : enquiryRows.length === 0 ? (
         <EmptyState
-          title="No stay enquiries found"
-          description={
-            activeTab === "ALL"
-              ? "You haven't enquired about any rooms or stays yet. Check out verified properties in your area."
-              : `No ${activeTab.toLowerCase()} stay enquiries at this time.`
-          }
-          action={
-            <Link href="/stays">
-              <Button className="font-bold">Explore Rooms & Stays</Button>
-            </Link>
-          }
+          title="No enquiries yet"
+          description="Enquire about a room and the owner's number appears here."
+          action={explore}
         />
       ) : (
         <div className="flex flex-col gap-4">
-          {filteredEnquiries.map((enquiry) => (
+          {enquiryRows.map((enquiry) => (
             <StayEnquiryCard key={enquiry.id} enquiry={enquiry} />
           ))}
         </div>
@@ -182,3 +157,10 @@ export default function MyStayEnquiriesPage() {
   );
 }
 
+export default function MyStayEnquiriesPage() {
+  return (
+    <Suspense fallback={null}>
+      <MyStays />
+    </Suspense>
+  );
+}

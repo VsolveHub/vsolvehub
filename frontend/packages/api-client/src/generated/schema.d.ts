@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.66.0)
- * Checksum: 5ecab3df6b49df8e
+ * Checksum: 3a9c3dec6ff5a722
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -11994,9 +11994,7 @@ export interface components {
             moderation_reason?: string;
             listing_status?: components["schemas"]["ListingStatusEnum"];
             visits_enabled?: boolean;
-            readonly visit_slots: {
-                [key: string]: unknown;
-            }[];
+            readonly visit_slots: components["schemas"]["StayVisitSlot"][];
             readonly visit_blocked_dates: string[];
         };
         PartnerRateItem: {
@@ -15744,6 +15742,15 @@ export interface components {
          * @enum {string}
          */
         StayVisitDeclineReasonEnum: "ROOM_UNAVAILABLE" | "DATE_MISMATCH" | "ALREADY_OCCUPIED" | "OTHER";
+        StayVisitSlot: {
+            /** Format: uuid */
+            readonly id: string;
+            weekday: number;
+            /** Format: time */
+            start_time: string;
+            /** Format: time */
+            end_time: string;
+        };
         /**
          * @description * `REQUESTED` - Requested
          *     * `ACCEPTED` - Accepted

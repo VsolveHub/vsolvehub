@@ -282,6 +282,12 @@ class PropertySerializer(serializers.ModelSerializer):
         return visits_offered(obj)
 
 
+class StayVisitSlotSerializer(serializers.ModelSerializer[VisitSlot]):
+    class Meta:
+        model = VisitSlot
+        fields = ("id", "weekday", "start_time", "end_time")
+
+
 class PartnerPropertySerializer(PropertySerializer):
     """The host's own view: every room (inactive too), the Operations note and the listing switch.
 
@@ -302,9 +308,9 @@ class PartnerPropertySerializer(PropertySerializer):
             "visit_blocked_dates",
         )
 
-    @extend_schema_field(serializers.ListField(child=serializers.DictField()))
+    @extend_schema_field(StayVisitSlotSerializer(many=True))
     def get_visit_slots(self, obj: Property) -> list[dict[str, Any]]:
-        return list(VisitSlotSerializer(obj.visit_slots.all(), many=True).data)
+        return list(StayVisitSlotSerializer(obj.visit_slots.all(), many=True).data)
 
     @extend_schema_field(serializers.ListField(child=serializers.DateField()))
     def get_visit_blocked_dates(self, obj: Property) -> list[date]:
@@ -638,12 +644,6 @@ class HostStaySummarySerializer(serializers.Serializer[dict[str, Any]]):
 
 
 # --- visits ---------------------------------------------------------------------------------
-
-
-class VisitSlotSerializer(serializers.ModelSerializer[VisitSlot]):
-    class Meta:
-        model = VisitSlot
-        fields = ("id", "weekday", "start_time", "end_time")
 
 
 class VisitSlotInputSerializer(serializers.Serializer[dict[str, Any]]):
