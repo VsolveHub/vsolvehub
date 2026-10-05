@@ -57,14 +57,17 @@ export function StayVisitPanel({
   const [error, setError] = useState<string | null>(null);
   const [requested, setRequested] = useState<StayVisit | null>(null);
 
-  const chosenDay = days.find((row) => row.date === day) ?? null;
+  const openDays = useMemo(() => new Set(days.map((row) => row.date)), [days]);
+  // The first open day is chosen up front, so times show straight away.
+  const activeDay = day ?? days[0]?.date ?? null;
+  const chosenDay = days.find((row) => row.date === activeDay) ?? null;
 
   const mutation = useMutation({
     mutationFn: () =>
       createStayVisit({
         property_id: property.id,
         slot_id: slotId ?? "",
-        visit_date: day ?? "",
+        visit_date: activeDay ?? "",
         unit_id: unitId || null,
         message,
       }),
@@ -115,11 +118,11 @@ export function StayVisitPanel({
   return (
     <form
       noValidate
-      className="flex flex-col gap-5"
+      className="flex min-w-0 flex-col gap-5"
       onSubmit={(event) => {
         event.preventDefault();
         setError(null);
-        if (!day || !slotId) {
+        if (!activeDay || !slotId) {
           setError("Pick a day and a time.");
           return;
         }
@@ -131,38 +134,28 @@ export function StayVisitPanel({
         you&apos;re notified either way.
       </p>
 
-      <fieldset className="flex flex-col gap-2">
+      <fieldset className="flex min-w-0 flex-col gap-2">
         <legend className="mb-1.5 flex items-center gap-1.5 text-xs font-bold text-text">
           <CalendarClock className="size-3.5 text-text-secondary" aria-hidden />
-          Day
+          Pick a day
         </legend>
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {days.map((row) => (
-            <button
-              key={row.date}
-              type="button"
-              aria-pressed={day === row.date}
-              onClick={() => {
-                setDay(row.date);
-                setSlotId(null);
-                setError(null);
-              }}
-              className={`shrink-0 rounded-control border px-3 py-2 text-xs font-bold transition ${
-                day === row.date
-                  ? "border-action bg-action-surface text-action"
-                  : "border-line bg-surface text-text-secondary hover:border-line-strong"
-              }`}
-            >
-              {visitDayLabel(row.date)}
-            </button>
-          ))}
-        </div>
+        <VisitCalendar
+          openDays={openDays}
+          value={activeDay}
+          onChange={(value) => {
+            setDay(value);
+            setSlotId(null);
+            setError(null);
+          }}
+        />
       </fieldset>
 
       {chosenDay ? (
         <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1.5 text-xs font-bold text-text">Time</legend>
-          <div className="grid grid-cols-2 gap-2">
+          <legend className="mb-1.5 text-xs font-bold text-text">
+            Pick a time · <span className="font-semibold text-text-secondary">{visitDayLabel(chosenDay.date)}</span>
+          </legend>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {chosenDay.slots.map((slot) => (
               <button
                 key={slot.id}
@@ -231,5 +224,94 @@ export function StayVisitPanel({
         Request visit
       </Button>
     </form>
+  );
+}
+
+const WEEK = ["M", "T", "W", "T", "F", "S", "S"];
+
+function isoOf(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+/**
+ * Two weeks as a small calendar: days the owner takes visits are tappable,
+ * the rest are greyed out. Fits the panel at any width; nothing scrolls sideways.
+ */
+function VisitCalendar({
+  openDays,
+  value,
+  onChange,
+}: {
+  openDays: Set<string>;
+  value: string | null;
+  onChange: (value: string) => void;
+}) {
+  const today = new Date();
+  today.setHours(12, 0, 0, 0);
+  const todayIso = isoOf(today);
+  // Start on this week's Monday; show enough weeks to cover the next 14 days.
+  const start = new Date(today);
+  start.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+  const cells = Array.from({ length: 21 }, (_, i) => {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    return d;
+  });
+  const last = new Date(today);
+  last.setDate(today.getDate() + 14);
+  const weeks = [0, 1, 2]
+    .map((w) => cells.slice(w * 7, w * 7 + 7))
+    .filter((week) => week.some((d) => d >= today && d <= last));
+  const month = today.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+
+  return (
+    <div className="rounded-control border border-line bg-surface p-3">
+      <p className="mb-2 text-xs font-bold text-text">{month}</p>
+      <div className="grid grid-cols-7 gap-1 text-center">
+        {WEEK.map((letter, i) => (
+          <span key={i} className="pb-1 text-[11px] font-semibold text-text-muted">
+            {letter}
+          </span>
+        ))}
+        {weeks.flat().map((d) => {
+          const iso = isoOf(d);
+          const open = openDays.has(iso);
+          const selected = value === iso;
+          const isToday = iso === todayIso;
+          const newMonth = d.getDate() === 1;
+          return (
+            <button
+              key={iso}
+              type="button"
+              disabled={!open}
+              aria-pressed={selected}
+              aria-label={`${d.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}${open ? "" : ", no visits"}`}
+              onClick={() => onChange(iso)}
+              className={`relative flex aspect-square flex-col items-center justify-center rounded-full text-sm font-bold transition ${
+                selected
+                  ? "bg-action text-action-text shadow-sm"
+                  : open
+                    ? "text-text hover:bg-action-surface"
+                    : "cursor-not-allowed text-text-muted/50"
+              }`}
+            >
+              {newMonth ? (
+                <span className="absolute -top-1 text-[9px] font-semibold uppercase">
+                  {d.toLocaleDateString("en-IN", { month: "short" })}
+                </span>
+              ) : null}
+              {d.getDate()}
+              {open && !selected ? <span aria-hidden className="absolute bottom-1 size-1 rounded-full bg-action" /> : null}
+              {isToday && !selected ? (
+                <span aria-hidden className="absolute inset-0 rounded-full ring-1 ring-line-strong" />
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+      <p className="mt-2 flex items-center gap-1.5 text-[11px] text-text-secondary">
+        <span aria-hidden className="size-1.5 rounded-full bg-action" /> Owner takes visits that day
+      </p>
+    </div>
   );
 }

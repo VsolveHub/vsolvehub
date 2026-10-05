@@ -13,6 +13,7 @@ import { usePartnerApplication } from "@/features/application/queries";
 import { usePartnerPerformance, type PartnerPerformance } from "@/features/earnings/queries";
 import { readStoredSession } from "@/features/presence/model/stored-session";
 import { PartnerPresence } from "@/features/presence/view/partner-presence";
+import { ListingHome } from "@/features/listings/view/listing-home";
 import { RentalHome } from "@/features/rentals/view/rental-home";
 import { StayHome } from "@/features/stays/view/stay-home";
 import { useSpecialtyHome } from "@/features/workspace/queries";
@@ -183,6 +184,8 @@ function WorkStack() {
             <RentalHome />
           ) : specialty.home === "stays" ? (
             <StayHome />
+          ) : specialty.home === "listings" ? (
+            <ListingHome />
           ) : (
             <StackBody stack={stack} needsYou={needsYou} specialty={specialty.home} />
           )}

@@ -477,7 +477,7 @@ export default function StayDetailPage() {
         </div>
 
         {/* Right Column: Interactive Quote and Enquiry Panel */}
-        <div className="lg:col-span-5 sticky top-24">
+        <div className="min-w-0 lg:col-span-5 lg:sticky lg:top-24">
           <StayActionPanel
             key={panelUnitId || "default"}
             property={property}
