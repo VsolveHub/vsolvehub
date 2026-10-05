@@ -6,10 +6,12 @@ import {
   ExternalLink,
   XCircle,
 } from "lucide-react";
-import { Badge, Card, StatusChip, formatDate } from "@vsolve/ui";
+import { Badge, Card, formatDate } from "@vsolve/ui";
 import { listingHref } from "@/lib/routes";
 
 import { formatStatusEventKind } from "../model";
+import { HIRING_STEP_LABELS } from "../seeker-queries";
+import { HiringProgress } from "./hiring-progress";
 import {
   snapshotFields,
   type ListingApplication,
@@ -32,7 +34,7 @@ export function ApplicationCard({
   onConfirmWithdraw,
   isPending,
 }: ApplicationCardProps) {
-  const canWithdraw = ["SUBMITTED", "UNDER_REVIEW", "SHORTLISTED"].includes(app.status);
+  const canWithdraw = ["SUBMITTED", "UNDER_REVIEW", "SHORTLISTED", "INTERVIEW"].includes(app.status);
   const snapshot = snapshotFields(app.applicant_snapshot);
 
   return (
@@ -40,7 +42,9 @@ export function ApplicationCard({
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="flex-1 space-y-2">
           <div className="flex flex-wrap items-center gap-2.5">
-            <StatusChip status={app.status} category="listing-application" />
+            <Badge tone={["REJECTED", "WITHDRAWN", "EXPIRED"].includes(app.status) ? "neutral" : "info"}>
+              {HIRING_STEP_LABELS[app.status] ?? app.status}
+            </Badge>
             <span className="flex items-center gap-1 text-xs text-text-muted">
               <Calendar className="size-3.5" />
               Applied on {formatDate(app.created_at)}
@@ -61,6 +65,10 @@ export function ApplicationCard({
               <ExternalLink className="size-3.5 text-text-muted" />
             </Link>
           </h2>
+
+          {app.employer_name ? <p className="text-sm text-text-secondary">{app.employer_name}</p> : null}
+
+          <HiringProgress app={app} />
 
           {/* Applicant Details Snapshot */}
           <div className="mt-3 grid gap-2 rounded-control border border-line bg-surface-sunken p-3 sm:grid-cols-2 text-xs text-text-secondary">

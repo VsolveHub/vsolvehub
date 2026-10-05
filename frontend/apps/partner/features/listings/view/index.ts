@@ -17,3 +17,5 @@ export { ApplicantCard } from "./applicant-card";
 export type { ApplicantCardProps } from "./applicant-card";
 export { ReportApplicantDialog } from "./report-applicant-dialog";
 export type { ReportApplicantDialogProps } from "./report-applicant-dialog";
+export * from "./job-matches";
+export * from "./interview-dialog";

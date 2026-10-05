@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Calendar, Clock, ShieldCheck } from "lucide-react";
+import { Calendar, Clock, MapPin, Navigation, Phone, ShieldCheck } from "lucide-react";
 import { describeError } from "@vsolve/query";
-import { Badge, Button, formatDate, useToast } from "@vsolve/ui";
+import { Badge, Button, buttonStyles, formatDate, useToast } from "@vsolve/ui";
 
 import { completeOrOpenCheckout } from "../../payment/standalone-handoff";
 import {
@@ -13,6 +13,7 @@ import {
   getRentalStatusBadge,
   type RentalBooking,
 } from "../model";
+import { whenLabel } from "../pickup-time";
 import { canCancelRentalBooking, cancelRentalBooking } from "../queries";
 
 const BUSINESS_NAME = "Vsolve Hub";
@@ -126,19 +127,72 @@ export function RentalBookingCard({ booking }: RentalBookingCardProps) {
         <div className="flex items-center gap-2">
           <Calendar className="size-4 shrink-0 text-action" />
           <span>
-            Rental Window:{" "}
-            <strong className="font-bold text-text">{formatDate(booking.start_date)}</strong> to{" "}
-            <strong className="font-bold text-text">{formatDate(booking.end_date)}</strong>
+            Pickup:{" "}
+            <strong className="font-bold text-text">
+              {booking.pickup_at ? whenLabel(booking.pickup_at) : formatDate(booking.start_date)}
+            </strong>
           </span>
         </div>
-
         <div className="flex items-center gap-2">
           <Clock className="size-4 shrink-0 text-action" />
           <span>
-            Handover: <strong className="font-bold text-text">Self pickup</strong>
+            Return:{" "}
+            <strong className="font-bold text-text">
+              {booking.return_at ? whenLabel(booking.return_at) : formatDate(booking.end_date)}
+            </strong>
+            {booking.rental_days ? ` · ${booking.rental_days} day${booking.rental_days === 1 ? "" : "s"}` : null}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <MapPin className="size-4 shrink-0 text-action" />
+          <span>
+            Handover: <strong className="font-bold text-text">Self pickup</strong> from the owner
           </span>
         </div>
       </div>
+
+      {booking.pickup_contact ? (
+        <div
+          data-testid="pickup-contact"
+          className="mt-4 rounded-control border border-line bg-surface-sunken p-3.5 text-xs"
+        >
+          <p className="font-bold text-text">Collect from the owner</p>
+          {booking.pickup_contact.address ? (
+            <p className="mt-1 flex items-start gap-1.5 text-text-secondary">
+              <MapPin className="mt-0.5 size-3.5 shrink-0 text-action" />
+              <span>
+                <strong className="text-text">{booking.pickup_contact.address}</strong>
+                <span className="block text-[11px]">Return the item here too. Delivery is not available.</span>
+              </span>
+            </p>
+          ) : null}
+          <div className="mt-3 flex flex-wrap gap-2">
+            {booking.pickup_contact.owner_phone ? (
+              <a
+                href={`tel:${booking.pickup_contact.owner_phone}`}
+                className={buttonStyles({ size: "sm" })}
+              >
+                <Phone className="size-4" />
+                Call {booking.pickup_contact.owner_name || "owner"}
+              </a>
+            ) : null}
+            {booking.pickup_contact.address ? (
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(booking.pickup_contact.address)}`}
+                target="_blank"
+                rel="noreferrer"
+                className={buttonStyles({ size: "sm", variant: "outline" })}
+              >
+                <Navigation className="size-4" />
+                Open in Maps
+              </a>
+            ) : null}
+          </div>
+          {booking.pickup_contact.owner_phone ? (
+            <p className="mt-2 text-[11px] text-text-secondary">{booking.pickup_contact.owner_phone}</p>
+          ) : null}
+        </div>
+      ) : null}
 
       {handoverPin ? (
         <div

@@ -6,6 +6,8 @@ import { Phone, MapPin, Navigation, Clock, Sparkles, Zap, Wifi, Signal, BatteryF
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
+import { useCurrentSession } from "@vsolve/query";
+import { getApiClient } from "@/lib/api/browser";
 import { inr } from "@/lib/format";
 
 /**
@@ -69,6 +71,12 @@ function capNationalPhoneDigits(value: string): string {
 
 export function PartnerHero() {
   const router = useRouter();
+  const session = useCurrentSession(getApiClient());
+  const activeUser = session.data?.user ?? null;
+  const activePhoneDigits = activeUser?.phone_number
+    ? activeUser.phone_number.replace(/\D/g, "").slice(-10)
+    : null;
+
   const [phone, setPhone] = useState("");
   const [index, setIndex] = useState(0);
   const [left, setLeft] = useState(OFFER_WINDOW);
@@ -162,9 +170,20 @@ export function PartnerHero() {
               event.preventDefault();
               const rawPhone = capNationalPhoneDigits(phone);
               if (rawPhone.length >= 10) {
-                router.push(`/apply?phone=${encodeURIComponent(rawPhone)}`);
+                // If already signed in with this exact phone, go directly to their dashboard
+                if (activePhoneDigits && activePhoneDigits === rawPhone) {
+                  router.push("/home");
+                  return;
+                }
+                // If signed in with a DIFFERENT number, take to login to switch accounts
+                if (activePhoneDigits && activePhoneDigits !== rawPhone) {
+                  router.push(`/login?phone=${encodeURIComponent(rawPhone)}&switch=true`);
+                  return;
+                }
+                // If not signed in, take to login to verify OTP and prefill the phone
+                router.push(`/login?phone=${encodeURIComponent(rawPhone)}`);
               } else {
-                router.push("/apply");
+                router.push(activePhoneDigits ? "/home" : "/login");
               }
             }}
             className="vsh-hero-slideup flex w-full max-w-[460px] flex-col gap-2"

@@ -201,6 +201,8 @@ export async function createPartnerStayUnit(
     is_active?: boolean;
     /** "101", "102" — one per room. When given, the count is their number. */
     room_numbers?: string[];
+    /** Photos of this room type, already uploaded with `uploadPartnerStayPhoto`. */
+    image_urls?: string[];
   },
 ): Promise<StayUnit> {
   const data = await request(() =>
@@ -215,6 +217,7 @@ export async function createPartnerStayUnit(
         attributes: input.attributes ?? {},
         is_active: input.is_active ?? true,
         room_numbers: input.room_numbers ?? [],
+        image_urls: input.image_urls ?? [],
       },
     }),
   );
@@ -516,4 +519,29 @@ export function dayLabel(isoDate: string): string {
 /** Numbers sort as people read them: Room 2 before Room 10. */
 export function byRoomNumber(a: { number: string }, b: { number: string }): number {
   return a.number.localeCompare(b.number, undefined, { numeric: true, sensitivity: "base" });
+}
+
+// --- room type photos -------------------------------------------------------------------------
+
+export type StayUnitMedia = Schemas["UnitMedia"];
+
+/** Most photos one room type can carry; the server enforces the same. */
+export const MAX_ROOM_PHOTOS = 8;
+
+export async function addPartnerStayUnitMedia(unitId: string, url: string): Promise<StayUnitMedia> {
+  const data = await request(() =>
+    getApiClient().POST("/api/v1/partner/stays/units/{unit_id}/media", {
+      params: { path: { unit_id: unitId } },
+      body: { url },
+    }),
+  );
+  return data as StayUnitMedia;
+}
+
+export async function deletePartnerStayUnitMedia(unitId: string, mediaId: string): Promise<void> {
+  await request(() =>
+    getApiClient().DELETE("/api/v1/partner/stays/units/{unit_id}/media/{media_id}", {
+      params: { path: { unit_id: unitId, media_id: mediaId } },
+    }),
+  );
 }

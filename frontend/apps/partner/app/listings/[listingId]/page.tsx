@@ -16,13 +16,23 @@ import {
   type ApplicationStatus,
   type PartnerApplication,
 } from "@/features/listings/queries";
-import { ApplicantCard, ReportApplicantDialog } from "@/features/listings/view";
+import { friendlyErrorMessage } from "@vsolve/query";
+import { useToast } from "@vsolve/ui";
+
+import { proposeInterview } from "@/features/listings/jobs-queries";
+import {
+  ApplicantCard,
+  InterviewDialog,
+  JobMatches,
+  ReportApplicantDialog,
+} from "@/features/listings/view";
 
 const FILTER_TABS = [
   { key: "ALL", label: "All Applicants" },
   { key: "NEW", label: "New / In Review" },
   { key: "SHORTLISTED", label: "Shortlisted" },
-  { key: "CONTACTED", label: "Contacted" },
+  { key: "INTERVIEW", label: "Interview" },
+  { key: "CONNECTED", label: "Connected" },
   { key: "CLOSED", label: "Closed / Withdrawn" },
 ];
 
@@ -31,6 +41,9 @@ export default function PartnerListingLeadsPage() {
   const queryClient = useQueryClient();
   const listingId = params.listingId;
   const [activeTab, setActiveTab] = useState<string>("ALL");
+  const [view, setView] = useState<"applicants" | "matches">("applicants");
+  const [interviewing, setInterviewing] = useState<PartnerApplication | null>(null);
+  const { notify } = useToast();
 
   const { data: listing } = useQuery({
     queryKey: ["partner-listing-detail", listingId],
@@ -48,7 +61,8 @@ export default function PartnerListingLeadsPage() {
     ALL: applications.length,
     NEW: applications.filter((app) => app.status === "SUBMITTED" || app.status === "UNDER_REVIEW").length,
     SHORTLISTED: applications.filter((app) => app.status === "SHORTLISTED").length,
-    CONTACTED: applications.filter((app) => app.status === "CONTACTED").length,
+    INTERVIEW: applications.filter((app) => app.status === "INTERVIEW").length,
+    CONNECTED: applications.filter((app) => app.status === "CONNECTED" || app.status === "CONTACTED").length,
     CLOSED: applications.filter((app) => ["REJECTED", "WITHDRAWN", "EXPIRED"].includes(app.status)).length,
   };
 
@@ -119,11 +133,22 @@ export default function PartnerListingLeadsPage() {
     },
   });
 
+  const interviewMutation = useMutation({
+    mutationFn: (body: Parameters<typeof proposeInterview>[1]) =>
+      proposeInterview(interviewing!.id, body),
+    onSuccess: () => {
+      setInterviewing(null);
+      notify("Interview invitation sent.");
+      queryClient.invalidateQueries({ queryKey });
+    },
+  });
+
   const filteredApplications = applications.filter((app) => {
     if (activeTab === "ALL") return true;
     if (activeTab === "NEW") return app.status === "SUBMITTED" || app.status === "UNDER_REVIEW";
     if (activeTab === "SHORTLISTED") return app.status === "SHORTLISTED";
-    if (activeTab === "CONTACTED") return app.status === "CONTACTED";
+    if (activeTab === "INTERVIEW") return app.status === "INTERVIEW";
+    if (activeTab === "CONNECTED") return app.status === "CONNECTED" || app.status === "CONTACTED";
     if (activeTab === "CLOSED") return ["REJECTED", "WITHDRAWN", "EXPIRED"].includes(app.status);
     return app.status === activeTab;
   });
@@ -153,6 +178,30 @@ export default function PartnerListingLeadsPage() {
         </div>
       </div>
 
+      <div role="tablist" className="grid grid-cols-2 gap-1 rounded-control border border-line bg-surface-sunken p-1 sm:max-w-sm">
+        {(
+          [
+            ["applicants", `Applications (${applications.length})`],
+            ["matches", "Matching candidates"],
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={view === key}
+            onClick={() => setView(key)}
+            className={`rounded-[calc(var(--radius-control)-2px)] px-3 py-2 text-sm font-bold ${view === key ? "bg-surface text-navy-900 shadow-xs" : "text-text-secondary"}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {view === "matches" ? (
+        <JobMatches listingId={listingId} onOpenApplications={() => setView("applicants")} />
+      ) : (
+      <>
       {/* Filter Tabs */}
       <div className="flex flex-wrap items-center gap-2 border-b border-line pb-3">
         {FILTER_TABS.map((tab) => {
@@ -219,6 +268,10 @@ export default function PartnerListingLeadsPage() {
             isRevealPending={reveal.isPending}
             onStatusChange={(params) => statusMutation.mutate(params)}
             isStatusPending={statusMutation.isPending}
+            onScheduleInterview={(target) => {
+              interviewMutation.reset();
+              setInterviewing(target);
+            }}
             onReport={(target) => {
               setReportingApp(target);
               setReportReason("SPAM");
@@ -227,6 +280,22 @@ export default function PartnerListingLeadsPage() {
           />
         ))}
       </div>
+
+      </>
+      )}
+
+      <InterviewDialog
+        open={interviewing !== null}
+        candidateName={
+          interviewing?.applicant_name ||
+          String((interviewing?.applicant_snapshot as Record<string, unknown> | undefined)?.name ?? "the candidate")
+        }
+        defaultLocation={listing?.location_text ?? ""}
+        isPending={interviewMutation.isPending}
+        error={interviewMutation.error ? friendlyErrorMessage(interviewMutation.error) : null}
+        onClose={() => setInterviewing(null)}
+        onSubmit={(body) => interviewMutation.mutate(body)}
+      />
 
       {/* Report Candidate Abuse Modal */}
       <ReportApplicantDialog

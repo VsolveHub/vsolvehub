@@ -352,6 +352,43 @@ _TEMPLATES: dict[str, tuple[str, str]] = {
         "An enquiry was withdrawn",
         "{guest_name} withdrew their enquiry for {property_title}.",
     ),
+    "job_match_new": (
+        "🎯 New job matches you",
+        "{job_title} in {place} · {score}% match. Open it to apply in one tap.",
+    ),
+    "job_invite": (
+        "{business_name} invited you to apply",
+        "{job_title} in {place}. Open the job to apply in one tap.",
+    ),
+    "job_candidates_digest": (
+        "{count} new matching candidates",
+        "New job seekers match your jobs. Open Jobs to see them.",
+    ),
+    "job_application_update": (
+        "Update on {job_title}",
+        "{message}",
+    ),
+    "job_interview_invite": (
+        "Interview invitation: {job_title}",
+        "{business_name} invited you for an interview on {when} ({mode}). Accept or ask for "
+        "another time.",
+    ),
+    "job_interview_accepted": (
+        "Interview accepted",
+        "{candidate_name} accepted the interview for {job_title} on {when}.",
+    ),
+    "job_interview_reschedule": (
+        "{candidate_name} asked for another time",
+        "For {job_title} on {when}.{note} Propose a new time.",
+    ),
+    "job_interview_declined": (
+        "Interview declined",
+        "{candidate_name} declined the interview for {job_title}.{note}",
+    ),
+    "job_application_received": (
+        "New application for {job_title}",
+        "{candidate_name} applied with their V Solve Hub profile.",
+    ),
     "stay_visit_requested": (
         "New visit request for {property_title}",
         "{guest_name} wants to visit on {visit_date}, {visit_time}. Accept or decline it.",

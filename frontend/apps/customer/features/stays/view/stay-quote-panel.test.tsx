@@ -62,6 +62,7 @@ function mockProperty(overrides: Partial<Schemas["Property"]> = {}): Schemas["Pr
         sharing_count: 2,
         max_guests: 2,
         nightly_rate_paise: 900_000,
+        media: [],
         is_active: true,
       },
     ],

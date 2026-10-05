@@ -4,29 +4,26 @@ from __future__ import annotations
 
 import builtins
 import uuid
-from pathlib import Path
 from typing import Any
 
 from django.conf import settings
 from django.db import models
 
 from apps.foundation.slugs import slug_base, unique_slug
+from apps.foundation.storage_paths import (
+    stay_ad_upload_to as _unified_stay_ad_upload_to,
+)
+from apps.foundation.storage_paths import (
+    stay_review_upload_to as _unified_stay_review_upload_to,
+)
 
 
 def stay_ad_upload_to(instance: models.Model, filename: str) -> str:
-    ext = Path(filename).suffix.lower()
-    if ext not in {".jpg", ".jpeg", ".png", ".webp"}:
-        ext = ".jpg"
-    partner_key = getattr(instance, "partner_id", None) or "anon"
-    return f"stay-ads/{partner_key}/{uuid.uuid4().hex}{ext}"
+    return _unified_stay_ad_upload_to(instance, filename)
 
 
 def stay_review_upload_to(instance: models.Model, filename: str) -> str:
-    ext = Path(filename).suffix.lower()
-    if ext not in {".jpg", ".jpeg", ".png", ".webp"}:
-        ext = ".jpg"
-    customer_key = getattr(instance, "customer_id", None) or "anon"
-    return f"stay-reviews/{customer_key}/{uuid.uuid4().hex}{ext}"
+    return _unified_stay_review_upload_to(instance, filename)
 
 
 class Property(models.Model):
@@ -410,6 +407,26 @@ class PropertyMedia(models.Model):
     @builtins.property
     def sort_order(self) -> int:
         return self.display_order
+
+
+class UnitMedia(models.Model):
+    """A photo of one room type ("Deluxe room", "2-sharing"), shown on that room's card.
+
+    The property's own photos (``PropertyMedia``) show the building and common areas;
+    these show what the guest's room looks like.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    unit = models.ForeignKey(Unit, on_delete=models.CASCADE, related_name="media")
+    url = models.URLField(max_length=1024)
+    display_order = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("display_order", "created_at")
+
+    def __str__(self) -> str:
+        return self.url
 
 
 class StayPhotoUpload(models.Model):

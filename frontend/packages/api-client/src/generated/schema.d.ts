@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.66.0)
- * Checksum: 3a9c3dec6ff5a722
+ * Checksum: c0d3375ccc3d176c
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -1992,6 +1992,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/job-profile-resumes/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Opens a profile resume from the signed link carried on an application. */
+        get: operations["job_profile_resumes_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/jobs/for-you": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Live jobs ranked by how well they match the signed-in seeker's profile. */
+        get: operations["jobs_for_you_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/jobs/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Job templates by category plus every option list the job forms tap from. */
+        get: operations["jobs_options_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/listings": {
         parameters: {
             query?: never;
@@ -2041,6 +2092,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/listings/{listing_id}/my-match": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description How well one job matches the signed-in seeker, with reasons. 204 without a profile. */
+        get: operations["listings_my_match_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/listings/{listing_id}/quick-apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Apply with the saved job profile in one tap. */
+        post: operations["listings_quick_apply_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/listings/{listing_id}/reports": {
         parameters: {
             query?: never;
@@ -2068,6 +2153,22 @@ export interface paths {
         put?: never;
         post: operations["listings_resume_uploads_create"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/listings/{listing_id}/save": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["listings_save_create"];
+        delete: operations["listings_save_destroy"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2111,6 +2212,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/job-profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["me_job_profile_retrieve"];
+        put: operations["me_job_profile_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/job-profile/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["me_job_profile_resume_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/rentals": {
         parameters: {
             query?: never;
@@ -2138,6 +2271,22 @@ export interface paths {
         put?: never;
         /** @description Customer cancel: PENDING_PAYMENT or CONFIRMED only. Fail-closed after handover. */
         post: operations["me_rentals_cancel_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/saved-jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["me_saved_jobs_list"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2236,6 +2385,23 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["me_stay_visits_cancel_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/my/interviews/{interview_id}/{action}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description The candidate answers an interview invitation: accept, reschedule or decline. */
+        post: operations["my_interview_answer"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5175,6 +5341,107 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/partner/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Post a job from picked options. It goes live at once unless ``publish`` is false. */
+        post: operations["partner_jobs_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/jobs/{listing_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["partner_jobs_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/partner/jobs/{listing_id}/duplicate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description A draft copy of a job, to post the same role again. */
+        post: operations["partner_jobs_duplicate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/jobs/{listing_id}/invite/{profile_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Invite a matching job seeker to apply. They get a notice; their number stays private. */
+        post: operations["partner_jobs_invite_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/jobs/{listing_id}/matches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Candidates for one job, best match first: applicants plus open profiles nearby. */
+        get: operations["partner_jobs_matches_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/jobs/{listing_id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Put a draft job live, or reopen a closed one, at once. */
+        post: operations["partner_jobs_publish_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/partner/languages/": {
         parameters: {
             query?: never;
@@ -5227,6 +5494,23 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["partner_listing_application_action"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/listing-applications/{application_id}/interview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Invite an applicant to an interview: day, time, in person / phone / video, place. */
+        post: operations["partner_listing_applications_interview_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5716,6 +6000,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/partner/rentals/pickup-hours": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description GET / PUT the days and hours customers can collect and return items. */
+        get: operations["partner_rentals_pickup_hours_retrieve"];
+        /** @description GET / PUT the days and hours customers can collect and return items. */
+        put: operations["partner_rentals_pickup_hours_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/partner/required-consents/": {
         parameters: {
             query?: never;
@@ -6061,6 +6363,40 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["partner_stays_units_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/partner/stays/units/{unit_id}/media": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Partner adds a photo of a room type (uploaded first through the stay photo upload). */
+        post: operations["partner_stays_units_media_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/stays/units/{unit_id}/media/{media_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Partner removes a photo from a room type. */
+        delete: operations["partner_stays_units_media_destroy"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/partner/stays/units/{unit_id}/rooms": {
@@ -7662,6 +7998,9 @@ export interface components {
             /** @default true */
             available: boolean;
         };
+        AddUnitMediaRequest: {
+            url: string;
+        };
         Address: {
             /** Format: uuid */
             readonly id: string;
@@ -7742,13 +8081,16 @@ export interface components {
             readonly request_id: string | null;
         };
         Application: {
+            readonly interview: components["schemas"]["Interview"] | null;
+            readonly employer_name: string;
+            readonly employer_phone: string;
             /** Format: uuid */
             readonly id: string;
             /** Format: uuid */
             listing: string;
             readonly listing_title: string;
             readonly listing_slug: string;
-            readonly status: components["schemas"]["Status26eEnum"];
+            readonly status: components["schemas"]["ListingApplicationStatusEnum"];
             applicant_snapshot?: unknown;
             readonly applicant_name: string;
             readonly applicant_phone: string;
@@ -7802,7 +8144,7 @@ export interface components {
             readonly created_at: string;
         };
         ApplicationStatusRequest: {
-            status: components["schemas"]["Status26eEnum"];
+            status: components["schemas"]["ListingApplicationStatusEnum"];
         };
         /**
          * @description The person coming, as the Customer may see them.
@@ -8109,6 +8451,29 @@ export interface components {
             evidence?: {
                 [key: string]: unknown;
             }[];
+        };
+        /**
+         * @description A candidate for one job, as the employer sees them. No phone number here: that comes
+         *     with an application, or after an accepted interview.
+         */
+        CandidateMatch: {
+            /** Format: uuid */
+            profile_id: string;
+            display_name: string;
+            roles: string[];
+            skills: string[];
+            experience_band: string;
+            qualification: string;
+            languages: string[];
+            city: string;
+            area: string;
+            expected_salary_rupees: number;
+            available_from: string;
+            applied: boolean;
+            /** Format: uuid */
+            application_id: string | null;
+            application_status: string;
+            match: components["schemas"]["Match"];
         };
         CapabilityOption: {
             /** Format: uuid */
@@ -8784,10 +9149,14 @@ export interface components {
         CreateBookingRequest: {
             /** Format: uuid */
             asset_id: string;
+            /** Format: date-time */
+            pickup_at?: string;
+            /** Format: date-time */
+            return_at?: string;
             /** Format: date */
-            start_date: string;
+            start_date?: string;
             /** Format: date */
-            end_date: string;
+            end_date?: string;
             /** @default 1 */
             quantity: number;
             /** @default PICKUP */
@@ -8830,7 +9199,7 @@ export interface components {
             house_rules: string;
             /** @default 1 */
             min_stay_nights: number;
-            image_urls: string[];
+            image_urls?: string[];
         };
         CreateReservationRequest: {
             /** Format: uuid */
@@ -8868,6 +9237,7 @@ export interface components {
             /** @default true */
             is_active: boolean;
             room_numbers?: string[];
+            image_urls?: string[];
         };
         CreateVisitRequest: {
             /** Format: uuid */
@@ -10387,6 +10757,45 @@ export interface components {
          * @enum {string}
          */
         IntendedRoleEnum: "partner";
+        Interview: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: date */
+            scheduled_date: string;
+            /** Format: time */
+            start_time: string;
+            mode?: components["schemas"]["InterviewModeEnum"];
+            readonly mode_label: string;
+            location_text?: string;
+            note?: string;
+            status?: components["schemas"]["InterviewStatusEnum"];
+            readonly status_label: string;
+            candidate_note?: string;
+            /** Format: date-time */
+            responded_at?: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        InterviewAnswerRequest: {
+            /** @default  */
+            note: string;
+        };
+        /**
+         * @description * `IN_PERSON` - In person
+         *     * `PHONE` - Phone call
+         *     * `VIDEO` - Video call
+         * @enum {string}
+         */
+        InterviewModeEnum: "IN_PERSON" | "PHONE" | "VIDEO";
+        /**
+         * @description * `PROPOSED` - Waiting for the candidate
+         *     * `ACCEPTED` - Accepted
+         *     * `RESCHEDULE_REQUESTED` - Asked for another time
+         *     * `DECLINED` - Declined
+         *     * `CANCELLED` - Cancelled
+         * @enum {string}
+         */
+        InterviewStatusEnum: "PROPOSED" | "ACCEPTED" | "RESCHEDULE_REQUESTED" | "DECLINED" | "CANCELLED";
         /**
          * @description * `TOO_FAR` - Too far to travel
          *     * `NO_CAPACITY` - No capacity on those dates
@@ -10397,6 +10806,139 @@ export interface components {
          * @enum {string}
          */
         InvitationDeclineReasonEnum: "TOO_FAR" | "NO_CAPACITY" | "OUT_OF_SCOPE" | "BUDGET_TOO_LOW" | "UNCLEAR_SCOPE" | "OTHER";
+        JobCategory: {
+            name: string;
+            roles: components["schemas"]["JobRoleTemplate"][];
+        };
+        JobCounts: {
+            views: number;
+            applied: number;
+            shortlisted: number;
+            interviews: number;
+            connected: number;
+        };
+        /**
+         * @description A job as the 4-step form sends it. Values are checked against ``jobs`` option lists in
+         *     the service; free text is limited to skills, duties, benefits, title, city and area.
+         */
+        JobCreateRequest: {
+            /** Format: uuid */
+            role_template_id?: string | null;
+            title: string;
+            job_category?: string;
+            vacancies?: number;
+            job_type?: string;
+            experience_band?: string;
+            required_skills?: string[];
+            preferred_skills?: string[];
+            responsibilities?: string[];
+            benefits?: string[];
+            languages?: string[];
+            min_qualification?: string;
+            shift?: string;
+            work_mode?: string;
+            /** Format: time */
+            timing_start?: string | null;
+            /** Format: time */
+            timing_end?: string | null;
+            weekly_off?: string;
+            urgency?: string;
+            city?: string;
+            area?: string;
+            salary_min_paise?: number;
+            salary_max_paise?: number;
+            salary_period?: string;
+            description?: string;
+            contact_phone?: string;
+            /** Format: email */
+            contact_email?: string;
+            /** @default true */
+            publish: boolean;
+        };
+        JobForYou: {
+            listing: components["schemas"]["ListingSummary"];
+            match: components["schemas"]["Match"];
+        };
+        JobOption: {
+            value: string;
+            label: string;
+        };
+        JobOptions: {
+            categories: components["schemas"]["JobCategory"][];
+            job_types: components["schemas"]["JobOption"][];
+            experience_bands: components["schemas"]["JobOption"][];
+            qualifications: components["schemas"]["JobOption"][];
+            languages: components["schemas"]["JobOption"][];
+            benefits: string[];
+            shifts: components["schemas"]["JobOption"][];
+            work_modes: components["schemas"]["JobOption"][];
+            weekly_offs: components["schemas"]["JobOption"][];
+            urgencies: components["schemas"]["JobOption"][];
+            salary_periods: components["schemas"]["JobOption"][];
+            salary_bands: components["schemas"]["SalaryBand"][];
+            cities: string[];
+        };
+        JobRoleTemplate: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            skills: string[];
+            responsibilities: string[];
+            job_type: string;
+            shift: string;
+            work_mode: string;
+            salary_min_rupees: number;
+            salary_max_rupees: number;
+        };
+        /**
+         * @description * `IMMEDIATE` - Immediately
+         *     * `WEEK` - Within 7 days
+         *     * `FORTNIGHT` - Within 15 days
+         *     * `MONTH` - Within 30 days
+         * @enum {string}
+         */
+        JobSeekerAvailabilityEnum: "IMMEDIATE" | "WEEK" | "FORTNIGHT" | "MONTH";
+        JobSeekerProfile: {
+            /** Format: uuid */
+            readonly id: string;
+            full_name?: string;
+            readonly phone: string;
+            roles?: unknown;
+            skills?: unknown;
+            experience_band?: string;
+            qualification?: string;
+            languages?: unknown;
+            city?: string;
+            area?: string;
+            expected_salary_rupees?: number;
+            job_types?: unknown;
+            available_from?: components["schemas"]["JobSeekerAvailabilityEnum"] | components["schemas"]["BlankEnum"];
+            visibility?: components["schemas"]["JobSeekerVisibilityEnum"];
+            readonly resume_name: string;
+            readonly has_resume: boolean;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        JobSeekerProfileWriteRequest: {
+            full_name?: string;
+            roles?: string[];
+            skills?: string[];
+            experience_band?: string;
+            qualification?: string;
+            languages?: string[];
+            city?: string;
+            area?: string;
+            expected_salary_rupees?: number;
+            job_types?: string[];
+            available_from?: string;
+            visibility?: string;
+        };
+        /**
+         * @description * `OPEN` - Matching employers can find me
+         *     * `APPLIED_ONLY` - Only employers I apply to
+         * @enum {string}
+         */
+        JobSeekerVisibilityEnum: "OPEN" | "APPLIED_ONLY";
         /**
          * @description A switch, with both signatures and both timestamps.
          *
@@ -10475,6 +11017,19 @@ export interface components {
          * @enum {string}
          */
         LifecycleStatusEnum: "DRAFT" | "ACTIVE" | "RETIRED" | "REJECTED";
+        /**
+         * @description * `SUBMITTED` - Submitted
+         *     * `UNDER_REVIEW` - Under review
+         *     * `SHORTLISTED` - Shortlisted
+         *     * `INTERVIEW` - Interview
+         *     * `CONNECTED` - Connected
+         *     * `CONTACTED` - Contacted
+         *     * `REJECTED` - Rejected
+         *     * `WITHDRAWN` - Withdrawn
+         *     * `EXPIRED` - Expired
+         * @enum {string}
+         */
+        ListingApplicationStatusEnum: "SUBMITTED" | "UNDER_REVIEW" | "SHORTLISTED" | "INTERVIEW" | "CONNECTED" | "CONTACTED" | "REJECTED" | "WITHDRAWN" | "EXPIRED";
         ListingCategoryOption: {
             label: string;
             value: string;
@@ -10504,6 +11059,28 @@ export interface components {
             expires_at?: string | null;
             /** @default 0 */
             readonly application_count: number;
+            /** Format: uuid */
+            readonly role_template: string | null;
+            readonly job_category: string;
+            readonly vacancies: number;
+            readonly job_type: string;
+            readonly experience_band: string;
+            readonly required_skills: unknown;
+            readonly preferred_skills: unknown;
+            readonly responsibilities: unknown;
+            readonly benefits: unknown;
+            readonly languages: unknown;
+            readonly min_qualification: string;
+            readonly shift: string;
+            readonly work_mode: string;
+            /** Format: time */
+            readonly timing_start: string | null;
+            /** Format: time */
+            readonly timing_end: string | null;
+            readonly weekly_off: string;
+            readonly urgency: string;
+            readonly city: string;
+            readonly area: string;
             readonly contact_masked: {
                 [key: string]: string;
             };
@@ -10570,6 +11147,28 @@ export interface components {
             expires_at?: string | null;
             /** @default 0 */
             readonly application_count: number;
+            /** Format: uuid */
+            readonly role_template: string | null;
+            readonly job_category: string;
+            readonly vacancies: number;
+            readonly job_type: string;
+            readonly experience_band: string;
+            readonly required_skills: unknown;
+            readonly preferred_skills: unknown;
+            readonly responsibilities: unknown;
+            readonly benefits: unknown;
+            readonly languages: unknown;
+            readonly min_qualification: string;
+            readonly shift: string;
+            readonly work_mode: string;
+            /** Format: time */
+            readonly timing_start: string | null;
+            /** Format: time */
+            readonly timing_end: string | null;
+            readonly weekly_off: string;
+            readonly urgency: string;
+            readonly city: string;
+            readonly area: string;
         };
         ManualOfferRequest: {
             /** Format: uuid */
@@ -10592,6 +11191,12 @@ export interface components {
             occupant_name: string;
             /** Format: uuid */
             visit_id?: string | null;
+        };
+        Match: {
+            score: number;
+            level: string;
+            matched: string[];
+            missing: string[];
         };
         /**
          * @description * `SEARCHING` - Searching
@@ -11813,6 +12418,28 @@ export interface components {
             /** @default 0 */
             readonly application_count: number;
             /** Format: uuid */
+            readonly role_template: string | null;
+            readonly job_category: string;
+            readonly vacancies: number;
+            readonly job_type: string;
+            readonly experience_band: string;
+            readonly required_skills: unknown;
+            readonly preferred_skills: unknown;
+            readonly responsibilities: unknown;
+            readonly benefits: unknown;
+            readonly languages: unknown;
+            readonly min_qualification: string;
+            readonly shift: string;
+            readonly work_mode: string;
+            /** Format: time */
+            readonly timing_start: string | null;
+            /** Format: time */
+            readonly timing_end: string | null;
+            readonly weekly_off: string;
+            readonly urgency: string;
+            readonly city: string;
+            readonly area: string;
+            /** Format: uuid */
             variant?: string;
             contact_phone?: string;
             /** Format: email */
@@ -11830,6 +12457,8 @@ export interface components {
             readonly listing_type_schema: {
                 [key: string]: unknown;
             };
+            readonly counts: components["schemas"]["JobCounts"];
+            view_count?: number;
         };
         PartnerListingRequest: {
             description: string;
@@ -11855,6 +12484,7 @@ export interface components {
             contact_phone?: string;
             /** Format: email */
             contact_email?: string;
+            view_count?: number;
         };
         /**
          * @description The account, masked, plus when it becomes usable.
@@ -12012,6 +12642,36 @@ export interface components {
             /** @default true */
             is_active: boolean;
         };
+        /**
+         * @description The owner's view of an ad: how many pieces are out today and free to book.
+         *
+         *     Needs ``context["stock"]`` from ``asset_stock_counts``.
+         */
+        PartnerRentalAsset: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly slug: string;
+            readonly title: string;
+            readonly description: string;
+            readonly location_text: string;
+            readonly daily_rate_paise: number;
+            readonly deposit_paise: number;
+            readonly quantity_available: number;
+            readonly condition_grade: components["schemas"]["ConditionGradeEnum"];
+            readonly current_status: components["schemas"]["CurrentStatusEnum"];
+            readonly moderation_status: components["schemas"]["RentalAssetModerationStatusEnum"];
+            readonly public_state: string;
+            readonly partner_name: string;
+            /** Format: uuid */
+            readonly variant: string;
+            readonly structured_fields: unknown;
+            readonly media: components["schemas"]["RentalAssetMedia"][];
+            /** Format: date-time */
+            readonly created_at: string;
+            readonly booked_now: number;
+            readonly available_now: number;
+            readonly upcoming_bookings: number;
+        };
         /** @description The owner's view of the booking: includes renter's name and phone to coordinate. */
         PartnerRentalBooking: {
             /** Format: uuid */
@@ -12021,6 +12681,11 @@ export interface components {
             start_date: string;
             /** Format: date */
             end_date: string;
+            /** Format: date-time */
+            pickup_at: string;
+            /** Format: date-time */
+            return_at: string;
+            readonly rental_days: number;
             readonly quantity: number;
             price_paise: number;
             platform_fee_percent?: number;
@@ -12031,6 +12696,7 @@ export interface components {
             readonly deposit: components["schemas"]["RentalDeposit"];
             /** @description Plaintext PIN for the customer only, once the booking is paid/active. */
             readonly handover_pin: string | null;
+            readonly pickup_contact: components["schemas"]["RentalPickupContact"] | null;
             /** Format: date-time */
             readonly created_at: string;
             readonly customer_name: string;
@@ -12174,6 +12840,7 @@ export interface components {
         PartnerUnit: {
             /** Format: uuid */
             readonly id: string;
+            readonly media: components["schemas"]["UnitMedia"][];
             name: string;
             sharing_count?: number;
             quantity?: number;
@@ -12278,6 +12945,44 @@ export interface components {
             /** Format: email */
             email?: string;
         };
+        /**
+         * @description A job as the 4-step form sends it. Values are checked against ``jobs`` option lists in
+         *     the service; free text is limited to skills, duties, benefits, title, city and area.
+         */
+        PatchedJobUpdateRequest: {
+            /** Format: uuid */
+            role_template_id?: string | null;
+            title?: string;
+            job_category?: string;
+            vacancies?: number;
+            job_type?: string;
+            experience_band?: string;
+            required_skills?: string[];
+            preferred_skills?: string[];
+            responsibilities?: string[];
+            benefits?: string[];
+            languages?: string[];
+            min_qualification?: string;
+            shift?: string;
+            work_mode?: string;
+            /** Format: time */
+            timing_start?: string | null;
+            /** Format: time */
+            timing_end?: string | null;
+            weekly_off?: string;
+            urgency?: string;
+            city?: string;
+            area?: string;
+            salary_min_paise?: number;
+            salary_max_paise?: number;
+            salary_period?: string;
+            description?: string;
+            contact_phone?: string;
+            /** Format: email */
+            contact_email?: string;
+            /** @default false */
+            regenerate_description: boolean;
+        };
         PatchedOpsDashboardPreferenceRequest: {
             /** @description List of tile IDs pinned by the operator. e.g. ['open_cases', 'overdue_bookings', 'captured_today', 'wallet_liability'] */
             pinned_tiles?: unknown;
@@ -12364,6 +13069,7 @@ export interface components {
             location_text?: string;
             quantity_available?: number;
             structured_fields?: unknown;
+            add_image_urls?: string[];
         };
         PatchedUpdatePropertyRequest: {
             title?: string;
@@ -13574,6 +14280,15 @@ export interface components {
             reason: string;
             task_quantity: number;
         };
+        ProposeInterviewRequest: {
+            /** Format: date */
+            scheduled_date: string;
+            /** Format: time */
+            start_time: string;
+            mode: components["schemas"]["InterviewModeEnum"];
+            location_text?: string;
+            note?: string;
+        };
         ProposePayoutBatchRequestRequest: {
             reference: string;
             /** Format: date-time */
@@ -13612,6 +14327,10 @@ export interface components {
         QuestionAskerRoleEnum: "CUSTOMER" | "VENDOR" | "OPERATIONS";
         QuestionCreateRequest: {
             question: string;
+        };
+        QuickApplyRequest: {
+            /** @default  */
+            note: string;
         };
         Quote: {
             /** Format: uuid */
@@ -14213,6 +14932,30 @@ export interface components {
             /** Format: date-time */
             readonly created_at: string;
         };
+        /** @description One item's page: adds the owner's pickup hours so the customer picks valid times. */
+        RentalAssetDetail: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly slug: string;
+            readonly title: string;
+            readonly description: string;
+            readonly location_text: string;
+            readonly daily_rate_paise: number;
+            readonly deposit_paise: number;
+            readonly quantity_available: number;
+            readonly condition_grade: components["schemas"]["ConditionGradeEnum"];
+            readonly current_status: components["schemas"]["CurrentStatusEnum"];
+            readonly moderation_status: components["schemas"]["RentalAssetModerationStatusEnum"];
+            readonly public_state: string;
+            readonly partner_name: string;
+            /** Format: uuid */
+            readonly variant: string;
+            readonly structured_fields: unknown;
+            readonly media: components["schemas"]["RentalAssetMedia"][];
+            /** Format: date-time */
+            readonly created_at: string;
+            readonly pickup_hours: components["schemas"]["RentalPickupHours"];
+        };
         RentalAssetMedia: {
             /** Format: uuid */
             readonly id: string;
@@ -14243,6 +14986,11 @@ export interface components {
             start_date: string;
             /** Format: date */
             end_date: string;
+            /** Format: date-time */
+            pickup_at: string;
+            /** Format: date-time */
+            return_at: string;
+            readonly rental_days: number;
             readonly quantity: number;
             price_paise: number;
             platform_fee_percent?: number;
@@ -14253,6 +15001,7 @@ export interface components {
             readonly deposit: components["schemas"]["RentalDeposit"];
             /** @description Plaintext PIN for the customer only, once the booking is paid/active. */
             readonly handover_pin: string | null;
+            readonly pickup_contact: components["schemas"]["RentalPickupContact"] | null;
             /** Format: date-time */
             readonly created_at: string;
         };
@@ -14290,6 +15039,33 @@ export interface components {
             /** Format: uri */
             url: string;
             original_name: string;
+        };
+        RentalPickupContact: {
+            owner_name: string;
+            owner_phone: string;
+            address: string;
+        };
+        /** @description The owner's pickup and return schedule. ``HH:MM`` local times; Monday = 0. */
+        RentalPickupHours: {
+            open_days: number[];
+            /** Format: time */
+            opens_at: string;
+            /** Format: time */
+            closes_at: string;
+            min_notice_minutes: number;
+            max_advance_days: number;
+            readonly slot_minutes: number;
+            readonly summary: string;
+        };
+        /** @description The owner's pickup and return schedule. ``HH:MM`` local times; Monday = 0. */
+        RentalPickupHoursRequest: {
+            open_days: number[];
+            /** Format: time */
+            opens_at: string;
+            /** Format: time */
+            closes_at: string;
+            min_notice_minutes: number;
+            max_advance_days: number;
         };
         RentalPlatformFee: {
             percent: number;
@@ -14811,6 +15587,10 @@ export interface components {
          * @enum {string}
          */
         SafetyIncidentStatusEnum: "REPORTED" | "UNDER_REVIEW" | "RESOLVED";
+        SalaryBand: {
+            min_rupees: number;
+            max_rupees: number;
+        };
         /**
          * @description * `PENDING` - Pending scan
          *     * `CLEAN` - Clean
@@ -15481,17 +16261,6 @@ export interface components {
          */
         Status24aEnum: "DRAFT" | "ACTIVE" | "RETIRED";
         /**
-         * @description * `SUBMITTED` - Submitted
-         *     * `UNDER_REVIEW` - Under review
-         *     * `SHORTLISTED` - Shortlisted
-         *     * `CONTACTED` - Contacted
-         *     * `REJECTED` - Rejected
-         *     * `WITHDRAWN` - Withdrawn
-         *     * `EXPIRED` - Expired
-         * @enum {string}
-         */
-        Status26eEnum: "SUBMITTED" | "UNDER_REVIEW" | "SHORTLISTED" | "CONTACTED" | "REJECTED" | "WITHDRAWN" | "EXPIRED";
-        /**
          * @description * `ACTIVE` - Active
          *     * `RETIRED` - Retired
          * @enum {string}
@@ -15928,9 +16697,10 @@ export interface components {
          * @description * `SERVICES` - Offer services
          *     * `STAY_HOST` - List my property
          *     * `RENTAL_OWNER` - Rent out items
+         *     * `EMPLOYER` - Hire staff
          * @enum {string}
          */
-        TrackEnum: "SERVICES" | "STAY_HOST" | "RENTAL_OWNER";
+        TrackEnum: "SERVICES" | "STAY_HOST" | "RENTAL_OWNER" | "EMPLOYER";
         /** @description The replacement's price for one unfinished milestone. */
         TransferQuoteRequest: {
             /** Format: uuid */
@@ -15948,6 +16718,7 @@ export interface components {
         Unit: {
             /** Format: uuid */
             readonly id: string;
+            readonly media: components["schemas"]["UnitMedia"][];
             name: string;
             sharing_count?: number;
             quantity?: number;
@@ -15981,6 +16752,13 @@ export interface components {
          * @enum {string}
          */
         UnitEnum: "day" | "each" | "hour" | "job" | "kg" | "litre" | "metre" | "running_ft" | "set" | "sq_ft";
+        UnitMedia: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uri */
+            url: string;
+            display_order?: number;
+        };
         UnitRescheduleOutcome: {
             /** Format: uuid */
             fulfilment_unit_id: string;
@@ -21090,11 +21868,80 @@ export interface operations {
             };
         };
     };
+    job_profile_resumes_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No response body */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    jobs_for_you_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobForYou"][];
+                };
+            };
+        };
+    };
+    jobs_options_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOptions"];
+                };
+            };
+        };
+    };
     listings_list: {
         parameters: {
             query?: {
+                category?: string;
+                city?: string;
                 employment_type?: string;
                 experience?: string;
+                experience_band?: string;
+                job_type?: string;
                 location?: string;
                 max_salary?: number;
                 min_salary?: number;
@@ -21168,6 +22015,61 @@ export interface operations {
             };
         };
     };
+    listings_my_match_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listing_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Match"];
+                };
+            };
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listings_quick_apply_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listing_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["QuickApplyRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["QuickApplyRequest"];
+                "multipart/form-data": components["schemas"]["QuickApplyRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Application"];
+                };
+            };
+        };
+    };
     listings_reports_create: {
         parameters: {
             query?: never;
@@ -21222,6 +22124,46 @@ export interface operations {
             };
         };
     };
+    listings_save_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listing_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listings_save_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listing_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     listings_filters_retrieve: {
         parameters: {
             query?: never;
@@ -21268,6 +22210,80 @@ export interface operations {
             };
         };
     };
+    me_job_profile_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobSeekerProfile"];
+                };
+            };
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    me_job_profile_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["JobSeekerProfileWriteRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["JobSeekerProfileWriteRequest"];
+                "multipart/form-data": components["schemas"]["JobSeekerProfileWriteRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobSeekerProfile"];
+                };
+            };
+        };
+    };
+    me_job_profile_resume_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": Record<string, unknown>;
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobSeekerProfile"];
+                };
+            };
+        };
+    };
     me_rentals_list: {
         parameters: {
             query?: never;
@@ -21304,6 +22320,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RentalBooking"];
+                };
+            };
+        };
+    };
+    me_saved_jobs_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListingSummary"][];
                 };
             };
         };
@@ -21424,6 +22459,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StayVisit"];
+                };
+            };
+        };
+    };
+    my_interview_answer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                action: string;
+                interview_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["InterviewAnswerRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["InterviewAnswerRequest"];
+                "multipart/form-data": components["schemas"]["InterviewAnswerRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Application"];
                 };
             };
         };
@@ -28843,6 +29906,142 @@ export interface operations {
             };
         };
     };
+    partner_jobs_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JobCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["JobCreateRequest"];
+                "multipart/form-data": components["schemas"]["JobCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerListing"];
+                };
+            };
+        };
+    };
+    partner_jobs_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listing_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedJobUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedJobUpdateRequest"];
+                "multipart/form-data": components["schemas"]["PatchedJobUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerListing"];
+                };
+            };
+        };
+    };
+    partner_jobs_duplicate_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listing_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerListing"];
+                };
+            };
+        };
+    };
+    partner_jobs_invite_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listing_id: string;
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    partner_jobs_matches_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listing_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CandidateMatch"][];
+                };
+            };
+        };
+    };
+    partner_jobs_publish_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                listing_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerListing"];
+                };
+            };
+        };
+    };
     m2_partner_language_list: {
         parameters: {
             query?: never;
@@ -28952,6 +30151,33 @@ export interface operations {
         };
         responses: {
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Application"];
+                };
+            };
+        };
+    };
+    partner_listing_applications_interview_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProposeInterviewRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProposeInterviewRequest"];
+                "multipart/form-data": components["schemas"]["ProposeInterviewRequest"];
+            };
+        };
+        responses: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -29726,7 +30952,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RentalAsset"][];
+                    "application/json": components["schemas"]["PartnerRentalAsset"][];
                 };
             };
         };
@@ -29914,6 +31140,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RentalPhotoUpload"];
+                };
+            };
+        };
+    };
+    partner_rentals_pickup_hours_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RentalPickupHours"];
+                };
+            };
+        };
+    };
+    partner_rentals_pickup_hours_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RentalPickupHoursRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["RentalPickupHoursRequest"];
+                "multipart/form-data": components["schemas"]["RentalPickupHoursRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RentalPickupHours"];
                 };
             };
         };
@@ -30509,6 +31779,54 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PartnerUnit"];
                 };
+            };
+        };
+    };
+    partner_stays_units_media_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                unit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddUnitMediaRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AddUnitMediaRequest"];
+                "multipart/form-data": components["schemas"]["AddUnitMediaRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnitMedia"];
+                };
+            };
+        };
+    };
+    partner_stays_units_media_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                media_id: string;
+                unit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -31465,7 +32783,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RentalAsset"];
+                    "application/json": components["schemas"]["RentalAssetDetail"];
                 };
             };
         };

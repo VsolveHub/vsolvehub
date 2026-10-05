@@ -145,7 +145,6 @@ export function PropertyCreateForm({
       return setError("Remove the photos that failed, or try them again.");
     }
     const urls = photos.map((photo) => photo.remoteUrl).filter((url): url is string => Boolean(url));
-    if (urls.length === 0) return setError("Add at least one photo. The first one is the cover.");
     const collected = collectSchemaAnswers(selected.variant.property_schema, answers);
     if ("missing" in collected) return setError(`Choose ${collected.missing}.`);
     setError(null);
@@ -253,9 +252,9 @@ export function PropertyCreateForm({
         </Field>
 
         <Field
-          label="Photos"
-          required
-          description={`The first photo is the cover. Up to ${MAX_PHOTOS} photos: JPEG, PNG or WebP, up to 10 MB each.`}
+          label="Building & common area photos"
+          showOptional={false}
+          description={`Optional: the entrance, kitchen, washroom, street. Room photos are added with each room type next. Up to ${MAX_PHOTOS} photos, 10 MB each.`}
         >
           <input
             ref={fileInputRef}

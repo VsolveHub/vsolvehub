@@ -1,5 +1,12 @@
 "use client";
 
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { ApiRequestError } from "@vsolve/api-client";
+import { friendlyErrorMessage } from "@vsolve/query";
+import { useToast } from "@vsolve/ui";
+import { useRouter } from "next/navigation";
+
+import { duplicateJob, publishJob } from "@/features/listings/jobs-queries";
 import { LISTING_TABS } from "@/features/listings/model";
 import { usePartnerListingsWorkspace } from "@/features/listings/use-partner-listings-workspace";
 import {
@@ -52,6 +59,36 @@ export default function PartnerListingsPage() {
     runSubscribe,
     filteredListings,
   } = usePartnerListingsWorkspace();
+  const router = useRouter();
+  const qc = useQueryClient();
+  const { notify } = useToast();
+  const refresh = () => {
+    void qc.invalidateQueries({ queryKey: ["partner-listings"] });
+    void qc.invalidateQueries({ queryKey: ["partner-listing-home"] });
+  };
+  const publishNow = useMutation({
+    mutationFn: publishJob,
+    onSuccess: () => {
+      notify("Your job is live.");
+      setActionError(null);
+      refresh();
+    },
+    onError: (err) => {
+      if (err instanceof ApiRequestError && err.code === "listing_plan_cap") {
+        setIsSubscriptionModalOpen(true);
+      }
+      setActionError(friendlyErrorMessage(err));
+    },
+  });
+  const duplicate = useMutation({
+    mutationFn: duplicateJob,
+    onSuccess: (copy) => {
+      refresh();
+      router.push(`/listings/post?edit=${copy.id}`);
+    },
+    onError: (err) => setActionError(friendlyErrorMessage(err)),
+  });
+  const openPostJob = () => router.push("/listings/post");
 
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-8">
@@ -74,7 +111,7 @@ export default function PartnerListingsPage() {
       <WorkspaceHeader
         subscriptionPlanName={home?.subscription?.plan_name}
         onOpenSubscription={() => setIsSubscriptionModalOpen(true)}
-        onOpenCreate={() => setIsCreateOpen(true)}
+        onOpenCreate={openPostJob}
       />
 
       <WorkspaceStats home={home} />
@@ -108,7 +145,7 @@ export default function PartnerListingsPage() {
         ) : null}
 
         {!isLoading && filteredListings.length === 0 ? (
-          <WorkspaceEmptyState onCreate={() => setIsCreateOpen(true)} />
+          <WorkspaceEmptyState onCreate={openPostJob} />
         ) : null}
 
         {filteredListings.map((listing) => (
@@ -117,7 +154,9 @@ export default function PartnerListingsPage() {
             listing={listing}
             onStartEdit={handleStartEdit}
             onAction={runAction}
-            isActionPending={actionPending}
+            onPublishNow={(id) => publishNow.mutate(id)}
+            onDuplicate={(id) => duplicate.mutate(id)}
+            isActionPending={actionPending || publishNow.isPending || duplicate.isPending}
           />
         ))}
       </div>

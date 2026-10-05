@@ -124,6 +124,9 @@ class PartnerApplication(models.Model):
         SERVICES = "SERVICES", "Offer services"
         STAY_HOST = "STAY_HOST", "List my property"
         RENTAL_OWNER = "RENTAL_OWNER", "Rent out items"
+        #: A shop, clinic or office hiring staff. Same short onboarding as ``STAY_HOST``;
+        #: approval grants job posting (A10) without a separate capability review.
+        EMPLOYER = "EMPLOYER", "Hire staff"
 
     class Status(models.TextChoices):
         DRAFT = "DRAFT", "Draft"

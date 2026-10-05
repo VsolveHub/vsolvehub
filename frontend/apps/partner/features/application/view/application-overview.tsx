@@ -524,8 +524,8 @@ function History({ transitions }: { transitions: Application["transitions"] }) {
   if (transitions.length === 0) return null;
 
   return (
-    <section>
-      <h2 className="pb-2 text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-text-muted">
+    <section className="rounded-3xl border border-line bg-surface p-6 shadow-xs">
+      <h2 className="pb-4 text-xs font-black uppercase tracking-wider text-navy-900">
         What has happened
       </h2>
       <ol className="flex list-none flex-col gap-0 p-0">
@@ -543,7 +543,7 @@ function History({ transitions }: { transitions: Application["transitions"] }) {
               )}
             </span>
             <div className="min-w-0 flex-1 pb-4">
-              <p className="text-[0.9375rem] font-semibold text-text">
+              <p className="text-[0.9375rem] font-bold text-navy-900">
                 {describeTransition(transition.from_status, transition.to_status)}
               </p>
               {transition.reason ? (

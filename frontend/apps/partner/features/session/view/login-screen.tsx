@@ -1,7 +1,7 @@
 "use client";
 
 import { ApiRequestError } from "@vsolve/api-client";
-import { useAuthGuard, useOtpFlow } from "@vsolve/query";
+import { useAuthGuard, useLogout, useOtpFlow } from "@vsolve/query";
 import { Card, ErrorState, Logo, OtpForm, Spinner, useHydrated } from "@vsolve/ui";
 import { HelpCircle } from "lucide-react";
 import Link from "next/link";
@@ -59,12 +59,37 @@ export function LoginScreen() {
   const searchParams = useSearchParams();
   const hydrated = useHydrated();
   const guard = useAuthGuard(getApiClient());
+  const logout = useLogout(getApiClient());
   const isAuthenticated = guard.status === "authenticated";
+
+  const phoneParam = searchParams.get("phone") ?? "";
+  const isSwitchRequested = searchParams.get("switch") === "true";
+
+  const activePhoneDigits = guard.user?.phone_number
+    ? guard.user.phone_number.replace(/\D/g, "").slice(-10)
+    : null;
+  const requestedPhoneDigits = phoneParam ? phoneParam.replace(/\D/g, "").slice(-10) : null;
+
+  // Account switch is required if explicitly requested OR if visiting with a different phone number
+  const isAccountSwitchNeeded =
+    isAuthenticated &&
+    Boolean(
+      isSwitchRequested ||
+      (requestedPhoneDigits && activePhoneDigits && requestedPhoneDigits !== activePhoneDigits)
+    );
+
+  useEffect(() => {
+    if (isAccountSwitchNeeded && !logout.isPending) {
+      logout.mutate();
+    }
+  }, [isAccountSwitchNeeded, logout]);
 
   // Only once there is a session. Asking Django for an application while nobody
   // is signed in spends a guaranteed refusal on every visit to this screen.
-  const application = usePartnerApplication({ enabled: isAuthenticated });
-  const flow = useOtpFlow(getApiClient());
+  const application = usePartnerApplication({ enabled: isAuthenticated && !isAccountSwitchNeeded });
+  const flow = useOtpFlow(getApiClient(), {
+    initialPhone: phoneParam,
+  });
   const flowWithAudio = {
     ...flow,
     onRequestCode: () => {
@@ -85,7 +110,14 @@ export function LoginScreen() {
   const knowsWhereToGo = !application.isPending || isMissing;
 
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || isAccountSwitchNeeded) return;
+
+    const isApproved = application.data?.status === "APPROVED";
+    // If the partner is approved, they must never be sent to the onboarding /apply route
+    if (isApproved && (!next || next === "/apply" || next.startsWith("/apply/"))) {
+      router.replace("/home");
+      return;
+    }
 
     if (next) {
       router.replace(next);
@@ -94,12 +126,20 @@ export function LoginScreen() {
 
     if (!knowsWhereToGo) return;
     router.replace(homeForApplication(application.data?.status ?? null));
-  }, [application.data?.status, isAuthenticated, knowsWhereToGo, next, router]);
+  }, [application.data?.status, isAuthenticated, isAccountSwitchNeeded, knowsWhereToGo, next, router]);
 
   if (!hydrated || guard.status === "checking") {
     return (
       <LoginShell>
         <LoginWait message="Checking your session…" />
+      </LoginShell>
+    );
+  }
+
+  if (isAccountSwitchNeeded || logout.isPending) {
+    return (
+      <LoginShell>
+        <LoginWait message="Switching accounts…" />
       </LoginShell>
     );
   }

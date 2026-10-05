@@ -3,7 +3,7 @@ from uuid import UUID
 
 from django.conf import settings
 from django.core import signing
-from django.db.models import Q
+from django.db.models import F, Q
 from django.http import FileResponse, Http404, HttpResponseRedirect
 from django.http.response import HttpResponseBase
 from django.shortcuts import get_object_or_404
@@ -29,22 +29,52 @@ from apps.listings.exceptions import (
     ListingVariantRequiredApiError,
     UnsupportedListingActionApiError,
 )
-from apps.listings.models import Application, Listing, ListingResumeUpload, VendorSubscriptionPlan
+from apps.listings.interviews import propose_interview, respond_to_interview
+from apps.listings.models import (
+    Application,
+    Interview,
+    JobSeekerProfile,
+    Listing,
+    ListingResumeUpload,
+    SavedJob,
+    VendorSubscriptionPlan,
+)
+from apps.listings.seekers import (
+    invite_to_apply,
+    jobs_for,
+    match_for,
+    matches_for_job,
+    quick_apply,
+    save_profile,
+    set_profile_resume,
+    set_saved,
+)
 from apps.listings.selectors import public_listings
 from apps.listings.serializers import (
     ActionReasonSerializer,
     ApplicationReportSerializer,
     ApplicationSerializer,
     ApplicationStatusSerializer,
+    CandidateMatchSerializer,
+    InterviewAnswerSerializer,
+    JobCreateSerializer,
+    JobForYouSerializer,
+    JobOptionsSerializer,
+    JobSeekerProfileSerializer,
+    JobSeekerProfileWriteSerializer,
+    JobUpdateSerializer,
     ListingDetailSerializer,
     ListingFiltersTaxonomySerializer,
     ListingReportSerializer,
     ListingSummarySerializer,
+    MatchSerializer,
     ModerationSerializer,
     OpsCreateVendorSubscriptionPlanSerializer,
     OpsUpdateVendorSubscriptionPlanSerializer,
     OpsVendorSubscriptionPlanCatalogSerializer,
     PartnerListingSerializer,
+    ProposeInterviewSerializer,
+    QuickApplySerializer,
     ReportSerializer,
     SubmitApplicationSerializer,
     VendorSubscriptionPlanSerializer,
@@ -55,8 +85,12 @@ from apps.listings.services import (
     ListingStateError,
     close_listing,
     create_listing,
+    duplicate_listing,
+    job_options,
     moderate_listing,
     partner_summary,
+    post_job,
+    publish_job_now,
     publish_listing,
     reinstate_listing,
     remove_listing,
@@ -69,6 +103,7 @@ from apps.listings.services import (
     submit_application,
     submit_listing,
     update_application_status,
+    update_job,
     update_listing,
     withdraw_application,
 )
@@ -155,6 +190,10 @@ class ListingBrowseView(APIView):
             OpenApiParameter("salary_band", OpenApiTypes.STR, OpenApiParameter.QUERY),
             OpenApiParameter("min_salary", OpenApiTypes.INT, OpenApiParameter.QUERY),
             OpenApiParameter("max_salary", OpenApiTypes.INT, OpenApiParameter.QUERY),
+            OpenApiParameter("job_type", OpenApiTypes.STR, OpenApiParameter.QUERY),
+            OpenApiParameter("experience_band", OpenApiTypes.STR, OpenApiParameter.QUERY),
+            OpenApiParameter("category", OpenApiTypes.STR, OpenApiParameter.QUERY),
+            OpenApiParameter("city", OpenApiTypes.STR, OpenApiParameter.QUERY),
         ],
         responses=ListingSummarySerializer(many=True),
     )
@@ -170,6 +209,10 @@ class ListingBrowseView(APIView):
                 "experience": request.query_params.get("experience"),
                 "salary_band": request.query_params.get("salary_band"),
                 "min_salary": request.query_params.get("min_salary"),
+                "job_type": request.query_params.get("job_type"),
+                "experience_band": request.query_params.get("experience_band"),
+                "job_category": request.query_params.get("category"),
+                "city": request.query_params.get("city"),
                 "max_salary": request.query_params.get("max_salary"),
             }
         )
@@ -183,6 +226,7 @@ class ListingDetailView(APIView):
     def get(self, _request: Any, key: str) -> Response:
         """``key`` is the page slug; an old link's listing id still works."""
         listing = get_object_or_404(public_listings(), **lookup_by_slug_or_id(key))
+        Listing.objects.filter(id=listing.id).update(view_count=F("view_count") + 1)
         return Response(ListingDetailSerializer(listing).data)
 
 
@@ -750,3 +794,380 @@ class OpsVendorSubscriptionPlanDetailView(APIView):
         ser.is_valid(raise_exception=True)
         plan = ser.save()
         return Response(VendorSubscriptionPlanSerializer(plan).data)
+
+
+# --- jobs: the quick, tap-to-pick post ------------------------------------------------------
+
+
+class JobOptionsView(APIView):
+    """Job templates by category plus every option list the job forms tap from."""
+
+    permission_classes = (permissions.AllowAny,)
+
+    @extend_schema(responses=JobOptionsSerializer)
+    def get(self, _request: Any) -> Response:
+        return Response(JobOptionsSerializer(job_options()).data)
+
+
+class PartnerJobCreateView(APIView):
+    """Post a job from picked options. It goes live at once unless ``publish`` is false."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(request=JobCreateSerializer, responses={201: PartnerListingSerializer})
+    def post(self, request: Any) -> Response:
+        serializer = JobCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = dict(serializer.validated_data)
+        publish = data.pop("publish", True)
+        try:
+            listing = post_job(
+                poster=_partner_profile(request.user),
+                actor=request.user,
+                data=data,
+                publish=publish,
+            )
+        except (ListingStateError, PermissionError) as exc:
+            _raise_listing_error(exc)
+        return Response(PartnerListingSerializer(listing).data, status=status.HTTP_201_CREATED)
+
+
+class PartnerJobDetailView(APIView):
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(request=JobUpdateSerializer, responses=PartnerListingSerializer)
+    def patch(self, request: Any, listing_id: UUID) -> Response:
+        listing = get_object_or_404(Listing, id=listing_id, poster=_partner_profile(request.user))
+        serializer = JobUpdateSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        try:
+            listing = update_job(
+                listing=listing, actor=request.user, data=dict(serializer.validated_data)
+            )
+        except (ListingStateError, PermissionError) as exc:
+            _raise_listing_error(exc)
+        return Response(PartnerListingSerializer(listing).data)
+
+
+class PartnerJobPublishView(APIView):
+    """Put a draft job live, or reopen a closed one, at once."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(request=None, responses=PartnerListingSerializer)
+    def post(self, request: Any, listing_id: UUID) -> Response:
+        listing = get_object_or_404(Listing, id=listing_id, poster=_partner_profile(request.user))
+        try:
+            listing = publish_job_now(listing=listing, actor=request.user)
+        except (ListingStateError, PermissionError) as exc:
+            _raise_listing_error(exc)
+        return Response(PartnerListingSerializer(listing).data)
+
+
+class PartnerJobDuplicateView(APIView):
+    """A draft copy of a job, to post the same role again."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(request=None, responses={201: PartnerListingSerializer})
+    def post(self, request: Any, listing_id: UUID) -> Response:
+        listing = get_object_or_404(Listing, id=listing_id, poster=_partner_profile(request.user))
+        try:
+            copy = duplicate_listing(listing=listing, actor=request.user)
+        except (ListingStateError, PermissionError) as exc:
+            _raise_listing_error(exc)
+        return Response(PartnerListingSerializer(copy).data, status=status.HTTP_201_CREATED)
+
+
+# --- job seekers ----------------------------------------------------------------------------
+
+_PROFILE_RESUME_SALT = "listings.profile-resume"
+
+
+def _profile_resume_url(request: Any, profile: JobSeekerProfile) -> str:
+    if not profile.resume_file:
+        return ""
+    token = signing.dumps(str(profile.id), salt=_PROFILE_RESUME_SALT)
+    return str(request.build_absolute_uri(reverse("job-profile-resume", kwargs={"token": token})))
+
+
+def _display_name(full_name: str) -> str:
+    """ "Priya Sharma" → "Priya S." — enough for a list, without the full name."""
+    parts = full_name.split()
+    if not parts:
+        return "Job seeker"
+    return parts[0] if len(parts) == 1 else f"{parts[0]} {parts[-1][0]}."
+
+
+class MyJobProfileView(APIView):
+    permission_classes = (permissions.IsAuthenticated,)
+
+    @extend_schema(responses={200: JobSeekerProfileSerializer, 204: None})
+    def get(self, request: Any) -> Response:
+        profile = JobSeekerProfile.objects.filter(user=request.user).select_related("user").first()
+        if profile is None:
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        return Response(JobSeekerProfileSerializer(profile).data)
+
+    @extend_schema(request=JobSeekerProfileWriteSerializer, responses=JobSeekerProfileSerializer)
+    def put(self, request: Any) -> Response:
+        serializer = JobSeekerProfileWriteSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        try:
+            profile = save_profile(user=request.user, data=dict(serializer.validated_data))
+        except ListingStateError as exc:
+            _raise_listing_error(exc)
+        return Response(JobSeekerProfileSerializer(profile).data)
+
+
+class MyJobProfileResumeView(APIView):
+    permission_classes = (permissions.IsAuthenticated,)
+    parser_classes = (MultiPartParser, FormParser)
+
+    @extend_schema(
+        request={"multipart/form-data": {"type": "object"}},
+        responses=JobSeekerProfileSerializer,
+    )
+    def post(self, request: Any) -> Response:
+        upload = request.FILES.get("file")
+        if upload is None:
+            return Response({"detail": "Attach a resume file."}, status=status.HTTP_400_BAD_REQUEST)
+        content_type = (upload.content_type or "").split(";")[0].strip()
+        if content_type not in _RESUME_TYPES:
+            return Response(
+                {"detail": "Resume must be a PDF, DOC, or DOCX file."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if upload.size > _RESUME_MAX_BYTES:
+            return Response(
+                {"detail": "Resume must be 5 MB or smaller."}, status=status.HTTP_400_BAD_REQUEST
+            )
+        try:
+            profile = save_profile(user=request.user, data={})
+        except ListingStateError as exc:
+            _raise_listing_error(exc)
+        set_profile_resume(profile=profile, upload=upload, content_type=content_type)
+        return Response(JobSeekerProfileSerializer(profile).data)
+
+
+class JobProfileResumeFileView(APIView):
+    """Opens a profile resume from the signed link carried on an application."""
+
+    permission_classes = (permissions.AllowAny,)
+
+    @extend_schema(responses={302: None, 404: None})
+    def get(self, _request: Any, token: str) -> HttpResponseBase:
+        try:
+            profile_id = signing.loads(token, salt=_PROFILE_RESUME_SALT)
+        except signing.BadSignature as exc:
+            raise Http404 from exc
+        profile = get_object_or_404(JobSeekerProfile, id=profile_id)
+        if not profile.resume_file:
+            raise Http404
+        if settings.R2_PRIVATE_ENABLED:
+            return HttpResponseRedirect(profile.resume_file.url)
+        return FileResponse(
+            profile.resume_file.open("rb"),
+            as_attachment=False,
+            filename=profile.resume_name or "resume",
+            content_type=profile.resume_content_type or "application/octet-stream",
+        )
+
+
+class QuickApplyView(APIView):
+    """Apply with the saved job profile in one tap."""
+
+    permission_classes = (permissions.IsAuthenticated,)
+
+    @extend_schema(request=QuickApplySerializer, responses={201: ApplicationSerializer})
+    def post(self, request: Any, listing_id: UUID) -> Response:
+        serializer = QuickApplySerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        listing = get_object_or_404(Listing.objects.select_related("poster"), id=listing_id)
+        profile = JobSeekerProfile.objects.filter(user=request.user).first()
+        try:
+            application = quick_apply(
+                listing=listing,
+                user=request.user,
+                note=serializer.validated_data["note"],
+                resume_url=_profile_resume_url(request, profile) if profile else "",
+            )
+        except (ListingStateError, PermissionError) as exc:
+            _raise_listing_error(exc)
+        return Response(ApplicationSerializer(application).data, status=status.HTTP_201_CREATED)
+
+
+class SaveJobView(APIView):
+    permission_classes = (permissions.IsAuthenticated,)
+
+    @extend_schema(request=None, responses={204: None})
+    def post(self, request: Any, listing_id: UUID) -> Response:
+        set_saved(user=request.user, listing=get_object_or_404(Listing, id=listing_id), saved=True)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @extend_schema(request=None, responses={204: None})
+    def delete(self, request: Any, listing_id: UUID) -> Response:
+        set_saved(user=request.user, listing=get_object_or_404(Listing, id=listing_id), saved=False)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class MySavedJobsView(APIView):
+    permission_classes = (permissions.IsAuthenticated,)
+
+    @extend_schema(responses=ListingSummarySerializer(many=True))
+    def get(self, request: Any) -> Response:
+        ids = SavedJob.objects.filter(user=request.user).values_list("listing_id", flat=True)
+        rows = Listing.objects.filter(id__in=list(ids)).select_related(
+            "poster", "variant", "variant__service"
+        )
+        return Response(ListingSummarySerializer(rows, many=True).data)
+
+
+class JobsForYouView(APIView):
+    """Live jobs ranked by how well they match the signed-in seeker's profile."""
+
+    permission_classes = (permissions.IsAuthenticated,)
+
+    @extend_schema(responses=JobForYouSerializer(many=True))
+    def get(self, request: Any) -> Response:
+        profile = JobSeekerProfile.objects.filter(user=request.user).first()
+        if profile is None:
+            return Response([])
+        rows: Any = [{"listing": job, "match": match.as_dict()} for job, match in jobs_for(profile)]
+        return Response(JobForYouSerializer(rows, many=True).data)
+
+
+class MyJobMatchView(APIView):
+    """How well one job matches the signed-in seeker, with reasons. 204 without a profile."""
+
+    permission_classes = (permissions.IsAuthenticated,)
+
+    @extend_schema(responses={200: MatchSerializer, 204: None})
+    def get(self, request: Any, listing_id: UUID) -> Response:
+        listing = get_object_or_404(Listing, id=listing_id)
+        match = match_for(listing, request.user)
+        if match is None:
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        return Response(MatchSerializer(match.as_dict()).data)
+
+
+class PartnerJobMatchesView(APIView):
+    """Candidates for one job, best match first: applicants plus open profiles nearby."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(responses=CandidateMatchSerializer(many=True))
+    def get(self, request: Any, listing_id: UUID) -> Response:
+        listing = get_object_or_404(
+            Listing.objects.select_related("poster"),
+            id=listing_id,
+            poster=_partner_profile(request.user),
+        )
+        rows: Any = [
+            {
+                "profile_id": profile.id,
+                "display_name": _display_name(profile.full_name),
+                "roles": profile.roles,
+                "skills": profile.skills,
+                "experience_band": profile.experience_band,
+                "qualification": profile.qualification,
+                "languages": profile.languages,
+                "city": profile.city,
+                "area": profile.area,
+                "expected_salary_rupees": profile.expected_salary_rupees,
+                "available_from": profile.available_from,
+                "applied": application is not None,
+                "application_id": application.id if application else None,
+                "application_status": application.status if application else "",
+                "match": match.as_dict(),
+            }
+            for profile, match, application in matches_for_job(listing)
+        ]
+        return Response(CandidateMatchSerializer(rows, many=True).data)
+
+
+class PartnerJobInviteView(APIView):
+    """Invite a matching job seeker to apply. They get a notice; their number stays private."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(request=None, responses={204: None})
+    def post(self, request: Any, listing_id: UUID, profile_id: UUID) -> Response:
+        listing = get_object_or_404(
+            Listing.objects.select_related("poster"),
+            id=listing_id,
+            poster=_partner_profile(request.user),
+        )
+        profile = get_object_or_404(JobSeekerProfile, id=profile_id)
+        try:
+            invite_to_apply(listing=listing, profile=profile)
+        except ListingStateError as exc:
+            _raise_listing_error(exc)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# --- interviews -----------------------------------------------------------------------------
+
+
+class PartnerProposeInterviewView(APIView):
+    """Invite an applicant to an interview: day, time, in person / phone / video, place."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(request=ProposeInterviewSerializer, responses={201: ApplicationSerializer})
+    def post(self, request: Any, application_id: UUID) -> Response:
+        serializer = ProposeInterviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        application = get_object_or_404(
+            Application.objects.select_related("listing__poster"),
+            id=application_id,
+            listing__poster=_partner_profile(request.user),
+        )
+        data = serializer.validated_data
+        try:
+            propose_interview(
+                application=application,
+                actor=request.user,
+                scheduled_date=data["scheduled_date"],
+                start_time=data["start_time"],
+                mode=data["mode"],
+                location_text=data.get("location_text", ""),
+                note=data.get("note", ""),
+            )
+        except (ListingStateError, PermissionError) as exc:
+            _raise_listing_error(exc)
+        application.refresh_from_db()
+        return Response(ApplicationSerializer(application).data, status=status.HTTP_201_CREATED)
+
+
+class MyInterviewAnswerView(APIView):
+    """The candidate answers an interview invitation: accept, reschedule or decline."""
+
+    permission_classes = (permissions.IsAuthenticated,)
+
+    @extend_schema(
+        operation_id="my_interview_answer",
+        request=InterviewAnswerSerializer,
+        responses=ApplicationSerializer,
+    )
+    def post(self, request: Any, interview_id: UUID, action: str) -> Response:
+        serializer = InterviewAnswerSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        interview = get_object_or_404(
+            Interview.objects.select_related("application"),
+            id=interview_id,
+            application__applicant=request.user,
+        )
+        try:
+            respond_to_interview(
+                interview=interview,
+                user=request.user,
+                action=action,
+                note=serializer.validated_data["note"],
+            )
+        except (ListingStateError, PermissionError) as exc:
+            _raise_listing_error(exc)
+        application = Application.objects.select_related("listing__poster__user").get(
+            id=interview.application_id
+        )
+        return Response(ApplicationSerializer(application).data)

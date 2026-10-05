@@ -145,6 +145,7 @@ def _base_application_is_complete(application: PartnerApplication) -> bool:
     if application.track in (
         PartnerApplication.Track.STAY_HOST,
         PartnerApplication.Track.RENTAL_OWNER,
+        PartnerApplication.Track.EMPLOYER,
     ):
         # A stay host or rental owner: who they are and the agreements are enough.
         # Trades, services and areas describe travelling to a customer and are not asked.

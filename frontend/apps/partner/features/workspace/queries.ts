@@ -6,6 +6,8 @@ import { useQuery } from "@tanstack/react-query";
 
 import { getApiClient } from "@/lib/api/browser";
 
+import { resolveWorkspaces, specialtyShellHome } from "./registry";
+
 /**
  * The read behind every M2 navigation decision: what is this Partner approved for.
  *
@@ -98,5 +100,21 @@ export function usePartnerWorkspaceGrants(
     isPending: enabled && query.isPending,
     isError: query.isError,
     refetch: () => void query.refetch(),
+  };
+}
+
+/**
+ * The single specialty this Partner works in (rentals, stays or listings), or
+ * null for an on-demand Partner or one with several workspaces.
+ *
+ * A specialty Partner never receives live job offers, so screens use this to
+ * leave out "go online". `isPending` is true until the grants are read, so a
+ * caller can hold back the toggle instead of flashing it.
+ */
+export function useSpecialtyHome(): { home: ReturnType<typeof specialtyShellHome>; isPending: boolean } {
+  const grants = usePartnerWorkspaceGrants();
+  return {
+    home: specialtyShellHome(resolveWorkspaces(grants.grants ?? [])),
+    isPending: grants.isPending,
   };
 }

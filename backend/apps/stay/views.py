@@ -17,6 +17,7 @@ from apps.stay.models import Property, Room, StayEnquiry, StayReservation, StayV
 from apps.stay.serializers import (
     AddPropertyMediaSerializer,
     AddRoomSerializer,
+    AddUnitMediaSerializer,
     ConfirmEnquirySerializer,
     CreateEnquirySerializer,
     CreatePropertySerializer,
@@ -49,6 +50,7 @@ from apps.stay.serializers import (
     StayReviewSerializer,
     StayTaxonomySubcategorySerializer,
     StayVisitSerializer,
+    UnitMediaSerializer,
     UpdatePropertySerializer,
     UpdateRoomSerializer,
     UpdateUnitSerializer,
@@ -58,6 +60,7 @@ from apps.stay.services import (
     StayStateError,
     add_property_media,
     add_room,
+    add_unit_media,
     calculate_stay_quote,
     cancel_enquiry,
     cancel_reservation,
@@ -82,6 +85,7 @@ from apps.stay.services import (
     public_properties,
     release_room,
     remove_property_media,
+    remove_unit_media,
     rename_room,
     respond_enquiry,
     set_property_listing,
@@ -349,6 +353,7 @@ class PartnerPropertyCollectionView(APIView):
             Property.objects.filter(host=partner)
             .prefetch_related(
                 "units__rooms",
+                "units__media",
                 "media",
                 "reviews",
                 "visit_slots",
@@ -455,6 +460,44 @@ class PartnerUnitDetailView(APIView):
         return Response(PartnerUnitSerializer(unit).data)
 
 
+class PartnerUnitMediaCreateView(APIView):
+    """Partner adds a photo of a room type (uploaded first through the stay photo upload)."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(request=AddUnitMediaSerializer, responses={201: UnitMediaSerializer})
+    def post(self, request: Any, unit_id: UUID) -> Response:
+        ser = AddUnitMediaSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        partner = _partner(request.user)
+        unit = get_object_or_404(
+            Unit.objects.select_related("property"), id=unit_id, property__host=partner
+        )
+        try:
+            media = add_unit_media(unit=unit, host=partner, url=ser.validated_data["url"])
+        except (StayStateError, PermissionError) as exc:
+            _raise_domain_error(exc)
+        return Response(UnitMediaSerializer(media).data, status=status.HTTP_201_CREATED)
+
+
+class PartnerUnitMediaDeleteView(APIView):
+    """Partner removes a photo from a room type."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(responses={204: None})
+    def delete(self, request: Any, unit_id: UUID, media_id: UUID) -> Response:
+        partner = _partner(request.user)
+        unit = get_object_or_404(
+            Unit.objects.select_related("property"), id=unit_id, property__host=partner
+        )
+        try:
+            remove_unit_media(unit=unit, host=partner, media_id=media_id)
+        except (StayStateError, PermissionError) as exc:
+            _raise_domain_error(exc)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 class PartnerEnquiryCollectionView(APIView):
     permission_classes = (IsPartnerUser,)
 
@@ -495,7 +538,7 @@ class OpsStayCollectionView(APIView):
     def get(self, _request: Any) -> Response:
         rows = (
             Property.objects.all()
-            .prefetch_related("units", "media", "reviews", "variant__a9_configurations")
+            .prefetch_related("units__media", "media", "reviews", "variant__a9_configurations")
             .select_related("host", "variant")
         )
         return Response(PropertySerializer(rows, many=True).data)

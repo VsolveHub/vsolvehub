@@ -365,11 +365,11 @@ def private_file_storage() -> Any:
 _PROBE_NAME = "__vsolve_probe__"
 
 
-def public_stored_name(url: str, *, folder: str) -> str | None:
+def public_stored_name(url: str, *, folder: str | tuple[str, ...]) -> str | None:
     """The stored file name behind a public photo link, or None if it is not one of ours.
 
-    Works for both places photos live: the R2 public domain (``https://media.example/stay-ads/…``)
-    and local disk (``/media/stay-ads/…``, possibly with the API's host in front).
+    Works for both places photos live: the R2 public domain (``https://media.example/…``)
+    and local disk (``/media/…``, possibly with the API's host in front).
     """
     from django.core.files.storage import default_storage  # noqa: PLC0415
 
@@ -381,6 +381,9 @@ def public_stored_name(url: str, *, folder: str) -> str | None:
     else:
         path = urlparse(clean).path
         remainder = path[len(base) :] if path.startswith(base) else None
-    if remainder is None or not remainder.startswith(folder):
+    if remainder is None:
+        return None
+    allowed_folders = (folder,) if isinstance(folder, str) else folder
+    if not any(remainder.startswith(f) for f in allowed_folders):
         return None
     return remainder

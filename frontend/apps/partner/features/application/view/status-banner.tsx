@@ -107,10 +107,10 @@ export function ApplicationStatusBanner({ application }: ApplicationStatusBanner
       aria-live={presentation.isWaiting ? "polite" : "assertive"}
       className={cn(
         "rounded-2xl border p-5 shadow-xs transition-all",
-        presentation.tone === "info" && "bg-sky-50/70 border-sky-200 text-sky-950",
-        presentation.tone === "warning" && "bg-amber-50/80 border-amber-300 text-amber-950",
-        presentation.tone === "success" && "bg-emerald-50/80 border-emerald-300 text-emerald-950",
-        presentation.tone === "danger" && "bg-rose-50/80 border-rose-300 text-rose-950",
+        presentation.tone === "info" && "bg-sky-50 border-sky-200 text-sky-950",
+        presentation.tone === "warning" && "bg-amber-50 border-amber-300 text-amber-950",
+        presentation.tone === "success" && "bg-emerald-50 border-emerald-300 text-emerald-950",
+        presentation.tone === "danger" && "bg-rose-50 border-rose-300 text-rose-950",
         presentation.tone === "neutral" && "bg-surface-sunken border-line text-text",
       )}
     >

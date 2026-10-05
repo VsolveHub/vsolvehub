@@ -4869,16 +4869,87 @@ paths:
           description: Required dependencies are reachable.
         '503':
           description: One or more required dependencies are unavailable.
+  /api/v1/job-profile-resumes/{token}:
+    get:
+      operationId: job_profile_resumes_retrieve
+      description: Opens a profile resume from the signed link carried on an application.
+      parameters:
+      - in: path
+        name: token
+        schema:
+          type: string
+        required: true
+      tags:
+      - job-profile-resumes
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '302':
+          description: No response body
+        '404':
+          description: No response body
+  /api/v1/jobs/for-you:
+    get:
+      operationId: jobs_for_you_list
+      description: Live jobs ranked by how well they match the signed-in seeker's
+        profile.
+      tags:
+      - jobs
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/JobForYou'
+          description: ''
+  /api/v1/jobs/options:
+    get:
+      operationId: jobs_options_retrieve
+      description: Job templates by category plus every option list the job forms
+        tap from.
+      tags:
+      - jobs
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobOptions'
+          description: ''
   /api/v1/listings:
     get:
       operationId: listings_list
       parameters:
+      - in: query
+        name: category
+        schema:
+          type: string
+      - in: query
+        name: city
+        schema:
+          type: string
       - in: query
         name: employment_type
         schema:
           type: string
       - in: query
         name: experience
+        schema:
+          type: string
+      - in: query
+        name: experience_band
+        schema:
+          type: string
+      - in: query
+        name: job_type
         schema:
           type: string
       - in: query
@@ -4982,6 +5053,64 @@ paths:
               schema:
                 $ref: '#/components/schemas/Application'
           description: ''
+  /api/v1/listings/{listing_id}/my-match:
+    get:
+      operationId: listings_my_match_retrieve
+      description: How well one job matches the signed-in seeker, with reasons. 204
+        without a profile.
+      parameters:
+      - in: path
+        name: listing_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - listings
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Match'
+          description: ''
+        '204':
+          description: No response body
+  /api/v1/listings/{listing_id}/quick-apply:
+    post:
+      operationId: listings_quick_apply_create
+      description: Apply with the saved job profile in one tap.
+      parameters:
+      - in: path
+        name: listing_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - listings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuickApplyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/QuickApplyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/QuickApplyRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+          description: ''
   /api/v1/listings/{listing_id}/reports:
     post:
       operationId: listings_reports_create
@@ -5042,6 +5171,39 @@ paths:
                 type: object
                 additionalProperties: {}
           description: ''
+  /api/v1/listings/{listing_id}/save:
+    post:
+      operationId: listings_save_create
+      parameters:
+      - in: path
+        name: listing_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - listings
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+    delete:
+      operationId: listings_save_destroy
+      parameters:
+      - in: path
+        name: listing_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - listings
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/v1/listings/filters:
     get:
       operationId: listings_filters_retrieve
@@ -5081,6 +5243,65 @@ paths:
           description: No response body
         '404':
           description: No response body
+  /api/v1/me/job-profile:
+    get:
+      operationId: me_job_profile_retrieve
+      tags:
+      - me
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobSeekerProfile'
+          description: ''
+        '204':
+          description: No response body
+    put:
+      operationId: me_job_profile_update
+      tags:
+      - me
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobSeekerProfileWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/JobSeekerProfileWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/JobSeekerProfileWriteRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobSeekerProfile'
+          description: ''
+  /api/v1/me/job-profile/resume:
+    post:
+      operationId: me_job_profile_resume_create
+      tags:
+      - me
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobSeekerProfile'
+          description: ''
   /api/v1/me/rentals:
     get:
       operationId: me_rentals_list
@@ -5119,6 +5340,22 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RentalBooking'
+          description: ''
+  /api/v1/me/saved-jobs:
+    get:
+      operationId: me_saved_jobs_list
+      tags:
+      - me
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ListingSummary'
           description: ''
   /api/v1/me/stay-enquiries:
     get:
@@ -5233,6 +5470,45 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/StayVisit'
+          description: ''
+  /api/v1/my/interviews/{interview_id}/{action}:
+    post:
+      operationId: my_interview_answer
+      description: 'The candidate answers an interview invitation: accept, reschedule
+        or decline.'
+      parameters:
+      - in: path
+        name: action
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: interview_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - my
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InterviewAnswerRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/InterviewAnswerRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/InterviewAnswerRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
           description: ''
   /api/v1/my/listing-applications:
     get:
@@ -12923,6 +13199,160 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/partner/jobs:
+    post:
+      operationId: partner_jobs_create
+      description: Post a job from picked options. It goes live at once unless ``publish``
+        is false.
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/JobCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/JobCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerListing'
+          description: ''
+  /api/v1/partner/jobs/{listing_id}:
+    patch:
+      operationId: partner_jobs_partial_update
+      parameters:
+      - in: path
+        name: listing_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedJobUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedJobUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedJobUpdateRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerListing'
+          description: ''
+  /api/v1/partner/jobs/{listing_id}/duplicate:
+    post:
+      operationId: partner_jobs_duplicate_create
+      description: A draft copy of a job, to post the same role again.
+      parameters:
+      - in: path
+        name: listing_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerListing'
+          description: ''
+  /api/v1/partner/jobs/{listing_id}/invite/{profile_id}:
+    post:
+      operationId: partner_jobs_invite_create
+      description: Invite a matching job seeker to apply. They get a notice; their
+        number stays private.
+      parameters:
+      - in: path
+        name: listing_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: profile_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/partner/jobs/{listing_id}/matches:
+    get:
+      operationId: partner_jobs_matches_list
+      description: 'Candidates for one job, best match first: applicants plus open
+        profiles nearby.'
+      parameters:
+      - in: path
+        name: listing_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CandidateMatch'
+          description: ''
+  /api/v1/partner/jobs/{listing_id}/publish:
+    post:
+      operationId: partner_jobs_publish_create
+      description: Put a draft job live, or reopen a closed one, at once.
+      parameters:
+      - in: path
+        name: listing_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerListing'
+          description: ''
   /api/v1/partner/languages/:
     get:
       operationId: m2_partner_language_list
@@ -13044,6 +13474,41 @@ paths:
       - cookieAuth: []
       responses:
         '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+          description: ''
+  /api/v1/partner/listing-applications/{application_id}/interview:
+    post:
+      operationId: partner_listing_applications_interview_create
+      description: 'Invite an applicant to an interview: day, time, in person / phone
+        / video, place.'
+      parameters:
+      - in: path
+        name: application_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProposeInterviewRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProposeInterviewRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProposeInterviewRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
           content:
             application/json:
               schema:
@@ -13818,7 +14283,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/RentalAsset'
+                  $ref: '#/components/schemas/PartnerRentalAsset'
           description: ''
     post:
       operationId: partner_rentals_assets_create
@@ -14021,6 +14486,47 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RentalPhotoUpload'
+          description: ''
+  /api/v1/partner/rentals/pickup-hours:
+    get:
+      operationId: partner_rentals_pickup_hours_retrieve
+      description: GET / PUT the days and hours customers can collect and return items.
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RentalPickupHours'
+          description: ''
+    put:
+      operationId: partner_rentals_pickup_hours_update
+      description: GET / PUT the days and hours customers can collect and return items.
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RentalPickupHoursRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RentalPickupHoursRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RentalPickupHoursRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RentalPickupHours'
           description: ''
   /api/v1/partner/required-consents/:
     get:
@@ -14681,6 +15187,65 @@ paths:
               schema:
                 $ref: '#/components/schemas/PartnerUnit'
           description: ''
+  /api/v1/partner/stays/units/{unit_id}/media:
+    post:
+      operationId: partner_stays_units_media_create
+      description: Partner adds a photo of a room type (uploaded first through the
+        stay photo upload).
+      parameters:
+      - in: path
+        name: unit_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddUnitMediaRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AddUnitMediaRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AddUnitMediaRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnitMedia'
+          description: ''
+  /api/v1/partner/stays/units/{unit_id}/media/{media_id}:
+    delete:
+      operationId: partner_stays_units_media_destroy
+      description: Partner removes a photo from a room type.
+      parameters:
+      - in: path
+        name: media_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: unit_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/v1/partner/stays/units/{unit_id}/rooms:
     post:
       operationId: partner_stays_units_rooms_create
@@ -15756,7 +16321,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RentalAsset'
+                $ref: '#/components/schemas/RentalAssetDetail'
           description: ''
   /api/v1/rentals/book:
     post:
@@ -18906,6 +19471,15 @@ components:
           default: true
       required:
       - number
+    AddUnitMediaRequest:
+      type: object
+      properties:
+        url:
+          type: string
+          minLength: 1
+          maxLength: 1024
+      required:
+      - url
     Address:
       type: object
       properties:
@@ -19137,6 +19711,17 @@ components:
     Application:
       type: object
       properties:
+        interview:
+          allOf:
+          - $ref: '#/components/schemas/Interview'
+          nullable: true
+          readOnly: true
+        employer_name:
+          type: string
+          readOnly: true
+        employer_phone:
+          type: string
+          readOnly: true
         id:
           type: string
           format: uuid
@@ -19152,7 +19737,7 @@ components:
           readOnly: true
         status:
           allOf:
-          - $ref: '#/components/schemas/Status26eEnum'
+          - $ref: '#/components/schemas/ListingApplicationStatusEnum'
           readOnly: true
         applicant_snapshot: {}
         applicant_name:
@@ -19211,7 +19796,10 @@ components:
       - contact_revealed_at
       - created_at
       - duplicate_of
+      - employer_name
+      - employer_phone
       - id
+      - interview
       - listing
       - listing_slug
       - listing_title
@@ -19302,7 +19890,7 @@ components:
       type: object
       properties:
         status:
-          $ref: '#/components/schemas/Status26eEnum'
+          $ref: '#/components/schemas/ListingApplicationStatusEnum'
       required:
       - status
     AssignedProfessional:
@@ -20062,6 +20650,67 @@ components:
           maxItems: 20
       required:
       - reason_code
+    CandidateMatch:
+      type: object
+      description: |-
+        A candidate for one job, as the employer sees them. No phone number here: that comes
+        with an application, or after an accepted interview.
+      properties:
+        profile_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+        skills:
+          type: array
+          items:
+            type: string
+        experience_band:
+          type: string
+        qualification:
+          type: string
+        languages:
+          type: array
+          items:
+            type: string
+        city:
+          type: string
+        area:
+          type: string
+        expected_salary_rupees:
+          type: integer
+        available_from:
+          type: string
+        applied:
+          type: boolean
+        application_id:
+          type: string
+          format: uuid
+          nullable: true
+        application_status:
+          type: string
+        match:
+          $ref: '#/components/schemas/Match'
+      required:
+      - application_id
+      - application_status
+      - applied
+      - area
+      - available_from
+      - city
+      - display_name
+      - expected_salary_rupees
+      - experience_band
+      - languages
+      - match
+      - profile_id
+      - qualification
+      - roles
+      - skills
     CapabilityOption:
       type: object
       properties:
@@ -21744,6 +22393,12 @@ components:
         asset_id:
           type: string
           format: uuid
+        pickup_at:
+          type: string
+          format: date-time
+        return_at:
+          type: string
+          format: date-time
         start_date:
           type: string
           format: date
@@ -21763,8 +22418,6 @@ components:
           default: ''
       required:
       - asset_id
-      - end_date
-      - start_date
     CreateEnquiryRequest:
       type: object
       properties:
@@ -21842,9 +22495,7 @@ components:
             type: string
             minLength: 1
           maxItems: 8
-          minItems: 1
       required:
-      - image_urls
       - title
       - variant_id
     CreateReservationRequest:
@@ -21939,6 +22590,13 @@ components:
             minLength: 1
             maxLength: 40
           maxItems: 500
+        image_urls:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 1024
+          maxItems: 8
       required:
       - name
       - nightly_rate_paise
@@ -25737,6 +26395,84 @@ components:
       - partner
       type: string
       description: '* `partner` - partner'
+    Interview:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        scheduled_date:
+          type: string
+          format: date
+        start_time:
+          type: string
+          format: time
+        mode:
+          $ref: '#/components/schemas/InterviewModeEnum'
+        mode_label:
+          type: string
+          readOnly: true
+        location_text:
+          type: string
+          maxLength: 240
+        note:
+          type: string
+          maxLength: 480
+        status:
+          $ref: '#/components/schemas/InterviewStatusEnum'
+        status_label:
+          type: string
+          readOnly: true
+        candidate_note:
+          type: string
+          maxLength: 480
+        responded_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - mode_label
+      - scheduled_date
+      - start_time
+      - status_label
+    InterviewAnswerRequest:
+      type: object
+      properties:
+        note:
+          type: string
+          default: ''
+          maxLength: 480
+    InterviewModeEnum:
+      enum:
+      - IN_PERSON
+      - PHONE
+      - VIDEO
+      type: string
+      description: |-
+        * `IN_PERSON` - In person
+        * `PHONE` - Phone call
+        * `VIDEO` - Video call
+    InterviewStatusEnum:
+      enum:
+      - PROPOSED
+      - ACCEPTED
+      - RESCHEDULE_REQUESTED
+      - DECLINED
+      - CANCELLED
+      type: string
+      description: |-
+        * `PROPOSED` - Waiting for the candidate
+        * `ACCEPTED` - Accepted
+        * `RESCHEDULE_REQUESTED` - Asked for another time
+        * `DECLINED` - Declined
+        * `CANCELLED` - Cancelled
     InvitationDeclineReasonEnum:
       enum:
       - TOO_FAR
@@ -25753,6 +26489,405 @@ components:
         * `BUDGET_TOO_LOW` - Budget is below what this costs
         * `UNCLEAR_SCOPE` - Cannot tell what is being asked for
         * `OTHER` - Another reason
+    JobCategory:
+      type: object
+      properties:
+        name:
+          type: string
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/JobRoleTemplate'
+      required:
+      - name
+      - roles
+    JobCounts:
+      type: object
+      properties:
+        views:
+          type: integer
+        applied:
+          type: integer
+        shortlisted:
+          type: integer
+        interviews:
+          type: integer
+        connected:
+          type: integer
+      required:
+      - applied
+      - connected
+      - interviews
+      - shortlisted
+      - views
+    JobCreateRequest:
+      type: object
+      description: |-
+        A job as the 4-step form sends it. Values are checked against ``jobs`` option lists in
+        the service; free text is limited to skills, duties, benefits, title, city and area.
+      properties:
+        role_template_id:
+          type: string
+          format: uuid
+          nullable: true
+        title:
+          type: string
+          minLength: 1
+          maxLength: 180
+        job_category:
+          type: string
+          maxLength: 80
+        vacancies:
+          type: integer
+          maximum: 500
+          minimum: 1
+        job_type:
+          type: string
+          maxLength: 20
+        experience_band:
+          type: string
+          maxLength: 12
+        required_skills:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 60
+          maxItems: 15
+        preferred_skills:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 60
+          maxItems: 15
+        responsibilities:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 60
+          maxItems: 15
+        benefits:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 60
+          maxItems: 15
+        languages:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 20
+          maxItems: 10
+        min_qualification:
+          type: string
+          maxLength: 20
+        shift:
+          type: string
+          maxLength: 12
+        work_mode:
+          type: string
+          maxLength: 16
+        timing_start:
+          type: string
+          format: time
+          nullable: true
+        timing_end:
+          type: string
+          format: time
+          nullable: true
+        weekly_off:
+          type: string
+          maxLength: 12
+        urgency:
+          type: string
+          maxLength: 12
+        city:
+          type: string
+          maxLength: 80
+        area:
+          type: string
+          maxLength: 120
+        salary_min_paise:
+          type: integer
+          minimum: 0
+        salary_max_paise:
+          type: integer
+          minimum: 0
+        salary_period:
+          type: string
+          maxLength: 16
+        description:
+          type: string
+          maxLength: 5000
+        contact_phone:
+          type: string
+          maxLength: 32
+        contact_email:
+          type: string
+          format: email
+          maxLength: 254
+        publish:
+          type: boolean
+          default: true
+      required:
+      - title
+    JobForYou:
+      type: object
+      properties:
+        listing:
+          $ref: '#/components/schemas/ListingSummary'
+        match:
+          $ref: '#/components/schemas/Match'
+      required:
+      - listing
+      - match
+    JobOption:
+      type: object
+      properties:
+        value:
+          type: string
+        label:
+          type: string
+      required:
+      - label
+      - value
+    JobOptions:
+      type: object
+      properties:
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/JobCategory'
+        job_types:
+          type: array
+          items:
+            $ref: '#/components/schemas/JobOption'
+        experience_bands:
+          type: array
+          items:
+            $ref: '#/components/schemas/JobOption'
+        qualifications:
+          type: array
+          items:
+            $ref: '#/components/schemas/JobOption'
+        languages:
+          type: array
+          items:
+            $ref: '#/components/schemas/JobOption'
+        benefits:
+          type: array
+          items:
+            type: string
+        shifts:
+          type: array
+          items:
+            $ref: '#/components/schemas/JobOption'
+        work_modes:
+          type: array
+          items:
+            $ref: '#/components/schemas/JobOption'
+        weekly_offs:
+          type: array
+          items:
+            $ref: '#/components/schemas/JobOption'
+        urgencies:
+          type: array
+          items:
+            $ref: '#/components/schemas/JobOption'
+        salary_periods:
+          type: array
+          items:
+            $ref: '#/components/schemas/JobOption'
+        salary_bands:
+          type: array
+          items:
+            $ref: '#/components/schemas/SalaryBand'
+        cities:
+          type: array
+          items:
+            type: string
+      required:
+      - benefits
+      - categories
+      - cities
+      - experience_bands
+      - job_types
+      - languages
+      - qualifications
+      - salary_bands
+      - salary_periods
+      - shifts
+      - urgencies
+      - weekly_offs
+      - work_modes
+    JobRoleTemplate:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        skills:
+          type: array
+          items:
+            type: string
+        responsibilities:
+          type: array
+          items:
+            type: string
+        job_type:
+          type: string
+        shift:
+          type: string
+        work_mode:
+          type: string
+        salary_min_rupees:
+          type: integer
+        salary_max_rupees:
+          type: integer
+      required:
+      - id
+      - job_type
+      - name
+      - responsibilities
+      - salary_max_rupees
+      - salary_min_rupees
+      - shift
+      - skills
+      - work_mode
+    JobSeekerAvailabilityEnum:
+      enum:
+      - IMMEDIATE
+      - WEEK
+      - FORTNIGHT
+      - MONTH
+      type: string
+      description: |-
+        * `IMMEDIATE` - Immediately
+        * `WEEK` - Within 7 days
+        * `FORTNIGHT` - Within 15 days
+        * `MONTH` - Within 30 days
+    JobSeekerProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        full_name:
+          type: string
+          maxLength: 120
+        phone:
+          type: string
+          readOnly: true
+        roles: {}
+        skills: {}
+        experience_band:
+          type: string
+          maxLength: 12
+        qualification:
+          type: string
+          maxLength: 20
+        languages: {}
+        city:
+          type: string
+          maxLength: 80
+        area:
+          type: string
+          maxLength: 120
+        expected_salary_rupees:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        job_types: {}
+        available_from:
+          oneOf:
+          - $ref: '#/components/schemas/JobSeekerAvailabilityEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        visibility:
+          $ref: '#/components/schemas/JobSeekerVisibilityEnum'
+        resume_name:
+          type: string
+          readOnly: true
+        has_resume:
+          type: boolean
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - has_resume
+      - id
+      - phone
+      - resume_name
+      - updated_at
+    JobSeekerProfileWriteRequest:
+      type: object
+      properties:
+        full_name:
+          type: string
+          maxLength: 120
+        roles:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 60
+        skills:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 60
+        experience_band:
+          type: string
+          maxLength: 12
+        qualification:
+          type: string
+          maxLength: 20
+        languages:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 20
+        city:
+          type: string
+          maxLength: 80
+        area:
+          type: string
+          maxLength: 120
+        expected_salary_rupees:
+          type: integer
+          maximum: 10000000
+          minimum: 0
+        job_types:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 20
+        available_from:
+          type: string
+          maxLength: 12
+        visibility:
+          type: string
+          minLength: 1
+          maxLength: 16
+    JobSeekerVisibilityEnum:
+      enum:
+      - OPEN
+      - APPLIED_ONLY
+      type: string
+      description: |-
+        * `OPEN` - Matching employers can find me
+        * `APPLIED_ONLY` - Only employers I apply to
     KillSwitch:
       type: object
       description: |-
@@ -25903,6 +27038,28 @@ components:
         * `ACTIVE` - Active
         * `RETIRED` - Retired
         * `REJECTED` - Rejected
+    ListingApplicationStatusEnum:
+      enum:
+      - SUBMITTED
+      - UNDER_REVIEW
+      - SHORTLISTED
+      - INTERVIEW
+      - CONNECTED
+      - CONTACTED
+      - REJECTED
+      - WITHDRAWN
+      - EXPIRED
+      type: string
+      description: |-
+        * `SUBMITTED` - Submitted
+        * `UNDER_REVIEW` - Under review
+        * `SHORTLISTED` - Shortlisted
+        * `INTERVIEW` - Interview
+        * `CONNECTED` - Connected
+        * `CONTACTED` - Contacted
+        * `REJECTED` - Rejected
+        * `WITHDRAWN` - Withdrawn
+        * `EXPIRED` - Expired
     ListingCategoryOption:
       type: object
       properties:
@@ -25977,6 +27134,64 @@ components:
           type: integer
           readOnly: true
           default: 0
+        role_template:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        job_category:
+          type: string
+          readOnly: true
+        vacancies:
+          type: integer
+          readOnly: true
+        job_type:
+          type: string
+          readOnly: true
+        experience_band:
+          type: string
+          readOnly: true
+        required_skills:
+          readOnly: true
+        preferred_skills:
+          readOnly: true
+        responsibilities:
+          readOnly: true
+        benefits:
+          readOnly: true
+        languages:
+          readOnly: true
+        min_qualification:
+          type: string
+          readOnly: true
+        shift:
+          type: string
+          readOnly: true
+        work_mode:
+          type: string
+          readOnly: true
+        timing_start:
+          type: string
+          format: time
+          readOnly: true
+          nullable: true
+        timing_end:
+          type: string
+          format: time
+          readOnly: true
+          nullable: true
+        weekly_off:
+          type: string
+          readOnly: true
+        urgency:
+          type: string
+          readOnly: true
+        city:
+          type: string
+          readOnly: true
+        area:
+          type: string
+          readOnly: true
         contact_masked:
           type: object
           additionalProperties:
@@ -25993,17 +27208,36 @@ components:
       required:
       - application_count
       - application_schema
+      - area
+      - benefits
+      - city
       - contact_masked
       - description
+      - experience_band
       - id
+      - job_category
+      - job_type
+      - languages
       - listing_type_schema
+      - min_qualification
       - poster_name
+      - preferred_skills
       - public_state
+      - required_skills
+      - responsibilities
+      - role_template
       - salary_display
       - service_name
+      - shift
       - slug
+      - timing_end
+      - timing_start
       - title
+      - urgency
+      - vacancies
       - variant_name
+      - weekly_off
+      - work_mode
     ListingFiltersTaxonomy:
       type: object
       properties:
@@ -26129,16 +27363,93 @@ components:
           type: integer
           readOnly: true
           default: 0
+        role_template:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        job_category:
+          type: string
+          readOnly: true
+        vacancies:
+          type: integer
+          readOnly: true
+        job_type:
+          type: string
+          readOnly: true
+        experience_band:
+          type: string
+          readOnly: true
+        required_skills:
+          readOnly: true
+        preferred_skills:
+          readOnly: true
+        responsibilities:
+          readOnly: true
+        benefits:
+          readOnly: true
+        languages:
+          readOnly: true
+        min_qualification:
+          type: string
+          readOnly: true
+        shift:
+          type: string
+          readOnly: true
+        work_mode:
+          type: string
+          readOnly: true
+        timing_start:
+          type: string
+          format: time
+          readOnly: true
+          nullable: true
+        timing_end:
+          type: string
+          format: time
+          readOnly: true
+          nullable: true
+        weekly_off:
+          type: string
+          readOnly: true
+        urgency:
+          type: string
+          readOnly: true
+        city:
+          type: string
+          readOnly: true
+        area:
+          type: string
+          readOnly: true
       required:
       - application_count
+      - area
+      - benefits
+      - city
+      - experience_band
       - id
+      - job_category
+      - job_type
+      - languages
+      - min_qualification
       - poster_name
+      - preferred_skills
       - public_state
+      - required_skills
+      - responsibilities
+      - role_template
       - salary_display
       - service_name
+      - shift
       - slug
+      - timing_end
+      - timing_start
       - title
+      - urgency
+      - vacancies
       - variant_name
+      - weekly_off
+      - work_mode
     ManualOfferRequest:
       type: object
       properties:
@@ -26172,6 +27483,26 @@ components:
           type: string
           format: uuid
           nullable: true
+    Match:
+      type: object
+      properties:
+        score:
+          type: integer
+        level:
+          type: string
+        matched:
+          type: array
+          items:
+            type: string
+        missing:
+          type: array
+          items:
+            type: string
+      required:
+      - level
+      - matched
+      - missing
+      - score
     MatchingStatusEnum:
       enum:
       - SEARCHING
@@ -29315,6 +30646,64 @@ components:
           type: integer
           readOnly: true
           default: 0
+        role_template:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        job_category:
+          type: string
+          readOnly: true
+        vacancies:
+          type: integer
+          readOnly: true
+        job_type:
+          type: string
+          readOnly: true
+        experience_band:
+          type: string
+          readOnly: true
+        required_skills:
+          readOnly: true
+        preferred_skills:
+          readOnly: true
+        responsibilities:
+          readOnly: true
+        benefits:
+          readOnly: true
+        languages:
+          readOnly: true
+        min_qualification:
+          type: string
+          readOnly: true
+        shift:
+          type: string
+          readOnly: true
+        work_mode:
+          type: string
+          readOnly: true
+        timing_start:
+          type: string
+          format: time
+          readOnly: true
+          nullable: true
+        timing_end:
+          type: string
+          format: time
+          readOnly: true
+          nullable: true
+        weekly_off:
+          type: string
+          readOnly: true
+        urgency:
+          type: string
+          readOnly: true
+        city:
+          type: string
+          readOnly: true
+        area:
+          type: string
+          readOnly: true
         variant:
           type: string
           format: uuid
@@ -29354,26 +30743,54 @@ components:
           type: object
           additionalProperties: {}
           readOnly: true
+        counts:
+          allOf:
+          - $ref: '#/components/schemas/JobCounts'
+          readOnly: true
+        view_count:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
       required:
       - application_count
+      - area
+      - benefits
+      - city
       - closed_at
+      - counts
       - created_at
       - description
+      - experience_band
       - id
+      - job_category
+      - job_type
+      - languages
       - listing_type_schema
+      - min_qualification
       - moderation_reason
       - moderation_status
       - payment_attempt_id
       - poster_name
+      - preferred_skills
       - public_state
       - removed_at
+      - required_skills
+      - responsibilities
+      - role_template
       - salary_display
       - service_name
+      - shift
       - slug
       - status
+      - timing_end
+      - timing_start
       - title
+      - urgency
+      - vacancies
       - variant_name
       - version
+      - weekly_off
+      - work_mode
     PartnerListingRequest:
       type: object
       properties:
@@ -29431,6 +30848,10 @@ components:
           type: string
           format: email
           maxLength: 254
+        view_count:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
       required:
       - description
       - title
@@ -29832,6 +31253,102 @@ components:
           default: true
       required:
       - rate_paise
+    PartnerRentalAsset:
+      type: object
+      description: |-
+        The owner's view of an ad: how many pieces are out today and free to book.
+
+        Needs ``context["stock"]`` from ``asset_stock_counts``.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        slug:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        title:
+          type: string
+          readOnly: true
+        description:
+          type: string
+          readOnly: true
+        location_text:
+          type: string
+          readOnly: true
+        daily_rate_paise:
+          type: integer
+          readOnly: true
+        deposit_paise:
+          type: integer
+          readOnly: true
+        quantity_available:
+          type: integer
+          readOnly: true
+        condition_grade:
+          allOf:
+          - $ref: '#/components/schemas/ConditionGradeEnum'
+          readOnly: true
+        current_status:
+          allOf:
+          - $ref: '#/components/schemas/CurrentStatusEnum'
+          readOnly: true
+        moderation_status:
+          allOf:
+          - $ref: '#/components/schemas/RentalAssetModerationStatusEnum'
+          readOnly: true
+        public_state:
+          type: string
+          readOnly: true
+        partner_name:
+          type: string
+          readOnly: true
+        variant:
+          type: string
+          format: uuid
+          readOnly: true
+        structured_fields:
+          readOnly: true
+        media:
+          type: array
+          items:
+            $ref: '#/components/schemas/RentalAssetMedia'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        booked_now:
+          type: integer
+          readOnly: true
+        available_now:
+          type: integer
+          readOnly: true
+        upcoming_bookings:
+          type: integer
+          readOnly: true
+      required:
+      - available_now
+      - booked_now
+      - condition_grade
+      - created_at
+      - current_status
+      - daily_rate_paise
+      - deposit_paise
+      - description
+      - id
+      - location_text
+      - media
+      - moderation_status
+      - partner_name
+      - public_state
+      - quantity_available
+      - slug
+      - structured_fields
+      - title
+      - upcoming_bookings
+      - variant
     PartnerRentalBooking:
       type: object
       description: 'The owner''s view of the booking: includes renter''s name and
@@ -29849,6 +31366,15 @@ components:
         end_date:
           type: string
           format: date
+        pickup_at:
+          type: string
+          format: date-time
+        return_at:
+          type: string
+          format: date-time
+        rental_days:
+          type: integer
+          readOnly: true
         quantity:
           type: integer
           readOnly: true
@@ -29882,6 +31408,11 @@ components:
           nullable: true
           description: Plaintext PIN for the customer only, once the booking is paid/active.
           readOnly: true
+        pickup_contact:
+          allOf:
+          - $ref: '#/components/schemas/RentalPickupContact'
+          nullable: true
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -29902,8 +31433,12 @@ components:
       - end_date
       - handover_pin
       - id
+      - pickup_at
+      - pickup_contact
       - price_paise
       - quantity
+      - rental_days
+      - return_at
       - start_date
     PartnerReservationActionRequest:
       type: object
@@ -30236,6 +31771,11 @@ components:
           type: string
           format: uuid
           readOnly: true
+        media:
+          type: array
+          items:
+            $ref: '#/components/schemas/UnitMedia'
+          readOnly: true
         name:
           type: string
           maxLength: 120
@@ -30272,6 +31812,7 @@ components:
           readOnly: true
       required:
       - id
+      - media
       - name
       - nightly_rate_paise
       - rooms
@@ -30483,6 +32024,119 @@ components:
           type: string
           format: email
           maxLength: 254
+    PatchedJobUpdateRequest:
+      type: object
+      description: |-
+        A job as the 4-step form sends it. Values are checked against ``jobs`` option lists in
+        the service; free text is limited to skills, duties, benefits, title, city and area.
+      properties:
+        role_template_id:
+          type: string
+          format: uuid
+          nullable: true
+        title:
+          type: string
+          minLength: 1
+          maxLength: 180
+        job_category:
+          type: string
+          maxLength: 80
+        vacancies:
+          type: integer
+          maximum: 500
+          minimum: 1
+        job_type:
+          type: string
+          maxLength: 20
+        experience_band:
+          type: string
+          maxLength: 12
+        required_skills:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 60
+          maxItems: 15
+        preferred_skills:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 60
+          maxItems: 15
+        responsibilities:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 60
+          maxItems: 15
+        benefits:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 60
+          maxItems: 15
+        languages:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 20
+          maxItems: 10
+        min_qualification:
+          type: string
+          maxLength: 20
+        shift:
+          type: string
+          maxLength: 12
+        work_mode:
+          type: string
+          maxLength: 16
+        timing_start:
+          type: string
+          format: time
+          nullable: true
+        timing_end:
+          type: string
+          format: time
+          nullable: true
+        weekly_off:
+          type: string
+          maxLength: 12
+        urgency:
+          type: string
+          maxLength: 12
+        city:
+          type: string
+          maxLength: 80
+        area:
+          type: string
+          maxLength: 120
+        salary_min_paise:
+          type: integer
+          minimum: 0
+        salary_max_paise:
+          type: integer
+          minimum: 0
+        salary_period:
+          type: string
+          maxLength: 16
+        description:
+          type: string
+          maxLength: 5000
+        contact_phone:
+          type: string
+          maxLength: 32
+        contact_email:
+          type: string
+          format: email
+          maxLength: 254
+        regenerate_description:
+          type: boolean
+          default: false
     PatchedOpsDashboardPreferenceRequest:
       type: object
       properties:
@@ -30673,6 +32327,12 @@ components:
           type: integer
           minimum: 1
         structured_fields: {}
+        add_image_urls:
+          type: array
+          items:
+            type: string
+            minLength: 1
+          maxItems: 8
     PatchedUpdatePropertyRequest:
       type: object
       properties:
@@ -33724,6 +35384,27 @@ components:
       - expected_version
       - reason
       - task_quantity
+    ProposeInterviewRequest:
+      type: object
+      properties:
+        scheduled_date:
+          type: string
+          format: date
+        start_time:
+          type: string
+          format: time
+        mode:
+          $ref: '#/components/schemas/InterviewModeEnum'
+        location_text:
+          type: string
+          maxLength: 240
+        note:
+          type: string
+          maxLength: 480
+      required:
+      - mode
+      - scheduled_date
+      - start_time
     ProposePayoutBatchRequestRequest:
       type: object
       properties:
@@ -33803,6 +35484,13 @@ components:
           maxLength: 2000
       required:
       - question
+    QuickApplyRequest:
+      type: object
+      properties:
+        note:
+          type: string
+          default: ''
+          maxLength: 2000
     Quote:
       type: object
       properties:
@@ -35335,6 +37023,93 @@ components:
       - structured_fields
       - title
       - variant
+    RentalAssetDetail:
+      type: object
+      description: 'One item''s page: adds the owner''s pickup hours so the customer
+        picks valid times.'
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        slug:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        title:
+          type: string
+          readOnly: true
+        description:
+          type: string
+          readOnly: true
+        location_text:
+          type: string
+          readOnly: true
+        daily_rate_paise:
+          type: integer
+          readOnly: true
+        deposit_paise:
+          type: integer
+          readOnly: true
+        quantity_available:
+          type: integer
+          readOnly: true
+        condition_grade:
+          allOf:
+          - $ref: '#/components/schemas/ConditionGradeEnum'
+          readOnly: true
+        current_status:
+          allOf:
+          - $ref: '#/components/schemas/CurrentStatusEnum'
+          readOnly: true
+        moderation_status:
+          allOf:
+          - $ref: '#/components/schemas/RentalAssetModerationStatusEnum'
+          readOnly: true
+        public_state:
+          type: string
+          readOnly: true
+        partner_name:
+          type: string
+          readOnly: true
+        variant:
+          type: string
+          format: uuid
+          readOnly: true
+        structured_fields:
+          readOnly: true
+        media:
+          type: array
+          items:
+            $ref: '#/components/schemas/RentalAssetMedia'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        pickup_hours:
+          allOf:
+          - $ref: '#/components/schemas/RentalPickupHours'
+          readOnly: true
+      required:
+      - condition_grade
+      - created_at
+      - current_status
+      - daily_rate_paise
+      - deposit_paise
+      - description
+      - id
+      - location_text
+      - media
+      - moderation_status
+      - partner_name
+      - pickup_hours
+      - public_state
+      - quantity_available
+      - slug
+      - structured_fields
+      - title
+      - variant
     RentalAssetMedia:
       type: object
       properties:
@@ -35400,6 +37175,15 @@ components:
         end_date:
           type: string
           format: date
+        pickup_at:
+          type: string
+          format: date-time
+        return_at:
+          type: string
+          format: date-time
+        rental_days:
+          type: integer
+          readOnly: true
         quantity:
           type: integer
           readOnly: true
@@ -35433,6 +37217,11 @@ components:
           nullable: true
           description: Plaintext PIN for the customer only, once the booking is paid/active.
           readOnly: true
+        pickup_contact:
+          allOf:
+          - $ref: '#/components/schemas/RentalPickupContact'
+          nullable: true
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -35444,8 +37233,12 @@ components:
       - end_date
       - handover_pin
       - id
+      - pickup_at
+      - pickup_contact
       - price_paise
       - quantity
+      - rental_days
+      - return_at
       - start_date
     RentalDeposit:
       type: object
@@ -35530,6 +37323,85 @@ components:
       - original_name
       - upload_id
       - url
+    RentalPickupContact:
+      type: object
+      properties:
+        owner_name:
+          type: string
+        owner_phone:
+          type: string
+        address:
+          type: string
+      required:
+      - address
+      - owner_name
+      - owner_phone
+    RentalPickupHours:
+      type: object
+      description: The owner's pickup and return schedule. ``HH:MM`` local times;
+        Monday = 0.
+      properties:
+        open_days:
+          type: array
+          items:
+            type: integer
+            maximum: 6
+            minimum: 0
+        opens_at:
+          type: string
+          format: time
+        closes_at:
+          type: string
+          format: time
+        min_notice_minutes:
+          type: integer
+          minimum: 0
+        max_advance_days:
+          type: integer
+          minimum: 1
+        slot_minutes:
+          type: integer
+          readOnly: true
+        summary:
+          type: string
+          readOnly: true
+      required:
+      - closes_at
+      - max_advance_days
+      - min_notice_minutes
+      - open_days
+      - opens_at
+      - slot_minutes
+      - summary
+    RentalPickupHoursRequest:
+      type: object
+      description: The owner's pickup and return schedule. ``HH:MM`` local times;
+        Monday = 0.
+      properties:
+        open_days:
+          type: array
+          items:
+            type: integer
+            maximum: 6
+            minimum: 0
+        opens_at:
+          type: string
+          format: time
+        closes_at:
+          type: string
+          format: time
+        min_notice_minutes:
+          type: integer
+          minimum: 0
+        max_advance_days:
+          type: integer
+          minimum: 1
+      required:
+      - closes_at
+      - max_advance_days
+      - min_notice_minutes
+      - open_days
+      - opens_at
     RentalPlatformFee:
       type: object
       properties:
@@ -36740,6 +38612,16 @@ components:
         * `REPORTED` - Reported
         * `UNDER_REVIEW` - Operations is reviewing it
         * `RESOLVED` - Closed by Operations
+    SalaryBand:
+      type: object
+      properties:
+        min_rupees:
+          type: integer
+        max_rupees:
+          type: integer
+      required:
+      - max_rupees
+      - min_rupees
     ScanStatusEnum:
       enum:
       - PENDING
@@ -38421,24 +40303,6 @@ components:
         * `DRAFT` - Draft
         * `ACTIVE` - Active
         * `RETIRED` - Retired
-    Status26eEnum:
-      enum:
-      - SUBMITTED
-      - UNDER_REVIEW
-      - SHORTLISTED
-      - CONTACTED
-      - REJECTED
-      - WITHDRAWN
-      - EXPIRED
-      type: string
-      description: |-
-        * `SUBMITTED` - Submitted
-        * `UNDER_REVIEW` - Under review
-        * `SHORTLISTED` - Shortlisted
-        * `CONTACTED` - Contacted
-        * `REJECTED` - Rejected
-        * `WITHDRAWN` - Withdrawn
-        * `EXPIRED` - Expired
     Status423Enum:
       enum:
       - ACTIVE
@@ -39411,11 +41275,13 @@ components:
       - SERVICES
       - STAY_HOST
       - RENTAL_OWNER
+      - EMPLOYER
       type: string
       description: |-
         * `SERVICES` - Offer services
         * `STAY_HOST` - List my property
         * `RENTAL_OWNER` - Rent out items
+        * `EMPLOYER` - Hire staff
     TransferQuoteRequest:
       type: object
       description: The replacement's price for one unfinished milestone.
@@ -39448,6 +41314,11 @@ components:
           type: string
           format: uuid
           readOnly: true
+        media:
+          type: array
+          items:
+            $ref: '#/components/schemas/UnitMedia'
+          readOnly: true
         name:
           type: string
           maxLength: 120
@@ -39476,6 +41347,7 @@ components:
         attributes: {}
       required:
       - id
+      - media
       - name
       - nightly_rate_paise
     UnitCancellationOutcome:
@@ -39529,6 +41401,24 @@ components:
         * `running_ft` - running_ft
         * `set` - set
         * `sq_ft` - sq_ft
+    UnitMedia:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        url:
+          type: string
+          format: uri
+          maxLength: 1024
+        display_order:
+          type: integer
+          maximum: 32767
+          minimum: 0
+      required:
+      - id
+      - url
     UnitRescheduleOutcome:
       type: object
       properties:

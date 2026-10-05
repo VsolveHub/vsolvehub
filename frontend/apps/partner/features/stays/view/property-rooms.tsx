@@ -13,6 +13,7 @@ import {
   type StayUnit,
 } from "@/features/stays/queries";
 
+import { RoomPhotosDraft } from "./room-photos";
 import { RoomTypeBlock } from "./room-type-block";
 import { SchemaQuestions } from "./schema-questions";
 import {
@@ -315,6 +316,7 @@ export function PropertyRooms({
   const idBase = useId();
   const [adding, setAdding] = useState((property.units ?? []).length === 0);
   const [newRoom, setNewRoom] = useState<RoomDraft>(EMPTY_ROOM);
+  const [newPhotos, setNewPhotos] = useState<string[]>([]);
   const [newError, setNewError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<RoomDraft>(EMPTY_ROOM);
@@ -331,9 +333,11 @@ export function PropertyRooms({
   const invalidate = () => void qc.invalidateQueries({ queryKey: ["partner-stays"] });
 
   const create = useMutation({
-    mutationFn: (room: ParsedRoom) => createPartnerStayUnit(property.id, room),
+    mutationFn: (room: ParsedRoom) =>
+      createPartnerStayUnit(property.id, { ...room, image_urls: newPhotos }),
     onSuccess: () => {
       setNewRoom(EMPTY_ROOM);
+      setNewPhotos([]);
       setAdding(false);
       invalidate();
     },
@@ -454,6 +458,7 @@ export function PropertyRooms({
             priceLabel={priceLabel}
             style={style}
           />
+          <RoomPhotosDraft urls={newPhotos} onChange={setNewPhotos} />
           {!hasRoomQuestions ? null : (
             <p className="text-xs text-text-secondary">
               Room details like AC are asked per room type, so one property can have both kinds.

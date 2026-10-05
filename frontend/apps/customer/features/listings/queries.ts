@@ -136,3 +136,10 @@ export function fetchJobCategories() {
 export function fetchListingFilters() {
   return request(() => getApiClient().GET("/api/v1/listings/filters"));
 }
+
+export type JobOptions = Schemas["JobOptions"];
+
+/** Labels for job values ("FULL_TIME" → "Full time"), shared with the employer form. */
+export function fetchJobOptions(): Promise<JobOptions> {
+  return request(() => getApiClient().GET("/api/v1/jobs/options"));
+}

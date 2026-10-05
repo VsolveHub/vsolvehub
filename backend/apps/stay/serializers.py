@@ -15,15 +15,26 @@ from apps.stay.models import (
     StayReview,
     StayVisit,
     Unit,
+    UnitMedia,
     VisitSlot,
 )
 
 
+class UnitMediaSerializer(serializers.ModelSerializer[UnitMedia]):
+    class Meta:
+        model = UnitMedia
+        fields = ("id", "url", "display_order")
+
+
 class UnitSerializer(serializers.ModelSerializer):
+    #: Photos of this room type; the property gallery shows the building.
+    media = UnitMediaSerializer(many=True, read_only=True)
+
     class Meta:
         model = Unit
         fields: tuple[str, ...] = (
             "id",
+            "media",
             "name",
             "sharing_count",
             "quantity",
@@ -377,9 +388,11 @@ class CreatePropertySerializer(serializers.Serializer):
     cancellation_policy_text = serializers.CharField(required=False, allow_blank=True, default="")
     house_rules = serializers.CharField(required=False, allow_blank=True, default="")
     min_stay_nights = serializers.IntegerField(min_value=1, required=False, default=1)
+    #: Building and common-area photos. Optional: guests choose by the room photos.
     image_urls = serializers.ListField(
         child=serializers.CharField(min_length=1),
-        min_length=1,
+        required=False,
+        default=list,
         max_length=8,
     )
 
@@ -410,6 +423,17 @@ class CreateUnitSerializer(serializers.Serializer):
         default=list,
         max_length=500,
     )
+    #: Photos of this room type, uploaded first through the stay photo upload.
+    image_urls = serializers.ListField(
+        child=serializers.CharField(max_length=1024),
+        required=False,
+        default=list,
+        max_length=8,
+    )
+
+
+class AddUnitMediaSerializer(serializers.Serializer):
+    url = serializers.CharField(max_length=1024)
 
 
 class UpdateUnitSerializer(serializers.Serializer):

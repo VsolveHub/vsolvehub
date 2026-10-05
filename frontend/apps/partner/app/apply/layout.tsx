@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
 import { ApplyGuard } from "@/features/application/view/apply-guard";
 import { ApplyShell } from "@/features/application/view/apply-shell";
@@ -38,8 +39,10 @@ export const metadata: Metadata = {
 
 export default function ApplyLayout({ children }: { children: React.ReactNode }) {
   return (
-    <ApplyGuard>
-      <ApplyShell>{children}</ApplyShell>
-    </ApplyGuard>
+    <Suspense fallback={<div className="min-h-dvh bg-canvas" />}>
+      <ApplyGuard>
+        <ApplyShell>{children}</ApplyShell>
+      </ApplyGuard>
+    </Suspense>
   );
 }

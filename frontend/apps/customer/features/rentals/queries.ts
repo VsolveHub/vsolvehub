@@ -55,8 +55,9 @@ export function fetchRentalPlatformFee() {
 
 export function bookRental(payload: {
   asset_id: string;
-  start_date: string;
-  end_date: string;
+  /** ISO date-times: when the customer collects and returns the item. */
+  pickup_at: string;
+  return_at: string;
   pickup_or_delivery_mode?: string;
   notes?: string;
   quantity?: number;
@@ -65,8 +66,8 @@ export function bookRental(payload: {
     getApiClient().POST("/api/v1/rentals/book", {
       body: {
         asset_id: payload.asset_id,
-        start_date: payload.start_date,
-        end_date: payload.end_date,
+        pickup_at: payload.pickup_at,
+        return_at: payload.return_at,
         quantity: payload.quantity ?? 1,
         pickup_or_delivery_mode: payload.pickup_or_delivery_mode ?? "PICKUP",
         notes: payload.notes ?? "",

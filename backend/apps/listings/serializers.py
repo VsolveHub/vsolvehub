@@ -1,5 +1,6 @@
 from typing import Any
 
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.catalog.models import Service, ServiceVariant
@@ -9,6 +10,8 @@ from apps.listings.models import (
     ApplicationAttachment,
     ApplicationReport,
     ApplicationStatusEvent,
+    Interview,
+    JobSeekerProfile,
     Listing,
     ListingReport,
     VendorSubscription,
@@ -38,6 +41,30 @@ class PhoneNumberField(serializers.CharField):
 MAX_STRUCTURED_FIELD_COUNT = 20
 MAX_STRUCTURED_FIELD_NAME_LENGTH = 60
 MAX_STRUCTURED_FIELD_VALUE_LENGTH = 300
+
+
+#: The tap-to-pick job details, shown on every job card and page (see ``apps.listings.jobs``).
+JOB_FIELDS: tuple[str, ...] = (
+    "role_template",
+    "job_category",
+    "vacancies",
+    "job_type",
+    "experience_band",
+    "required_skills",
+    "preferred_skills",
+    "responsibilities",
+    "benefits",
+    "languages",
+    "min_qualification",
+    "shift",
+    "work_mode",
+    "timing_start",
+    "timing_end",
+    "weekly_off",
+    "urgency",
+    "city",
+    "area",
+)
 
 
 class ListingSummarySerializer(serializers.ModelSerializer[Listing]):
@@ -70,7 +97,9 @@ class ListingSummarySerializer(serializers.ModelSerializer[Listing]):
             "published_at",
             "expires_at",
             "application_count",
+            *JOB_FIELDS,
         )
+        read_only_fields: tuple[str, ...] = JOB_FIELDS
 
     def get_salary_display(self, obj: Listing) -> str:
         if obj.salary_min_paise > 0:
@@ -116,6 +145,14 @@ class ListingDetailSerializer(ListingSummarySerializer):
         return cfg.application_schema if cfg else {}
 
 
+class JobCountsSerializer(serializers.Serializer[dict[str, Any]]):
+    views = serializers.IntegerField()
+    applied = serializers.IntegerField()
+    shortlisted = serializers.IntegerField()
+    interviews = serializers.IntegerField()
+    connected = serializers.IntegerField()
+
+
 class PartnerListingSerializer(ListingSummarySerializer):
     title = serializers.CharField(min_length=5, max_length=180, trim_whitespace=True)
     description = serializers.CharField(min_length=20, max_length=5000, trim_whitespace=True)
@@ -128,6 +165,8 @@ class PartnerListingSerializer(ListingSummarySerializer):
     is_premium = serializers.BooleanField(required=False, default=False)
     payment_attempt_id = serializers.UUIDField(read_only=True, allow_null=True)
     listing_type_schema = serializers.SerializerMethodField()
+    #: Views, applied, shortlisted, interviews, connected: the numbers on the job card.
+    counts = serializers.SerializerMethodField()
 
     class Meta(ListingSummarySerializer.Meta):
         fields = (
@@ -147,6 +186,8 @@ class PartnerListingSerializer(ListingSummarySerializer):
             "created_at",
             "payment_attempt_id",
             "listing_type_schema",
+            "counts",
+            "view_count",
         )
         read_only_fields = (
             "status",
@@ -158,6 +199,7 @@ class PartnerListingSerializer(ListingSummarySerializer):
             "created_at",
             "payment_attempt_id",
             "listing_type_schema",
+            *JOB_FIELDS,
         )
 
     def get_listing_type_schema(self, obj: Listing) -> dict[str, Any]:
@@ -165,6 +207,19 @@ class PartnerListingSerializer(ListingSummarySerializer):
             return {}
         cfg = obj.variant.a10_configurations.filter(status="ACTIVE").first()
         return cfg.listing_type_schema if cfg else {}
+
+    @extend_schema_field(JobCountsSerializer)
+    def get_counts(self, obj: Listing) -> dict[str, int]:
+        live = obj.applications.exclude(
+            status__in=(Application.Status.WITHDRAWN, Application.Status.EXPIRED)
+        )
+        return {
+            "views": obj.view_count,
+            "applied": live.count(),
+            "shortlisted": live.filter(status=Application.Status.SHORTLISTED).count(),
+            "interviews": live.filter(status=Application.Status.INTERVIEW).count(),
+            "connected": live.filter(status=Application.Status.CONNECTED).count(),
+        }
 
     def validate_structured_fields(self, value: dict[str, Any]) -> dict[str, Any]:
         """Keep role details to a small, flat, human-sized map.
@@ -291,6 +346,28 @@ class ApplicationStatusEventSerializer(serializers.ModelSerializer[ApplicationSt
         fields = ("id", "from_status", "to_status", "kind", "note", "created_at")
 
 
+class InterviewSerializer(serializers.ModelSerializer[Any]):
+    mode_label = serializers.CharField(source="get_mode_display", read_only=True)
+    status_label = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = Interview
+        fields = (
+            "id",
+            "scheduled_date",
+            "start_time",
+            "mode",
+            "mode_label",
+            "location_text",
+            "note",
+            "status",
+            "status_label",
+            "candidate_note",
+            "responded_at",
+            "created_at",
+        )
+
+
 class ApplicationSerializer(serializers.ModelSerializer[Application]):
     listing_title = serializers.CharField(source="listing.title", read_only=True)
     #: For the "view listing" link: /listings/<listing_slug>.
@@ -300,10 +377,18 @@ class ApplicationSerializer(serializers.ModelSerializer[Application]):
     applicant_email = serializers.SerializerMethodField()
     attachments = ApplicationAttachmentSerializer(many=True, read_only=True)
     status_events = ApplicationStatusEventSerializer(many=True, read_only=True)
+    #: The latest interview, if any.
+    interview = serializers.SerializerMethodField()
+    employer_name = serializers.CharField(source="listing.poster.display_name", read_only=True)
+    #: Shown to the candidate once an interview is accepted or they are connected.
+    employer_phone = serializers.SerializerMethodField()
 
     class Meta:
         model = Application
         fields = (
+            "interview",
+            "employer_name",
+            "employer_phone",
             "id",
             "listing",
             "listing_title",
@@ -331,6 +416,16 @@ class ApplicationSerializer(serializers.ModelSerializer[Application]):
             "created_at",
             "updated_at",
         )
+
+    @extend_schema_field(InterviewSerializer(allow_null=True))
+    def get_interview(self, obj: Application) -> dict[str, Any] | None:
+        latest = obj.interviews.order_by("-created_at").first()
+        return dict(InterviewSerializer(latest).data) if latest else None
+
+    def get_employer_phone(self, obj: Application) -> str:
+        from apps.listings.interviews import employer_contact  # noqa: PLC0415
+
+        return employer_contact(obj)
 
     def _snapshot_value(self, obj: Application, key: str) -> str:
         if obj.contact_revealed_at is None and key in ("phone", "email"):
@@ -513,3 +608,204 @@ class OpsUpdateVendorSubscriptionPlanSerializer(
             "details",
             "is_active",
         )
+
+
+# --- jobs: the quick, tap-to-pick post ------------------------------------------------------
+
+
+def _short_list() -> serializers.ListField:
+    return serializers.ListField(
+        child=serializers.CharField(max_length=60), required=False, max_length=15
+    )
+
+
+class JobWriteSerializer(serializers.Serializer[dict[str, Any]]):
+    """A job as the 4-step form sends it. Values are checked against ``jobs`` option lists in
+    the service; free text is limited to skills, duties, benefits, title, city and area."""
+
+    role_template_id = serializers.UUIDField(required=False, allow_null=True)
+    title = serializers.CharField(max_length=180, required=False)
+    job_category = serializers.CharField(max_length=80, required=False, allow_blank=True)
+    vacancies = serializers.IntegerField(min_value=1, max_value=500, required=False)
+    job_type = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    experience_band = serializers.CharField(max_length=12, required=False, allow_blank=True)
+    required_skills = _short_list()
+    preferred_skills = _short_list()
+    responsibilities = _short_list()
+    benefits = _short_list()
+    languages = serializers.ListField(
+        child=serializers.CharField(max_length=20), required=False, max_length=10
+    )
+    min_qualification = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    shift = serializers.CharField(max_length=12, required=False, allow_blank=True)
+    work_mode = serializers.CharField(max_length=16, required=False, allow_blank=True)
+    timing_start = serializers.TimeField(required=False, allow_null=True)
+    timing_end = serializers.TimeField(required=False, allow_null=True)
+    weekly_off = serializers.CharField(max_length=12, required=False, allow_blank=True)
+    urgency = serializers.CharField(max_length=12, required=False, allow_blank=True)
+    city = serializers.CharField(max_length=80, required=False, allow_blank=True)
+    area = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    salary_min_paise = serializers.IntegerField(min_value=0, required=False)
+    salary_max_paise = serializers.IntegerField(min_value=0, required=False)
+    salary_period = serializers.CharField(max_length=16, required=False, allow_blank=True)
+    #: Leave blank and the job writes its own description from the picked options.
+    description = serializers.CharField(max_length=5000, required=False, allow_blank=True)
+    contact_phone = PhoneNumberField(max_length=32, required=False, allow_blank=True)
+    contact_email = serializers.EmailField(required=False, allow_blank=True, max_length=254)
+
+
+class JobCreateSerializer(JobWriteSerializer):
+    title = serializers.CharField(max_length=180)
+    #: True (default) puts the job live at once; False keeps it as a draft.
+    publish = serializers.BooleanField(required=False, default=True)
+
+
+class JobUpdateSerializer(JobWriteSerializer):
+    #: Rewrite the description from the current options.
+    regenerate_description = serializers.BooleanField(required=False, default=False)
+
+
+class JobOptionSerializer(serializers.Serializer[dict[str, Any]]):
+    value = serializers.CharField()
+    label = serializers.CharField()  # type: ignore[assignment]
+
+
+class JobRoleTemplateSerializer(serializers.Serializer[dict[str, Any]]):
+    id = serializers.UUIDField()
+    name = serializers.CharField()
+    skills = serializers.ListField(child=serializers.CharField())
+    responsibilities = serializers.ListField(child=serializers.CharField())
+    job_type = serializers.CharField()
+    shift = serializers.CharField()
+    work_mode = serializers.CharField()
+    salary_min_rupees = serializers.IntegerField()
+    salary_max_rupees = serializers.IntegerField()
+
+
+class JobCategorySerializer(serializers.Serializer[dict[str, Any]]):
+    name = serializers.CharField()
+    roles = JobRoleTemplateSerializer(many=True)
+
+
+class SalaryBandSerializer(serializers.Serializer[dict[str, Any]]):
+    min_rupees = serializers.IntegerField()
+    #: 0 means "and above".
+    max_rupees = serializers.IntegerField()
+
+
+class JobOptionsSerializer(serializers.Serializer[dict[str, Any]]):
+    categories = JobCategorySerializer(many=True)
+    job_types = JobOptionSerializer(many=True)
+    experience_bands = JobOptionSerializer(many=True)
+    qualifications = JobOptionSerializer(many=True)
+    languages = JobOptionSerializer(many=True)
+    benefits = serializers.ListField(child=serializers.CharField())
+    shifts = JobOptionSerializer(many=True)
+    work_modes = JobOptionSerializer(many=True)
+    weekly_offs = JobOptionSerializer(many=True)
+    urgencies = JobOptionSerializer(many=True)
+    salary_periods = JobOptionSerializer(many=True)
+    salary_bands = SalaryBandSerializer(many=True)
+    cities = serializers.ListField(child=serializers.CharField())
+
+
+# --- job seekers ----------------------------------------------------------------------------
+
+
+class JobSeekerProfileSerializer(serializers.ModelSerializer[JobSeekerProfile]):
+    has_resume = serializers.SerializerMethodField()
+    phone = serializers.CharField(source="user.phone_number", read_only=True)
+
+    class Meta:
+        model = JobSeekerProfile
+        fields = (
+            "id",
+            "full_name",
+            "phone",
+            "roles",
+            "skills",
+            "experience_band",
+            "qualification",
+            "languages",
+            "city",
+            "area",
+            "expected_salary_rupees",
+            "job_types",
+            "available_from",
+            "visibility",
+            "resume_name",
+            "has_resume",
+            "updated_at",
+        )
+        read_only_fields = ("id", "phone", "resume_name", "has_resume", "updated_at")
+
+    def get_has_resume(self, obj: JobSeekerProfile) -> bool:
+        return bool(obj.resume_file)
+
+
+class JobSeekerProfileWriteSerializer(serializers.Serializer[dict[str, Any]]):
+    full_name = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    roles = serializers.ListField(child=serializers.CharField(max_length=60), required=False)
+    skills = serializers.ListField(child=serializers.CharField(max_length=60), required=False)
+    experience_band = serializers.CharField(max_length=12, required=False, allow_blank=True)
+    qualification = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    languages = serializers.ListField(child=serializers.CharField(max_length=20), required=False)
+    city = serializers.CharField(max_length=80, required=False, allow_blank=True)
+    area = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    expected_salary_rupees = serializers.IntegerField(
+        min_value=0, max_value=10_000_000, required=False
+    )
+    job_types = serializers.ListField(child=serializers.CharField(max_length=20), required=False)
+    available_from = serializers.CharField(max_length=12, required=False, allow_blank=True)
+    visibility = serializers.CharField(max_length=16, required=False)
+
+
+class MatchSerializer(serializers.Serializer[dict[str, Any]]):
+    score = serializers.IntegerField()
+    #: STRONG, GOOD or OTHER.
+    level = serializers.CharField()
+    matched = serializers.ListField(child=serializers.CharField())
+    missing = serializers.ListField(child=serializers.CharField())
+
+
+class JobForYouSerializer(serializers.Serializer[dict[str, Any]]):
+    listing = ListingSummarySerializer()
+    match = MatchSerializer()
+
+
+class QuickApplySerializer(serializers.Serializer[dict[str, Any]]):
+    note = serializers.CharField(max_length=2000, required=False, allow_blank=True, default="")
+
+
+class CandidateMatchSerializer(serializers.Serializer[dict[str, Any]]):
+    """A candidate for one job, as the employer sees them. No phone number here: that comes
+    with an application, or after an accepted interview."""
+
+    profile_id = serializers.UUIDField()
+    display_name = serializers.CharField()
+    roles = serializers.ListField(child=serializers.CharField())
+    skills = serializers.ListField(child=serializers.CharField())
+    experience_band = serializers.CharField()
+    qualification = serializers.CharField()
+    languages = serializers.ListField(child=serializers.CharField())
+    city = serializers.CharField()
+    area = serializers.CharField()
+    expected_salary_rupees = serializers.IntegerField()
+    available_from = serializers.CharField()
+    applied = serializers.BooleanField()
+    application_id = serializers.UUIDField(allow_null=True)
+    application_status = serializers.CharField(allow_blank=True)
+    match = MatchSerializer()
+
+
+class ProposeInterviewSerializer(serializers.Serializer[dict[str, Any]]):
+    scheduled_date = serializers.DateField()
+    start_time = serializers.TimeField()
+    #: IN_PERSON, PHONE or VIDEO.
+    mode = serializers.ChoiceField(choices=Interview.Mode.choices)
+    location_text = serializers.CharField(max_length=240, required=False, allow_blank=True)
+    note = serializers.CharField(max_length=480, required=False, allow_blank=True)
+
+
+class InterviewAnswerSerializer(serializers.Serializer[dict[str, Any]]):
+    note = serializers.CharField(max_length=480, required=False, allow_blank=True, default="")

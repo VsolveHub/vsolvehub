@@ -137,7 +137,7 @@ export function MarketingMobileNav({
                   <span>Application Dashboard</span>
                 </button>
               </Link>
-              <Link href="/login" onClick={close} className="block">
+              <Link href="/login?switch=true" onClick={close} className="block">
                 <button
                   type="button"
                   className="w-full rounded-full bg-surface py-2.5 text-sm font-bold text-navy-900 hover:bg-surface-sunken border border-line-strong transition-colors"

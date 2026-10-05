@@ -12,6 +12,7 @@ import {
   type ListingApplication,
 } from "@/features/listings/queries";
 import { ApplicationCard } from "@/features/listings/view";
+import { fetchSavedJobs } from "@/features/listings/seeker-queries";
 
 const FILTER_TABS = [
   { key: "ALL", label: "All Applications" },
@@ -22,6 +23,7 @@ const FILTER_TABS = [
 
 export default function MyApplicationsPage() {
   const queryClient = useQueryClient();
+  const saved = useQuery({ queryKey: ["saved-jobs"], queryFn: fetchSavedJobs });
   const [activeTab, setActiveTab] = useState<string>("ALL");
   const [withdrawingId, setWithdrawingId] = useState<string | null>(null);
   const [withdrawNotice, setWithdrawNotice] = useState<
@@ -88,6 +90,25 @@ export default function MyApplicationsPage() {
           <BriefcaseBusiness className="size-4" /> Browse Opportunities
         </Link>
       </div>
+
+      {(saved.data ?? []).length > 0 ? (
+        <section className="flex flex-col gap-2">
+          <h2 className="text-sm font-bold text-navy-900">Saved jobs</h2>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {(saved.data ?? []).map((job) => (
+              <Link
+                key={job.id}
+                href={`/listings/${job.slug || job.id}`}
+                className="w-56 shrink-0 rounded-card border border-line bg-surface p-3 hover:border-action"
+              >
+                <p className="text-sm font-bold text-navy-900">{job.title}</p>
+                <p className="text-xs text-text-secondary">{job.poster_name}</p>
+                <p className="text-xs text-text-secondary">{job.location_text}</p>
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {/* Tabs */}
       <div className="flex flex-wrap gap-2 border-b border-line pb-3">

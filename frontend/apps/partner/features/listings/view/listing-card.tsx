@@ -1,5 +1,6 @@
 import Link from "next/link";
 import {
+  Copy,
   Check,
   CheckCircle2,
   MapPin,
@@ -17,6 +18,9 @@ import type { PartnerListing } from "../queries";
 
 export interface ListingCardProps {
   listing: PartnerListing;
+  /** Put a draft live, or reopen a closed job, at once. */
+  onPublishNow: (id: string) => void;
+  onDuplicate: (id: string) => void;
   onStartEdit: (listing: PartnerListing) => void;
   onAction: (params: {
     id: string;
@@ -28,6 +32,8 @@ export interface ListingCardProps {
 
 export function ListingCard({
   listing,
+  onPublishNow,
+  onDuplicate,
   onStartEdit,
   onAction,
   isActionPending,
@@ -49,9 +55,12 @@ export function ListingCard({
     displayPay = formatMoneyText(String(listing.structured_fields.salary_range));
   }
 
-  const exp = listing.structured_fields?.experience_years 
-    ? String(listing.structured_fields.experience_years) 
+  const exp = listing.structured_fields?.experience_years
+    ? String(listing.structured_fields.experience_years)
     : "";
+  const skills = (listing.required_skills as string[] | undefined) ?? [];
+  // Jobs made with the quick form publish at once; older long-form ones keep the review step.
+  const quickJob = Boolean(listing.city || listing.job_category);
 
   return (
     <Card className="p-5 transition duration-fast hover:border-line-strong hover:shadow-raised">
@@ -88,9 +97,22 @@ export function ListingCard({
             )}
           </div>
 
-          <p className="line-clamp-2 text-sm text-text-secondary mt-2">
-            {listing.description}
-          </p>
+          {quickJob ? (
+            <p className="text-sm font-semibold text-navy-900">
+              👥 {listing.vacancies ?? 1} needed
+            </p>
+          ) : null}
+          {skills.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {skills.slice(0, 5).map((skill) => (
+                <Badge key={skill} tone="info">
+                  {skill}
+                </Badge>
+              ))}
+            </div>
+          ) : (
+            <p className="line-clamp-2 text-sm text-text-secondary mt-2">{listing.description}</p>
+          )}
 
           <div className="flex flex-wrap items-center gap-2 pt-2">
             <StatusChip status={listing.status} category="listing" />
@@ -105,6 +127,16 @@ export function ListingCard({
               Created {formatDate(listing.created_at)}
             </span>
           </div>
+
+          {listing.counts ? (
+            <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-secondary" aria-label="Job activity">
+              <li>👁 {listing.counts.views} views</li>
+              <li>{listing.counts.applied} applied</li>
+              <li>{listing.counts.shortlisted} shortlisted</li>
+              <li>{listing.counts.interviews} interviews</li>
+              <li>{listing.counts.connected} connected</li>
+            </ul>
+          ) : null}
 
           {listing.moderation_reason && (
             <div className="mt-2 rounded-control border border-warning-line bg-warning-surface p-2.5 text-xs text-warning-text">
@@ -123,7 +155,36 @@ export function ListingCard({
             View Applicants ({listing.application_count})
           </Link>
 
-          {["DRAFT", "PUBLISHED"].includes(listing.status) && (
+          {["DRAFT", "PUBLISHED"].includes(listing.status) && quickJob && (
+            <Link
+              href={`/listings/post?edit=${listing.id}`}
+              className="inline-flex items-center gap-1.5 rounded-control border border-line bg-surface px-3.5 py-2 text-xs font-semibold text-text-secondary transition hover:border-line-strong hover:bg-surface-hover"
+            >
+              <Pencil className="size-3.5 text-text-muted" /> Edit job
+            </Link>
+          )}
+
+          <button
+            type="button"
+            onClick={() => onDuplicate(listing.id)}
+            disabled={isActionPending}
+            className="inline-flex items-center gap-1.5 rounded-control border border-line bg-surface px-3.5 py-2 text-xs font-semibold text-text-secondary transition hover:border-line-strong hover:bg-surface-hover disabled:opacity-50"
+          >
+            <Copy className="size-3.5 text-text-muted" /> Post again
+          </button>
+
+          {listing.status === "DRAFT" && quickJob && (
+            <button
+              type="button"
+              onClick={() => onPublishNow(listing.id)}
+              disabled={isActionPending}
+              className="inline-flex items-center gap-1.5 rounded-control bg-action px-3.5 py-2 text-xs font-semibold text-action-text shadow-card transition hover:bg-action-hover disabled:opacity-50"
+            >
+              <Send className="size-3.5" /> Publish now
+            </button>
+          )}
+
+          {["DRAFT", "PUBLISHED"].includes(listing.status) && !quickJob && (
             <button
               type="button"
               onClick={() => onStartEdit(listing)}
@@ -133,7 +194,7 @@ export function ListingCard({
             </button>
           )}
 
-          {listing.status === "DRAFT" && (
+          {listing.status === "DRAFT" && !quickJob && (
             <button
               type="button"
               onClick={() => onAction({ id: listing.id, next: "submit" })}
@@ -168,18 +229,22 @@ export function ListingCard({
               disabled={isActionPending}
               className="inline-flex items-center gap-1.5 rounded-control border border-line px-3 py-1.5 text-xs font-medium text-text-muted hover:border-danger-line hover:text-danger-text hover:bg-danger-surface/20 disabled:opacity-50"
             >
-              <XCircle className="size-3.5 text-text-muted" /> Close Listing
+              <XCircle className="size-3.5 text-text-muted" /> Close job
             </button>
           )}
 
           {["CLOSED", "EXPIRED"].includes(listing.status) && (
             <button
               type="button"
-              onClick={() => onAction({ id: listing.id, next: "republish" })}
+              onClick={() =>
+                quickJob
+                  ? onPublishNow(listing.id)
+                  : onAction({ id: listing.id, next: "republish" })
+              }
               disabled={isActionPending}
               className="inline-flex items-center gap-1.5 rounded-control border border-line bg-surface-sunken px-3 py-1.5 text-xs font-semibold text-text-secondary hover:bg-surface-hover disabled:opacity-50"
             >
-              <RotateCcw className="size-3.5 text-text-muted" /> Republish
+              <RotateCcw className="size-3.5 text-text-muted" /> Reopen
             </button>
           )}
         </div>

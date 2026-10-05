@@ -10,7 +10,7 @@ vi.mock("@vsolve/query", async (importOriginal) => ({
   useLogout: () => ({ mutate: vi.fn() }),
 }));
 vi.mock("@/features/presence/view/partner-presence", () => ({
-  PartnerPresence: () => null,
+  PartnerPresence: () => <div data-testid="presence" />,
 }));
 vi.mock("@/lib/api/browser", () => ({ getApiClient: vi.fn() }));
 /*
@@ -69,5 +69,33 @@ describe("MeHome's Crew tile", () => {
     renderMeHome();
 
     expect(screen.getByRole("link", { name: /Contractor Crew/i })).toBeInTheDocument();
+  });
+});
+
+describe("MeHome's availability switch", () => {
+  it("is hidden for a rentals-only Partner, who never gets live offers", () => {
+    vi.mocked(usePartnerWorkspaceGrants).mockReturnValue({
+      grants: [{ workspaceKey: "A7_RENTAL", commercialMode: "LEAD_ONLY", actions: [] }],
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as never);
+
+    renderMeHome();
+
+    expect(screen.queryByTestId("presence")).not.toBeInTheDocument();
+  });
+
+  it("is shown for an on-demand Partner", () => {
+    vi.mocked(usePartnerWorkspaceGrants).mockReturnValue({
+      grants: [{ workspaceKey: "A3_TIME_BLOCK", commercialMode: "LEAD_ONLY", actions: [] }],
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as never);
+
+    renderMeHome();
+
+    expect(screen.getByTestId("presence")).toBeInTheDocument();
   });
 });

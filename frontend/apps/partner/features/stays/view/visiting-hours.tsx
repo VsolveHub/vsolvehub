@@ -3,8 +3,10 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { friendlyErrorMessage } from "@vsolve/query";
 import { Button, Input } from "@vsolve/ui";
-import { Plus, X } from "lucide-react";
+import { Copy, Plus, Trash2, X } from "lucide-react";
 import { useState } from "react";
+
+import { TimePicker, clockText } from "./time-picker";
 
 import {
   WEEKDAY_NAMES,
@@ -95,6 +97,11 @@ export function VisitingHours({ property }: { property: StayProperty }) {
     ]);
   }
 
+  function clearDay(weekday: number) {
+    setSaved(false);
+    setRows((current) => current.filter((row) => row.weekday !== weekday));
+  }
+
   function copyToAllDays(weekday: number) {
     setSaved(false);
     const template = rows.filter((row) => row.weekday === weekday);
@@ -143,64 +150,85 @@ export function VisitingHours({ property }: { property: StayProperty }) {
         </button>
       </div>
 
-      <ul className="flex flex-col divide-y divide-line rounded-control border border-line bg-surface">
+      <ul className="flex flex-col divide-y divide-line overflow-visible rounded-card border border-line bg-surface">
         {WEEKDAY_NAMES.map((name, weekday) => {
           const daySlots = rows
             .filter((row) => row.weekday === weekday)
             .sort((a, b) => a.start.localeCompare(b.start));
+          const open = daySlots.length > 0;
           return (
-            <li key={name} className="flex flex-col gap-2 p-3 sm:flex-row sm:items-start">
-              <p className="w-28 shrink-0 pt-1.5 text-sm font-semibold text-navy-900">{name}</p>
+            <li key={name} className="flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-start sm:px-4">
+              <label className="flex w-36 shrink-0 cursor-pointer items-center gap-2.5 pt-2">
+                <input
+                  type="checkbox"
+                  checked={open}
+                  onChange={() => (open ? clearDay(weekday) : addSlot(weekday))}
+                  className="size-4 accent-[var(--color-navy-900)]"
+                />
+                <span className={`text-sm font-bold ${open ? "text-navy-900" : "text-text-muted"}`}>{name}</span>
+              </label>
+
               <div className="flex flex-1 flex-col gap-2">
-                {daySlots.length === 0 ? (
-                  <p className="pt-1.5 text-xs text-text-secondary">No visits</p>
-                ) : null}
-                {daySlots.map((row) => (
+                {!open ? <p className="pt-2.5 text-sm text-text-muted">Unavailable</p> : null}
+                {daySlots.map((row, index) => (
                   <div key={row.key} className="flex flex-wrap items-center gap-2">
-                    <Input
-                      type="time"
-                      aria-label={`${name} start`}
+                    <TimePicker
+                      label={`${name} start`}
                       value={row.start}
-                      onChange={(event) => change(row.key, { start: event.target.value })}
-                      className="w-32"
+                      onChange={(value) => change(row.key, { start: value })}
                     />
-                    <span className="text-xs text-text-secondary">to</span>
-                    <Input
-                      type="time"
-                      aria-label={`${name} end`}
+                    <span aria-hidden className="text-text-muted">–</span>
+                    <TimePicker
+                      label={`${name} end`}
                       value={row.end}
-                      onChange={(event) => change(row.key, { end: event.target.value })}
-                      className="w-32"
+                      onChange={(value) => change(row.key, { end: value })}
                     />
+                    <span className="hidden text-xs text-text-muted sm:inline">{durationText(row.start, row.end)}</span>
                     <button
                       type="button"
-                      aria-label="Remove slot"
+                      aria-label={`Remove ${name} ${clockText(row.start)} slot`}
+                      title="Remove"
                       onClick={() => {
                         setSaved(false);
                         setRows((current) => current.filter((r) => r.key !== row.key));
                       }}
-                      className="inline-flex size-9 items-center justify-center rounded-control text-text-secondary hover:bg-surface-sunken hover:text-danger-text"
+                      className="inline-flex size-9 items-center justify-center rounded-full text-text-secondary hover:bg-danger-surface hover:text-danger-text"
                     >
-                      <X className="size-4" />
+                      <Trash2 className="size-4" />
                     </button>
+                    {index === 0 ? (
+                      <>
+                        <button
+                          type="button"
+                          aria-label={`Add another ${name} slot`}
+                          title="Add another time"
+                          onClick={() => addSlot(weekday)}
+                          className="inline-flex size-9 items-center justify-center rounded-full text-text-secondary hover:bg-selected-surface hover:text-navy-900"
+                        >
+                          <Plus className="size-4" />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`Copy ${name} times to all days`}
+                          title="Copy to all days"
+                          onClick={() => copyToAllDays(weekday)}
+                          className="inline-flex size-9 items-center justify-center rounded-full text-text-secondary hover:bg-selected-surface hover:text-navy-900"
+                        >
+                          <Copy className="size-4" />
+                        </button>
+                      </>
+                    ) : null}
                   </div>
                 ))}
-                <div className="flex flex-wrap gap-2">
-                  <Button size="sm" variant="ghost" onClick={() => addSlot(weekday)}>
-                    <Plus className="size-4" aria-hidden />
-                    Add slot
-                  </Button>
-                  {daySlots.length > 0 ? (
-                    <Button size="sm" variant="ghost" onClick={() => copyToAllDays(weekday)}>
-                      Copy to all days
-                    </Button>
-                  ) : null}
-                </div>
               </div>
             </li>
           );
         })}
       </ul>
+      <p className="-mt-2 text-xs text-text-secondary">
+        Tick a day to open it. <Plus className="inline size-3" aria-hidden /> adds another time that day,{" "}
+        <Copy className="inline size-3" aria-hidden /> copies the day&apos;s times to every day.
+      </p>
 
       <div className="flex flex-col gap-2">
         <p className="text-sm font-semibold text-navy-900">Days off</p>
@@ -252,4 +280,15 @@ export function VisitingHours({ property }: { property: StayProperty }) {
       </div>
     </section>
   );
+}
+
+/** "1 hr", "1 hr 30 min", "45 min". */
+function durationText(start: string, end: string): string {
+  const [sh = 0, sm = 0] = start.split(":").map(Number);
+  const [eh = 0, em = 0] = end.split(":").map(Number);
+  const minutes = eh * 60 + em - (sh * 60 + sm);
+  if (minutes <= 0) return "";
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return [h ? `${h} hr` : "", m ? `${m} min` : ""].filter(Boolean).join(" ");
 }

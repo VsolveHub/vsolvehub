@@ -13,7 +13,8 @@ import {
 import { Button, EmptyState, ErrorState, Skeleton } from "@vsolve/ui";
 
 import { fetchStays } from "@/features/stays/queries";
-import { type ActiveFilters, StayCard, StayFilters } from "@/features/stays/view";
+import { roomCardsFrom } from "@/features/stays/room-cards";
+import { type ActiveFilters, RoomCard, StayFilters } from "@/features/stays/view";
 
 function StaysBrowseContent() {
   const searchParams = useSearchParams();
@@ -82,7 +83,15 @@ function StaysBrowseContent() {
     staleTime: 30_000,
   });
 
-  const displayedStays = stays.slice(0, visible);
+  // One card per room type (two per property at most); rooms without a photo stay hidden.
+  const rooms = roomCardsFrom(stays, {
+    minPrice: filters.minPrice,
+    maxPrice: filters.maxPrice,
+    ac: filters.ac,
+    food: filters.food,
+    sort,
+  });
+  const displayedRooms = rooms.slice(0, visible);
 
 
   return (
@@ -126,7 +135,7 @@ function StaysBrowseContent() {
               type="search"
               value={draftQuery}
               onChange={(e) => setDraftQuery(e.target.value)}
-              placeholder="Search properties (e.g. Lakeview PG, Executive Single Room)"
+              placeholder="Search rooms or places (e.g. Lakeview PG, single room)"
               className="w-full bg-transparent py-2.5 text-sm text-text placeholder:text-text-secondary/70 focus:outline-none"
             />
           </label>
@@ -152,15 +161,15 @@ function StaysBrowseContent() {
       <StayFilters
         activeFilters={filters}
         onChangeFilter={setFilters}
-        count={stays.length}
+        count={rooms.length}
       />
 
       {/* Results Header with Count & Sort */}
-      {!isLoading && stays.length > 0 ? (
+      {!isLoading && rooms.length > 0 ? (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-line pb-3">
           <p className="text-sm font-semibold text-text">
-            Showing <span className="font-bold text-action">{displayedStays.length}</span> of{" "}
-            <span className="font-bold">{stays.length}</span> {stays.length === 1 ? "stay" : "stays"}
+            Showing <span className="font-bold text-action">{displayedRooms.length}</span> of{" "}
+            <span className="font-bold">{rooms.length}</span> {rooms.length === 1 ? "room" : "rooms"}
             {appliedLocation ? ` in "${appliedLocation}"` : ""}
           </p>
           <div className="flex items-center gap-2 self-end sm:self-auto">
@@ -204,9 +213,9 @@ function StaysBrowseContent() {
           actionLabel="Retry"
           onAction={() => refetch()}
         />
-      ) : stays.length === 0 ? (
+      ) : rooms.length === 0 ? (
         <EmptyState
-          title="No stay properties found"
+          title="No rooms found"
           description="Try broadening your filters or searching another area."
           action={
             <Button variant="secondary" onClick={clearFilters}>
@@ -216,15 +225,15 @@ function StaysBrowseContent() {
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {displayedStays.map((property) => (
-            <StayCard key={property.id} property={property} />
+          {displayedRooms.map((card) => (
+            <RoomCard key={card.key} card={card} />
           ))}
         </div>
       )}
-      {stays.length > visible ? (
+      {rooms.length > visible ? (
         <div className="flex justify-center pt-4">
           <Button type="button" variant="secondary" onClick={() => setVisible((count) => count + 6)}>
-            Load more ({stays.length - visible} remaining)
+            Load more ({rooms.length - visible} remaining)
           </Button>
         </div>
       ) : null}

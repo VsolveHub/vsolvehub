@@ -1,5 +1,6 @@
 "use client";
 
+import { RoomPhotosLive } from "./room-photos";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { friendlyErrorMessage } from "@vsolve/query";
 import { Badge, Button, Dialog, Field, Input, formatMoney } from "@vsolve/ui";
@@ -141,6 +142,8 @@ export function RoomTypeBlock({
           {booked > 0 ? <Badge tone="danger">{booked} booked</Badge> : null}
         </div>
       </div>
+
+      <RoomPhotosLive unit={unit} />
 
       {available === 0 ? (
         <p className="rounded-control bg-surface-sunken px-3 py-2 text-xs text-text-secondary">

@@ -33,7 +33,14 @@ function visitRefusal(err: unknown): string {
  * Several guests may pick the same slot. The owner accepts or declines; the guest is notified
  * and, once accepted, sees the owner's number on the visit.
  */
-export function StayVisitPanel({ property }: { property: StayProperty }) {
+export function StayVisitPanel({
+  property,
+  initialUnitId,
+}: {
+  property: StayProperty;
+  /** The room chosen to start with (the one opened from search). */
+  initialUnitId?: string;
+}) {
   const period = pricePeriodOf(property.price_period);
   const slots = useQuery({
     queryKey: ["stay-visit-slots", property.id],
@@ -43,7 +50,9 @@ export function StayVisitPanel({ property }: { property: StayProperty }) {
 
   const [day, setDay] = useState<string | null>(null);
   const [slotId, setSlotId] = useState<string | null>(null);
-  const [unitId, setUnitId] = useState<string>("");
+  const [unitId, setUnitId] = useState<string>(
+    property.units.some((u) => u.id === initialUnitId) ? (initialUnitId ?? "") : "",
+  );
   const [message, setMessage] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [requested, setRequested] = useState<StayVisit | null>(null);

@@ -284,7 +284,29 @@ def workspace_grants(partner: PartnerProfile) -> list[WorkspaceGrant]:
                 actions=list(WORKSPACE_ACTIONS[rental_key]),
             )
         )
+    listing_key = ServiceVariant.BookingArchetype.A10_LISTING
+    if listing_key not in seen and is_approved_employer(partner):
+        grants.append(
+            WorkspaceGrant(
+                workspace_key=listing_key,
+                commercial_mode=commercial_mode_for_archetype(listing_key),
+                actions=list(WORKSPACE_ACTIONS[listing_key]),
+            )
+        )
     return grants
+
+
+def is_approved_employer(partner: PartnerProfile) -> bool:
+    """A business that signed up to hire staff and whose application was approved.
+
+    The application review is the job-posting permission; no separate A10 capability.
+    Mirrors ``is_approved_stay_host``.
+    """
+    return PartnerApplication.objects.filter(
+        partner=partner,
+        status=PartnerApplication.Status.APPROVED,
+        track=PartnerApplication.Track.EMPLOYER,
+    ).exists()
 
 
 def is_approved_stay_host(partner: PartnerProfile) -> bool:

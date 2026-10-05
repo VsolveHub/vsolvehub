@@ -24,10 +24,19 @@ import { ApplySteps } from "@/features/listings/apply-steps";
 import {
   JdSections,
   ReportDialog,
+  JobHighlights,
+  MatchCard,
+  QuickApplyCard,
   RoleFacts,
   RoleHeader,
 } from "@/features/listings/view";
 import { useCustomerSession } from "@/features/session/queries";
+import {
+  fetchMyJobProfile,
+  fetchMyMatch,
+  fetchSavedJobs,
+  setJobSaved,
+} from "@/features/listings/seeker-queries";
 import { LISTINGS_HREF } from "@/lib/routes";
 import { useCanonicalSlug } from "@/lib/use-canonical-slug";
 
@@ -47,6 +56,27 @@ export default function ListingDetailPage() {
   useCanonicalSlug(LISTINGS_HREF, pageKey, listing?.slug, () =>
     queryClient.setQueryData(["listing", listing?.slug], listing),
   );
+
+  const jobProfile = useQuery({
+    queryKey: ["my-job-profile"],
+    queryFn: fetchMyJobProfile,
+    enabled: session.isAuthenticated,
+  });
+  const myMatch = useQuery({
+    queryKey: ["my-job-match", listingId],
+    queryFn: () => fetchMyMatch(listingId),
+    enabled: Boolean(session.isAuthenticated && listingId && jobProfile.data),
+  });
+  const savedJobs = useQuery({
+    queryKey: ["saved-jobs"],
+    queryFn: fetchSavedJobs,
+    enabled: session.isAuthenticated,
+  });
+  const isSaved = (savedJobs.data ?? []).some((row) => row.id === listingId);
+  const toggleSave = useMutation({
+    mutationFn: () => setJobSaved(listingId, !isSaved),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["saved-jobs"] }),
+  });
 
   const myApplicationsQuery = useQuery({
     queryKey: ["my-listing-applications"],
@@ -149,11 +179,31 @@ export default function ListingDetailPage() {
       <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
         <Card padding="lg" className="flex flex-col gap-6">
           <RoleHeader listing={listing} />
+          {session.isAuthenticated ? (
+            <button
+              type="button"
+              aria-pressed={isSaved}
+              disabled={toggleSave.isPending}
+              onClick={() => toggleSave.mutate()}
+              className="inline-flex min-h-10 items-center gap-1.5 self-start rounded-full border border-line bg-surface px-4 text-sm font-semibold text-text hover:border-action"
+            >
+              {isSaved ? "♥ Saved" : "♡ Save job"}
+            </button>
+          ) : null}
+          {myMatch.data ? <MatchCard match={myMatch.data} /> : null}
           <hr className="border-line" />
-          <RoleFacts listing={listing} />
+          <JobHighlights listing={listing} />
+          {listing.city || listing.job_category ? null : <RoleFacts listing={listing} />}
           <JdSections listing={listing} onOpenReport={() => setReportModalOpen(true)} />
         </Card>
 
+        {jobProfile.data && !activeApplication ? (
+          <QuickApplyCard
+            listingId={listingId}
+            posterName={listing.poster_name}
+            profile={jobProfile.data}
+          />
+        ) : (
         <ApplySteps
           listingId={listingId}
           posterName={listing.poster_name}
@@ -172,6 +222,7 @@ export default function ListingDetailPage() {
           onErrors={setFieldErrors}
           onSubmit={handleApply}
         />
+        )}
       </div>
 
       {/* Sticky Apply Bar on mobile (< lg) */}

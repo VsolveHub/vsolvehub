@@ -25,6 +25,8 @@ interface StayQuotePanelProps {
   onViewProperty?: () => void;
   /** Hide the panel's own frame and heading when a parent already draws them. */
   embedded?: boolean;
+  /** The room chosen to start with (the one opened from search). */
+  initialUnitId?: string;
 }
 
 /** Server limits, in the property's unit: 24 months or 90 nights. */
@@ -68,6 +70,7 @@ export function StayQuotePanel({
   onSelectUnit,
   onViewProperty,
   embedded = false,
+  initialUnitId,
 }: StayQuotePanelProps) {
   const [sent, setSent] = useState<StayEnquiry | null>(null);
   const period = pricePeriodOf(property.price_period);
@@ -79,7 +82,9 @@ export function StayQuotePanel({
   const [checkIn, setCheckIn] = useState(addDaysIso(todayIso(), 7));
   const [length, setLength] = useState(minimum);
   const [lengthText, setLengthText] = useState(String(minimum));
-  const [selectedUnitId, setSelectedUnitId] = useState<string>(property.units[0]?.id ?? "");
+  const [selectedUnitId, setSelectedUnitId] = useState<string>(
+    property.units.find((u) => u.id === initialUnitId)?.id ?? property.units[0]?.id ?? "",
+  );
   const [adultCount, setAdultCount] = useState(1);
   const [childCount, setChildCount] = useState(0);
   const [message, setMessage] = useState("");

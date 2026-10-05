@@ -62,6 +62,36 @@ class Listing(models.Model):
         on_delete=models.PROTECT,
         related_name="premium_listing",
     )
+    # --- Jobs: picked from options, not typed (see ``apps.listings.jobs``) -------------------
+    #: The template the employer started from. The job keeps its own copy of every detail.
+    role_template = models.ForeignKey(
+        "JobRoleTemplate",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="listings",
+    )
+    job_category = models.CharField(max_length=80, blank=True, default="")
+    vacancies = models.PositiveSmallIntegerField(default=1)
+    job_type = models.CharField(max_length=20, blank=True, default="")
+    experience_band = models.CharField(max_length=12, blank=True, default="")
+    #: Must-have skills drive matching; nice-to-have skills only add to a score.
+    required_skills = models.JSONField(default=list, blank=True)
+    preferred_skills = models.JSONField(default=list, blank=True)
+    responsibilities = models.JSONField(default=list, blank=True)
+    benefits = models.JSONField(default=list, blank=True)
+    languages = models.JSONField(default=list, blank=True)
+    min_qualification = models.CharField(max_length=20, blank=True, default="")
+    shift = models.CharField(max_length=12, blank=True, default="")
+    work_mode = models.CharField(max_length=16, blank=True, default="")
+    timing_start = models.TimeField(null=True, blank=True)
+    timing_end = models.TimeField(null=True, blank=True)
+    weekly_off = models.CharField(max_length=12, blank=True, default="")
+    urgency = models.CharField(max_length=12, blank=True, default="")
+    city = models.CharField(max_length=80, blank=True, default="")
+    area = models.CharField(max_length=120, blank=True, default="")
+    #: Times the public job page was opened. A rough count for the employer's job card.
+    view_count = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -158,6 +188,10 @@ class Application(models.Model):
         SUBMITTED = "SUBMITTED", "Submitted"
         UNDER_REVIEW = "UNDER_REVIEW", "Under review"
         SHORTLISTED = "SHORTLISTED", "Shortlisted"
+        #: An interview is being arranged or has been agreed.
+        INTERVIEW = "INTERVIEW", "Interview"
+        #: Employer and candidate are in touch directly; V Solve Hub's part is done.
+        CONNECTED = "CONNECTED", "Connected"
         CONTACTED = "CONTACTED", "Contacted"
         REJECTED = "REJECTED", "Rejected"
         WITHDRAWN = "WITHDRAWN", "Withdrawn"
@@ -364,3 +398,153 @@ class ListingResumeUpload(models.Model):
     # Private: never on the public photo bucket. Opened through a signed link only.
     stored_file = models.FileField(upload_to="listing-resumes/", storage=private_file_storage)
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class JobRoleTemplate(models.Model):
+    """A common job ("Sales Executive") with what it usually needs, so employers and job seekers
+    tap instead of type. Operations can edit these; a job keeps its own copy once posted.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    category = models.CharField(max_length=80)
+    name = models.CharField(max_length=80)
+    skills = models.JSONField(default=list, blank=True)
+    responsibilities = models.JSONField(default=list, blank=True)
+    job_type = models.CharField(max_length=20, blank=True, default="")
+    shift = models.CharField(max_length=12, blank=True, default="")
+    work_mode = models.CharField(max_length=16, blank=True, default="")
+    #: A typical monthly pay range in rupees, offered as the starting point.
+    salary_min_rupees = models.PositiveIntegerField(default=0)
+    salary_max_rupees = models.PositiveIntegerField(default=0)
+    display_order = models.PositiveSmallIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("category", "display_order", "name")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("category", "name"), name="listings_job_template_unique_name"
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.category} / {self.name}"
+
+
+class JobSeekerProfile(models.Model):
+    """A job seeker's profile, filled once mostly by tapping. Applying sends it in one tap, and
+    it is what jobs are matched against.
+    """
+
+    class Visibility(models.TextChoices):
+        #: Matching employers can see the profile summary (never the phone) and invite them.
+        OPEN = "OPEN", "Matching employers can find me"
+        #: Only employers they apply to see it.
+        APPLIED_ONLY = "APPLIED_ONLY", "Only employers I apply to"
+
+    class Availability(models.TextChoices):
+        IMMEDIATE = "IMMEDIATE", "Immediately"
+        WEEK = "WEEK", "Within 7 days"
+        FORTNIGHT = "FORTNIGHT", "Within 15 days"
+        MONTH = "MONTH", "Within 30 days"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="job_profile"
+    )
+    full_name = models.CharField(max_length=120, blank=True, default="")
+    #: Up to three job titles they want ("Sales Executive", "Cashier").
+    roles = models.JSONField(default=list, blank=True)
+    skills = models.JSONField(default=list, blank=True)
+    experience_band = models.CharField(max_length=12, blank=True, default="")
+    qualification = models.CharField(max_length=20, blank=True, default="")
+    languages = models.JSONField(default=list, blank=True)
+    city = models.CharField(max_length=80, blank=True, default="")
+    area = models.CharField(max_length=120, blank=True, default="")
+    expected_salary_rupees = models.PositiveIntegerField(default=0)
+    job_types = models.JSONField(default=list, blank=True)
+    available_from = models.CharField(
+        max_length=12, choices=Availability.choices, blank=True, default=""
+    )
+    visibility = models.CharField(
+        max_length=16, choices=Visibility.choices, default=Visibility.OPEN
+    )
+    resume_name = models.CharField(max_length=180, blank=True, default="")
+    resume_content_type = models.CharField(max_length=80, blank=True, default="")
+    resume_file = models.FileField(
+        upload_to="job-profile-resumes/", storage=private_file_storage, blank=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [models.Index(fields=("city", "visibility"), name="listings_profile_city_idx")]
+
+    def __str__(self) -> str:
+        return self.full_name or str(self.user_id)
+
+
+class SavedJob(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="saved_jobs"
+    )
+    listing = models.ForeignKey(Listing, on_delete=models.CASCADE, related_name="saves")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        constraints = [
+            models.UniqueConstraint(fields=("user", "listing"), name="listings_saved_job_unique")
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user_id}:{self.listing_id}"
+
+
+class Interview(models.Model):
+    """An interview the employer proposes for one application. The candidate accepts, asks for
+    another time, or declines. Phone numbers are shared both ways once it is accepted."""
+
+    class Mode(models.TextChoices):
+        IN_PERSON = "IN_PERSON", "In person"
+        PHONE = "PHONE", "Phone call"
+        VIDEO = "VIDEO", "Video call"
+
+    class Status(models.TextChoices):
+        PROPOSED = "PROPOSED", "Waiting for the candidate"
+        ACCEPTED = "ACCEPTED", "Accepted"
+        RESCHEDULE_REQUESTED = "RESCHEDULE_REQUESTED", "Asked for another time"
+        DECLINED = "DECLINED", "Declined"
+        CANCELLED = "CANCELLED", "Cancelled"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    application = models.ForeignKey(
+        Application, on_delete=models.CASCADE, related_name="interviews"
+    )
+    scheduled_date = models.DateField()
+    start_time = models.TimeField()
+    mode = models.CharField(max_length=12, choices=Mode.choices, default=Mode.IN_PERSON)
+    location_text = models.CharField(max_length=240, blank=True, default="")
+    note = models.CharField(max_length=480, blank=True, default="")
+    status = models.CharField(max_length=24, choices=Status.choices, default=Status.PROPOSED)
+    #: What the candidate wrote when asking for another time or declining.
+    candidate_note = models.CharField(max_length=480, blank=True, default="")
+    responded_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=("application",),
+                condition=models.Q(status__in=("PROPOSED", "ACCEPTED", "RESCHEDULE_REQUESTED")),
+                name="listings_one_open_interview",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.application_id}:{self.scheduled_date}:{self.status}"

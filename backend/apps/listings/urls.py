@@ -3,6 +3,67 @@ from django.urls import path
 from apps.listings import views
 
 urlpatterns = [
+    path("jobs/options", views.JobOptionsView.as_view(), name="job-options"),
+    path("jobs/for-you", views.JobsForYouView.as_view(), name="jobs-for-you"),
+    path(
+        "partner/listing-applications/<uuid:application_id>/interview",
+        views.PartnerProposeInterviewView.as_view(),
+        name="partner-application-interview",
+    ),
+    path(
+        "my/interviews/<uuid:interview_id>/<slug:action>",
+        views.MyInterviewAnswerView.as_view(),
+        name="my-interview-answer",
+    ),
+    path("me/job-profile", views.MyJobProfileView.as_view(), name="my-job-profile"),
+    path(
+        "me/job-profile/resume",
+        views.MyJobProfileResumeView.as_view(),
+        name="my-job-profile-resume",
+    ),
+    path(
+        "job-profile-resumes/<str:token>",
+        views.JobProfileResumeFileView.as_view(),
+        name="job-profile-resume",
+    ),
+    path("me/saved-jobs", views.MySavedJobsView.as_view(), name="my-saved-jobs"),
+    path(
+        "listings/<uuid:listing_id>/quick-apply",
+        views.QuickApplyView.as_view(),
+        name="listing-quick-apply",
+    ),
+    path("listings/<uuid:listing_id>/save", views.SaveJobView.as_view(), name="listing-save"),
+    path(
+        "listings/<uuid:listing_id>/my-match",
+        views.MyJobMatchView.as_view(),
+        name="listing-my-match",
+    ),
+    path(
+        "partner/jobs/<uuid:listing_id>/matches",
+        views.PartnerJobMatchesView.as_view(),
+        name="partner-job-matches",
+    ),
+    path(
+        "partner/jobs/<uuid:listing_id>/invite/<uuid:profile_id>",
+        views.PartnerJobInviteView.as_view(),
+        name="partner-job-invite",
+    ),
+    path("partner/jobs", views.PartnerJobCreateView.as_view(), name="partner-job-create"),
+    path(
+        "partner/jobs/<uuid:listing_id>",
+        views.PartnerJobDetailView.as_view(),
+        name="partner-job-detail",
+    ),
+    path(
+        "partner/jobs/<uuid:listing_id>/publish",
+        views.PartnerJobPublishView.as_view(),
+        name="partner-job-publish",
+    ),
+    path(
+        "partner/jobs/<uuid:listing_id>/duplicate",
+        views.PartnerJobDuplicateView.as_view(),
+        name="partner-job-duplicate",
+    ),
     path("listings", views.ListingBrowseView.as_view(), name="listing-browse"),
     path("listings/filters", views.ListingFiltersView.as_view(), name="listing-filters"),
     path(

@@ -8,12 +8,19 @@ import Link from "next/link";
 import { PartnerPresence } from "@/features/presence/view/partner-presence";
 import { usePartnerProfile } from "@/features/profile/queries";
 import { usePartnerWorkspaceGrants } from "@/features/workspace/queries";
-import { WORKFORCE_WORKSPACE } from "@/features/workspace/registry";
+import {
+  WORKFORCE_WORKSPACE,
+  resolveWorkspaces,
+  specialtyShellHome,
+} from "@/features/workspace/registry";
 import { getApiClient } from "@/lib/api/browser";
 
 export function MeHome() {
   const logout = useLogout(getApiClient());
   const grants = usePartnerWorkspaceGrants();
+  // Rentals, stays and listings partners never get live offers, so no availability switch.
+  const showPresence =
+    !grants.isPending && specialtyShellHome(resolveWorkspaces(grants.grants ?? [])) === null;
   const canManageCrew = hasWorkspaceAction(grants.grants ?? [], WORKFORCE_WORKSPACE, "crew.manage");
 
   return (
@@ -23,10 +30,12 @@ export function MeHome() {
       {/* Clean Professional Profile Card */}
       <IdentityCard />
 
-      {/* Live Availability Toggle Card */}
-      <div className="px-4 pt-3">
-        <PartnerPresence />
-      </div>
+      {/* Live availability: only for Partners who receive live job offers. */}
+      {showPresence ? (
+        <div className="px-4 pt-3">
+          <PartnerPresence />
+        </div>
+      ) : null}
 
       {/* Settings & Navigation Sections */}
       <div className="flex flex-1 flex-col px-4 pt-4 gap-4">

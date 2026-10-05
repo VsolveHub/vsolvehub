@@ -45,6 +45,11 @@ def public_listings(  # noqa: PLR0912
         value = str(filters.get(key) or "").strip()
         if value:
             qs = qs.filter(**{f"structured_fields__{key}__icontains": value})
+    # Jobs posted with the quick form carry these as their own fields.
+    for key in ("job_type", "experience_band", "job_category", "city"):
+        value = str(filters.get(key) or "").strip()
+        if value:
+            qs = qs.filter(**{f"{key}__iexact": value})
     min_salary = filters.get("min_salary")
     if min_salary and str(min_salary).isdigit():
         qs = qs.filter(

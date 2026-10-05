@@ -199,9 +199,16 @@ export function PropertyCard({
           <PropertyPhotoCarousel
             fill
             label={property.title}
-            slides={media
-              .filter((item) => Boolean(item.url))
-              .map((item) => ({ id: item.id, url: item.url, caption: item.caption || property.title }))}
+            slides={
+              // Building photos first; with none, the room photos stand in.
+              media.length > 0
+                ? media
+                    .filter((item) => Boolean(item.url))
+                    .map((item) => ({ id: item.id, url: item.url, caption: item.caption || property.title }))
+                : (property.units ?? []).flatMap((unit) =>
+                    (unit.media ?? []).map((item) => ({ id: item.id, url: item.url, caption: unit.name })),
+                  )
+            }
             overlay={
               <Badge tone={status.tone} className="absolute right-2 top-2 z-10">
                 {status.label}
@@ -279,7 +286,7 @@ export function PropertyCard({
                   variant={panel === "photos" ? "secondary" : "outline"}
                   onClick={() => toggle("photos")}
                 >
-                  Photos
+                  Building photos
                 </Button>
                 <Button
                   size="sm"

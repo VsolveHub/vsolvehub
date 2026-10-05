@@ -1,11 +1,12 @@
 "use client";
 
 import { useAuthGuard } from "@vsolve/query";
-import { ErrorState, Spinner } from "@vsolve/ui";
-import { usePathname, useRouter } from "next/navigation";
+import { Button, Card, ErrorState, Spinner } from "@vsolve/ui";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 
 import { getApiClient } from "@/lib/api/browser";
+import { usePartnerApplication } from "../queries";
 
 /**
  * The session gate for onboarding, without the signed-in app's chrome.
@@ -46,18 +47,103 @@ import { getApiClient } from "@/lib/api/browser";
 export function ApplyGuard({ children }: { children: ReactNode }) {
   const guard = useAuthGuard(getApiClient());
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const router = useRouter();
 
   const isUnauthenticated = guard.status === "unauthenticated";
 
+  // An approved partner must never see the onboarding / application screens again.
+  const application = usePartnerApplication({
+    enabled: guard.status === "authenticated",
+  });
+  const isApproved = application.data?.status === "APPROVED";
+
+  useEffect(() => {
+    if (isApproved) {
+      router.replace("/home");
+    }
+  }, [isApproved, router]);
+
   useEffect(() => {
     if (!isUnauthenticated) return;
-    router.replace(`/login?next=${encodeURIComponent(pathname)}`);
-  }, [isUnauthenticated, pathname, router]);
+    const query = searchParams.toString();
+    const fullUrl = query ? `${pathname}?${query}` : pathname;
+    router.replace(`/login?next=${encodeURIComponent(fullUrl)}`);
+  }, [isUnauthenticated, pathname, router, searchParams]);
+
+  // Check phone mismatch between active session and URL parameter
+  const phoneParam = searchParams.get("phone");
+  const activePhoneDigits = guard.user?.phone_number
+    ? guard.user.phone_number.replace(/\D/g, "").slice(-10)
+    : null;
+  const requestedPhoneDigits = phoneParam ? phoneParam.replace(/\D/g, "").slice(-10) : null;
+
+  const isPhoneMismatch = Boolean(
+    guard.status === "authenticated" &&
+    requestedPhoneDigits &&
+    activePhoneDigits &&
+    requestedPhoneDigits !== activePhoneDigits
+  );
 
   if (guard.status === "checking") return <Waiting>Checking your access…</Waiting>;
   if (isUnauthenticated) return <Waiting>Taking you to sign in…</Waiting>;
   if (guard.isSelectingRole) return <Waiting>Opening your account…</Waiting>;
+  if (isApproved) return <Waiting>Opening your workspace…</Waiting>;
+
+  if (isPhoneMismatch) {
+    const handleContinueAsCurrent = () => {
+      // Remove ?phone from URL so user continues with their current session cleanly
+      router.replace(pathname);
+    };
+
+    const handleSwitchAccount = () => {
+      // Direct to login with switch=true and the requested phone prefilled
+      router.push(`/login?phone=${encodeURIComponent(requestedPhoneDigits!)}&next=${encodeURIComponent(pathname)}&switch=true`);
+    };
+
+    return (
+      <Centred>
+        <Card className="p-6 sm:p-7 border border-line-strong rounded-3xl shadow-xl bg-surface">
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center font-bold text-lg shrink-0">
+                ⚠️
+              </div>
+              <div>
+                <h2 className="text-lg font-extrabold text-navy-900">Switch Account?</h2>
+                <p className="text-xs text-text-secondary">Different mobile number detected</p>
+              </div>
+            </div>
+
+            <p className="text-sm text-text leading-relaxed">
+              You are currently signed in as <strong className="text-navy-900">{guard.user?.phone_number || activePhoneDigits}</strong>, but navigated to apply with <strong className="text-navy-900">+91 {requestedPhoneDigits}</strong>.
+            </p>
+
+            <div className="rounded-2xl bg-surface-sunken p-3.5 border border-line text-xs text-text-muted">
+              Choose <strong>Switch Account</strong> to verify and apply with +91 {requestedPhoneDigits}, or continue with your current account.
+            </div>
+
+            <div className="flex flex-col gap-2.5 pt-2">
+              <Button
+                variant="primary"
+                onClick={handleSwitchAccount}
+                className="w-full justify-center font-bold"
+              >
+                Switch to +91 {requestedPhoneDigits}
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={handleContinueAsCurrent}
+                className="w-full justify-center"
+              >
+                Continue as {guard.user?.phone_number || activePhoneDigits}
+              </Button>
+            </div>
+          </div>
+        </Card>
+      </Centred>
+    );
+  }
 
   if (guard.status === "error") {
     return (

@@ -13,6 +13,9 @@ import { usePartnerApplication } from "@/features/application/queries";
 import { usePartnerPerformance, type PartnerPerformance } from "@/features/earnings/queries";
 import { readStoredSession } from "@/features/presence/model/stored-session";
 import { PartnerPresence } from "@/features/presence/view/partner-presence";
+import { RentalHome } from "@/features/rentals/view/rental-home";
+import { StayHome } from "@/features/stays/view/stay-home";
+import { useSpecialtyHome } from "@/features/workspace/queries";
 
 import type { WorkItem } from "../model/work-item";
 import { useWorkStack } from "../queries";
@@ -106,6 +109,9 @@ export function WorkHome() {
 function WorkStack() {
   const stack = useWorkStack();
   const performance = usePartnerPerformance();
+  // Rentals, stays and job-listing partners never get live offers: no "go online" for them.
+  const specialty = useSpecialtyHome();
+  const showPresence = !specialty.isPending && specialty.home === null;
 
   /*
     What is on the Partner's plate *right now*, and what is merely on file.
@@ -166,12 +172,20 @@ function WorkStack() {
         <div aria-hidden className="mx-auto mt-3 h-1 w-10 rounded-full bg-line" />
 
         {/* The white sheet spans the viewport; its contents stay a readable width. */}
-        <div className="px-4 pt-4 pb-2 lg:mx-auto lg:w-full lg:max-w-7xl lg:px-8">
-          <PartnerPresence variant="driver" />
-        </div>
+        {showPresence ? (
+          <div className="px-4 pt-4 pb-2 lg:mx-auto lg:w-full lg:max-w-7xl lg:px-8">
+            <PartnerPresence variant="driver" />
+          </div>
+        ) : null}
 
-        <div className="flex flex-1 flex-col gap-3 px-4 pb-4 pt-2 lg:mx-auto lg:w-full lg:max-w-7xl lg:px-8">
-          <StackBody stack={stack} needsYou={needsYou} />
+        <div className="flex flex-1 flex-col gap-3 px-4 pb-4 pt-4 lg:mx-auto lg:w-full lg:max-w-7xl lg:px-8">
+          {specialty.home === "rentals" ? (
+            <RentalHome />
+          ) : specialty.home === "stays" ? (
+            <StayHome />
+          ) : (
+            <StackBody stack={stack} needsYou={needsYou} specialty={specialty.home} />
+          )}
         </div>
       </div>
     </main>
@@ -235,9 +249,12 @@ function Metric({ label, value }: { label: string; value: string }) {
 function StackBody({
   stack,
   needsYou,
+  specialty = null,
 }: {
   stack: ReturnType<typeof useWorkStack>;
   needsYou: readonly WorkItem[];
+  /** A stays- or listings-only Partner: nothing waiting is not "go online". */
+  specialty?: "listings" | "stays" | "rentals" | null;
 }) {
   if (stack.isPending) {
     return (
@@ -259,7 +276,11 @@ function StackBody({
     );
   }
 
-  if (needsYou.length === 0) return <WaitingForWork />;
+  if (needsYou.length === 0) {
+    if (specialty === "stays") return <NothingWaiting href="/stays" label="Open your stays" />;
+    if (specialty === "listings") return <NothingWaiting href="/listings" label="Open your listings" />;
+    return <WaitingForWork />;
+  }
 
   return (
     <section className="flex flex-col gap-2.5">
@@ -302,6 +323,19 @@ function WaitingForWork() {
   );
 
   return <WaitingRadar isOnline={storedSession} />;
+}
+
+/** Nothing needs a specialty Partner right now; point them at their workspace. */
+function NothingWaiting({ href, label }: { href: string; label: string }) {
+  return (
+    <div className="flex flex-col items-center gap-3 py-12 text-center">
+      <p className="font-bold text-text">Nothing needs you right now</p>
+      <p className="text-sm text-text-secondary">New enquiries and requests will show up here.</p>
+      <Link href={href} className="text-sm font-semibold text-text-link hover:underline">
+        {label} →
+      </Link>
+    </div>
+  );
 }
 
 /** Storage does not change under us within a paint; nothing to subscribe to. */

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -28,10 +28,24 @@ from apps.rental.models import (
     RentalDisputePhoto,
     RentalModerationEvent,
     RentalPhotoUpload,
+    RentalPickupHours,
     RentalPlatformFee,
     overlapping_reservations,
     overlapping_reserved_quantity,
 )
+from apps.rental.pickup_hours import (
+    PickupWindowError,
+    at_local,
+    check_booking_window,
+    rental_days,
+)
+
+#: The whole-day booking form hands over at this hour.
+LEGACY_HANDOVER_TIME = time(10, 0)
+
+
+def _when(value: datetime) -> str:
+    return timezone.localtime(value).strftime("%a %d %b, %I:%M %p")
 
 
 class RentalStateError(ValueError):
@@ -69,6 +83,11 @@ def _as_uuid(value: UUID | str) -> UUID:
 def _require_rental_capability(partner: Any) -> None:
     if not partner.capabilities.filter(archetype="A7_RENTAL", status="APPROVED").exists():
         raise PermissionError("Partner does not have an approved A7 rental capability.")
+
+
+def require_rental_partner(partner: Any) -> None:
+    """Public form of the capability check, for views outside this module."""
+    _require_rental_capability(partner)
 
 
 def _require_active_a7(variant_id: UUID | str) -> A7VariantConfiguration:
@@ -123,7 +142,6 @@ def _validate_image_header(upload: Any) -> None:
     then live on our CDN with an image extension. This check looks at
     what the file actually starts with.
     """
-    import io
 
     position = upload.tell() if hasattr(upload, "tell") else 0
     header = upload.read(32)
@@ -182,9 +200,7 @@ def _attach_dispute_photos(
         )
     if not ids:
         return
-    rows = list(
-        RentalDisputePhoto.objects.select_for_update().filter(id__in=ids, partner=partner)
-    )
+    rows = list(RentalDisputePhoto.objects.select_for_update().filter(id__in=ids, partner=partner))
     if len(rows) != len(ids):
         raise RentalStateError(
             "One of those photos is not yours.",
@@ -199,7 +215,9 @@ def _attach_dispute_photos(
 
 
 def partner_owns_rental_photo(*, partner: Any, url: str) -> bool:
-    stored_name = public_stored_name(url, folder="rental-ads/")
+    stored_name = public_stored_name(
+        url, folder=("images/rentals/assets/", "images/rentals/ads/", "rental-ads/")
+    )
     if stored_name is None:
         return False
     return RentalPhotoUpload.objects.filter(partner=partner, stored_file=stored_name).exists()
@@ -334,7 +352,10 @@ def auto_publish_asset(
     return asset
 
 
-def update_asset(
+MAX_AD_PHOTOS = 8
+
+
+def update_asset(  # noqa: PLR0912 — one branch per optional field
     *,
     asset: RentalAsset,
     partner: Any,
@@ -345,8 +366,12 @@ def update_asset(
     location_text: str | None = None,
     quantity_available: int | None = None,
     structured_fields: dict[str, Any] | None = None,
+    add_image_urls: list[str] | None = None,
 ) -> RentalAsset:
-    """Edit an existing ad. Only the owner can edit, and only non-REMOVED/RETIRED ads."""
+    """Edit an existing ad. Only the owner can edit, and only non-REMOVED/RETIRED ads.
+
+    ``add_image_urls`` appends new photos after the existing ones (at most 8 in all).
+    """
     _require_rental_capability(partner)
     if asset.partner_id != partner.id:
         raise PermissionError("Not your asset.")
@@ -381,11 +406,65 @@ def update_asset(
         asset.quantity_available = quantity_available
         update_fields.append("quantity_available")
     if structured_fields is not None:
+        config = _require_active_a7(asset.variant_id)
+        if config.asset_schema and structured_fields:
+            try:
+                jsonschema.validate(instance=structured_fields, schema=config.asset_schema)
+            except JsonSchemaValidationError as e:
+                raise RentalStateError(f"Invalid structured fields: {e.message}") from e
         asset.structured_fields = structured_fields
         update_fields.append("structured_fields")
+    if add_image_urls:
+        existing = asset.media.count()
+        if existing + len(add_image_urls) > MAX_AD_PHOTOS:
+            raise RentalStateError(f"An ad can have at most {MAX_AD_PHOTOS} photos.")
+        for offset, url in enumerate(add_image_urls):
+            attach_asset_media(
+                asset=asset, partner=partner, url=url, display_order=existing + offset
+            )
 
     asset.save(update_fields=update_fields)
     return asset
+
+
+def asset_stock_counts(asset_ids: list[UUID]) -> dict[UUID, dict[str, int]]:
+    """Pieces out with customers today, and bookings still to come, per ad.
+
+    ``booked_now`` counts handed-over pieces whatever the times (an overdue return
+    is still out) and paid bookings whose pickup-to-return span covers this moment.
+    ``upcoming`` counts paid bookings whose pickup is still ahead.
+    """
+    now = timezone.now()
+    out: dict[UUID, dict[str, int]] = {aid: {"booked_now": 0, "upcoming": 0} for aid in asset_ids}
+    if not asset_ids:
+        return out
+    now_rows = (
+        RentalBookingLine.objects.filter(asset_id__in=asset_ids)
+        .filter(
+            models.Q(booking__status=RentalBooking.Status.HANDOVER)
+            | models.Q(
+                booking__status=RentalBooking.Status.CONFIRMED,
+                booking__pickup_at__lte=now,
+                booking__return_at__gt=now,
+            )
+        )
+        .values("asset_id")
+        .annotate(total=models.Sum("quantity"))
+    )
+    for row in now_rows:
+        out[row["asset_id"]]["booked_now"] = int(row["total"] or 0)
+    upcoming_rows = (
+        RentalBooking.objects.filter(
+            asset_id__in=asset_ids,
+            status=RentalBooking.Status.CONFIRMED,
+            pickup_at__gt=now,
+        )
+        .values("asset_id")
+        .annotate(total=models.Count("id"))
+    )
+    for row in upcoming_rows:
+        out[row["asset_id"]]["upcoming"] = int(row["total"] or 0)
+    return out
 
 
 def pause_asset(*, asset: RentalAsset, partner: Any) -> RentalAsset:
@@ -606,17 +685,26 @@ def save_platform_fee(*, percent: int, actor: Any) -> RentalPlatformFee:
 
 
 @transaction.atomic
-def create_booking(
+def create_booking(  # noqa: PLR0915
     *,
     customer: Any,
     asset_id: UUID | str,
-    start_date: date,
-    end_date: date,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    pickup_at: datetime | None = None,
+    return_at: datetime | None = None,
     mode: str = "PICKUP",
     notes: str = "",
     quantity: int = 1,
     hold_deposit_for_demo: bool = False,
 ) -> RentalBooking:
+    """Book an item from ``pickup_at`` to ``return_at``.
+
+    Times are checked against the owner's pickup hours and notice period, and the
+    price is per started 24 hours (one hour's grace). The older whole-day form,
+    ``start_date``/``end_date``, still works: it books 10:00 to 10:00 and skips the
+    hours check, as it did before times existed.
+    """
     # OLX-style rentals: pickup only. Ignore any client-supplied delivery mode.
     mode = "PICKUP"
     if quantity < 1:
@@ -629,9 +717,23 @@ def create_booking(
     _require_active_a7(asset.variant_id)
     if asset.public_state != "PUBLISHED":
         raise RentalStateError("Asset is not available to book.")
-    if end_date <= start_date:
-        raise RentalStateError("End date must be after start date.")
-    days = (end_date - start_date).days
+    if pickup_at is not None and return_at is not None:
+        hours = RentalPickupHours.for_partner(asset.partner)
+        try:
+            check_booking_window(hours, pickup_at, return_at)
+        except PickupWindowError as exc:
+            raise RentalStateError(str(exc), code=exc.code) from exc
+        days = rental_days(pickup_at, return_at)
+        start_date = timezone.localtime(pickup_at).date()
+        end_date = timezone.localtime(return_at).date()
+    elif start_date is not None and end_date is not None:
+        if end_date <= start_date:
+            raise RentalStateError("End date must be after start date.")
+        days = (end_date - start_date).days
+        pickup_at = at_local(start_date, LEGACY_HANDOVER_TIME)
+        return_at = at_local(end_date, LEGACY_HANDOVER_TIME)
+    else:
+        raise RentalStateError("Choose a pickup and a return time.", code="pickup_window_missing")
     config = _require_active_a7(asset.variant_id)
     if days < config.min_rental_days:
         raise RentalStateError(f"Minimum rental is {config.min_rental_days} day(s).")
@@ -642,8 +744,8 @@ def create_booking(
             code="out_of_stock",
         )
     # Serialize against concurrent holds on the same asset/date window.
-    list(overlapping_reservations(asset.id, start_date, end_date).select_for_update())
-    overlapping = overlapping_reserved_quantity(asset.id, start_date, end_date)
+    list(overlapping_reservations(asset.id, pickup_at, return_at).select_for_update())
+    overlapping = overlapping_reserved_quantity(asset.id, pickup_at, return_at)
     remaining = stock - overlapping
     if remaining <= 0:
         raise RentalStateError(
@@ -665,6 +767,8 @@ def create_booking(
         status=AssetReservation.Status.CONFIRMED,
         start_date=start_date,
         end_date=end_date,
+        pickup_at=pickup_at,
+        return_at=return_at,
     )
     needs_deposit = asset.deposit_paise > 0 and not hold_deposit_for_demo
     deposit = RentalDeposit.objects.create(
@@ -695,6 +799,8 @@ def create_booking(
         ),
         start_date=start_date,
         end_date=end_date,
+        pickup_at=pickup_at,
+        return_at=return_at,
         price_paise=price,
         platform_fee_percent=fee_percent,
         platform_fee_paise=fee_paise,
@@ -733,6 +839,8 @@ def create_booking(
             "asset_title": asset.title,
             "start_date": str(start_date),
             "end_date": str(end_date),
+            "pickup_at": _when(pickup_at),
+            "return_at": _when(return_at),
         },
         idempotency_key=f"rental-new-booking:{booking.id}",
     )
@@ -746,6 +854,8 @@ def create_booking(
             "pin": handover_pin,
             "start_date": str(start_date),
             "end_date": str(end_date),
+            "pickup_at": _when(pickup_at),
+            "return_at": _when(return_at),
         },
         idempotency_key=f"rental-booking-confirmed:{booking.id}",
     )
@@ -1213,8 +1323,8 @@ def public_assets(
                     AssetReservation.Status.TENTATIVE,
                     AssetReservation.Status.CONFIRMED,
                 ),
-                booking__reservation__start_date__lt=end_date,
-                booking__reservation__end_date__gt=start_date,
+                booking__reservation__pickup_at__lt=at_local(end_date, time.min),
+                booking__reservation__return_at__gt=at_local(start_date, time.min),
             )
             .exclude(
                 booking__status__in=(
@@ -1241,9 +1351,7 @@ def initiate_rental_booking_payment(*, booking: RentalBooking) -> Any:
 
     # Stored amounts, not the live rate: a retry must not change what the customer was shown.
     deposit_amount = int(booking.deposit.amount_paise) if booking.deposit_id else 0
-    amount_paise = (
-        int(booking.price_paise) + int(booking.platform_fee_paise) + deposit_amount
-    )
+    amount_paise = int(booking.price_paise) + int(booking.platform_fee_paise) + deposit_amount
 
     attempt = initiate_standalone_payment_attempt(
         purpose=PaymentAttempt.Purpose.A7_RENTAL_BOOKING,

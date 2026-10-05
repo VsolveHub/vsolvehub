@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -59,6 +59,8 @@ export default function StayDetailPage() {
   const [reviewPhotos, setReviewPhotos] = useState<string[]>([]);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [selectedUnitId, setSelectedUnitId] = useState<string>("");
+  // The room the enquiry and visit forms start with; changing it re-opens them for that room.
+  const [panelUnitId, setPanelUnitId] = useState<string>("");
 
   const {
     data: property,
@@ -70,6 +72,16 @@ export default function StayDetailPage() {
     queryFn: () => fetchStayProperty(pageKey),
     enabled: Boolean(pageKey),
   });
+  // Opened from a room card in search (?room=<id>): show that room first.
+  useEffect(() => {
+    if (!property) return;
+    const wanted = new URLSearchParams(window.location.search).get("room");
+    if (wanted && property.units.some((u) => u.id === wanted)) {
+      setSelectedUnitId(wanted);
+      setPanelUnitId(wanted);
+    }
+  }, [property]);
+
   useCanonicalSlug(STAYS_HREF, pageKey, property?.slug, () =>
     queryClient.setQueryData(["stay-property", property?.slug], property),
   );
@@ -175,10 +187,17 @@ export default function StayDetailPage() {
       </nav>
 
       {(() => {
-        const currentUnitId = selectedUnitId || property.units[0]?.id || "";
+        const firstWithPhoto = property.units.find((u) => (u.media ?? []).length > 0);
+        const currentUnitId = selectedUnitId || firstWithPhoto?.id || property.units[0]?.id || "";
         const currentUnit = property.units.find((u) => u.id === currentUnitId);
         const unitMedia = (currentUnit as { media?: Array<{ id: string; url: string; display_order?: number; caption?: string }> })?.media;
-        const activeMedia = unitMedia && unitMedia.length > 0 ? (unitMedia as typeof property.media) : property.media;
+        const showsRoomPhotos = Boolean(unitMedia && unitMedia.length > 0);
+        const activeMedia = showsRoomPhotos ? (unitMedia as typeof property.media) : property.media;
+        // The building's photos get their own section once the gallery shows the room.
+        const showBuildingPhotos = showsRoomPhotos && property.media.length > 0;
+        // Room types without photos are hidden from guests, unless none has a photo yet.
+        const withPhotos = property.units.filter((u) => (u.media ?? []).length > 0);
+        const visibleRooms = withPhotos.length > 0 ? withPhotos : property.units;
         const galleryTitle = currentUnit?.name ? `${property.title} · ${currentUnit.name}` : property.title;
 
         return (
@@ -242,36 +261,97 @@ export default function StayDetailPage() {
               </div>
             ) : null}
 
-            {/* Room Units */}
+            {/* Rooms here: the room types, each with its own photos. */}
             <div className="mt-6 border-t border-line/70 pt-5">
-              <h2 className="text-sm font-bold text-text">Available Room Configurations</h2>
+              <h2 className="text-sm font-bold text-text">
+                {visibleRooms.length > 1 ? "Rooms here" : "The room"}
+              </h2>
               <div className="mt-3 grid gap-3">
-                {property.units.map((unit) => (
-                  <div
-                    key={unit.id}
-                    className="flex items-center justify-between rounded-control border border-line bg-surface-sunken p-3.5"
-                  >
-                    <div>
-                      <div className="text-sm font-bold text-text">{unit.name}</div>
-                      <div className="text-xs text-text-secondary">
-                        {roomOccupancyLabel(unit, property.room_style)}
-                      </div>
-                      <div className="mt-0.5 text-[11px] font-semibold text-emerald-700">
-                        {availabilityLabel(unit.available_count, property.room_style)}
+                {visibleRooms.map((unit) => {
+                  const isSelected = unit.id === currentUnitId;
+                  const cover = unit.media?.[0]?.url;
+                  return (
+                    <div
+                      key={unit.id}
+                      className={`flex gap-3 rounded-control border p-3 ${
+                        isSelected ? "border-action bg-action-surface" : "border-line bg-surface-sunken"
+                      }`}
+                    >
+                      {cover ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={cover}
+                          alt={unit.name}
+                          className="h-20 w-28 shrink-0 rounded-control object-cover sm:h-24 sm:w-32"
+                          loading="lazy"
+                        />
+                      ) : null}
+                      <div className="flex min-w-0 flex-1 flex-col gap-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="text-sm font-bold text-text">{unit.name}</div>
+                            <div className="text-xs text-text-secondary">
+                              {roomOccupancyLabel(unit, property.room_style)}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-base font-extrabold text-action">
+                              {formatPaise(unit.nightly_rate_paise)}
+                            </div>
+                            <div className="text-[10px] text-text-secondary">
+                              {pricePeriodOf(property.price_period) === "NIGHT" ? "per night" : "per month"}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="mt-auto flex items-center justify-between gap-2">
+                          <span className="text-[11px] font-semibold text-emerald-700">
+                            {availabilityLabel(unit.available_count, property.room_style)}
+                          </span>
+                          {isSelected ? (
+                            <Badge tone="action">Selected</Badge>
+                          ) : (
+                            <button
+                              type="button"
+                              className="text-xs font-bold text-text-link hover:underline"
+                              onClick={() => {
+                                setSelectedUnitId(unit.id);
+                                setPanelUnitId(unit.id);
+                                document
+                                  .getElementById("property-details")
+                                  ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                              }}
+                            >
+                              See this room
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className="text-base font-extrabold text-action">
-                        {formatPaise(unit.nightly_rate_paise)}
-                      </div>
-                      <div className="text-[10px] text-text-secondary">
-                        {pricePeriodOf(property.price_period) === "NIGHT" ? "per night" : "per month"}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
+
+            {showBuildingPhotos ? (
+              <div className="mt-6 border-t border-line/70 pt-5">
+                <h2 className="text-sm font-bold text-text">Building &amp; common areas</h2>
+                <ul className="mt-3 flex gap-2 overflow-x-auto pb-1">
+                  {property.media.map((photo) => (
+                    <li key={photo.id} className="shrink-0">
+                      <a href={photo.url} target="_blank" rel="noreferrer">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={photo.url}
+                          alt={photo.caption || property.title}
+                          className="h-28 w-40 rounded-control object-cover"
+                          loading="lazy"
+                        />
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
 
             {/* Amenities: only what the host said yes to, labelled by the server. */}
             <div className="mt-6 border-t border-line/70 pt-5">
@@ -399,7 +479,9 @@ export default function StayDetailPage() {
         {/* Right Column: Interactive Quote and Enquiry Panel */}
         <div className="lg:col-span-5 sticky top-24">
           <StayActionPanel
+            key={panelUnitId || "default"}
             property={property}
+            initialUnitId={panelUnitId || currentUnitId}
             onSelectUnit={setSelectedUnitId}
             onViewProperty={() =>
               document

@@ -1,5 +1,6 @@
 "use client";
 
+import { whenLabel } from "@/features/rentals/pickup-time";
 import {
   Button,
   FactList,
@@ -179,8 +180,14 @@ export function RentalBookingDetailSheet({
           <SheetSection title="Rental">
             <FactList
               items={[
-                { label: "From", value: formatDate(`${booking.start_date}`) },
-                { label: "To", value: formatDate(`${booking.end_date}`) },
+                {
+                  label: "Pickup",
+                  value: whenLabel(booking.pickup_at) || formatDate(`${booking.start_date}`),
+                },
+                {
+                  label: "Return",
+                  value: whenLabel(booking.return_at) || formatDate(`${booking.end_date}`),
+                },
                 { label: "Quantity", value: String(booking.quantity ?? 1) },
                 {
                   label: "Collection",

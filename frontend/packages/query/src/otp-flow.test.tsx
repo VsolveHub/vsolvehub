@@ -627,3 +627,20 @@ describe("code length", () => {
     expect(result.current.codeLength).toBe(6);
   });
 });
+
+describe("initial phone pre-fill", () => {
+  it("pre-fills phone and enables request code when valid", () => {
+    const stub = createStub();
+    const { result } = renderFlow(stub, { initialPhone: PHONE });
+    expect(result.current.phone).toBe(PHONE);
+    expect(result.current.canRequest).toBe(true);
+  });
+
+  it("sanitizes pre-filled phone with country code or spaces", () => {
+    const stub = createStub();
+    const { result } = renderFlow(stub, { initialPhone: "+91 98765 43210" });
+    expect(result.current.phone).toBe("9876543210");
+    expect(result.current.canRequest).toBe(true);
+  });
+});
+

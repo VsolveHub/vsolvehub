@@ -13,10 +13,12 @@ import { Button, EmptyState, ErrorState, Skeleton } from "@vsolve/ui";
 
 import { fetchListingFilters, fetchListings, type Listing } from "@/features/listings/queries";
 import { ListingOpportunityCard } from "@/features/listings/listing-opportunity-card";
-import { ListingFilters } from "@/features/listings/view";
+import { JobsForYou, ListingFilters } from "@/features/listings/view";
+import { useCustomerSession } from "@/features/session/queries";
 import { PartAHero, PartAPill, PartAResultHeader } from "@/features/part-a";
 
 function ListingsBrowseContent() {
+  const session = useCustomerSession();
   const searchParams = useSearchParams();
   const initService = searchParams.get("service") ?? "";
 
@@ -135,6 +137,8 @@ function ListingsBrowseContent() {
           </Button>
         </div>
       </PartAHero>
+
+      {session.isAuthenticated ? <JobsForYou /> : null}
 
       <div className="flex flex-wrap gap-2">
         <PartAPill

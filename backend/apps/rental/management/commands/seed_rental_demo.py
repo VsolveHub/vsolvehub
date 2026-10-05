@@ -18,6 +18,7 @@ from apps.catalog.models import (
 )
 from apps.identity.models import Role, UserRole
 from apps.partners.models import PartnerApplication, PartnerCapability, PartnerProfile
+from apps.rental.field_options import with_suggestions
 from apps.rental.models import RentalAsset, RentalAssetMedia, RentalBooking
 from apps.rental.services import create_asset, create_booking, moderate_asset, submit_asset
 
@@ -238,7 +239,7 @@ class Command(BaseCommand):
                         "default_deposit_paise": 200000,
                         "min_rental_days": 1,
                         "deposit_required": True,
-                        "asset_schema": asset_schema,
+                        "asset_schema": with_suggestions(asset_schema),
                     },
                 )
                 if first_variant is None:

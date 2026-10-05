@@ -378,12 +378,12 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
   const workspaces = resolveWorkspaces(workspaceGrants.grants ?? []);
   const workspaceKeys = workspaces.map((item) => item.key);
   const primaryNav = primaryShellNavFor(workspaces);
-  const isDarkHero = pathname === "/home" || pathname === "/work";
+  const isDarkHero = (pathname === "/home" || pathname === "/work") && isApprovedPartner;
 
   return (
     <PartnerHeaderTitleProvider>
       {(headerTitle) => (
-        <div className="flex min-h-screen flex-col items-center bg-background">
+        <div className="flex min-h-screen flex-col items-center bg-canvas">
       {/*
         DESKTOP (`lg:` and up) ONLY — every class below `lg:` is the phone
         layout and is deliberately untouched.
@@ -406,11 +406,11 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
           // home banner now run edge to edge like any desktop application, and
           // line length is controlled where it belongs: on the content inside.
           "lg:max-w-none lg:border-x-0 lg:shadow-none",
-          isDarkHero ? "bg-[var(--color-ink-900)]" : "bg-surface",
+          isDarkHero ? "bg-[var(--color-ink-900)]" : "bg-canvas",
         )}
       >
         {chromeMode === "full" ? (
-          <div className={isDarkHero ? "sticky top-0 z-30 bg-[var(--color-ink-900)]" : "sticky top-0 z-30"}>
+          <div className={isDarkHero ? "sticky top-0 z-30 bg-[var(--color-ink-900)]" : "sticky top-0 z-30 bg-surface"}>
             {/*
               DESKTOP ONLY: the phone header keeps its pill corners and heavy
               drop shadow; from `lg:` it becomes a flat page header with a hairline

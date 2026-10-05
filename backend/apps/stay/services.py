@@ -33,6 +33,7 @@ from apps.stay.models import (
     StayReviewPhoto,
     StayVisit,
     Unit,
+    UnitMedia,
     UnitReservation,
 )
 
@@ -305,17 +306,18 @@ def _stored_name_from_url(url: str, folder: str) -> str | None:
 
 
 def customer_owns_review_photo(*, customer: Any, url: str) -> bool:
-    stored_name = _stored_name_from_url(url, "stay-reviews/")
+    stored_name = _stored_name_from_url(url, ("images/reviews/stays/", "stay-reviews/"))
     if stored_name is None:
         return False
     return StayReviewPhoto.objects.filter(customer=customer, stored_file=stored_name).exists()
 
 
 def partner_owns_stay_photo(*, partner: Any, url: str) -> bool:
-    stored_name = _stored_name_from_url(url, "stay-ads/")
+    stored_name = _stored_name_from_url(url, ("images/stays/properties/", "stay-ads/"))
     if stored_name is None:
         return False
     return StayPhotoUpload.objects.filter(partner=partner, stored_file=stored_name).exists()
+
 
 
 #: Facts that differ from room to room. The category schemas publish them once per property, which
@@ -669,8 +671,9 @@ def create_unit(
     attributes: dict[str, Any] | None = None,
     is_active: bool = True,
     room_numbers: list[str] | None = None,
+    image_urls: list[str] | None = None,
 ) -> Unit:
-    """A new room type and its numbered rooms.
+    """A new room type, its numbered rooms, and photos of the room (``image_urls``).
 
     ``room_numbers`` ("101", "102") name each room; without them the type gets ``quantity``
     rooms numbered "Room N" for the host to rename.
@@ -713,6 +716,8 @@ def create_unit(
         numbers=numbers or _next_room_numbers(prop, quantity),
         status=Room.Status.AVAILABLE if is_active else Room.Status.UNAVAILABLE,
     )
+    for url in image_urls or []:
+        add_unit_media(unit=unit, host=host, url=url)
     return sync_unit_rooms(unit)
 
 
@@ -1222,8 +1227,11 @@ def _assert_publishable(prop: Property) -> None:
         raise StayStateError(
             "Add the property location before publishing.", code="location_required"
         )
-    if not prop.media.exists():
-        raise StayStateError("Add at least one photo before publishing.", code="photo_required")
+    # Guests choose by the room, so a room photo is enough; building photos are optional.
+    if not prop.media.exists() and not UnitMedia.objects.filter(unit__property=prop).exists():
+        raise StayStateError(
+            "Add at least one room photo before publishing.", code="photo_required"
+        )
     if not prop.units.filter(is_active=True).exists():
         raise StayStateError("Add at least one room before publishing.", code="room_required")
 
@@ -1521,7 +1529,9 @@ def public_properties(  # noqa: PLR0912
         )
         .filter(models.Exists(rooms), host_approved)
         .prefetch_related(
-            models.Prefetch("units", queryset=Unit.objects.filter(is_active=True)),
+            models.Prefetch(
+                "units", queryset=Unit.objects.filter(is_active=True).prefetch_related("media")
+            ),
             "media",
             "reviews",
             "variant__a9_configurations",
@@ -1954,6 +1964,40 @@ def add_property_media(
     )
 
 
+#: Photos per room type. The property's own gallery holds the building and common areas.
+MAX_UNIT_PHOTOS = 8
+
+
+def add_unit_media(*, unit: Unit, host: Any, url: str) -> UnitMedia:
+    """Attach a photo this partner uploaded to one of their room types."""
+    _require_stay_capability(host)
+    if unit.property.host_id != host.id:
+        raise PermissionError("Not your property.")
+    cleaned_url = url.strip()
+    if not cleaned_url:
+        raise StayStateError("Image URL is required.")
+    if not partner_owns_stay_photo(partner=host, url=cleaned_url):
+        raise StayStateError(
+            "Upload photos from this form instead of pasting links.",
+            code="photo_not_uploaded",
+        )
+    count = unit.media.count()
+    if count >= MAX_UNIT_PHOTOS:
+        raise StayStateError(
+            f"A room type can have up to {MAX_UNIT_PHOTOS} photos.", code="too_many_photos"
+        )
+    return UnitMedia.objects.create(unit=unit, url=cleaned_url, display_order=count)
+
+
+def remove_unit_media(*, unit: Unit, host: Any, media_id: UUID | str) -> None:
+    _require_stay_capability(host)
+    if unit.property.host_id != host.id:
+        raise PermissionError("Not your property.")
+    deleted, _ = UnitMedia.objects.filter(id=_as_uuid(media_id), unit=unit).delete()
+    if not deleted:
+        raise StayStateError("Photo not found on this room type.", code="media_not_found")
+
+
 def remove_property_media(
     *,
     prop: Property,
@@ -1966,7 +2010,11 @@ def remove_property_media(
     media = PropertyMedia.objects.filter(id=_as_uuid(media_id), property=prop).first()
     if not media:
         raise StayStateError("Photo not found on this property.", code="media_not_found")
-    if prop.public_state == "PUBLISHED" and not prop.media.exclude(id=media.id).exists():
+    if (
+        prop.public_state == "PUBLISHED"
+        and not prop.media.exclude(id=media.id).exists()
+        and not UnitMedia.objects.filter(unit__property=prop).exists()
+    ):
         raise StayStateError(
             "A live property needs at least one photo. Add another photo first.",
             code="last_photo",

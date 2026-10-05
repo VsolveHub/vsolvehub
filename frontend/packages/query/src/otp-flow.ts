@@ -84,6 +84,10 @@ export interface OtpFlowOptions {
   intendedRole?: "partner";
   /** Called once Django has established the session cookie. */
   onAuthenticated?: (session: AuthenticatedSession) => void;
+  /**
+   * Pre-filled phone number (e.g. from hero input or query string).
+   */
+  initialPhone?: string;
 }
 
 function countDigits(value: string): number {
@@ -308,6 +312,7 @@ export function useOtpFlow(apiClient: ApiClient, options: OtpFlowOptions = {}): 
     codeLength: fallbackCodeLength = 6,
     intendedRole,
     onAuthenticated,
+    initialPhone = "",
   } = options;
 
   const [phase, setPhase] = useState<OtpPhase>("phone");
@@ -319,7 +324,13 @@ export function useOtpFlow(apiClient: ApiClient, options: OtpFlowOptions = {}): 
    * Verify button disabled on a complete one.
    */
   const [issuedCodeLength, setIssuedCodeLength] = useState<number | null>(null);
-  const [phone, setPhone] = useState("");
+  const [phone, setPhone] = useState(initialPhone);
+
+  useEffect(() => {
+    if (initialPhone && phase === "phone") {
+      setPhone((current) => current || initialPhone);
+    }
+  }, [initialPhone, phase]);
   const [code, setCode] = useState("");
   const [challengeId, setChallengeId] = useState<string | null>(null);
   const [developmentCode, setDevelopmentCode] = useState<string | null>(null);
