@@ -21,7 +21,9 @@ export function appKind(): AppKind {
  * calls never fail due to mobile loopback or Wi-Fi IP changes.
  */
 export function apiBaseUrl(): string {
-  const configured = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
+  const configured =
+    process.env.EXPO_PUBLIC_API_BASE_URL?.trim() ||
+    (Constants.expoConfig?.extra?.apiBaseUrl as string | undefined)?.trim();
   const rawUrl = configured && configured.length > 0 ? configured.replace(/\/$/, "") : "http://localhost:8000";
 
   if (Platform.OS === "web") {
@@ -29,11 +31,19 @@ export function apiBaseUrl(): string {
   }
 
   // On native mobile (iOS / Android), 127.0.0.1 and localhost refer to the device itself.
+  // Also sync stale LAN IPs to the active Expo hostUri if Wi-Fi IP changes.
   const devHost = Constants.expoConfig?.hostUri?.split(":")[0];
-  if (rawUrl.includes("localhost") || rawUrl.includes("127.0.0.1")) {
-    if (devHost) {
-      return rawUrl.replace(/localhost|127\.0\.0\.1/, devHost);
+  if (devHost) {
+    if (
+      rawUrl.includes("localhost") ||
+      rawUrl.includes("127.0.0.1") ||
+      /^https?:\/\/(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?(\/.*)?$/.test(rawUrl)
+    ) {
+      return rawUrl.replace(/^(https?:\/\/)([^:/]+)(:\d+)?/, `$1${devHost}$3`);
     }
+  }
+
+  if (rawUrl.includes("localhost") || rawUrl.includes("127.0.0.1")) {
     if (Platform.OS === "android") {
       return rawUrl.replace(/localhost|127\.0\.0\.1/, "10.0.2.2");
     }
