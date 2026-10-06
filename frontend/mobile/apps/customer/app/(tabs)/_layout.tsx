@@ -4,8 +4,9 @@ import { useAuthStore } from "@vsolve/mobile-core";
 import { Text } from "@vsolve/mobile-ui";
 import { Image } from "expo-image";
 import { usePathname, useRouter, Slot } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Pressable, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle, Line, Path, Polyline, Rect } from "react-native-svg";
 
 import { useCustomerProfile } from "@/features/account/queries";
@@ -16,14 +17,16 @@ import { appChromeLayout } from "@/features/session/app-chrome-layout";
 import { CustomerLoginSheet } from "@/features/session/customer-login-sheet";
 import { isCustomerTabActive, requiresCustomerSignIn } from "@/features/session/navigation";
 
-const TABS = [
-  { name: "Home", href: "/" },
-  { name: "Services", href: "/catalog" },
-  { name: "Bookings", href: "/activity" },
-  { name: "Profile", href: "/account" },
-] as const;
+type TabIconType = "home" | "services" | "bookings" | "login" | "profile";
+
+interface TabItem {
+  name: string;
+  href: string | null;
+  icon: TabIconType;
+}
 
 export default function TabsLayout() {
+  const insets = useSafeAreaInsets();
   const pathname = usePathname();
   const router = useRouter();
   const status = useAuthStore((state) => state.status);
@@ -32,6 +35,7 @@ export default function TabsLayout() {
   const cartCount = cart.data?.items.length ?? 0;
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
+  const [pendingRedirect, setPendingRedirect] = useState<string | null>(null);
   const profile = useCustomerProfile(status === "signedIn");
   const profileName = profile.data?.display_name || profile.data?.full_name || "";
   const initials =
@@ -49,6 +53,37 @@ export default function TabsLayout() {
       router.replace(`/login?next=${encodeURIComponent(pathname)}` as never);
     }
   }, [pathname, router, status]);
+
+  const tabs: TabItem[] = [
+    { name: "Home", href: "/", icon: "home" },
+    { name: "Services", href: "/catalog", icon: "services" },
+    { name: "Bookings", href: "/activity", icon: "bookings" },
+    status === "signedIn"
+      ? { name: "Profile", href: "/account", icon: "profile" }
+      : { name: "Log in", href: null, icon: "login" },
+  ];
+
+  const handleTabPress = (tab: TabItem) => {
+    if (tab.name === "Bookings") {
+      if (status === "signedIn") {
+        router.push("/activity");
+      } else {
+        setPendingRedirect("/activity");
+        setLoginOpen(true);
+      }
+      return;
+    }
+
+    if (tab.name === "Log in") {
+      setPendingRedirect("/account");
+      setLoginOpen(true);
+      return;
+    }
+
+    if (tab.href) {
+      router.push(tab.href as never);
+    }
+  };
 
   if (chrome.hideMobileChrome) {
     return (
@@ -96,7 +131,14 @@ export default function TabsLayout() {
                 </Pressable>
               </>
             ) : (
-              <Pressable accessibilityRole="button" accessibilityLabel="Log in" onPress={() => setLoginOpen(true)}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Log in"
+                onPress={() => {
+                  setPendingRedirect("/account");
+                  setLoginOpen(true);
+                }}
+              >
                 <Text className="text-xs font-bold text-[#EA580C]">Log in</Text>
               </Pressable>
             )}
@@ -106,55 +148,100 @@ export default function TabsLayout() {
       <View className="flex-1">
         {status === "signedIn" || !requiresCustomerSignIn(pathname) ? <Slot /> : null}
       </View>
-      <View className="flex-row items-center justify-around border-t border-line/80 bg-[#FAF9F7] px-2 py-3">
-        {TABS.map((tab) => {
-          const active = isCustomerTabActive(tab.href, pathname);
-          const color = active ? "#EA580C" : "#6B6560";
+      <View
+        className="flex-row items-center justify-around border-t border-line/60 bg-[#FAF9F7] px-2 pt-2"
+        style={{ paddingBottom: Math.max(8, insets.bottom) }}
+      >
+        {tabs.map((tab) => {
+          const active = tab.href ? isCustomerTabActive(tab.href, pathname) : false;
+          const iconColor = active ? "#ffffff" : "#6B6560";
           return (
-            <Pressable key={tab.name} accessibilityRole="tab" accessibilityState={{ selected: active }} onPress={() => router.push(tab.href as never)} className="min-w-16 items-center gap-1 px-2 py-1">
-              <TabIcon name={tab.name} color={color} />
-              <Text className={active ? "text-[0.65rem] font-bold text-[#EA580C]" : "text-[0.65rem] font-semibold text-text-muted"}>{tab.name}</Text>
+            <Pressable
+              key={tab.name}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
+              onPress={() => handleTabPress(tab)}
+              className="min-w-16 items-center gap-1 px-2 py-0.5"
+            >
+              <View
+                className={
+                  active
+                    ? "h-10 w-10 items-center justify-center rounded-full bg-[#f87000]"
+                    : "h-10 w-10 items-center justify-center bg-transparent"
+                }
+              >
+                <TabIcon type={tab.icon} color={iconColor} />
+              </View>
+              <Text
+                className={
+                  active
+                    ? "text-[11px] font-bold text-[#f87000]"
+                    : "text-[11px] font-semibold text-[#6B6560]"
+                }
+              >
+                {tab.name}
+              </Text>
             </Pressable>
           );
         })}
       </View>
       <NotificationSheet open={alertsOpen} onOpenChange={setAlertsOpen} />
-      <CustomerLoginSheet open={loginOpen} onOpenChange={setLoginOpen} />
+      <CustomerLoginSheet
+        open={loginOpen}
+        onOpenChange={setLoginOpen}
+        onSuccess={() => {
+          if (pendingRedirect) {
+            const target = pendingRedirect;
+            setPendingRedirect(null);
+            router.push(target as never);
+          }
+        }}
+      />
     </View>
   );
 }
 
-function TabIcon({ name, color }: { name: (typeof TABS)[number]["name"]; color: string }) {
-  if (name === "Home") {
+function TabIcon({ type, color }: { type: TabIconType; color: string }) {
+  if (type === "home") {
     return (
-      <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
-        <Path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke={color} strokeWidth={2} />
-        <Polyline points="9 22 9 12 15 12 15 22" stroke={color} strokeWidth={2} />
+      <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+        <Path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+        <Polyline points="9 22 9 12 15 12 15 22" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
       </Svg>
     );
   }
-  if (name === "Services") {
+  if (type === "services") {
     return (
-      <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+      <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
         <Circle cx={11} cy={11} r={8} stroke={color} strokeWidth={2} />
-        <Path d="m21 21-4.3-4.3" stroke={color} strokeWidth={2} />
+        <Path d="m21 21-4.3-4.3" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
       </Svg>
     );
   }
-  if (name === "Bookings") {
+  if (type === "bookings") {
     return (
-      <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+      <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
         <Rect x={3} y={4} width={18} height={18} rx={2} stroke={color} strokeWidth={2} />
-        <Line x1={16} x2={16} y1={2} y2={6} stroke={color} strokeWidth={2} />
-        <Line x1={8} x2={8} y1={2} y2={6} stroke={color} strokeWidth={2} />
+        <Line x1={16} x2={16} y1={2} y2={6} stroke={color} strokeWidth={2} strokeLinecap="round" />
+        <Line x1={8} x2={8} y1={2} y2={6} stroke={color} strokeWidth={2} strokeLinecap="round" />
         <Line x1={3} x2={21} y1={10} y2={10} stroke={color} strokeWidth={2} />
       </Svg>
     );
   }
+  if (type === "login") {
+    return (
+      <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+        <Path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+        <Polyline points="10 17 15 12 10 7" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+        <Line x1={15} y1={12} x2={3} y2={12} stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      </Svg>
+    );
+  }
   return (
-    <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
-      <Path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" stroke={color} strokeWidth={2} />
+    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+      <Path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
       <Circle cx={12} cy={7} r={4} stroke={color} strokeWidth={2} />
     </Svg>
   );
 }
+

@@ -92,7 +92,8 @@ export function AddressSheet({
         postal_code: postal,
         latitude,
         longitude,
-        country: "IN",
+        state: "Telangana",
+        country_code: "IN",
       },
       {
         onSuccess: (created) => {

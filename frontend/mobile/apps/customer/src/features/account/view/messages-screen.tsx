@@ -1,8 +1,8 @@
 // Ported from frontend/apps/customer/features/account/view/communication-preferences.tsx
 // Exact match with Image 1 (Messages tab)
 import { describeError } from "@vsolve/query/native";
-import { Badge, ErrorState, Spinner, Switch, Text } from "@vsolve/mobile-ui";
-import { Pressable, View } from "react-native";
+import { Badge, ErrorState, Spinner, Text } from "@vsolve/mobile-ui";
+import { Pressable, Switch, View } from "react-native";
 
 import { useCommunicationPreferences, useSetCommunicationPreference } from "@/features/account/queries";
 import { AccountPageShell } from "./account-page-shell";
@@ -102,8 +102,8 @@ export function MessagesScreen() {
                     ) : null}
                   </View>
                   <Switch
-                    checked={row.is_enabled}
-                    onCheckedChange={(checked) =>
+                    value={row.is_enabled}
+                    onValueChange={(checked: boolean) =>
                       update.mutate({
                         channel: row.channel,
                         purpose: row.purpose,
