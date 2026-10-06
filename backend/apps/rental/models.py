@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, time
+from datetime import date
+from pathlib import Path
 from typing import Any
 
 from django.conf import settings
@@ -12,16 +13,14 @@ from django.db.models import Q, QuerySet
 
 from apps.foundation.slugs import slug_base, unique_slug
 from apps.foundation.storage import private_file_storage
-from apps.foundation.storage_paths import (
-    rental_ad_upload_to as _unified_rental_ad_upload_to,
-)
-from apps.foundation.storage_paths import (
-    rental_dispute_upload_to as _unified_rental_dispute_upload_to,
-)
 
 
 def rental_ad_upload_to(instance: models.Model, filename: str) -> str:
-    return _unified_rental_ad_upload_to(instance, filename)
+    ext = Path(filename).suffix.lower()
+    if ext not in {".jpg", ".jpeg", ".png", ".webp"}:
+        ext = ".jpg"
+    partner_key = getattr(instance, "partner_id", None) or "anon"
+    return f"rental-ads/{partner_key}/{uuid.uuid4().hex}{ext}"
 
 
 class RentalAsset(models.Model):
@@ -120,7 +119,7 @@ class RentalAsset(models.Model):
 
 
 class AssetReservation(models.Model):
-    """Stock held from pickup to return. Overlap is checked in services under a row lock."""
+    """Day-granular hold on an asset. MVP overlap enforced in services (select_for_update)."""
 
     class Status(models.TextChoices):
         TENTATIVE = "TENTATIVE", "Tentative"
@@ -132,10 +131,6 @@ class AssetReservation(models.Model):
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.TENTATIVE)
     start_date = models.DateField()
     end_date = models.DateField()
-    #: When the customer collects and returns the item. Stock is held between the two, so an
-    #: item returned at 10:00 can go out again at 14:00 the same day.
-    pickup_at = models.DateTimeField()
-    return_at = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -143,7 +138,6 @@ class AssetReservation(models.Model):
         ordering = ("-created_at",)
         indexes = [
             models.Index(fields=("asset", "status", "start_date", "end_date")),
-            models.Index(fields=("asset", "status", "pickup_at", "return_at")),
         ]
 
 
@@ -200,11 +194,8 @@ class RentalBooking(models.Model):
     )
     deposit = models.OneToOneField(RentalDeposit, on_delete=models.PROTECT, related_name="booking")
     status = models.CharField(max_length=24, choices=Status.choices, default=Status.CONFIRMED)
-    #: Pickup and return dates, kept for lists and reports. ``pickup_at``/``return_at`` decide.
     start_date = models.DateField()
     end_date = models.DateField()
-    pickup_at = models.DateTimeField()
-    return_at = models.DateTimeField()
     price_paise = models.PositiveIntegerField()
     #: Snapshot of the platform fee at booking time. Later rate changes do not rewrite it.
     platform_fee_percent = models.PositiveSmallIntegerField(default=0)
@@ -249,45 +240,6 @@ class RentalPlatformFee(models.Model):
         return f"{self.percent}%"
 
 
-class RentalPickupHours(models.Model):
-    """When a rental partner hands items over and takes them back.
-
-    One row per partner and it covers all their items. A partner without a row
-    gets ``RentalPickupHours.defaults_for(partner)`` (every day, 09:00-20:00).
-    """
-
-    #: Monday = 0 … Sunday = 6, as ``date.weekday()``.
-    ALL_DAYS = (0, 1, 2, 3, 4, 5, 6)
-    DEFAULT_OPENS = time(9, 0)
-    DEFAULT_CLOSES = time(20, 0)
-    DEFAULT_NOTICE_MINUTES = 120
-    DEFAULT_MAX_ADVANCE_DAYS = 60
-
-    partner = models.OneToOneField(
-        "partners.PartnerProfile", on_delete=models.CASCADE, related_name="rental_pickup_hours"
-    )
-    open_days = models.JSONField(default=list)
-    opens_at = models.TimeField(default=DEFAULT_OPENS)
-    closes_at = models.TimeField(default=DEFAULT_CLOSES)
-    #: The customer must book at least this long before pickup.
-    min_notice_minutes = models.PositiveIntegerField(default=DEFAULT_NOTICE_MINUTES)
-    #: The furthest ahead a pickup can be booked.
-    max_advance_days = models.PositiveSmallIntegerField(default=DEFAULT_MAX_ADVANCE_DAYS)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self) -> str:
-        return f"Pickup hours for {self.partner_id}"
-
-    @classmethod
-    def defaults_for(cls, partner: Any) -> RentalPickupHours:
-        return cls(partner=partner, open_days=list(cls.ALL_DAYS))
-
-    @classmethod
-    def for_partner(cls, partner: Any) -> RentalPickupHours:
-        row = cls.objects.filter(partner=partner).first()
-        return row if row is not None else cls.defaults_for(partner)
-
-
 class RentalBookingLine(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     booking = models.ForeignKey(RentalBooking, on_delete=models.CASCADE, related_name="lines")
@@ -318,20 +270,19 @@ class RentalModerationEvent(models.Model):
 
 
 def overlapping_reservations(
-    asset_id: uuid.UUID, start: datetime, end: datetime
+    asset_id: uuid.UUID, start: date, end: date
 ) -> QuerySet[AssetReservation]:
     return AssetReservation.objects.filter(
         asset_id=asset_id,
         status__in=(AssetReservation.Status.TENTATIVE, AssetReservation.Status.CONFIRMED),
-    ).filter(Q(pickup_at__lt=end) & Q(return_at__gt=start))
+    ).filter(Q(start_date__lt=end) & Q(end_date__gt=start))
 
 
-def overlapping_reserved_quantity(asset_id: uuid.UUID, start: datetime, end: datetime) -> int:
-    """Most pieces held at any one moment between ``start`` and ``end``.
+def overlapping_reserved_quantity(asset_id: uuid.UUID, start: date, end: date) -> int:
+    """Sum booking-line quantities held by overlapping tentative/confirmed reservations.
 
-    Sums booking-line quantities, because counting reservation *rows* under-counts
-    multi-unit bookings (one ``AssetReservation`` per booking whatever its quantity),
-    which let stock be oversold.
+    Counting reservation *rows* under-counts multi-unit bookings (quantity > 1 on a
+    line still creates one ``AssetReservation``), which let stock be oversold.
 
     CANCELLED/RETURNED bookings are excluded even if a leaked CONFIRMED
     reservation row remains (ghost hold); callers should still repair those rows.
@@ -343,8 +294,8 @@ def overlapping_reserved_quantity(asset_id: uuid.UUID, start: datetime, end: dat
                 AssetReservation.Status.TENTATIVE,
                 AssetReservation.Status.CONFIRMED,
             ),
-            booking__reservation__pickup_at__lt=end,
-            booking__reservation__return_at__gt=start,
+            booking__reservation__start_date__lt=end,
+            booking__reservation__end_date__gt=start,
         )
         .exclude(
             booking__status__in=(
@@ -355,10 +306,12 @@ def overlapping_reserved_quantity(asset_id: uuid.UUID, start: datetime, end: dat
         .select_related("booking__reservation")
     )
 
-    events: list[tuple[datetime, int]] = []
+    events = []
     for line in lines:
-        act_start = max(line.booking.reservation.pickup_at, start)
-        act_end = min(line.booking.reservation.return_at, end)
+        r_start = line.booking.reservation.start_date
+        r_end = line.booking.reservation.end_date
+        act_start = max(r_start, start)
+        act_end = min(r_end, end)
         if act_start < act_end:
             events.append((act_start, line.quantity))
             events.append((act_end, -line.quantity))
@@ -366,7 +319,6 @@ def overlapping_reserved_quantity(asset_id: uuid.UUID, start: datetime, end: dat
     if not events:
         return 0
 
-    # A return and a pickup at the same moment do not overlap: apply returns first.
     events.sort(key=lambda x: (x[0], x[1]))
     max_q = 0
     cur_q = 0
@@ -400,7 +352,11 @@ class RentalPhotoUpload(models.Model):
 
 
 def rental_dispute_upload_to(instance: models.Model, filename: str) -> str:
-    return _unified_rental_dispute_upload_to(instance, filename)
+    ext = Path(filename).suffix.lower()
+    if ext not in {".jpg", ".jpeg", ".png", ".webp"}:
+        ext = ".jpg"
+    partner_key = getattr(instance, "partner_id", None) or "anon"
+    return f"rental-disputes/{partner_key}/{uuid.uuid4().hex}{ext}"
 
 
 class RentalDisputePhoto(models.Model):

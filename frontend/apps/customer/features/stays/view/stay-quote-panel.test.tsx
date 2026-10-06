@@ -49,7 +49,6 @@ function mockProperty(overrides: Partial<Schemas["Property"]> = {}): Schemas["Pr
     amenities: [],
     highlights: [],
     can_review: false,
-    visits_offered: false,
     public_state: "PUBLISHED",
     media: [],
     reviews: [],
@@ -62,7 +61,6 @@ function mockProperty(overrides: Partial<Schemas["Property"]> = {}): Schemas["Pr
         sharing_count: 2,
         max_guests: 2,
         nightly_rate_paise: 900_000,
-        media: [],
         is_active: true,
       },
     ],
@@ -128,18 +126,7 @@ describe("StayQuotePanel", () => {
 
   it("sends the length, not a check-out date", async () => {
     client.GET.mockResolvedValue(ok({ nightly_rate_paise: 900_000, total_quote_paise: 900_000 }));
-    client.POST.mockResolvedValue(
-      ok(
-        {
-          id: "enq-1",
-          status: "SUBMITTED",
-          host_name: "Sri Sai PG",
-          host_phone: "+919955550001",
-          property_slug: "sri-sai-pg",
-        },
-        201,
-      ),
-    );
+    client.POST.mockResolvedValue(ok({ id: "enq-1" }, 201));
 
     render(<StayQuotePanel property={mockProperty()} />, { wrapper });
     fireEvent.click(await screen.findByRole("button", { name: /Send enquiry/i }));
@@ -148,16 +135,7 @@ describe("StayQuotePanel", () => {
     const body = client.POST.mock.calls[0]![1].body;
     expect(body).toMatchObject({ property_id: "prop-1", unit_id: "unit-1", length: 1 });
     expect(body).not.toHaveProperty("check_out");
-    // The guest stays on the page and sees who to call.
-    expect(
-      await screen.findByText(/Your details have been sent to the owner/i),
-    ).toBeInTheDocument();
-    expect(screen.getByText("+91 99555 50001")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /^Call$/ })).toHaveAttribute(
-      "href",
-      "tel:+919955550001",
-    );
-    expect(push).not.toHaveBeenCalled();
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/stays/mine"));
   });
 
   it("explains a minimum stay in the property's unit", async () => {

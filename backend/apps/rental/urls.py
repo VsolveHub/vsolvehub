@@ -43,11 +43,6 @@ urlpatterns = [
         name="partner-rental-asset-media-delete",
     ),
     path(
-        "partner/rentals/pickup-hours",
-        views.PartnerRentalPickupHoursView.as_view(),
-        name="partner-rental-pickup-hours",
-    ),
-    path(
         "partner/rentals/bookings",
         views.PartnerBookingCollectionView.as_view(),
         name="partner-rental-bookings",

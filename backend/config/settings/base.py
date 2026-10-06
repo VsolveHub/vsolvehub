@@ -195,7 +195,7 @@ STORAGES = {
             "OPTIONS": {
                 **_R2_CONNECTION,
                 "bucket_name": R2_PRIVATE_BUCKET,
-                "location": env("R2_PRIVATE_LOCATION", default=""),
+                "location": "files",
                 "querystring_auth": True,
                 "querystring_expire": R2_PRIVATE_URL_TTL_SECONDS,
             },
@@ -414,17 +414,6 @@ SPECTACULAR_SETTINGS = {
         # app's documents step — the same silent-rename trap as `CompletionResponseDecisionEnum`
         # below.
         "PartnerDocumentStatusEnum": "apps.partners.models.PartnerDocument.Status",
-        # Stay rooms and visits: named so new status sets elsewhere cannot rename them.
-        "StayRoomStatusEnum": "apps.stay.models.Room.Status",
-        "StayVisitStatusEnum": "apps.stay.models.StayVisit.Status",
-        "StayVisitDeclineReasonEnum": "apps.stay.models.StayVisit.DeclineReason",
-        # Jobs: interview mode collided with the compatibility-rule "ModeEnum".
-        "InterviewModeEnum": "apps.listings.models.Interview.Mode",
-        "ModeEnum": "apps.carts.models.ServiceCompatibilityRule.Mode",
-        "InterviewStatusEnum": "apps.listings.models.Interview.Status",
-        "ListingApplicationStatusEnum": "apps.listings.models.Application.Status",
-        "JobSeekerVisibilityEnum": "apps.listings.models.JobSeekerProfile.Visibility",
-        "JobSeekerAvailabilityEnum": "apps.listings.models.JobSeekerProfile.Availability",
         # Crew identity documents, added with the crew-verification surface. `kind` and `status`
         # each already existed on several models, so without these the generator emits positional
         # `Kind461Enum` / `StatusD62Enum` — names that shift the next time any unrelated model
@@ -609,7 +598,6 @@ SPECTACULAR_SETTINGS = {
         # Stays/rentals and listings moderation status choice sets
         "ModerationStatusEnum": "apps.stay.models.Property.ModerationStatus",
         "ListingModerationStatusEnum": "apps.listings.models.Listing.ModerationStatus",
-        "RentalAssetModerationStatusEnum": "apps.rental.models.RentalAsset.ModerationStatus",
     },
 }
 API_DOCS_ENABLED = env.bool("API_DOCS_ENABLED")
@@ -713,7 +701,7 @@ PARTNER_REQUIRED_DOCUMENT_KINDS = ("GOVERNMENT_ID",)
 DOCUMENT_STORAGE_PROVIDER = env("DOCUMENT_STORAGE_PROVIDER", default="unconfigured")
 SUPABASE_STORAGE_URL = env("SUPABASE_STORAGE_URL", default="")
 SUPABASE_SERVICE_ROLE_KEY = env("SUPABASE_SERVICE_ROLE_KEY", default="")
-PARTNER_DOCUMENT_BUCKET = env("PARTNER_DOCUMENT_BUCKET", default="documents/partner-kyc")
+PARTNER_DOCUMENT_BUCKET = env("PARTNER_DOCUMENT_BUCKET", default="partner-kyc")
 DOCUMENT_STORAGE_CONNECT_TIMEOUT_SECONDS = env.float(
     "DOCUMENT_STORAGE_CONNECT_TIMEOUT_SECONDS",
     default=3.0,
@@ -733,7 +721,7 @@ PARTNER_DOCUMENT_ORPHAN_RETENTION_HOURS = env.int(
 # A crew member's identity evidence. Its own bucket, not `partner-kyc`: these are documents about
 # a *worker*, retained on a different basis from the agency's own KYC, and a shared bucket makes
 # "delete everything we hold about this person" a prefix scan across two subjects.
-CREW_DOCUMENT_BUCKET = env("CREW_DOCUMENT_BUCKET", default="documents/crew-identity")
+CREW_DOCUMENT_BUCKET = env("CREW_DOCUMENT_BUCKET", default="crew-identity")
 # What a crew member must have approved before Operations verification stamps itself. Government
 # identity only, by default and deliberately: address proof and police verification are real
 # document kinds a Partner may upload and a reviewer may approve, but requiring them would empty
@@ -744,18 +732,14 @@ CREW_REQUIRED_DOCUMENT_KINDS = ("GOVERNMENT_ID",)
 # gallery of twenty-megabyte originals. Half the partner-KYC ceiling, which admits multi-page PDFs
 # this never needs.
 MAX_CREW_DOCUMENT_SIZE_BYTES = 10 * 1024 * 1024
-FULFILMENT_EVIDENCE_BUCKET = env(
-    "FULFILMENT_EVIDENCE_BUCKET",
-    default="images/fulfilment-evidence",
-)
+FULFILMENT_EVIDENCE_BUCKET = env("FULFILMENT_EVIDENCE_BUCKET", default="fulfilment-evidence")
 # M2 adds a bucket, not a storage adapter. `apps.foundation.storage` is one signed-upload boundary
 # shared by every app that needs one; a second implementation here is the duplication
 # `02-backend-tasks.md` §"Reuse before building" names against `M2-BE-202`.
 REQUIREMENT_ATTACHMENT_BUCKET = env(
     "REQUIREMENT_ATTACHMENT_BUCKET",
-    default="images/requirement-attachments",
+    default="requirement-attachments",
 )
-
 # Short: an attachment view URL is handed to a vendor whose invitation may expire while they hold
 # it. Five minutes means a leaked link is worthless long before `M2-BE-310` has to revoke anything.
 REQUIREMENT_ATTACHMENT_ACCESS_URL_TTL_SECONDS = env.int(
@@ -889,14 +873,6 @@ OUTBOX_RETRY_BACKOFF_MAX_SECONDS = env.int("OUTBOX_RETRY_BACKOFF_MAX_SECONDS", d
 OUTBOX_RECOVERY_BATCH_SIZE = env.int("OUTBOX_RECOVERY_BATCH_SIZE", default=200)
 
 CELERY_BEAT_SCHEDULE = {
-    "expire-stale-stay-visits": {
-        "task": "apps.stay.tasks.expire_stale_stay_visits",
-        "schedule": 60.0 * 15,
-    },
-    "send-job-candidate-digests": {
-        "task": "apps.listings.tasks.send_job_candidate_digests",
-        "schedule": 60.0 * 60 * 24,
-    },
     "recover-outbox-events": {
         "task": "apps.foundation.tasks.recover_outbox_events",
         "schedule": 30.0,

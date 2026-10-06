@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { AlertCircle, Calendar, Info, Phone, ShieldCheck, Users } from "lucide-react";
 import { isApiRequestError } from "@vsolve/api-client";
@@ -12,21 +13,13 @@ import {
   formatRate,
   pricePeriodOf,
   stayLengthLabel,
-  type StayEnquiry,
   type StayProperty,
 } from "../model";
 import { createStayEnquiry, fetchStayQuote } from "../queries";
-import { StayEnquirySent } from "./stay-enquiry-sent";
 
 interface StayQuotePanelProps {
   property: StayProperty;
   onSelectUnit?: (unitId: string) => void;
-  /** Scrolls the page back to the property details from the confirmation. */
-  onViewProperty?: () => void;
-  /** Hide the panel's own frame and heading when a parent already draws them. */
-  embedded?: boolean;
-  /** The room chosen to start with (the one opened from search). */
-  initialUnitId?: string;
 }
 
 /** Server limits, in the property's unit: 24 months or 90 nights. */
@@ -57,22 +50,15 @@ function refusalMessage(err: unknown, minimumLabel: string): string {
 }
 
 /**
- * The guest's side of a stay: send an enquiry, see the owner's number, and talk.
+ * The guest's side of a stay: send an enquiry, and the host calls.
  *
- * Once sent, the panel turns into a confirmation with the owner's name, number and a Call
- * button. Nothing is paid here; rent is paid directly to the owner. The guest picks a room (when there is more than one), a start date,
+ * Nothing is paid here. The guest picks a room (when there is more than one), a start date,
  * how long (months or nights, whichever the property is priced in) and how many people. The
  * estimate is the room's rate times that length, so the guest knows roughly what to expect
  * before the call.
  */
-export function StayQuotePanel({
-  property,
-  onSelectUnit,
-  onViewProperty,
-  embedded = false,
-  initialUnitId,
-}: StayQuotePanelProps) {
-  const [sent, setSent] = useState<StayEnquiry | null>(null);
+export function StayQuotePanel({ property, onSelectUnit }: StayQuotePanelProps) {
+  const router = useRouter();
   const period = pricePeriodOf(property.price_period);
   const monthly = period === "MONTH";
   const minimum = Math.max(property.min_stay_nights ?? 1, 1);
@@ -82,9 +68,7 @@ export function StayQuotePanel({
   const [checkIn, setCheckIn] = useState(addDaysIso(todayIso(), 7));
   const [length, setLength] = useState(minimum);
   const [lengthText, setLengthText] = useState(String(minimum));
-  const [selectedUnitId, setSelectedUnitId] = useState<string>(
-    property.units.find((u) => u.id === initialUnitId)?.id ?? property.units[0]?.id ?? "",
-  );
+  const [selectedUnitId, setSelectedUnitId] = useState<string>(property.units[0]?.id ?? "");
   const [adultCount, setAdultCount] = useState(1);
   const [childCount, setChildCount] = useState(0);
   const [message, setMessage] = useState("");
@@ -127,7 +111,7 @@ export function StayQuotePanel({
         child_count: children,
         message,
       }),
-    onSuccess: (enquiry) => setSent(enquiry as StayEnquiry),
+    onSuccess: () => router.push("/stays/mine"),
     onError: (err: unknown) => setError(refusalMessage(err, minimumLabel)),
   });
 
@@ -160,32 +144,17 @@ export function StayQuotePanel({
     reset();
   };
 
-  const frame = embedded
-    ? ""
-    : "rounded-[var(--radius-card)] border border-line bg-surface p-6 shadow-raised";
-
-  if (sent) {
-    return (
-      <div className={frame}>
-        <StayEnquirySent enquiry={sent} onViewProperty={onViewProperty} />
-      </div>
-    );
-  }
-
   return (
-    <div className={frame}>
-      {embedded ? null : (
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-xl font-bold text-text">Send an enquiry</h2>
-          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
-            <ShieldCheck className="size-3.5" />
-            Verified host
-          </span>
-        </div>
-      )}
-      <p className={embedded ? "text-xs text-text-secondary" : "mt-1 text-xs text-text-secondary"}>
-        Send your dates. You&apos;ll see the owner&apos;s number straight away, and they will call
-        you.
+    <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6 shadow-raised">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-xl font-bold text-text">Send an enquiry</h2>
+        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
+          <ShieldCheck className="size-3.5" />
+          Verified host
+        </span>
+      </div>
+      <p className="mt-1 text-xs text-text-secondary">
+        The host calls you to talk it through. Nothing is paid here.
       </p>
 
       <form onSubmit={handleSubmit} noValidate className="mt-6 flex flex-col gap-5">
@@ -363,8 +332,7 @@ export function StayQuotePanel({
           </p>
           <p className="flex items-start gap-1.5 text-[11px] text-text-secondary/80">
             <Info className="mt-0.5 size-3.5 shrink-0 text-text-secondary" />
-            An estimate only. Payment is made directly to the property owner; V Solve Hub does
-            not collect the room rent.
+            An estimate only — you agree the final price and payment with the host.
           </p>
         </div>
 

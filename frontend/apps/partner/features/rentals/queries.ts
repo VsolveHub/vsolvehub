@@ -5,17 +5,10 @@ import { request, type Schemas } from "@vsolve/api-client";
 import { getApiClient } from "@/lib/api/browser";
 
 export type RentalAsset = Schemas["RentalAsset"];
-/** The owner's list row: adds booked_now, available_now and upcoming_bookings. */
-export type PartnerRentalAsset = Schemas["PartnerRentalAsset"];
 export type RentalBooking = Schemas["RentalBooking"];
-/** The owner's view of a booking: adds the renter's name and phone. */
-export type PartnerRentalBooking = Schemas["PartnerRentalBooking"];
 export type CreateAssetRequest = Schemas["CreateAssetRequest"];
-export type UpdateAssetRequest = Schemas["PatchedUpdateAssetRequest"];
 export type PartnerCapability = Schemas["PartnerCapability"];
 export type PartnerBookingActionRequest = Schemas["PartnerBookingActionRequest"];
-export type RentalPickupHours = Schemas["RentalPickupHours"];
-export type RentalPickupHoursInput = Schemas["RentalPickupHoursRequest"];
 
 export type RentalTaxonomyVariant = {
   id: string;
@@ -53,7 +46,7 @@ export async function fetchPartnerDefaultLocation(): Promise<string> {
   }
 }
 
-export async function fetchPartnerRentalAssets(): Promise<PartnerRentalAsset[]> {
+export async function fetchPartnerRentalAssets(): Promise<RentalAsset[]> {
   const data = await request(() => getApiClient().GET("/api/v1/partner/rentals/assets"));
   return Array.isArray(data) ? data : [];
 }
@@ -120,48 +113,6 @@ export async function submitPartnerRentalAsset(assetId: string): Promise<RentalA
   return data as RentalAsset;
 }
 
-export async function updatePartnerRentalAsset(
-  assetId: string,
-  body: UpdateAssetRequest,
-): Promise<RentalAsset> {
-  const data = await request(() =>
-    getApiClient().PATCH("/api/v1/partner/rentals/assets/{asset_id}", {
-      params: { path: { asset_id: assetId } },
-      body,
-    }),
-  );
-  return data as RentalAsset;
-}
-
-/** pause = "mark unavailable" (hidden from customers), resume = back on sale. */
-export async function partnerRentalAssetAction(
-  assetId: string,
-  action: "submit" | "pause" | "resume",
-): Promise<RentalAsset> {
-  const data = await request(() =>
-    getApiClient().POST("/api/v1/partner/rentals/assets/{asset_id}/{action}", {
-      params: { path: { asset_id: assetId, action } },
-    }),
-  );
-  return data as RentalAsset;
-}
-
-export async function deletePartnerRentalAsset(assetId: string): Promise<void> {
-  await request(() =>
-    getApiClient().DELETE("/api/v1/partner/rentals/assets/{asset_id}", {
-      params: { path: { asset_id: assetId } },
-    }),
-  );
-}
-
-export async function deletePartnerRentalAssetMedia(assetId: string, mediaId: string): Promise<void> {
-  await request(() =>
-    getApiClient().DELETE("/api/v1/partner/rentals/assets/{asset_id}/media/{media_id}", {
-      params: { path: { asset_id: assetId, media_id: mediaId } },
-    }),
-  );
-}
-
 export async function partnerRentalBookingAction(
   bookingId: string,
   action: "handover" | "return" | "release-deposit" | "dispute-deposit" | "cancel",
@@ -191,17 +142,4 @@ export function rentalVariantChoices(
   return capabilities
     .filter((cap) => cap.workspace_key === "A7_RENTAL" && cap.status === "APPROVED")
     .map((cap) => ({ id: cap.variant_id, name: cap.variant_name }));
-}
-
-/** When customers can collect and return this partner's items. */
-export async function fetchRentalPickupHours(): Promise<RentalPickupHours> {
-  const data = await request(() => getApiClient().GET("/api/v1/partner/rentals/pickup-hours"));
-  return data as RentalPickupHours;
-}
-
-export async function saveRentalPickupHours(body: RentalPickupHoursInput): Promise<RentalPickupHours> {
-  const data = await request(() =>
-    getApiClient().PUT("/api/v1/partner/rentals/pickup-hours", { body }),
-  );
-  return data as RentalPickupHours;
 }

@@ -1,6 +1,5 @@
 "use client";
 
-import { whenLabel } from "@/features/rentals/pickup-time";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { friendlyErrorMessage } from "@vsolve/query";
 import { Badge, Button, Card, Dialog, EmptyState, Field, Input, Textarea, formatDate, formatMoney } from "@vsolve/ui";
@@ -336,9 +335,8 @@ export function PartnerRentalBookingsWorkspace() {
                   </Badge>
                 </span>
                 <span className="block text-sm text-text-secondary">
-                  {formatMoney(booking.price_paise)} ·{" "}
-                  {whenLabel(booking.pickup_at) || formatDate(booking.start_date)} –{" "}
-                  {whenLabel(booking.return_at) || formatDate(booking.end_date)}
+                  {formatMoney(booking.price_paise)} · {formatDate(booking.start_date)} –{" "}
+                  {formatDate(booking.end_date)}
                 </span>
                 <span className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-text-link">
                   View booking

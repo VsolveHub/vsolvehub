@@ -69,10 +69,6 @@ function mockBooking(overrides: Partial<Schemas["RentalBooking"]> = {}): Schemas
     status: "CONFIRMED",
     start_date: "2026-09-01",
     end_date: "2026-09-03",
-    pickup_at: "2026-09-01T04:30:00Z",
-    return_at: "2026-09-03T04:30:00Z",
-    rental_days: 2,
-    pickup_contact: null,
     quantity: 1,
     price_paise: 100000,
     pickup_or_delivery_mode: "PICKUP",
@@ -134,8 +130,7 @@ describe("RentalBookPanel", () => {
     render(<RentalBookPanel asset={mockAsset()} />, { wrapper });
 
     expect(await screen.findByText("Platform fee (10%)")).toBeInTheDocument();
-    // The first pickup slot to the same time two days later: two days at ₹500,
-    // plus 10% (₹100), plus the ₹2,000 deposit.
+    // Two days at ₹500, plus 10% (₹100), plus the ₹2,000 deposit.
     expect(screen.getByText("₹3,100")).toBeInTheDocument();
   });
 
@@ -161,12 +156,12 @@ describe("RentalBookPanel", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText("Out of stock for these times. Try different times or another listing."),
+        screen.getByText("Out of stock for these dates. Try different dates or another listing."),
       ).toBeInTheDocument();
     });
 
     expect(
-      screen.getByRole("button", { name: "Unavailable for these times" }),
+      screen.getByRole("button", { name: "Unavailable for these dates" }),
     ).toBeDisabled();
     expect(window.alert).not.toHaveBeenCalled();
   });
@@ -187,12 +182,12 @@ describe("RentalBookPanel", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText("Not enough pieces free for these times. Try different times."),
+        screen.getByText("Not enough quantity available for these dates. Try different dates."),
       ).toBeInTheDocument();
     });
 
     expect(
-      screen.getByRole("button", { name: "Unavailable for these times" }),
+      screen.getByRole("button", { name: "Unavailable for these dates" }),
     ).toBeDisabled();
     expect(window.alert).not.toHaveBeenCalled();
   });
@@ -217,45 +212,5 @@ describe("RentalBookPanel", () => {
       expect(router.push).toHaveBeenCalledWith("/rentals/mine");
     });
     expect(window.alert).not.toHaveBeenCalled();
-  });
-  it("sends the chosen pickup and return as date-times", async () => {
-    client.POST.mockResolvedValue(ok(mockBooking({ deposit: { id: "d", amount_paise: 0, status: "HELD", payment_attempt_id: null, simulated_capture_available: false } }), 201));
-
-    render(<RentalBookPanel asset={mockAsset()} />, { wrapper });
-    fireEvent.click(screen.getByRole("button", { name: "Confirm Rental Booking" }));
-
-    await waitFor(() => expect(client.POST).toHaveBeenCalled());
-    const body = client.POST.mock.calls[0]?.[1]?.body as { pickup_at: string; return_at: string };
-    const pickup = new Date(body.pickup_at).getTime();
-    const ret = new Date(body.return_at).getTime();
-    expect(ret - pickup).toBe(2 * 24 * 60 * 60 * 1000);
-    expect(body).not.toHaveProperty("start_date");
-  });
-
-  it("shows the owner's hours and only offers slots inside them", () => {
-    const asset = {
-      ...mockAsset(),
-      pickup_hours: {
-        open_days: [0, 1, 2, 3, 4, 5, 6],
-        opens_at: "10:00",
-        closes_at: "11:00",
-        min_notice_minutes: 0,
-        max_advance_days: 30,
-        slot_minutes: 30,
-        summary: "Every day, 10:00 AM - 11:00 AM",
-      },
-    };
-    render(<RentalBookPanel asset={asset} />, { wrapper });
-
-    expect(screen.getByText("Every day, 10:00 AM - 11:00 AM")).toBeInTheDocument();
-    const returnTimes = screen.getByRole("combobox", { name: "Return time" });
-    const labels = Array.from(returnTimes.querySelectorAll("option")).map((o) => o.textContent);
-    expect(labels.every((l) => ["10:00 AM", "10:30 AM", "11:00 AM"].includes(l ?? ""))).toBe(true);
-  });
-
-  it("tells the customer they collect the item from the owner's address", () => {
-    render(<RentalBookPanel asset={mockAsset()} />, { wrapper });
-    expect(screen.getByText("Koramangala, Bengaluru")).toBeInTheDocument();
-    expect(screen.getByText(/Delivery is not available/)).toBeInTheDocument();
   });
 });

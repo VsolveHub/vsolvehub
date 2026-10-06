@@ -1,17 +1,7 @@
-from typing import Any
-
 from django.conf import settings
-from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from apps.rental.models import (
-    RentalAsset,
-    RentalAssetMedia,
-    RentalBooking,
-    RentalDeposit,
-    RentalPickupHours,
-)
-from apps.rental.pickup_hours import hours_payload, rental_days
+from apps.rental.models import RentalAsset, RentalAssetMedia, RentalBooking, RentalDeposit
 
 
 class RentalAssetMediaSerializer(serializers.ModelSerializer):
@@ -30,7 +20,7 @@ class RentalAssetSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = RentalAsset
-        fields: tuple[str, ...] = (
+        fields = (
             "id",
             "slug",
             "title",
@@ -50,39 +40,6 @@ class RentalAssetSerializer(serializers.ModelSerializer):
             "created_at",
         )
         read_only_fields = fields
-
-
-class PartnerRentalAssetSerializer(RentalAssetSerializer):
-    """The owner's view of an ad: how many pieces are out today and free to book.
-
-    Needs ``context["stock"]`` from ``asset_stock_counts``.
-    """
-
-    booked_now = serializers.SerializerMethodField()
-    available_now = serializers.SerializerMethodField()
-    upcoming_bookings = serializers.SerializerMethodField()
-
-    class Meta(RentalAssetSerializer.Meta):
-        fields = (
-            *RentalAssetSerializer.Meta.fields,
-            "booked_now",
-            "available_now",
-            "upcoming_bookings",
-        )
-        read_only_fields = fields
-
-    def _stock(self, obj: RentalAsset) -> dict[str, int]:
-        stock = self.context.get("stock") or {}
-        return stock.get(obj.id) or {"booked_now": 0, "upcoming": 0}
-
-    def get_booked_now(self, obj: RentalAsset) -> int:
-        return min(self._stock(obj)["booked_now"], obj.quantity_available)
-
-    def get_available_now(self, obj: RentalAsset) -> int:
-        return max(obj.quantity_available - self._stock(obj)["booked_now"], 0)
-
-    def get_upcoming_bookings(self, obj: RentalAsset) -> int:
-        return self._stock(obj)["upcoming"]
 
 
 class RentalPhotoUploadSerializer(serializers.Serializer):
@@ -143,12 +100,8 @@ class RentalTaxonomySubcategorySerializer(serializers.Serializer):
 
 class CreateBookingSerializer(serializers.Serializer):
     asset_id = serializers.UUIDField()
-    #: When the customer collects and returns the item. Preferred over the dates.
-    pickup_at = serializers.DateTimeField(required=False)
-    return_at = serializers.DateTimeField(required=False)
-    #: The older whole-day form: books 10:00 to 10:00.
-    start_date = serializers.DateField(required=False)
-    end_date = serializers.DateField(required=False)
+    start_date = serializers.DateField()
+    end_date = serializers.DateField()
     quantity = serializers.IntegerField(min_value=1, required=False, default=1)
     # Accepted for API compat; always coerced to PICKUP (OLX pickup-only model).
     pickup_or_delivery_mode = serializers.CharField(required=False, default="PICKUP")
@@ -156,13 +109,6 @@ class CreateBookingSerializer(serializers.Serializer):
 
     def validate_pickup_or_delivery_mode(self, value: str) -> str:
         return "PICKUP"
-
-    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-        has_times = attrs.get("pickup_at") is not None and attrs.get("return_at") is not None
-        has_dates = attrs.get("start_date") is not None and attrs.get("end_date") is not None
-        if not (has_times or has_dates):
-            raise serializers.ValidationError("Choose a pickup and a return time.")
-        return attrs
 
 
 class OpsRentalDisputeDecisionSerializer(serializers.Serializer):
@@ -193,10 +139,6 @@ class UpdateAssetSerializer(serializers.Serializer):
     location_text = serializers.CharField(max_length=180, required=False)
     quantity_available = serializers.IntegerField(min_value=1, required=False)
     structured_fields = serializers.JSONField(required=False)
-    #: New photos to add (uploaded through the photos endpoint). Existing ones stay.
-    add_image_urls = serializers.ListField(
-        child=serializers.CharField(min_length=1), required=False, max_length=8
-    )
 
 
 class RentalDepositSerializer(serializers.ModelSerializer):
@@ -224,56 +166,19 @@ class RentalDepositSerializer(serializers.ModelSerializer):
         return bool(settings.PAYMENTS_ALLOW_SIMULATED_CAPTURE) and attempt.provider == "fake"
 
 
-class RentalPickupContactSerializer(serializers.Serializer):
-    owner_name = serializers.CharField()
-    owner_phone = serializers.CharField()
-    address = serializers.CharField()
-
-
-class RentalPickupHoursSerializer(serializers.Serializer):
-    """The owner's pickup and return schedule. ``HH:MM`` local times; Monday = 0."""
-
-    open_days = serializers.ListField(child=serializers.IntegerField(min_value=0, max_value=6))
-    opens_at = serializers.TimeField(format="%H:%M")
-    closes_at = serializers.TimeField(format="%H:%M")
-    min_notice_minutes = serializers.IntegerField(min_value=0)
-    max_advance_days = serializers.IntegerField(min_value=1)
-    slot_minutes = serializers.IntegerField(read_only=True)
-    summary = serializers.CharField(read_only=True)
-
-
-class RentalAssetDetailSerializer(RentalAssetSerializer):
-    """One item's page: adds the owner's pickup hours so the customer picks valid times."""
-
-    pickup_hours = serializers.SerializerMethodField()
-
-    class Meta(RentalAssetSerializer.Meta):
-        fields = (*RentalAssetSerializer.Meta.fields, "pickup_hours")
-        read_only_fields = fields
-
-    @extend_schema_field(RentalPickupHoursSerializer)
-    def get_pickup_hours(self, obj: RentalAsset) -> dict[str, Any]:
-        return hours_payload(RentalPickupHours.for_partner(obj.partner))
-
-
 class RentalBookingSerializer(serializers.ModelSerializer):
     asset = RentalAssetSerializer(read_only=True)
     deposit = RentalDepositSerializer(read_only=True)
     handover_pin = serializers.SerializerMethodField()
     quantity = serializers.SerializerMethodField()
-    rental_days = serializers.SerializerMethodField()
-    pickup_contact = serializers.SerializerMethodField()
 
     class Meta:
         model = RentalBooking
-        fields: tuple[str, ...] = (
+        fields = (
             "id",
             "status",
             "start_date",
             "end_date",
-            "pickup_at",
-            "return_at",
-            "rental_days",
             "quantity",
             "price_paise",
             "platform_fee_percent",
@@ -283,31 +188,8 @@ class RentalBookingSerializer(serializers.ModelSerializer):
             "asset",
             "deposit",
             "handover_pin",
-            "pickup_contact",
             "created_at",
         )
-
-    def get_rental_days(self, booking: RentalBooking) -> int:
-        return rental_days(booking.pickup_at, booking.return_at)
-
-    @extend_schema_field(RentalPickupContactSerializer(allow_null=True))
-    def get_pickup_contact(self, booking: RentalBooking) -> dict[str, str] | None:
-        """Where and whom to collect from — the renting customer only, once the booking is paid."""
-        request = self.context.get("request")
-        user = getattr(request, "user", None)
-        if user is None or not user.is_authenticated or user.id != booking.customer_id:
-            return None
-        if booking.status not in (
-            RentalBooking.Status.CONFIRMED,
-            RentalBooking.Status.HANDOVER,
-        ):
-            return None
-        partner = booking.asset.partner
-        return {
-            "owner_name": partner.display_name or "",
-            "owner_phone": str(getattr(partner.user, "phone_number", "") or ""),
-            "address": booking.asset.location_text or "",
-        }
 
     def get_quantity(self, booking: RentalBooking) -> int:
         line = booking.lines.order_by("id").first()

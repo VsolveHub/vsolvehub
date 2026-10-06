@@ -15,28 +15,23 @@ from apps.foundation.slugs import lookup_by_slug_or_id
 from apps.partners.models import PartnerProfile
 from apps.partners.permissions import IsOperationsUser, IsPartnerUser
 from apps.rental.exceptions import RentalStateApiError
-from apps.rental.models import RentalAsset, RentalBooking, RentalDeposit, RentalPickupHours
-from apps.rental.pickup_hours import HoursInput, PickupWindowError, hours_payload, save_hours
+from apps.rental.models import RentalAsset, RentalBooking, RentalDeposit
 from apps.rental.serializers import (
     CreateAssetSerializer,
     CreateBookingSerializer,
     OpsRentalDisputeDecisionSerializer,
     PartnerBookingActionSerializer,
-    PartnerRentalAssetSerializer,
     PartnerRentalBookingSerializer,
-    RentalAssetDetailSerializer,
     RentalAssetSerializer,
     RentalBookingSerializer,
     RentalModerationSerializer,
     RentalPhotoUploadSerializer,
-    RentalPickupHoursSerializer,
     RentalPlatformFeeSerializer,
     RentalTaxonomySubcategorySerializer,
     UpdateAssetSerializer,
 )
 from apps.rental.services import (
     RentalStateError,
-    asset_stock_counts,
     auto_publish_asset,
     cancel_booking,
     create_booking,
@@ -52,7 +47,6 @@ from apps.rental.services import (
     public_assets,
     release_deposit,
     remove_media,
-    require_rental_partner,
     resume_asset,
     return_booking,
     save_platform_fee,
@@ -144,11 +138,11 @@ class RentalBrowseView(APIView):
 class RentalDetailView(APIView):
     permission_classes = (permissions.AllowAny,)
 
-    @extend_schema(responses=RentalAssetDetailSerializer)
+    @extend_schema(responses=RentalAssetSerializer)
     def get(self, _request: Any, key: str) -> Response:
         """``key`` is the page slug; an old link's asset id still works."""
         asset = get_object_or_404(public_assets(), **lookup_by_slug_or_id(key))
-        return Response(RentalAssetDetailSerializer(asset).data)
+        return Response(RentalAssetSerializer(asset).data)
 
 
 class RentalBookView(APIView):
@@ -162,10 +156,8 @@ class RentalBookView(APIView):
             booking = create_booking(
                 customer=request.user,
                 asset_id=ser.validated_data["asset_id"],
-                start_date=ser.validated_data.get("start_date"),
-                end_date=ser.validated_data.get("end_date"),
-                pickup_at=ser.validated_data.get("pickup_at"),
-                return_at=ser.validated_data.get("return_at"),
+                start_date=ser.validated_data["start_date"],
+                end_date=ser.validated_data["end_date"],
                 mode=ser.validated_data.get("pickup_or_delivery_mode", "PICKUP"),
                 notes=ser.validated_data.get("notes", ""),
                 quantity=ser.validated_data.get("quantity", 1),
@@ -251,18 +243,15 @@ class PartnerRentalPhotoUploadView(APIView):
 class PartnerAssetCollectionView(APIView):
     permission_classes = (IsPartnerUser,)
 
-    @extend_schema(responses=PartnerRentalAssetSerializer(many=True))
+    @extend_schema(responses=RentalAssetSerializer(many=True))
     def get(self, request: Any) -> Response:
         partner = _partner(request.user)
-        rows = list(
+        rows = (
             RentalAsset.objects.filter(partner=partner)
             .select_related("partner", "variant")
             .prefetch_related("media")
         )
-        stock = asset_stock_counts([row.id for row in rows])
-        return Response(
-            PartnerRentalAssetSerializer(rows, many=True, context={"stock": stock}).data
-        )
+        return Response(RentalAssetSerializer(rows, many=True).data)
 
     @extend_schema(request=CreateAssetSerializer, responses=RentalAssetSerializer)
     def post(self, request: Any) -> Response:
@@ -292,11 +281,6 @@ class PartnerAssetDetailView(APIView):
         asset = get_object_or_404(RentalAsset, id=asset_id, partner=partner)
         ser = UpdateAssetSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
-        new_urls = ser.validated_data.get("add_image_urls") or []
-        if not all(partner_owns_rental_photo(partner=partner, url=url) for url in new_urls):
-            raise RentalStateApiError(
-                reason="Upload photos from this form instead of pasting links."
-            )
         try:
             asset = update_asset(asset=asset, partner=partner, **ser.validated_data)
         except (RentalStateError, PermissionError) as exc:
@@ -557,43 +541,3 @@ class OpsRentalBookingCancelView(APIView):
             "asset", "asset__partner", "deposit", "deposit__payment_attempt"
         ).get(id=booking.id)
         return Response(RentalBookingSerializer(booking, context={"request": request}).data)
-
-
-class PartnerRentalPickupHoursView(APIView):
-    """GET / PUT the days and hours customers can collect and return items."""
-
-    permission_classes = (IsPartnerUser,)
-
-    @extend_schema(
-        operation_id="partner_rentals_pickup_hours_retrieve",
-        responses=RentalPickupHoursSerializer,
-    )
-    def get(self, request: Any) -> Response:
-        partner = _partner(request.user)
-        return Response(hours_payload(RentalPickupHours.for_partner(partner)))
-
-    @extend_schema(
-        operation_id="partner_rentals_pickup_hours_update",
-        request=RentalPickupHoursSerializer,
-        responses=RentalPickupHoursSerializer,
-    )
-    def put(self, request: Any) -> Response:
-        partner = _partner(request.user)
-        ser = RentalPickupHoursSerializer(data=request.data)
-        ser.is_valid(raise_exception=True)
-        data = ser.validated_data
-        try:
-            require_rental_partner(partner)
-            row = save_hours(
-                partner=partner,
-                data=HoursInput(
-                    open_days=list(data["open_days"]),
-                    opens_at=data["opens_at"],
-                    closes_at=data["closes_at"],
-                    min_notice_minutes=data["min_notice_minutes"],
-                    max_advance_days=data["max_advance_days"],
-                ),
-            )
-        except (PickupWindowError, PermissionError, RentalStateError) as exc:
-            _raise_domain_error(exc)
-        return Response(hours_payload(row))

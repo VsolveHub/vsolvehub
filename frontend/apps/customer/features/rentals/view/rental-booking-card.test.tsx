@@ -37,10 +37,6 @@ function mockBooking(overrides: Partial<Schemas["RentalBooking"]> = {}): Schemas
     status: "CONFIRMED",
     start_date: "2026-09-05",
     end_date: "2026-09-08",
-    pickup_at: "2026-09-05T04:30:00Z",
-    return_at: "2026-09-08T04:30:00Z",
-    rental_days: 2,
-    pickup_contact: null,
     quantity: 1,
     price_paise: 150000,
     pickup_or_delivery_mode: "PICKUP",
@@ -211,31 +207,5 @@ describe("RentalBookingCard", () => {
     render(<RentalBookingCard booking={booking} />, { wrapper });
 
     expect(screen.getByRole("button", { name: "Pay Now" })).toBeInTheDocument();
-  });
-  it("shows where to collect, the owner's number and a maps link once confirmed", () => {
-    const booking = mockBooking({
-      pickup_contact: {
-        owner_name: "Tool Master",
-        owner_phone: "+919800000000",
-        address: "Madhapur, Hyderabad",
-      },
-    });
-    render(<RentalBookingCard booking={booking} />, { wrapper });
-
-    expect(screen.getByText("Collect from the owner")).toBeInTheDocument();
-    expect(screen.getByText("Madhapur, Hyderabad")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Call Tool Master/ })).toHaveAttribute(
-      "href",
-      "tel:+919800000000",
-    );
-    expect(screen.getByRole("link", { name: /Open in Maps/ })).toHaveAttribute(
-      "href",
-      expect.stringContaining("Madhapur%2C%20Hyderabad"),
-    );
-  });
-
-  it("hides the owner's contact until the server shares it", () => {
-    render(<RentalBookingCard booking={mockBooking({ pickup_contact: null })} />, { wrapper });
-    expect(screen.queryByTestId("pickup-contact")).not.toBeInTheDocument();
   });
 });

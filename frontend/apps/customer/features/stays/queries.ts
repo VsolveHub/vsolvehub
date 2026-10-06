@@ -134,6 +134,54 @@ export function canCancelStayReservation(status?: string): boolean {
   return ["HELD", "PAYMENT_PENDING", "CONFIRMED"].includes(value);
 }
 
+export type StayVisit = Schemas["StayVisit"];
+
+export function fetchMyStayVisits() {
+  return request(() => getApiClient().GET("/api/v1/me/stay-visits"));
+}
+
+export function fetchVisitSlots(propertyId: string) {
+  return request(() =>
+    getApiClient().GET("/api/v1/stays/{property_id}/visit-slots", {
+      params: { path: { property_id: propertyId } },
+    }),
+  );
+}
+
+export function createStayVisit(payload: {
+  property_id: string;
+  slot_id: string;
+  visit_date: string;
+  unit_id?: string | null;
+  message?: string;
+}) {
+  return request(() =>
+    getApiClient().POST("/api/v1/stays/visits", {
+      body: {
+        property_id: payload.property_id,
+        slot_id: payload.slot_id,
+        visit_date: payload.visit_date,
+        unit_id: payload.unit_id ?? undefined,
+        message: payload.message ?? "",
+      },
+    }),
+  );
+}
+
+export function cancelStayVisit(visitId: string) {
+  return request(() =>
+    getApiClient().POST("/api/v1/me/stay-visits/{visit_id}/cancel", {
+      params: { path: { visit_id: visitId } },
+    }),
+  );
+}
+
+/** A guest can cancel a visit that is still requested or already accepted. */
+export function canCancelStayVisit(status?: string): boolean {
+  const value = (status ?? "").toUpperCase();
+  return value === "REQUESTED" || value === "ACCEPTED";
+}
+
 export function submitStayReview(payload: {
   property_id: string;
   rating: number;
@@ -173,54 +221,4 @@ export async function uploadStayReviewPhoto(file: File): Promise<{ upload_id: st
     }),
   );
   return data as { upload_id: string; url: string };
-}
-
-// --- visits ---------------------------------------------------------------------------------
-
-export type StayVisit = Schemas["StayVisit"];
-export type VisitDay = Schemas["VisitAvailabilityDay"];
-
-/** The days and visiting slots a guest can pick, for the next two weeks. */
-export function fetchVisitSlots(propertyId: string) {
-  return request(() =>
-    getApiClient().GET("/api/v1/stays/{property_id}/visit-slots", {
-      params: { path: { property_id: propertyId }, query: { days: 14 } },
-    }),
-  );
-}
-
-export function createStayVisit(payload: {
-  property_id: string;
-  slot_id: string;
-  visit_date: string;
-  unit_id?: string | null;
-  message?: string;
-}) {
-  return request(() =>
-    getApiClient().POST("/api/v1/stays/visits", {
-      body: {
-        property_id: payload.property_id,
-        slot_id: payload.slot_id,
-        visit_date: payload.visit_date,
-        unit_id: payload.unit_id ?? undefined,
-        message: payload.message ?? "",
-      },
-    }),
-  );
-}
-
-export function fetchMyStayVisits() {
-  return request(() => getApiClient().GET("/api/v1/me/stay-visits"));
-}
-
-export function cancelStayVisit(visitId: string) {
-  return request(() =>
-    getApiClient().POST("/api/v1/me/stay-visits/{visit_id}/cancel", {
-      params: { path: { visit_id: visitId } },
-    }),
-  );
-}
-
-export function canCancelStayVisit(status?: string): boolean {
-  return status === "REQUESTED" || status === "ACCEPTED";
 }

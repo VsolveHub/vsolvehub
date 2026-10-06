@@ -1,9 +1,8 @@
 "use client";
 
 import { ApiRequestError } from "@vsolve/api-client";
-import { useCurrentSession, useLogout } from "@vsolve/query";
 import { Logo, Sheet, cn } from "@vsolve/ui";
-import { Check, ChevronLeft, ListChecks, LogOut } from "lucide-react";
+import { Check, ChevronLeft, ListChecks } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useContext, useState, type ReactNode } from "react";
@@ -12,7 +11,6 @@ import { previousStep, progressSummary, stepProgress, type StepProgress } from "
 import { usePartnerApplication } from "../queries";
 import { MarketingMobileNav } from "@/components/marketing-mobile-nav";
 import { HomeHeroLink } from "@/components/home-hero-link";
-import { getApiClient } from "@/lib/api/browser";
 
 const NAV = [
   { href: "/how-it-works", label: "How It Works" },
@@ -146,9 +144,6 @@ function ApplyHeader({
 }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
-  const session = useCurrentSession(getApiClient());
-  const logout = useLogout(getApiClient());
-  const user = session.data?.user;
 
   const back = previousStep(pathname);
 
@@ -219,23 +214,6 @@ function ApplyHeader({
               >
                 Overview
               </Link>
-
-              {user && (
-                <div className="hidden md:flex items-center gap-1.5 rounded-full bg-surface-sunken border border-line-strong pl-3 pr-1 py-1 text-xs">
-                  <span className="font-semibold text-navy-900 max-w-[130px] truncate">
-                    {user.phone_number || "Signed In"}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => logout.mutate()}
-                    title="Sign Out / Switch Account"
-                    aria-label="Sign Out"
-                    className="flex h-6 w-6 items-center justify-center rounded-full bg-surface hover:bg-red-50 text-text-muted hover:text-red-600 transition-colors border border-line cursor-pointer"
-                  >
-                    <LogOut size={12} aria-hidden />
-                  </button>
-                </div>
-              )}
 
               <MarketingMobileNav items={NAV} />
             </div>
