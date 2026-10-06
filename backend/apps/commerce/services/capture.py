@@ -354,6 +354,11 @@ def apply_provider_payment(
 
             confirm_reservation_payment(payment_attempt_id=attempt.id)
             return None
+        if attempt.purpose == PaymentAttempt.Purpose.A9_STAY_SUBSCRIPTION:
+            from apps.stay.services import complete_stay_subscription_payment  # noqa: PLC0415
+
+            complete_stay_subscription_payment(payment_attempt_id=attempt.id)
+            return None
         _apply_m2_capture(attempt=attempt)
         return None
     if payment.status == "authorized" and attempt.status in (

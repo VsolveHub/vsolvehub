@@ -312,9 +312,9 @@ def _apply_refund_provider_result(
             refund.reconciliation_state = PaymentAttempt.ReconciliationState.IN_SYNC
             refund.failure_code = ""
             refund.completed_at = timezone.now()
-            from .loyalty_funding import credit_refunded_wallet  # noqa: PLC0415
+            from .loyalty_funding import apply_refund_to_loyalty  # noqa: PLC0415
 
-            credit_refunded_wallet(refund=refund)
+            apply_refund_to_loyalty(refund=refund)
             attempt = refund.payment_attempt
             if attempt is None:
                 raise ValueError("The provider refund has no payment attempt.")

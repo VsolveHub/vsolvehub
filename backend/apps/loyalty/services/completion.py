@@ -1,16 +1,21 @@
 """Customer completion recording service (Wave C2, ADR-0010)."""
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import UUID
 
 from django.db import transaction
+from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 from apps.foundation.models import OutboxEvent
 from apps.identity.models import User
 from apps.loyalty.models import CoinGrantRule, CustomerCompletion
-from apps.loyalty.services.coins import grant_coins, unlock_coins_for_customer
+from apps.loyalty.services.coins import (
+    get_loyalty_settings,
+    grant_coins,
+    unlock_coins_for_customer,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,7 +55,7 @@ def record_completion_for_customer(
     if raw_completed_at is None and event is not None:
         raw_completed_at = parse_datetime(str(event.payload.get("completed_at")))
     if raw_completed_at is None:
-        raw_completed_at = datetime.now()
+        raw_completed_at = timezone.now()
 
     eid = outbox_event_id
     if eid is None and event is not None:
@@ -74,11 +79,15 @@ def record_completion_for_customer(
     if created:
         count = CustomerCompletion.objects.filter(customer=customer).count()
         unlock_coins_for_customer(customer=customer, completion_count=count)
+        hold_days = get_loyalty_settings().reward_hold_days
         grant_coins(
             customer=customer,
             trigger=CoinGrantRule.GrantTrigger.BOOKING_COMPLETED,
             order_payable_paise=_order_payable_paise(event, stype, sid),
             sequence_n=count,
+            source_type=stype,
+            source_id=sid,
+            hold_until=raw_completed_at + timedelta(days=hold_days),
         )
 
     return RecordCompletionResult(created=created)
@@ -100,6 +109,11 @@ def _order_payable_paise(
 
         rental = RentalBooking.objects.filter(id=source_id).first()
         return rental.price_paise if rental else None
+    elif source_type == "ENGAGEMENT":
+        from apps.requirements.models import Engagement  # noqa: PLC0415
+
+        engagement = Engagement.objects.filter(id=source_id).first()
+        return int(engagement.total_paise) if engagement else None
     elif source_type == "STAY_CHECKED_OUT":
         from apps.stay.models import StayReservation  # noqa: PLC0415
 

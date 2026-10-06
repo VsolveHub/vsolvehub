@@ -13,6 +13,7 @@ import {
   issuesToFieldErrors,
   serverFieldErrors,
   type ApplyFormState,
+  parseSkills,
 } from "@/features/listings/model";
 import {
   fetchListing,
@@ -102,6 +103,8 @@ export default function ListingDetailPage() {
     experience: "",
     cover_note: "",
     resume_url: "",
+    skills: "",
+    findable: true,
   }));
 
   const [reportModalOpen, setReportModalOpen] = useState(false);
@@ -114,6 +117,7 @@ export default function ListingDetailPage() {
       submitListingApplication(listingId, {
         ...form,
         phone: toE164(form.phone, PHONE_COUNTRIES.IN),
+        skills: parseSkills(form.skills),
       }),
     onSuccess: () => {
       setFieldErrors({});
@@ -131,7 +135,7 @@ export default function ListingDetailPage() {
     },
   });
 
-  const updateField = (key: keyof ApplyFormState, value: string) => {
+  const updateField = (key: keyof ApplyFormState, value: string | boolean) => {
     setForm((current) => ({ ...current, [key]: value }));
     setFieldErrors((current) => (current[key] ? { ...current, [key]: "" } : current));
   };

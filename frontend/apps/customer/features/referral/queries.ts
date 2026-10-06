@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { request, type Schemas } from "@vsolve/api-client";
 import { VOLATILE_STATE } from "@vsolve/query";
 
@@ -45,22 +45,5 @@ export function useValidateReferralCode() {
           body: { code },
         }),
       ),
-  });
-}
-
-export function useApplyReferral() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (code: string) =>
-      request(() =>
-        getApiClient().POST("/api/v1/customer/referral/apply/", {
-          body: { code },
-        }),
-      ),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: referralKeys.summary });
-      void queryClient.invalidateQueries({ queryKey: referralKeys.attributions });
-    },
   });
 }

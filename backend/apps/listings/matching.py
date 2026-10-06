@@ -68,7 +68,10 @@ def score_match(job: Any, profile: Any) -> Match:  # noqa: PLR0912, PLR0915
 
     # Must-have skills, in proportion.
     have = _norm(profile.skills)
-    required = list(job.required_skills or [])
+    # A job posted without must-have skills borrows its role template's usual skills, so it
+    # does not hand every candidate the full skill points.
+    template = getattr(job, "role_template", None)
+    required = list(job.required_skills or []) or list(getattr(template, "skills", None) or [])
     if required:
         hits = [s for s in required if " ".join(s.lower().split()) in have]
         points += 35 * len(hits) / len(required)

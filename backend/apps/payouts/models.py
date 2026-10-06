@@ -36,6 +36,7 @@ from django.db import models
 
 from apps.commerce.models import Booking
 from apps.partners.models import PartnerProfile
+from apps.rental.models import RentalBooking
 
 
 class PartnerPayoutAccount(models.Model):
@@ -120,6 +121,14 @@ class PartnerLedgerEntry(models.Model):
     booking = models.ForeignKey(
         Booking, null=True, blank=True, on_delete=models.PROTECT, related_name="ledger_entries"
     )
+    #: A7 rental bookings. Exactly one of ``booking`` / ``rental_booking`` is set on an EARNING.
+    rental_booking = models.ForeignKey(
+        RentalBooking,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="ledger_entries",
+    )
     kind = models.CharField(max_length=12, choices=Kind.choices, default=Kind.EARNING)
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)
 
@@ -163,6 +172,12 @@ class PartnerLedgerEntry(models.Model):
                 fields=("booking",),
                 condition=models.Q(kind="EARNING", booking__isnull=False),
                 name="payouts_one_earning_per_booking",
+            ),
+            models.UniqueConstraint(
+                # One earning per A7 rental booking, same guarantee as above.
+                fields=("rental_booking",),
+                condition=models.Q(kind="EARNING", rental_booking__isnull=False),
+                name="payouts_one_earning_per_rental_booking",
             ),
             models.CheckConstraint(
                 condition=models.Q(

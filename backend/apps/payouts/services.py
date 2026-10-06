@@ -36,6 +36,7 @@ from apps.payouts.providers import (
     PayoutProviderRejectedError,
     get_payout_provider,
 )
+from apps.rental.models import RentalBooking
 
 #: How long a new or changed payout account must sit before money can leave through it.
 #:
@@ -201,14 +202,82 @@ def settle_booking_earning(
 
 
 @transaction.atomic
-def release_payout_hold(*, booking_id: UUID) -> PartnerLedgerEntry | None:
+def settle_rental_earning(
+    *, rental_booking_id: UUID, actor: User | None = None
+) -> PartnerLedgerEntry | None:
+    """Write the one immutable earning line for a returned rental booking.
+
+    Mirroring ``settle_booking_earning``, this is idempotent by the database
+    constraint ``payouts_one_earning_per_rental_booking``: a replayed settlement
+    returns the existing row. Two concurrent callers cannot both win.
+
+    The owner's share is ``price_paise - platform_fee_paise``. The deposit is
+    excluded — it is the customer's refundable security. The platform fee is
+    V Solve Hub's revenue (commission).
+
+    Returns ``None`` for a booking that has not reached ``RETURNED`` or
+    ``DISPUTED`` — the partner has not earned the fee yet.
+    """
+
+    rb = (
+        RentalBooking.objects.select_for_update(of=("self",))
+        .select_related("asset__partner")
+        .get(id=rental_booking_id)
+    )
+    existing = PartnerLedgerEntry.objects.filter(
+        rental_booking=rb, kind=PartnerLedgerEntry.Kind.EARNING
+    ).first()
+    if existing is not None:
+        return existing
+
+    if rb.status not in (RentalBooking.Status.RETURNED, RentalBooking.Status.DISPUTED):
+        return None
+
+    gross = int(rb.price_paise)
+    commission = int(rb.platform_fee_paise)
+    net = gross - commission
+    if net <= 0:
+        return None
+
+    held = rb.status == RentalBooking.Status.DISPUTED
+
+    return PartnerLedgerEntry.objects.create(
+        partner=rb.asset.partner,
+        rental_booking=rb,
+        kind=PartnerLedgerEntry.Kind.EARNING,
+        status=(PartnerLedgerEntry.Status.PENDING if held else PartnerLedgerEntry.Status.AVAILABLE),
+        gross_paise=gross,
+        commission_paise=commission,
+        net_paise=net,
+        currency="INR",
+        calculation_snapshot={
+            "booking_status": rb.status,
+            "price_paise": gross,
+            "platform_fee_percent": int(rb.platform_fee_percent),
+            "platform_fee_paise": commission,
+            "deposit_paise": int(rb.deposit.amount_paise) if rb.deposit_id else 0,
+        },
+        created_by=actor,
+        idempotency_key=f"rental-earning:{rb.id}",
+    )
+
+@transaction.atomic
+def release_payout_hold(
+    *, booking_id: UUID | None = None, rental_booking_id: UUID | None = None
+) -> PartnerLedgerEntry | None:
     """Move a held earning to `AVAILABLE` once the case that held it closes."""
 
-    entry = (
-        PartnerLedgerEntry.objects.select_for_update()
-        .filter(booking_id=booking_id, kind=PartnerLedgerEntry.Kind.EARNING)
-        .first()
+    qs = PartnerLedgerEntry.objects.select_for_update().filter(
+        kind=PartnerLedgerEntry.Kind.EARNING
     )
+    if booking_id is not None:
+        qs = qs.filter(booking_id=booking_id)
+    elif rental_booking_id is not None:
+        qs = qs.filter(rental_booking_id=rental_booking_id)
+    else:
+        return None
+
+    entry = qs.first()
     if entry is None or entry.status != PartnerLedgerEntry.Status.PENDING:
         return entry
     entry.status = PartnerLedgerEntry.Status.AVAILABLE

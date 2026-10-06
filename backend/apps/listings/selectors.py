@@ -14,7 +14,12 @@ def public_listings(  # noqa: PLR0912
     qs = (
         Listing.objects.select_related("poster", "variant", "variant__service")
         .prefetch_related("variant__a10_configurations")
-        .annotate(application_count=Count("applications"))
+        .annotate(
+            application_count=Count(
+                "applications",
+                filter=~Q(applications__status__in=("WITHDRAWN", "EXPIRED")),
+            )
+        )
         .filter(
             status=Listing.Status.PUBLISHED,
             moderation_status=Listing.ModerationStatus.APPROVED,
@@ -66,9 +71,9 @@ def public_listings(  # noqa: PLR0912
         )
     sort = str(filters.get("sort") or "latest")
     if sort == "salary_high":
-        qs = qs.order_by("-salary_max_paise", "-published_at", "-created_at")
+        qs = qs.order_by("-is_premium", "-salary_max_paise", "-published_at", "-created_at")
     elif sort == "salary_low":
-        qs = qs.order_by("salary_min_paise", "-published_at", "-created_at")
+        qs = qs.order_by("-is_premium", "salary_min_paise", "-published_at", "-created_at")
     else:
-        qs = qs.order_by("-published_at", "-created_at")
+        qs = qs.order_by("-is_premium", "-published_at", "-created_at")
     return qs

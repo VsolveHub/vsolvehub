@@ -13,6 +13,8 @@ from apps.stay.models import (
     StayEnquiry,
     StayReservation,
     StayReview,
+    StaySubscription,
+    StaySubscriptionPlan,
     StayVisit,
     Unit,
     UnitMedia,
@@ -770,3 +772,78 @@ class PartnerStayVisitSerializer(StayVisitSerializer):
             "decline_reason",
             "decline_note",
         )
+
+
+class StaySubscriptionPlanSerializer(serializers.ModelSerializer[StaySubscriptionPlan]):
+    class Meta:
+        model = StaySubscriptionPlan
+        fields = (
+            "id",
+            "code",
+            "name",
+            "price_paise",
+            "duration_days",
+            "max_properties",
+            "capabilities",
+            "details",
+            "is_active",
+            "created_at",
+            "updated_at",
+        )
+
+
+class OpsCreateStaySubscriptionPlanSerializer(serializers.ModelSerializer[StaySubscriptionPlan]):
+    class Meta:
+        model = StaySubscriptionPlan
+        fields = (
+            "code",
+            "name",
+            "price_paise",
+            "duration_days",
+            "max_properties",
+            "capabilities",
+            "details",
+            "is_active",
+        )
+
+
+class OpsUpdateStaySubscriptionPlanSerializer(serializers.ModelSerializer[StaySubscriptionPlan]):
+    class Meta:
+        model = StaySubscriptionPlan
+        fields = (
+            "name",
+            "price_paise",
+            "duration_days",
+            "max_properties",
+            "capabilities",
+            "details",
+            "is_active",
+        )
+
+
+class StaySubscriptionSerializer(serializers.ModelSerializer[StaySubscription]):
+    plan = StaySubscriptionPlanSerializer(read_only=True)
+
+    class Meta:
+        model = StaySubscription
+        fields = (
+            "id",
+            "plan",
+            "status",
+            "starts_at",
+            "ends_at",
+            "grace_ends_at",
+            "created_at",
+        )
+
+
+class HostSubscriptionStatusSerializer(serializers.Serializer[dict[str, Any]]):
+    subscription = StaySubscriptionSerializer(allow_null=True)
+    available_plans = StaySubscriptionPlanSerializer(many=True)
+    live_properties_count = serializers.IntegerField()
+    max_properties = serializers.IntegerField()
+
+
+class StartStaySubscriptionPurchaseSerializer(serializers.Serializer[dict[str, Any]]):
+    plan_id = serializers.UUIDField()
+

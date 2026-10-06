@@ -3,7 +3,11 @@
 from datetime import time
 from typing import Any
 
-from apps.listings.models import JobRoleTemplate
+from datetime import timedelta
+
+from django.utils import timezone
+
+from apps.listings.models import JobRoleTemplate, VendorSubscription, VendorSubscriptionPlan
 
 SALES_PAY_MIN = 2000000
 SALES_PAY_MAX = 3500000
@@ -35,3 +39,24 @@ def _sales_job(**overrides: Any) -> dict[str, Any]:
     }
     data.update(overrides)
     return data
+
+
+def give_matching_plan(poster: Any) -> VendorSubscription:
+    """An active paid plan that includes Matching candidates."""
+    plan, _ = VendorSubscriptionPlan.objects.get_or_create(
+        code="test-matching",
+        defaults={
+            "name": "Matching test plan",
+            "price_paise": 99900,
+            "max_active_listings": 50,
+            "premium_capabilities": ["CANDIDATE_MATCHING"],
+        },
+    )
+    now = timezone.now()
+    return VendorSubscription.objects.create(
+        poster=poster,
+        plan=plan,
+        status=VendorSubscription.Status.ACTIVE,
+        starts_at=now - timedelta(minutes=1),
+        ends_at=now + timedelta(days=30),
+    )

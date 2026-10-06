@@ -20,6 +20,9 @@ import { createStayEnquiry, fetchStayQuote } from "../queries";
 interface StayQuotePanelProps {
   property: StayProperty;
   onSelectUnit?: (unitId: string) => void;
+  onViewProperty?: () => void;
+  embedded?: boolean;
+  initialUnitId?: string;
 }
 
 /** Server limits, in the property's unit: 24 months or 90 nights. */
@@ -57,7 +60,13 @@ function refusalMessage(err: unknown, minimumLabel: string): string {
  * estimate is the room's rate times that length, so the guest knows roughly what to expect
  * before the call.
  */
-export function StayQuotePanel({ property, onSelectUnit }: StayQuotePanelProps) {
+export function StayQuotePanel({
+  property,
+  onSelectUnit,
+  onViewProperty: _onViewProperty,
+  embedded = false,
+  initialUnitId,
+}: StayQuotePanelProps) {
   const router = useRouter();
   const period = pricePeriodOf(property.price_period);
   const monthly = period === "MONTH";
@@ -68,7 +77,9 @@ export function StayQuotePanel({ property, onSelectUnit }: StayQuotePanelProps) 
   const [checkIn, setCheckIn] = useState(addDaysIso(todayIso(), 7));
   const [length, setLength] = useState(minimum);
   const [lengthText, setLengthText] = useState(String(minimum));
-  const [selectedUnitId, setSelectedUnitId] = useState<string>(property.units[0]?.id ?? "");
+  const [selectedUnitId, setSelectedUnitId] = useState<string>(
+    property.units.find((u) => u.id === initialUnitId)?.id ?? property.units[0]?.id ?? "",
+  );
   const [adultCount, setAdultCount] = useState(1);
   const [childCount, setChildCount] = useState(0);
   const [message, setMessage] = useState("");
@@ -144,16 +155,22 @@ export function StayQuotePanel({ property, onSelectUnit }: StayQuotePanelProps) 
     reset();
   };
 
+  const frame = embedded
+    ? ""
+    : "rounded-[var(--radius-card)] border border-line bg-surface p-6 shadow-raised";
+
   return (
-    <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6 shadow-raised">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-xl font-bold text-text">Send an enquiry</h2>
-        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
-          <ShieldCheck className="size-3.5" />
-          Verified host
-        </span>
-      </div>
-      <p className="mt-1 text-xs text-text-secondary">
+    <div className={frame}>
+      {embedded ? null : (
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-xl font-bold text-text">Send an enquiry</h2>
+          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
+            <ShieldCheck className="size-3.5" />
+            Verified host
+          </span>
+        </div>
+      )}
+      <p className={embedded ? "text-xs text-text-secondary" : "mt-1 text-xs text-text-secondary"}>
         The host calls you to talk it through. Nothing is paid here.
       </p>
 

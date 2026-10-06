@@ -384,7 +384,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.66.0",
+    "VERSION": "1.67.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -432,6 +432,7 @@ SPECTACULAR_SETTINGS = {
         "WorkEvidenceKindEnum": "apps.fulfilment.models.WorkEvidence.Kind",
         "WorkOutcomeEnum": "apps.fulfilment.models.WorkOutcome.Outcome",
         "BookingStatusEnum": "apps.commerce.models.Booking.Status",
+        "ModeEnum": "apps.carts.models.ServiceCompatibilityRule.Mode",
         # Pinned when the host's enquiry view (with the guest's contact) became a second
         # serializer over `StayEnquiry`; without it the enum was renamed to a positional name.
         "StayEnquiryStatusEnum": "apps.stay.models.StayEnquiry.Status",
@@ -917,6 +918,11 @@ CELERY_BEAT_SCHEDULE = {
     },
     "expire-loyalty-coins": {
         "task": "apps.loyalty.tasks.expire_due_coins",
+        "schedule": 60.0 * 15,
+    },
+    "release-loyalty-rewards": {
+        # Pays booking coins and referral rewards once their waiting period is over.
+        "task": "apps.loyalty.tasks.release_due_loyalty_rewards",
         "schedule": 60.0 * 15,
     },
     "reconcile-payouts": {

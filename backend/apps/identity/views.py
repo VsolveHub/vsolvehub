@@ -151,6 +151,7 @@ class OtpVerifyView(APIView):
                 challenge_id=data["challenge_id"],
                 phone_number=data["phone_number"],
                 code=data["code"],
+                referral_code=data.get("referral_code", ""),
             )
         except OtpVerificationError as exc:
             raise InvalidOtpApiError from exc

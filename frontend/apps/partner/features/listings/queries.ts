@@ -40,6 +40,8 @@ export interface ListingHome {
   pending_moderation: number;
   new_applications: number;
   plan_limit: number | null;
+  /** Paid plans with Matching candidates; free employers see only applicants. */
+  can_see_matches: boolean;
   subscription: null | {
     id: string;
     plan_name: string;

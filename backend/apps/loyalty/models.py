@@ -47,11 +47,48 @@ class CustomerCompletion(models.Model):
         return f"{self.customer_id}:{self.source_type}:{self.source_id}"
 
 
+class LoyaltySettings(models.Model):
+    """Single row of Operations settings shared by V Coins and referrals."""
+
+    SINGLETON_ID = 1
+
+    id = models.PositiveSmallIntegerField(primary_key=True, default=SINGLETON_ID, editable=False)
+    #: Days after a booking completes before coins earned on it, or a referral it qualified,
+    #: become usable. A refund inside the window cancels them. 0 pays immediately.
+    reward_hold_days = models.PositiveSmallIntegerField(default=7)
+    #: Most referral rewards one referrer can receive per calendar month. 0 means no limit.
+    #: Rewards above the cap wait and are paid in a later month.
+    referral_monthly_cap = models.PositiveIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(id=1),
+                name="loyalty_settings_singleton",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(reward_hold_days__lte=90),
+                name="loyalty_settings_hold_days_range",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"LoyaltySettings(hold={self.reward_hold_days}d, cap={self.referral_monthly_cap})"
+
+
 class CoinBurnPolicy(models.Model):
     """Operations-configurable coin burn rules for checkout."""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    max_burn_percent = models.PositiveSmallIntegerField(default=30)  # e.g. 30% max
+    max_burn_percent = models.PositiveSmallIntegerField(default=20)  # e.g. 20% max
     coin_value_paise = models.PositiveIntegerField(default=10)  # 1 coin = 10 paise (₹0.10)
     is_active = models.BooleanField(default=True)
     effective_from = models.DateTimeField(auto_now_add=True)
@@ -144,10 +181,22 @@ class CoinGrant(models.Model):
     """Promised bucket of V Coins granted to a specific customer."""
 
     class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending (waiting period)"
         PROMISED = "PROMISED", "Promised (locked)"
         UNLOCKED = "UNLOCKED", "Unlocked (spendable)"
         EXPIRED = "EXPIRED", "Expired"
         EXHAUSTED = "EXHAUSTED", "Exhausted"
+        CANCELLED = "CANCELLED", "Cancelled"
+        REVERSED = "REVERSED", "Reversed"
+
+    class SourceType(models.TextChoices):
+        SIGNUP = "SIGNUP", "Signup"
+        BOOKING = "BOOKING", "Booking"
+        ENGAGEMENT = "ENGAGEMENT", "Engagement"
+        RENTAL_COMPLETED = "RENTAL_COMPLETED", "Rental completed"
+        STAY_CHECKED_OUT = "STAY_CHECKED_OUT", "Stay checked out"
+        REFERRAL = "REFERRAL", "Referral"
+        MANUAL_OPS = "MANUAL_OPS", "Manual operations"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     customer = models.ForeignKey(
@@ -169,10 +218,19 @@ class CoinGrant(models.Model):
     expired_coins = models.PositiveIntegerField(default=0)
     expires_at = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PROMISED)
+    #: What earned these coins: the booking, referral or Operations action. Blank for legacy rows.
+    source_type = models.CharField(max_length=20, choices=SourceType.choices, blank=True)
+    source_id = models.UUIDField(null=True, blank=True)
+    #: When a PENDING grant leaves its waiting period. Null for every other status.
+    available_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ("expires_at", "created_at")
+        indexes = [
+            models.Index(fields=("status", "available_at")),
+            models.Index(fields=("source_type", "source_id")),
+        ]
 
     def __str__(self) -> str:
         return f"{self.customer_id}:{self.spendable_coins} spendable / {self.locked_coins} locked"
@@ -188,6 +246,8 @@ class CoinTransaction(models.Model):
         BURN = "BURN", "Burn"
         RELEASE = "RELEASE", "Release"
         EXPIRE = "EXPIRE", "Expire"
+        CANCEL = "CANCEL", "Cancel"
+        REVERSE = "REVERSE", "Reverse"
         ADJUSTMENT = "ADJUSTMENT", "Adjustment"
 
     class Status(models.TextChoices):
@@ -254,7 +314,7 @@ class ReferralProgramVersion(models.Model):
         choices=RewardSides.choices,
         default=RewardSides.BOTH,
     )
-    referee_wallet_paise = models.PositiveBigIntegerField(default=5000)  # default ₹50
+    referee_wallet_paise = models.PositiveBigIntegerField(default=0)
     referee_coins_amount = models.PositiveIntegerField(default=100)
     is_active = models.BooleanField(default=True)
     effective_from = models.DateTimeField(auto_now_add=True)
@@ -275,8 +335,8 @@ class ReferralProgramRewardTier(models.Model):
         related_name="tiers",
     )
     min_qualified_referrals = models.PositiveIntegerField(default=1)
-    referrer_wallet_paise = models.PositiveBigIntegerField(default=10000)  # default ₹100
-    referrer_coins_amount = models.PositiveIntegerField(default=0)
+    referrer_wallet_paise = models.PositiveBigIntegerField(default=0)
+    referrer_coins_amount = models.PositiveIntegerField(default=100)
     referee_wallet_paise = models.PositiveBigIntegerField(null=True, blank=True)
     referee_coins_amount = models.PositiveIntegerField(null=True, blank=True)
     sort_order = models.PositiveSmallIntegerField(default=0)
@@ -313,7 +373,8 @@ class ReferralAttribution(models.Model):
         QUALIFIED = "QUALIFIED", "Qualified"
         REWARDED = "REWARDED", "Rewarded"
         EXPIRED = "EXPIRED", "Expired"
-        INELIGIBLE = "INELIGIBLE", "Ineligible"
+        INELIGIBLE = "INELIGIBLE", "Rejected"
+        REVERSED = "REVERSED", "Reversed"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     referrer = models.ForeignKey(
@@ -335,7 +396,27 @@ class ReferralAttribution(models.Model):
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     attributed_at = models.DateTimeField(auto_now_add=True)
     qualified_at = models.DateTimeField(null=True, blank=True)
+    #: The completion that qualified this referral. A refund on it inside the waiting period
+    #: sends the referral back to PENDING so a later booking can qualify instead.
+    qualifying_source_type = models.CharField(max_length=20, blank=True)
+    qualifying_source_id = models.UUIDField(null=True, blank=True)
+    reward_available_at = models.DateTimeField(null=True, blank=True)
     rewarded_at = models.DateTimeField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_reason = models.CharField(max_length=240, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=("status", "reward_available_at")),
+            models.Index(fields=("referrer", "status", "rewarded_at")),
+        ]
 
     def __str__(self) -> str:
         return f"{self.referrer_id} -> {self.referee_id} ({self.status})"

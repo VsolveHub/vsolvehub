@@ -40,6 +40,7 @@ from apps.listings.models import (
     VendorSubscriptionPlan,
 )
 from apps.listings.seekers import (
+    ensure_profile_from_application,
     invite_to_apply,
     jobs_for,
     match_for,
@@ -83,6 +84,8 @@ from apps.listings.serializers import (
 from apps.listings.services import (
     ListingPlanCapError,
     ListingStateError,
+    _active_subscription,
+    can_see_matching_candidates,
     close_listing,
     create_listing,
     duplicate_listing,
@@ -91,17 +94,15 @@ from apps.listings.services import (
     partner_summary,
     post_job,
     publish_job_now,
-    publish_listing,
+    publish_listing_instantly,
     reinstate_listing,
     remove_listing,
     report_application,
     report_listing,
-    republish_listing,
     reveal_contact,
     start_premium_purchase,
     start_subscription_purchase,
     submit_application,
-    submit_listing,
     update_application_status,
     update_job,
     update_listing,
@@ -336,6 +337,14 @@ class ListingApplicationView(APIView):
                     cover_note=serializer.validated_data.get("cover_note", ""),
                     resume_url=serializer.validated_data.get("resume_url", ""),
                 )
+                ensure_profile_from_application(
+                    user=request.user,
+                    listing=listing,
+                    name=serializer.validated_data["name"],
+                    experience=serializer.validated_data.get("experience", ""),
+                    skills=serializer.validated_data.get("skills", []),
+                    findable=serializer.validated_data.get("findable", True),
+                )
             except (ListingStateError, PermissionError) as exc:
                 _raise_listing_error(exc)
             return status.HTTP_201_CREATED, ApplicationSerializer(application).data
@@ -551,12 +560,10 @@ class PartnerListingActionView(APIView):
         serializer = ActionReasonSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         try:
-            if action == "submit":
-                listing = submit_listing(listing=listing, actor=request.user)
-            elif action == "publish":
-                listing = publish_listing(listing=listing, actor=request.user)
-            elif action == "republish":
-                listing = republish_listing(listing=listing, actor=request.user)
+            # No review queue for partners: "submit", "publish" and "republish" all put the
+            # listing live at once. Operations still remove reported listings.
+            if action in ("submit", "publish", "republish"):
+                listing = publish_listing_instantly(listing=listing, actor=request.user)
             elif action == "close":
                 listing = close_listing(
                     listing=listing,
@@ -794,6 +801,13 @@ class OpsVendorSubscriptionPlanDetailView(APIView):
         ser.is_valid(raise_exception=True)
         plan = ser.save()
         return Response(VendorSubscriptionPlanSerializer(plan).data)
+
+    @extend_schema(responses={204: None})
+    def delete(self, _request: Any, plan_id: UUID) -> Response:
+        plan = get_object_or_404(VendorSubscriptionPlan, id=plan_id)
+        plan.is_active = False
+        plan.save(update_fields=("is_active",))
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 # --- jobs: the quick, tap-to-pick post ------------------------------------------------------
@@ -1058,10 +1072,16 @@ class PartnerJobMatchesView(APIView):
 
     @extend_schema(responses=CandidateMatchSerializer(many=True))
     def get(self, request: Any, listing_id: UUID) -> Response:
+        partner = _partner_profile(request.user)
         listing = get_object_or_404(
             Listing.objects.select_related("poster"),
             id=listing_id,
-            poster=_partner_profile(request.user),
+            poster=partner,
+        )
+        subscription = _active_subscription(partner)
+        can_see_matches = can_see_matching_candidates(partner)
+        can_view_contact = bool(
+            subscription and "CANDIDATE_CONTACT" in (subscription.plan.premium_capabilities or [])
         )
         rows: Any = [
             {
@@ -1080,8 +1100,18 @@ class PartnerJobMatchesView(APIView):
                 "application_id": application.id if application else None,
                 "application_status": application.status if application else "",
                 "match": match.as_dict(),
+                "contact_phone": str(getattr(profile.user, "phone_number", "") or "")
+                if can_view_contact
+                else "",
+                "resume_url": _profile_resume_url(request, profile)
+                if (can_view_contact and profile.resume_file)
+                else "",
+                "is_contact_locked": not can_view_contact,
             }
             for profile, match, application in matches_for_job(listing)
+            # Free employers see only the people who applied; matching job seekers who have
+            # not applied are a paid-plan feature (the job card still shows how many there are).
+            if application is not None or can_see_matches
         ]
         return Response(CandidateMatchSerializer(rows, many=True).data)
 

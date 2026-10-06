@@ -18,7 +18,14 @@ from apps.catalog.models import (
 )
 from apps.identity.models import Role, UserRole
 from apps.partners.models import PartnerApplication, PartnerCapability, PartnerProfile
-from apps.stay.models import Property, PropertyMedia, StayEnquiry, StayReview
+from apps.stay.models import (
+    Property,
+    PropertyMedia,
+    StayEnquiry,
+    StayReview,
+    StaySubscription,
+    StaySubscriptionPlan,
+)
 from apps.stay.services import create_enquiry, create_property, moderate_property, submit_property
 
 User = get_user_model()
@@ -31,7 +38,7 @@ class Command(BaseCommand):
     help = "Seeds A9 stay taxonomy, ACTIVE configs, and demo enquiry E2E data."
 
     @transaction.atomic
-    def handle(self, *args: Any, **options: Any) -> None:
+    def handle(self, *args: Any, **options: Any) -> None:  # noqa: PLR0912, PLR0915
         category, _ = Category.objects.get_or_create(
             slug="rooms-pg-hostel-hotels",
             defaults={
@@ -501,6 +508,62 @@ class Command(BaseCommand):
             defaults={
                 "variant": first_variant,
                 "status": PartnerCapability.Status.APPROVED,
+            },
+        )
+
+        # Seed Stay Subscription Plans (3 tiers: Basic, Pro, Business)
+        plans_data = [
+            {
+                "code": "basic",
+                "name": "Basic Plan",
+                "price_paise": 99900,
+                "duration_days": 30,
+                "max_properties": 2,
+                "capabilities": ["STANDARD_SUPPORT"],
+                "details": "Up to 2 properties with standard visibility.",
+            },
+            {
+                "code": "pro",
+                "name": "Pro Plan",
+                "price_paise": 249900,
+                "duration_days": 30,
+                "max_properties": 5,
+                "capabilities": ["STANDARD_SUPPORT", "PRIORITY_SUPPORT", "FEATURED_HOST"],
+                "details": "Up to 5 properties with priority support and featured badge.",
+            },
+            {
+                "code": "business",
+                "name": "Business Plan",
+                "price_paise": 499900,
+                "duration_days": 30,
+                "max_properties": 0,
+                "capabilities": [
+                    "STANDARD_SUPPORT",
+                    "PRIORITY_SUPPORT",
+                    "FEATURED_HOST",
+                    "ACCOUNT_MANAGER",
+                ],
+                "details": "Unlimited properties with dedicated account manager.",
+            },
+        ]
+        created_plans = {}
+        for pdata in plans_data:
+            plan_obj, _ = StaySubscriptionPlan.objects.update_or_create(
+                code=pdata["code"],
+                defaults=pdata,
+            )
+            created_plans[pdata["code"]] = plan_obj
+
+        # Give demo host an active Pro plan so properties can be published
+        now = timezone.now()
+        StaySubscription.objects.update_or_create(
+            host=profile,
+            defaults={
+                "plan": created_plans["pro"],
+                "status": StaySubscription.Status.ACTIVE,
+                "starts_at": now - timedelta(days=1),
+                "ends_at": now + timedelta(days=29),
+                "grace_ends_at": now + timedelta(days=32),
             },
         )
 

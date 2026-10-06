@@ -32,7 +32,7 @@ export function ApplySteps({
   fieldErrors: Record<string, string>;
   isPending: boolean;
   serverError?: string;
-  onFieldChange: (key: keyof ApplyFormState, value: string) => void;
+  onFieldChange: (key: keyof ApplyFormState, value: string | boolean) => void;
   onErrors: (errors: Record<string, string>) => void;
   onSubmit: () => void;
 }) {
@@ -149,10 +149,47 @@ export function ApplySteps({
           {uploadError ? <p className="text-xs text-danger-text">{uploadError}</p> : null}
           {fieldErrors.resume_url ? <p className="text-xs text-danger-text">{fieldErrors.resume_url}</p> : null}
           <label className="block text-xs font-semibold">
+            Experience
+            <input
+              className="mt-1 h-10 w-full rounded-control border border-line px-3 text-sm"
+              placeholder="e.g. 2 years, or Fresher"
+              maxLength={120}
+              value={form.experience}
+              onChange={(e) => onFieldChange("experience", e.target.value)}
+            />
+          </label>
+          {fieldErrors.experience ? <p className="text-xs text-danger-text">{fieldErrors.experience}</p> : null}
+          <label className="block text-xs font-semibold">
+            Your skills
+            <input
+              className="mt-1 h-10 w-full rounded-control border border-line px-3 text-sm"
+              placeholder="e.g. Python, React, Customer support"
+              value={form.skills}
+              onChange={(e) => onFieldChange("skills", e.target.value)}
+            />
+            <span className="mt-1 block font-normal text-text-secondary">Separate skills with commas.</span>
+          </label>
+          {fieldErrors.skills ? <p className="text-xs text-danger-text">{fieldErrors.skills}</p> : null}
+          <label className="block text-xs font-semibold">
             Cover note
             <textarea className="mt-1 w-full rounded-control border border-line px-3 py-2 text-sm" maxLength={500} value={form.cover_note} onChange={(e) => onFieldChange("cover_note", e.target.value)} />
           </label>
           {fieldErrors.cover_note ? <p className="text-xs text-danger-text">{fieldErrors.cover_note}</p> : null}
+          <label className="flex items-start gap-2 rounded-control border border-line bg-surface-sunken p-3 text-xs">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={form.findable}
+              onChange={(e) => onFieldChange("findable", e.target.checked)}
+            />
+            <span>
+              <span className="block font-semibold">Let other employers with matching jobs find my profile</span>
+              <span className="mt-0.5 block text-text-secondary">
+                They see your name, area, experience and skills, and can invite you to apply. Your phone
+                number is shared only with employers you apply to. Change this anytime in your job profile.
+              </span>
+            </span>
+          </label>
           <button type="submit" className="w-full rounded-control bg-action py-2.5 text-sm font-bold text-action-text">
             Review Application
           </button>
@@ -163,7 +200,14 @@ export function ApplySteps({
           <p>{form.phone}</p>
           <p>{form.email || "No email"}</p>
           <p className="text-xs text-text-secondary">{form.resume_url || "No resume uploaded"}</p>
+          {form.experience ? <p className="text-xs">Experience: {form.experience}</p> : null}
+          {form.skills ? <p className="text-xs">Skills: {form.skills}</p> : null}
           <p className="text-xs">{form.cover_note}</p>
+          <p className="text-xs text-text-secondary">
+            {form.findable
+              ? "Other employers with matching jobs can find your profile."
+              : "Only employers you apply to will see your profile."}
+          </p>
           {Object.keys(fieldErrors).length > 0 ? (
             <div role="alert" className="rounded-control border border-danger-line bg-danger-surface p-3 text-xs text-danger-text">
               <p className="font-semibold">Check these fields</p>

@@ -92,6 +92,13 @@ class OtpVerifySerializer(serializers.Serializer[dict[str, object]]):
         max_length=100,
         write_only=True,
     )
+    referral_code = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=32,
+        write_only=True,
+        help_text="Applied only when this verification creates a new account.",
+    )
 
     def validate_code(self, value: str) -> str:
         if len(value) != settings.OTP_CODE_LENGTH or not value.isascii() or not value.isdigit():

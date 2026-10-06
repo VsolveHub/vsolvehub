@@ -2,6 +2,7 @@ from typing import Any
 from uuid import UUID
 
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import permissions, status
@@ -13,7 +14,15 @@ from apps.foundation.slugs import lookup_by_slug_or_id
 from apps.partners.models import PartnerProfile
 from apps.partners.permissions import IsOperationsUser, IsPartnerUser
 from apps.stay.exceptions import StayStateApiError
-from apps.stay.models import Property, Room, StayEnquiry, StayReservation, StayVisit, Unit
+from apps.stay.models import (
+    Property,
+    Room,
+    StayEnquiry,
+    StayReservation,
+    StaySubscriptionPlan,
+    StayVisit,
+    Unit,
+)
 from apps.stay.serializers import (
     AddPropertyMediaSerializer,
     AddRoomSerializer,
@@ -27,8 +36,11 @@ from apps.stay.serializers import (
     CreateVisitSerializer,
     DeclineVisitSerializer,
     HostStaySummarySerializer,
+    HostSubscriptionStatusSerializer,
     MarkRoomBookedSerializer,
     OpsCancelStayReservationSerializer,
+    OpsCreateStaySubscriptionPlanSerializer,
+    OpsUpdateStaySubscriptionPlanSerializer,
     PartnerPropertySerializer,
     PartnerReservationActionSerializer,
     PartnerStayEnquirySerializer,
@@ -40,6 +52,7 @@ from apps.stay.serializers import (
     RespondEnquirySerializer,
     RoomSerializer,
     SetVisitingHoursSerializer,
+    StartStaySubscriptionPurchaseSerializer,
     StayEnquirySerializer,
     StayModerationSerializer,
     StayPhotoUploadSerializer,
@@ -48,6 +61,8 @@ from apps.stay.serializers import (
     StayReservationSerializer,
     StayReviewPhotoUploadSerializer,
     StayReviewSerializer,
+    StaySubscriptionPlanSerializer,
+    StaySubscriptionSerializer,
     StayTaxonomySubcategorySerializer,
     StayVisitSerializer,
     UnitMediaSerializer,
@@ -58,6 +73,7 @@ from apps.stay.serializers import (
 )
 from apps.stay.services import (
     StayStateError,
+    _active_stay_subscription,
     add_property_media,
     add_room,
     add_unit_media,
@@ -90,6 +106,7 @@ from apps.stay.services import (
     respond_enquiry,
     set_property_listing,
     set_room_available,
+    start_stay_subscription_purchase,
     store_stay_photo,
     store_stay_review_photo,
     submit_property,
@@ -1059,3 +1076,113 @@ class PartnerVisitActionView(APIView):
         except (StayStateError, PermissionError) as exc:
             _raise_domain_error(exc)
         return Response(PartnerStayVisitSerializer(visit).data)
+
+
+class OpsStaySubscriptionPlanCollectionView(APIView):
+    permission_classes = (IsOperationsUser,)
+
+    @extend_schema(
+        operation_id="ops_stay_subscription_plans_list",
+        responses=StaySubscriptionPlanSerializer(many=True),
+    )
+    def get(self, _request: Any) -> Response:
+        plans = StaySubscriptionPlan.objects.all().order_by("price_paise")
+        return Response(StaySubscriptionPlanSerializer(plans, many=True).data)
+
+    @extend_schema(
+        operation_id="ops_stay_subscription_plans_create",
+        request=OpsCreateStaySubscriptionPlanSerializer,
+        responses={201: StaySubscriptionPlanSerializer},
+    )
+    def post(self, request: Any) -> Response:
+        ser = OpsCreateStaySubscriptionPlanSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        plan = ser.save()
+        return Response(StaySubscriptionPlanSerializer(plan).data, status=status.HTTP_201_CREATED)
+
+
+class OpsStaySubscriptionPlanDetailView(APIView):
+    permission_classes = (IsOperationsUser,)
+
+    @extend_schema(
+        operation_id="ops_stay_subscription_plans_retrieve",
+        responses=StaySubscriptionPlanSerializer,
+    )
+    def get(self, _request: Any, plan_id: UUID) -> Response:
+        plan = get_object_or_404(StaySubscriptionPlan, id=plan_id)
+        return Response(StaySubscriptionPlanSerializer(plan).data)
+
+    @extend_schema(
+        operation_id="ops_stay_subscription_plans_update",
+        request=OpsUpdateStaySubscriptionPlanSerializer,
+        responses=StaySubscriptionPlanSerializer,
+    )
+    def patch(self, request: Any, plan_id: UUID) -> Response:
+        plan = get_object_or_404(StaySubscriptionPlan, id=plan_id)
+        ser = OpsUpdateStaySubscriptionPlanSerializer(plan, data=request.data, partial=True)
+        ser.is_valid(raise_exception=True)
+        plan = ser.save()
+        return Response(StaySubscriptionPlanSerializer(plan).data)
+
+    @extend_schema(
+        operation_id="ops_stay_subscription_plans_delete",
+        responses={204: None},
+    )
+    def delete(self, _request: Any, plan_id: UUID) -> Response:
+        plan = get_object_or_404(StaySubscriptionPlan, id=plan_id)
+        plan.is_active = False
+        plan.save(update_fields=("is_active", "updated_at"))
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class PartnerStaySubscriptionView(APIView):
+    """Host views current subscription and available tiers, or starts an upgrade."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(
+        operation_id="partner_stays_subscription_get",
+        responses=HostSubscriptionStatusSerializer,
+    )
+    def get(self, request: Any) -> Response:
+        partner = _partner(request.user)
+        sub = _active_stay_subscription(partner)
+        plans = StaySubscriptionPlan.objects.filter(is_active=True).order_by("price_paise")
+        live_count = Property.objects.filter(
+            host=partner,
+            moderation_status=Property.ModerationStatus.APPROVED,
+            listing_status=Property.ListingStatus.LIVE,
+        ).count()
+        max_props = sub.plan.max_properties if sub else 0
+        data = {
+            "subscription": StaySubscriptionSerializer(sub).data if sub else None,
+            "available_plans": StaySubscriptionPlanSerializer(plans, many=True).data,
+            "live_properties_count": live_count,
+            "max_properties": max_props,
+        }
+        return Response(HostSubscriptionStatusSerializer(data).data)
+
+    @extend_schema(
+        operation_id="partner_stays_subscription_purchase",
+        request=StartStaySubscriptionPurchaseSerializer,
+        responses={201: StaySubscriptionSerializer},
+    )
+    def post(self, request: Any) -> Response:
+        partner = _partner(request.user)
+        ser = StartStaySubscriptionPurchaseSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        plan = get_object_or_404(
+            StaySubscriptionPlan, id=ser.validated_data["plan_id"], is_active=True
+        )
+        idempotency_key = (
+            request.headers.get("Idempotency-Key")
+            or f"stay-sub:{partner.id}:{plan.id}:{timezone.now().timestamp()}"
+        )
+        try:
+            sub = start_stay_subscription_purchase(
+                host=partner, plan=plan, idempotency_key=str(idempotency_key)
+            )
+        except (StayStateError, PermissionError) as exc:
+            _raise_domain_error(exc)
+        return Response(StaySubscriptionSerializer(sub).data, status=status.HTTP_201_CREATED)
+

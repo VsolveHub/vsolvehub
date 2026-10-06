@@ -166,7 +166,7 @@ export function serverErrorMessage(error: unknown, fallback: string): string {
 export const SUCCESS_MESSAGES = {
   create: "Opening saved as a draft.",
   update: "Opening updated.",
-  submit: "Sent for review. You will see it under In Review until it is approved.",
+  submit: "Opening is live and visible to applicants.",
   publish: "Opening is live and visible to applicants.",
   republish: "Opening is live again.",
   close: "Opening closed. It no longer accepts applications.",
@@ -178,8 +178,9 @@ export const STATUS_BADGES: Record<
   { label: string; bg: string; text: string; border: string }
 > = {
   DRAFT: { label: "Draft", bg: "bg-surface-sunken", text: "text-text-secondary", border: "border-line" },
+  // Legacy: listings sent for review before instant publishing. "Publish now" puts them live.
   PENDING_REVIEW: {
-    label: "In Review",
+    label: "Draft",
     bg: "bg-warning-surface",
     text: "text-warning-text",
     border: "border-warning-line",
@@ -205,7 +206,6 @@ export const STATUS_BADGES: Record<
 export const LISTING_TABS = [
   { key: "ALL", label: "All Listings" },
   { key: "ACTIVE", label: "Live Active" },
-  { key: "REVIEW", label: "Under Review" },
   { key: "DRAFT", label: "Drafts" },
   { key: "CLOSED", label: "Closed / Expired" },
 ] as const;

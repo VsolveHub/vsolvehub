@@ -3,6 +3,7 @@
 import { useOtpFlow } from "@vsolve/query";
 import { Button, ErrorState, OtpForm, Spinner } from "@vsolve/ui";
 
+import { readPendingReferral } from "@/features/referral/pending-referral";
 import { getApiClient } from "@/lib/api/browser";
 import { useCustomerSession } from "@/features/session/queries";
 
@@ -34,6 +35,7 @@ export function LoginStage({ summary }: LoginStageProps) {
   const session = useCustomerSession();
 
   const flow = useOtpFlow(getApiClient(), {
+    getReferralCode: readPendingReferral,
     // The verify mutation writes the session into the cache and tells sibling
     // tabs; this returns the customer to what they were doing.
     onAuthenticated: () => dispatch({ type: "LOGIN_COMPLETED" }),

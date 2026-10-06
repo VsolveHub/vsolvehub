@@ -7,7 +7,7 @@ import Link from "next/link";
 
 import { PartnerPresence } from "@/features/presence/view/partner-presence";
 import { usePartnerProfile } from "@/features/profile/queries";
-import { usePartnerWorkspaceGrants } from "@/features/workspace/queries";
+import { usePartnerWorkspaceGrants, useSpecialtyHome } from "@/features/workspace/queries";
 import {
   WORKFORCE_WORKSPACE,
   resolveWorkspaces,
@@ -22,6 +22,9 @@ export function MeHome() {
   const showPresence =
     !grants.isPending && specialtyShellHome(resolveWorkspaces(grants.grants ?? [])) === null;
   const canManageCrew = hasWorkspaceAction(grants.grants ?? [], WORKFORCE_WORKSPACE, "crew.manage");
+  // Job-listing employers never earn on the platform; their plan and billing live on Listings.
+  const specialty = useSpecialtyHome();
+  const showMoney = !specialty.isPending && specialty.home !== "listings";
 
   return (
     <main className="flex min-h-[calc(100dvh-9rem)] flex-col bg-canvas pb-8 lg:mx-auto lg:min-h-[calc(100dvh-5rem)] lg:w-full lg:max-w-4xl lg:pb-12">
@@ -65,19 +68,22 @@ export function MeHome() {
         </section>
 
         {/* Work & Financials Section */}
+        {showMoney || canManageCrew ? (
         <section className="flex flex-col gap-1.5">
           <p className="px-1 text-[11px] font-bold uppercase tracking-wider text-text-muted">
             Work & Financials
           </p>
           <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-xs divide-y divide-line/60">
-            <SettingsRow
-              href="/money"
-              icon={Wallet}
-              title="Money & Earnings"
-              subtitle="Daily earnings, passbook & settlements"
-              colorClass="bg-emerald-50 border-emerald-100/80"
-              iconClass="text-emerald-600"
-            />
+            {showMoney ? (
+              <SettingsRow
+                href="/money"
+                icon={Wallet}
+                title="Money & Earnings"
+                subtitle="Daily earnings, passbook & settlements"
+                colorClass="bg-emerald-50 border-emerald-100/80"
+                iconClass="text-emerald-600"
+              />
+            ) : null}
             {canManageCrew ? (
               <SettingsRow
                 href="/me/crew"
@@ -90,6 +96,7 @@ export function MeHome() {
             ) : null}
           </div>
         </section>
+        ) : null}
 
         {/* Help & Support Section */}
         <section className="flex flex-col gap-1.5">

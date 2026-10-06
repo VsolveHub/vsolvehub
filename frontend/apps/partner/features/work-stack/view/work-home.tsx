@@ -132,6 +132,19 @@ function WorkStack() {
     (item) => item.urgency === "live" || item.urgency === "needs_price" || item.urgency === "doing",
   );
 
+  // Employers post jobs; they never earn on the platform, so the earnings hero would only
+  // ever say ₹0. Their home is the hiring summary on a plain page.
+  if (specialty.home === "listings") {
+    return (
+      <main className="flex min-h-[calc(100dvh-3.5rem)] flex-col bg-surface">
+        <h1 className="sr-only">Your hiring</h1>
+        <div className="flex flex-1 flex-col gap-3 px-4 py-6 lg:mx-auto lg:w-full lg:max-w-7xl lg:px-8">
+          <ListingHome />
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="relative flex min-h-[calc(100dvh-3.5rem)] flex-col bg-[var(--color-ink-900)]">
       <h1 className="sr-only">Your work</h1>
@@ -159,12 +172,17 @@ function WorkStack() {
           Below `lg:` this wrapper is a plain block and changes nothing.
         */}
         <div className="relative lg:mx-auto lg:w-full lg:max-w-7xl lg:px-4">
-          <TodayPlate
-            netPaise={performance.data?.today_net_paise ?? null}
-            jobs={performance.data?.today_jobs ?? null}
-          />
+          {/* Held back until the grants are read, so an employer never sees ₹0 flash. */}
+          {specialty.isPending ? null : (
+            <>
+              <TodayPlate
+                netPaise={performance.data?.today_net_paise ?? null}
+                jobs={performance.data?.today_jobs ?? null}
+              />
 
-          <MonthStrip performance={performance.data ?? null} />
+              <MonthStrip performance={performance.data ?? null} />
+            </>
+          )}
         </div>
       </div>
 
@@ -184,8 +202,6 @@ function WorkStack() {
             <RentalHome />
           ) : specialty.home === "stays" ? (
             <StayHome />
-          ) : specialty.home === "listings" ? (
-            <ListingHome />
           ) : (
             <StackBody stack={stack} needsYou={needsYou} specialty={specialty.home} />
           )}

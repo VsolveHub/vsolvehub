@@ -52,6 +52,20 @@ function getCoinTxnMeta(kind: CoinTransaction["kind"]) {
         isCredit: false,
         tone: "warning" as const,
       };
+    case "CANCEL":
+      return {
+        label: "Cancelled (booking refunded)",
+        icon: Clock,
+        isCredit: false,
+        tone: "warning" as const,
+      };
+    case "REVERSE":
+      return {
+        label: "Reward withdrawn",
+        icon: Clock,
+        isCredit: false,
+        tone: "warning" as const,
+      };
     case "ADJUSTMENT":
     default:
       return {

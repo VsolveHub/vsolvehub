@@ -228,7 +228,7 @@ class Command(BaseCommand):
                 "price_paise": 99900,
                 "duration_days": 30,
                 "max_active_listings": 5,
-                "premium_capabilities": [],
+                "premium_capabilities": ["CANDIDATE_MATCHING"],
                 "premium_price_paise": 49900,
             },
             {
@@ -237,7 +237,7 @@ class Command(BaseCommand):
                 "price_paise": 249900,
                 "duration_days": 60,
                 "max_active_listings": 15,
-                "premium_capabilities": ["FEATURED_PLACEMENT"],
+                "premium_capabilities": ["FEATURED_PLACEMENT", "CANDIDATE_MATCHING"],
                 "premium_price_paise": 49900,
             },
             {
@@ -246,7 +246,7 @@ class Command(BaseCommand):
                 "price_paise": 499900,
                 "duration_days": 90,
                 "max_active_listings": 50,
-                "premium_capabilities": ["FEATURED_PLACEMENT", "PRIORITY_MODERATION"],
+                "premium_capabilities": ["FEATURED_PLACEMENT", "CANDIDATE_MATCHING"],
                 "premium_price_paise": 49900,
             },
         ]

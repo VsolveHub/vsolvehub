@@ -197,6 +197,8 @@ describe("primaryShellNavFor — live PartnerShell chrome", () => {
     expect(hrefs).toContain("/listings");
     expect(hrefs).not.toContain("/work/all");
     expect(hrefs).not.toContain("/jobs");
+    // Employers never earn on the platform, so there is no Money ledger for them.
+    expect(hrefs).not.toContain("/money");
   });
 
   it("keeps TAP_FIRST Work for empty grants (A1 floor)", () => {

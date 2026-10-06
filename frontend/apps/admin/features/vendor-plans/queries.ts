@@ -4,7 +4,8 @@ import { getApiClient } from "@/lib/api/browser";
 
 export const PREMIUM_CAPABILITIES = [
   { code: "FEATURED_PLACEMENT", label: "Featured placement" },
-  { code: "PRIORITY_MODERATION", label: "Priority moderation" },
+  { code: "CANDIDATE_MATCHING", label: "Matching candidates (see & invite people who haven't applied)" },
+  { code: "CANDIDATE_CONTACT", label: "Candidate phone numbers in matches" },
 ] as const;
 
 export type PremiumCapabilityCode = (typeof PREMIUM_CAPABILITIES)[number]["code"];

@@ -3,8 +3,11 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { friendlyErrorMessage } from "@vsolve/query";
 import { Badge, Button, Card, EmptyState } from "@vsolve/ui";
-import { MapPin } from "lucide-react";
+import { Lock, MapPin } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
+
+import { fetchListingHome } from "../queries";
 
 import {
   fetchJobMatches,
@@ -25,8 +28,19 @@ const LEVELS = [
  * (✓) and what is missing (△). Phone numbers are not shown here: they come with an
  * application. The employer can invite a good match to apply.
  */
-export function JobMatches({ listingId, onOpenApplications }: { listingId: string; onOpenApplications: () => void }) {
+export function JobMatches({
+  listingId,
+  onOpenApplications,
+  hiddenMatchCount = 0,
+}: {
+  listingId: string;
+  onOpenApplications: () => void;
+  /** Strong and good matches who have not applied (from the job's counts). */
+  hiddenMatchCount?: number;
+}) {
   const [level, setLevel] = useState("STRONG");
+  const home = useQuery({ queryKey: ["partner-listings", "home"], queryFn: fetchListingHome });
+  const locked = home.data ? !home.data.can_see_matches : false;
   const [invited, setInvited] = useState<Set<string>>(new Set());
   const matches = useQuery({ queryKey: ["job-matches", listingId], queryFn: () => fetchJobMatches(listingId) });
   const options = useQuery({ queryKey: ["job-options"], queryFn: fetchJobOptions, staleTime: 3600_000 });
@@ -53,6 +67,33 @@ export function JobMatches({ listingId, onOpenApplications }: { listingId: strin
           </button>
         ))}
       </div>
+      {locked ? (
+        <Card className="flex flex-col gap-2 border-action/40 bg-action/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-2">
+            <Lock className="mt-0.5 size-4 shrink-0 text-action" aria-hidden />
+            <p className="text-sm text-text">
+              {hiddenMatchCount > 0 ? (
+                <>
+                  <strong>
+                    {hiddenMatchCount} {hiddenMatchCount === 1 ? "person matches" : "people match"} this job
+                  </strong>{" "}
+                  but {hiddenMatchCount === 1 ? "hasn't" : "haven't"} applied yet.
+                </>
+              ) : (
+                <strong>Find people who match this job before they apply.</strong>
+              )}{" "}
+              Upgrade your plan to see matching candidates and invite them. On the free plan you see the people who
+              applied, below.
+            </p>
+          </div>
+          <Link
+            href="/listings?plans=open"
+            className="inline-flex shrink-0 items-center justify-center rounded-control bg-action px-4 py-2 text-xs font-bold text-action-text"
+          >
+            See plans
+          </Link>
+        </Card>
+      ) : null}
       <p className="text-xs text-text-secondary">
         Matched on the information in each profile. Please interview candidates to check their skills and experience —
         the final choice is yours.
@@ -61,7 +102,15 @@ export function JobMatches({ listingId, onOpenApplications }: { listingId: strin
       {matches.error ? <p className="text-sm text-danger-text">{friendlyErrorMessage(matches.error)}</p> : null}
       {invite.error ? <p className="text-sm text-danger-text">{friendlyErrorMessage(invite.error)}</p> : null}
       {!matches.isLoading && shown.length === 0 ? (
-        <EmptyState compact title="No candidates here yet" description="As job seekers in this city make profiles, they appear here. You'll get a daily summary." />
+        <EmptyState
+          compact
+          title="No candidates here yet"
+          description={
+            locked
+              ? "People who apply to this job appear here with their match score."
+              : "As job seekers in this city make profiles, they appear here. You'll get a daily summary."
+          }
+        />
       ) : null}
       <ul className="grid gap-3">
         {shown.map((row: CandidateMatch) => {

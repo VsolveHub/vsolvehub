@@ -213,6 +213,21 @@ def accept_engagement_completion(
         actor=actor,
         reason_code="engagement_completed",
     )
+    # Loyalty: coins and referral qualification, same event M1 bookings, rentals and stays use.
+    enqueue_outbox_event(
+        aggregate_type="engagement",
+        aggregate_id=engagement.id,
+        event_type="customer.fulfilment.completed",
+        idempotency_key=f"customer-engagement-completed:{engagement.id}",
+        payload={
+            "event_version": 1,
+            "customer_id": str(engagement.customer_id),
+            "engagement_id": str(engagement.id),
+            "source_type": "ENGAGEMENT",
+            "source_id": str(engagement.id),
+            "completed_at": now.isoformat(),
+        },
+    )
     services.close_requirement(
         requirement_id=engagement.requirement_id,
         status=CustomerRequirement.Status.CLOSED_COMPLETE,

@@ -57,6 +57,11 @@ export interface OtpFlowOptions {
   /** Human-readable device name shown in "your devices". */
   deviceLabel?: string;
   /**
+   * Read at verify time. Django applies the code only when this verification creates a new
+   * account, so it is safe to send on every login; an existing account ignores it.
+   */
+  getReferralCode?: () => string | null;
+  /**
    * Digits required before this hook will spend a request.
    *
    * Django validates with libphonenumber against region IN and remains the only
@@ -308,6 +313,7 @@ export function useOtpFlow(apiClient: ApiClient, options: OtpFlowOptions = {}): 
   const {
     deviceIdentifier,
     deviceLabel,
+    getReferralCode,
     minimumPhoneDigits = 10,
     codeLength: fallbackCodeLength = 6,
     intendedRole,
@@ -478,6 +484,7 @@ export function useOtpFlow(apiClient: ApiClient, options: OtpFlowOptions = {}): 
     setFailure(null);
     setCodeError(null);
 
+    const referralCode = getReferralCode?.() ?? null;
     verifyOtp.mutate(
       {
         challenge_id: challengeId,
@@ -485,6 +492,7 @@ export function useOtpFlow(apiClient: ApiClient, options: OtpFlowOptions = {}): 
         code,
         ...(deviceIdentifier ? { device_identifier: deviceIdentifier } : {}),
         ...(deviceLabel ? { device_label: deviceLabel } : {}),
+        ...(referralCode ? { referral_code: referralCode } : {}),
       },
       {
         onSuccess: (session) => {
@@ -522,7 +530,17 @@ export function useOtpFlow(apiClient: ApiClient, options: OtpFlowOptions = {}): 
         },
       },
     );
-  }, [challengeId, code, codeLength, deviceIdentifier, deviceLabel, isExpired, phone, verifyOtp]);
+  }, [
+    challengeId,
+    code,
+    codeLength,
+    deviceIdentifier,
+    deviceLabel,
+    getReferralCode,
+    isExpired,
+    phone,
+    verifyOtp,
+  ]);
 
   const onChangeNumber = useCallback(() => {
     setPhase("phone");

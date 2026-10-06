@@ -1,6 +1,6 @@
 "use client";
 
-import { formatMoney } from "@vsolve/ui";
+import { formatDate, formatMoney } from "@vsolve/ui";
 import { AlertCircle, Coins as CoinsIcon, Lock, Sparkles } from "lucide-react";
 import type { CustomerCoinsSummary } from "../queries";
 
@@ -51,6 +51,7 @@ export function CoinsBucketsCard({ summary }: CoinsBucketsCardProps) {
 
         {/* Bucket stats */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:w-auto">
+          {/* Pending (waiting period) Bucket */}
           <div className="flex items-start gap-3 rounded-xl border border-[#eee9e0] bg-[#FAF9F7] p-3.5">
             <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-amber-100/70 text-amber-700">
               <Sparkles className="size-4" />
@@ -58,12 +59,14 @@ export function CoinsBucketsCard({ summary }: CoinsBucketsCardProps) {
             <div>
               <div className="flex items-center gap-1.5">
                 <span data-numeric className="text-base font-bold text-navy-900">
-                  {summary.promised_coins.toLocaleString("en-IN")}
+                  {summary.pending_coins.toLocaleString("en-IN")}
                 </span>
-                <span className="text-xs font-medium text-text-muted">Promised</span>
+                <span className="text-xs font-medium text-text-muted">Pending</span>
               </div>
               <p className="mt-0.5 text-[11px] leading-tight text-text-secondary">
-                Credited after the booking or referral that earned them is completed.
+                {summary.next_pending_available_at
+                  ? `Earned from a completed booking. Next coins usable on ${formatDate(summary.next_pending_available_at)}.`
+                  : "Coins from a completed booking become usable after a short waiting period."}
               </p>
             </div>
           </div>
@@ -80,7 +83,7 @@ export function CoinsBucketsCard({ summary }: CoinsBucketsCardProps) {
                 <span className="text-xs font-medium text-text-muted">Locked</span>
               </div>
               <p className="mt-0.5 text-[11px] leading-tight text-text-secondary">
-                Unlocks automatically when you complete a verified booking.
+                Welcome or campaign coins. They unlock when you complete a booking.
               </p>
             </div>
           </div>

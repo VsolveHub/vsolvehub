@@ -3,7 +3,7 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { friendlyErrorMessage } from "@vsolve/query";
 import { Badge, Card, Spinner, buttonStyles } from "@vsolve/ui";
-import { ArrowRight, Briefcase, CalendarClock, Clock, Plus, UserRoundCheck, Users } from "lucide-react";
+import { ArrowRight, Briefcase, CalendarClock, Clock, Plus, UserPlus, UserRoundCheck, Users } from "lucide-react";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
@@ -92,6 +92,10 @@ export function ListingHome() {
     .filter((a) => a.interview && LIVE_INTERVIEW.has(a.interview.status ?? "") && interviewTime(a) >= now.getTime() - 60 * 60 * 1000)
     .sort((a, b) => interviewTime(a) - interviewTime(b));
 
+  const withMatches = [...open]
+    .filter((l) => (l.counts?.matches ?? 0) > 0)
+    .sort((a, b) => (b.counts?.matches ?? 0) - (a.counts?.matches ?? 0));
+
   const totals = open.reduce(
     (acc, l) => ({
       views: acc.views + (l.counts?.views ?? 0),
@@ -169,6 +173,31 @@ export function ListingHome() {
           ))}
         </Group>
       </div>
+
+      {withMatches.length > 0 ? (
+        <Group
+          title="Matching candidates you can invite"
+          icon={<UserPlus className="size-4" />}
+          count={withMatches.reduce((sum, l) => sum + (l.counts?.matches ?? 0), 0)}
+          empty=""
+        >
+          {withMatches.slice(0, 5).map((l) => (
+            <Row
+              key={l.id}
+              href={`/listings/${l.id}?view=matches`}
+              title={l.title}
+              sub={
+                summary.data?.can_see_matches
+                  ? `${l.counts?.matches ?? 0} people with a strong or good match haven't applied yet`
+                  : `${l.counts?.matches ?? 0} people match but haven't applied · upgrade to see and invite them`
+              }
+              meta=""
+              badge={null}
+              action={summary.data?.can_see_matches ? "See them" : "Upgrade"}
+            />
+          ))}
+        </Group>
+      ) : null}
 
       {open.length > 0 ? (
         <Group title="Your open jobs" icon={<Briefcase className="size-4" />} count={open.length} empty="">

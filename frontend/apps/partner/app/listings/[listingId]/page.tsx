@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Clock } from "lucide-react";
@@ -42,6 +42,11 @@ export default function PartnerListingLeadsPage() {
   const listingId = params.listingId;
   const [activeTab, setActiveTab] = useState<string>("ALL");
   const [view, setView] = useState<"applicants" | "matches">("applicants");
+  // `?view=matches` (from the job card and home) opens straight on matching candidates.
+  // Read after mount: `useSearchParams` would force a Suspense boundary on this route.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("view") === "matches") setView("matches");
+  }, []);
   const [interviewing, setInterviewing] = useState<PartnerApplication | null>(null);
   const { notify } = useToast();
 
@@ -199,7 +204,11 @@ export default function PartnerListingLeadsPage() {
       </div>
 
       {view === "matches" ? (
-        <JobMatches listingId={listingId} onOpenApplications={() => setView("applicants")} />
+        <JobMatches
+          listingId={listingId}
+          hiddenMatchCount={listing?.counts?.matches ?? 0}
+          onOpenApplications={() => setView("applicants")}
+        />
       ) : (
       <>
       {/* Filter Tabs */}

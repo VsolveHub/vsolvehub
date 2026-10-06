@@ -76,6 +76,18 @@ def _active_subscription(poster: PartnerProfile) -> VendorSubscription | None:
     )
 
 
+#: Plan capability that lets an employer see and invite matching job seekers who have not
+#: applied. Free employers see only the people who applied to their jobs.
+CANDIDATE_MATCHING = "CANDIDATE_MATCHING"
+
+
+def can_see_matching_candidates(poster: PartnerProfile) -> bool:
+    subscription = _active_subscription(poster)
+    return bool(
+        subscription and CANDIDATE_MATCHING in (subscription.plan.premium_capabilities or [])
+    )
+
+
 def _require_listing_capability(poster: PartnerProfile) -> None:
     # An approved "Hire staff" sign-up is the job-posting permission on its own.
     if is_approved_employer(poster):
@@ -151,11 +163,8 @@ def update_listing(*, listing: Listing, actor: Any, **changes: Any) -> Listing:
     ):
         if field in changes:
             setattr(listing, field, changes[field])
-    if listing.status == Listing.Status.PUBLISHED:
-        listing.status = Listing.Status.DRAFT
-        listing.moderation_status = Listing.ModerationStatus.PENDING
-        listing.published_at = None
-        listing.moderation_reason = ""
+    # A live listing stays live when edited: approved employers publish without a review queue,
+    # and a reported listing is removed by Operations instead.
     listing.version += 1
     listing.save()
     _event(listing, ListingModerationEvent.Action.EDITED, actor=actor)
@@ -205,22 +214,23 @@ def publish_listing(*, listing: Listing, actor: Any) -> Listing:
     if listing.status not in (Listing.Status.DRAFT, Listing.Status.CLOSED, Listing.Status.EXPIRED):
         raise ListingStateError("This listing cannot be published from its current state.")
     subscription = _active_subscription(listing.poster)
-    # Explicit free tier allows max 1 active listing, not unlimited.
-    # Plan max_active_listings applies when an active VendorSubscription exists.
-    active_count = (
-        Listing.objects.filter(
-            poster=listing.poster,
-            status=Listing.Status.PUBLISHED,
-            expires_at__gt=timezone.now(),
-        )
-        .exclude(id=listing.id)
-        .count()
-    )
+    # Free posting is unlimited. Only a paid plan imposes a cap through
+    # ``max_active_listings``.  Reporting and Operations removal still guard
+    # against spam.
     if subscription is not None:
+        active_count = (
+            Listing.objects.filter(
+                poster=listing.poster,
+                status=Listing.Status.PUBLISHED,
+                expires_at__gt=timezone.now(),
+            )
+            .exclude(id=listing.id)
+            .count()
+        )
         if active_count >= subscription.plan.max_active_listings:
             raise ListingPlanCapError("Active listing limit reached for the current plan.")
-    elif active_count >= FREE_TIER_MAX_ACTIVE_LISTINGS:
-        raise ListingPlanCapError("Active listing limit reached for the free tier.")
+        if "FEATURED_PLACEMENT" in (subscription.plan.premium_capabilities or []):
+            listing.is_premium = True
     listing.status = Listing.Status.PUBLISHED
     listing.published_at = timezone.now()
     listing.expires_at = listing.published_at + timedelta(days=30)
@@ -532,6 +542,11 @@ def expire_subscriptions() -> int:
     for sub in expired:
         sub.status = VendorSubscription.Status.EXPIRED
         sub.save(update_fields=("status", "updated_at"))
+        if "FEATURED_PLACEMENT" in (sub.plan.premium_capabilities or []):
+            Listing.objects.filter(
+                poster_id=sub.poster_id,
+                status=Listing.Status.PUBLISHED,
+            ).update(is_premium=False, updated_at=now)
     return len(expired)
 
 
@@ -582,6 +597,11 @@ def complete_subscription_payment(*, payment_attempt_id: UUID | str) -> None:
     subscription.starts_at = now
     subscription.ends_at = now + timedelta(days=subscription.plan.duration_days)
     subscription.save(update_fields=("status", "starts_at", "ends_at", "updated_at"))
+    if "FEATURED_PLACEMENT" in (subscription.plan.premium_capabilities or []):
+        Listing.objects.filter(
+            poster_id=subscription.poster_id,
+            status=Listing.Status.PUBLISHED,
+        ).update(is_premium=True, updated_at=now)
 
 
 @transaction.atomic
@@ -641,7 +661,12 @@ def partner_summary(poster: PartnerProfile) -> dict[str, Any]:
         "new_applications": Application.objects.filter(
             listing__poster=poster, status=Application.Status.SUBMITTED
         ).count(),
-        "plan_limit": active_subscription.plan.max_active_listings if active_subscription else 1,
+        # Free posting has no cap (see `publish_listing`); only a paid plan sets one.
+        "plan_limit": active_subscription.plan.max_active_listings if active_subscription else None,
+        "can_see_matches": bool(
+            active_subscription
+            and CANDIDATE_MATCHING in (active_subscription.plan.premium_capabilities or [])
+        ),
         "subscription": (
             {
                 "id": str(active_subscription.id),
@@ -838,20 +863,28 @@ def post_job(
 
 
 @transaction.atomic
-def publish_job_now(*, listing: Listing, actor: Any) -> Listing:
-    """Put a job live at once, no review queue: the employer is already approved, and a
-    reported job is removed by Operations. Plan limits still apply. Also reopens a closed or
-    expired job. Older listings made with the long form keep the review step."""
+def publish_listing_instantly(*, listing: Listing, actor: Any) -> Listing:
+    """Put any listing live at once, no review queue: the employer is already approved, and a
+    reported listing is removed by Operations. Plan limits still apply. Also reopens a closed or
+    expired listing. A listing Operations removed can never come back this way."""
     _require_poster(listing, actor)
     if listing.moderation_status == Listing.ModerationStatus.REMOVED or listing.removed_at:
         raise ListingStateError("Operations removed this job. It cannot be published again.")
-    _require_job_basics(listing)
     if listing.moderation_status != Listing.ModerationStatus.APPROVED:
         listing.moderation_status = Listing.ModerationStatus.APPROVED
         listing.moderation_reason = ""
         listing.save(update_fields=("moderation_status", "moderation_reason", "updated_at"))
         _event(listing, ListingModerationEvent.Action.APPROVED, actor=actor, reason="Instant")
-    listing = publish_listing(listing=listing, actor=actor)
+    return publish_listing(listing=listing, actor=actor)
+
+
+@transaction.atomic
+def publish_job_now(*, listing: Listing, actor: Any) -> Listing:
+    """`publish_listing_instantly` for a job made with the quick form, which also checks the
+    fields matching needs and tells strong matches about the job."""
+    _require_poster(listing, actor)
+    _require_job_basics(listing)
+    listing = publish_listing_instantly(listing=listing, actor=actor)
     # Strong matches hear about it once the job is safely live.
     transaction.on_commit(lambda: _notify_matches(listing.id))
     return listing

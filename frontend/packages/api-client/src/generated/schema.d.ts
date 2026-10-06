@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.66.0)
- * Checksum: c0d3375ccc3d176c
+ * Source:   contracts/openapi/v1.yaml (version 1.67.0)
+ * Checksum: d0a8df7300950076
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -956,23 +956,6 @@ export interface paths {
         get: operations["customer_referral_retrieve"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/customer/referral/apply/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Apply referral code for the current customer at signup */
-        post: operations["customer_referral_apply_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4115,6 +4098,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ops/loyalty/coin-adjustments/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ops_loyalty_coin_adjustments_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/loyalty/customer-ledger/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description One customer's wallet, coin and referral history for support and audit. */
+        get: operations["ops_loyalty_customer_ledger_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ops/loyalty/grant-rules/": {
         parameters: {
             query?: never;
@@ -4147,20 +4163,20 @@ export interface paths {
         patch: operations["ops_loyalty_grant_rules_partial_update"];
         trace?: never;
     };
-    "/api/v1/ops/loyalty/grant-rules/{rule_id}/tiers/": {
+    "/api/v1/ops/loyalty/settings/": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["ops_loyalty_grant_rules_tiers_list"];
+        get: operations["ops_loyalty_settings_retrieve"];
         put?: never;
-        post: operations["ops_loyalty_grant_rules_tiers_create"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        patch: operations["ops_loyalty_settings_partial_update"];
         trace?: never;
     };
     "/api/v1/ops/referral/attributions/": {
@@ -4170,9 +4186,45 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * @description Referral review queue. Filter with `?status=PENDING|QUALIFIED|REWARDED|INELIGIBLE|REVERSED`
+         *     and `?phone=` (referrer or referee).
+         */
         get: operations["ops_referral_attributions_list"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/referral/attributions/{attribution_id}/reject/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ops_referral_attributions_reject_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/referral/attributions/{attribution_id}/reverse/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ops_referral_attributions_reverse_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4357,6 +4409,38 @@ export interface paths {
         patch: operations["ops_reports_presets_partial_update"];
         trace?: never;
     };
+    "/api/v1/ops/stay-subscription-plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ops_stay_subscription_plans_list"];
+        put?: never;
+        post: operations["ops_stay_subscription_plans_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/stay-subscription-plans/{plan_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ops_stay_subscription_plans_retrieve"];
+        put?: never;
+        post?: never;
+        delete: operations["ops_stay_subscription_plans_delete"];
+        options?: never;
+        head?: never;
+        patch: operations["ops_stay_subscription_plans_update"];
+        trace?: never;
+    };
     "/api/v1/ops/stays": {
         parameters: {
             query?: never;
@@ -4464,7 +4548,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        delete: operations["ops_vendor_subscription_plans_destroy"];
         options?: never;
         head?: never;
         patch: operations["ops_vendor_subscription_plans_partial_update"];
@@ -6000,24 +6084,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/partner/rentals/pickup-hours": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description GET / PUT the days and hours customers can collect and return items. */
-        get: operations["partner_rentals_pickup_hours_retrieve"];
-        /** @description GET / PUT the days and hours customers can collect and return items. */
-        put: operations["partner_rentals_pickup_hours_update"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/partner/required-consents/": {
         parameters: {
             query?: never;
@@ -6326,6 +6392,24 @@ export interface paths {
         put?: never;
         /** @description ``book``: mark the room Booked. ``release``: the guest left; it is available again. */
         post: operations["partner_stays_room_action"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/stays/subscription": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Host views current subscription and available tiers, or starts an upgrade. */
+        get: operations["partner_stays_subscription_get"];
+        put?: never;
+        /** @description Host views current subscription and available tiers, or starts an upgrade. */
+        post: operations["partner_stays_subscription_purchase"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8090,7 +8174,7 @@ export interface components {
             listing: string;
             readonly listing_title: string;
             readonly listing_slug: string;
-            readonly status: components["schemas"]["ListingApplicationStatusEnum"];
+            readonly status: components["schemas"]["StatusD32Enum"];
             applicant_snapshot?: unknown;
             readonly applicant_name: string;
             readonly applicant_phone: string;
@@ -8144,7 +8228,7 @@ export interface components {
             readonly created_at: string;
         };
         ApplicationStatusRequest: {
-            status: components["schemas"]["ListingApplicationStatusEnum"];
+            status: components["schemas"]["StatusD32Enum"];
         };
         /**
          * @description The person coming, as the Customer may see them.
@@ -8242,6 +8326,14 @@ export interface components {
             /** Format: date-time */
             readonly session_expires_at: string;
         };
+        /**
+         * @description * `IMMEDIATE` - Immediately
+         *     * `WEEK` - Within 7 days
+         *     * `FORTNIGHT` - Within 15 days
+         *     * `MONTH` - Within 30 days
+         * @enum {string}
+         */
+        AvailableFromEnum: "IMMEDIATE" | "WEEK" | "FORTNIGHT" | "MONTH";
         /** @enum {unknown} */
         BlankEnum: "";
         Booking: {
@@ -8474,6 +8566,12 @@ export interface components {
             application_id: string | null;
             application_status: string;
             match: components["schemas"]["Match"];
+            /** @default  */
+            contact_phone: string;
+            /** @default  */
+            resume_url: string;
+            /** @default true */
+            is_contact_locked: boolean;
         };
         CapabilityOption: {
             /** Format: uuid */
@@ -8813,6 +8911,20 @@ export interface components {
          * @enum {string}
          */
         CheckoutStatusEnum: "CREATED" | "FINDING_PARTNER" | "PARTNER_COMMITTED" | "PAYMENT_PENDING" | "COMPLETED" | "REPLAN_REQUIRED" | "CANCELLED" | "EXPIRED";
+        CoinAdjustment: {
+            /** Format: uuid */
+            customer_id: string;
+            /** @description Positive adds coins, negative deducts. */
+            amount: number;
+            reason: string;
+        };
+        CoinAdjustmentRequest: {
+            /** Format: uuid */
+            customer_id: string;
+            /** @description Positive adds coins, negative deducts. */
+            amount: number;
+            reason: string;
+        };
         CoinBurnPolicy: {
             max_burn_percent?: number;
             coin_value_paise?: number;
@@ -8846,7 +8958,7 @@ export interface components {
         CoinEarnTier: {
             /** Format: uuid */
             readonly id: string;
-            tier_kind: components["schemas"]["TierKindEnum"];
+            tier_kind?: components["schemas"]["TierKindEnum"];
             /** Format: int64 */
             min_order_paise?: number | null;
             /** Format: int64 */
@@ -8857,7 +8969,7 @@ export interface components {
             sort_order?: number;
         };
         CoinEarnTierRequest: {
-            tier_kind: components["schemas"]["TierKindEnum"];
+            tier_kind?: components["schemas"]["TierKindEnum"];
             /** Format: int64 */
             min_order_paise?: number | null;
             /** Format: int64 */
@@ -8867,6 +8979,7 @@ export interface components {
             coins_amount: number;
             sort_order?: number;
         };
+        /** @description An earn campaign. Tiered modes carry their bands inline in `tiers`. */
         CoinGrantRule: {
             /** Format: uuid */
             readonly id: string;
@@ -8882,7 +8995,9 @@ export interface components {
             is_active?: boolean;
             /** Format: date-time */
             readonly created_at: string;
+            tiers?: components["schemas"]["CoinEarnTier"][];
         };
+        /** @description An earn campaign. Tiered modes carry their bands inline in `tiers`. */
         CoinGrantRuleRequest: {
             name: string;
             earn_mode?: components["schemas"]["EarnModeEnum"];
@@ -8894,27 +9009,18 @@ export interface components {
             /** Format: date-time */
             expires_at?: string | null;
             is_active?: boolean;
+            tiers?: components["schemas"]["CoinEarnTierRequest"][];
         };
         CoinTransaction: {
             /** Format: uuid */
             readonly id: string;
-            kind: components["schemas"]["CoinTransactionKindEnum"];
+            kind: components["schemas"]["Kind1c9Enum"];
+            status?: components["schemas"]["Status4a3Enum"];
             amount: number;
             notes?: string;
             /** Format: date-time */
             readonly created_at: string;
         };
-        /**
-         * @description * `EARN_PROMISE` - Earn promise
-         *     * `UNLOCK` - Unlock
-         *     * `RESERVE` - Reserve
-         *     * `BURN` - Burn
-         *     * `RELEASE` - Release
-         *     * `EXPIRE` - Expire
-         *     * `ADJUSTMENT` - Adjustment
-         * @enum {string}
-         */
-        CoinTransactionKindEnum: "EARN_PROMISE" | "UNLOCK" | "RESERVE" | "BURN" | "RELEASE" | "EXPIRE" | "ADJUSTMENT";
         /**
          * @description * `PARTNER_QUOTE` - Partner quote total
          *     * `TAXABLE_VALUE` - Taxable value
@@ -9149,14 +9255,10 @@ export interface components {
         CreateBookingRequest: {
             /** Format: uuid */
             asset_id: string;
-            /** Format: date-time */
-            pickup_at?: string;
-            /** Format: date-time */
-            return_at?: string;
             /** Format: date */
-            start_date?: string;
+            start_date: string;
             /** Format: date */
-            end_date?: string;
+            end_date: string;
             /** @default 1 */
             quantity: number;
             /** @default PICKUP */
@@ -9707,6 +9809,9 @@ export interface components {
             spendable_coins: number;
             promised_coins: number;
             locked_coins: number;
+            pending_coins: number;
+            /** Format: date-time */
+            next_pending_available_at: string | null;
             expiring_soon_coins: number;
             active_burn_policy: components["schemas"]["CoinBurnPolicy"];
         };
@@ -9798,8 +9903,15 @@ export interface components {
         CustomerReferralSummary: {
             code: string;
             share_url: string;
+            share_message: string;
             total_earned_paise: number;
+            total_earned_coins: number;
+            invited_count: number;
             successful_referral_count: number;
+            pending_referral_count: number;
+            current_tier_min: number | null;
+            next_tier_min: number | null;
+            referrals_to_next_tier: number | null;
             active_program: components["schemas"]["ReferralProgramSummary"];
         };
         CustomerRequestedVisitSlots: {
@@ -9866,9 +9978,17 @@ export interface components {
          * @enum {string}
          */
         DaySettlementStatusEnum: "AWAITING_BOTH" | "SUPERVISOR_CLAIMED" | "CUSTOMER_CLAIMED" | "SETTLED";
+        /**
+         * @description * `ROOM_UNAVAILABLE` - Room unavailable
+         *     * `DATE_MISMATCH` - Date doesn't match
+         *     * `ALREADY_OCCUPIED` - Already occupied
+         *     * `OTHER` - Other
+         * @enum {string}
+         */
+        DeclineReasonEnum: "ROOM_UNAVAILABLE" | "DATE_MISMATCH" | "ALREADY_OCCUPIED" | "OTHER";
         DeclineVisitRequest: {
             /** @default  */
-            reason: components["schemas"]["StayVisitDeclineReasonEnum"] | components["schemas"]["BlankEnum"];
+            reason: components["schemas"]["Reason463Enum"] | components["schemas"]["BlankEnum"];
             /** @default  */
             note: string;
         };
@@ -10704,6 +10824,12 @@ export interface components {
             pending_visits: number;
             upcoming_visits: number;
         };
+        HostSubscriptionStatus: {
+            subscription: components["schemas"]["StaySubscription"] | null;
+            available_plans: components["schemas"]["StaySubscriptionPlan"][];
+            live_properties_count: number;
+            max_properties: number;
+        };
         /**
          * @description * `service` - Generic service
          *     * `electrical` - Electrical
@@ -10764,7 +10890,7 @@ export interface components {
             scheduled_date: string;
             /** Format: time */
             start_time: string;
-            mode?: components["schemas"]["InterviewModeEnum"];
+            mode?: components["schemas"]["Mode074Enum"];
             readonly mode_label: string;
             location_text?: string;
             note?: string;
@@ -10780,13 +10906,6 @@ export interface components {
             /** @default  */
             note: string;
         };
-        /**
-         * @description * `IN_PERSON` - In person
-         *     * `PHONE` - Phone call
-         *     * `VIDEO` - Video call
-         * @enum {string}
-         */
-        InterviewModeEnum: "IN_PERSON" | "PHONE" | "VIDEO";
         /**
          * @description * `PROPOSED` - Waiting for the candidate
          *     * `ACCEPTED` - Accepted
@@ -10816,6 +10935,7 @@ export interface components {
             shortlisted: number;
             interviews: number;
             connected: number;
+            matches: number;
         };
         /**
          * @description A job as the 4-step form sends it. Values are checked against ``jobs`` option lists in
@@ -10890,14 +11010,6 @@ export interface components {
             salary_min_rupees: number;
             salary_max_rupees: number;
         };
-        /**
-         * @description * `IMMEDIATE` - Immediately
-         *     * `WEEK` - Within 7 days
-         *     * `FORTNIGHT` - Within 15 days
-         *     * `MONTH` - Within 30 days
-         * @enum {string}
-         */
-        JobSeekerAvailabilityEnum: "IMMEDIATE" | "WEEK" | "FORTNIGHT" | "MONTH";
         JobSeekerProfile: {
             /** Format: uuid */
             readonly id: string;
@@ -10912,8 +11024,8 @@ export interface components {
             area?: string;
             expected_salary_rupees?: number;
             job_types?: unknown;
-            available_from?: components["schemas"]["JobSeekerAvailabilityEnum"] | components["schemas"]["BlankEnum"];
-            visibility?: components["schemas"]["JobSeekerVisibilityEnum"];
+            available_from?: components["schemas"]["AvailableFromEnum"] | components["schemas"]["BlankEnum"];
+            visibility?: components["schemas"]["VisibilityEnum"];
             readonly resume_name: string;
             readonly has_resume: boolean;
             /** Format: date-time */
@@ -10933,12 +11045,6 @@ export interface components {
             available_from?: string;
             visibility?: string;
         };
-        /**
-         * @description * `OPEN` - Matching employers can find me
-         *     * `APPLIED_ONLY` - Only employers I apply to
-         * @enum {string}
-         */
-        JobSeekerVisibilityEnum: "OPEN" | "APPLIED_ONLY";
         /**
          * @description A switch, with both signatures and both timestamps.
          *
@@ -10980,6 +11086,19 @@ export interface components {
          */
         KillSwitchScopeEnum: "NOTIFICATIONS" | "SMS" | "WHATSAPP" | "VOICE" | "PAYMENTS" | "PAYOUTS" | "DISPATCH" | "SERVICE_AREA" | "SERVICE" | "M2_PURCHASES";
         /**
+         * @description * `EARN_PROMISE` - Earn promise
+         *     * `UNLOCK` - Unlock
+         *     * `RESERVE` - Reserve
+         *     * `BURN` - Burn
+         *     * `RELEASE` - Release
+         *     * `EXPIRE` - Expire
+         *     * `CANCEL` - Cancel
+         *     * `REVERSE` - Reverse
+         *     * `ADJUSTMENT` - Adjustment
+         * @enum {string}
+         */
+        Kind1c9Enum: "EARN_PROMISE" | "UNLOCK" | "RESERVE" | "BURN" | "RELEASE" | "EXPIRE" | "CANCEL" | "REVERSE" | "ADJUSTMENT";
+        /**
          * @description A correction, which is always a new entry rather than an edit.
          *
          *     `net_paise` is signed and deliberately has no minimum: a negative value is a reversal, which
@@ -11017,19 +11136,6 @@ export interface components {
          * @enum {string}
          */
         LifecycleStatusEnum: "DRAFT" | "ACTIVE" | "RETIRED" | "REJECTED";
-        /**
-         * @description * `SUBMITTED` - Submitted
-         *     * `UNDER_REVIEW` - Under review
-         *     * `SHORTLISTED` - Shortlisted
-         *     * `INTERVIEW` - Interview
-         *     * `CONNECTED` - Connected
-         *     * `CONTACTED` - Contacted
-         *     * `REJECTED` - Rejected
-         *     * `WITHDRAWN` - Withdrawn
-         *     * `EXPIRED` - Expired
-         * @enum {string}
-         */
-        ListingApplicationStatusEnum: "SUBMITTED" | "UNDER_REVIEW" | "SHORTLISTED" | "INTERVIEW" | "CONNECTED" | "CONTACTED" | "REJECTED" | "WITHDRAWN" | "EXPIRED";
         ListingCategoryOption: {
             label: string;
             value: string;
@@ -11057,7 +11163,6 @@ export interface components {
             published_at?: string | null;
             /** Format: date-time */
             expires_at?: string | null;
-            /** @default 0 */
             readonly application_count: number;
             /** Format: uuid */
             readonly role_template: string | null;
@@ -11145,7 +11250,6 @@ export interface components {
             published_at?: string | null;
             /** Format: date-time */
             expires_at?: string | null;
-            /** @default 0 */
             readonly application_count: number;
             /** Format: uuid */
             readonly role_template: string | null;
@@ -11169,6 +11273,12 @@ export interface components {
             readonly urgency: string;
             readonly city: string;
             readonly area: string;
+        };
+        LoyaltySettings: {
+            reward_hold_days?: number;
+            referral_monthly_cap?: number;
+            /** Format: date-time */
+            readonly updated_at: string;
         };
         ManualOfferRequest: {
             /** Format: uuid */
@@ -11223,6 +11333,13 @@ export interface components {
          * @enum {string}
          */
         MaterialFulfilmentModeEnum: "NOT_APPLICABLE" | "CUSTOMER_PROCURES" | "PARTNER_TURNKEY";
+        /**
+         * @description * `IN_PERSON` - In person
+         *     * `PHONE` - Phone call
+         *     * `VIDEO` - Video call
+         * @enum {string}
+         */
+        Mode074Enum: "IN_PERSON" | "PHONE" | "VIDEO";
         /**
          * @description * `SAME_PARTNER_SEQUENTIAL` - Same Partner sequential
          *     * `PARALLEL_ALLOWED` - Parallel allowed
@@ -11775,6 +11892,35 @@ export interface components {
             /** @default  */
             reason: string;
         };
+        OpsCoinTransaction: {
+            /** Format: uuid */
+            readonly id: string;
+            kind: components["schemas"]["Kind1c9Enum"];
+            status?: components["schemas"]["Status4a3Enum"];
+            amount: number;
+            notes?: string;
+            /** @default  */
+            readonly source_type: string;
+            /** Format: uuid */
+            readonly source_id: string;
+            /** @default  */
+            readonly rule_name: string;
+            /** Format: uuid */
+            payment_attempt?: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        OpsCreateStaySubscriptionPlanRequest: {
+            code: string;
+            name: string;
+            /** Format: int64 */
+            price_paise: number;
+            duration_days?: number;
+            max_properties?: number;
+            capabilities?: unknown;
+            details?: string;
+            is_active?: boolean;
+        };
         OpsCreateVendorSubscriptionPlanRequest: {
             /** Format: uuid */
             service?: string | null;
@@ -11790,6 +11936,21 @@ export interface components {
             details?: string;
             is_active?: boolean;
         };
+        OpsCustomerLedger: {
+            /** Format: uuid */
+            customer_id: string;
+            phone_number: string;
+            wallet_available_paise: number;
+            wallet_reserved_paise: number;
+            coins: {
+                [key: string]: number | null;
+            };
+            referral_code: string;
+            referred_by: components["schemas"]["OpsReferralAttribution"] | null;
+            referrals_made: components["schemas"]["OpsReferralAttribution"][];
+            wallet_transactions: components["schemas"]["OpsWalletTransaction"][];
+            coin_transactions: components["schemas"]["OpsCoinTransaction"][];
+        };
         OpsDashboardPreference: {
             /** @description List of tile IDs pinned by the operator. e.g. ['open_cases', 'overdue_bookings', 'captured_today', 'wallet_liability'] */
             pinned_tiles?: unknown;
@@ -11799,6 +11960,45 @@ export interface components {
         OpsDashboardPreferenceRequest: {
             /** @description List of tile IDs pinned by the operator. e.g. ['open_cases', 'overdue_bookings', 'captured_today', 'wallet_liability'] */
             pinned_tiles?: unknown;
+        };
+        /** @description Operations view: full phone numbers, program version, terms and review trail. */
+        OpsReferralAttribution: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly referrer_id: string;
+            readonly referrer_phone: string;
+            /** Format: uuid */
+            readonly referee_id: string;
+            readonly referee_phone: string;
+            readonly program_version_code: string;
+            terms_snapshot?: unknown;
+            status?: components["schemas"]["Status9f9Enum"];
+            /** Format: date-time */
+            readonly attributed_at: string;
+            /** Format: date-time */
+            qualified_at?: string | null;
+            qualifying_source_type?: string;
+            /** Format: uuid */
+            qualifying_source_id?: string | null;
+            /** Format: date-time */
+            reward_available_at?: string | null;
+            /** Format: date-time */
+            rewarded_at?: string | null;
+            readonly reviewed_by_phone: string | null;
+            /** Format: date-time */
+            reviewed_at?: string | null;
+            review_reason?: string;
+            readonly rewards: components["schemas"]["OpsReferralReward"][];
+        };
+        OpsReferralReward: {
+            reward_side: components["schemas"]["RewardSideEnum"];
+            payout_sequence_n: number;
+            /** Format: int64 */
+            wallet_paise?: number;
+            coins_amount?: number;
+            /** Format: date-time */
+            readonly paid_at: string;
         };
         OpsReportCatalogItem: {
             id: string;
@@ -11868,6 +12068,18 @@ export interface components {
             /** Format: int64 */
             max_paise?: number;
         };
+        OpsWalletTransaction: {
+            /** Format: uuid */
+            id: string;
+            amount_paise: number;
+            kind: string;
+            status: string;
+            notes: string;
+            /** Format: uuid */
+            order_id: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
         Order: {
             /** Format: uuid */
             readonly id: string;
@@ -11916,6 +12128,8 @@ export interface components {
             code: string;
             device_identifier?: string;
             device_label?: string;
+            /** @description Applied only when this verification creates a new account. */
+            referral_code?: string;
         };
         OutcomeInputRequest: {
             /** Format: uuid */
@@ -12415,7 +12629,6 @@ export interface components {
             published_at?: string | null;
             /** Format: date-time */
             expires_at?: string | null;
-            /** @default 0 */
             readonly application_count: number;
             /** Format: uuid */
             readonly role_template: string | null;
@@ -12642,36 +12855,6 @@ export interface components {
             /** @default true */
             is_active: boolean;
         };
-        /**
-         * @description The owner's view of an ad: how many pieces are out today and free to book.
-         *
-         *     Needs ``context["stock"]`` from ``asset_stock_counts``.
-         */
-        PartnerRentalAsset: {
-            /** Format: uuid */
-            readonly id: string;
-            readonly slug: string;
-            readonly title: string;
-            readonly description: string;
-            readonly location_text: string;
-            readonly daily_rate_paise: number;
-            readonly deposit_paise: number;
-            readonly quantity_available: number;
-            readonly condition_grade: components["schemas"]["ConditionGradeEnum"];
-            readonly current_status: components["schemas"]["CurrentStatusEnum"];
-            readonly moderation_status: components["schemas"]["RentalAssetModerationStatusEnum"];
-            readonly public_state: string;
-            readonly partner_name: string;
-            /** Format: uuid */
-            readonly variant: string;
-            readonly structured_fields: unknown;
-            readonly media: components["schemas"]["RentalAssetMedia"][];
-            /** Format: date-time */
-            readonly created_at: string;
-            readonly booked_now: number;
-            readonly available_now: number;
-            readonly upcoming_bookings: number;
-        };
         /** @description The owner's view of the booking: includes renter's name and phone to coordinate. */
         PartnerRentalBooking: {
             /** Format: uuid */
@@ -12681,11 +12864,6 @@ export interface components {
             start_date: string;
             /** Format: date */
             end_date: string;
-            /** Format: date-time */
-            pickup_at: string;
-            /** Format: date-time */
-            return_at: string;
-            readonly rental_days: number;
             readonly quantity: number;
             price_paise: number;
             platform_fee_percent?: number;
@@ -12696,7 +12874,6 @@ export interface components {
             readonly deposit: components["schemas"]["RentalDeposit"];
             /** @description Plaintext PIN for the customer only, once the booking is paid/active. */
             readonly handover_pin: string | null;
-            readonly pickup_contact: components["schemas"]["RentalPickupContact"] | null;
             /** Format: date-time */
             readonly created_at: string;
             readonly customer_name: string;
@@ -12820,7 +12997,7 @@ export interface components {
             /** Format: time */
             end_time: string;
             message?: string;
-            status?: components["schemas"]["StayVisitStatusEnum"];
+            status?: components["schemas"]["Status0a1Enum"];
             readonly reason_text: string;
             readonly host_name: string;
             readonly host_phone: string;
@@ -12830,7 +13007,7 @@ export interface components {
             readonly created_at: string;
             readonly customer_name: string;
             readonly customer_phone: string;
-            decline_reason?: components["schemas"]["StayVisitDeclineReasonEnum"] | components["schemas"]["BlankEnum"];
+            decline_reason?: components["schemas"]["DeclineReasonEnum"] | components["schemas"]["BlankEnum"];
             decline_note?: string;
         };
         /**
@@ -12910,6 +13087,7 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** @description An earn campaign. Tiered modes carry their bands inline in `tiers`. */
         PatchedCoinGrantRuleRequest: {
             name?: string;
             earn_mode?: components["schemas"]["EarnModeEnum"];
@@ -12921,6 +13099,7 @@ export interface components {
             /** Format: date-time */
             expires_at?: string | null;
             is_active?: boolean;
+            tiers?: components["schemas"]["CoinEarnTierRequest"][];
         };
         /**
          * @description The name this agency uses, their skills, the supervisor flag, and gender.
@@ -12983,6 +13162,10 @@ export interface components {
             /** @default false */
             regenerate_description: boolean;
         };
+        PatchedLoyaltySettingsRequest: {
+            reward_hold_days?: number;
+            referral_monthly_cap?: number;
+        };
         PatchedOpsDashboardPreferenceRequest: {
             /** @description List of tile IDs pinned by the operator. e.g. ['open_cases', 'overdue_bookings', 'captured_today', 'wallet_liability'] */
             pinned_tiles?: unknown;
@@ -12993,6 +13176,16 @@ export interface components {
             filters_json?: unknown;
             /** @description Allow-list of columns */
             columns_json?: unknown;
+        };
+        PatchedOpsUpdateStaySubscriptionPlanRequest: {
+            name?: string;
+            /** Format: int64 */
+            price_paise?: number;
+            duration_days?: number;
+            max_properties?: number;
+            capabilities?: unknown;
+            details?: string;
+            is_active?: boolean;
         };
         PatchedOpsUpdateVendorSubscriptionPlanRequest: {
             /** Format: uuid */
@@ -13069,7 +13262,6 @@ export interface components {
             location_text?: string;
             quantity_available?: number;
             structured_fields?: unknown;
-            add_image_urls?: string[];
         };
         PatchedUpdatePropertyRequest: {
             title?: string;
@@ -14285,7 +14477,7 @@ export interface components {
             scheduled_date: string;
             /** Format: time */
             start_time: string;
-            mode: components["schemas"]["InterviewModeEnum"];
+            mode: components["schemas"]["Mode074Enum"];
             location_text?: string;
             note?: string;
         };
@@ -14312,9 +14504,10 @@ export interface components {
          *     * `A7_RENTAL_DEPOSIT` - A7 rental deposit
          *     * `A9_STAY_RESERVATION` - A9 stay reservation
          *     * `A7_RENTAL_BOOKING` - A7 rental booking
+         *     * `A9_STAY_SUBSCRIPTION` - A9 stay subscription
          * @enum {string}
          */
-        PurposeEnum: "BOOKING_GROUP" | "SCOPE_AMENDMENT_REVISION" | "M2_QUOTE_UNLOCK" | "M2_VISIT_PLAN" | "M2_SITE_VISIT_FEE" | "M2_STAGE_FUNDING" | "M2_MATERIAL_ADVANCE" | "M2_SCOPE_AMENDMENT" | "M2_BOOKING_FEE" | "A10_VENDOR_SUBSCRIPTION" | "A10_PREMIUM_LISTING" | "WALLET_TOP_UP" | "A7_RENTAL_DEPOSIT" | "A9_STAY_RESERVATION" | "A7_RENTAL_BOOKING";
+        PurposeEnum: "BOOKING_GROUP" | "SCOPE_AMENDMENT_REVISION" | "M2_QUOTE_UNLOCK" | "M2_VISIT_PLAN" | "M2_SITE_VISIT_FEE" | "M2_STAGE_FUNDING" | "M2_MATERIAL_ADVANCE" | "M2_SCOPE_AMENDMENT" | "M2_BOOKING_FEE" | "A10_VENDOR_SUBSCRIPTION" | "A10_PREMIUM_LISTING" | "WALLET_TOP_UP" | "A7_RENTAL_DEPOSIT" | "A9_STAY_RESERVATION" | "A7_RENTAL_BOOKING" | "A9_STAY_SUBSCRIPTION";
         QuestionAnswerRequest: {
             answer: string;
         };
@@ -14709,6 +14902,14 @@ export interface components {
             ratings: components["schemas"]["ServiceRating"][];
         };
         /**
+         * @description * `ROOM_UNAVAILABLE` - Room unavailable
+         *     * `DATE_MISMATCH` - Date doesn't match
+         *     * `ALREADY_OCCUPIED` - Already occupied
+         *     * `OTHER` - Other
+         * @enum {string}
+         */
+        Reason463Enum: "ROOM_UNAVAILABLE" | "DATE_MISMATCH" | "ALREADY_OCCUPIED" | "OTHER";
+        /**
          * @description * `PARTNER_UNREACHABLE` - Partner unreachable
          *     * `CUSTOMER_REQUEST` - Customer request
          *     * `SAFETY_CONCERN` - Safety concern
@@ -14768,23 +14969,16 @@ export interface components {
             /** Format: uuid */
             readonly id: string;
             readonly referee_display: string;
-            status?: components["schemas"]["ReferralAttributionStatusEnum"];
+            status?: components["schemas"]["Status9f9Enum"];
             /** Format: date-time */
             readonly attributed_at: string;
             /** Format: date-time */
             qualified_at?: string | null;
             /** Format: date-time */
+            reward_available_at?: string | null;
+            /** Format: date-time */
             rewarded_at?: string | null;
         };
-        /**
-         * @description * `PENDING` - Pending
-         *     * `QUALIFIED` - Qualified
-         *     * `REWARDED` - Rewarded
-         *     * `EXPIRED` - Expired
-         *     * `INELIGIBLE` - Ineligible
-         * @enum {string}
-         */
-        ReferralAttributionStatusEnum: "PENDING" | "QUALIFIED" | "REWARDED" | "EXPIRED" | "INELIGIBLE";
         ReferralProgramSummary: {
             version_code: string;
             reward_sides?: components["schemas"]["RewardSidesEnum"];
@@ -14811,9 +15005,13 @@ export interface components {
         ReferralProgramWriteRequest: {
             version_code: string;
             reward_sides: components["schemas"]["RewardSidesEnum"];
+            /** @default 0 */
             referee_wallet_paise: number;
             referee_coins_amount: number;
             tiers: components["schemas"]["ReferralTierWriteRequest"][];
+        };
+        ReferralReviewRequest: {
+            reason: string;
         };
         ReferralRewardTier: {
             min_qualified_referrals?: number;
@@ -14826,9 +15024,10 @@ export interface components {
         };
         ReferralTierWriteRequest: {
             min_qualified_referrals: number;
-            referrer_wallet_paise: number;
             /** @default 0 */
             referrer_coins_amount: number;
+            /** @default 0 */
+            referrer_wallet_paise: number;
         };
         ReferralValidateRequestRequest: {
             code: string;
@@ -14932,30 +15131,6 @@ export interface components {
             /** Format: date-time */
             readonly created_at: string;
         };
-        /** @description One item's page: adds the owner's pickup hours so the customer picks valid times. */
-        RentalAssetDetail: {
-            /** Format: uuid */
-            readonly id: string;
-            readonly slug: string;
-            readonly title: string;
-            readonly description: string;
-            readonly location_text: string;
-            readonly daily_rate_paise: number;
-            readonly deposit_paise: number;
-            readonly quantity_available: number;
-            readonly condition_grade: components["schemas"]["ConditionGradeEnum"];
-            readonly current_status: components["schemas"]["CurrentStatusEnum"];
-            readonly moderation_status: components["schemas"]["RentalAssetModerationStatusEnum"];
-            readonly public_state: string;
-            readonly partner_name: string;
-            /** Format: uuid */
-            readonly variant: string;
-            readonly structured_fields: unknown;
-            readonly media: components["schemas"]["RentalAssetMedia"][];
-            /** Format: date-time */
-            readonly created_at: string;
-            readonly pickup_hours: components["schemas"]["RentalPickupHours"];
-        };
         RentalAssetMedia: {
             /** Format: uuid */
             readonly id: string;
@@ -14986,11 +15161,6 @@ export interface components {
             start_date: string;
             /** Format: date */
             end_date: string;
-            /** Format: date-time */
-            pickup_at: string;
-            /** Format: date-time */
-            return_at: string;
-            readonly rental_days: number;
             readonly quantity: number;
             price_paise: number;
             platform_fee_percent?: number;
@@ -15001,7 +15171,6 @@ export interface components {
             readonly deposit: components["schemas"]["RentalDeposit"];
             /** @description Plaintext PIN for the customer only, once the booking is paid/active. */
             readonly handover_pin: string | null;
-            readonly pickup_contact: components["schemas"]["RentalPickupContact"] | null;
             /** Format: date-time */
             readonly created_at: string;
         };
@@ -15039,33 +15208,6 @@ export interface components {
             /** Format: uri */
             url: string;
             original_name: string;
-        };
-        RentalPickupContact: {
-            owner_name: string;
-            owner_phone: string;
-            address: string;
-        };
-        /** @description The owner's pickup and return schedule. ``HH:MM`` local times; Monday = 0. */
-        RentalPickupHours: {
-            open_days: number[];
-            /** Format: time */
-            opens_at: string;
-            /** Format: time */
-            closes_at: string;
-            min_notice_minutes: number;
-            max_advance_days: number;
-            readonly slot_minutes: number;
-            readonly summary: string;
-        };
-        /** @description The owner's pickup and return schedule. ``HH:MM`` local times; Monday = 0. */
-        RentalPickupHoursRequest: {
-            open_days: number[];
-            /** Format: time */
-            opens_at: string;
-            /** Format: time */
-            closes_at: string;
-            min_notice_minutes: number;
-            max_advance_days: number;
         };
         RentalPlatformFee: {
             percent: number;
@@ -15469,6 +15611,12 @@ export interface components {
          */
         RevisionRequestStatusEnum: "OPEN" | "ANSWERED" | "DECLINED";
         /**
+         * @description * `REFERRER` - Referrer
+         *     * `REFEREE` - Referee
+         * @enum {string}
+         */
+        RewardSideEnum: "REFERRER" | "REFEREE";
+        /**
          * @description * `REFERRER_ONLY` - Referrer only
          *     * `REFEREE_ONLY` - Referee only
          *     * `BOTH` - Both referrer and referee
@@ -15501,7 +15649,7 @@ export interface components {
             /** Format: uuid */
             readonly id: string;
             number: string;
-            status?: components["schemas"]["StayRoomStatusEnum"];
+            status?: components["schemas"]["RoomStatusEnum"];
             occupant_name?: string;
             /** Format: uuid */
             booked_enquiry?: string | null;
@@ -15510,6 +15658,13 @@ export interface components {
             /** Format: date-time */
             booked_at?: string | null;
         };
+        /**
+         * @description * `AVAILABLE` - Available
+         *     * `UNAVAILABLE` - Not available
+         *     * `BOOKED` - Booked
+         * @enum {string}
+         */
+        RoomStatusEnum: "AVAILABLE" | "UNAVAILABLE" | "BOOKED";
         /**
          * @description A first-class safety record (`M2-BE-530`). **Never a cancellation reason.**
          *
@@ -16253,6 +16408,19 @@ export interface components {
             expected_version: number;
             code: string;
         };
+        StartStaySubscriptionPurchaseRequest: {
+            /** Format: uuid */
+            plan_id: string;
+        };
+        /**
+         * @description * `REQUESTED` - Requested
+         *     * `ACCEPTED` - Accepted
+         *     * `DECLINED` - Not accepted
+         *     * `CANCELLED` - Cancelled
+         *     * `EXPIRED` - Expired
+         * @enum {string}
+         */
+        Status0a1Enum: "REQUESTED" | "ACCEPTED" | "DECLINED" | "CANCELLED" | "EXPIRED";
         /**
          * @description * `DRAFT` - Draft
          *     * `ACTIVE` - Active
@@ -16266,6 +16434,23 @@ export interface components {
          * @enum {string}
          */
         Status423Enum: "ACTIVE" | "RETIRED";
+        /**
+         * @description * `RESERVED` - Reserved
+         *     * `CAPTURED` - Captured
+         *     * `RELEASED` - Released
+         * @enum {string}
+         */
+        Status4a3Enum: "RESERVED" | "CAPTURED" | "RELEASED";
+        /**
+         * @description * `PENDING` - Pending
+         *     * `QUALIFIED` - Qualified
+         *     * `REWARDED` - Rewarded
+         *     * `EXPIRED` - Expired
+         *     * `INELIGIBLE` - Rejected
+         *     * `REVERSED` - Reversed
+         * @enum {string}
+         */
+        Status9f9Enum: "PENDING" | "QUALIFIED" | "REWARDED" | "EXPIRED" | "INELIGIBLE" | "REVERSED";
         /**
          * @description * `DRAFT` - Draft
          *     * `PUBLISHED` - Published
@@ -16282,6 +16467,19 @@ export interface components {
          * @enum {string}
          */
         StatusD1aEnum: "OPEN" | "RESOLVED";
+        /**
+         * @description * `SUBMITTED` - Submitted
+         *     * `UNDER_REVIEW` - Under review
+         *     * `SHORTLISTED` - Shortlisted
+         *     * `INTERVIEW` - Interview
+         *     * `CONNECTED` - Connected
+         *     * `CONTACTED` - Contacted
+         *     * `REJECTED` - Rejected
+         *     * `WITHDRAWN` - Withdrawn
+         *     * `EXPIRED` - Expired
+         * @enum {string}
+         */
+        StatusD32Enum: "SUBMITTED" | "UNDER_REVIEW" | "SHORTLISTED" | "INTERVIEW" | "CONNECTED" | "CONTACTED" | "REJECTED" | "WITHDRAWN" | "EXPIRED";
         /**
          * @description * `PENDING_PAYMENT` - Pending payment
          *     * `CONFIRMED` - Confirmed
@@ -16438,13 +16636,46 @@ export interface components {
             /** Format: uri */
             url: string;
         };
+        StaySubscription: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly plan: components["schemas"]["StaySubscriptionPlan"];
+            status?: components["schemas"]["StaySubscriptionStatusEnum"];
+            /** Format: date-time */
+            starts_at?: string | null;
+            /** Format: date-time */
+            ends_at?: string | null;
+            /** Format: date-time */
+            grace_ends_at?: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        StaySubscriptionPlan: {
+            /** Format: uuid */
+            readonly id: string;
+            code: string;
+            name: string;
+            /** Format: int64 */
+            price_paise: number;
+            duration_days?: number;
+            max_properties?: number;
+            capabilities?: unknown;
+            details?: string;
+            is_active?: boolean;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
         /**
-         * @description * `AVAILABLE` - Available
-         *     * `UNAVAILABLE` - Not available
-         *     * `BOOKED` - Booked
+         * @description * `PENDING_ACTIVATION` - Pending activation
+         *     * `ACTIVE` - Active
+         *     * `GRACE` - Grace period
+         *     * `EXPIRED` - Expired
+         *     * `CANCELLED` - Cancelled
          * @enum {string}
          */
-        StayRoomStatusEnum: "AVAILABLE" | "UNAVAILABLE" | "BOOKED";
+        StaySubscriptionStatusEnum: "PENDING_ACTIVATION" | "ACTIVE" | "GRACE" | "EXPIRED" | "CANCELLED";
         StayTaxonomyService: {
             /** Format: uuid */
             id: string;
@@ -16494,7 +16725,7 @@ export interface components {
             /** Format: time */
             end_time: string;
             message?: string;
-            status?: components["schemas"]["StayVisitStatusEnum"];
+            status?: components["schemas"]["Status0a1Enum"];
             readonly reason_text: string;
             readonly host_name: string;
             readonly host_phone: string;
@@ -16503,14 +16734,6 @@ export interface components {
             /** Format: date-time */
             readonly created_at: string;
         };
-        /**
-         * @description * `ROOM_UNAVAILABLE` - Room unavailable
-         *     * `DATE_MISMATCH` - Date doesn't match
-         *     * `ALREADY_OCCUPIED` - Already occupied
-         *     * `OTHER` - Other
-         * @enum {string}
-         */
-        StayVisitDeclineReasonEnum: "ROOM_UNAVAILABLE" | "DATE_MISMATCH" | "ALREADY_OCCUPIED" | "OTHER";
         StayVisitSlot: {
             /** Format: uuid */
             readonly id: string;
@@ -16520,15 +16743,6 @@ export interface components {
             /** Format: time */
             end_time: string;
         };
-        /**
-         * @description * `REQUESTED` - Requested
-         *     * `ACCEPTED` - Accepted
-         *     * `DECLINED` - Not accepted
-         *     * `CANCELLED` - Cancelled
-         *     * `EXPIRED` - Expired
-         * @enum {string}
-         */
-        StayVisitStatusEnum: "REQUESTED" | "ACCEPTED" | "DECLINED" | "CANCELLED" | "EXPIRED";
         StepUpSession: {
             /** Format: date-time */
             readonly stepped_up_at: string;
@@ -16582,6 +16796,9 @@ export interface components {
             cover_note?: string;
             /** Format: uri */
             resume_url?: string;
+            skills?: string[];
+            /** @default true */
+            findable: boolean;
         };
         /**
          * @description The floor every state-changing fulfilment command sits on.
@@ -16914,6 +17131,12 @@ export interface components {
             expected_version: number;
         };
         /**
+         * @description * `OPEN` - Matching employers can find me
+         *     * `APPLIED_ONLY` - Only employers I apply to
+         * @enum {string}
+         */
+        VisibilityEnum: "OPEN" | "APPLIED_ONLY";
+        /**
          * @description The Customer's live arrival code, and whether a new one can be asked for.
          *
          *     `code` and `can_issue` answer two different questions and a client needs both. A visit that is
@@ -17213,7 +17436,7 @@ export interface components {
             /** Format: int64 */
             amount_paise: number;
             kind: components["schemas"]["WalletTransactionKindEnum"];
-            status?: components["schemas"]["WalletTransactionStatusEnum"];
+            status?: components["schemas"]["Status4a3Enum"];
             idempotency_key?: string;
             notes?: string;
             /** Format: date-time */
@@ -17229,13 +17452,6 @@ export interface components {
          * @enum {string}
          */
         WalletTransactionKindEnum: "TOP_UP" | "CHECKOUT_DEBIT" | "CHECKOUT_RELEASE" | "REFUND_CREDIT" | "REFERRAL_CREDIT" | "ADJUSTMENT";
-        /**
-         * @description * `RESERVED` - Reserved
-         *     * `CAPTURED` - Captured
-         *     * `RELEASED` - Released
-         * @enum {string}
-         */
-        WalletTransactionStatusEnum: "RESERVED" | "CAPTURED" | "RELEASED";
         /** @description The Customer calls on a warranty the retention was held against. */
         WarrantyClaimRequest: {
             summary: string;
@@ -19615,31 +19831,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CustomerReferralSummary"];
-                };
-            };
-        };
-    };
-    customer_referral_apply_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ReferralValidateRequestRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["ReferralValidateRequestRequest"];
-                "multipart/form-data": components["schemas"]["ReferralValidateRequestRequest"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReferralAttribution"];
                 };
             };
         };
@@ -26784,6 +26975,52 @@ export interface operations {
             };
         };
     };
+    ops_loyalty_coin_adjustments_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CoinAdjustmentRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CoinAdjustmentRequest"];
+                "multipart/form-data": components["schemas"]["CoinAdjustmentRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoinAdjustment"];
+                };
+            };
+        };
+    };
+    ops_loyalty_customer_ledger_retrieve: {
+        parameters: {
+            query: {
+                phone_number: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpsCustomerLedger"];
+                };
+            };
+        };
+    };
     ops_loyalty_grant_rules_list: {
         parameters: {
             query?: never;
@@ -26876,55 +27113,7 @@ export interface operations {
             };
         };
     };
-    ops_loyalty_grant_rules_tiers_list: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                rule_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CoinEarnTier"][];
-                };
-            };
-        };
-    };
-    ops_loyalty_grant_rules_tiers_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                rule_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CoinEarnTierRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["CoinEarnTierRequest"];
-                "multipart/form-data": components["schemas"]["CoinEarnTierRequest"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CoinEarnTier"];
-                };
-            };
-        };
-    };
-    ops_referral_attributions_list: {
+    ops_loyalty_settings_retrieve: {
         parameters: {
             query?: never;
             header?: never;
@@ -26938,7 +27127,108 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ReferralAttribution"][];
+                    "application/json": components["schemas"]["LoyaltySettings"];
+                };
+            };
+        };
+    };
+    ops_loyalty_settings_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedLoyaltySettingsRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedLoyaltySettingsRequest"];
+                "multipart/form-data": components["schemas"]["PatchedLoyaltySettingsRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoyaltySettings"];
+                };
+            };
+        };
+    };
+    ops_referral_attributions_list: {
+        parameters: {
+            query?: {
+                phone?: string;
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpsReferralAttribution"][];
+                };
+            };
+        };
+    };
+    ops_referral_attributions_reject_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attribution_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReferralReviewRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ReferralReviewRequest"];
+                "multipart/form-data": components["schemas"]["ReferralReviewRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpsReferralAttribution"];
+                };
+            };
+        };
+    };
+    ops_referral_attributions_reverse_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attribution_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReferralReviewRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ReferralReviewRequest"];
+                "multipart/form-data": components["schemas"]["ReferralReviewRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpsReferralAttribution"];
                 };
             };
         };
@@ -27315,6 +27605,118 @@ export interface operations {
             };
         };
     };
+    ops_stay_subscription_plans_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaySubscriptionPlan"][];
+                };
+            };
+        };
+    };
+    ops_stay_subscription_plans_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OpsCreateStaySubscriptionPlanRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["OpsCreateStaySubscriptionPlanRequest"];
+                "multipart/form-data": components["schemas"]["OpsCreateStaySubscriptionPlanRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaySubscriptionPlan"];
+                };
+            };
+        };
+    };
+    ops_stay_subscription_plans_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaySubscriptionPlan"];
+                };
+            };
+        };
+    };
+    ops_stay_subscription_plans_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ops_stay_subscription_plans_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedOpsUpdateStaySubscriptionPlanRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedOpsUpdateStaySubscriptionPlanRequest"];
+                "multipart/form-data": components["schemas"]["PatchedOpsUpdateStaySubscriptionPlanRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaySubscriptionPlan"];
+                };
+            };
+        };
+    };
     ops_stays_list: {
         parameters: {
             query?: never;
@@ -27467,6 +27869,26 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["VendorSubscriptionPlan"];
                 };
+            };
+        };
+    };
+    ops_vendor_subscription_plans_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -30952,7 +31374,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PartnerRentalAsset"][];
+                    "application/json": components["schemas"]["RentalAsset"][];
                 };
             };
         };
@@ -31140,50 +31562,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RentalPhotoUpload"];
-                };
-            };
-        };
-    };
-    partner_rentals_pickup_hours_retrieve: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RentalPickupHours"];
-                };
-            };
-        };
-    };
-    partner_rentals_pickup_hours_update: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RentalPickupHoursRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["RentalPickupHoursRequest"];
-                "multipart/form-data": components["schemas"]["RentalPickupHoursRequest"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RentalPickupHours"];
                 };
             };
         };
@@ -31732,6 +32110,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
+    partner_stays_subscription_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HostSubscriptionStatus"];
+                };
+            };
+        };
+    };
+    partner_stays_subscription_purchase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartStaySubscriptionPurchaseRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["StartStaySubscriptionPurchaseRequest"];
+                "multipart/form-data": components["schemas"]["StartStaySubscriptionPurchaseRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaySubscription"];
                 };
             };
         };
@@ -32783,7 +33205,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RentalAssetDetail"];
+                    "application/json": components["schemas"]["RentalAsset"];
                 };
             };
         };

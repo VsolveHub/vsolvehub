@@ -10,6 +10,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
 import { NotificationBell } from "@/features/notifications/view/notification-bell";
+import { readPendingReferral } from "@/features/referral/pending-referral";
 import { getApiClient } from "@/lib/api/browser";
 import { useCart } from "@/features/checkout/queries";
 
@@ -34,6 +35,7 @@ export function SiteHeader() {
   const hydrated = useHydrated();
   const guard = useAuthGuard(getApiClient());
   const flow = useOtpFlow(getApiClient(), {
+    getReferralCode: readPendingReferral,
     onAuthenticated: () => {
       setIsLoginOpen(false);
       router.refresh();

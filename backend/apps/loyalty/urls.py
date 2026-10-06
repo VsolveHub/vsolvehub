@@ -3,18 +3,21 @@
 from django.urls import path
 
 from apps.loyalty.ops_views import (
+    OpsCoinAdjustmentView,
     OpsCoinBurnPolicyListView,
-    OpsCoinEarnTierListView,
     OpsCoinGrantRuleDetailView,
     OpsCoinGrantRuleListView,
+    OpsCustomerLedgerView,
+    OpsLoyaltySettingsView,
     OpsReferralAttributionListView,
     OpsReferralProgramListView,
+    OpsReferralRejectView,
+    OpsReferralReverseView,
 )
 from apps.loyalty.views import (
     CustomerCoinsBurnPreviewView,
     CustomerCoinsView,
     CustomerCoinTransactionsView,
-    CustomerReferralApplyView,
     CustomerReferralAttributionsView,
     CustomerReferralView,
     PublicReferralValidateView,
@@ -44,11 +47,6 @@ urlpatterns = [
         name="customer-referral-validate",
     ),
     path(
-        "customer/referral/apply/",
-        CustomerReferralApplyView.as_view(),
-        name="customer-referral-apply",
-    ),
-    path(
         "ops/loyalty/grant-rules/",
         OpsCoinGrantRuleListView.as_view(),
         name="ops-coin-grant-rules",
@@ -57,11 +55,6 @@ urlpatterns = [
         "ops/loyalty/grant-rules/<uuid:rule_id>/",
         OpsCoinGrantRuleDetailView.as_view(),
         name="ops-coin-grant-rule",
-    ),
-    path(
-        "ops/loyalty/grant-rules/<uuid:rule_id>/tiers/",
-        OpsCoinEarnTierListView.as_view(),
-        name="ops-coin-earn-tiers",
     ),
     path(
         "ops/loyalty/burn-policies/",
@@ -77,5 +70,26 @@ urlpatterns = [
         "ops/referral/attributions/",
         OpsReferralAttributionListView.as_view(),
         name="ops-referral-attributions",
+    ),
+    path(
+        "ops/referral/attributions/<uuid:attribution_id>/reject/",
+        OpsReferralRejectView.as_view(),
+        name="ops-referral-reject",
+    ),
+    path(
+        "ops/referral/attributions/<uuid:attribution_id>/reverse/",
+        OpsReferralReverseView.as_view(),
+        name="ops-referral-reverse",
+    ),
+    path("ops/loyalty/settings/", OpsLoyaltySettingsView.as_view(), name="ops-loyalty-settings"),
+    path(
+        "ops/loyalty/customer-ledger/",
+        OpsCustomerLedgerView.as_view(),
+        name="ops-loyalty-customer-ledger",
+    ),
+    path(
+        "ops/loyalty/coin-adjustments/",
+        OpsCoinAdjustmentView.as_view(),
+        name="ops-loyalty-coin-adjustments",
     ),
 ]

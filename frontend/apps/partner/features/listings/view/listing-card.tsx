@@ -1,17 +1,5 @@
 import Link from "next/link";
-import {
-  Copy,
-  Check,
-  CheckCircle2,
-  MapPin,
-  Pencil,
-  RotateCcw,
-  Send,
-  Users,
-  XCircle,
-  Briefcase,
-  IndianRupee,
-} from "lucide-react";
+import { Briefcase, Check, CheckCircle2, Copy, IndianRupee, MapPin, Pencil, RotateCcw, Send, UserPlus, Users, XCircle } from "lucide-react";
 import { Badge, Card, StatusChip, formatMoney, formatMoneyText, formatDate } from "@vsolve/ui";
 
 import type { PartnerListing } from "../queries";
@@ -155,6 +143,16 @@ export function ListingCard({
             View Applicants ({listing.application_count})
           </Link>
 
+          {(listing.counts?.matches ?? 0) > 0 ? (
+            <Link
+              href={`/listings/${listing.id}?view=matches`}
+              className="inline-flex items-center gap-1.5 rounded-control border border-line bg-surface px-3.5 py-2 text-xs font-semibold text-text transition hover:border-line-strong hover:bg-surface-hover"
+            >
+              <UserPlus className="size-3.5 text-action" />
+              Matching candidates ({listing.counts?.matches})
+            </Link>
+          ) : null}
+
           {["DRAFT", "PUBLISHED"].includes(listing.status) && quickJob && (
             <Link
               href={`/listings/post?edit=${listing.id}`}
@@ -201,7 +199,7 @@ export function ListingCard({
               disabled={isActionPending}
               className="inline-flex items-center gap-1.5 rounded-control bg-action px-3.5 py-2 text-xs font-semibold text-action-text shadow-card transition hover:bg-action-hover active:bg-action-active disabled:opacity-50"
             >
-              <Send className="size-3.5" /> Submit for Review
+              <Send className="size-3.5" /> Publish now
             </button>
           )}
 

@@ -16,7 +16,11 @@ from apps.listings import jobs
 from apps.listings.matching import GOOD, OTHER, STRONG, Match, score_match
 from apps.listings.models import Application, JobSeekerProfile, Listing, SavedJob
 from apps.listings.selectors import public_listings
-from apps.listings.services import ListingStateError, submit_application
+from apps.listings.services import (
+    ListingStateError,
+    can_see_matching_candidates,
+    submit_application,
+)
 from apps.notifications.models import NotificationIntent
 from apps.notifications.services import request_notification
 
@@ -186,17 +190,97 @@ def matches_for_job(listing: Listing) -> list[tuple[JobSeekerProfile, Match, App
             status__in=(Application.Status.WITHDRAWN, Application.Status.EXPIRED)
         )
     }
-    qs = JobSeekerProfile.objects.exclude(user_id=listing.poster.user_id).filter(
-        Q(user_id__in=applications.keys())
-        | Q(visibility=JobSeekerProfile.Visibility.OPEN, city__iexact=listing.city or "-")
+    findable = Q(visibility=JobSeekerProfile.Visibility.OPEN)
+    # Work-from-home jobs are open to the whole country; every other job matches by city.
+    if listing.work_mode != "WORK_FROM_HOME":
+        findable &= Q(city__iexact=listing_city(listing) or "-")
+    qs = (
+        JobSeekerProfile.objects.select_related("user")
+        .exclude(user_id=listing.poster.user_id)
+        .filter(Q(user_id__in=applications.keys()) | findable)
     )
     rows = [(p, score_match(listing, p), applications.get(p.user_id)) for p in qs[:SCAN_LIMIT]]
     rows.sort(key=lambda row: (-row[1].score, row[0].full_name))
     return rows
 
 
+def invitable_matches(listing: Listing) -> list[tuple[JobSeekerProfile, Match]]:
+    """Strong and good matches who have not applied: the people an employer can invite."""
+    return [
+        (profile, match)
+        for profile, match, application in matches_for_job(listing)
+        if application is None and match.level != OTHER
+    ]
+
+
+def listing_city(listing: Listing) -> str:
+    """The job's city. Long-form listings only have free text ("Hyderabad, Telangana")."""
+    if listing.city:
+        return listing.city.strip()
+    return (listing.location_text or "").split(",")[0].strip()
+
+
+_EXPERIENCE_WORDS = (
+    ("fresher", "FRESHER"),
+    ("no experience", "FRESHER"),
+)
+
+
+#: Upper year bound (exclusive) for each band, smallest first.
+_BAND_LIMITS = ((1.0, "0_1"), (3.0, "1_3"), (5.0, "3_5"))
+
+
+def _experience_band(text: str) -> str:
+    """Best-effort band from what someone typed ("2 years", "6 months", "fresher")."""
+    lowered = (text or "").lower()
+    if any(word in lowered for word, _band in _EXPERIENCE_WORDS):
+        return "FRESHER"
+    numbers = "".join(ch if ch.isdigit() or ch == "." else " " for ch in lowered).split()
+    try:
+        years = float(numbers[0]) if numbers else -1.0
+    except ValueError:
+        years = -1.0
+    if years < 0:
+        return ""
+    if "month" in lowered:
+        years /= 12
+    return next((band for limit, band in _BAND_LIMITS if years < limit), "5_PLUS")
+
+
+def ensure_profile_from_application(
+    *,
+    user: Any,
+    listing: Listing,
+    name: str,
+    experience: str,
+    skills: list[str],
+    findable: bool,
+) -> JobSeekerProfile | None:
+    """Give a first-time applicant a job profile built from what they just told us, so other
+    employers with matching jobs can find them. An existing profile is never overwritten.
+    """
+    if JobSeekerProfile.objects.filter(user=user).exists():
+        return None
+    return JobSeekerProfile.objects.create(
+        user=user,
+        full_name=name.strip()[:120],
+        roles=[listing.title.strip()[:80]],
+        skills=_clean_items(skills, limit=MAX_SKILLS, what="skills"),
+        experience_band=_experience_band(experience),
+        city=listing_city(listing)[:80],
+        area=(listing.area or "")[:120],
+        visibility=(
+            JobSeekerProfile.Visibility.OPEN
+            if findable
+            else JobSeekerProfile.Visibility.APPLIED_ONLY
+        ),
+    )
+
+
 def invite_to_apply(*, listing: Listing, profile: JobSeekerProfile) -> None:
     """Tell a matching job seeker about the job. Their number stays private until they apply."""
+    if not can_see_matching_candidates(listing.poster):
+        raise ListingStateError("Upgrade to a plan with Matching candidates to invite people.")
     if listing.status != Listing.Status.PUBLISHED:
         raise ListingStateError("Publish the job before inviting people.")
     if profile.visibility != JobSeekerProfile.Visibility.OPEN:
@@ -255,7 +339,13 @@ def send_candidate_digests() -> int:
         return 0
     per_poster: dict[Any, set[Any]] = {}
     users: dict[Any, Any] = {}
+    allowed: dict[Any, bool] = {}
     for job in public_listings().exclude(city="").select_related("poster"):
+        # Only employers whose plan includes Matching candidates get the daily summary.
+        if job.poster_id not in allowed:
+            allowed[job.poster_id] = can_see_matching_candidates(job.poster)
+        if not allowed[job.poster_id]:
+            continue
         for profile in fresh:
             if profile.city.lower() != job.city.lower() or profile.user_id == job.poster.user_id:
                 continue

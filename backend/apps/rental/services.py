@@ -891,6 +891,12 @@ def dispute_deposit(
     deposit.save(update_fields=("requested_consume_paise", "provider_note", "updated_at"))
     booking.status = RentalBooking.Status.DISPUTED
     booking.save(update_fields=("status", "updated_at"))
+
+    from apps.payouts.models import PartnerLedgerEntry
+
+    PartnerLedgerEntry.objects.filter(
+        rental_booking=booking, kind=PartnerLedgerEntry.Kind.EARNING
+    ).update(status=PartnerLedgerEntry.Status.PENDING)
     return booking
 
 
@@ -966,6 +972,10 @@ def decide_deposit_dispute(
         )
     else:
         raise RentalStateError("Decision must approve or reject the dispute.")
+
+    from apps.payouts.services import release_payout_hold
+
+    release_payout_hold(rental_booking_id=booking.id)
     return booking
 
 
@@ -1004,6 +1014,13 @@ def return_booking(*, booking: RentalBooking, partner: Any) -> RentalBooking:
             "completed_at": timezone.now().isoformat(),
         },
     )
+
+    # Record the partner's earning in the payout ledger. The rental fee minus
+    # the platform fee is what the owner is owed; the deposit is excluded.
+    from apps.payouts.services import settle_rental_earning
+
+    settle_rental_earning(rental_booking_id=booking.id)
+
     return booking
 
 

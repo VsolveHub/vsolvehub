@@ -4,6 +4,7 @@ import { Badge, Button } from "@vsolve/ui";
 import { request } from "@vsolve/api-client";
 import { CheckCircle2, Gift, Tag } from "lucide-react";
 import { useEffect, useState } from "react";
+import { readPendingReferral, savePendingReferral } from "@/features/referral/pending-referral";
 import { getApiClient } from "@/lib/api/browser";
 
 export function LoginReferralInput() {
@@ -27,7 +28,7 @@ export function LoginReferralInput() {
       );
       if (data?.valid) {
         setValidationSuccess(data.referee_reward_summary || "Referral reward confirmed!");
-        sessionStorage.setItem("vsolve_pending_referral", clean);
+        savePendingReferral(clean);
       } else {
         setValidationError("Invalid referral code");
         setValidationSuccess(null);
@@ -46,7 +47,7 @@ export function LoginReferralInput() {
     // Check URL params for ?ref=...
     const urlParams = new URLSearchParams(window.location.search);
     const refParam = urlParams.get("ref");
-    const pendingCode = refParam || sessionStorage.getItem("vsolve_pending_referral");
+    const pendingCode = refParam || readPendingReferral();
 
     if (pendingCode) {
       setCode(pendingCode);
@@ -117,7 +118,7 @@ export function LoginReferralInput() {
         <p className="mt-1 text-[11px] font-medium text-rose-600">{validationError}</p>
       )}
       <p className="mt-2 text-[11px] leading-relaxed text-text-secondary">
-        Referral codes apply only at first signup. An existing account cannot add one later.
+        The code is applied when you create your account. An existing account cannot add one.
       </p>
     </div>
   );

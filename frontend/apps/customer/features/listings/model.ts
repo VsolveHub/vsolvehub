@@ -78,6 +78,24 @@ export interface ApplyFormState {
   experience: string;
   cover_note: string;
   resume_url: string;
+  /** Comma-separated in the form; sent as a list. Saved to the applicant's job profile. */
+  skills: string;
+  /** "Let other employers with matching jobs find my profile". Ticked by default. */
+  findable: boolean;
+}
+
+/** "Python, React ,  sql" -> ["Python", "React", "sql"], de-duplicated, at most 20. */
+export function parseSkills(text: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of text.split(",")) {
+    const skill = raw.trim().replace(/\s+/g, " ").slice(0, 60);
+    if (skill && !seen.has(skill.toLowerCase())) {
+      seen.add(skill.toLowerCase());
+      out.push(skill);
+    }
+  }
+  return out.slice(0, 20);
 }
 
 /**

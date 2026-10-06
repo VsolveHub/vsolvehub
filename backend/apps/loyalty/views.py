@@ -2,8 +2,9 @@
 
 from typing import cast
 
+from django.db.models import Sum
 from drf_spectacular.utils import extend_schema
-from rest_framework import permissions, status
+from rest_framework import permissions
 from rest_framework.exceptions import ValidationError
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -28,9 +29,9 @@ from apps.loyalty.services.coins import (
 )
 from apps.loyalty.services.referral import (
     ReferralValidationError,
-    apply_referral_at_signup,
     get_active_referral_program,
     get_or_create_referral_code,
+    referee_reward_summary,
     validate_referral_code,
 )
 
@@ -103,25 +104,46 @@ class CustomerReferralView(APIView):
         tags=["referral"],
     )
     def get(self, request: Request) -> Response:
-        ref_code = get_or_create_referral_code(cast(User, request.user))
+        user = cast(User, request.user)
+        ref_code = get_or_create_referral_code(user)
         program = get_active_referral_program()
 
-        # Total earned from referral rewards
-        rewards = ReferralReward.objects.filter(
-            recipient=cast(User, request.user),
-            reward_side=ReferralReward.RewardSide.REFERRER,
-        )
-        total_earned = sum(r.wallet_paise for r in rewards)
-        successful_count = ReferralAttribution.objects.filter(
-            referrer=cast(User, request.user),
-            status=ReferralAttribution.Status.REWARDED,
+        made = ReferralAttribution.objects.filter(referrer=user)
+        successful = made.filter(status=ReferralAttribution.Status.REWARDED).count()
+        pending = made.filter(
+            status__in=(
+                ReferralAttribution.Status.PENDING,
+                ReferralAttribution.Status.QUALIFIED,
+            )
         ).count()
+        # Rewards from referrals Operations later reversed do not count as earned.
+        earned = ReferralReward.objects.filter(
+            recipient=user,
+            reward_side=ReferralReward.RewardSide.REFERRER,
+            attribution__status=ReferralAttribution.Status.REWARDED,
+        ).aggregate(coins=Sum("coins_amount"), paise=Sum("wallet_paise"))
+
+        # Tier for the referrer's *next* payout, and how many more until a better one.
+        tier_minimums = sorted(t.min_qualified_referrals for t in program.tiers.all())
+        next_payout = successful + 1
+        current = max((m for m in tier_minimums if m <= next_payout), default=None)
+        upcoming = min((m for m in tier_minimums if m > next_payout), default=None)
 
         data = {
             "code": ref_code.code,
             "share_url": ref_code.share_url,
-            "total_earned_paise": total_earned,
-            "successful_referral_count": successful_count,
+            "share_message": (
+                "Join V Solve Hub using my link. "
+                f"{referee_reward_summary(program)} {ref_code.share_url}"
+            ),
+            "total_earned_paise": earned["paise"] or 0,
+            "total_earned_coins": earned["coins"] or 0,
+            "invited_count": made.count(),
+            "successful_referral_count": successful,
+            "pending_referral_count": pending,
+            "current_tier_min": current,
+            "next_tier_min": upcoming,
+            "referrals_to_next_tier": (upcoming - successful) if upcoming else None,
             "active_program": program,
         }
         serializer = CustomerReferralSummarySerializer(data)
@@ -162,29 +184,5 @@ class PublicReferralValidateView(APIView):
         try:
             result = validate_referral_code(code)
             return Response(result)
-        except ReferralValidationError as exc:
-            raise ValidationError({"code": str(exc)}) from exc
-
-
-class CustomerReferralApplyView(APIView):
-    permission_classes = (permissions.IsAuthenticated,)
-
-    @extend_schema(
-        summary="Apply referral code for the current customer at signup",
-        request=ReferralValidateRequestSerializer,
-        responses={201: ReferralAttributionSerializer},
-        tags=["referral"],
-    )
-    def post(self, request: Request) -> Response:
-        serializer = ReferralValidateRequestSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        code = serializer.validated_data["code"]
-
-        try:
-            attribution = apply_referral_at_signup(referee=cast(User, request.user), code_str=code)
-            return Response(
-                ReferralAttributionSerializer(attribution).data,
-                status=status.HTTP_201_CREATED,
-            )
         except ReferralValidationError as exc:
             raise ValidationError({"code": str(exc)}) from exc

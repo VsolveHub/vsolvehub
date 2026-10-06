@@ -186,7 +186,6 @@ export function usePartnerListingsWorkspace() {
     const state = item.public_state || item.status;
     if (activeTab === "ALL") return true;
     if (activeTab === "ACTIVE") return state === "PUBLISHED";
-    if (activeTab === "REVIEW") return state === "PENDING_REVIEW" || item.moderation_status === "PENDING";
     if (activeTab === "DRAFT") return state === "DRAFT";
     if (activeTab === "CLOSED") return ["CLOSED", "EXPIRED", "REMOVED", "ARCHIVED"].includes(state);
     return state === activeTab;

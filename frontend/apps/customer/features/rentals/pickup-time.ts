@@ -1,5 +1,3 @@
-import type { Schemas } from "@vsolve/api-client";
-
 /**
  * Pickup and return times for a rental, worked out on the device.
  *
@@ -9,7 +7,15 @@ import type { Schemas } from "@vsolve/api-client";
  * when the booking is made.
  */
 
-export type PickupHours = Schemas["RentalPickupHours"];
+export type PickupHours = {
+  open_days: number[];
+  opens_at: string;
+  closes_at: string;
+  min_notice_minutes: number;
+  max_advance_days: number;
+  slot_minutes?: number;
+  summary?: string;
+};
 
 export const DEFAULT_PICKUP_HOURS: PickupHours = {
   open_days: [0, 1, 2, 3, 4, 5, 6],

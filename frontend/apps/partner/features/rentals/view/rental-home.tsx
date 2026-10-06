@@ -7,7 +7,7 @@ import { ArrowRight, PackageCheck, PackageOpen, Phone, Plus } from "lucide-react
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
-import { clockOf, isSameLocalDay, whenLabel } from "@/features/rentals/pickup-time";
+import { dateLabel, isSameLocalDay } from "@/features/rentals/pickup-time";
 import {
   fetchPartnerRentalAssets,
   fetchPartnerRentalBookings,
@@ -37,29 +37,30 @@ export function RentalHome() {
 
   const rows = (bookings.data ?? []) as PartnerRentalBooking[];
   const pickups = rows
-    .filter((b) => b.status === "CONFIRMED" && isSameLocalDay(b.pickup_at, now))
-    .sort((a, b) => time(a.pickup_at) - time(b.pickup_at));
+    .filter((b) => b.status === "CONFIRMED" && isSameLocalDay(b.start_date, now))
+    .sort((a, b) => time(a.start_date) - time(b.start_date));
   const returns = rows
     .filter(
       (b) =>
         b.status === "HANDOVER" &&
-        (isSameLocalDay(b.return_at, now) || time(b.return_at) < now.getTime()),
+        (isSameLocalDay(b.end_date, now) || time(b.end_date) < now.getTime()),
     )
-    .sort((a, b) => time(a.return_at) - time(b.return_at));
+    .sort((a, b) => time(a.end_date) - time(b.end_date));
   const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime();
   const upcoming = rows
     .filter(
       (b) =>
         b.status === "CONFIRMED" &&
-        time(b.pickup_at) >= endOfToday &&
-        time(b.pickup_at) < now.getTime() + WEEK_MS,
+        time(b.start_date) >= endOfToday &&
+        time(b.start_date) < now.getTime() + WEEK_MS,
     )
-    .sort((a, b) => time(a.pickup_at) - time(b.pickup_at));
+    .sort((a, b) => time(a.start_date) - time(b.start_date));
 
   const live = (assets.data ?? []).filter((a) => a.public_state === "PUBLISHED");
   const pieces = live.reduce((n, a) => n + a.quantity_available, 0);
-  const booked = live.reduce((n, a) => n + a.booked_now, 0);
-  const free = live.reduce((n, a) => n + a.available_now, 0);
+  const activeBookings = rows.filter((b) => b.status === "CONFIRMED" || b.status === "HANDOVER");
+  const booked = activeBookings.reduce((n, b) => n + (b.quantity ?? 1), 0);
+  const free = Math.max(0, pieces - booked);
 
   if (bookings.isPending || assets.isPending) {
     return (
@@ -89,15 +90,15 @@ export function RentalHome() {
           icon={<PackageOpen className="size-4" />}
           empty="No one is collecting an item today."
           rows={pickups}
-          when={(b) => clockOf(b.pickup_at)}
+          when={(b) => dateLabel(b.start_date)}
         />
         <Group
           title="Returns today"
           icon={<PackageCheck className="size-4" />}
           empty="No items are due back today."
           rows={returns}
-          when={(b) => (time(b.return_at) < now.getTime() ? `Overdue · ${whenLabel(b.return_at)}` : clockOf(b.return_at))}
-          late={(b) => time(b.return_at) < now.getTime()}
+          when={(b) => (time(b.end_date) < now.getTime() ? `Overdue · ${dateLabel(b.end_date)}` : dateLabel(b.end_date))}
+          late={(b) => time(b.end_date) < now.getTime()}
         />
       </div>
 
@@ -105,7 +106,7 @@ export function RentalHome() {
         title="Next 7 days"
         empty="No pickups booked for the coming week."
         rows={upcoming}
-        when={(b) => whenLabel(b.pickup_at)}
+        when={(b) => dateLabel(b.start_date)}
       />
 
       <div className="flex flex-wrap gap-2">

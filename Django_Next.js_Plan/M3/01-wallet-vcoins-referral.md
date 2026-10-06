@@ -1,10 +1,33 @@
 # Wallet, V Coins & Referral — M3 Phase C
 
-**Status:** Planning — owner decisions recorded 2026-09-01  
+**Status:** Built — owner verification pending. Client spec update applied 2026-10-06 (see §0).  
 **Depends on:** Phase B (Razorpay on staging; MSG91 optional for referral SMS but not blocking ledger)  
 **Blocks:** Checkout UX across all categories once coins/wallet are live
 
 This document is the design authority for Phase C until an ADR (`docs/adr/0010-customer-wallet-and-loyalty-scope.md`) is merged. If they disagree, fix the defect in the same change.
+
+---
+
+## 0. Client spec update — 2026-10-06 (supersedes conflicting rules below)
+
+The client's "Developer Functional Specification" changed these rules. Where §1–§10 disagree,
+this section wins.
+
+| Topic | Final rule |
+| --- | --- |
+| Referral reward form | **V Coins by default.** Wallet cash stays possible per tier/side but is off unless Operations sets an amount |
+| Referral reward amount | **Flat tiers** by the referrer's count of successful referrals. Launch tiers: #1–3 100 coins, #4–9 150, #10–24 250, #25–49 350, #50+ 500; new customer 100 coins. "% of platform fee" formula was **dropped** (fee differs per category; stays have none) |
+| Coin value | 100 coins = ₹10 (`coin_value_paise = 10`) |
+| Max coins per order | Operations-configurable; launch default **20%** |
+| Waiting period | `LoyaltySettings.reward_hold_days` (default **7**, 0–90). Coins earned on a completed booking and referral rewards stay **PENDING** until `completed_at + hold`. Celery `release_due_loyalty_rewards` (every 15 min) releases them |
+| Refund in waiting period | Cancels that booking's pending coins (`CANCEL` ledger row) and sends a QUALIFIED referral back to PENDING so the friend's next booking can qualify |
+| Signup only | Referral code travels in `POST /auth/otp/verify/` (`referral_code`) and is applied only when that verification **creates** the account; the server also refuses accounts older than 30 min or with any order/completion. `POST /customer/referral/apply/` was **removed** |
+| Signup coins | `SIGNUP` earn rules now actually fire, once, at account creation |
+| Fraud | Self-referral blocked; one referrer per customer; optional `referral_monthly_cap` (0 = none, over-cap rewards wait for next month); Operations **reject** (before payment) and **reverse** (after) with a required reason, reviewer and timestamp stored on the attribution |
+| Statuses (UI) | Pending · Qualified (waiting) · Approved (`REWARDED`) · Rejected (`INELIGIBLE`) · Reversed |
+| Ledger | Every `CoinGrant` stores `source_type` / `source_id` (booking, engagement, rental, stay, signup, referral, manual) and its rule; Operations customer lookup shows wallet + coin + referral history |
+| M2 | `accept_engagement_completion` now emits `customer.fulfilment.completed` (`source_type=ENGAGEMENT`) |
+| Dropped | Cashback (OQ-05), per-campaign coin value (OQ-01 → platform-wide rate), attribution expiry, device fingerprinting, manual approval of every referral, `REFERRAL_QUALIFIED`/`MANUAL_OPS` earn triggers in the admin UI |
 
 ---
 

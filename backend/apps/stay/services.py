@@ -31,6 +31,8 @@ from apps.stay.models import (
     StayReservation,
     StayReview,
     StayReviewPhoto,
+    StaySubscription,
+    StaySubscriptionPlan,
     StayVisit,
     Unit,
     UnitMedia,
@@ -50,6 +52,11 @@ class StayStateError(ValueError):
     def __init__(self, message: str, *, code: str = "stay_state_invalid") -> None:
         super().__init__(message)
         self.code = code
+
+
+class StayPlanCapError(StayStateError):
+    def __init__(self, message: str, *, code: str = "stay_plan_cap_reached") -> None:
+        super().__init__(message, code=code)
 
 
 def _as_uuid(value: UUID | str) -> UUID:
@@ -898,6 +905,7 @@ def set_property_listing(*, prop: Property, host: Any, action: str) -> Property:
         if not approved or prop.listing_status != status.PAUSED:
             raise StayStateError("Only a paused property can be resumed.")
         _assert_publishable(prop)
+        assert_stay_subscription_capacity(prop)
         prop.listing_status = status.LIVE
     elif action == "archive":
         if prop.listing_status == status.ARCHIVED:
@@ -1258,6 +1266,7 @@ def submit_property(*, prop: Property, host: Any) -> Property:
     if prop.listing_status == Property.ListingStatus.ARCHIVED:
         raise StayStateError("Restore this property before publishing it.")
     _assert_publishable(prop)
+    assert_stay_subscription_capacity(prop)
 
     trusted_at = (
         PartnerProfile.objects.filter(id=host.id)
@@ -2496,3 +2505,137 @@ def host_stay_summary(*, host: Any) -> dict[str, Any]:
             property__host=host, status=StayVisit.Status.ACCEPTED, visit_date__gte=today
         ).count(),
     }
+
+
+def active_stay_subscription(host: Any) -> StaySubscription | None:
+    now = timezone.now()
+    return (
+        StaySubscription.objects.select_related("plan")
+        .filter(
+            host=host,
+            status__in=(StaySubscription.Status.ACTIVE, StaySubscription.Status.GRACE),
+            starts_at__lte=now,
+        )
+        .filter(models.Q(ends_at__gt=now) | models.Q(grace_ends_at__gt=now))
+        .order_by("-ends_at")
+        .first()
+    )
+
+
+_active_stay_subscription = active_stay_subscription
+
+
+def assert_stay_subscription_capacity(prop: Property) -> None:
+    """Enforce plan limits on live properties if subscription plans are defined."""
+    if not StaySubscriptionPlan.objects.filter(is_active=True).exists():
+        return
+    sub = _active_stay_subscription(prop.host)
+    if sub is None:
+        raise StayPlanCapError(
+            "An active subscription plan is required to publish a property.",
+            code="subscription_required",
+        )
+    max_props = sub.plan.max_properties
+    if max_props > 0:
+        live_count = (
+            Property.objects.filter(
+                host=prop.host,
+                moderation_status=Property.ModerationStatus.APPROVED,
+                listing_status=Property.ListingStatus.LIVE,
+            )
+            .exclude(id=prop.id)
+            .count()
+        )
+        if live_count >= max_props:
+            raise StayPlanCapError(
+                f"Your {sub.plan.name} allows at most {max_props} live properties. "
+                "Upgrade your plan to publish more.",
+                code="plan_property_limit_reached",
+            )
+
+
+@transaction.atomic
+def start_stay_subscription_purchase(
+    *, host: PartnerProfile, plan: StaySubscriptionPlan, idempotency_key: str
+) -> StaySubscription:
+    _require_stay_capability(host)
+    existing = StaySubscription.objects.filter(
+        host=host,
+        plan=plan,
+        status=StaySubscription.Status.PENDING_ACTIVATION,
+        payment_attempt__status__in=(
+            PaymentAttempt.Status.PROVIDER_PENDING,
+            PaymentAttempt.Status.CREATED,
+            PaymentAttempt.Status.AUTHORIZED,
+        ),
+    ).first()
+    if existing is not None:
+        return existing
+    attempt = initiate_standalone_payment_attempt(
+        purpose=PaymentAttempt.Purpose.A9_STAY_SUBSCRIPTION,
+        amount_paise=plan.price_paise,
+        idempotency_key=idempotency_key,
+    )
+    return StaySubscription.objects.create(host=host, plan=plan, payment_attempt=attempt)
+
+
+@transaction.atomic
+def complete_stay_subscription_payment(*, payment_attempt_id: UUID | str) -> None:
+    sub = (
+        StaySubscription.objects.select_for_update()
+        .select_related("plan")
+        .filter(payment_attempt_id=_as_uuid(payment_attempt_id))
+        .first()
+    )
+    if sub is None or sub.status != StaySubscription.Status.PENDING_ACTIVATION:
+        return
+    now = timezone.now()
+    StaySubscription.objects.filter(
+        host_id=sub.host_id,
+        status__in=(StaySubscription.Status.ACTIVE, StaySubscription.Status.GRACE),
+    ).exclude(id=sub.id).update(
+        status=StaySubscription.Status.EXPIRED,
+        updated_at=now,
+    )
+    sub.status = StaySubscription.Status.ACTIVE
+    sub.starts_at = now
+    sub.ends_at = now + timedelta(days=sub.plan.duration_days)
+    sub.grace_ends_at = sub.ends_at + timedelta(days=3)
+    sub.save(update_fields=("status", "starts_at", "ends_at", "grace_ends_at", "updated_at"))
+
+
+@transaction.atomic
+def expire_stay_subscriptions() -> int:
+    now = timezone.now()
+    # 1. ACTIVE -> GRACE when ends_at passes
+    grace_subs = list(
+        StaySubscription.objects.select_for_update().filter(
+            status=StaySubscription.Status.ACTIVE,
+            ends_at__lte=now,
+        )
+    )
+    for sub in grace_subs:
+        sub.status = StaySubscription.Status.GRACE
+        if not sub.grace_ends_at:
+            sub.grace_ends_at = (sub.ends_at or now) + timedelta(days=3)
+        sub.save(update_fields=("status", "grace_ends_at", "updated_at"))
+
+    # 2. GRACE -> EXPIRED when grace_ends_at passes
+    expired_subs = list(
+        StaySubscription.objects.select_for_update().filter(
+            status=StaySubscription.Status.GRACE,
+            grace_ends_at__lte=now,
+        )
+    )
+    for sub in expired_subs:
+        sub.status = StaySubscription.Status.EXPIRED
+        sub.save(update_fields=("status", "updated_at"))
+        Property.objects.filter(
+            host_id=sub.host_id,
+            listing_status=Property.ListingStatus.LIVE,
+        ).update(
+            listing_status=Property.ListingStatus.PAUSED,
+            updated_at=now,
+        )
+    return len(grace_subs) + len(expired_subs)
+

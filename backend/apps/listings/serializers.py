@@ -67,11 +67,28 @@ JOB_FIELDS: tuple[str, ...] = (
 )
 
 
+def invitable_match_count(listing: Listing) -> int:
+    from apps.listings.seekers import invitable_matches  # noqa: PLC0415 - seekers imports services
+
+    return len(invitable_matches(listing))
+
+
+def live_application_count(listing: Listing) -> int:
+    annotated = getattr(listing, "application_count", None)
+    if annotated is not None:
+        return int(annotated)
+    return listing.applications.exclude(
+        status__in=(Application.Status.WITHDRAWN, Application.Status.EXPIRED)
+    ).count()
+
+
 class ListingSummarySerializer(serializers.ModelSerializer[Listing]):
     poster_name = serializers.CharField(source="poster.display_name", read_only=True)
     service_name = serializers.CharField(source="variant.service.name", read_only=True)
     variant_name = serializers.CharField(source="variant.name", read_only=True)
-    application_count = serializers.IntegerField(read_only=True, default=0)
+    #: Live applications (withdrawn and expired ones excluded). Uses the queryset annotation when
+    #: present and counts otherwise, so a partner or Operations list never shows a silent 0.
+    application_count = serializers.SerializerMethodField()
     public_state = serializers.CharField(read_only=True)
     salary_display = serializers.SerializerMethodField()
 
@@ -101,10 +118,15 @@ class ListingSummarySerializer(serializers.ModelSerializer[Listing]):
         )
         read_only_fields: tuple[str, ...] = JOB_FIELDS
 
+    def get_application_count(self, obj: Listing) -> int:
+        return live_application_count(obj)
+
     def get_salary_display(self, obj: Listing) -> str:
         if obj.salary_min_paise > 0:
             return ""
-        return obj.structured_fields.get("salary_range", obj.structured_fields.get("pay_range", ""))
+        return str(
+            obj.structured_fields.get("salary_range", obj.structured_fields.get("pay_range", ""))
+        )
 
 
 class ListingDetailSerializer(ListingSummarySerializer):
@@ -151,6 +173,8 @@ class JobCountsSerializer(serializers.Serializer[dict[str, Any]]):
     shortlisted = serializers.IntegerField()
     interviews = serializers.IntegerField()
     connected = serializers.IntegerField()
+    #: Strong and good matches who have not applied yet: people the employer can invite.
+    matches = serializers.IntegerField()
 
 
 class PartnerListingSerializer(ListingSummarySerializer):
@@ -219,6 +243,7 @@ class PartnerListingSerializer(ListingSummarySerializer):
             "shortlisted": live.filter(status=Application.Status.SHORTLISTED).count(),
             "interviews": live.filter(status=Application.Status.INTERVIEW).count(),
             "connected": live.filter(status=Application.Status.CONNECTED).count(),
+            "matches": invitable_match_count(obj),
         }
 
     def validate_structured_fields(self, value: dict[str, Any]) -> dict[str, Any]:
@@ -455,6 +480,15 @@ class SubmitApplicationSerializer(serializers.Serializer[dict[str, Any]]):
         max_length=2000, required=False, allow_blank=True, trim_whitespace=True
     )
     resume_url = serializers.URLField(max_length=500, required=False, allow_blank=True)
+    #: What the applicant is good at. Saved to their job profile so other employers can match it.
+    skills = serializers.ListField(
+        child=serializers.CharField(max_length=60, trim_whitespace=True),
+        required=False,
+        max_length=20,
+        default=list,
+    )
+    #: "Let other employers with matching jobs find my profile". Ticked by default in the form.
+    findable = serializers.BooleanField(required=False, default=True)
 
     def validate_name(self, value: str) -> str:
         if not any(character.isalpha() for character in value):
@@ -796,6 +830,9 @@ class CandidateMatchSerializer(serializers.Serializer[dict[str, Any]]):
     application_id = serializers.UUIDField(allow_null=True)
     application_status = serializers.CharField(allow_blank=True)
     match = MatchSerializer()
+    contact_phone = serializers.CharField(required=False, default="", allow_blank=True)
+    resume_url = serializers.CharField(required=False, default="", allow_blank=True)
+    is_contact_locked = serializers.BooleanField(required=False, default=True)
 
 
 class ProposeInterviewSerializer(serializers.Serializer[dict[str, Any]]):

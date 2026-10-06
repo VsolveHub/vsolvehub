@@ -1,12 +1,18 @@
 import { Check, Crown, X } from "lucide-react";
 import type { VendorSubscriptionPlan } from "../queries";
 
+const CAPABILITY_LABELS: Record<string, string> = {
+  FEATURED_PLACEMENT: "Featured jobs",
+  CANDIDATE_MATCHING: "Matching candidates: see and invite people before they apply",
+  CANDIDATE_CONTACT: "Candidate phone numbers in matches",
+};
+
 function premiumLabels(plan: VendorSubscriptionPlan): string[] {
   const raw = plan.premium_capabilities;
   if (!Array.isArray(raw)) return [];
   return raw
     .map((entry) => {
-      if (typeof entry === "string") return entry.replaceAll("_", " ");
+      if (typeof entry === "string") return CAPABILITY_LABELS[entry] ?? entry.replaceAll("_", " ");
       if (entry && typeof entry === "object" && "code" in entry) {
         return String((entry as { code: string }).code).replaceAll("_", " ");
       }

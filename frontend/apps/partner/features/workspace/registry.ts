@@ -204,8 +204,8 @@ export const TAP_FIRST_NAV: readonly WorkspaceNavItem[] = [
  * Shell chrome for A10_LISTING-only employers: same dock shape as
  * `TAP_FIRST_NAV`, with Listings in place of Work. Never `/work/all` or `/jobs`.
  *
- * Money and Alerts stay — billing/subscription UI still lives on listings, but
- * Money is a shared ledger surface and Alerts is shared notification chrome.
+ * No Money tab: an employer pays for a listing plan (billing lives on Listings) and never
+ * earns on the platform, so an earnings ledger would only ever show ₹0.
  * `LISTING_NAV` below stays the shorter workspace-registry shape for
  * `navigationFor` / authorizedNav; the live shell uses this array via
  * `primaryShellNavFor`.
@@ -213,7 +213,6 @@ export const TAP_FIRST_NAV: readonly WorkspaceNavItem[] = [
 export const LISTING_TAP_FIRST_NAV: readonly WorkspaceNavItem[] = [
   { href: "/home", label: "Home", icon: Home },
   { href: "/listings", label: "Listings", icon: Briefcase, activePrefix: "/listings" },
-  { href: "/money", label: "Money", icon: Wallet },
   { href: "#notifications", label: "Alerts", icon: Bell, kind: "notifications" },
   { href: "/me", label: "Me", icon: UserCircle2 },
 ];

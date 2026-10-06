@@ -5,6 +5,7 @@ import { ApiRequestError } from "@vsolve/api-client";
 import { friendlyErrorMessage } from "@vsolve/query";
 import { useToast } from "@vsolve/ui";
 import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 import { duplicateJob, publishJob } from "@/features/listings/jobs-queries";
 import { LISTING_TABS } from "@/features/listings/model";
@@ -59,6 +60,13 @@ export default function PartnerListingsPage() {
     runSubscribe,
     filteredListings,
   } = usePartnerListingsWorkspace();
+
+  // `/listings?plans=open` (from the Matching candidates upsell) opens the plans dialog.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("plans") === "open") {
+      setIsSubscriptionModalOpen(true);
+    }
+  }, [setIsSubscriptionModalOpen]);
   const router = useRouter();
   const qc = useQueryClient();
   const { notify } = useToast();

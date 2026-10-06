@@ -14,7 +14,7 @@
 | --- | --- | --- | --- |
 | **A** | Procurement & staging | `[ ]` Not started | — |
 | **B** | Real Razorpay + MSG91 on M1/M2 | `[ ]` Not started | A |
-| **C** | Wallet, V Coins, Referral | `[ ]` Not started | B (checkout); schema can parallel B |
+| **C** | Wallet, V Coins, Referral | `[~]` Built — owner verification pending | B (checkout); schema can parallel B |
 | **D** | Rental, Stay, Jobs categories | `[ ]` Not started | B |
 | **E** | Operations analytics & exports | `[ ]` Not started | C, D partial |
 | **F** | M3 staging acceptance | `[ ]` Not started | A–E |
@@ -50,22 +50,22 @@
 
 ### C0 — Foundation
 
-- [ ] `M3-BE-201` ADR-0010 customer wallet & loyalty scope (`docs/adr/`)
-- [ ] `M3-BE-202` Contract proposals: wallet, coins, referral, operations loyalty
-- [ ] `M3-BE-203` Models: `WalletAccount`, `WalletTransaction`
-- [ ] `M3-BE-204` Models: `CoinGrantRule`, `CoinEarnTier`, `CoinGrant`, `CoinTransaction`, `CoinBurnPolicy`
-- [ ] `M3-BE-205` Models: `ReferralProgramVersion`, `ReferralProgramRewardTier`, `ReferralCode`, `ReferralAttribution`, `ReferralReward`
-- [ ] `M3-BE-206` `apps/loyalty/` module scaffold — **folded into M3-BE-207** (minimal C0b tree only)
+- [~] `M3-BE-201` ADR-0010 customer wallet & loyalty scope (`docs/adr/`)
+- [~] `M3-BE-202` Contract proposals: wallet, coins, referral, operations loyalty
+- [~] `M3-BE-203` Models: `WalletAccount`, `WalletTransaction`
+- [~] `M3-BE-204` Models: `CoinGrantRule`, `CoinEarnTier`, `CoinGrant`, `CoinTransaction`, `CoinBurnPolicy`
+- [~] `M3-BE-205` Models: `ReferralProgramVersion`, `ReferralProgramRewardTier`, `ReferralCode`, `ReferralAttribution`, `ReferralReward`
+- [~] `M3-BE-206` `apps/loyalty/` module scaffold — **folded into M3-BE-207** (minimal C0b tree only)
 
 ### C0b — M1 completion outbox hook (`M3-BE-207` — next implementation; planning locked)
 
 Single task; do not jump to wallet/coin models.
 
-- [ ] **207.1** Emit `customer.fulfilment.completed` from `_settle_submission()` — `COMPLETED` only, same transaction
-- [ ] **207.2** Idempotency key `customer-fulfilment-completed:{booking_id}` (unique constraint)
-- [ ] **207.3** `apps/loyalty/handlers.py` orchestrator → `services/completion.py`, `referral.py` (stub), `notifications.py` (real)
-- [ ] **207.4** `record_completion_for_customer` boundary (stub); `evaluate_referral_qualification` stub until C4
-- [ ] **207.5** Tests T1–T10 — transactional invariant; T9/T10 lock `completed_at` and `event_version`
+- [~] **207.1** Emit `customer.fulfilment.completed` from `_settle_submission()` — `COMPLETED` only, same transaction
+- [~] **207.2** Idempotency key `customer-fulfilment-completed:{booking_id}` (unique constraint)
+- [~] **207.3** `apps/loyalty/handlers.py` orchestrator → `services/completion.py`, `referral.py` (stub), `notifications.py` (real)
+- [~] **207.4** `record_completion_for_customer` boundary (stub); `evaluate_referral_qualification` stub until C4
+- [~] **207.5** Tests T1–T10 — transactional invariant; T9/T10 lock `completed_at` and `event_version`
 
 **Out of scope for 207:** wallet/coin/referral models, checkout, M2 `customer.engagement.completed`, HTTP, Operations CRUD.
 
@@ -73,57 +73,68 @@ Single task; do not jump to wallet/coin models.
 
 ### C1 — Customer wallet
 
-- [ ] `M3-BE-211` Commands: credit, reserve, capture, release wallet
-- [ ] `M3-BE-212` `WALLET_TOP_UP` payment purpose + Razorpay capture → credit
-- [ ] `M3-BE-213` `GET /customer/wallet/` + transaction history (paginated)
-- [ ] `M3-BE-214` `POST /customer/wallet/top-up/` (enforces configurable min/max)
-- [ ] `M3-BE-215` Operations `WalletTopUpPolicy` CRUD
-- [ ] `M3-FE-211` Account → Wallet page (balance, history, top-up)
-- [ ] `M3-OPS-211` Wallet liability read-only report
+- [~] `M3-BE-211` Commands: credit, reserve, capture, release wallet
+- [~] `M3-BE-212` `WALLET_TOP_UP` payment purpose + Razorpay capture → credit
+- [~] `M3-BE-213` `GET /customer/wallet/` + transaction history (paginated)
+- [~] `M3-BE-214` `POST /customer/wallet/top-up/` (enforces configurable min/max)
+- [~] `M3-BE-215` Operations `WalletTopUpPolicy` CRUD
+- [~] `M3-FE-211` Account → Wallet page (balance, history, top-up)
+- [~] `M3-OPS-211` Wallet liability read-only report
 
 ### C2 — V Coins engine
 
-- [ ] `M3-BE-221` Operations CRUD: `CoinGrantRule` + `CoinEarnTier` (earn_mode, eligibility, unlock N, expiry, trigger)
-- [ ] `M3-BE-222` Operations CRUD: `CoinBurnPolicy` (max %, coin value paise, effective dates)
-- [ ] `M3-BE-223` Grant on signup — promised + locked buckets; eligibility filters (§2.2.2)
-- [ ] `M3-BE-227` Earn on booking complete — tier selection by order value or booking sequence (§2.2.1)
-- [ ] `M3-BE-224` `CustomerCompletion` ledger — `UNIQUE(customer_id, source_type, source_id)`; unlock only on `get_or_create(created=True)` (§3.4)
-- [ ] `M3-BE-225` Celery: coin expiry sweep (FIFO burn order documented)
-- [ ] `M3-BE-226` `GET /customer/coins/` — promised / locked / spendable / expiring_soon
-- [ ] `M3-FE-221` Signup/onboarding promised-coins disclosure
-- [ ] `M3-FE-222` Account → Coins page
-- [ ] `M3-OPS-221` Coin grant rules admin UI
-- [ ] `M3-OPS-222` Burn policy admin UI + preview
+- [~] `M3-BE-221` Operations CRUD: `CoinGrantRule` + `CoinEarnTier` (earn_mode, eligibility, unlock N, expiry, trigger)
+- [~] `M3-BE-222` Operations CRUD: `CoinBurnPolicy` (max %, coin value paise, effective dates)
+- [~] `M3-BE-223` Grant on signup — promised + locked buckets; eligibility filters (§2.2.2)
+- [~] `M3-BE-227` Earn on booking complete — tier selection by order value or booking sequence (§2.2.1)
+- [~] `M3-BE-224` `CustomerCompletion` ledger — `UNIQUE(customer_id, source_type, source_id)`; unlock only on `get_or_create(created=True)` (§3.4)
+- [~] `M3-BE-225` Celery: coin expiry sweep (FIFO burn order documented)
+- [~] `M3-BE-226` `GET /customer/coins/` — promised / locked / spendable / expiring_soon
+- [~] `M3-FE-221` Signup/onboarding promised-coins disclosure
+- [~] `M3-FE-222` Account → Coins page
+- [~] `M3-OPS-221` Coin grant rules admin UI
+- [~] `M3-OPS-222` Burn policy admin UI + preview
 
 ### C3 — Checkout integration
 
-- [ ] `M3-BE-231` Extend `POST /payment-attempts/` — `wallet_amount_paise`, `coin_burn_amount`
-- [ ] `M3-BE-232` Checkout preview: max burn from active policy (server-only math)
-- [ ] `M3-BE-233` Refund: wallet portion → wallet; Razorpay portion → provider; coins not restored
-- [ ] `M3-BE-235` Coin `RESERVE` / `RELEASE` on payment attempt (concurrency-safe burn path)
-- [ ] `M3-FE-231` Payment workspace — wallet toggle + coin toggle + server caps
-- [ ] `M3-FE-232` Split display: wallet + coins + Razorpay remainder
-- [ ] `M3-BE-234` Regression tests: ADR-0003 allocation sum invariant with splits
+- [~] `M3-BE-231` Extend `POST /payment-attempts/` — `wallet_amount_paise`, `coin_burn_amount`
+- [~] `M3-BE-232` Checkout preview: max burn from active policy (server-only math)
+- [~] `M3-BE-233` Refund: wallet portion → wallet; Razorpay portion → provider; coins not restored
+- [~] `M3-BE-235` Coin `RESERVE` / `RELEASE` on payment attempt (concurrency-safe burn path)
+- [~] `M3-FE-231` Payment workspace — wallet toggle + coin toggle + server caps
+- [~] `M3-FE-232` Split display: wallet + coins + Razorpay remainder
+- [~] `M3-BE-234` Regression tests: ADR-0003 allocation sum invariant with splits
 
 ### C4 — Referral
 
-- [ ] `M3-BE-241` Operations: `ReferralProgramVersion` + `ReferralProgramRewardTier` CRUD (volume tiers §2.4.1)
-- [ ] `M3-BE-242` Referral attribution at **signup only** — `?ref=` param, auto-fill, snapshot `program_version_id` + **`terms_snapshot`**
-- [ ] `M3-BE-243` Qualifying hook: default **first completed booking**
-- [ ] `M3-BE-244` Tier selection at payout; immutable `ReferralReward` (version, tier, `payout_sequence_n`); never rewrite paid rows
-- [ ] `M3-BE-245` Self-referral + basic fraud guards + **`UNIQUE(referee_id)`** on attribution (§2.6.1)
-- [ ] `M3-BE-246` Publish referral changes as **new program version only**; version history read-only in Operations
-- [ ] `M3-FE-240` Signup page: read `?ref=` from URL, auto-fill referral field
-- [ ] `M3-FE-241` Account → Referral (code, copy link, **tier schedule**, pending/earned — no late code entry)
-- [ ] `M3-OPS-241` Referral program versions + **tier editor** + attribution queue
+- [~] `M3-BE-241` Operations: `ReferralProgramVersion` + `ReferralProgramRewardTier` CRUD (volume tiers §2.4.1)
+- [~] `M3-BE-242` Referral attribution at **signup only** — `?ref=` param, auto-fill, snapshot `program_version_id` + **`terms_snapshot`**
+- [~] `M3-BE-243` Qualifying hook: default **first completed booking**
+- [~] `M3-BE-244` Tier selection at payout; immutable `ReferralReward` (version, tier, `payout_sequence_n`); never rewrite paid rows
+- [~] `M3-BE-245` Self-referral + basic fraud guards + **`UNIQUE(referee_id)`** on attribution (§2.6.1)
+- [~] `M3-BE-246` Publish referral changes as **new program version only**; version history read-only in Operations
+- [~] `M3-FE-240` Signup page: read `?ref=` from URL, auto-fill referral field
+- [~] `M3-FE-241` Account → Referral (code, copy link, **tier schedule**, pending/earned — no late code entry)
+- [~] `M3-OPS-241` Referral program versions + **tier editor** + attribution queue
 
 ### C5 — Phase C acceptance
 
-- [ ] `M3-DOC-251` Runbook `docs/runbooks/m3-wallet-coins-referral-smoke.md`
+- [~] `M3-DOC-251` Runbook `docs/runbooks/m3-wallet-coins-referral-smoke.md`
 - [ ] `M3-QA-251` Acceptance scenarios C-01 … C-23+ (owner manual pass)
-- [ ] `M3-BE-252` Object-level auth tests (owner runs)
-- [ ] `M3-BE-253` **Wallet concurrency** — parallel checkout cannot drive balance below zero (§2.7.1, C-09a)
-- [ ] `M3-BE-254` **Coin concurrency** — parallel checkout cannot burn more than spendable (§2.3.1, C-09b)
+- [~] `M3-BE-252` Object-level auth tests (owner runs)
+- [~] `M3-BE-253` **Wallet concurrency** — parallel checkout cannot drive balance below zero (§2.7.1, C-09a)
+- [~] `M3-BE-254` **Coin concurrency** — parallel checkout cannot burn more than spendable (§2.3.1, C-09b)
+
+### C6 — Client spec update (2026-10-06, see design doc §0)
+
+- [~] `M3-BE-261` `LoyaltySettings` (hold days, monthly cap) + PENDING grants + release sweep
+- [~] `M3-BE-262` Refund cancels pending coins / re-pends qualified referral
+- [~] `M3-BE-263` Referral code applied in OTP verify only; `/customer/referral/apply/` removed; SIGNUP coin rules fire
+- [~] `M3-BE-264` Coin-tier default program; reject/reverse with audit; coin adjustments; customer ledger
+- [~] `M3-BE-265` M2 engagement completion emits loyalty event
+- [~] `M3-FE-261` Operations: tabs for settings, earn rules (inline tiers), referral program (multi-tier), review queue, customer lookup
+- [~] `M3-FE-262` Customer: `/signup?ref=` route, referral stats, pending coins
+- Tests: `backend/tests/loyalty/test_rewards_hold_and_review.py`, updated `test_referral_flow.py`, `test_coins_engine.py`
 
 **Phase C exit gate:** All scenarios in `01-wallet-vcoins-referral.md` §9 pass on staging.
 
@@ -244,4 +255,5 @@ Do not mark `[x]` until owner manual pass. Agents do not run pytest; owner runs 
 | 2026-09-01 | `customer.fulfilment.completed` payload includes `event_version: 1`; bump on breaking schema changes |
 | 2026-09-01 | C2 `CustomerCompletion` ledger with `UNIQUE(customer_id, source_type, source_id)` — `get_or_create`; unlock only on `created=True`; M1/M2 stay separate event types |
 | 2026-09-13 | A10 Career/Jobs implements Wave D3 IDs `M3-BE-351`…`361` / `M3-FE-331`/`332` on `feature/m3-a10-listings`. Stub `M3-BE-303` dropped. ADR-0012 Proposed; proposal 0017. A7/A9 and wallet stay off this branch. |
+| 2026-10-06 | Client spec update: coin referral rewards in flat tiers (fee-% dropped), 100 coins = ₹10, 20% max burn, 7-day waiting period, signup-only via OTP verify, reject/reverse + monthly cap. Phase C marked `[~]` |
 | 2026-09-13 | A10 Wave D3 code port marked `[~]` (BE + FE). Living handoff: `srikar-prompts/A10_CONTINUE_HERE.md`. Do not mark `[x]` until owner migrate/seed/`--no-cov` pytest + smoke. |

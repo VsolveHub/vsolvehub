@@ -200,3 +200,16 @@ def credit_refunded_wallet(*, refund: Refund) -> None:
         order=refund.order,
         notes="Checkout refund restored to wallet",
     )
+
+
+def apply_refund_to_loyalty(*, refund: Refund) -> None:
+    """Everything a succeeded refund changes on the loyalty side.
+
+    The wallet share goes back to the wallet, and coins or referral rewards that the refunded
+    booking earned are cancelled if they are still in their waiting period.
+    """
+    from apps.loyalty.services.holds import cancel_pending_rewards_for_order  # noqa: PLC0415
+
+    credit_refunded_wallet(refund=refund)
+    if refund.order_id is not None:
+        cancel_pending_rewards_for_order(order_id=refund.order_id)

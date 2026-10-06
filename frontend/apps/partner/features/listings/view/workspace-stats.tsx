@@ -7,24 +7,16 @@ export interface WorkspaceStatsProps {
 
 export function WorkspaceStats({ home }: WorkspaceStatsProps) {
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
       <Card padding="md" className="flex flex-col justify-between">
         <div className="text-xs font-semibold text-text-muted">Active Listings</div>
         <div className="mt-1.5 flex items-baseline gap-2">
           <span className="text-2xl font-extrabold text-text">{home?.active_listings ?? 0}</span>
-          {home?.plan_limit ? (
-            <span className="text-xs text-text-muted">/ {home.plan_limit} quota</span>
-          ) : null}
+          <span className="text-xs text-text-muted">
+            {home?.plan_limit ? `/ ${home.plan_limit} on your plan` : "no limit"}
+          </span>
         </div>
         <div className="mt-2 text-[11px] text-success-text font-semibold">Live on platform</div>
-      </Card>
-
-      <Card padding="md" className="flex flex-col justify-between">
-        <div className="text-xs font-semibold text-text-muted">Pending Review</div>
-        <div className="mt-1.5 text-2xl font-extrabold text-text">
-          {home?.pending_moderation ?? 0}
-        </div>
-        <div className="mt-2 text-[11px] text-warning-text font-semibold">In moderation</div>
       </Card>
 
       <Card padding="md" className="flex flex-col justify-between">

@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, formatMoney } from "@vsolve/ui";
-import { Check, Copy, Gift, MessageCircle, Users } from "lucide-react";
+import { Check, Copy, Gift, MessageCircle, Share2 } from "lucide-react";
 import { useState } from "react";
 import type { CustomerReferralSummary } from "../queries";
 
@@ -29,10 +29,16 @@ export function ReferralShareCard({ summary }: ReferralShareCardProps) {
     }
   };
 
-  const whatsappMessage = encodeURIComponent(
-    `Book trusted home services on Vsolve Hub using my invite code ${summary.code} or click: ${summary.share_url}`,
-  );
-  const whatsappUrl = `https://api.whatsapp.com/send?text=${whatsappMessage}`;
+  const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(summary.share_message)}`;
+  const canNativeShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
+
+  const handleShare = async () => {
+    try {
+      await navigator.share({ text: summary.share_message, url: summary.share_url });
+    } catch {
+      // Dismissed or unsupported; the copy and WhatsApp buttons remain.
+    }
+  };
 
   const program = summary.active_program;
   const refereeLabel = rewardLabel(
@@ -52,7 +58,7 @@ export function ReferralShareCard({ summary }: ReferralShareCardProps) {
         : "Invite friends. Rewards show here when a program is published.";
   const rewardSentence =
     refereeLabel || referrerLabel
-      ? "Rewards are paid after your friend's first completed booking, in the wallet amount and V Coins this program publishes."
+      ? "Rewards are added a few days after your friend's first booking is completed."
       : "Share your code. A published program decides whether the reward is wallet balance, V Coins, or both.";
 
   return (
@@ -118,34 +124,75 @@ export function ReferralShareCard({ summary }: ReferralShareCardProps) {
               <MessageCircle className="size-4" />
               Share on WhatsApp
             </a>
+
+            {canNativeShare ? (
+              <Button
+                variant="outline"
+                className="h-10 text-xs font-semibold px-4"
+                onClick={() => void handleShare()}
+              >
+                <Share2 className="size-4 mr-1.5" />
+                Share
+              </Button>
+            ) : null}
           </div>
         </div>
 
-        {/* Lifetime Earnings Stat Card */}
-        <div className="flex flex-col gap-3 rounded-2xl border border-[#eee9e0] bg-[#FAF9F7] p-5 lg:min-w-[240px]">
-          <div>
-            <span className="block text-[11px] font-bold uppercase tracking-wider text-text-muted">
-              Total Referral Rewards
-            </span>
-            <span
-              data-numeric
-              className="mt-1 block text-2xl font-extrabold tabular-nums text-emerald-700"
-            >
-              {formatMoney(summary.total_earned_paise)}
-            </span>
-          </div>
-
-          <div className="border-t border-[#eee9e0] pt-2.5 flex items-center justify-between">
-            <div className="flex items-center gap-1.5 text-xs text-text-secondary">
-              <Users className="size-4 text-text-muted" />
-              <span>Friends Joined</span>
-            </div>
-            <span data-numeric className="text-sm font-bold text-navy-900">
-              {summary.successful_referral_count}
-            </span>
-          </div>
-        </div>
+        {/* Referral stats */}
+        <ReferralStats summary={summary} />
       </div>
+    </div>
+  );
+}
+
+
+function ReferralStats({ summary }: ReferralShareCardProps) {
+  const earned = rewardLabel(summary.total_earned_paise, summary.total_earned_coins) || "0 V Coins";
+  const rows: Array<[string, number]> = [
+    ["Friends invited", summary.invited_count],
+    ["Successful referrals", summary.successful_referral_count],
+    ["Pending", summary.pending_referral_count],
+  ];
+  const nextTierCopy =
+    summary.next_tier_min != null && summary.referrals_to_next_tier != null
+      ? `${summary.referrals_to_next_tier} more successful referral${
+          summary.referrals_to_next_tier === 1 ? "" : "s"
+        } to reach the next tier`
+      : "You are on the top tier";
+
+  return (
+    <div className="flex flex-col gap-3 rounded-2xl border border-[#eee9e0] bg-[#FAF9F7] p-5 lg:min-w-[260px]">
+      <div>
+        <span className="block text-[11px] font-bold uppercase tracking-wider text-text-muted">
+          Rewards earned
+        </span>
+        <span
+          data-numeric
+          className="mt-1 block text-2xl font-extrabold tabular-nums text-emerald-700"
+        >
+          {earned}
+        </span>
+      </div>
+
+      <dl className="space-y-1.5 border-t border-[#eee9e0] pt-2.5 text-xs">
+        {rows.map(([label, value]) => (
+          <div key={label} className="flex items-center justify-between">
+            <dt className="text-text-secondary">{label}</dt>
+            <dd data-numeric className="font-bold text-navy-900">
+              {value}
+            </dd>
+          </div>
+        ))}
+      </dl>
+
+      <p className="border-t border-[#eee9e0] pt-2.5 text-[11px] text-text-secondary">
+        {summary.current_tier_min != null ? (
+          <span className="block font-semibold text-navy-900">
+            Current tier: from referral #{summary.current_tier_min}
+          </span>
+        ) : null}
+        {nextTierCopy}
+      </p>
     </div>
   );
 }

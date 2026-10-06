@@ -173,6 +173,21 @@ urlpatterns = [
         views.OpsStayReservationCancelView.as_view(),
         name="ops-stay-reservation-cancel",
     ),
+    path(
+        "ops/stay-subscription-plans",
+        views.OpsStaySubscriptionPlanCollectionView.as_view(),
+        name="ops-stay-subscription-plans",
+    ),
+    path(
+        "ops/stay-subscription-plans/<uuid:plan_id>",
+        views.OpsStaySubscriptionPlanDetailView.as_view(),
+        name="ops-stay-subscription-plan-detail",
+    ),
+    path(
+        "partner/stays/subscription",
+        views.PartnerStaySubscriptionView.as_view(),
+        name="partner-stay-subscription",
+    ),
     # Last: "stays/<key>" would otherwise swallow fixed addresses such as "stays/reviews".
     path("stays/<str:key>", views.StayDetailView.as_view(), name="stay-detail"),
 ]

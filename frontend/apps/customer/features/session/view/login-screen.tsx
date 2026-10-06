@@ -5,6 +5,7 @@ import { ErrorState, Spinner } from "@vsolve/ui";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 
+import { clearPendingReferral, readPendingReferral } from "@/features/referral/pending-referral";
 import { getApiClient } from "@/lib/api/browser";
 
 import { CustomerLoginExperience } from "./customer-login-experience";
@@ -38,7 +39,7 @@ export function LoginScreen() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const guard = useAuthGuard(getApiClient());
-  const flow = useOtpFlow(getApiClient());
+  const flow = useOtpFlow(getApiClient(), { getReferralCode: readPendingReferral });
 
   const isAuthenticated = guard.status === "authenticated";
   const next = safeNextPath(searchParams.get("next"));
@@ -46,22 +47,8 @@ export function LoginScreen() {
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    const pendingRef = typeof window !== "undefined" ? sessionStorage.getItem("vsolve_pending_referral") : null;
-    if (pendingRef) {
-      sessionStorage.removeItem("vsolve_pending_referral");
-      void getApiClient()
-        .POST("/api/v1/customer/referral/apply/", {
-          body: { code: pendingRef },
-        })
-        .catch(() => {
-          // If already attributed or invalid, fail open
-        })
-        .finally(() => {
-          router.replace(next ?? "/bookings");
-        });
-      return;
-    }
-
+    // Django applied the code (if any) during OTP verification of a new account.
+    clearPendingReferral();
     router.replace(next ?? "/bookings");
   }, [isAuthenticated, next, router]);
 

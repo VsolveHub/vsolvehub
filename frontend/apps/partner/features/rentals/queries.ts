@@ -5,8 +5,12 @@ import { request, type Schemas } from "@vsolve/api-client";
 import { getApiClient } from "@/lib/api/browser";
 
 export type RentalAsset = Schemas["RentalAsset"];
+export type PartnerRentalAsset = RentalAsset;
 export type RentalBooking = Schemas["RentalBooking"];
+/** The owner's view of a booking: adds the renter's name and phone. */
+export type PartnerRentalBooking = Schemas["PartnerRentalBooking"];
 export type CreateAssetRequest = Schemas["CreateAssetRequest"];
+export type UpdateAssetRequest = Schemas["PatchedUpdateAssetRequest"];
 export type PartnerCapability = Schemas["PartnerCapability"];
 export type PartnerBookingActionRequest = Schemas["PartnerBookingActionRequest"];
 
@@ -46,12 +50,12 @@ export async function fetchPartnerDefaultLocation(): Promise<string> {
   }
 }
 
-export async function fetchPartnerRentalAssets(): Promise<RentalAsset[]> {
+export async function fetchPartnerRentalAssets(): Promise<PartnerRentalAsset[]> {
   const data = await request(() => getApiClient().GET("/api/v1/partner/rentals/assets"));
   return Array.isArray(data) ? data : [];
 }
 
-export async function fetchPartnerRentalBookings(status?: string): Promise<RentalBooking[]> {
+export async function fetchPartnerRentalBookings(status?: string): Promise<PartnerRentalBooking[]> {
   const data = await request(() =>
     getApiClient().GET("/api/v1/partner/rentals/bookings", {
       params: status ? { query: { status } } : undefined,
@@ -111,6 +115,48 @@ export async function submitPartnerRentalAsset(assetId: string): Promise<RentalA
     }),
   );
   return data as RentalAsset;
+}
+
+export async function updatePartnerRentalAsset(
+  assetId: string,
+  body: UpdateAssetRequest,
+): Promise<RentalAsset> {
+  const data = await request(() =>
+    getApiClient().PATCH("/api/v1/partner/rentals/assets/{asset_id}", {
+      params: { path: { asset_id: assetId } },
+      body,
+    }),
+  );
+  return data as RentalAsset;
+}
+
+/** pause = "mark unavailable" (hidden from customers), resume = back on sale. */
+export async function partnerRentalAssetAction(
+  assetId: string,
+  action: "submit" | "pause" | "resume",
+): Promise<RentalAsset> {
+  const data = await request(() =>
+    getApiClient().POST("/api/v1/partner/rentals/assets/{asset_id}/{action}", {
+      params: { path: { asset_id: assetId, action } },
+    }),
+  );
+  return data as RentalAsset;
+}
+
+export async function deletePartnerRentalAsset(assetId: string): Promise<void> {
+  await request(() =>
+    getApiClient().DELETE("/api/v1/partner/rentals/assets/{asset_id}", {
+      params: { path: { asset_id: assetId } },
+    }),
+  );
+}
+
+export async function deletePartnerRentalAssetMedia(assetId: string, mediaId: string): Promise<void> {
+  await request(() =>
+    getApiClient().DELETE("/api/v1/partner/rentals/assets/{asset_id}/media/{media_id}", {
+      params: { path: { asset_id: assetId, media_id: mediaId } },
+    }),
+  );
 }
 
 export async function partnerRentalBookingAction(

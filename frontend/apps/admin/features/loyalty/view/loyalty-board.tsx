@@ -8,6 +8,8 @@ import { useEffect, useState } from "react";
 import { getApiClient } from "@/lib/api/browser";
 import { PUBLIC_API_BASE_URL } from "@/lib/api/config";
 
+import { RewardRulesCard } from "./reward-rules-card";
+
 export function LoyaltyBoard() {
   const queryClient = useQueryClient();
   const burn = useQuery({
@@ -18,10 +20,6 @@ export function LoyaltyBoard() {
     queryKey: ["ops", "wallet-policies"],
     queryFn: () => request(() => getApiClient().GET("/api/v1/ops/wallet/policies/")),
   });
-  const programs = useQuery({
-    queryKey: ["ops", "referral-programs"],
-    queryFn: () => request(() => getApiClient().GET("/api/v1/ops/referral/programs/")),
-  });
   const liability = useQuery({
     queryKey: ["ops", "wallet-liability"],
     queryFn: () => request(() => getApiClient().GET("/api/v1/ops/wallet/liability/")),
@@ -31,11 +29,6 @@ export function LoyaltyBoard() {
   const [coinValue, setCoinValue] = useState("");
   const [minPaise, setMinPaise] = useState("");
   const [maxPaise, setMaxPaise] = useState("");
-  const [versionCode, setVersionCode] = useState("");
-  const [refereeWalletPaise, setRefereeWalletPaise] = useState("");
-  const [refereeCoins, setRefereeCoins] = useState("");
-  const [referrerWalletPaise, setReferrerWalletPaise] = useState("");
-  const [referrerCoins, setReferrerCoins] = useState("");
   const [seeded, setSeeded] = useState(false);
 
   useEffect(() => {
@@ -78,35 +71,10 @@ export function LoyaltyBoard() {
       void queryClient.invalidateQueries({ queryKey: ["ops", "wallet-policies"] });
     },
   });
-  const publishProgram = useMutation({
-    mutationFn: () =>
-      request(() =>
-        getApiClient().POST("/api/v1/ops/referral/programs/", {
-            body: {
-            version_code: versionCode.trim(),
-            reward_sides: "BOTH",
-            referee_wallet_paise: Number(refereeWalletPaise),
-            referee_coins_amount: Number(refereeCoins),
-            tiers: [
-              {
-                min_qualified_referrals: 1,
-                referrer_wallet_paise: Number(referrerWalletPaise),
-                referrer_coins_amount: Number(referrerCoins),
-              },
-            ],
-          },
-        }),
-      ),
-    onSuccess: () => {
-      setVersionCode("");
-      void queryClient.invalidateQueries({ queryKey: ["ops", "referral-programs"] });
-    },
-  });
-
-  if (burn.isPending || policies.isPending || programs.isPending) {
+  if (burn.isPending || policies.isPending) {
     return <Spinner />;
   }
-  if (burn.isError || policies.isError || programs.isError) {
+  if (burn.isError || policies.isError) {
     return (
       <ErrorState
         severity="warning"
@@ -134,7 +102,11 @@ export function LoyaltyBoard() {
       </Card>
 
       <Card padding="md">
-        <h2 className="text-sm font-semibold">Coin burn policy</h2>
+        <h2 className="text-sm font-semibold">V Coins at checkout</h2>
+        <p className="mt-1 text-sm text-text-secondary">
+          Max % of an order customers can pay with coins, and what one coin is worth (10 paise =
+          100 coins for ₹10).
+        </p>
         <ul className="mt-2 text-sm">
           {(burn.data ?? []).map((policy) => (
             <li key={policy.id}>
@@ -144,10 +116,10 @@ export function LoyaltyBoard() {
           ))}
         </ul>
         <div className="mt-3 flex flex-wrap gap-2">
-          <Field label="Max burn percent">
+          <Field label="Max % of an order">
             <Input value={maxPercent} onChange={(event) => setMaxPercent(event.target.value)} />
           </Field>
-          <Field label="Coin value paise">
+          <Field label="Coin value (paise per coin)">
             <Input value={coinValue} onChange={(event) => setCoinValue(event.target.value)} />
           </Field>
           <Button
@@ -160,7 +132,7 @@ export function LoyaltyBoard() {
             }
             onClick={() => publishBurn.mutate()}
           >
-            Publish burn policy
+            Save coin policy
           </Button>
         </div>
       </Card>
@@ -196,59 +168,7 @@ export function LoyaltyBoard() {
         </div>
       </Card>
 
-      <Card padding="md">
-        <h2 className="text-sm font-semibold">Referral program versions</h2>
-        <p className="mt-1 text-sm text-text-secondary">
-          Codes apply only at customer signup. A later version does not rewrite an existing
-          attribution.
-        </p>
-        <ul className="mt-2 text-sm">
-          {(programs.data ?? []).map((program) => (
-            <li key={program.id}>
-              {program.version_code}
-              {program.is_active ? " · active" : " · history"}
-            </li>
-          ))}
-        </ul>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Field label="New version code">
-            <Input value={versionCode} onChange={(event) => setVersionCode(event.target.value)} />
-          </Field>
-          <Field label="Referee wallet paise">
-            <Input
-              value={refereeWalletPaise}
-              onChange={(event) => setRefereeWalletPaise(event.target.value)}
-            />
-          </Field>
-          <Field label="Referee coins">
-            <Input value={refereeCoins} onChange={(event) => setRefereeCoins(event.target.value)} />
-          </Field>
-          <Field label="Referrer wallet paise">
-            <Input
-              value={referrerWalletPaise}
-              onChange={(event) => setReferrerWalletPaise(event.target.value)}
-            />
-          </Field>
-          <Field label="Referrer coins">
-            <Input
-              value={referrerCoins}
-              onChange={(event) => setReferrerCoins(event.target.value)}
-            />
-          </Field>
-          <Button
-            loading={publishProgram.isPending}
-            disabled={
-              versionCode.trim() === "" ||
-              [refereeWalletPaise, refereeCoins, referrerWalletPaise, referrerCoins].some(
-                (value) => value.trim() === "" || !Number.isInteger(Number(value)),
-              )
-            }
-            onClick={() => publishProgram.mutate()}
-          >
-            Publish version
-          </Button>
-        </div>
-      </Card>
+      <RewardRulesCard />
     </div>
   );
 }

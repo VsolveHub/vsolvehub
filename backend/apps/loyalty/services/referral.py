@@ -1,30 +1,72 @@
-"""Referral program services: codes, signup attribution, and tier qualification (ADR-0010)."""
+"""Referral program services: codes, signup attribution, qualification and payout (ADR-0010).
 
+Lifecycle of one referral (`ReferralAttribution.status`):
+
+    PENDING    referee signed up with the code; no completed booking yet
+    QUALIFIED  referee completed a booking; reward waits for `reward_available_at`
+    REWARDED   waiting period over and rewards paid (coins by default, wallet if configured)
+    INELIGIBLE Operations rejected it before payment ("Rejected" in every UI)
+    REVERSED   Operations took a paid reward back
+
+A refund on the qualifying booking inside the waiting period sends the referral back to
+PENDING, so the referee's next completed booking can qualify instead.
+"""
+
+import logging
+from datetime import datetime, timedelta
 from uuid import UUID
 
 from django.db import transaction
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 
 from apps.foundation.models import OutboxEvent
 from apps.identity.models import User
 from apps.loyalty.models import (
+    CoinGrant,
+    CustomerCompletion,
     ReferralAttribution,
     ReferralCode,
     ReferralProgramRewardTier,
     ReferralProgramVersion,
     ReferralReward,
 )
-from apps.loyalty.services.coins import grant_configured_coins
+from apps.loyalty.services.coins import (
+    get_loyalty_settings,
+    grant_configured_coins,
+    reverse_coin_grant,
+)
 from apps.wallet.models import WalletTransaction
-from apps.wallet.services import credit_wallet, get_or_create_wallet
+from apps.wallet.services import adjust_wallet, credit_wallet, get_or_create_wallet
+
+logger = logging.getLogger(__name__)
+
+#: Launch tiers from the client spec, in V Coins (100 coins = ₹10). Only used to seed the first
+#: program when none exists; Operations publishes every later version.
+DEFAULT_REFERRER_TIERS: tuple[tuple[int, int], ...] = (
+    (1, 100),
+    (4, 150),
+    (10, 250),
+    (25, 350),
+    (50, 500),
+)
+DEFAULT_REFEREE_COINS = 100
+
+#: A referral code is accepted only while the account is this new. OTP signup applies it in the
+#: same request that creates the account, so anything older is a retroactive attempt.
+SIGNUP_WINDOW = timedelta(minutes=30)
 
 
 class ReferralValidationError(Exception):
     """Raised when a referral code cannot be applied or validated."""
 
 
+class ReferralReviewError(Exception):
+    """Raised when an Operations reject/reverse is not allowed in the current state."""
+
+
 def get_active_referral_program() -> ReferralProgramVersion:
-    """Retrieve the active referral program version or seed default v1."""
+    """Retrieve the active referral program version or seed the default coin program."""
     program = (
         ReferralProgramVersion.objects.filter(is_active=True).order_by("-effective_from").first()
     )
@@ -33,28 +75,18 @@ def get_active_referral_program() -> ReferralProgramVersion:
             version_code="v1",
             qualifying_event=ReferralProgramVersion.QualifyingEvent.REFEREE_FIRST_COMPLETED_BOOKING,
             reward_sides=ReferralProgramVersion.RewardSides.BOTH,
-            referee_wallet_paise=5000,  # ₹50
-            referee_coins_amount=100,
+            referee_wallet_paise=0,
+            referee_coins_amount=DEFAULT_REFEREE_COINS,
             is_active=True,
         )
-        ReferralProgramRewardTier.objects.create(
-            program_version=program,
-            min_qualified_referrals=1,
-            referrer_wallet_paise=10000,  # ₹100
-            referrer_coins_amount=0,
-            referee_wallet_paise=5000,
-            referee_coins_amount=100,
-            sort_order=1,
-        )
-        ReferralProgramRewardTier.objects.create(
-            program_version=program,
-            min_qualified_referrals=5,
-            referrer_wallet_paise=20000,  # ₹200
-            referrer_coins_amount=0,
-            referee_wallet_paise=5000,
-            referee_coins_amount=100,
-            sort_order=2,
-        )
+        for index, (minimum, coins) in enumerate(DEFAULT_REFERRER_TIERS):
+            ReferralProgramRewardTier.objects.create(
+                program_version=program,
+                min_qualified_referrals=minimum,
+                referrer_wallet_paise=0,
+                referrer_coins_amount=coins,
+                sort_order=index,
+            )
     return program
 
 
@@ -77,6 +109,20 @@ def get_or_create_referral_code(user: User) -> ReferralCode:
     )
 
 
+def referee_reward_summary(program: ReferralProgramVersion) -> str:
+    """Customer-facing sentence describing the new customer's reward, built from config."""
+    if program.reward_sides == ReferralProgramVersion.RewardSides.REFERRER_ONLY:
+        return "Sign up with this code to join V Solve Hub."
+    parts = []
+    if program.referee_coins_amount:
+        parts.append(f"{program.referee_coins_amount} V Coins")
+    if program.referee_wallet_paise:
+        parts.append(f"₹{program.referee_wallet_paise // 100} wallet credit")
+    if not parts:
+        return "Sign up with this code to join V Solve Hub."
+    return f"Get {' + '.join(parts)} after your first completed booking."
+
+
 def validate_referral_code(code_str: str) -> dict[str, object]:
     """Validate a referral code for public signup pre-check."""
     clean_code = code_str.strip().upper()
@@ -85,15 +131,24 @@ def validate_referral_code(code_str: str) -> dict[str, object]:
         raise ReferralValidationError(f"Referral code '{clean_code}' is invalid.")
 
     program = get_active_referral_program()
-    referee_wallet = program.referee_wallet_paise // 100
     return {
         "valid": True,
         "code": clean_code,
         "referrer_id": str(ref_code.user_id),
-        "referee_reward_summary": (
-            f"Get ₹{referee_wallet} wallet credit on your first completed booking!"
-        ),
+        "referee_reward_summary": referee_reward_summary(program),
     }
+
+
+def _assert_new_customer(referee: User) -> None:
+    """A referral only counts for a genuinely new customer (client spec §7)."""
+    from apps.commerce.models import Order  # noqa: PLC0415 - commerce imports loyalty
+
+    if timezone.now() - referee.date_joined > SIGNUP_WINDOW:
+        raise ReferralValidationError("Referral codes can only be used when you sign up.")
+    if CustomerCompletion.objects.filter(customer=referee).exists():
+        raise ReferralValidationError("Referral codes are only for new customers.")
+    if Order.objects.filter(customer=referee).exists():
+        raise ReferralValidationError("Referral codes are only for new customers.")
 
 
 @transaction.atomic
@@ -118,6 +173,8 @@ def apply_referral_at_signup(
 
     if ReferralAttribution.objects.filter(referee=referee).exists():
         raise ReferralValidationError("Customer already has an applied referral attribution.")
+
+    _assert_new_customer(referee)
 
     program = get_active_referral_program()
 
@@ -150,9 +207,28 @@ def apply_referral_at_signup(
     )
 
 
+def apply_referral_for_new_signup(*, referee: User, code_str: str) -> bool:
+    """Signup hook. A bad code never blocks login; it is logged and ignored.
+
+    Runs inside a savepoint so a rejected code cannot roll back the account creation.
+    """
+    if not code_str.strip():
+        return False
+    try:
+        with transaction.atomic():
+            apply_referral_at_signup(referee=referee, code_str=code_str)
+    except ReferralValidationError as exc:
+        logger.info("Referral code not applied at signup: %s", exc)
+        return False
+    return True
+
+
 @transaction.atomic
 def evaluate_referral_qualification(event: OutboxEvent) -> None:
-    """Evaluate referee qualifying event and issue grandfathered rewards."""
+    """Mark the referee's PENDING referral QUALIFIED and start the waiting period.
+
+    Pays at once when the waiting period is zero days.
+    """
     customer_id_str = event.payload.get("customer_id")
     if not customer_id_str:
         return
@@ -164,40 +240,77 @@ def evaluate_referral_qualification(event: OutboxEvent) -> None:
             referee_id=referee_id,
             status=ReferralAttribution.Status.PENDING,
         )
-        .select_related("referrer", "referee", "program_version")
         .first()
     )
     if attribution is None:
         return
 
-    now = timezone.now()
+    source_type = str(event.payload.get("source_type") or "BOOKING")
+    raw_source = (
+        event.payload.get("booking_id")
+        or event.payload.get("engagement_id")
+        or event.payload.get("source_id")
+    )
+    completed_at = parse_datetime(str(event.payload.get("completed_at") or "")) or timezone.now()
+    hold_days = get_loyalty_settings().reward_hold_days
+
     attribution.status = ReferralAttribution.Status.QUALIFIED
-    attribution.qualified_at = now
-    attribution.save(update_fields=("status", "qualified_at"))
+    attribution.qualified_at = timezone.now()
+    attribution.qualifying_source_type = source_type
+    attribution.qualifying_source_id = UUID(str(raw_source)) if raw_source else None
+    attribution.reward_available_at = completed_at + timedelta(days=hold_days)
+    attribution.save(
+        update_fields=(
+            "status",
+            "qualified_at",
+            "qualifying_source_type",
+            "qualifying_source_id",
+            "reward_available_at",
+        )
+    )
+    if attribution.reward_available_at <= timezone.now():
+        _pay_attribution(attribution)
+
+
+def _rewarded_this_month(referrer_id: UUID, now: datetime) -> int:
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    return ReferralAttribution.objects.filter(
+        referrer_id=referrer_id,
+        status=ReferralAttribution.Status.REWARDED,
+        rewarded_at__gte=month_start,
+    ).count()
+
+
+def _pay_attribution(attribution: ReferralAttribution) -> bool:
+    """Issue rewards for one QUALIFIED referral. Caller holds the row lock.
+
+    Returns False when the referrer is at the monthly cap; the referral stays QUALIFIED and is
+    retried by the next sweep, so it pays in a later month.
+    """
+    now = timezone.now()
+    cap = get_loyalty_settings().referral_monthly_cap
+    if cap and _rewarded_this_month(attribution.referrer_id, now) >= cap:
+        return False
 
     program = attribution.program_version
     referrer = attribution.referrer
     referee = attribution.referee
 
-    # Referrer's successful rewarded count
-    successful_count = ReferralAttribution.objects.filter(
-        referrer=referrer,
-        status=ReferralAttribution.Status.REWARDED,
-    ).count()
-    n = successful_count + 1
-
-    # Select tier with highest min_qualified_referrals <= n
+    # Tier: referrer's nth successful (rewarded, not reversed) referral.
+    n = (
+        ReferralAttribution.objects.filter(
+            referrer=referrer, status=ReferralAttribution.Status.REWARDED
+        ).count()
+        + 1
+    )
     matching_tier = (
         program.tiers.filter(min_qualified_referrals__lte=n)
         .order_by("-min_qualified_referrals")
         .first()
-    )
-    if matching_tier is None:
-        matching_tier = program.tiers.order_by("min_qualified_referrals").first()
+    ) or program.tiers.order_by("min_qualified_referrals").first()
 
-    referrer_wallet_paise = matching_tier.referrer_wallet_paise if matching_tier else 10000
+    referrer_wallet_paise = matching_tier.referrer_wallet_paise if matching_tier else 0
     referrer_coins = matching_tier.referrer_coins_amount if matching_tier else 0
-
     referee_wallet_paise = (
         matching_tier.referee_wallet_paise
         if (matching_tier and matching_tier.referee_wallet_paise is not None)
@@ -209,77 +322,170 @@ def evaluate_referral_qualification(event: OutboxEvent) -> None:
         else program.referee_coins_amount
     )
 
-    # 1. Pay Referrer if configured
-    referrer_wallet_txn = None
+    sides = []
     if program.reward_sides in (
         ReferralProgramVersion.RewardSides.REFERRER_ONLY,
         ReferralProgramVersion.RewardSides.BOTH,
     ):
-        if referrer_wallet_paise > 0:
-            referrer_wallet = get_or_create_wallet(referrer)
-            referrer_wallet_txn = credit_wallet(
-                wallet=referrer_wallet,
-                amount_paise=referrer_wallet_paise,
-                kind=WalletTransaction.Kind.REFERRAL_CREDIT,
-                idempotency_key=f"referral-reward:referrer:{attribution.id}",
-                notes=f"Referral reward for referring {referee.id}",
-            )
-        referrer_grant = grant_configured_coins(
-            customer=referrer,
-            coins_amount=referrer_coins,
-            notes=f"Referral coins for referring {referee.id}",
+        sides.append(
+            (ReferralReward.RewardSide.REFERRER, referrer, referrer_wallet_paise, referrer_coins)
         )
-
-        ReferralReward.objects.create(
-            attribution=attribution,
-            program_version=program,
-            tier=matching_tier,
-            payout_sequence_n=n,
-            recipient=referrer,
-            reward_side=ReferralReward.RewardSide.REFERRER,
-            wallet_paise=referrer_wallet_paise,
-            coins_amount=referrer_coins,
-            wallet_transaction=referrer_wallet_txn,
-            coin_grant=referrer_grant,
-        )
-
-    # 2. Pay Referee if configured
-    referee_wallet_txn = None
     if program.reward_sides in (
         ReferralProgramVersion.RewardSides.REFEREE_ONLY,
         ReferralProgramVersion.RewardSides.BOTH,
     ):
-        if referee_wallet_paise > 0:
-            referee_wallet = get_or_create_wallet(referee)
-            referee_wallet_txn = credit_wallet(
-                wallet=referee_wallet,
-                amount_paise=referee_wallet_paise,
-                kind=WalletTransaction.Kind.REFERRAL_CREDIT,
-                idempotency_key=f"referral-reward:referee:{attribution.id}",
-                notes="Signup referral reward on completing first booking",
-            )
-        referee_grant = grant_configured_coins(
-            customer=referee,
-            coins_amount=referee_coins,
-            notes="Referral welcome coins on first completed booking",
+        sides.append(
+            (ReferralReward.RewardSide.REFEREE, referee, referee_wallet_paise, referee_coins)
         )
 
+    for side, recipient, wallet_paise, coins in sides:
+        wallet_txn = None
+        if wallet_paise > 0:
+            wallet_txn = credit_wallet(
+                wallet=get_or_create_wallet(recipient),
+                amount_paise=wallet_paise,
+                kind=WalletTransaction.Kind.REFERRAL_CREDIT,
+                idempotency_key=f"referral-reward:{side.lower()}:{attribution.id}",
+                notes="Referral reward",
+            )
+        coin_grant = grant_configured_coins(
+            customer=recipient,
+            coins_amount=coins,
+            notes=(
+                "Referral reward for inviting a friend"
+                if side == ReferralReward.RewardSide.REFERRER
+                else "Welcome reward for joining with a referral"
+            ),
+            source_type=CoinGrant.SourceType.REFERRAL,
+            source_id=attribution.id,
+        )
         ReferralReward.objects.create(
             attribution=attribution,
             program_version=program,
             tier=matching_tier,
             payout_sequence_n=n,
-            recipient=referee,
-            reward_side=ReferralReward.RewardSide.REFEREE,
-            wallet_paise=referee_wallet_paise,
-            coins_amount=referee_coins,
-            wallet_transaction=referee_wallet_txn,
-            coin_grant=referee_grant,
+            recipient=recipient,
+            reward_side=side,
+            wallet_paise=wallet_paise,
+            coins_amount=coins,
+            wallet_transaction=wallet_txn,
+            coin_grant=coin_grant,
         )
 
     attribution.status = ReferralAttribution.Status.REWARDED
     attribution.rewarded_at = now
     attribution.save(update_fields=("status", "rewarded_at"))
+    return True
+
+
+def release_due_referral_rewards(*, now: datetime | None = None) -> int:
+    """Pay QUALIFIED referrals whose waiting period is over. Oldest first; capped referrers wait."""
+    moment = now or timezone.now()
+    ids = list(
+        ReferralAttribution.objects.filter(
+            status=ReferralAttribution.Status.QUALIFIED,
+            reward_available_at__lte=moment,
+        )
+        .order_by("reward_available_at")
+        .values_list("id", flat=True)[:500]
+    )
+    paid = 0
+    for attribution_id in ids:
+        with transaction.atomic():
+            attribution = (
+                ReferralAttribution.objects.select_for_update(of=("self",))
+                .select_related("referrer", "referee", "program_version")
+                .get(id=attribution_id)
+            )
+            if attribution.status != ReferralAttribution.Status.QUALIFIED:
+                continue
+            if _pay_attribution(attribution):
+                paid += 1
+    return paid
+
+
+@transaction.atomic
+def requalify_after_refund(*, source_type: str, source_id: UUID) -> int:
+    """Send referrals qualified by a now-refunded booking back to PENDING (still unpaid only)."""
+    rows = ReferralAttribution.objects.select_for_update().filter(
+        status=ReferralAttribution.Status.QUALIFIED,
+        qualifying_source_type=source_type,
+        qualifying_source_id=source_id,
+    )
+    count = 0
+    for attribution in rows:
+        attribution.status = ReferralAttribution.Status.PENDING
+        attribution.qualified_at = None
+        attribution.qualifying_source_type = ""
+        attribution.qualifying_source_id = None
+        attribution.reward_available_at = None
+        attribution.save(
+            update_fields=(
+                "status",
+                "qualified_at",
+                "qualifying_source_type",
+                "qualifying_source_id",
+                "reward_available_at",
+            )
+        )
+        count += 1
+    return count
+
+
+def _record_review(attribution: ReferralAttribution, *, actor: User, reason: str) -> None:
+    attribution.reviewed_by = actor
+    attribution.reviewed_at = timezone.now()
+    attribution.review_reason = reason[:240]
+
+
+@transaction.atomic
+def reject_referral(*, attribution_id: UUID, actor: User, reason: str) -> ReferralAttribution:
+    """Operations reject a referral before it pays (suspected fraud, duplicate account, ...)."""
+    if not reason.strip():
+        raise ReferralReviewError("A reason is required.")
+    attribution = ReferralAttribution.objects.select_for_update().get(id=attribution_id)
+    if attribution.status not in (
+        ReferralAttribution.Status.PENDING,
+        ReferralAttribution.Status.QUALIFIED,
+    ):
+        raise ReferralReviewError("Only a pending or qualified referral can be rejected.")
+    attribution.status = ReferralAttribution.Status.INELIGIBLE
+    _record_review(attribution, actor=actor, reason=reason)
+    attribution.save(update_fields=("status", "reviewed_by", "reviewed_at", "review_reason"))
+    return attribution
+
+
+@transaction.atomic
+def reverse_referral(*, attribution_id: UUID, actor: User, reason: str) -> ReferralAttribution:
+    """Operations take back a paid referral reward. Coins already spent cannot be recovered.
+
+    Every recovered coin and rupee leaves a REVERSE / ADJUSTMENT ledger row with the reason.
+    """
+    if not reason.strip():
+        raise ReferralReviewError("A reason is required.")
+    attribution = ReferralAttribution.objects.select_for_update().get(id=attribution_id)
+    if attribution.status != ReferralAttribution.Status.REWARDED:
+        raise ReferralReviewError("Only a rewarded referral can be reversed.")
+
+    note = f"Referral reversed: {reason}"
+    for reward in attribution.rewards.select_related("coin_grant", "recipient"):
+        if reward.coin_grant is not None:
+            reverse_coin_grant(grant=reward.coin_grant, reason=note)
+        if reward.wallet_paise > 0:
+            wallet = get_or_create_wallet(reward.recipient)
+            recoverable = min(reward.wallet_paise, wallet.available_balance_paise)
+            if recoverable > 0:
+                adjust_wallet(
+                    user=reward.recipient,
+                    amount_paise=-recoverable,
+                    reason=note[:240],
+                    idempotency_key=f"referral-reverse:{reward.id}",
+                )
+
+    attribution.status = ReferralAttribution.Status.REVERSED
+    _record_review(attribution, actor=actor, reason=reason)
+    attribution.save(update_fields=("status", "reviewed_by", "reviewed_at", "review_reason"))
+    return attribution
 
 
 @transaction.atomic
@@ -296,6 +502,11 @@ def publish_referral_program(
         raise ValueError("A referral program version with this code already exists.")
     if not tiers:
         raise ValueError("A referral program needs at least one reward tier.")
+    minimums = [int(t["min_qualified_referrals"]) for t in tiers]
+    if 1 not in minimums:
+        raise ValueError("The first tier must start at 1 successful referral.")
+    if len(set(minimums)) != len(minimums):
+        raise ValueError("Two tiers cannot start at the same number of referrals.")
     now = timezone.now()
     ReferralProgramVersion.objects.filter(is_active=True).update(
         is_active=False, effective_until=now
@@ -307,11 +518,11 @@ def publish_referral_program(
         referee_coins_amount=referee_coins_amount,
         is_active=True,
     )
-    for index, tier in enumerate(tiers):
+    for index, tier in enumerate(sorted(tiers, key=lambda t: int(t["min_qualified_referrals"]))):
         ReferralProgramRewardTier.objects.create(
             program_version=program,
             min_qualified_referrals=tier["min_qualified_referrals"],
-            referrer_wallet_paise=tier["referrer_wallet_paise"],
+            referrer_wallet_paise=tier.get("referrer_wallet_paise", 0),
             referrer_coins_amount=tier.get("referrer_coins_amount", 0),
             sort_order=index,
         )

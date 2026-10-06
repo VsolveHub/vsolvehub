@@ -246,7 +246,7 @@ export function RentalAdEditor({
         for (const mediaId of removedMediaIds) {
           await deletePartnerRentalAssetMedia(asset.id, mediaId);
         }
-        await updatePartnerRentalAsset(asset.id, { ...rest, add_image_urls: newUrls });
+        await updatePartnerRentalAsset(asset.id, rest);
         return "updated";
       }
       const created = await createPartnerRentalAsset({

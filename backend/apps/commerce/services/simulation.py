@@ -112,6 +112,12 @@ def _standalone_attempt_belongs_to(*, attempt: PaymentAttempt, customer_id: UUID
         owned = StayReservation.objects.filter(
             payment_attempt=attempt, customer_id=customer_id
         ).exists()
+    elif purpose == PaymentAttempt.Purpose.A9_STAY_SUBSCRIPTION:
+        from apps.stay.models import StaySubscription  # noqa: PLC0415
+
+        owned = StaySubscription.objects.filter(
+            payment_attempt=attempt, host__user_id=customer_id
+        ).exists()
     return owned
 
 

@@ -26,7 +26,7 @@ from apps.listings.seekers import (
 from apps.listings.services import ListingStateError, post_job
 from apps.notifications.models import NotificationIntent
 from tests.helpers import force_role_client
-from tests.listings.jobs_helpers import _sales_job
+from tests.listings.jobs_helpers import _sales_job, give_matching_plan
 
 User = get_user_model()
 
@@ -155,6 +155,7 @@ def test_employer_sees_applicants_and_open_profiles_but_not_private_ones(job):
 
 @pytest.mark.django_db
 def test_invite_reaches_open_profiles_only(job):
+    give_matching_plan(job.poster)
     open_user = _seeker("Sneha Rao")
     private_user = _seeker("Kavya N", visibility="APPLIED_ONLY")
 
@@ -182,6 +183,7 @@ def test_strong_matches_hear_about_a_new_job_once(job):
 
 @pytest.mark.django_db
 def test_employers_get_one_daily_digest(job, employer):  # noqa: ARG001
+    give_matching_plan(employer)
     _seeker("Sneha Rao")
     _seeker("Anjali M")
 

@@ -12,6 +12,7 @@ from rest_framework.test import APIClient
 from apps.foundation.models import OutboxEvent
 from apps.identity.models import User
 from apps.loyalty.models import (
+    CoinBurnPolicy,
     CoinGrant,
     CoinGrantRule,
     CustomerCompletion,
@@ -33,6 +34,8 @@ def _user(suffix: str = "1") -> User:
 
 
 def test_coin_burn_math_respects_max_percent_and_coin_value() -> None:
+    # The launch default is 20%; this test pins an explicit 30% policy.
+    CoinBurnPolicy.objects.create(max_burn_percent=30, coin_value_paise=10, is_active=True)
     # 30% cap, 10 paise per coin
     # Order ₹1000 = 100,000 paise
     # 30% cap = 30,000 paise = 3,000 coins max burn

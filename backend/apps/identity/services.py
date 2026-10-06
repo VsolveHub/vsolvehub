@@ -147,6 +147,7 @@ def verify_login_otp(
     challenge_id: uuid.UUID,
     phone_number: str,
     code: str,
+    referral_code: str = "",
 ) -> User:
     canonical_phone = normalize_phone_number(phone_number)
     verification_failed = False
@@ -178,7 +179,7 @@ def verify_login_otp(
             challenge.consumed_at = timezone.now()
             challenge.save(update_fields=("consumed_at",))
 
-            user, _created = User.objects.get_or_create(phone_number=canonical_phone)
+            user, user_created = User.objects.get_or_create(phone_number=canonical_phone)
             CustomerProfile.objects.get_or_create(user=user)
             customer_role, _created = Role.objects.get_or_create(
                 code="customer",
@@ -189,6 +190,12 @@ def verify_login_otp(
                 role=customer_role,
                 revoked_at__isnull=True,
             )
+            if user_created:
+                # Referral codes are accepted only here, in the request that creates the
+                # account, and signup coin campaigns fire exactly once.
+                from apps.loyalty.services.signup import on_customer_signup  # noqa: PLC0415
+
+                on_customer_signup(user=user, referral_code=referral_code)
             return user
 
     if verification_failed:

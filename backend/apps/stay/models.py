@@ -587,3 +587,62 @@ class StayReservation(models.Model):
 
     def __str__(self) -> str:
         return str(self.id)
+
+
+class StaySubscriptionPlan(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    code = models.SlugField(max_length=80, unique=True)
+    name = models.CharField(max_length=120)
+    price_paise = models.PositiveBigIntegerField()
+    duration_days = models.PositiveSmallIntegerField(default=30)
+    max_properties = models.PositiveSmallIntegerField(default=2)  # 0 = unlimited
+    capabilities = models.JSONField(default=list, blank=True)
+    details = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("price_paise", "id")
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class StaySubscription(models.Model):
+    class Status(models.TextChoices):
+        PENDING_ACTIVATION = "PENDING_ACTIVATION", "Pending activation"
+        ACTIVE = "ACTIVE", "Active"
+        GRACE = "GRACE", "Grace period"
+        EXPIRED = "EXPIRED", "Expired"
+        CANCELLED = "CANCELLED", "Cancelled"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    host = models.ForeignKey(
+        "partners.PartnerProfile", on_delete=models.PROTECT, related_name="stay_subscriptions"
+    )
+    plan = models.ForeignKey(
+        StaySubscriptionPlan, on_delete=models.PROTECT, related_name="subscriptions"
+    )
+    payment_attempt = models.OneToOneField(
+        "commerce.PaymentAttempt",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="stay_subscription",
+    )
+    status = models.CharField(
+        max_length=24, choices=Status.choices, default=Status.PENDING_ACTIVATION
+    )
+    starts_at = models.DateTimeField(null=True, blank=True)
+    ends_at = models.DateTimeField(null=True, blank=True)
+    grace_ends_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at", "id")
+
+    def __str__(self) -> str:
+        return f"{self.host_id}:{self.plan_id}:{self.status}"
+

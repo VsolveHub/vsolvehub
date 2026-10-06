@@ -8,26 +8,40 @@ interface ReferralAttributionsListProps {
   attributions: ReferralAttribution[];
 }
 
-function getReferralStatusMeta(status?: ReferralAttribution["status"]) {
-  switch (status) {
+function getReferralStatusMeta(attr: ReferralAttribution) {
+  switch (attr.status) {
     case "REWARDED":
       return {
-        label: "Reward Paid",
+        label: "Reward added",
         tone: "success" as const,
-        description: "Wallet credits added to your balance",
+        description: "Your reward has been added",
       };
     case "QUALIFIED":
       return {
-        label: "Qualified",
+        label: "Booking completed",
         tone: "info" as const,
-        description: "Booking completed, payout processing",
+        description: attr.reward_available_at
+          ? `Reward on ${formatDate(attr.reward_available_at)}`
+          : "Reward coming soon",
+      };
+    case "INELIGIBLE":
+      return {
+        label: "Not eligible",
+        tone: "neutral" as const,
+        description: "This referral did not qualify",
+      };
+    case "REVERSED":
+      return {
+        label: "Reversed",
+        tone: "neutral" as const,
+        description: "This reward was withdrawn",
       };
     case "PENDING":
     default:
       return {
-        label: "Pending Booking",
+        label: "Pending booking",
         tone: "warning" as const,
-        description: "Waiting for their first completed service",
+        description: "Waiting for their first completed booking",
       };
   }
 }
@@ -55,7 +69,7 @@ export function ReferralAttributionsList({ attributions }: ReferralAttributionsL
 
       <div className="divide-y divide-[#eee9e0]">
         {attributions.map((attr) => {
-          const meta = getReferralStatusMeta(attr.status);
+          const meta = getReferralStatusMeta(attr);
           const formattedDate = formatDate(attr.attributed_at || "");
 
           return (

@@ -1,3 +1,4 @@
+from http import HTTPStatus
 from datetime import timedelta
 from typing import Any
 import uuid
@@ -38,7 +39,9 @@ from apps.listings.services import (
     expire_listings,
     expire_subscriptions,
     moderate_listing,
+    partner_summary,
     publish_listing,
+    publish_listing_instantly,
     reinstate_listing,
     remove_listing,
     report_listing,
@@ -1234,3 +1237,71 @@ def test_listing_plan_cap_api_error(poster, a10_variant):
     assert body["error"]["code"] == "listing_plan_cap"
     # Must not fall through to the generic listing_state_conflict code.
     assert body["error"]["code"] != "listing_state_conflict"
+
+
+@pytest.mark.django_db
+def test_partner_submit_action_publishes_at_once_without_review(poster, a10_variant):
+    """Approved employers publish directly: "submit" puts a long-form listing live, no queue."""
+    listing = create_listing(
+        poster=poster,
+        variant_id=a10_variant.id,
+        title="Senior Developer",
+        description="Build and ship features.",
+        location_text="Hyderabad",
+    )
+    client = _client_for(poster.user, "partner")
+
+    res = client.post(f"/api/v1/partner/listings/{listing.id}/submit", {}, format="json")
+
+    assert res.status_code == HTTPStatus.OK, res.content
+    listing.refresh_from_db()
+    assert listing.status == Listing.Status.PUBLISHED
+    assert listing.moderation_status == Listing.ModerationStatus.APPROVED
+
+    # Editing a live listing keeps it live.
+    update_listing(listing=listing, actor=poster.user, description="Updated description.")
+    listing.refresh_from_db()
+    assert listing.status == Listing.Status.PUBLISHED
+
+
+@pytest.mark.django_db
+def test_removed_listing_cannot_be_published_instantly(poster, a10_variant):
+    listing = create_listing(
+        poster=poster, variant_id=a10_variant.id, title="Spam job", description="x" * 20
+    )
+    Listing.objects.filter(id=listing.id).update(
+        moderation_status=Listing.ModerationStatus.REMOVED, removed_at=timezone.now()
+    )
+    listing.refresh_from_db()
+    with pytest.raises(ListingStateError):
+        publish_listing_instantly(listing=listing, actor=poster.user)
+
+
+@pytest.mark.django_db
+def test_free_poster_has_no_plan_limit(poster):
+    assert partner_summary(poster)["plan_limit"] is None
+
+
+@pytest.mark.django_db
+def test_partner_listing_list_reports_real_application_count(poster, a10_variant):
+    """Regression: the partner job card showed "View Applicants (0)" because the partner list
+    was never annotated. Withdrawn applications do not count."""
+    listing = create_listing(
+        poster=poster, variant_id=a10_variant.id, title="Counted role", description="x" * 20
+    )
+    publish_listing_instantly(listing=listing, actor=poster.user)
+    for index in range(3):
+        Application.objects.create(
+            listing=listing,
+            applicant=_create_user(f"+9197{uuid.uuid4().int % 10**8:08d}"),
+            applicant_snapshot={"name": f"Applicant {index}"},
+            status=Application.Status.WITHDRAWN if index == 2 else Application.Status.SUBMITTED,
+        )
+    client = _client_for(poster.user, "partner")
+
+    body = client.get("/api/v1/partner/listings").json()
+    rows = body["results"] if isinstance(body, dict) else body
+    row = next(item for item in rows if item["id"] == str(listing.id))
+
+    assert row["application_count"] == 2
+    assert row["counts"]["applied"] == 2
