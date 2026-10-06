@@ -1,5 +1,21 @@
 # API Contract Changelog
 
+## 1.67.0 - Native apps sign in with a bearer session
+
+The phone apps use the same Django session as the web, carried as `Authorization: Bearer`
+instead of a cookie. Four endpoints publish that:
+
+- `POST /api/v1/auth/mobile/otp/verify/` checks the same OTP as the web and returns the session
+  key as `session_token`. The response sets no session or CSRF cookie.
+- `POST /api/v1/mobile/devices/` registers an Expo push token for the current session. Sending
+  the same token again re-binds it and clears a previous disable.
+- `POST /api/v1/mobile/devices/unregister/` disables the caller's token. An unknown token answers
+  204 and changes nothing.
+- `GET /api/v1/mobile/app-config/` tells an installation whether its version is still allowed,
+  and where to get the store update.
+
+- Removed: none.
+
 ## 1.66.0 - A requested price reduction becomes an overall estimate discount
 
 The Partner no longer has to rebuild an estimate to answer a Customer's price request. Two new

@@ -44,18 +44,18 @@ Do not edit any file in apps/notifications or apps/assignments.
 
 ## TODO
 
-- [ ] models + migration
-- [ ] Expo provider (fail-closed, timeouts) + fake
-- [ ] every PUSH template code has copy
-- [ ] PUSH intents delivered; in-app notices mirrored to push
-- [ ] sweep + receipts beat tasks
-- [ ] 3 endpoints
-- [ ] tests pass; notification/assignment tests still pass; quality-static passes
+- [x] models + migration
+- [x] Expo provider (fail-closed, timeouts) + fake
+- [x] every PUSH template code has copy
+- [x] PUSH intents delivered; in-app notices mirrored to push
+- [x] sweep + receipts beat tasks
+- [x] 3 endpoints
+- [x] tests pass; notification/assignment tests still pass; quality-static passes
 
 ## Done when
 
-- [ ] real passing output shown for all commands
-- [ ] you added `MOBILE_PUSH_PROVIDER=fake` to your `backend\.env` and restarted server, worker
+- [x] real passing output shown for all commands
+- [x] you added `MOBILE_PUSH_PROVIDER=fake` to your `backend\.env` and restarted server, worker
       and beat
 
 ## Commit
@@ -64,3 +64,8 @@ Do not edit any file in apps/notifications or apps/assignments.
 git add backend/apps/mobile backend/tests/mobile backend/config/settings/base.py contracts/openapi/v1.yaml
 git commit -m "feat(mobile-api): push devices, Expo push delivery and app version gate"
 ```
+
+## Status
+
+- **Status:** Complete (100% implemented)
+- **Implementation:** PushDevice/PushTicket models, Expo/Fake push providers, Celery tasks for delivery/receipts, endpoints `POST mobile/devices/`, `POST mobile/devices/unregister/`, `GET mobile/app-config/`, and pytest suites in `backend/tests/mobile/`.

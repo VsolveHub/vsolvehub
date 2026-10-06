@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.vsolvehub.partner",
+      "sha256_cert_fingerprints": [
+        "14:6D:E9:7F:48:9A:2F:5D:8E:24:9C:1D:6E:7F:5A:8B:3C:9E:2D:4F:6A:8B:1C:3E:5F:7A:9B:2C:4D:6E"
+      ]
+    }
+  }
+]

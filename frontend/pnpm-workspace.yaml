@@ -1,6 +1,11 @@
+overrides:
+  react-native-gesture-handler: "2.32.0"
+
 packages:
   - "apps/*"
   - "packages/*"
+  - "mobile/apps/*"
+  - "mobile/packages/*"
 
 # The Windows npm-registry path can sustain large downloads but has high
 # latency and low throughput. Next, SWC, and Turbo ship large platform

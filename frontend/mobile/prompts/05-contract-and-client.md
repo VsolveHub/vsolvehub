@@ -25,15 +25,15 @@ fully, frontend/packages/query/src/index.ts and package.json.
 
 ## TODO
 
-- [ ] contract regenerated, version bumped, changelog entry
-- [ ] generated TS client updated
-- [ ] bearer mode + tests (cookie mode untouched)
-- [ ] `@vsolve/query/native` entry
-- [ ] all checks pass (web unaffected)
+- [x] contract regenerated, version bumped, changelog entry
+- [x] generated TS client updated
+- [x] bearer mode + tests (cookie mode untouched)
+- [x] `@vsolve/query/native` entry
+- [x] all checks pass (web unaffected)
 
 ## Done when
 
-- [ ] the output shows all checks green
+- [x] the output shows all checks green
 
 ## Commit
 
@@ -41,3 +41,8 @@ fully, frontend/packages/query/src/index.ts and package.json.
 git add backend/config/settings/base.py contracts/openapi frontend/packages/api-client frontend/packages/query
 git commit -m "feat(api-client): bearer mode and native query entry for mobile apps"
 ```
+
+## Status
+
+- **Status:** Complete (100% implemented)
+- **Implementation:** OpenAPI 1.67.0 contract updated with changelog, `@vsolve/api-client` bearer mode implemented and tested without affecting cookie mode, and `@vsolve/query/native` exported.

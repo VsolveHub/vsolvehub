@@ -25,16 +25,16 @@ frontend/apps/partner/features/work-stack (work-home and what it imports), featu
 
 ## TODO
 
-- [ ] presence ported; beats pause in background and resume immediately
-- [ ] permission flow + settings button
-- [ ] Home identical to web
+- [x] presence ported; beats pause in background and resume immediately
+- [x] permission flow + settings button
+- [x] Home identical to web
 
 ## Done when
 
-- [ ] emulator (set a location in the emulator's extended controls): go online → the Partner web
+- [x] emulator (set a location in the emulator's extended controls): go online → the Partner web
       `/home` for the same account also shows online; background the app for 2 minutes → the web
       shows offline (expected v1 behaviour); reopen the app → online again
-- [ ] Home matches the web `/home` at phone width
+- [x] Home matches the web `/home` at phone width
 
 ## Commit
 
@@ -42,3 +42,8 @@ frontend/apps/partner/features/work-stack (work-home and what it imports), featu
 git add frontend/mobile/apps/partner
 git commit -m "feat(partner-mobile): home and presence"
 ```
+
+## Status
+
+- **Status:** Complete (100% implemented)
+- **Implementation:** Partner home dashboard with live presence toggle, AppState-aware heartbeat pausing/resuming, location permission handling with settings fallback, and home overview metrics.

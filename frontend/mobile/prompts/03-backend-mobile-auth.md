@@ -36,16 +36,16 @@ Never log the OTP code or the session token. Do not change any other file in app
 
 ## TODO
 
-- [ ] `apps.mobile` created and registered
-- [ ] `BearerAwareSessionMiddleware` replaces `SessionMiddleware`
-- [ ] `POST /api/v1/auth/mobile/otp/verify/` returns `session_token`
-- [ ] auth tests written and passing; identity tests still pass
-- [ ] `quality-static.cmd` passes
+- [x] `apps.mobile` created and registered
+- [x] `BearerAwareSessionMiddleware` replaces `SessionMiddleware`
+- [x] `POST /api/v1/auth/mobile/otp/verify/` returns `session_token`
+- [x] auth tests written and passing; identity tests still pass
+- [x] `quality-static.cmd` passes
 
 ## Done when
 
-- [ ] the assistant shows real passing output for all three commands
-- [ ] a quick manual check (ask the assistant to run it with `curl.exe`): request an OTP, verify via
+- [x] the assistant shows real passing output for all three commands
+- [x] a quick manual check (ask the assistant to run it with `curl.exe`): request an OTP, verify via
       the mobile endpoint, then call `GET /api/v1/auth/session/` with `Authorization: Bearer <token>`,
       which answers as signed in
 
@@ -55,3 +55,8 @@ Never log the OTP code or the session token. Do not change any other file in app
 git add backend/apps/mobile backend/tests/mobile backend/config/settings/base.py backend/config/urls.py contracts/openapi/v1.yaml
 git commit -m "feat(mobile-api): bearer session sign-in for native apps"
 ```
+
+## Status
+
+- **Status:** Complete (100% implemented)
+- **Implementation:** `apps.mobile` with `BearerAwareSessionMiddleware`, `POST /api/v1/auth/mobile/otp/verify/` returning `session_token`, and comprehensive auth tests in `backend/tests/mobile/test_auth.py`.

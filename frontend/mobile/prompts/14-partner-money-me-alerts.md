@@ -24,14 +24,14 @@ notifications and support, plus frontend/apps/customer/features/account/view/pri
 
 ## TODO
 
-- [ ] Money, Me, Profile, Crew, Rate card, Language ported
-- [ ] Alerts panel real, badge updates after reading
-- [ ] Delete account, Terms, Privacy, Log out
+- [x] Money, Me, Profile, Crew, Rate card, Language ported
+- [x] Alerts panel real, badge updates after reading
+- [x] Delete account, Terms, Privacy, Log out
 
 ## Done when
 
-- [ ] each screen matches the web at phone width, with the same data
-- [ ] reading a notification on the phone lowers the badge on the phone and on the web
+- [x] each screen matches the web at phone width, with the same data
+- [x] reading a notification on the phone lowers the badge on the phone and on the web
 
 ## Commit
 
@@ -39,3 +39,8 @@ notifications and support, plus frontend/apps/customer/features/account/view/pri
 git add frontend/mobile/apps/partner
 git commit -m "feat(partner-mobile): money, profile, crew, rate card, alerts and account deletion"
 ```
+
+## Status
+
+- **Status:** Complete (100% implemented)
+- **Implementation:** Partner financial views, profile management, crew roster, rate card configuration, notification drawer with real-time unread badges, account deletion request flow, and web browser links for terms/privacy.

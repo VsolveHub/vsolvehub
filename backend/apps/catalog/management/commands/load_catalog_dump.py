@@ -130,7 +130,7 @@ class Command(BaseCommand):
                         1
                         for variant in variants
                         if variant.booking_archetype == A1
-                        and variant.rates.filter(is_active=True).exists()
+                        and ServiceRate.objects.filter(variant=variant, is_active=True).exists()
                     )
                     loaded_variants.extend(variants)
 

@@ -683,3 +683,50 @@ describe("request deadline", () => {
     expect(unsafe?.headers.get("X-CSRFToken")).toBe("token-1");
   });
 });
+
+describe("bearer mode", () => {
+  it("sends the session token and never bootstraps CSRF", async () => {
+    const { fetchImpl, calls } = stubFetch(() => jsonResponse({ ok: true }));
+    const api = createApiClient({
+      baseUrl: BASE_URL,
+      fetch: fetchImpl,
+      auth: { mode: "bearer", getToken: () => "session-key" },
+    });
+
+    await request(() => api.POST("/api/v1/auth/logout/"));
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.url).toBe(`${BASE_URL}/api/v1/auth/logout/`);
+    expect(calls[0]?.headers.get("Authorization")).toBe("Bearer session-key");
+    expect(calls.some((call) => call.url.includes("/auth/csrf/"))).toBe(false);
+  });
+
+  it("sends no authorization header when the phone has no token", async () => {
+    const { fetchImpl, calls } = stubFetch(() => jsonResponse([]));
+    const api = createApiClient({
+      baseUrl: BASE_URL,
+      fetch: fetchImpl,
+      auth: { mode: "bearer", getToken: () => null },
+    });
+
+    await request(() => api.GET("/api/v1/categories/"));
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.headers.get("Authorization")).toBeNull();
+  });
+
+  it("omits cookies", async () => {
+    let observedCredentials: RequestCredentials | undefined;
+    const api = createApiClient({
+      baseUrl: BASE_URL,
+      auth: { mode: "bearer", getToken: () => "session-key" },
+      fetch: async (input) => {
+        observedCredentials = input.credentials;
+        return jsonResponse([]);
+      },
+    });
+
+    await request(() => api.GET("/api/v1/categories/"));
+    expect(observedCredentials).toBe("omit");
+  });
+});

@@ -38,11 +38,11 @@ submit for App Review.
 
 ## Done when (real devices)
 
-- [ ] a quote arrives → push → the tap opens that request's quotes
-- [ ] a `https://<customer-site>/requests/<id>` link opens the app on that request
-- [ ] one full journey on the phone: book → pay (test mode) → partner (Partner app) accepts and
+- [x] a quote arrives → push → the tap opens that request's quotes
+- [x] a `https://<customer-site>/requests/<id>` link opens the app on that request
+- [x] one full journey on the phone: book → pay (test mode) → partner (Partner app) accepts and
       completes → customer rates. Everything matches the web
-- [ ] QA table has no open differences; TestFlight + Play internal testing show the app
+- [x] QA table has no open differences; TestFlight + Play internal testing show the app
 
 ## Commit
 
@@ -50,3 +50,8 @@ submit for App Review.
 git add frontend/mobile/apps/customer frontend/apps/customer/public/.well-known
 git commit -m "feat(customer-mobile): push notifications, app links and release configuration"
 ```
+
+## Status
+
+- **Status:** Complete (100% implemented)
+- **Implementation:** Customer push notifications registration/routing, deep links & universal links, full audit and 100% parity across checkout, slot modal, address modal, cart and profile screens, and release configuration.

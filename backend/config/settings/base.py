@@ -60,12 +60,14 @@ INSTALLED_APPS = [
     "apps.wallet",
     "apps.loyalty",
     "apps.ops_reports",
+    "apps.mobile",
 ]
 
 MIDDLEWARE = [
     "common.observability.middleware.RequestIdMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "corsheaders.middleware.CorsMiddleware",
+    "apps.mobile.middleware.BearerAwareSessionMiddleware",
     # Ahead of SessionMiddleware so its response hook runs afterwards and can
     # re-issue the sign-out Set-Cookie with the Secure flag Django's own
     # delete omits. See apps.identity.middleware.
@@ -681,6 +683,20 @@ MSG91_SENDER_ID = env("MSG91_SENDER_ID", default="")
 MSG91_OTP_TEMPLATE_ID = env("MSG91_OTP_TEMPLATE_ID", default="")
 MSG91_API_BASE_URL = env("MSG91_API_BASE_URL", default="https://control.msg91.com/api/v5")
 
+# Mobile apps (frontend/mobile). Push is fail-closed like MESSAGE_TRANSPORT.
+MOBILE_PUSH_PROVIDER = env("MOBILE_PUSH_PROVIDER", default="unconfigured")
+MOBILE_PUSH_ALLOW_FAKE = env.bool("MOBILE_PUSH_ALLOW_FAKE", default=False)
+EXPO_ACCESS_TOKEN = env("EXPO_ACCESS_TOKEN", default="")
+EXPO_PUSH_TIMEOUT_SECONDS = env.int("EXPO_PUSH_TIMEOUT_SECONDS", default=10)
+MOBILE_PARTNER_MIN_VERSION = env("MOBILE_PARTNER_MIN_VERSION", default="1.0.0")
+MOBILE_CUSTOMER_MIN_VERSION = env("MOBILE_CUSTOMER_MIN_VERSION", default="1.0.0")
+MOBILE_PARTNER_LATEST_VERSION = env("MOBILE_PARTNER_LATEST_VERSION", default="1.0.0")
+MOBILE_CUSTOMER_LATEST_VERSION = env("MOBILE_CUSTOMER_LATEST_VERSION", default="1.0.0")
+MOBILE_PARTNER_ANDROID_STORE_URL = env("MOBILE_PARTNER_ANDROID_STORE_URL", default="")
+MOBILE_PARTNER_IOS_STORE_URL = env("MOBILE_PARTNER_IOS_STORE_URL", default="")
+MOBILE_CUSTOMER_ANDROID_STORE_URL = env("MOBILE_CUSTOMER_ANDROID_STORE_URL", default="")
+MOBILE_CUSTOMER_IOS_STORE_URL = env("MOBILE_CUSTOMER_IOS_STORE_URL", default="")
+
 GEOCODING_PROVIDER = env("GEOCODING_PROVIDER", default="unconfigured")
 GEOCODING_NOMINATIM_URL = env(
     "GEOCODING_NOMINATIM_URL",
@@ -1157,6 +1173,15 @@ CELERY_BEAT_SCHEDULE = {
     "sweep-expired-subscriptions": {
         "task": "apps.listings.tasks.expire_vendor_subscriptions",
         "schedule": 60.0 * 15,
+    },
+    # Mobile push notifications
+    "sweep-pending-push-intents": {
+        "task": "apps.mobile.tasks.sweep_pending_push_intents",
+        "schedule": 30.0,
+    },
+    "check-push-receipts": {
+        "task": "apps.mobile.tasks.check_push_receipts",
+        "schedule": 900.0,
     },
 }
 

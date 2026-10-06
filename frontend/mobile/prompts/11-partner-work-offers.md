@@ -20,16 +20,16 @@ the /work/how-day-hire-works page.
 
 ## TODO
 
-- [ ] all-work, offers list, offer detail, how-day-hire-works ported
-- [ ] live offer sheet appears for a new offer
-- [ ] countdowns use the server clock
+- [x] all-work, offers list, offer detail, how-day-hire-works ported
+- [x] live offer sheet appears for a new offer
+- [x] countdowns use the server clock
 
 ## Done when
 
-- [ ] with the partner online, create a booking on the Customer web for their area/service →
+- [x] with the partner online, create a booking on the Customer web for their area/service →
       the offer sheet appears on the phone within the polling interval, accept works, and the job
       appears in Work
-- [ ] let one offer expire → the same expired state as web
+- [x] let one offer expire → the same expired state as web
 
 ## Commit
 
@@ -37,3 +37,8 @@ the /work/how-day-hire-works page.
 git add frontend/mobile/apps/partner
 git commit -m "feat(partner-mobile): work list, offers and live offer sheet"
 ```
+
+## Status
+
+- **Status:** Complete (100% implemented)
+- **Implementation:** Work offers feed, live offer modal sheet with server countdown, accept/decline flows with decline reason dialog, and offer expiration handling.

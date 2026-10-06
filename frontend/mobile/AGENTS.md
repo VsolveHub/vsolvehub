@@ -230,12 +230,12 @@ For every phase:
 
 | Item | Version |
 |---|---|
-| Expo SDK | _fill in Phase 1_ |
-| React Native | _fill in Phase 1_ |
-| React (mobile apps) | _fill in Phase 1_ |
-| expo-router | _fill in Phase 1_ |
-| nativewind | _fill in Phase 1_ |
-| tailwindcss (mobile) | _fill in Phase 1_ |
-| @tanstack/react-query | _fill in Phase 1_ |
-| Node.js | _fill in Phase 1_ |
+| Expo SDK | 57.0.26 |
+| React Native | 0.86.3 |
+| React (mobile apps) | 19.2.3 |
+| expo-router | 57.0.24 |
+| nativewind | 4.2.7 |
+| tailwindcss (mobile) | 3.4.19 |
+| @tanstack/react-query | 5.101.4 |
+| Node.js | 22.19.0 |
 | pnpm | 11.2.2 (from `frontend/package.json`) |

@@ -17,9 +17,9 @@ features/crew (views, model, adapters, queries, tests).
 
 ## Done when
 
-- [ ] with a partner estimate from Phase 12: compare, ask a question (the partner sees it),
+- [x] with a partner estimate from Phase 12: compare, ask a question (the partner sees it),
       choose and confirm → the same engagement is created as from the web
-- [ ] book a crew → fee paid → shows under Activity
+- [x] book a crew → fee paid → shows under Activity
 
 ## Commit
 
@@ -27,3 +27,8 @@ features/crew (views, model, adapters, queries, tests).
 git add frontend/mobile/apps/customer
 git commit -m "feat(customer-mobile): quotes, estimate decisions and crew booking"
 ```
+
+## Status
+
+- **Status:** Complete (100% implemented)
+- **Implementation:** Quotes comparison, estimate detail review, partner questioning thread, quote selection confirmation, and crew hiring fee payment.

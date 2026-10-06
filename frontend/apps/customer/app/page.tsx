@@ -8,7 +8,6 @@ import {
 } from "@/features/catalog/components/category-card";
 import { getCategories } from "@/features/catalog/queries";
 import { HomepageClientSections } from "@/features/catalog/components/homepage-client-sections";
-import { catalogCategoryHref } from "@/lib/routes";
 
 export const metadata: Metadata = {
   title: "V Solve Hub — Book a verified technician",
@@ -90,104 +89,51 @@ async function CategoryGrid() {
     );
   }
 
-  const firstRow = categories.slice(0, 5);
-  const secondRow = categories.slice(5, 9);
-
   return (
     <>
-      {/* Desktop: 2 rows (5 in first row, 4 in second row) as clean icons with text below */}
-      <div className="hidden md:flex flex-col gap-6 lg:gap-8">
-        {/* Row 1: 5 categories */}
-        <div className="grid grid-cols-5 gap-5 lg:gap-7">
-          {firstRow.map((category) => (
-            <Link
-              key={category.id}
-              href={catalogCategoryHref(category.slug)}
-              className="group flex flex-col items-center gap-2.5 text-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
-            >
-              <div className="relative aspect-square w-full rounded-2xl bg-[#F8F9FA] border border-line/80 overflow-hidden flex items-center justify-center p-3.5 lg:p-4 shadow-xs transition-all duration-200 group-hover:scale-105 group-hover:shadow-md group-hover:border-line-strong group-hover:bg-[#FFF8F3]">
-                {category.image_url !== "" ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={category.image_url}
-                    alt=""
-                    loading="lazy"
-                    className="size-full object-contain transition-transform duration-300 group-hover:scale-110"
-                  />
-                ) : (
-                  <span
-                    aria-hidden
-                    className="grid size-12 place-items-center rounded-xl bg-navy-50 text-navy-700 shadow-xs"
+      {/* Desktop: clean grid of categories */}
+      <div className="hidden md:grid grid-cols-4 lg:grid-cols-6 gap-5 lg:gap-7">
+        {categories.map((category) => (
+          <Link
+            key={category.id}
+            href={`/catalog/${category.slug}`}
+            className="group flex flex-col items-center gap-2.5 text-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+          >
+            <div className="relative aspect-square w-full rounded-2xl bg-[#F8F9FA] border border-line/80 overflow-hidden flex items-center justify-center p-3.5 lg:p-4 shadow-xs transition-all duration-200 group-hover:scale-105 group-hover:shadow-md group-hover:border-line-strong group-hover:bg-[#FFF8F3]">
+              {category.image_url !== "" ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={category.image_url}
+                  alt=""
+                  loading="lazy"
+                  className="size-full object-contain transition-transform duration-300 group-hover:scale-110"
+                />
+              ) : (
+                <span
+                  aria-hidden
+                  className="grid size-12 place-items-center rounded-xl bg-navy-50 text-navy-700 shadow-xs"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="size-6"
                   >
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="size-6"
-                    >
-                      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-                    </svg>
-                  </span>
-                )}
-              </div>
-              <div className="w-full px-1">
-                <h3 className="text-navy-900 font-bold text-sm lg:text-[15px] leading-tight group-hover:text-signal-700 transition-colors">
-                  {category.name}
-                </h3>
-              </div>
-            </Link>
-          ))}
-        </div>
-
-        {/* Row 2: 4 categories */}
-        {secondRow.length > 0 ? (
-          <div className="grid grid-cols-4 gap-5 lg:gap-7 max-w-[80%] mx-auto w-full">
-            {secondRow.map((category) => (
-              <Link
-                key={category.id}
-                href={catalogCategoryHref(category.slug)}
-                className="group flex flex-col items-center gap-2.5 text-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
-              >
-                <div className="relative aspect-square w-full rounded-2xl bg-[#F8F9FA] border border-line/80 overflow-hidden flex items-center justify-center p-3.5 lg:p-4 shadow-xs transition-all duration-200 group-hover:scale-105 group-hover:shadow-md group-hover:border-line-strong group-hover:bg-[#FFF8F3]">
-                  {category.image_url !== "" ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={category.image_url}
-                      alt=""
-                      loading="lazy"
-                      className="size-full object-contain transition-transform duration-300 group-hover:scale-110"
-                    />
-                  ) : (
-                    <span
-                      aria-hidden
-                      className="grid size-12 place-items-center rounded-xl bg-navy-50 text-navy-700 shadow-xs"
-                    >
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className="size-6"
-                      >
-                        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-                      </svg>
-                    </span>
-                  )}
-                </div>
-                <div className="w-full px-1">
-                  <h3 className="text-navy-900 font-bold text-sm lg:text-[15px] leading-tight group-hover:text-signal-700 transition-colors">
-                    {category.name}
-                  </h3>
-                </div>
-              </Link>
-            ))}
-          </div>
-        ) : null}
+                    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+                  </svg>
+                </span>
+              )}
+            </div>
+            <div className="w-full px-1">
+              <h3 className="text-navy-900 font-bold text-sm lg:text-[15px] leading-tight group-hover:text-signal-700 transition-colors">
+                {category.name}
+              </h3>
+            </div>
+          </Link>
+        ))}
       </div>
 
       {/* Mobile: the whole catalogue as photo tiles, three across. */}
@@ -195,7 +141,7 @@ async function CategoryGrid() {
         {categories.map((category) => (
           <li key={category.id} className="min-w-0">
             <Link
-              href={catalogCategoryHref(category.slug)}
+              href={`/catalog/${category.slug}`}
               className="flex flex-col items-center gap-2 rounded-card focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
             >
               {category.image_url !== "" ? (
@@ -409,7 +355,7 @@ export default async function HomePage() {
               {categories.map((category) => (
                 <li key={category.id} className="min-w-0">
                   <Link
-                    href={catalogCategoryHref(category.slug)}
+                    href={`/catalog/${category.slug}`}
                     className="group flex flex-col items-center gap-1.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
                   >
                     <div className="relative aspect-square w-full rounded-2xl bg-[#F8F9FA] border border-line/80 overflow-hidden flex items-center justify-center p-2.5 shadow-xs transition-all duration-200 group-hover:scale-105 group-hover:shadow-md group-hover:border-line-strong group-hover:bg-[#FFF8F3]">

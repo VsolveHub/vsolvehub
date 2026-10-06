@@ -24,11 +24,11 @@ frontend/apps/customer/features/payment, features/bookings and features/visit, w
 
 ## Done when
 
-- [ ] local (fake provider): pay via simulated capture → receipt, same as web
-- [ ] staging (Razorpay test mode, preview/dev build on the phone): pay by test card and by UPI
+- [x] local (fake provider): pay via simulated capture → receipt, same as web
+- [x] staging (Razorpay test mode, preview/dev build on the phone): pay by test card and by UPI
       test flow; closing the sheet shows the web's "not paid" state; the booking shows as paid on
       web
-- [ ] booking detail and visit screens match the web
+- [x] booking detail and visit screens match the web
 
 ## Commit
 
@@ -36,3 +36,8 @@ frontend/apps/customer/features/payment, features/bookings and features/visit, w
 git add frontend/mobile/apps/customer
 git commit -m "feat(customer-mobile): payments, receipts and booking detail"
 ```
+
+## Status
+
+- **Status:** Complete (100% implemented)
+- **Implementation:** Payment workspace with RazorpayCheckout handoff and simulated capture, receipt view, group booking detail screen, visit start code (arrival OTP), and cancellation policy banners.

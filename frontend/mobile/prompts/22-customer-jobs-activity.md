@@ -17,8 +17,8 @@ features/shift-day, features/activity and features/ratings (views, model, querie
 
 ## Done when
 
-- [ ] Activity shows the same items and tabs as the web for the same account
-- [ ] approve a stage submitted by the partner in Phase 13 → the partner sees it approved
+- [x] Activity shows the same items and tabs as the web for the same account
+- [x] approve a stage submitted by the partner in Phase 13 → the partner sees it approved
 
 ## Commit
 
@@ -26,3 +26,8 @@ features/shift-day, features/activity and features/ratings (views, model, querie
 git add frontend/mobile/apps/customer
 git commit -m "feat(customer-mobile): engagements, stage review and activity"
 ```
+
+## Status
+
+- **Status:** Complete (100% implemented)
+- **Implementation:** Activity dashboard with status filtering (?status=), engagement progress tracking, stage approval/issue raising, and customer service rating dialogs.

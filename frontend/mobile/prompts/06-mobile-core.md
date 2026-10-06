@@ -53,16 +53,16 @@ in the browser.
 
 ## TODO
 
-- [ ] modules 1–12 exist and are exported
-- [ ] tests for each module pass
-- [ ] both apps' root layouts use the core providers
-- [ ] browser preview still starts
+- [x] modules 1–12 exist and are exported
+- [x] tests for each module pass
+- [x] both apps' root layouts use the core providers
+- [x] browser preview still starts
 
 ## Done when
 
-- [ ] check output green
-- [ ] browser: app starts, no red error screen
-- [ ] stop the backend and restart the app: no update screen appears (a network error never
+- [x] check output green
+- [x] browser: app starts, no red error screen
+- [x] stop the backend and restart the app: no update screen appears (a network error never
       blocks the app)
 
 ## Commit
@@ -71,3 +71,8 @@ in the browser.
 git add frontend/mobile/packages/core frontend/mobile/apps/partner/app frontend/mobile/apps/customer/app frontend/pnpm-lock.yaml
 git commit -m "feat(mobile): core package for API, sign-in, data, push, uploads and payments"
 ```
+
+## Status
+
+- **Status:** Complete (100% implemented)
+- **Implementation:** `@vsolve/mobile-core` implements all 12 modules (bearer client, auth store, OTP flow, push registration/routing, file uploads, RazorpayCheckout, geolocation, version gating, storage) and is wired into both partner and customer root layouts.

@@ -63,21 +63,21 @@ Do exactly this:
 
 ## TODO
 
-- [ ] workspace + eslint lines added (nothing else changed)
-- [ ] `apps/partner`, `apps/customer` scaffolded with Expo Router
-- [ ] NativeWind v4 + tokens + `inlineRem: 16` + fonts working
-- [ ] `packages/core`, `packages/ui` created (react etc. as peer deps)
-- [ ] jest-expo in all four packages with a smoke test
-- [ ] `app.config.ts`, `.env.example`, `.gitignore` in both apps
-- [ ] pinned versions table filled
-- [ ] all checks pass, web checks still pass
+- [x] workspace + eslint lines added (nothing else changed)
+- [x] `apps/partner`, `apps/customer` scaffolded with Expo Router
+- [x] NativeWind v4 + tokens + `inlineRem: 16` + fonts working
+- [x] `packages/core`, `packages/ui` created (react etc. as peer deps)
+- [x] jest-expo in all four packages with a smoke test
+- [x] `app.config.ts`, `.env.example`, `.gitignore` in both apps
+- [x] pinned versions table filled
+- [x] all checks pass, web checks still pass
 
 ## Done when
 
-- [ ] `pnpm --filter partner-mobile start` → press `w` → the ready text is navy, bold, Plus Jakarta
+- [x] `pnpm --filter partner-mobile start` → press `w` → the ready text is navy, bold, Plus Jakarta
       Sans, on the warm background, and the button is orange with dark text
-- [ ] the same for `customer-mobile`
-- [ ] press `a` → the same on the Android emulator
+- [x] the same for `customer-mobile`
+- [x] press `a` → the same on the Android emulator
 
 ## Commit
 
@@ -85,3 +85,8 @@ Do exactly this:
 git add frontend/pnpm-workspace.yaml frontend/eslint.config.mjs frontend/pnpm-lock.yaml frontend/mobile
 git commit -m "feat(mobile): scaffold Expo workspace for Customer and Partner apps"
 ```
+
+## Status
+
+- **Status:** Complete (100% implemented)
+- **Implementation:** Both Expo apps (`partner-mobile`, `customer-mobile`) and shared packages (`@vsolve/mobile-core`, `@vsolve/mobile-ui`) configured with Expo Router, NativeWind v4, Plus Jakarta Sans, Jest tests, and verified in browser/emulator.

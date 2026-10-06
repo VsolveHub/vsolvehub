@@ -23,9 +23,9 @@ lib/api/public.ts + lib/api/config.ts (endpoints and cache lifetimes).
 
 ## Done when
 
-- [ ] Home, Services, a category and a service page match the web at phone width
-- [ ] search returns the same results as web for 3 test queries
-- [ ] "Add to cart" updates the cart count in the header
+- [x] Home, Services, a category and a service page match the web at phone width
+- [x] search returns the same results as web for 3 test queries
+- [x] "Add to cart" updates the cart count in the header
 
 ## Commit
 
@@ -33,3 +33,8 @@ lib/api/public.ts + lib/api/config.ts (endpoints and cache lifetimes).
 git add frontend/mobile/apps/customer
 git commit -m "feat(customer-mobile): home, catalog and service pages"
 ```
+
+## Status
+
+- **Status:** Complete (100% implemented)
+- **Implementation:** Customer home, category browsing, catalog search, service details with variants/policies/process steps, fit-out selector, and add-to-cart with reactive badge count.

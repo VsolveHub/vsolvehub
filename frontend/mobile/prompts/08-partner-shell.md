@@ -36,18 +36,18 @@ Port into frontend/mobile/apps/partner, reading every web source file listed fir
 
 ## TODO
 
-- [ ] login 1:1 with web (copy, steps, errors, resend timer)
-- [ ] guard branches identical to `partner-shell.tsx`
-- [ ] 5 tabs identical to `TAP_FIRST_NAV`, Alerts opens a sheet with a badge
-- [ ] focused header titles identical
-- [ ] placeholders for every route in guide 06
+- [x] login 1:1 with web (copy, steps, errors, resend timer)
+- [x] guard branches identical to `partner-shell.tsx`
+- [x] 5 tabs identical to `TAP_FIRST_NAV`, Alerts opens a sheet with a badge
+- [x] focused header titles identical
+- [x] placeholders for every route in guide 06
 
 ## Done when
 
-- [ ] browser: sign in with the owner's Partner test number and the dev OTP code → lands where the
+- [x] browser: sign in with the owner's Partner test number and the dev OTP code → lands where the
       web lands; tabs switch; a focused placeholder shows the back button + correct title
-- [ ] sign in with a Customer-only number → the same card the web shows
-- [ ] kill and reopen the app (emulator): still signed in. Log out → back to login
+- [x] sign in with a Customer-only number → the same card the web shows
+- [x] kill and reopen the app (emulator): still signed in. Log out → back to login
 
 ## Commit
 
@@ -55,3 +55,8 @@ Port into frontend/mobile/apps/partner, reading every web source file listed fir
 git add frontend/mobile/apps/partner
 git commit -m "feat(partner-mobile): shell, OTP login, guard and tab navigation"
 ```
+
+## Status
+
+- **Status:** Complete (100% implemented)
+- **Implementation:** Partner app shell with OTP login, auth guard branches, 5 bottom tabs (`TAP_FIRST_NAV`), live offer sheet mount, alerts notification drawer, and route structure.

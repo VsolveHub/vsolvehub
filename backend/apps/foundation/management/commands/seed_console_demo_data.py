@@ -186,7 +186,7 @@ class BookedGroup:
 
     @property
     def booking(self) -> Booking:
-        return self.unit.booking
+        return Booking.objects.get(fulfilment_unit=self.unit)
 
     @property
     def partner(self) -> PartnerProfile:
@@ -360,7 +360,9 @@ class Command(BaseCommand):
         PartnerApplication.objects.update_or_create(
             partner=partner, defaults={"status": PartnerApplication.Status.APPROVED}
         )
-        variant = ServiceVariant.objects.get(service__slug=slug)
+        variant = ServiceVariant.objects.filter(service__slug=slug, is_active=True).first()
+        if variant is None:
+            variant = ServiceVariant.objects.get(service__slug=slug)
         PartnerService.objects.get_or_create(partner=partner, variant=variant)
         PartnerServiceArea.objects.get_or_create(partner=partner, service_area=area)
         starts_at = _preferred_start(slot).astimezone(ZoneInfo(area.timezone))
@@ -375,7 +377,9 @@ class Command(BaseCommand):
 
     def _booked_group(self, *, slug: str, key_prefix: str, slot: tuple[int, int]) -> BookedGroup:
         client, customer, address_id, cart_version = self._customer_context()
-        variant = ServiceVariant.objects.get(service__slug=slug)
+        variant = ServiceVariant.objects.filter(service__slug=slug, is_active=True).first()
+        if variant is None:
+            variant = ServiceVariant.objects.get(service__slug=slug)
         response = client.post(
             "/api/v1/cart/items/",
             {
@@ -827,7 +831,9 @@ class Command(BaseCommand):
 
     def _seed_review_queue(self, *, ops_primary: User) -> None:
         self.stdout.write("Seeding the Partner review queue...")
-        variant = ServiceVariant.objects.get(service__slug=SERVICE_SLUGS[0])
+        variant = ServiceVariant.objects.filter(service__slug=SERVICE_SLUGS[0], is_active=True).first()
+        if variant is None:
+            variant = ServiceVariant.objects.get(service__slug=SERVICE_SLUGS[0])
         area = ServiceArea.objects.get(slug=DEMO_AREA_SLUG)
 
         def _applicant(idx: int, name: str) -> PartnerProfile:
@@ -939,8 +945,8 @@ class Command(BaseCommand):
         )
 
         for left_slug, right_slug, mode, reason, request_id in proposals:
-            left = ServiceVariant.objects.get(service__slug=left_slug)
-            right = ServiceVariant.objects.get(service__slug=right_slug)
+            left = ServiceVariant.objects.filter(service__slug=left_slug, is_active=True).first() or ServiceVariant.objects.get(service__slug=left_slug)
+            right = ServiceVariant.objects.filter(service__slug=right_slug, is_active=True).first() or ServiceVariant.objects.get(service__slug=right_slug)
             # Checked in both directions: a rule stores its pair canonically ordered, so the row
             # written for (switch-socket, fan) reads back as (fan, switch-socket) and a
             # one-directional lookup silently misses it.

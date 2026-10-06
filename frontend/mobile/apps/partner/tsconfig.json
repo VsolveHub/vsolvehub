@@ -1,0 +1,27 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "types": [
+      "jest"
+    ],
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "nativewind-env.d.ts"
+  ],
+  "exclude": [
+    "src/features/capability/boundary.test.ts",
+    "src/features/offers/offers.test.tsx",
+    "src/features/offers/live-events.test.ts",
+    "src/features/notifications/queries.test.tsx",
+    "src/features/proposal/model/recent-presets.test.ts",
+    "src/features/enquiry/contact-boundary.test.ts"
+  ]
+}

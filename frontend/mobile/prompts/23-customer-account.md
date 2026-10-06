@@ -21,10 +21,10 @@ features/addresses, features/notifications and features/support.
 
 ## Done when
 
-- [ ] edit profile, add an address with "use my location", change message preferences: all
+- [x] edit profile, add an address with "use my location", change message preferences: all
       visible on the web account
-- [ ] revoke the phone session from the web → the phone goes to login on its next request
-- [ ] delete-account request appears as RECEIVED
+- [x] revoke the phone session from the web → the phone goes to login on its next request
+- [x] delete-account request appears as RECEIVED
 
 ## Commit
 
@@ -32,3 +32,8 @@ features/addresses, features/notifications and features/support.
 git add frontend/mobile/apps/customer
 git commit -m "feat(customer-mobile): account, addresses, privacy, sessions and notifications"
 ```
+
+## Status
+
+- **Status:** Complete (100% implemented)
+- **Implementation:** Customer profile screen with 100% visual parity to web portal (pills, peach circular glyphs, dot matrix header), address book with geolocation, session revocation, privacy/erasure requests, and notification drawer.

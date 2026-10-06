@@ -28,16 +28,16 @@ Port into frontend/mobile/apps/customer:
 
 ## TODO
 
-- [ ] login page + login sheet 1:1
-- [ ] 4 tabs identical to the web bottom nav
-- [ ] header and back-button rules ported
-- [ ] gate for signed-in trees; public routes stay public
-- [ ] placeholders + redirects for every route
+- [x] login page + login sheet 1:1
+- [x] 4 tabs identical to the web bottom nav
+- [x] header and back-button rules ported
+- [x] gate for signed-in trees; public routes stay public
+- [x] placeholders + redirects for every route
 
 ## Done when
 
-- [ ] browser: tabs switch; `/account` while signed out → login → back to `/account` after sign-in
-- [ ] signed-out user can open Home and Services
+- [x] browser: tabs switch; `/account` while signed out → login → back to `/account` after sign-in
+- [x] signed-out user can open Home and Services
 
 ## Commit
 
@@ -45,3 +45,8 @@ Port into frontend/mobile/apps/customer:
 git add frontend/mobile/apps/customer
 git commit -m "feat(customer-mobile): shell, OTP login, tabs and route gate"
 ```
+
+## Status
+
+- **Status:** Complete (100% implemented)
+- **Implementation:** Customer shell, mobile OTP authentication flow, bottom tab bar (Home, Services, Bookings, Profile), site header and focus-mode rules, authentication routing gate, and modal login sheet.

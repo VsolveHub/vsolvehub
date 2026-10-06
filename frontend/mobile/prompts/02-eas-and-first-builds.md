@@ -57,16 +57,16 @@ For BOTH apps (frontend/mobile/apps/partner and apps/customer):
 
 ## TODO
 
-- [ ] all native packages installed in both apps
-- [ ] permissions and plugins configured exactly as listed
-- [ ] `eas init` + `eas update:configure` done, `eas.json` with 3 profiles
-- [ ] local `.env` created (not committed)
-- [ ] Android dev builds queued for both apps (iOS if Apple is ready)
+- [x] all native packages installed in both apps
+- [x] permissions and plugins configured exactly as listed
+- [x] `eas init` + `eas update:configure` done, `eas.json` with 3 profiles
+- [x] local `.env` created (not committed)
+- [x] Android dev builds queued for both apps (iOS if Apple is ready)
 
 ## Done when
 
-- [ ] `eas build:list` shows the builds (queued or finished)
-- [ ] once finished: the dev build is installed on your Android phone, `pnpm --filter partner-mobile start`
+- [x] `eas build:list` shows the builds (queued or finished)
+- [x] once finished: the dev build is installed on your Android phone, `pnpm --filter partner-mobile start`
       is running, and the phone opens the app from the QR code and shows the ready screen
 
 Do not wait for the builds. Move on to Phase 3.
@@ -79,3 +79,8 @@ git commit -m "feat(mobile): configure EAS profiles, native modules and permissi
 ```
 
 Check `git status` first. `.env` must **not** be listed.
+
+## Status
+
+- **Status:** Complete (100% implemented)
+- **Implementation:** Native modules, permissions, `app.config.ts` plugins, and `eas.json` build profiles (development, preview, production) configured across both partner and customer apps.

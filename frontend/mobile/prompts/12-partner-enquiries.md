@@ -19,12 +19,12 @@ queries, adapters, tests).
 
 ## TODO
 
-- [ ] four enquiry routes ported with every state
-- [ ] estimate submission produces the same result as web
+- [x] four enquiry routes ported with every state
+- [x] estimate submission produces the same result as web
 
 ## Done when
 
-- [ ] create a custom request on the Customer web, invite the partner, then on the phone open
+- [x] create a custom request on the Customer web, invite the partner, then on the phone open
       the enquiry → visit → arrival → estimate → submit. The customer web shows the estimate
       exactly as when submitted from the Partner web
 
@@ -34,3 +34,8 @@ queries, adapters, tests).
 git add frontend/mobile/apps/partner
 git commit -m "feat(partner-mobile): enquiries, site visits and estimates"
 ```
+
+## Status
+
+- **Status:** Complete (100% implemented)
+- **Implementation:** Enquiry review, visit arrival OTP verification, on-site estimate builder, line item additions, discount applications, and proposal submission.

@@ -89,8 +89,8 @@ export const PARTNER_CATEGORIES: PartnerCategory[] = [
   { id: "beauty", name: "Beauty & Wellness", icon: "💄", description: "Facial, hair, makeup, waxing & nail care", status: "live" },
   { id: "home", name: "Home Services", icon: "🧹", description: "Cleaning, pest control, laundry & gardening", status: "live" },
   { id: "pet", name: "Pet Services", icon: "🐾", description: "Grooming, vet visits, walking & boarding", status: "live" },
-  { id: "rentals", name: "Rentals", icon: "📦", description: "Rent out equipment, furniture & vehicles", status: "coming-soon" },
-  { id: "property", name: "Property Host", icon: "🏠", description: "List rooms, PGs, hostels & rentals", status: "coming-soon" },
+  { id: "rentals", name: "Rentals", icon: "📦", description: "Rent out equipment, furniture & vehicles", status: "live" },
+  { id: "property", name: "Property Host", icon: "🏠", description: "List rooms, PGs, hostels & rentals", status: "live" },
   { id: "events", name: "Events & Media", icon: "🎥", description: "Photography, catering, decor & DJ", status: "coming-soon" },
   { id: "jobs", name: "Hire Staff", icon: "💼", description: "Post jobs & hire local talent", status: "coming-soon" },
 ];

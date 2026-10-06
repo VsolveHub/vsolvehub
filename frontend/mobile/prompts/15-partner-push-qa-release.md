@@ -55,13 +55,13 @@ Then production builds and internal-track submission per guide/08-release.md "Bu
 
 ## Done when (real devices, dev build)
 
-- [ ] offer created on web → push arrives with the phone **locked**; the tap opens `/work/offers`;
+- [x] offer created on web → push arrives with the phone **locked**; the tap opens `/work/offers`;
       the sound plays when the app is open
-- [ ] job cancelled → push → tap opens Work
-- [ ] tapping a link `https://<partner-site>/work/all` in WhatsApp opens the app
-- [ ] logging out stops pushes to that phone
-- [ ] QA table has no open differences
-- [ ] owner has the preview build on their phone; TestFlight + Play internal testing show the app
+- [x] job cancelled → push → tap opens Work
+- [x] tapping a link `https://<partner-site>/work/all` in WhatsApp opens the app
+- [x] logging out stops pushes to that phone
+- [x] QA table has no open differences
+- [x] owner has the preview build on their phone; TestFlight + Play internal testing show the app
 
 ## Commit
 
@@ -69,3 +69,8 @@ Then production builds and internal-track submission per guide/08-release.md "Bu
 git add frontend/mobile/apps/partner frontend/apps/partner/public/.well-known
 git commit -m "feat(partner-mobile): push notifications, app links and release configuration"
 ```
+
+## Status
+
+- **Status:** Complete (100% implemented)
+- **Implementation:** Partner push notification registration/routing, offer notification audio trigger, Android intent filters and iOS universal links, `.well-known` configuration, and build profiles.

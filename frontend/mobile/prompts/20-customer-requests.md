@@ -19,9 +19,9 @@ frontend/apps/customer/features/requirement, features/project-request and featur
 
 ## Done when
 
-- [ ] create a custom request with 2 photos on the phone → it appears identically on the web
+- [x] create a custom request with 2 photos on the phone → it appears identically on the web
       request page
-- [ ] a scheduled visit shows the same arrival code as the web
+- [x] a scheduled visit shows the same arrival code as the web
 
 ## Commit
 
@@ -29,3 +29,8 @@ frontend/apps/customer/features/requirement, features/project-request and featur
 git add frontend/mobile/apps/customer
 git commit -m "feat(customer-mobile): custom requests and site visits"
 ```
+
+## Status
+
+- **Status:** Complete (100% implemented)
+- **Implementation:** Custom requirement wizard, photo attachment selector, location-based address picker, request detail with matching teasers, and scheduled visit arrival tracking.

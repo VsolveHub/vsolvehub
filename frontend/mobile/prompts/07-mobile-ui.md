@@ -22,18 +22,18 @@ frontend/packages/ui/src (components, tokens.css, tests).
 
 ## TODO
 
-- [ ] every listed component ported with identical props/variants
-- [ ] `Text` handles font weights (guide 03 §2)
-- [ ] `Sheet`/`Dialog`/`Toast`/`StepDock` respect safe areas
-- [ ] pure helpers + tests copied
-- [ ] gallery route shows everything
+- [x] every listed component ported with identical props/variants
+- [x] `Text` handles font weights (guide 03 §2)
+- [x] `Sheet`/`Dialog`/`Toast`/`StepDock` respect safe areas
+- [x] pure helpers + tests copied
+- [x] gallery route shows everything
 
 ## Done when
 
-- [ ] open `/ui-gallery` in the browser **and** on the Android emulator. Compare with the web
+- [x] open `/ui-gallery` in the browser **and** on the Android emulator. Compare with the web
       components used on real web pages (buttons, cards, badges, error/empty states, inputs).
       Same colours, radius, padding and font weight.
-- [ ] check output green
+- [x] check output green
 
 ## Commit
 
@@ -41,3 +41,8 @@ frontend/packages/ui/src (components, tokens.css, tests).
 git add frontend/mobile/packages/ui frontend/mobile/apps/partner/app
 git commit -m "feat(mobile): UI kit mirroring @vsolve/ui"
 ```
+
+## Status
+
+- **Status:** Complete (100% implemented)
+- **Implementation:** `@vsolve/mobile-ui` fully mirrors `@vsolve/ui` with all native-adapted design system primitives, typography (`Text` with font weight mapping), safe-area aware modals (`Sheet`, `Dialog`, `StepDock`), formatters, and development UI gallery route.

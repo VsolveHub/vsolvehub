@@ -17,7 +17,7 @@ from apps.partners.models import (
 )
 from apps.partners.services import _ensure_partner_role
 
-FIXTURE_PHONE_PREFIX = "+9199000000"
+FIXTURE_PHONE_PREFIX = "+9199000"
 PARTNERS_PER_CATEGORY = 3
 
 
@@ -49,7 +49,7 @@ class Command(BaseCommand):
                 defaults={"name": category_slug.replace("-", " ").title(), "is_active": True},
             )
             for partner_index in range(1, PARTNERS_PER_CATEGORY + 1):
-                phone_number = f"{FIXTURE_PHONE_PREFIX}{category_index}{partner_index}"
+                phone_number = f"{FIXTURE_PHONE_PREFIX}{category_index:03d}{partner_index:02d}"
                 user, was_created = User.objects.get_or_create(phone_number=phone_number)
                 _ensure_partner_role(user)
                 partner, _ = PartnerProfile.objects.get_or_create(

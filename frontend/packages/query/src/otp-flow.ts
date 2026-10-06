@@ -114,9 +114,12 @@ function capIndianMobileDigits(digitsOnly: string, hasLeadingPlus = false): stri
 /** Keeps only what a phone field can legally contain, so paste is forgiving. */
 export function sanitizePhoneInput(value: string): string {
   const compact = value.replace(/[^\d+\s-]/g, "").trimStart();
-  const normalized = compact.startsWith("+")
-    ? `+${compact.slice(1).replace(/\+/g, "")}`
-    : compact.replace(/\+/g, "");
+  // A later plus is the person starting the number again, not a second country code.
+  const restartedAt = compact.lastIndexOf("+");
+  const focused = restartedAt > 0 ? compact.slice(restartedAt) : compact;
+  const normalized = focused.startsWith("+")
+    ? `+${focused.slice(1).replace(/\+/g, "")}`
+    : focused.replace(/\+/g, "");
 
   const digitsOnly = (normalized.match(/\d/g) ?? []).join("");
   const cappedDigits = capIndianMobileDigits(digitsOnly, normalized.startsWith("+"));

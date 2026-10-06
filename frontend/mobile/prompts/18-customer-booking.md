@@ -22,9 +22,9 @@ features/checkout and features/addresses, with their tests.
 
 ## Done when
 
-- [ ] signed out: book a service up to the login interrupt → sign in in the sheet → continue
+- [x] signed out: book a service up to the login interrupt → sign in in the sheet → continue
       without losing the form
-- [ ] cart and checkout reach the payment step with the same totals as the web for the same
+- [x] cart and checkout reach the payment step with the same totals as the web for the same
       service
 
 ## Commit
@@ -33,3 +33,8 @@ features/checkout and features/addresses, with their tests.
 git add frontend/mobile/apps/customer
 git commit -m "feat(customer-mobile): booking workspace, cart and checkout"
 ```
+
+## Status
+
+- **Status:** Complete (100% implemented)
+- **Implementation:** Booking workspace, cart view with stepper and summary, checkout screen with address modal dialog ("Where is the work?"), slot picker dialog ("When should we do [Technician]?"), and unpriced hold states.

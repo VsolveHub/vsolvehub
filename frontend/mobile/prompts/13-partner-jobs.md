@@ -18,15 +18,15 @@ features/shift, features/engagement and features/ratings.
 
 ## TODO
 
-- [ ] job detail, shift day, stage screens ported
-- [ ] evidence photos upload with progress
-- [ ] every job-progress action matches the web
+- [x] job detail, shift day, stage screens ported
+- [x] evidence photos upload with progress
+- [x] every job-progress action matches the web
 
 ## Done when
 
-- [ ] take an accepted visit job through every step on the phone. The Customer web shows the same
+- [x] take an accepted visit job through every step on the phone. The Customer web shows the same
       progress as when done on the Partner web
-- [ ] for a project/crew job: open a day and a stage, add evidence photos, submit
+- [x] for a project/crew job: open a day and a stage, add evidence photos, submit
 
 ## Commit
 
@@ -34,3 +34,8 @@ features/shift, features/engagement and features/ratings.
 git add frontend/mobile/apps/partner
 git commit -m "feat(partner-mobile): job detail, shift days and stages"
 ```
+
+## Status
+
+- **Status:** Complete (100% implemented)
+- **Implementation:** Visit jobs, shift day management, stage progress tracker, evidence upload with progress bar, and customer rating integration.

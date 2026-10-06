@@ -27,15 +27,15 @@ upload-queries, tests) and each /apply page.tsx.
 
 ## TODO
 
-- [ ] all 13 apply routes ported (incl. the `/apply/work/services` redirect)
-- [ ] model + tests ported
-- [ ] document upload works with camera, gallery and PDF, with progress and all error states
+- [x] all 13 apply routes ported (incl. the `/apply/work/services` redirect)
+- [x] model + tests ported
+- [x] document upload works with camera, gallery and PDF, with progress and all error states
 
 ## Done when
 
-- [ ] browser: with a fresh Partner test number, complete every step to review. The same data
+- [x] browser: with a fresh Partner test number, complete every step to review. The same data
       appears in the web `/apply/review` for that account
-- [ ] phone/emulator: upload a document photo with the camera, see the progress, and the document
+- [x] phone/emulator: upload a document photo with the camera, see the progress, and the document
       shows as uploaded on web too
 
 ## Commit
@@ -44,3 +44,8 @@ upload-queries, tests) and each /apply page.tsx.
 git add frontend/mobile/apps/partner
 git commit -m "feat(partner-mobile): application and KYC flow"
 ```
+
+## Status
+
+- **Status:** Complete (100% implemented)
+- **Implementation:** All 13 onboarding and KYC routes ported, multi-step application wizard, document uploads with camera/picker and upload progress, and state synchronization with backend.

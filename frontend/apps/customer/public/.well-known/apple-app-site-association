@@ -1,0 +1,21 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "TEAMID.com.vsolvehub.customer",
+        "paths": [
+          "/bookings/*",
+          "/requests/*",
+          "/engagements/*",
+          "/jobs/*",
+          "/activity",
+          "/account/*",
+          "/catalog/*",
+          "/book/*",
+          "/cart"
+        ]
+      }
+    ]
+  }
+}

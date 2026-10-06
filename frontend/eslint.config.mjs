@@ -87,5 +87,6 @@ export default defineConfig([
     "**/test-results/**",
     "**/e2e/**",
     "packages/api-client/src/generated/**",
+    "mobile/**",
   ]),
 ]);
