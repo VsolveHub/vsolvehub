@@ -1,8 +1,11 @@
 // Ported from frontend/apps/customer/features/session/view/customer-login-modal.tsx
 import { useAuthStore, useMobileOtpFlow } from "@vsolve/mobile-core";
-import { Dialog, Logo, OtpForm, Text } from "@vsolve/mobile-ui";
+import { BlurBackdrop, Text } from "@vsolve/mobile-ui";
+import { useRouter } from "expo-router";
 import { useEffect, useRef } from "react";
-import { View } from "react-native";
+import { Modal, View } from "react-native";
+
+import { CustomerLoginExperience } from "./view/customer-login-experience";
 
 export function CustomerLoginSheet({
   open,
@@ -14,6 +17,7 @@ export function CustomerLoginSheet({
   onSuccess?: () => void;
 }) {
   const flow = useMobileOtpFlow();
+  const router = useRouter();
   const status = useAuthStore((state) => state.status);
   const wasOpenRef = useRef(open);
 
@@ -31,25 +35,42 @@ export function CustomerLoginSheet({
     }
   }, [open, status, onOpenChange, onSuccess]);
 
+  if (!open) return null;
+
   return (
-    <Dialog
-      open={open}
-      onOpenChange={onOpenChange}
-      title="Log in to V Solve Hub"
-      description="Verify your mobile number to view bookings and checkout"
+    <Modal
+      visible={open}
+      transparent
+      animationType="fade"
+      onRequestClose={() => onOpenChange(false)}
     >
-      <View className="mb-2">
-        <Logo className="self-start" />
-        <Text className="mt-3 text-xs leading-relaxed text-text-secondary">
-          Use the mobile number you book with. We will text you a code — there is no password.
-        </Text>
+      <View className="flex-1 items-center justify-center px-4">
+        <BlurBackdrop
+          onPress={() => onOpenChange(false)}
+          accessibilityLabel="Close dialog backdrop"
+        />
+        <CustomerLoginExperience
+          flow={flow}
+          variant="modal"
+          mobileFocused
+          onClose={() => onOpenChange(false)}
+          footer={
+            <Text className="text-[13px] leading-relaxed text-text-secondary">
+              New here?{" "}
+              <Text
+                onPress={() => {
+                  onOpenChange(false);
+                  router.push("/catalog");
+                }}
+                className="font-bold text-navy-900 underline"
+              >
+                Browse services
+              </Text>
+              {" "}— you can add to your basket before signing in.
+            </Text>
+          }
+        />
       </View>
-      <OtpForm
-        {...flow}
-        heading="Your mobile number"
-        description="We will text you a code. There is no password."
-        verifyLabel="Verify & continue"
-      />
-    </Dialog>
+    </Modal>
   );
 }

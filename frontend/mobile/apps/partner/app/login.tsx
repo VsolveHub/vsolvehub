@@ -60,7 +60,16 @@ export default function LoginScreen() {
       keyboardShouldPersistTaps="handled"
     >
       {/* Floating Dynamic-Island Navigation Header Capsule */}
-      <View className="mb-6 w-full max-w-md flex-row items-center justify-between rounded-full border border-line bg-white/95 px-4 py-2.5 shadow-md">
+      <View
+        className="mb-6 w-full max-w-md flex-row items-center justify-between rounded-2xl sm:rounded-full border border-line-strong bg-white/95 px-3.5 sm:px-5 py-2.5 shadow-md"
+        style={{
+          shadowColor: "rgba(0, 17, 46, 0.5)",
+          shadowOffset: { width: 0, height: 10 },
+          shadowOpacity: 0.22,
+          shadowRadius: 20,
+          elevation: 8,
+        }}
+      >
         <Pressable
           accessibilityRole="button"
           onPress={() => router.push("/")}
@@ -72,13 +81,20 @@ export default function LoginScreen() {
           <Pressable
             accessibilityRole="button"
             onPress={() => router.push("/apply")}
-            className="overflow-hidden rounded-full shadow-xs active:opacity-90"
+            className="overflow-hidden rounded-full active:scale-[0.98] active:opacity-95"
+            style={{
+              shadowColor: "#f87000",
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.35,
+              shadowRadius: 8,
+              elevation: 4,
+            }}
           >
             <LinearGradient
               colors={["#f87000", "#f59e0b", "#fb923c"]}
               start={{ x: 0, y: 0.5 }}
               end={{ x: 1, y: 0.5 }}
-              style={{ paddingHorizontal: 16, paddingVertical: 6, borderRadius: 9999 }}
+              style={{ paddingHorizontal: 16, paddingVertical: 7, borderRadius: 9999 }}
             >
               <Text className="text-xs font-extrabold text-[#00112e]">Join</Text>
             </LinearGradient>
@@ -87,9 +103,9 @@ export default function LoginScreen() {
             accessibilityRole="button"
             accessibilityLabel="Navigation menu"
             onPress={() => setMenuOpen((prev) => !prev)}
-            className="h-9 w-9 items-center justify-center rounded-full border border-line bg-surface-sunken active:bg-surface-hover"
+            className="h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-full border border-line-strong bg-surface-sunken active:bg-surface-hover shadow-xs"
           >
-            <Svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="#00112e" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <Svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#00112e" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
               {menuOpen ? (
                 <Path d="M18 6L6 18M6 6l12 12" />
               ) : (

@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
-import { Modal, Pressable, StyleSheet, View } from "react-native";
+import { Modal, Platform, Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Line } from "react-native-svg";
+import { BlurView } from "expo-blur";
 
 import { cn } from "./cn";
 import { Text } from "./text";
@@ -15,6 +16,54 @@ interface BaseProps {
   footer?: ReactNode;
   dismissable?: boolean;
   className?: string;
+}
+
+export interface BlurBackdropProps {
+  onPress?: () => void;
+  accessibilityLabel?: string;
+}
+
+export function BlurBackdrop({
+  onPress,
+  accessibilityLabel = "Close backdrop",
+}: BlurBackdropProps) {
+  return (
+    <>
+      {Platform.OS === "web" ? (
+        <View
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              backgroundColor: "rgba(0, 17, 46, 0.45)",
+              backdropFilter: "blur(8px)",
+              WebkitBackdropFilter: "blur(8px)",
+            } as never,
+          ]}
+        />
+      ) : (
+        <>
+          <BlurView
+            intensity={40}
+            tint="dark"
+            style={StyleSheet.absoluteFill}
+          />
+          <View
+            style={[
+              StyleSheet.absoluteFill,
+              { backgroundColor: "rgba(0, 17, 46, 0.35)" },
+            ]}
+          />
+        </>
+      )}
+      {onPress ? (
+        <Pressable
+          accessibilityLabel={accessibilityLabel}
+          onPress={onPress}
+          style={StyleSheet.absoluteFill}
+        />
+      ) : null}
+    </>
+  );
 }
 
 function CloseButton({ onPress }: { onPress: () => void }) {
@@ -46,14 +95,11 @@ export function Dialog({
 }: BaseProps) {
   return (
     <Modal visible={open} transparent animationType="fade" onRequestClose={() => dismissable && onOpenChange(false)}>
-      <View className="flex-1 items-center justify-center bg-black/50 px-4">
-        {dismissable ? (
-          <Pressable
-            accessibilityLabel="Close dialog backdrop"
-            onPress={() => onOpenChange(false)}
-            style={StyleSheet.absoluteFill}
-          />
-        ) : null}
+      <View className="flex-1 items-center justify-center px-4">
+        <BlurBackdrop
+          onPress={dismissable ? () => onOpenChange(false) : undefined}
+          accessibilityLabel="Close dialog backdrop"
+        />
         <View className={cn("w-full max-w-sm rounded-[1.75rem] bg-surface p-6 shadow-2xl", className)}>
           <View className="flex-row items-start justify-between gap-3">
             <View className="min-w-0 flex-1">
@@ -75,14 +121,11 @@ export function Sheet(props: BaseProps) {
   const { open, onOpenChange, title, description, children, footer, dismissable = true, className } = props;
   return (
     <Modal visible={open} transparent animationType="slide" onRequestClose={() => dismissable && onOpenChange(false)}>
-      <View className="flex-1 justify-end bg-black/40">
-        {dismissable ? (
-          <Pressable
-            accessibilityLabel="Close sheet backdrop"
-            onPress={() => onOpenChange(false)}
-            style={StyleSheet.absoluteFill}
-          />
-        ) : null}
+      <View className="flex-1 justify-end">
+        <BlurBackdrop
+          onPress={dismissable ? () => onOpenChange(false) : undefined}
+          accessibilityLabel="Close sheet backdrop"
+        />
         <View
           className={cn("rounded-t-card bg-surface px-5 pt-4", className)}
           style={{ paddingBottom: Math.max(16, insets.bottom) }}

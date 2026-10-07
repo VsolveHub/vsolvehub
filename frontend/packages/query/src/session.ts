@@ -477,7 +477,18 @@ export function useLogout(apiClient: ApiClient): UseMutationResult<void, Error, 
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: () => request(() => apiClient.POST("/api/v1/auth/logout/")),
+    mutationFn: async () => {
+      try {
+        await request(() => apiClient.POST("/api/v1/auth/logout/"));
+      } catch (error) {
+        // If the server returned 401 or 403, the session is already absent,
+        // expired, or unauthenticated on the server. Treat as successful logout.
+        if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) {
+          return;
+        }
+        throw error;
+      }
+    },
     // Settled, not only success. A revoked session answers 403 before the old
     // handler could flush, and stopping there left the cookie in the browser.
     onSettled: () => {

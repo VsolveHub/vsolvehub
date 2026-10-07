@@ -52,8 +52,10 @@ import {
   ScrollView,
   TextInput,
   UIManager,
+  useWindowDimensions,
   View,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Path } from "react-native-svg";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -378,6 +380,8 @@ const FOOTER_SECTIONS: FooterSection[] = [
 
 export default function Index() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isWide = width >= 640;
   const status = useAuthStore((state) => state.status);
   const [phone, setPhone] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -461,126 +465,20 @@ export default function Index() {
       keyboardShouldPersistTaps="handled"
     >
       {/* ========================================================================= */}
-      {/* 1. FLOATING DYNAMIC-ISLAND NAVIGATION BAR                                   */}
+      {/* 1 & 2. HERO + FLOATING DYNAMIC-ISLAND NAVIGATION BAR                        */}
       {/* ========================================================================= */}
-      <View className="sticky top-0 z-50 px-3 sm:px-6 pt-3 pb-2">
-        <View className="mx-auto w-full max-w-5xl flex-row items-center justify-between rounded-full border border-line-strong bg-white/95 px-3.5 sm:px-4 py-2 shadow-md">
-          <Pressable onPress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })} className="active:opacity-80">
-            <Logo />
-          </Pressable>
-
-          <View className="flex-row items-center gap-2">
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => router.push("/apply")}
-              className="rounded-full bg-signal-500 px-4 py-2 active:bg-signal-600 shadow-sm"
-              style={{
-                backgroundColor: "#f87000",
-                shadowColor: "#f87000",
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.35,
-                shadowRadius: 8,
-              }}
-            >
-              <Text className="text-xs font-extrabold text-[#00112e]">Become a Partner</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Navigation menu"
-              onPress={() => setMenuOpen((prev) => !prev)}
-              className="h-9 w-9 items-center justify-center rounded-full border border-line bg-surface-sunken active:bg-surface-hover"
-            >
-              <Svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="#00112e" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                {menuOpen ? (
-                  <Path d="M18 6L6 18M6 6l12 12" />
-                ) : (
-                  <Path d="M4 6h16M4 12h16M4 18h16" />
-                )}
-              </Svg>
-            </Pressable>
-          </View>
-        </View>
-
-        {/* Dropdown Navigation Menu */}
-        {menuOpen ? (
-          <View className="mx-auto mt-2 w-full max-w-5xl overflow-hidden rounded-2xl border border-line bg-white p-2 shadow-xl">
-            <Pressable
-              onPress={() => scrollToSection("how-it-works")}
-              className="rounded-xl px-4 py-2.5 active:bg-surface-sunken"
-            >
-              <Text className="text-sm font-semibold text-navy-900">How It Works</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => scrollToSection("benefits")}
-              className="rounded-xl px-4 py-2.5 active:bg-surface-sunken"
-            >
-              <Text className="text-sm font-semibold text-navy-900">Earnings & Benefits</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => scrollToSection("services")}
-              className="rounded-xl px-4 py-2.5 active:bg-surface-sunken"
-            >
-              <Text className="text-sm font-semibold text-navy-900">High-Demand Trades</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => scrollToSection("testimonials")}
-              className="rounded-xl px-4 py-2.5 active:bg-surface-sunken"
-            >
-              <Text className="text-sm font-semibold text-navy-900">Verified Partner Reviews</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => scrollToSection("faq")}
-              className="rounded-xl px-4 py-2.5 active:bg-surface-sunken"
-            >
-              <Text className="text-sm font-semibold text-navy-900">Frequently Asked Questions</Text>
-            </Pressable>
-            <View className="my-1.5 border-t border-line/60" />
-            <Pressable
-              onPress={() => {
-                setMenuOpen(false);
-                router.push("/login");
-              }}
-              className="rounded-xl px-4 py-2.5 bg-surface-sunken/60 active:bg-surface-sunken"
-            >
-              <Text className="text-sm font-bold text-signal-700">Partner Sign In →</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                setMenuOpen(false);
-                router.push("/apply");
-              }}
-              className="rounded-xl px-4 py-2.5 active:bg-surface-sunken"
-            >
-              <Text className="text-sm font-bold text-navy-900">Register as a Partner</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                setMenuOpen(false);
-                void WebBrowser.openBrowserAsync(`${WEB_BASE}/contact`);
-              }}
-              className="rounded-xl px-4 py-2.5 active:bg-surface-sunken"
-            >
-              <Text className="text-sm font-medium text-text-secondary">24/7 Support Desk</Text>
-            </Pressable>
-          </View>
-        ) : null}
-      </View>
-
-      {/* ========================================================================= */}
-      {/* 2. HERO SECTION                                                           */}
-      {/* ========================================================================= */}
-      <View className="relative overflow-hidden bg-[#00112e] px-4 pt-6 pb-14 text-white">
-        {/* Subtle Ambient Radial Glow */}
+      <View className="relative overflow-hidden bg-[#00112e] text-white">
+        {/* Subtle Ambient Radial Glow matching Web partner-hero aurora */}
         <View
           pointerEvents="none"
           style={{
             position: "absolute",
-            right: -60,
-            top: -40,
-            width: 320,
-            height: 320,
-            borderRadius: 160,
-            backgroundColor: "rgba(248, 112, 0, 0.15)",
+            right: -80,
+            top: -60,
+            width: 420,
+            height: 420,
+            borderRadius: 210,
+            backgroundColor: "rgba(248, 112, 0, 0.16)",
           }}
         />
         <View
@@ -588,103 +486,382 @@ export default function Index() {
           style={{
             position: "absolute",
             left: -80,
-            bottom: -60,
-            width: 260,
-            height: 260,
-            borderRadius: 130,
+            top: 260,
+            width: 300,
+            height: 300,
+            borderRadius: 150,
             backgroundColor: "rgba(37, 99, 235, 0.1)",
           }}
         />
 
-        <View className="mx-auto w-full max-w-md gap-4">
-          {/* Bare Text Tag matching Web partner-hero.tsx */}
-          <Text className="text-[13px] font-semibold uppercase tracking-[0.08em] text-[#fb8130]">
-            Free to join
-          </Text>
-
-          {/* Main Headline with Heavy Plus Jakarta Sans Weight and Tight Tracking */}
-          <View className="gap-1">
-            <Text
-              style={{
-                fontSize: 38,
-                lineHeight: 41,
-                letterSpacing: -0.8,
-              }}
-              className="font-extrabold text-white"
-            >
-              Your skill. Their doorstep.
-            </Text>
-            <Text
-              style={{
-                fontSize: 38,
-                lineHeight: 41,
-                letterSpacing: -0.8,
-              }}
-              className="font-extrabold text-[#f87000]"
-            >
-              Paid instantly.
-            </Text>
-          </View>
-
-          {/* Subtitle Body matching 17px leading-1.6 text-white/72 */}
-          <Text
-            style={{ fontSize: 17, lineHeight: 27 }}
-            className="font-normal text-white/75 max-w-[440px]"
+        {/* Floating Dynamic-Island Navigation Bar */}
+        <View className="sticky top-0 z-50 px-3 sm:px-6 pt-3 pb-1.5">
+          <View
+            className="mx-auto w-full max-w-5xl flex-row items-center justify-between rounded-2xl sm:rounded-full border border-line-strong bg-white/95 px-3.5 sm:px-5 py-2.5 shadow-md"
+            style={{
+              shadowColor: "rgba(0, 17, 46, 0.12)",
+              shadowOffset: { width: 0, height: 12 },
+              shadowOpacity: 1,
+              shadowRadius: 32,
+              elevation: 8,
+              minHeight: 66,
+            }}
           >
-            Join 5,000+ professionals across Telangana. Get local jobs and weekly payouts.
-          </Text>
-
-          {/* Phone Apply Input Form */}
-          <View className="mt-2 gap-3">
-            <View className="h-[52px] flex-row items-center rounded-xl border border-warm-300 bg-white px-3.5 shadow-sm">
-              <View className="flex-row items-center gap-1.5 pr-2">
-                <Phone size={16} color="#6b7280" />
-                <Text className="text-sm font-bold text-gray-500">+91</Text>
-              </View>
-              <TextInput
-                keyboardType="phone-pad"
-                placeholder="Enter 10-digit number"
-                placeholderTextColor="#9ca3af"
-                value={phone}
-                onChangeText={(val) => setPhone(val.replace(/\D/g, "").slice(0, 10))}
-                className="h-full flex-1 pl-1 text-base font-semibold text-navy-900"
-              />
-            </View>
-
-            <Pressable
-              accessibilityRole="button"
-              onPress={handleApply}
-              className="h-[52px] w-full items-center justify-center rounded-xl bg-signal-500 active:bg-signal-600 shadow-md"
-              style={{
-                backgroundColor: "#f87000",
-                shadowColor: "#f87000",
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.35,
-                shadowRadius: 8,
-              }}
-            >
-              <Text className="text-base font-bold text-[#00112e]">Apply Now</Text>
+            <Pressable onPress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })} className="active:opacity-80">
+              <Logo />
             </Pressable>
 
-            <View className="flex-row items-center gap-2 pt-0.5">
-              <View className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-              <Text className="text-[13px] text-white/70">
-                We'll send an OTP. Signup takes only 5 minutes.
-              </Text>
-            </View>
-
-            {/* Already registered sign-in shortcut */}
-            <View className="mt-2 flex-row items-center justify-between rounded-2xl border border-white/15 bg-white/10 px-4 py-2.5">
-              <Text className="text-xs text-white/80">Already registered as a Partner?</Text>
+            <View className="flex-row items-center gap-2">
               <Pressable
                 accessibilityRole="button"
-                onPress={() => router.push("/login")}
-                className="rounded-full bg-white px-3.5 py-1.5 shadow-sm active:bg-amber-300"
+                onPress={() => router.push("/apply")}
+                className="min-h-11 h-11 overflow-hidden rounded-full active:scale-[0.98] active:opacity-95"
+                style={{
+                  height: 44,
+                  minHeight: 44,
+                  shadowColor: "rgba(248, 112, 0, 0.3)",
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 1,
+                  shadowRadius: 6,
+                  elevation: 4,
+                }}
               >
-                <Text className="text-xs font-extrabold text-[#00112e]">Sign In</Text>
+                <LinearGradient
+                  colors={["#f87000", "#f59e0b", "#fb923c"]}
+                  start={{ x: 0, y: 0.5 }}
+                  end={{ x: 1, y: 0.5 }}
+                  style={{
+                    minHeight: 44,
+                    height: 44,
+                    paddingHorizontal: isWide ? 20 : 16,
+                    paddingVertical: 6,
+                    borderRadius: 9999,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: "800",
+                      lineHeight: 16,
+                      color: "#00112e",
+                      fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+                    }}
+                    className="text-xs font-extrabold text-[#00112e]"
+                  >
+                    {isWide ? "Become a Partner" : "Join"}
+                  </Text>
+                </LinearGradient>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Navigation menu"
+                onPress={() => setMenuOpen((prev) => !prev)}
+                className="h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-full border border-line-strong bg-surface-sunken active:bg-surface-hover shadow-xs"
+              >
+                <Svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#00112e" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                  {menuOpen ? (
+                    <Path d="M18 6L6 18M6 6l12 12" />
+                  ) : (
+                    <Path d="M4 6h16M4 12h16M4 18h16" />
+                  )}
+                </Svg>
               </Pressable>
             </View>
           </View>
+
+          {/* Dropdown Navigation Menu */}
+          {menuOpen ? (
+            <View className="mx-auto mt-2 w-full max-w-5xl overflow-hidden rounded-2xl border border-line bg-white p-2 shadow-xl">
+              <Pressable
+                onPress={() => scrollToSection("how-it-works")}
+                className="rounded-xl px-4 py-2.5 active:bg-surface-sunken"
+              >
+                <Text className="text-sm font-semibold text-navy-900">How It Works</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => scrollToSection("benefits")}
+                className="rounded-xl px-4 py-2.5 active:bg-surface-sunken"
+              >
+                <Text className="text-sm font-semibold text-navy-900">Earnings & Benefits</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => scrollToSection("services")}
+                className="rounded-xl px-4 py-2.5 active:bg-surface-sunken"
+              >
+                <Text className="text-sm font-semibold text-navy-900">High-Demand Trades</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => scrollToSection("testimonials")}
+                className="rounded-xl px-4 py-2.5 active:bg-surface-sunken"
+              >
+                <Text className="text-sm font-semibold text-navy-900">Verified Partner Reviews</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => scrollToSection("faq")}
+                className="rounded-xl px-4 py-2.5 active:bg-surface-sunken"
+              >
+                <Text className="text-sm font-semibold text-navy-900">Frequently Asked Questions</Text>
+              </Pressable>
+              <View className="my-1.5 border-t border-line/60" />
+              <Pressable
+                onPress={() => {
+                  setMenuOpen(false);
+                  router.push("/login");
+                }}
+                className="rounded-xl px-4 py-2.5 bg-surface-sunken/60 active:bg-surface-sunken"
+              >
+                <Text className="text-sm font-bold text-signal-700">Partner Sign In →</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  setMenuOpen(false);
+                  router.push("/apply");
+                }}
+                className="rounded-xl px-4 py-2.5 active:bg-surface-sunken"
+              >
+                <Text className="text-sm font-bold text-navy-900">Register as a Partner</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  setMenuOpen(false);
+                  void WebBrowser.openBrowserAsync(`${WEB_BASE}/contact`);
+                }}
+                className="rounded-xl px-4 py-2.5 active:bg-surface-sunken"
+              >
+                <Text className="text-sm font-medium text-text-secondary">24/7 Support Desk</Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
+
+        {/* Hero Content */}
+        <View className="px-5 pt-4 pb-14 sm:pt-6 sm:pb-20">
+          <View className="mx-auto w-full max-w-md gap-6">
+            {/* Bare Text Tag matching Web partner-hero.tsx */}
+            <Text
+              style={{
+                fontSize: 13,
+                fontWeight: "600",
+                lineHeight: 19.5,
+                letterSpacing: 1.04,
+                textTransform: "uppercase",
+                color: "#fb8130",
+                fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+              }}
+              className="text-[13px] font-semibold uppercase tracking-[0.08em] text-[#fb8130]"
+            >
+              Free to join
+            </Text>
+
+            {/* Main Headline with Heavy Plus Jakarta Sans Weight and Tight Tracking */}
+            <View className="gap-0">
+              <Text
+                style={{
+                  fontSize: 36,
+                  lineHeight: 37.8,
+                  letterSpacing: -0.72,
+                  fontWeight: "800",
+                  color: "#ffffff",
+                  fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+                }}
+                className="font-extrabold text-white"
+              >
+                Your skill. Their doorstep.
+              </Text>
+              <Text
+                style={{
+                  fontSize: 36,
+                  lineHeight: 37.8,
+                  letterSpacing: -0.72,
+                  fontWeight: "800",
+                  color: "#f87000",
+                  fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+                }}
+                className="font-extrabold text-[#f87000]"
+              >
+                Paid instantly.
+              </Text>
+            </View>
+
+            {/* Subtitle Body matching 17px leading-1.6 text-white/72 */}
+            <Text
+              style={{
+                fontSize: 17,
+                lineHeight: 27.2,
+                color: "rgba(255, 255, 255, 0.72)",
+                fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+              }}
+              className="font-normal text-white/72 max-w-[440px]"
+            >
+              Join 5,000+ professionals across Telangana. Get local jobs and weekly payouts.
+            </Text>
+
+            {/* Phone Apply Input Form */}
+            <View className="mt-2 gap-2">
+              <View className="relative w-full">
+                <View
+                  pointerEvents="none"
+                  style={{
+                    position: "absolute",
+                    left: 14,
+                    top: 0,
+                    bottom: 0,
+                    justifyContent: "center",
+                    zIndex: 10,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 4,
+                  }}
+                >
+                  <Phone size={16} color="#9ca3af" />
+                  <Text style={{ fontSize: 14, fontWeight: "700", color: "#6b7280" }}>+91</Text>
+                </View>
+                <TextInput
+                  keyboardType="phone-pad"
+                  placeholder="Enter 10-digit number"
+                  placeholderTextColor="#9ca3af"
+                  value={phone}
+                  onChangeText={(val) => setPhone(val.replace(/\D/g, "").slice(0, 10))}
+                  style={{
+                    height: 52,
+                    width: "100%",
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: "#d3ccc0",
+                    backgroundColor: "#ffffff",
+                    paddingLeft: 72,
+                    paddingRight: 16,
+                    fontSize: 16,
+                    fontWeight: "600",
+                    color: "#00112e",
+                    fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+                  }}
+                  className="h-[52px] w-full rounded-lg border border-warm-300 bg-white pl-[72px] pr-4 text-base font-semibold text-navy-900"
+                />
+              </View>
+
+              <Pressable
+                accessibilityRole="button"
+                onPress={handleApply}
+                className="h-[52px] w-full flex-row items-center justify-center gap-2 rounded-lg bg-signal-500 active:bg-signal-600 shadow-md"
+                style={{
+                  height: 52,
+                  borderRadius: 8,
+                  backgroundColor: "#f87000",
+                  paddingHorizontal: 24,
+                  gap: 8,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  shadowColor: "rgba(0, 0, 0, 0.1)",
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 1,
+                  shadowRadius: 6,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 16,
+                    fontWeight: "700",
+                    color: "#00112e",
+                    fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+                  }}
+                  className="text-base font-bold text-[#00112e]"
+                >
+                  Apply Now
+                </Text>
+              </Pressable>
+
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+                className="flex-row items-center gap-2"
+              >
+                <View className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                <Text
+                  style={{
+                    fontSize: 13,
+                    lineHeight: 19.5,
+                    color: "rgba(255, 255, 255, 0.7)",
+                    fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+                  }}
+                  className="text-[13px] text-white/70"
+                >
+                  We'll send an OTP. Signup takes only 5 minutes.
+                </Text>
+              </View>
+
+              {/* Already registered sign-in shortcut */}
+              <View
+                style={{
+                  marginTop: 8,
+                  flexDirection: "row",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 8,
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: "rgba(255, 255, 255, 0.15)",
+                  backgroundColor: "rgba(255, 255, 255, 0.1)",
+                  paddingHorizontal: 16,
+                  paddingVertical: 10,
+                  minHeight: 66,
+                }}
+                className="mt-2 flex-row items-center justify-between rounded-2xl border border-white/15 bg-white/10 px-4 py-2.5"
+              >
+                <Text
+                  style={{
+                    fontSize: 12,
+                    lineHeight: 16,
+                    color: "rgba(255, 255, 255, 0.8)",
+                    fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+                  }}
+                  className="text-xs font-medium text-white/80"
+                >
+                  Already registered as a Partner?
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => router.push("/login")}
+                  className="min-h-11 h-11 items-center justify-center rounded-full bg-white px-3.5 py-1 shadow-sm active:bg-amber-300"
+                  style={{
+                    minHeight: 44,
+                    height: 44,
+                    borderRadius: 9999,
+                    backgroundColor: "#ffffff",
+                    paddingHorizontal: 14,
+                    paddingVertical: 4,
+                    justifyContent: "center",
+                    alignItems: "center",
+                    shadowColor: "rgba(0, 0, 0, 0.1)",
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: 1,
+                    shadowRadius: 3,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: "800",
+                      lineHeight: 16,
+                      color: "#00112e",
+                      fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+                    }}
+                    className="text-xs font-extrabold text-[#00112e]"
+                  >
+                    Sign In
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
 
           {/* 3D App Mockup Phone Preview with Idle Float & 3-Degree Tilt */}
           <View className="mt-8 items-center">
@@ -848,11 +1025,12 @@ export default function Index() {
           </View>
         </View>
       </View>
+    </View>
 
       {/* ========================================================================= */}
       {/* 3. TRUST & STATS TICKER STRIP                                              */}
       {/* ========================================================================= */}
-      <View className="border-y border-line bg-surface py-7 px-4">
+      <View style={{ paddingVertical: 32, paddingHorizontal: 16 }} className="border-y border-line bg-surface py-8 px-4 sm:px-6">
         <View className="mx-auto w-full max-w-5xl flex-row flex-wrap justify-between gap-3">
           {STATS.map((s) => {
             const Icon = s.icon;
@@ -882,25 +1060,74 @@ export default function Index() {
         onLayout={(e) => {
           sectionPositions.current["how-it-works"] = e.nativeEvent.layout.y;
         }}
-        className="px-4 py-14 bg-white"
+        style={{ paddingVertical: 96, paddingHorizontal: 16, backgroundColor: "#ffffff" }}
+        className="px-4 py-24 sm:px-6 bg-white overflow-hidden relative"
       >
-        <View className="mx-auto w-full max-w-md">
+        <View className="mx-auto w-full max-w-md items-center">
           {/* Header */}
-          <View className="items-center text-center gap-2">
-            <View className="flex-row items-center gap-1.5 rounded-full bg-orange-50 px-3.5 py-1 border border-orange-200">
-              <Sparkles size={14} color="#ea580c" />
-              <Text className="text-xs font-extrabold text-signal-700">Simple 4-Step Journey</Text>
+          <View className="items-center text-center">
+            <View
+              style={{
+                backgroundColor: "rgb(255, 244, 236)",
+                borderColor: "rgb(255, 196, 160)",
+                borderWidth: 1,
+                borderRadius: 9999,
+                paddingHorizontal: 14,
+                paddingVertical: 4,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                shadowColor: "rgba(0, 0, 0, 0.05)",
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 1,
+                shadowRadius: 2,
+              }}
+              className="flex-row items-center gap-1.5 rounded-full bg-signal-50 px-3.5 py-1 border border-signal-200 shadow-xs"
+            >
+              <Sparkles size={14} color="#a94900" />
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontWeight: "800",
+                  lineHeight: 16,
+                  color: "rgb(169, 73, 0)",
+                  fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+                }}
+                className="text-xs font-extrabold text-signal-700"
+              >
+                Simple 4-Step Journey
+              </Text>
             </View>
-            <Text className="text-center text-2xl font-black text-navy-900 tracking-tight">
+            <Text
+              style={{
+                fontSize: 30,
+                fontWeight: "800",
+                lineHeight: 36,
+                letterSpacing: -0.75,
+                marginTop: 16,
+                color: "#00112e",
+                fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+              }}
+              className="text-center text-3xl font-extrabold text-navy-900 tracking-tight"
+            >
               How Becoming a Partner Works
             </Text>
-            <Text className="text-center text-xs leading-relaxed text-text-secondary">
+            <Text
+              style={{
+                fontSize: 14,
+                lineHeight: 20,
+                marginTop: 12,
+                color: "#6b7280",
+                fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+              }}
+              className="text-center text-xs leading-relaxed text-text-secondary"
+            >
               From registration to your first payout in four quick steps. Zero joining fees and no complicated paperwork.
             </Text>
           </View>
 
           {/* Stepper Cards */}
-          <View className="mt-8 gap-4">
+          <View className="mt-8 gap-4 w-full">
             {HOW_IT_WORKS_STEPS.map((step) => {
               const Icon = step.icon;
               return (
@@ -955,25 +1182,78 @@ export default function Index() {
         onLayout={(e) => {
           sectionPositions.current["benefits"] = e.nativeEvent.layout.y;
         }}
-        className="border-t border-line bg-surface-sunken/50 px-4 py-14"
+        style={{
+          paddingVertical: 96,
+          paddingHorizontal: 16,
+          backgroundColor: "rgba(244, 241, 236, 0.5)",
+        }}
+        className="border-t border-line bg-surface-sunken/50 px-4 py-24 sm:px-6 overflow-hidden relative"
       >
-        <View className="mx-auto w-full max-w-md">
+        <View className="mx-auto w-full max-w-md items-center">
           {/* Header */}
-          <View className="items-center text-center gap-2">
-            <View className="flex-row items-center gap-1.5 rounded-full bg-navy-100 px-3.5 py-1 border border-navy-200">
+          <View className="items-center text-center">
+            <View
+              style={{
+                backgroundColor: "#e0e7ff",
+                borderColor: "rgba(0, 17, 46, 0.15)",
+                borderWidth: 1,
+                borderRadius: 9999,
+                paddingHorizontal: 14,
+                paddingVertical: 4,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                shadowColor: "rgba(0, 0, 0, 0.05)",
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 1,
+                shadowRadius: 2,
+              }}
+              className="flex-row items-center gap-1.5 rounded-full bg-navy-100 px-3.5 py-1 border border-navy-200 shadow-xs"
+            >
               <Award size={14} color="#00112e" />
-              <Text className="text-xs font-extrabold text-navy-900">Platform Advantages</Text>
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontWeight: "800",
+                  lineHeight: 16,
+                  color: "#00112e",
+                  fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+                }}
+                className="text-xs font-extrabold text-navy-900"
+              >
+                Platform Advantages
+              </Text>
             </View>
-            <Text className="text-center text-2xl font-black text-navy-900 tracking-tight">
+            <Text
+              style={{
+                fontSize: 30,
+                fontWeight: "800",
+                lineHeight: 36,
+                letterSpacing: -0.75,
+                marginTop: 16,
+                color: "#00112e",
+                fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+              }}
+              className="text-center text-3xl font-extrabold text-navy-900 tracking-tight"
+            >
               Built for Your Independence & Growth
             </Text>
-            <Text className="text-center text-xs leading-relaxed text-text-secondary">
+            <Text
+              style={{
+                fontSize: 14,
+                lineHeight: 20,
+                marginTop: 12,
+                color: "#6b7280",
+                fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+              }}
+              className="text-center text-xs leading-relaxed text-text-secondary"
+            >
               Everything you need to run and scale your service trade with dignity, security, and top earnings.
             </Text>
           </View>
 
           {/* 4 Modern Bento Cards */}
-          <View className="mt-8 gap-4">
+          <View className="mt-8 gap-4 w-full">
             {FEATURES.map((feat) => {
               const Icon = feat.icon;
               return (
@@ -1008,25 +1288,74 @@ export default function Index() {
         onLayout={(e) => {
           sectionPositions.current["services"] = e.nativeEvent.layout.y;
         }}
-        className="border-t border-line bg-surface px-4 py-14"
+        style={{ paddingVertical: 96, paddingHorizontal: 16 }}
+        className="border-t border-line bg-surface px-4 py-24 sm:px-6"
       >
-        <View className="mx-auto w-full max-w-md">
+        <View className="mx-auto w-full max-w-md items-center">
           {/* Header */}
-          <View className="items-center text-center gap-2">
-            <View className="flex-row items-center gap-1.5 rounded-full bg-orange-50 px-3.5 py-1 border border-orange-200">
-              <Sparkles size={14} color="#ea580c" />
-              <Text className="text-xs font-extrabold text-signal-700">High Demand Trades</Text>
+          <View className="items-center text-center">
+            <View
+              style={{
+                backgroundColor: "rgb(255, 244, 236)",
+                borderColor: "rgb(255, 196, 160)",
+                borderWidth: 1,
+                borderRadius: 9999,
+                paddingHorizontal: 14,
+                paddingVertical: 4,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                shadowColor: "rgba(0, 0, 0, 0.05)",
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 1,
+                shadowRadius: 2,
+              }}
+              className="flex-row items-center gap-1.5 rounded-full bg-signal-50 px-3.5 py-1 border border-signal-200 shadow-xs"
+            >
+              <Sparkles size={14} color="#a94900" />
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontWeight: "800",
+                  lineHeight: 16,
+                  color: "rgb(169, 73, 0)",
+                  fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+                }}
+                className="text-xs font-extrabold text-signal-700"
+              >
+                High Demand Trades
+              </Text>
             </View>
-            <Text className="text-center text-2xl font-black text-navy-900 tracking-tight">
+            <Text
+              style={{
+                fontSize: 30,
+                fontWeight: "800",
+                lineHeight: 36,
+                letterSpacing: -0.75,
+                marginTop: 16,
+                color: "#00112e",
+                fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+              }}
+              className="text-center text-3xl font-extrabold text-navy-900 tracking-tight"
+            >
               Choose Your Trade to Start Earning
             </Text>
-            <Text className="text-center text-xs leading-relaxed text-text-secondary">
+            <Text
+              style={{
+                fontSize: 14,
+                lineHeight: 20,
+                marginTop: 12,
+                color: "#6b7280",
+                fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+              }}
+              className="text-center text-xs leading-relaxed text-text-secondary"
+            >
               Active customer demand across Telangana guarantees regular jobs and reliable weekly earnings.
             </Text>
           </View>
 
           {/* 8 Trade Cards */}
-          <View className="mt-8 gap-3.5">
+          <View className="mt-8 gap-3.5 w-full">
             {HIGH_DEMAND_TRADES.map((trade) => {
               const Icon = trade.icon;
               return (
@@ -1084,7 +1413,7 @@ export default function Index() {
           </View>
 
           {/* Specialist Contractor Banner */}
-          <View className="mt-8 rounded-3xl bg-[#00112e] p-6 shadow-2xl border border-white/10">
+          <View className="mt-8 rounded-3xl bg-[#00112e] p-6 shadow-2xl border border-white/10 w-full">
             <View className="self-start rounded-full bg-white/10 px-2.5 py-0.5 border border-white/20">
               <Text className="text-[11px] font-extrabold uppercase tracking-wider text-amber-300">
                 Contractors & Fleet Owners
@@ -1114,30 +1443,83 @@ export default function Index() {
         onLayout={(e) => {
           sectionPositions.current["testimonials"] = e.nativeEvent.layout.y;
         }}
-        className="border-t border-line bg-surface-sunken/40 px-4 py-14"
+        style={{
+          paddingVertical: 96,
+          paddingHorizontal: 16,
+          backgroundColor: "rgba(244, 241, 236, 0.4)",
+        }}
+        className="border-t border-line bg-surface-sunken/40 px-4 py-24 sm:px-6 overflow-hidden relative"
       >
-        <View className="mx-auto w-full max-w-md">
+        <View className="mx-auto w-full max-w-md items-center">
           {/* Header */}
-          <View className="items-center text-center gap-2">
-            <View className="flex-row items-center gap-1.5 rounded-full bg-emerald-50 px-3.5 py-1 border border-emerald-200">
+          <View className="items-center text-center">
+            <View
+              style={{
+                backgroundColor: "rgb(236, 253, 245)",
+                borderColor: "rgb(167, 243, 208)",
+                borderWidth: 1,
+                borderRadius: 9999,
+                paddingHorizontal: 14,
+                paddingVertical: 4,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                shadowColor: "rgba(0, 0, 0, 0.05)",
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 1,
+                shadowRadius: 2,
+              }}
+              className="flex-row items-center gap-1.5 rounded-full bg-emerald-50 px-3.5 py-1 border border-emerald-200 shadow-xs"
+            >
               <ShieldCheck size={14} color="#059669" />
-              <Text className="text-xs font-extrabold text-emerald-800">Verified Partner Stories</Text>
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontWeight: "800",
+                  lineHeight: 16,
+                  color: "rgb(6, 95, 70)",
+                  fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+                }}
+                className="text-xs font-extrabold text-emerald-800"
+              >
+                Verified Partner Stories
+              </Text>
             </View>
-            <Text className="text-center text-2xl font-black text-navy-900 tracking-tight">
+            <Text
+              style={{
+                fontSize: 30,
+                fontWeight: "800",
+                lineHeight: 36,
+                letterSpacing: -0.75,
+                marginTop: 16,
+                color: "#00112e",
+                fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+              }}
+              className="text-center text-3xl font-extrabold text-navy-900 tracking-tight"
+            >
               Trusted by 5,000+ Skilled Professionals
             </Text>
-            <Text className="text-center text-xs leading-relaxed text-text-secondary">
+            <Text
+              style={{
+                fontSize: 14,
+                lineHeight: 20,
+                marginTop: 12,
+                color: "#6b7280",
+                fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+              }}
+              className="text-center text-xs leading-relaxed text-text-secondary"
+            >
               Real stories, verified partner reviews, and reliable weekly earnings across Telangana.
             </Text>
 
             {/* Rating Summary Pill */}
-            <View className="mt-3 flex-row items-center gap-1.5 rounded-full bg-white px-3.5 py-1.5 border border-line shadow-xs">
+            <View className="mt-5 flex-row items-center gap-2 rounded-full bg-white px-4 py-1.5 border border-line shadow-xs">
               <View className="flex-row gap-0.5">
                 {[...Array(5)].map((_, i) => (
-                  <Star key={i} size={12} fill="#f59e0b" color="#f59e0b" />
+                  <Star key={i} size={14} fill="#f59e0b" color="#f59e0b" />
                 ))}
               </View>
-              <Text className="text-[11px] font-bold text-navy-900">
+              <Text className="text-xs font-bold text-navy-900">
                 4.9 / 5 Average Partner Satisfaction (12,000+ Reviews)
               </Text>
             </View>
@@ -1209,24 +1591,70 @@ export default function Index() {
         onLayout={(e) => {
           sectionPositions.current["faq"] = e.nativeEvent.layout.y;
         }}
-        className="border-t border-line bg-surface px-4 py-14"
+        style={{ paddingVertical: 96, paddingHorizontal: 16 }}
+        className="border-t border-line bg-surface px-4 py-24 sm:px-6"
       >
-        <View className="mx-auto w-full max-w-md">
+        <View className="mx-auto w-full max-w-md items-center">
           {/* Header */}
-          <View className="items-center text-center gap-2">
-            <View className="rounded-full bg-navy-50 px-3.5 py-1 border border-navy-200">
-              <Text className="text-xs font-extrabold text-navy-900">Got Questions?</Text>
+          <View className="items-center text-center">
+            <View
+              style={{
+                backgroundColor: "rgba(0, 17, 46, 0.05)",
+                borderColor: "rgba(0, 17, 46, 0.15)",
+                borderWidth: 1,
+                borderRadius: 9999,
+                paddingHorizontal: 14,
+                paddingVertical: 4,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+              }}
+              className="rounded-full bg-navy-50 px-3.5 py-1 border border-navy-200"
+            >
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontWeight: "800",
+                  lineHeight: 16,
+                  color: "#00112e",
+                  fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+                }}
+                className="text-xs font-extrabold text-navy-900"
+              >
+                Got Questions?
+              </Text>
             </View>
-            <Text className="text-center text-2xl font-black text-navy-900 tracking-tight">
+            <Text
+              style={{
+                fontSize: 30,
+                fontWeight: "800",
+                lineHeight: 36,
+                letterSpacing: -0.75,
+                marginTop: 16,
+                color: "#00112e",
+                fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+              }}
+              className="text-center text-3xl font-extrabold text-navy-900 tracking-tight"
+            >
               Frequently Asked Questions
             </Text>
-            <Text className="text-center text-xs text-text-secondary leading-relaxed">
+            <Text
+              style={{
+                fontSize: 14,
+                lineHeight: 20,
+                marginTop: 12,
+                color: "#6b7280",
+                fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+              }}
+              className="text-center text-xs text-text-secondary leading-relaxed"
+            >
               Everything you need to know about registering, verification, and getting paid.
             </Text>
           </View>
 
           {/* Accordion list */}
-          <View className="mt-8 gap-2.5">
+          <View className="mt-8 gap-2.5 w-full">
             {FAQS.map((faq, idx) => {
               const isOpen = openFaq === idx;
               return (
@@ -1254,7 +1682,7 @@ export default function Index() {
           </View>
 
           {/* Helpdesk Callout Card */}
-          <View className="mt-8 rounded-2xl border border-line bg-surface-sunken p-5 items-center text-center">
+          <View className="mt-8 rounded-2xl border border-line bg-surface-sunken p-5 items-center text-center w-full">
             <Text className="text-xs font-bold text-navy-900">Have a specific question not covered here?</Text>
             <Text className="mt-1 text-[11px] text-text-secondary text-center leading-relaxed">
               Our partner helpdesk is available 24/7 to guide you through registration and verification.
@@ -1275,23 +1703,96 @@ export default function Index() {
       {/* ========================================================================= */}
       {/* 9. FINAL HIGH-IMPACT CTA BAND                                              */}
       {/* ========================================================================= */}
-      <View className="px-4 py-8">
-        <View className="mx-auto w-full max-w-md rounded-3xl bg-[#00112e] p-7 items-center text-center shadow-2xl border border-white/10">
-          <View className="flex-row items-center gap-1.5 rounded-full bg-signal-500/20 px-3.5 py-1 border border-signal-500/30">
-            <Sparkles size={12} color="#fcd34d" />
-            <Text className="text-[11px] font-extrabold text-amber-300">Start Earning This Week</Text>
+      <View className="px-4 pb-24 sm:px-6">
+        <LinearGradient
+          colors={["#00112e", "#001f54", "#00112e"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{
+            borderRadius: 24,
+            borderWidth: 1,
+            borderColor: "rgba(255, 255, 255, 0.1)",
+            paddingVertical: 64,
+            paddingHorizontal: 32,
+            alignItems: "center",
+            shadowColor: "rgba(0, 0, 0, 0.25)",
+            shadowOffset: { width: 0, height: 25 },
+            shadowOpacity: 1,
+            shadowRadius: 50,
+            elevation: 12,
+            overflow: "hidden",
+          }}
+          className="mx-auto w-full max-w-5xl items-center text-center rounded-3xl"
+        >
+          <View
+            style={{
+              backgroundColor: "rgba(248, 112, 0, 0.2)",
+              borderColor: "rgba(248, 112, 0, 0.3)",
+              borderWidth: 1,
+              borderRadius: 9999,
+              paddingHorizontal: 14,
+              paddingVertical: 4,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 6,
+            }}
+            className="flex-row items-center gap-1.5 rounded-full px-3.5 py-1"
+          >
+            <Sparkles size={14} color="#fcd34d" />
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: "800",
+                lineHeight: 16,
+                color: "#fcd34d",
+                fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+              }}
+              className="text-xs font-extrabold text-amber-300"
+            >
+              Start Earning This Week
+            </Text>
           </View>
-          <Text className="mt-3.5 text-2xl font-black text-white text-center leading-snug">
+          <Text
+            style={{
+              fontSize: 30,
+              fontWeight: "800",
+              lineHeight: 36,
+              letterSpacing: -0.75,
+              marginTop: 20,
+              color: "#ffffff",
+              fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+            }}
+            className="text-3xl font-extrabold text-white text-center leading-snug tracking-tight"
+          >
             Ready to Build a High-Earning Service Business?
           </Text>
-          <Text className="mt-2.5 text-xs text-navy-200 text-center leading-relaxed">
+          <Text
+            style={{
+              fontSize: 14,
+              lineHeight: 22,
+              marginTop: 12,
+              color: "#cbd5e1",
+              maxWidth: 500,
+              fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+            }}
+            className="text-center text-xs leading-relaxed text-navy-200"
+          >
             Join 5,000+ happy technicians across Telangana. Zero upfront cost, weekly automatic payouts, and instant local job offers.
           </Text>
-          <View className="mt-6 w-full gap-2.5">
+          <View className="mt-8 w-full max-w-md gap-3">
             <Pressable
               accessibilityRole="button"
               onPress={() => router.push("/apply")}
               className="h-12 w-full flex-row items-center justify-center gap-2 rounded-full bg-signal-500 active:bg-signal-600 shadow-xl shadow-signal-500/30"
+              style={{
+                height: 48,
+                borderRadius: 9999,
+                backgroundColor: "#f87000",
+                shadowColor: "rgba(248, 112, 0, 0.3)",
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 1,
+                shadowRadius: 8,
+              }}
             >
               <Text className="text-xs font-extrabold text-white">Register as a Partner Now</Text>
               <ArrowRight size={14} color="#ffffff" />
@@ -1300,18 +1801,31 @@ export default function Index() {
               accessibilityRole="button"
               onPress={() => void WebBrowser.openBrowserAsync(`${WEB_BASE}/contact`)}
               className="h-12 w-full items-center justify-center rounded-full border border-white/25 bg-white/10 active:bg-white/20"
+              style={{
+                height: 48,
+                borderRadius: 9999,
+              }}
             >
               <Text className="text-xs font-bold text-white">Contact Support</Text>
             </Pressable>
           </View>
-        </View>
+        </LinearGradient>
       </View>
 
       {/* ========================================================================= */}
       {/* 10. COMPREHENSIVE FOOTER (MATCHING WEB LAYOUT.TSX)                         */}
       {/* ========================================================================= */}
-      <View className="border-t border-navy-800 bg-[#00112e] text-slate-300 px-4 pt-12 pb-10">
-        <View className="mx-auto w-full max-w-md">
+      <View
+        style={{
+          backgroundColor: "#000e29",
+          borderTopWidth: 1,
+          borderTopColor: "rgba(30, 41, 59, 0.8)",
+          paddingHorizontal: 0,
+          paddingVertical: 0,
+        }}
+        className="border-t border-navy-800 bg-[#000e29] text-slate-300 relative overflow-hidden"
+      >
+        <View className="mx-auto w-full max-w-md px-4 pt-16 pb-12">
           {/* Brand Info */}
           <Logo dark />
           <Text className="mt-3.5 text-xs leading-relaxed text-slate-300">

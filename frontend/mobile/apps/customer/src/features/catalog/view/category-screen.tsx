@@ -1,8 +1,7 @@
 // Ported from frontend/apps/customer/features/catalog/components/category-tile-browser.tsx
 // Phone chrome from frontend/apps/customer/app/(shop)/catalog/[category]/page.tsx
 import { ApiRequestError } from "@vsolve/api-client";
-import { Button, ErrorState, Skeleton, Text, cn, formatMoney } from "@vsolve/mobile-ui";
-import { BlurView } from "expo-blur";
+import { BlurBackdrop, Button, ErrorState, Skeleton, Text, cn, formatMoney } from "@vsolve/mobile-ui";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ChevronLeft, ClipboardList, X } from "lucide-react-native";
@@ -155,16 +154,14 @@ function WhatYouCanBookModal({
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose} accessibilityViewIsModal>
-      <BlurView intensity={16} tint="dark" style={{ flex: 1 }}>
-        <View
-          className="flex-1 justify-end items-center bg-black/60 p-2"
-          style={{ paddingBottom: Math.max(20, insets.bottom + 8) }}
-        >
-          <Pressable
-            accessibilityLabel="Close modal backdrop"
-            onPress={onClose}
-            style={StyleSheet.absoluteFill}
-          />
+      <View
+        className="flex-1 justify-end items-center p-2"
+        style={{ paddingBottom: Math.max(20, insets.bottom + 8) }}
+      >
+        <BlurBackdrop
+          onPress={onClose}
+          accessibilityLabel="Close modal backdrop"
+        />
           <View
             className="w-full max-w-lg gap-3.5 rounded-3xl border border-line bg-surface p-4 shadow-2xl"
             style={{ maxHeight: "80%" }}
@@ -242,7 +239,6 @@ function WhatYouCanBookModal({
             </ScrollView>
           </View>
         </View>
-      </BlurView>
     </Modal>
   );
 }

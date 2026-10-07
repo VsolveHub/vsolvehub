@@ -28,7 +28,8 @@ export type { ChoiceChipOption, ChoiceChipsProps } from "./choice-chips";
 
 export { Card, StatCard } from "./card";
 export type { CardProps } from "./card";
-export { Dialog, Sheet } from "./dialog";
+export { Dialog, Sheet, BlurBackdrop } from "./dialog";
+export type { BlurBackdropProps } from "./dialog";
 export { RailLayout, RailHeadline, RailMoney } from "./rail-layout";
 export type { RailLayoutProps, RailHeadlineProps, RailMoneyRow } from "./rail-layout";
 export { ConfirmAction } from "./confirm-action";

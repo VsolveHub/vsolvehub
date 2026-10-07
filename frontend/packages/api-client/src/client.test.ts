@@ -729,4 +729,19 @@ describe("bearer mode", () => {
     await request(() => api.GET("/api/v1/categories/"));
     expect(observedCredentials).toBe("omit");
   });
+
+  it("includes credentials when bearer token is absent for anonymous sessions", async () => {
+    let observedCredentials: RequestCredentials | undefined;
+    const api = createApiClient({
+      baseUrl: BASE_URL,
+      auth: { mode: "bearer", getToken: () => null },
+      fetch: async (input) => {
+        observedCredentials = input.credentials;
+        return jsonResponse([]);
+      },
+    });
+
+    await request(() => api.GET("/api/v1/categories/"));
+    expect(observedCredentials).toBe("include");
+  });
 });

@@ -26,7 +26,22 @@ export function apiBaseUrl(): string {
     (Constants.expoConfig?.extra?.apiBaseUrl as string | undefined)?.trim();
   const rawUrl = configured && configured.length > 0 ? configured.replace(/\/$/, "") : "http://localhost:8000";
 
+  const isLocalOrLan =
+    rawUrl.includes("localhost") ||
+    rawUrl.includes("127.0.0.1") ||
+    /^https?:\/\/(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?(\/.*)?$/.test(rawUrl);
+
   if (Platform.OS === "web") {
+    if (isLocalOrLan && typeof window !== "undefined" && window.location) {
+      const hostname = window.location.hostname;
+      if (
+        hostname === "localhost" ||
+        hostname === "127.0.0.1" ||
+        /^192\.168\.\d+\.\d+$|^10\.\d+\.\d+\.\d+$|^172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+$/.test(hostname)
+      ) {
+        return rawUrl.replace(/^(https?:\/\/)([^:/]+)(:\d+)?/, `$1${hostname}$3`);
+      }
+    }
     return rawUrl;
   }
 

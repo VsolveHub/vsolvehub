@@ -307,14 +307,17 @@ export function createApiClient(options: CreateApiClientOptions): ApiClient {
     // Session cookies are HttpOnly and set by Django; the browser must send them
     // cross-origin. No session value is ever read from JavaScript, and the CSRF
     // token lives in memory only — never in browser storage.
-    //
-    // Bearer mode is the native apps. The session key travels as a header, so
-    // the cookie jar and the CSRF bootstrap stay out of the request.
+    // Bearer mode is the native apps. When signed in, the session key travels as
+    // a header and cookies are omitted. When unauthenticated (e.g. guest cart),
+    // credentials are included so the server session cookie is preserved across requests.
     credentials: bearerAuth ? "omit" : "include",
     fetch: bearerAuth
       ? async (request: Request) => {
           const token = bearerAuth.getToken();
-          if (!token) return fetchImpl(request);
+          if (!token) {
+            const attempt = new Request(request.clone(), { credentials: "include" });
+            return fetchWithCsrf(attempt);
+          }
           const attempt = request.clone();
           attempt.headers.set("Authorization", `Bearer ${token}`);
           return fetchImpl(attempt);
