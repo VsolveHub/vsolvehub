@@ -1,6 +1,6 @@
 # A7 Rental — Self Pickup, Partner-Arranged Delivery, Item Options
 
-**Status:** Planned — audit complete; owner decisions R-1, R-5, R-9 taken 8 Oct 2026; not built
+**Status:** Planned — audit complete; owner decisions R-0, R-1, R-5, R-9 taken 8 Oct 2026; not built
 **Effective date:** 2026-10-08
 **Base:** `main` @ `4d4b105`
 **Ownership (per `AGENTS.md`):** backend + `contracts/openapi/**` → Codex; `frontend/**` +
@@ -70,8 +70,9 @@ There is no area, city or pincode field, and no Maps link anywhere. Browsing fil
    deleted (commit `d76309b`). Importing the module raises `ImportError`, so
    `tests/rental/test_pickup_times.py` fails at collection, and with it the whole rental suite run.
    The frontend's `customer/features/rentals/pickup-time.ts`, `partner/.../pickup-time.ts` and
-   `partner/.../rental-home.tsx` still carry the removed pickup-hours UI. **Fix first:** delete the
-   dead module, its test and the frontend leftovers. Owner decision R-0.
+   `partner/.../rental-home.tsx` still carry the removed pickup-hours UI. **Fix first.** By R-0
+   (decided), pickup hours come back in a simpler per-day form (§5.4). The old module, test and
+   frontend helpers are replaced by it, not kept alongside.
 
    *In plain terms:* "pickup hours" was an earlier feature where the partner set opening days and
    times and the customer picked an exact pickup time slot. Commit `d76309b` removed it from the
@@ -90,13 +91,16 @@ There is no area, city or pincode field, and no Maps link anywhere. Browsing fil
 | --- | --- |
 | R-1 | **On a delivery booking nothing is paid until the transport fee is agreed.** The customer then pays **one** amount: rent + platform fee + deposit + transport |
 | R-5 | **Commission on transport is 0%.** The partner portal shows this wherever the partner sees a transport amount (§4.6) |
+| R-0 | **Partners set pickup hours. No time slots.** Each partner sets which days they are open and the hours for each day, e.g. Sat 9 AM–9 PM, Sun 9 AM–6 PM. Customers come any time inside those hours on the day they chose (§5.4) |
 | R-9 | **Colour / material are not added to every product.** Where a product already has a colour or material field, the partner picks from a dropdown with an **Other** option that opens a box for a custom value (§6) |
 
 ### Still open — recommendations stand unless the owner says otherwise
 
 | ID | Question | Recommendation |
 | --- | --- | --- |
-| R-0 | Remove the leftover "pickup hours" code (see §2.4 item 1)? | Yes. It's dead code that breaks the test run. Nothing visible to customers or partners changes |
+| R-10 | Must the pickup **and** return days both be open days? | Yes. The booking is refused if either date falls on a day the partner is closed. The date picker greys those days out |
+| R-11 | Ads published before pickup hours exist? | They stay live and show "Pickup hours not set — contact the owner". New ads can't be published until the partner saves their hours. The form starts pre-filled at **Mon–Sun, 9 AM–9 PM** for the partner to adjust |
+| R-12 | Holidays / one-off closures? | Out of scope for now. The partner can pause an ad. Add a "closed on these dates" list later if asked |
 | R-2 | If the partner declines delivery, or the quote isn't agreed in time? | Nothing has been paid (R-1), so the customer either **switches to Self Pickup** and pays the rent as a normal pickup booking, or **cancels** at no cost |
 | R-3 | Can the customer counter-offer? | No. The partner quotes, and the customer **accepts** or **rejects with a note**. The partner may re-quote, at most 3 quotes per booking |
 | R-4 | Does the quote cover the return trip? | Yes, as a choice: the partner states **one-way (drop only)** or **round trip (drop + collect)** with the quote |
@@ -290,6 +294,58 @@ Partner booking sheet: delivery address, customer note, a quote form (₹ amount
 Decline, Out for delivery, and the 0% commission lines in §4.6. The ad editor gets structured address fields and a "Delivery available
 on request" toggle. The hint "There is no delivery." is removed.
 
+### 5.4 Pickup hours (R-0)
+
+**What changes from the removed feature:** no time slots and no pickup/return clock time on the
+booking. Bookings stay date-only. Hours are now **per weekday** instead of one opening time for
+all open days. Notice period and "book up to N days ahead" are dropped.
+
+**Model** (`apps/rental/models.py`): `RentalPickupDay`
+
+| Field | Notes |
+| --- | --- |
+| `partner` | `FK(partners.PartnerProfile, CASCADE, related_name="rental_pickup_days")` |
+| `weekday` | `0`–`6`, Monday = 0 |
+| `opens_at`, `closes_at` | `TimeField`, whole or half hours |
+
+Constraints: unique (`partner`, `weekday`); `closes_at > opens_at`; `weekday` between 0 and 6.
+**No row for a weekday means closed that day.** A partner with no rows has not set hours yet. That
+is distinct from "closed every day", which the service refuses (at least one open day).
+
+One schedule per partner, used by all their rental ads. Pickup and return happen at the same
+address.
+
+**Service** (`apps/rental/pickup_hours.py`, rewritten):
+- `save_pickup_hours(partner, days: list[{weekday, opens_at, closes_at}])` replaces the
+  partner's rows atomically, after validating them.
+- `check_open_days(partner, start_date, end_date)`: raises `pickup_day_closed` /
+  `return_day_closed`, naming the day and the open days. Called from `create_booking` for both
+  modes. For delivery, the partner arranges the time with the customer, but the return still
+  needs an open day.
+- `pickup_hours_payload(partner)`: `{is_set, days: [{weekday, label, opens_at, closes_at}], summary}`.
+  The summary groups equal days, e.g. "Mon–Sat 9 AM–9 PM · Sun 9 AM–6 PM".
+- `auto_publish_asset` adds "Set your pickup hours." to its errors when `is_set` is false (R-11).
+
+**API**
+- `GET/PUT /partner/rentals/pickup-hours`: the partner's schedule.
+- `RentalAssetSerializer` adds `pickup_hours` (the payload above), next to `pickup_address`.
+
+**UI**
+- Partner rental home: a **Pickup hours** card with seven rows. Each row has an Open/Closed switch
+  and, when open, "from" and "to" time selects in 30-minute steps from 6 AM to 11 PM. The rows
+  start pre-filled at 9 AM–9 PM and a "Copy to all days" action fills the rest from one row.
+  Saving shows the summary line.
+- Customer item page and the Self Pickup block (§5.3): under the address, **🕘 Pickup hours**
+  with one line per day, or "Closed". Today's line is highlighted.
+- Customer date picker: closed weekdays are disabled for both pickup and return. The server
+  check (R-10) is the authority. The picker only helps.
+- Booking card after booking: "Pick up on Sat 12 Oct, any time 9 AM–9 PM", from the payload.
+
+**Leftovers replaced:** the old `pickup_hours.py` contents (slots, notice, advance window),
+`tests/rental/test_pickup_times.py`, `customer/features/rentals/pickup-time.ts`,
+`partner/features/rentals/pickup-time.ts`, and the slot code in `rental-home.tsx`. The rewrite
+reuses the names where they fit and deletes the slot logic.
+
 ## 6. Design — Colour / material dropdowns (R-9)
 
 **Scope:** only products whose category already has a colour or material field. Nothing is added
@@ -329,7 +385,8 @@ allows three causes:
 
 | # | Task | Owner | Depends |
 | --- | --- | --- | --- |
-| T0 | Remove pickup-hours leftovers (R-0): `pickup_hours.py`, `test_pickup_times.py`, both `pickup-time.ts`, `rental-home.tsx` usage | Codex + Claude | R-0 |
+| T0 | Pickup hours backend (§5.4): `RentalPickupDay` + migration, rewritten `pickup_hours.py`, booking day check, publish check, `GET/PUT /partner/rentals/pickup-hours`, `pickup_hours` on the asset. Replaces the broken leftovers | Codex | — |
+| T0b | Pickup hours frontend (§5.4): partner hours card, customer hours display, closed days disabled in the date picker. Replaces both `pickup-time.ts` | Claude | T0, T7 |
 | T1 | Contract proposal `contracts/proposals/a7-rental-delivery.md` (§4.7, §5.2) | Claude | — |
 | T2 | Structured pickup address: fields, data migration, serializer `pickup_address` + `maps_url`, publish check | Codex | T1 |
 | T3 | Delivery domain: status, fields, `RentalTransportRequest`, `transport.py` commands, `create_booking` change, beat expiry | Codex | T1 |
@@ -354,6 +411,10 @@ Backend (`backend/tests/rental/`):
 - `test_pickup_address.py`: profile → asset copy, override, pincode check, `maps_url` encoding
   (commas, `&`, `#`, non-ASCII), legacy `location_text` migration.
 - `test_rental_payout.py`: earning with and without transport, commission 0 on transport.
+- `test_pickup_hours.py` (replaces `test_pickup_times.py`): save/replace the schedule, `closes_at`
+  after `opens_at`, at least one open day, duplicate weekday refused, summary grouping
+  ("Mon–Sat 9 AM–9 PM · Sun 9 AM–6 PM"), booking refused on a closed pickup day and on a closed
+  return day, publish refused until hours are set, ads published earlier stay live.
 - `test_field_options.py`: `colour` / `Color` / title "Colour" get the list, a category without
   the field gets nothing, an author's `enum` is kept, a custom "Other" value saves.
 
@@ -375,5 +436,8 @@ custom value kept on edit).
   choice: switch to pickup or cancel.
 - No transport price is ever computed by the platform. Every amount is the partner's quote, in
   paise.
+- The partner sets different hours per day (e.g. Sat 9 AM–9 PM, Sun 9 AM–6 PM). The customer
+  sees them on the item page and the Self Pickup block, can't pick a closed day, and the server
+  refuses one if sent anyway.
 - Every product with a colour or material field shows a dropdown with Other. Products without
   those fields are unchanged.
