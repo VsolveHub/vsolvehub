@@ -14,6 +14,7 @@
     "@vsolve/mobile-ui": "workspace:*",
     "@vsolve/query": "workspace:*",
     "clsx": "^2.1.1",
+    "connect": "^3.7.0",
     "expo": "~57.0.26",
     "expo-asset": "~57.0.18",
     "expo-audio": "~57.0.5",
@@ -68,6 +69,7 @@
     "typescript": "~6.0.3"
   },
   "scripts": {
+    "dev": "expo start",
     "start": "expo start",
     "android": "expo start --android",
     "web": "expo start --web",

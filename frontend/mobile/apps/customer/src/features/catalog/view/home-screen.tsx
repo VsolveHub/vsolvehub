@@ -87,7 +87,21 @@ export function HomeScreen() {
         {!categories.isPending && !categories.isError ? (
           <View className="flex-row flex-wrap gap-3">
             {(categories.data ?? []).map((category) => (
-              <CategoryTile key={category.id} category={category} onPress={() => router.push(`/catalog/${category.slug}` as never)} />
+              <CategoryTile
+                key={category.id}
+                category={category}
+                onPress={() => {
+                  if (category.slug === "rental-services") {
+                    router.push("/rentals" as never);
+                  } else if (category.slug === "rooms-pg-hostel-hotels") {
+                    router.push("/stays" as never);
+                  } else if (category.slug === "career-jobs") {
+                    router.push("/listings" as never);
+                  } else {
+                    router.push(`/catalog/${category.slug}` as never);
+                  }
+                }}
+              />
             ))}
           </View>
         ) : null}

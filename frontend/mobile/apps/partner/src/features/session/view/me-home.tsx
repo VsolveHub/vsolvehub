@@ -5,8 +5,11 @@ import { useMobileLogout } from "@vsolve/mobile-core";
 import * as WebBrowser from "expo-web-browser";
 import { useRouter } from "expo-router";
 import {
+  Briefcase,
   ChevronRight,
+  FolderKanban,
   Globe,
+  HardHat,
   Phone,
   Power,
   ShieldCheck,
@@ -104,6 +107,37 @@ export function MeHome() {
             onPress={() => router.push("/me/crew")}
           />
         ) : null}
+      </Section>
+
+      {/* Specialty Workspaces Section */}
+      <Section title="Specialty Workspaces">
+        <SettingsRow
+          icon={HardHat}
+          title="Rental Equipment Workspace"
+          subtitle="Manage rental inventory, tools & orders"
+          boxBg="bg-amber-50"
+          boxBorder="border-amber-100"
+          iconColor="#d97706"
+          onPress={() => router.push("/rentals")}
+        />
+        <SettingsRow
+          icon={FolderKanban}
+          title="Stay & PG Hosting"
+          subtitle="Host hostel/PG rooms, manage leads & visits"
+          boxBg="bg-blue-50"
+          boxBorder="border-blue-100"
+          iconColor="#2563eb"
+          onPress={() => router.push("/stays")}
+        />
+        <SettingsRow
+          icon={Briefcase}
+          title="Hiring & Job Postings"
+          subtitle="Post job openings, review candidate pipeline"
+          boxBg="bg-indigo-50"
+          boxBorder="border-indigo-100"
+          iconColor="#4f46e5"
+          onPress={() => router.push("/listings")}
+        />
       </Section>
 
       {/* Support & Safety Section */}

@@ -1,6 +1,11 @@
 overrides:
   react-native-gesture-handler: "2.32.0"
 
+packageExtensions:
+  react-native-css-interop:
+    dependencies:
+      connect: "^3.7.0"
+
 packages:
   - "apps/*"
   - "packages/*"

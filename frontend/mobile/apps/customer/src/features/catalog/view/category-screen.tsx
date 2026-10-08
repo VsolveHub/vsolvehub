@@ -363,6 +363,17 @@ function CategoryTileBrowser({
 
 export function CategoryScreen({ categorySlug }: { categorySlug: string }) {
   const router = useRouter();
+
+  useState(() => {
+    if (categorySlug === "rental-services") {
+      router.replace("/rentals" as never);
+    } else if (categorySlug === "rooms-pg-hostel-hotels") {
+      router.replace("/stays" as never);
+    } else if (categorySlug === "career-jobs") {
+      router.replace("/listings" as never);
+    }
+  });
+
   const params = useLocalSearchParams<{ tile?: string | string[] }>();
   const tileValue = oneParam(params.tile);
   const activeTileSlug = tileValue !== "" ? tileValue : null;

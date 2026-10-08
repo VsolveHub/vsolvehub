@@ -40,12 +40,25 @@ import type { ServiceCard } from "./client-queries";
  * and nothing marked the others until this field was published.
  */
 const A3_TIME_BLOCK = "A3_TIME_BLOCK";
+const A7_RENTAL = "A7_RENTAL";
+const A9_STAY = "A9_STAY";
+const A10_LISTING = "A10_LISTING";
+
+export const CAREER_JOBS_CATEGORY_SLUG = "career-jobs";
+export const RENTAL_SERVICES_CATEGORY_SLUG = "rental-services";
+export const STAY_CATEGORY_SLUG = "rooms-pg-hostel-hotels";
 
 export function serviceHref(service: ServiceCard, categorySlug: string): string {
-  // A hybrid — a fixed price AND a quote path — goes to the service page, which
-  // is the only screen that can offer both. Routing it straight into the brief
-  // (the pre-2026-08-26 behaviour) hid the fixed price entirely: the customer
-  // was sent to describe a job the platform already knew how to price.
+  if (service.request_archetypes.includes(A10_LISTING) || categorySlug === CAREER_JOBS_CATEGORY_SLUG) {
+    return `/listings`;
+  }
+  if (service.request_archetypes.includes(A7_RENTAL) || categorySlug === RENTAL_SERVICES_CATEGORY_SLUG) {
+    return `/rentals`;
+  }
+  if (service.request_archetypes.includes(A9_STAY) || categorySlug === STAY_CATEGORY_SLUG) {
+    return `/stays`;
+  }
+
   const hasFixedPrice = service.starting_price !== null || service.bookable_variant_id !== null;
   if (service.request_archetypes.length > 0 && hasFixedPrice) {
     return `/catalog/${categorySlug}/${service.slug}`;

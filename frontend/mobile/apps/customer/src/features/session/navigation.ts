@@ -1,4 +1,16 @@
-const GATED_PREFIXES = ["/engagements", "/activity", "/projects", "/account", "/requests", "/bookings", "/jobs"];
+const GATED_PREFIXES = [
+  "/engagements",
+  "/activity",
+  "/projects",
+  "/account",
+  "/requests",
+  "/bookings",
+  "/jobs",
+  "/rentals/mine",
+  "/stays/mine",
+  "/listings/my-applications",
+  "/listings/profile",
+];
 
 export function requiresCustomerSignIn(pathname: string): boolean {
   return GATED_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));

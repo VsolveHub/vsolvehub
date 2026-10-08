@@ -12,7 +12,7 @@ import { subscribeOpenAlerts } from "@/features/notifications/alerts-bus";
 import { unreadBadgeDisplay, unreadBadgeLabel } from "@/features/notifications/model/feed";
 import { useUnreadNotificationCount } from "@/features/notifications/queries";
 import { focusedHeaderTitle, getPartnerChromeMode } from "@/features/session/chrome";
-import { TAP_FIRST_NAV, type WorkspaceNavItem } from "@/features/workspace/registry";
+import { TAP_FIRST_NAV, primaryShellNavFor, dockNavFor, type WorkspaceNavItem } from "@/features/workspace/registry";
 import { usePartnerWorkspaceGrants } from "@/features/workspace/queries";
 
 export default function TabsLayout() {
@@ -52,8 +52,10 @@ export default function TabsLayout() {
     );
   }
 
-  const homeItem = TAP_FIRST_NAV.find((item) => item.href === "/home" || item.label === "Home");
-  const sideItems = TAP_FIRST_NAV.filter((item) => item.href !== "/home" && item.label !== "Home");
+  const rawNav = primaryShellNavFor(grants.grants ?? []);
+  const activeNav = dockNavFor(rawNav);
+  const homeItem = activeNav.find((item) => item.href === "/home" || item.label === "Home");
+  const sideItems = activeNav.filter((item) => item.href !== "/home" && item.label !== "Home");
   const midPoint = Math.ceil(sideItems.length / 2);
   const leftItems = sideItems.slice(0, midPoint);
   const rightItems = sideItems.slice(midPoint);

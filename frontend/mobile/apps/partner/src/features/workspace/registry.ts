@@ -60,6 +60,9 @@ import {
 /** Server keys this build has screens for. Mirrors `partners.capabilities.WORKSPACE_ACTIONS`. */
 export const WORKFORCE_WORKSPACE = "A3_TIME_BLOCK";
 export const PROJECT_WORKSPACE = "A5_CUSTOM_PROJECT";
+export const LISTING_WORKSPACE = "A10_LISTING";
+export const RENTAL_WORKSPACE = "A7_RENTAL";
+export const STAY_WORKSPACE = "A9_STAY";
 
 export interface WorkspaceNavItem {
   href: string;
@@ -67,46 +70,22 @@ export interface WorkspaceNavItem {
   icon: LucideIcon;
   /**
    * Action that authorizes this destination.
-   *
-   * Omitted for a workspace's own home, which is readable by anyone holding the
-   * grant at all — there is no separate "view your own workspace" action, and
-   * inventing one here would be the client asserting a permission Django never
-   * published.
    */
   action?: string;
-  /**
-   * The path prefix this tab owns, when it is wider than its own `href`.
-   *
-   * The Work tab points at `/work/all` — the list is the destination — but it
-   * owns the whole `/work` tree: `/work/jobs/{id}`, `/work/offers/{id}`,
-   * `/work/enquiries/{id}/estimate`. Without this the tab bar would go
-   * completely dark the moment a vendor opened a job, because no item's `href`
-   * is a prefix of that path. A tab bar with nothing lit says "you are nowhere".
-   */
   activePrefix?: string;
-  /** Opens the notification panel instead of navigating. */
   kind?: "notifications";
+  desktopOnly?: boolean;
 }
 
 export interface WorkspaceDefinition {
   key: string;
-  /** Shown in the switcher. Names the work, not the archetype code. */
   label: string;
-  /** One line explaining what this workspace is for, for the switcher and empty states. */
   description: string;
   icon: LucideIcon;
-  /** Where the switcher lands. */
   home: string;
   nav: WorkspaceNavItem[];
 }
 
-/**
- * The M1 navigation every signed-in Partner keeps.
- *
- * Not a grant-driven workspace and deliberately not keyed like one: A1 task
- * partners hold no M2 capability, so a registry lookup would render them an
- * empty shell. This is the floor; M2 workspaces are added on top of it.
- */
 export const BASE_NAV: WorkspaceNavItem[] = [
   { href: "/dashboard", label: "Home", icon: Home },
   { href: "/jobs", label: "Jobs", icon: Briefcase },
@@ -114,65 +93,6 @@ export const BASE_NAV: WorkspaceNavItem[] = [
   { href: "/profile", label: "You", icon: UserCircle },
 ];
 
-/**
- * The tap-first navigation: three destinations, unconditionally, for
- * every signed-in Partner regardless of which capabilities they hold.
- *
- * Used by `partner-shell.tsx`'s bottom tab bar in place of
- * `navigationFor(activeWorkspace(...))`. This supersedes `BASE_NAV` and
- * `WorkspaceSwitcher` for that one call site only — everything else in
- * this file stays in place, because it still has live consumers outside
- * the tab bar:
- *
- *  - `WORKSPACE_REGISTRY` / `resolveWorkspaces` / `ResolvedWorkspace` gate
- *    every M2 workspace route (`features/workspace/view/workspace-route.tsx`,
- *    `features/workspace/model/session-guard.ts`) and drive the
- *    capability-request screen's "this would open the ___ workspace" copy
- *    (`features/capability/adapters/capability-options.ts`).
- *  - `WORKFORCE_WORKSPACE` / `PROJECT_WORKSPACE` are the app's canonical
- *    archetype-key constants, reused well beyond navigation — notification
- *    routing (`features/notifications/model/feed.ts`) and several
- *    per-archetype screens (`crew-offer`, `engagement`, `enquiry`, `shift`,
- *    `crew`, `proposal`) import them directly.
- *  - `activeWorkspace` / `navigationFor` / `BASE_NAV` (above) stay because
- *    `navigationFor` itself still reads `BASE_NAV` internally, even though
- *    `partner-shell.tsx` no longer calls either.
- *
- * Retiring those once every consumer above has a real replacement is a
- * separate, deliberately deferred follow-up — not done here. See
- * `docs/superpowers/specs/2026-08-19-partner-tap-first-redesign-design.md`
- * and task 4's report in `.superpowers/sdd/2026-08-19-partner-tap-first-redesign/`
- * for the full reasoning (notification `targetHref` in particular needs a
- * product decision this task cannot make: where should an `ENGAGEMENT`
- * notice link now that the shell no longer resolves a single active
- * workspace?).
- *
- * Nothing here decides authorization. `useWorkStack` (features/work-stack)
- * only ever surfaces a `WorkItem` the underlying query already returned,
- * and Django already scoped that query to what this Partner may see.
- */
-/**
- * ## Why there are four tabs and not three
- *
- * The 2026-08-19 redesign collapsed eight nav targets into three, and the win
- * was real. But it left `/work` doing two jobs: a status screen (am I online,
- * what have I earned, is anything coming) and a ledger of every record the
- * vendor touches. On any account with history the ledger won, and the status —
- * the part checked twenty times a day — was pushed off the top of the screen.
- *
- * Splitting them is not a return to the old sprawl. It is one destination
- * becoming two because it was always two things, and each of the four now
- * answers a question a vendor actually asks:
- *
- * - **Home** — am I online, and what have I made? Plus anything that needs me.
- * - **Work** — the full list, grouped by whose move it is.
- * - **Money** — the ledger, payouts, the detail Home deliberately omits.
- * - **Me** — who I am and what I control.
- *
- * `Work` points at `/work/all` rather than `/work`: the tab is the list, and
- * `/work` redirects to `/home` so that a bookmark, a notification deep link or
- * a browser history entry from before the split still lands somewhere true.
- */
 export const TAP_FIRST_NAV: readonly WorkspaceNavItem[] = [
   { href: "/home", label: "Home", icon: Home },
   { href: "/work/all", label: "Work", icon: Users, activePrefix: "/work" },
@@ -181,14 +101,65 @@ export const TAP_FIRST_NAV: readonly WorkspaceNavItem[] = [
   { href: "/me", label: "Me", icon: UserCircle2 },
 ];
 
-/**
- * Routes and labels per known workspace.
- *
- * Records stay in their own lifecycle vocabulary. An A3 shift-day is a shift and
- * an A5 milestone is a stage, and flattening both into "work item" — which is
- * what a single generic workspace would force — is exactly the erasure
- * `M2-FE-111` forbids. One spine in the backend does not mean one noun in the UI.
- */
+export const LISTING_TAP_FIRST_NAV: readonly WorkspaceNavItem[] = [
+  { href: "/home", label: "Home", icon: Home },
+  { href: "/listings", label: "Listings", icon: Briefcase, activePrefix: "/listings" },
+  { href: "#notifications", label: "Alerts", icon: Bell, kind: "notifications" },
+  { href: "/me", label: "Me", icon: UserCircle2 },
+];
+
+export const RENTAL_TAP_FIRST_NAV: readonly WorkspaceNavItem[] = [
+  { href: "/home", label: "Home", icon: Home },
+  { href: "/rentals", label: "Rentals", icon: HardHat, activePrefix: "/rentals" },
+  { href: "/rentals/bookings", label: "Bookings", icon: CalendarCheck, desktopOnly: true },
+  { href: "/money", label: "Money", icon: Wallet },
+  { href: "#notifications", label: "Alerts", icon: Bell, kind: "notifications" },
+  { href: "/me", label: "Me", icon: UserCircle2 },
+];
+
+export const STAY_TAP_FIRST_NAV: readonly WorkspaceNavItem[] = [
+  { href: "/home", label: "Home", icon: Home },
+  { href: "/stays", label: "Stays", icon: FolderKanban, activePrefix: "/stays" },
+  { href: "/stays/enquiries", label: "Enquiries", icon: ClipboardList, desktopOnly: true },
+  { href: "/money", label: "Money", icon: Wallet },
+  { href: "#notifications", label: "Alerts", icon: Bell, kind: "notifications" },
+  { href: "/me", label: "Me", icon: UserCircle2 },
+];
+
+export function specialtyShellHome(
+  workspaces: readonly { readonly key: string }[],
+): "listings" | "rentals" | "stays" | null {
+  if (workspaces.length !== 1) return null;
+  const key = workspaces[0]?.key;
+  if (key === LISTING_WORKSPACE) return "listings";
+  if (key === RENTAL_WORKSPACE) return "rentals";
+  if (key === STAY_WORKSPACE) return "stays";
+  return null;
+}
+
+export function isListingOnlyShell(
+  workspaces: readonly { readonly key: string }[],
+): boolean {
+  return specialtyShellHome(workspaces) === "listings";
+}
+
+export function primaryShellNavFor(
+  workspaces: readonly { readonly workspaceKey: string }[],
+): readonly WorkspaceNavItem[] {
+  const mapped = workspaces.map((w) => ({ key: w.workspaceKey }));
+  const home = specialtyShellHome(mapped);
+  if (home === "listings") return LISTING_TAP_FIRST_NAV;
+  if (home === "rentals") return RENTAL_TAP_FIRST_NAV;
+  if (home === "stays") return STAY_TAP_FIRST_NAV;
+  return TAP_FIRST_NAV;
+}
+
+export function dockNavFor(
+  items: readonly WorkspaceNavItem[],
+): readonly WorkspaceNavItem[] {
+  return items.filter((item) => item.desktopOnly !== true);
+}
+
 export const WORKSPACE_REGISTRY: Record<string, WorkspaceDefinition> = {
   [WORKFORCE_WORKSPACE]: {
     key: WORKFORCE_WORKSPACE,
@@ -198,11 +169,6 @@ export const WORKSPACE_REGISTRY: Record<string, WorkspaceDefinition> = {
     home: "/workforce",
     nav: [
       { href: "/workforce", label: "Workforce", icon: Users },
-      // The A3 primary path since ADR-0009 revision 4, and first because it is
-      // the one destination with a clock on it: a crew offer runs on the M1
-      // dispatch clock, in minutes. Enquiries stays directly beneath it — that
-      // is the thin-supply quote fallback, not a dead surface, and a lead whose
-      // city has no published rate card yet lives entirely in it.
       { href: "/workforce/offers", label: "Offers", icon: Zap, action: "enquiry.accept" },
       { href: "/workforce/enquiries", label: "Enquiries", icon: ClipboardList, action: "enquiry.view" },
       { href: "/workforce/shifts", label: "Shifts", icon: CalendarCheck, action: "attendance.confirm" },
@@ -219,6 +185,44 @@ export const WORKSPACE_REGISTRY: Record<string, WorkspaceDefinition> = {
       { href: "/projects", label: "Projects", icon: FolderKanban },
       { href: "/projects/enquiries", label: "Enquiries", icon: ClipboardList, action: "enquiry.view" },
       { href: "/projects/stages", label: "Stages", icon: CalendarCheck, action: "stage.submit_evidence" },
+    ],
+  },
+  [RENTAL_WORKSPACE]: {
+    key: RENTAL_WORKSPACE,
+    label: "Rentals",
+    description: "List rental assets, manage bookings, handover and deposit release.",
+    icon: HardHat,
+    home: "/rentals",
+    nav: [
+      { href: "/home", label: "Home", icon: Home },
+      { href: "/rentals", label: "Rentals", icon: HardHat, activePrefix: "/rentals" },
+      { href: "/rentals/bookings", label: "Bookings", icon: CalendarCheck },
+      { href: "/me", label: "Me", icon: UserCircle2, activePrefix: "/me" },
+    ],
+  },
+  [STAY_WORKSPACE]: {
+    key: STAY_WORKSPACE,
+    label: "Stays",
+    description: "Host properties and respond to guest enquiries.",
+    icon: FolderKanban,
+    home: "/stays",
+    nav: [
+      { href: "/home", label: "Home", icon: Home },
+      { href: "/stays", label: "Stays", icon: FolderKanban, activePrefix: "/stays" },
+      { href: "/stays/enquiries", label: "Enquiries", icon: ClipboardList },
+      { href: "/me", label: "Me", icon: UserCircle2, activePrefix: "/me" },
+    ],
+  },
+  [LISTING_WORKSPACE]: {
+    key: LISTING_WORKSPACE,
+    label: "Listings",
+    description: "Post jobs, screen applicants, and manage recruitment pipeline.",
+    icon: Briefcase,
+    home: "/listings",
+    nav: [
+      { href: "/home", label: "Home", icon: Home },
+      { href: "/listings", label: "Listings", icon: Briefcase, activePrefix: "/listings" },
+      { href: "/me", label: "Me", icon: UserCircle2, activePrefix: "/me" },
     ],
   },
 };

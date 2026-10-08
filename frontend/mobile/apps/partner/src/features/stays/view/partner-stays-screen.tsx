@@ -1,0 +1,627 @@
+import { Badge, Button, EmptyState, ErrorState, Spinner, Text, cn } from "@vsolve/mobile-ui";
+import { useMemo, useState } from "react";
+import { Pressable, RefreshControl, ScrollView, View } from "react-native";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { CalendarClock, Plus } from "lucide-react-native";
+
+import {
+  type HostStaySummary,
+  type PartnerStayVisit,
+  type StayEnquiry,
+  type StayProperty,
+  type StayUnit,
+  type VisitDeclineReason,
+  clockWindow,
+  dayLabel,
+} from "../model";
+import {
+  cancelPartnerStayEnquiry,
+  confirmPartnerStayEnquiry,
+  fetchPartnerStayEnquiries,
+  fetchPartnerStayProperties,
+  fetchPartnerStaySummary,
+  fetchPartnerStayVisits,
+  partnerStayRoomAction,
+  partnerStayVisitAction,
+  respondPartnerStayEnquiry,
+} from "../queries";
+import { PropertyCard } from "./property-card";
+import { EnquiryCard } from "./enquiry-card";
+import { VisitCard } from "./visit-card";
+import { PropertySheet } from "./property-sheet";
+import { UnitSheet } from "./unit-sheet";
+import { VisitingHoursSheet } from "./visiting-hours-sheet";
+import { StaySummaryCards } from "./stay-summary-cards";
+import { StayEnquiryDetailSheet } from "./stay-enquiry-detail-sheet";
+
+const ENQUIRY_FILTERS = ["OPEN", "CONFIRMED", "CLOSED", "ALL"] as const;
+type EnquiryFilter = (typeof ENQUIRY_FILTERS)[number];
+
+const VISIT_FILTERS = [
+  { value: "REQUESTED", label: "To answer" },
+  { value: "ACCEPTED", label: "Accepted" },
+  { value: "CLOSED", label: "Closed" },
+] as const;
+type VisitFilter = (typeof VISIT_FILTERS)[number]["value"];
+
+export function PartnerStaysScreen({
+  initialTab = "properties",
+}: {
+  initialTab?: "properties" | "enquiries" | "visits";
+}) {
+  const queryClient = useQueryClient();
+  const [tab, setTab] = useState<"properties" | "enquiries" | "visits">(initialTab);
+
+  // Property sub-filters & sheets
+  const [propertyFilter, setPropertyFilter] = useState<"active" | "archived">("active");
+  const [propertySheetOpen, setPropertySheetOpen] = useState(false);
+  const [editingProperty, setEditingProperty] = useState<StayProperty | null>(null);
+
+  // Unit Sheet
+  const [unitSheetOpen, setUnitSheetOpen] = useState(false);
+  const [unitProperty, setUnitProperty] = useState<StayProperty | null>(null);
+  const [editingUnit, setEditingUnit] = useState<StayUnit | null>(null);
+
+  // Visiting Hours Sheet
+  const [visitingHoursSheetOpen, setVisitingHoursSheetOpen] = useState(false);
+  const [visitingHoursProperty, setVisitingHoursProperty] = useState<StayProperty | null>(null);
+
+  // Enquiries & Detail Sheet
+  const [enquiryFilter, setEnquiryFilter] = useState<EnquiryFilter>("OPEN");
+  const [selectedEnquiry, setSelectedEnquiry] = useState<StayEnquiry | null>(null);
+
+  // Visits Filter
+  const [visitFilter, setVisitFilter] = useState<VisitFilter>("REQUESTED");
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  // Queries
+  const summaryQuery = useQuery({
+    queryKey: ["partner-stay-summary"],
+    queryFn: fetchPartnerStaySummary,
+  });
+
+  const propertiesQuery = useQuery({
+    queryKey: ["partner-stay-properties"],
+    queryFn: fetchPartnerStayProperties,
+  });
+
+  const enquiriesQuery = useQuery({
+    queryKey: ["partner-stay-enquiries"],
+    queryFn: fetchPartnerStayEnquiries,
+  });
+
+  const visitsQuery = useQuery({
+    queryKey: ["partner-stay-visits"],
+    queryFn: fetchPartnerStayVisits,
+  });
+
+  const invalidateAll = () => {
+    void queryClient.invalidateQueries({ queryKey: ["partner-stay-properties"] });
+    void queryClient.invalidateQueries({ queryKey: ["partner-stay-summary"] });
+    void queryClient.invalidateQueries({ queryKey: ["partner-stay-enquiries"] });
+    void queryClient.invalidateQueries({ queryKey: ["partner-stay-visits"] });
+  };
+
+  // Mutations
+  const enquiryMutation = useMutation({
+    mutationFn: ({
+      id,
+      action,
+      note,
+      roomId,
+    }: {
+      id: string;
+      action: "booked" | "not_available" | "cancel";
+      note?: string;
+      roomId?: string | null;
+    }) => {
+      if (action === "booked") return confirmPartnerStayEnquiry(id, roomId);
+      if (action === "not_available") return respondPartnerStayEnquiry(id, note ?? "", true);
+      return cancelPartnerStayEnquiry(id);
+    },
+    onSuccess: () => {
+      setActionError(null);
+      setSelectedEnquiry(null);
+      invalidateAll();
+    },
+    onError: (err: any) => setActionError(err?.message || "Failed to update enquiry"),
+  });
+
+  const visitMutation = useMutation({
+    mutationFn: ({
+      id,
+      action,
+      reason,
+      note,
+    }: {
+      id: string;
+      action: "accept" | "decline";
+      reason?: VisitDeclineReason;
+      note?: string;
+    }) => partnerStayVisitAction(id, action, { reason, note }),
+    onSuccess: () => {
+      setActionError(null);
+      invalidateAll();
+    },
+    onError: (err: any) => setActionError(err?.message || "Failed to update visit"),
+  });
+
+  const roomBookMutation = useMutation({
+    mutationFn: ({
+      roomId,
+      visitId,
+      guestName,
+    }: {
+      roomId: string;
+      visitId: string;
+      guestName?: string;
+    }) => partnerStayRoomAction(roomId, "book", { occupant_name: guestName }),
+    onSuccess: () => {
+      setActionError(null);
+      invalidateAll();
+    },
+    onError: (err: any) => setActionError(err?.message || "Failed to book room"),
+  });
+
+  const isRefreshing =
+    propertiesQuery.isRefetching ||
+    summaryQuery.isRefetching ||
+    enquiriesQuery.isRefetching ||
+    visitsQuery.isRefetching;
+
+  const onRefresh = () => {
+    void propertiesQuery.refetch();
+    void summaryQuery.refetch();
+    void enquiriesQuery.refetch();
+    void visitsQuery.refetch();
+  };
+
+  // Filter properties (Active vs Archived)
+  const properties = propertiesQuery.data ?? [];
+  const filteredProperties = useMemo(() => {
+    if (propertyFilter === "archived") {
+      return properties.filter((p) => p.listing_status === "ARCHIVED");
+    }
+    return properties.filter((p) => p.listing_status !== "ARCHIVED");
+  }, [properties, propertyFilter]);
+
+  // Filter enquiries
+  const OPEN_ENQUIRY = new Set(["SUBMITTED", "RESPONDED"]);
+  const allEnquiries = enquiriesQuery.data ?? [];
+  const filteredEnquiries = useMemo(() => {
+    return allEnquiries.filter((e) => {
+      const s = e.status ?? "";
+      if (enquiryFilter === "ALL") return true;
+      if (enquiryFilter === "OPEN") return OPEN_ENQUIRY.has(s);
+      if (enquiryFilter === "CONFIRMED") return s === "CONFIRMED";
+      return !OPEN_ENQUIRY.has(s) && s !== "CONFIRMED";
+    });
+  }, [allEnquiries, enquiryFilter]);
+
+  const openEnquiriesCount = allEnquiries.filter((e) => OPEN_ENQUIRY.has(e.status ?? "")).length;
+
+  // Filter & group visits by date + slot
+  const allVisits = visitsQuery.data ?? [];
+  const filteredVisits = useMemo(() => {
+    return allVisits.filter((v) => {
+      const s = v.status ?? "";
+      if (visitFilter === "CLOSED") return s !== "REQUESTED" && s !== "ACCEPTED";
+      return s === visitFilter;
+    });
+  }, [allVisits, visitFilter]);
+
+  const visitGroups = useMemo(() => {
+    const map = new Map<string, PartnerStayVisit[]>();
+    for (const v of filteredVisits) {
+      const key = `${v.visit_date}|${v.start_time}|${v.end_time}|${v.property?.id || v.property_title || ""}`;
+      map.set(key, [...(map.get(key) ?? []), v]);
+    }
+    const list = [...map.values()];
+    return visitFilter === "CLOSED" ? list.reverse() : list;
+  }, [filteredVisits, visitFilter]);
+
+  const requestedVisitsCount = allVisits.filter((v) => v.status === "REQUESTED").length;
+
+  return (
+    <View className="flex-1 bg-canvas">
+      {/* Header Tabs */}
+      <View className="border-b border-line bg-surface px-4 pt-3">
+        <View className="flex-row items-center gap-6">
+          <Pressable
+            onPress={() => setTab("properties")}
+            className={cn(
+              "pb-3 border-b-2",
+              tab === "properties" ? "border-action" : "border-transparent",
+            )}
+          >
+            <Text
+              className={cn(
+                "text-sm font-bold",
+                tab === "properties" ? "text-navy-900" : "text-text-muted",
+              )}
+            >
+              Stays ({properties.length})
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => setTab("enquiries")}
+            className={cn(
+              "pb-3 border-b-2 flex-row items-center gap-1.5",
+              tab === "enquiries" ? "border-action" : "border-transparent",
+            )}
+          >
+            <Text
+              className={cn(
+                "text-sm font-bold",
+                tab === "enquiries" ? "text-navy-900" : "text-text-muted",
+              )}
+            >
+              Enquiries
+            </Text>
+            {openEnquiriesCount > 0 ? (
+              <Badge tone="info">
+                {openEnquiriesCount}
+              </Badge>
+            ) : null}
+          </Pressable>
+
+          <Pressable
+            onPress={() => setTab("visits")}
+            className={cn(
+              "pb-3 border-b-2 flex-row items-center gap-1.5",
+              tab === "visits" ? "border-action" : "border-transparent",
+            )}
+          >
+            <Text
+              className={cn(
+                "text-sm font-bold",
+                tab === "visits" ? "text-navy-900" : "text-text-muted",
+              )}
+            >
+              Visits
+            </Text>
+            {requestedVisitsCount > 0 ? (
+              <Badge tone="info">
+                {requestedVisitsCount}
+              </Badge>
+            ) : null}
+          </Pressable>
+        </View>
+      </View>
+
+      <ScrollView
+        className="flex-1 px-4 py-4"
+        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
+      >
+        {/* Top Summary Cards (W-026) */}
+        <View className="mb-4">
+          <StaySummaryCards onSelectTab={(t) => setTab(t)} />
+        </View>
+
+        {actionError ? (
+          <View className="mb-3 rounded-lg bg-rose-50 p-3">
+            <Text className="text-xs text-rose-600 font-medium">{actionError}</Text>
+          </View>
+        ) : null}
+
+        {/* ===================== TAB: PROPERTIES ===================== */}
+        {tab === "properties" && (
+          <View className="flex-col gap-4 pb-12">
+            <View className="flex-row items-center justify-between">
+              {/* Filter: Active vs Archived */}
+              <View className="flex-row gap-1.5">
+                <Pressable
+                  onPress={() => setPropertyFilter("active")}
+                  className={`rounded-full px-3 py-1 border ${
+                    propertyFilter === "active"
+                      ? "border-[#071328] bg-[#071328]"
+                      : "border-line bg-surface"
+                  }`}
+                >
+                  <Text
+                    className={`text-xs font-semibold ${
+                      propertyFilter === "active" ? "text-white" : "text-text"
+                    }`}
+                  >
+                    Active Stays
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => setPropertyFilter("archived")}
+                  className={`rounded-full px-3 py-1 border ${
+                    propertyFilter === "archived"
+                      ? "border-[#071328] bg-[#071328]"
+                      : "border-line bg-surface"
+                  }`}
+                >
+                  <Text
+                    className={`text-xs font-semibold ${
+                      propertyFilter === "archived" ? "text-white" : "text-text"
+                    }`}
+                  >
+                    Archived
+                  </Text>
+                </Pressable>
+              </View>
+
+              <Button
+                variant="primary"
+                size="sm"
+                onPress={() => {
+                  setEditingProperty(null);
+                  setPropertySheetOpen(true);
+                }}
+                className="h-8 flex-row items-center gap-1.5 px-3"
+              >
+                <Plus size={14} color="#ffffff" />
+                <Text className="text-xs font-bold text-white">Add Property</Text>
+              </Button>
+            </View>
+
+            {propertiesQuery.isLoading ? (
+              <View className="py-12 items-center">
+                <Spinner size="lg" />
+              </View>
+            ) : propertiesQuery.isError ? (
+              <ErrorState
+                title="Could not load properties"
+                message={propertiesQuery.error?.message ?? "An error occurred"}
+                onAction={() => void propertiesQuery.refetch()}
+                actionLabel="Retry"
+              />
+            ) : filteredProperties.length === 0 ? (
+              <EmptyState
+                title={
+                  propertyFilter === "archived"
+                    ? "No archived properties"
+                    : "No stay properties listed yet"
+                }
+                description={
+                  propertyFilter === "archived"
+                    ? "Properties you archive will appear here."
+                    : "List your PG, hostel, or flat to start receiving bookings and visit requests."
+                }
+                action={
+                  propertyFilter === "active" ? (
+                    <Button
+                      variant="primary"
+                      onPress={() => {
+                        setEditingProperty(null);
+                        setPropertySheetOpen(true);
+                      }}
+                    >
+                      <Text className="font-bold text-white">List Your First Property</Text>
+                    </Button>
+                  ) : undefined
+                }
+              />
+            ) : (
+              <View className="flex-col gap-4">
+                {filteredProperties.map((property) => (
+                  <PropertyCard
+                    key={property.id}
+                    property={property}
+                    onEditDetails={(p) => {
+                      setEditingProperty(p);
+                      setPropertySheetOpen(true);
+                    }}
+                    onManageRooms={(p) => {
+                      setUnitProperty(p);
+                      setEditingUnit(null);
+                      setUnitSheetOpen(true);
+                    }}
+                    onVisitingHours={(p) => {
+                      setVisitingHoursProperty(p);
+                      setVisitingHoursSheetOpen(true);
+                    }}
+                  />
+                ))}
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* ===================== TAB: ENQUIRIES ===================== */}
+        {tab === "enquiries" && (
+          <View className="flex-col gap-4 pb-12">
+            {/* Filter Pills */}
+            <View className="flex-row flex-wrap gap-1.5">
+              {(
+                [
+                  { value: "OPEN", label: "To call" },
+                  { value: "CONFIRMED", label: "Booked" },
+                  { value: "CLOSED", label: "Closed" },
+                  { value: "ALL", label: "All" },
+                ] as const
+              ).map((f) => {
+                const isSelected = enquiryFilter === f.value;
+                return (
+                  <Pressable
+                    key={f.value}
+                    onPress={() => setEnquiryFilter(f.value)}
+                    className={`rounded-full px-3 py-1 border ${
+                      isSelected ? "border-[#071328] bg-[#071328]" : "border-line bg-surface"
+                    }`}
+                  >
+                    <Text
+                      className={`text-xs font-semibold ${
+                        isSelected ? "text-white" : "text-text"
+                      }`}
+                    >
+                      {f.label}
+                      {f.value === "OPEN" && openEnquiriesCount > 0 ? ` (${openEnquiriesCount})` : ""}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {enquiriesQuery.isLoading ? (
+              <View className="py-12 items-center">
+                <Spinner size="lg" />
+              </View>
+            ) : enquiriesQuery.isError ? (
+              <ErrorState
+                title="Could not load guest enquiries"
+                message={enquiriesQuery.error?.message ?? "An error occurred"}
+                onAction={() => void enquiriesQuery.refetch()}
+                actionLabel="Retry"
+              />
+            ) : filteredEnquiries.length === 0 ? (
+              <EmptyState
+                title={
+                  enquiryFilter === "OPEN"
+                    ? "Nobody to call right now"
+                    : "No enquiries in this view"
+                }
+                description="When guests enquire about your rooms, they appear here with their contact number."
+              />
+            ) : (
+              <View className="flex-col gap-3">
+                {filteredEnquiries.map((enquiry) => (
+                  <EnquiryCard
+                    key={enquiry.id}
+                    enquiry={enquiry}
+                    onSelect={(e) => setSelectedEnquiry(e)}
+                  />
+                ))}
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* ===================== TAB: VISITS ===================== */}
+        {tab === "visits" && (
+          <View className="flex-col gap-4 pb-12">
+            {/* Filter Pills */}
+            <View className="flex-row flex-wrap gap-1.5">
+              {VISIT_FILTERS.map((f) => {
+                const isSelected = visitFilter === f.value;
+                return (
+                  <Pressable
+                    key={f.value}
+                    onPress={() => setVisitFilter(f.value)}
+                    className={`rounded-full px-3 py-1 border ${
+                      isSelected ? "border-[#071328] bg-[#071328]" : "border-line bg-surface"
+                    }`}
+                  >
+                    <Text
+                      className={`text-xs font-semibold ${
+                        isSelected ? "text-white" : "text-text"
+                      }`}
+                    >
+                      {f.label}
+                      {f.value === "REQUESTED" && requestedVisitsCount > 0
+                        ? ` (${requestedVisitsCount})`
+                        : ""}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {visitsQuery.isLoading ? (
+              <View className="py-12 items-center">
+                <Spinner size="lg" />
+              </View>
+            ) : visitsQuery.isError ? (
+              <ErrorState
+                title="Could not load visit requests"
+                message={visitsQuery.error?.message ?? "An error occurred"}
+                onAction={() => void visitsQuery.refetch()}
+                actionLabel="Retry"
+              />
+            ) : visitGroups.length === 0 ? (
+              <EmptyState
+                title={
+                  visitFilter === "REQUESTED"
+                    ? "No visit requests to answer"
+                    : "No visit requests in this view"
+                }
+                description="When guests schedule visits during your visiting hours, they appear here."
+              />
+            ) : (
+              <View className="flex-col gap-4">
+                {visitGroups.map((group) => {
+                  const first = group[0]!;
+                  const timeWindow = clockWindow(first.start_time, first.end_time);
+
+                  return (
+                    <View key={`${first.visit_date}-${first.start_time}-${first.property?.id || first.property_title}`} className="flex-col gap-2">
+                      {/* Slot Header (GAP-S-11) */}
+                      <View className="flex-row items-center gap-2 px-1">
+                        <CalendarClock size={15} color="#f87000" />
+                        <Text className="text-xs font-bold text-text">
+                          {dayLabel(first.visit_date)} · {timeWindow}
+                          <Text className="font-normal text-text-muted">
+                            {" "}· {first.property?.title || first.property_title || "Stay"} · {group.length} visitor{group.length === 1 ? "" : "s"}
+                          </Text>
+                        </Text>
+                      </View>
+
+                      {/* Visits in this slot */}
+                      <View className="flex-col gap-2.5">
+                        {group.map((visit) => (
+                          <VisitCard
+                            key={visit.id}
+                            visit={visit}
+                            onAccept={(v) => visitMutation.mutate({ id: v.id, action: "accept" })}
+                            onDecline={(v, reason, note) =>
+                              visitMutation.mutate({ id: v.id, action: "decline", reason, note })
+                            }
+                            onBookRoom={(v, roomId) =>
+                              roomBookMutation.mutate({
+                                roomId,
+                                visitId: v.id,
+                                guestName: v.user_name,
+                              })
+                            }
+                          />
+                        ))}
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Sheets & Dialogs */}
+      <PropertySheet
+        open={propertySheetOpen}
+        onOpenChange={setPropertySheetOpen}
+        editingProperty={editingProperty}
+      />
+
+      <UnitSheet
+        open={unitSheetOpen}
+        onOpenChange={setUnitSheetOpen}
+        property={unitProperty}
+        editingUnit={editingUnit}
+      />
+
+      <VisitingHoursSheet
+        open={visitingHoursSheetOpen}
+        onOpenChange={setVisitingHoursSheetOpen}
+        property={visitingHoursProperty}
+      />
+
+      <StayEnquiryDetailSheet
+        open={selectedEnquiry !== null}
+        enquiry={selectedEnquiry}
+        onOpenChange={(open) => {
+          if (!open) setSelectedEnquiry(null);
+        }}
+        onBooked={(id, roomId) => enquiryMutation.mutate({ id, action: "booked", roomId })}
+        onNotAvailable={(id, note) => enquiryMutation.mutate({ id, action: "not_available", note })}
+        onCancelBooking={(id) => enquiryMutation.mutate({ id, action: "cancel" })}
+        isPending={enquiryMutation.isPending}
+        actionError={actionError}
+      />
+    </View>
+  );
+}

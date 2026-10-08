@@ -10,7 +10,13 @@ export function getPartnerChromeMode(pathname: string): PartnerChromeMode {
     pathname === "/work/all" ||
     pathname === "/money" ||
     pathname === "/me" ||
-    pathname.startsWith("/me/")
+    pathname.startsWith("/me/") ||
+    pathname === "/rentals" ||
+    pathname === "/rentals/bookings" ||
+    pathname === "/stays" ||
+    pathname === "/stays/enquiries" ||
+    pathname === "/stays/visits" ||
+    pathname === "/listings"
   ) {
     return "full";
   }
@@ -31,6 +37,13 @@ export function focusedHeaderTitle(pathname: string, titleOverride: string | nul
   else if (pathname.startsWith("/work/enquiries")) title = "Enquiry";
   else if (pathname.startsWith("/work/jobs")) title = "Job Details";
   else if (pathname.startsWith("/account") || pathname.startsWith("/me")) title = "Account";
+  else if (pathname.startsWith("/rentals/bookings")) title = "Rental Bookings";
+  else if (pathname.startsWith("/rentals")) title = "Rental Management";
+  else if (pathname.startsWith("/stays/enquiries")) title = "Stay Enquiries";
+  else if (pathname.startsWith("/stays/visits")) title = "Scheduled Visits";
+  else if (pathname.startsWith("/stays")) title = "Stay Hosting";
+  else if (pathname.startsWith("/listings/post")) title = "Post Job Opening";
+  else if (pathname.startsWith("/listings")) title = "Candidate Pipeline";
   if (titleOverride !== null) title = titleOverride;
   return title;
 }

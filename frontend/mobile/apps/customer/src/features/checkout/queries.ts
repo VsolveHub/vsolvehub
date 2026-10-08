@@ -10,6 +10,7 @@ import { type MergeAction } from "./conflicts";
 import { checkoutIntentKey, planQuoteIntentKey, planSetIntentKey } from "./intents";
 
 export type Cart = Schemas["Cart"];
+export type CartItem = Cart["items"][number];
 export type GroupQuote = Schemas["GroupQuote"];
 export type SchedulingGroup = Schemas["SchedulingGroup"];
 export type PlanSet = Schemas["FulfilmentPlanSet"];
