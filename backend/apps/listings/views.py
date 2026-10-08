@@ -1005,6 +1005,7 @@ class QuickApplyView(APIView):
                 user=request.user,
                 note=serializer.validated_data["note"],
                 resume_url=_profile_resume_url(request, profile) if profile else "",
+                skills=serializer.validated_data["skills"],
             )
         except (ListingStateError, PermissionError) as exc:
             _raise_listing_error(exc)

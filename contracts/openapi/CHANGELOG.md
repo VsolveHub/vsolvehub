@@ -1,5 +1,29 @@
 # API Contract Changelog
 
+## 1.69.0 - Stay room looks; job skills accumulate
+
+**Stays: looks.** A room type can now hold rooms that look different. `RoomLook` is a named photo
+set inside a type; every room belongs to one. Guests see one card per look.
+
+- `Unit` (public and partner) adds `looks[]`: `{id, name, display_name, display_order, media[],
+  available_count, room_count}`. No room numbers. `media` still lists every photo of the type.
+- `Room` (partner) adds `look`.
+- New partner endpoints: `POST /partner/stays/units/{unit_id}/looks` (name required),
+  `PATCH`/`DELETE /partner/stays/looks/{look_id}`, `POST /partner/stays/looks/{look_id}/media`.
+- `POST /partner/stays/units/{unit_id}/rooms` accepts `look_id`, or `new_look {name, image_urls}`.
+  `PATCH /partner/stays/rooms/{room_id}` accepts `look_id` to move a room.
+- `POST /stays/enquire` and `POST /stays/visits` accept `look_id`. Enquiries and visits add
+  `look`, and their `unit_name` reads "1 BHK · With balcony" when a named look was chosen.
+- Errors: `look_name_required`, `look_name_taken`, `look_mismatch`, `look_has_rooms`,
+  `last_look_of_type`.
+
+**Jobs: skills accumulate.** Applying never replaces a seeker's skills; each application's
+skills and job title are added. `JobSeekerProfile` adds read-only `skill_groups[]`
+(`{category, role, skills[], added_at}`), for the seeker only. `POST /listings/{listing_id}/quick-apply`
+accepts `skills` (the job's skills the seeker ticked). Caps rise to 60 skills and 10 roles.
+
+- Removed: none. Renamed: none.
+
 ## 1.68.0 - Rentals: self pickup address and hours, partner-arranged delivery
 
 A rental is now received one of two ways, chosen at booking.

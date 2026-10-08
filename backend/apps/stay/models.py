@@ -147,6 +147,28 @@ class Unit(models.Model):
         ]
 
 
+class RoomLook(models.Model):
+    """A look of a room type: the photos some of its rooms share.
+
+    "1 BHK" may have rooms 101-103 that look one way and 104-105 that look another. Each look
+    has its own photos and is shown to guests as its own card ("1 BHK", "1 BHK · With balcony"),
+    with the type's price. Every room belongs to exactly one look. The first look of a type may
+    be unnamed; every other look needs a name, so guests can tell the cards apart.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    unit = models.ForeignKey(Unit, on_delete=models.CASCADE, related_name="looks")
+    name = models.CharField(max_length=60, blank=True, default="")
+    display_order = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("display_order", "created_at")
+
+    def __str__(self) -> str:
+        return self.name or "Main look"
+
+
 class Room(models.Model):
     """One physical room (or bed) of a room type, numbered by the host: "Room 101".
 
@@ -165,6 +187,8 @@ class Room(models.Model):
     #: Denormalised from ``unit`` so room numbers can be unique per property.
     property = models.ForeignKey(Property, on_delete=models.CASCADE, related_name="rooms")
     unit = models.ForeignKey(Unit, on_delete=models.CASCADE, related_name="rooms")
+    #: Which of the type's looks (photo sets) this room has. Always one of ``unit``'s looks.
+    look = models.ForeignKey(RoomLook, on_delete=models.PROTECT, related_name="rooms")
     number = models.CharField(max_length=40)
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.AVAILABLE)
     #: Who is in the room, for the host's own reference. Filled from the enquiry or visit.
@@ -213,6 +237,10 @@ class StayEnquiry(models.Model):
     property = models.ForeignKey(Property, on_delete=models.PROTECT, related_name="enquiries")
     unit = models.ForeignKey(
         Unit, null=True, blank=True, on_delete=models.PROTECT, related_name="enquiries"
+    )
+    #: The look the guest picked, when the type has several. Tells the host which kind of room.
+    look = models.ForeignKey(
+        RoomLook, null=True, blank=True, on_delete=models.SET_NULL, related_name="enquiries"
     )
     unit_reservation = models.OneToOneField(
         "UnitReservation",
@@ -329,6 +357,9 @@ class StayVisit(models.Model):
     unit = models.ForeignKey(
         Unit, null=True, blank=True, on_delete=models.SET_NULL, related_name="visits"
     )
+    look = models.ForeignKey(
+        RoomLook, null=True, blank=True, on_delete=models.SET_NULL, related_name="visits"
+    )
     customer = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="stay_visits"
     )
@@ -418,6 +449,8 @@ class UnitMedia(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     unit = models.ForeignKey(Unit, on_delete=models.CASCADE, related_name="media")
+    #: The look these photos show. Guests see each look's photos on its own card.
+    look = models.ForeignKey(RoomLook, on_delete=models.CASCADE, related_name="media")
     url = models.URLField(max_length=1024)
     display_order = models.PositiveSmallIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -645,4 +678,3 @@ class StaySubscription(models.Model):
 
     def __str__(self) -> str:
         return f"{self.host_id}:{self.plan_id}:{self.status}"
-

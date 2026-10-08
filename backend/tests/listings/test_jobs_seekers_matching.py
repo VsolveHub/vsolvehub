@@ -100,7 +100,7 @@ def test_profile_options_are_checked(employer):  # noqa: ARG001
     with pytest.raises(ListingStateError):
         save_profile(user=user, data={"experience_band": "TEN_YEARS"})
     with pytest.raises(ListingStateError):
-        save_profile(user=user, data={"roles": ["A", "B", "C", "D"]})
+        save_profile(user=user, data={"roles": [f"Job {n}" for n in range(11)]})
 
 
 @pytest.mark.django_db

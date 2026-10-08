@@ -17,6 +17,7 @@ from apps.stay.exceptions import StayStateApiError
 from apps.stay.models import (
     Property,
     Room,
+    RoomLook,
     StayEnquiry,
     StayReservation,
     StaySubscriptionPlan,
@@ -24,11 +25,13 @@ from apps.stay.models import (
     Unit,
 )
 from apps.stay.serializers import (
+    AddLookMediaSerializer,
     AddPropertyMediaSerializer,
     AddRoomSerializer,
     AddUnitMediaSerializer,
     ConfirmEnquirySerializer,
     CreateEnquirySerializer,
+    CreateLookSerializer,
     CreatePropertySerializer,
     CreateReservationSerializer,
     CreateStayReviewSerializer,
@@ -50,6 +53,7 @@ from apps.stay.serializers import (
     PropertySerializer,
     PropertySummarySerializer,
     RespondEnquirySerializer,
+    RoomLookSerializer,
     RoomSerializer,
     SetVisitingHoursSerializer,
     StartStaySubscriptionPurchaseSerializer,
@@ -66,10 +70,12 @@ from apps.stay.serializers import (
     StayTaxonomySubcategorySerializer,
     StayVisitSerializer,
     UnitMediaSerializer,
+    UpdateLookSerializer,
     UpdatePropertySerializer,
     UpdateRoomSerializer,
     UpdateUnitSerializer,
     VisitAvailabilityDaySerializer,
+    unit_looks,
 )
 from apps.stay.services import (
     StayStateError,
@@ -85,10 +91,12 @@ from apps.stay.services import (
     check_out_reservation,
     confirm_enquiry,
     create_enquiry,
+    create_look,
     create_property,
     create_reservation,
     create_stay_review,
     create_unit,
+    delete_look,
     delete_room,
     get_stay_taxonomy,
     host_cancel_reservation,
@@ -97,11 +105,13 @@ from apps.stay.services import (
     mark_no_show,
     mark_room_booked,
     moderate_property,
+    move_room,
     partner_owns_stay_photo,
     public_properties,
     release_room,
     remove_property_media,
     remove_unit_media,
+    rename_look,
     rename_room,
     respond_enquiry,
     set_property_listing,
@@ -244,6 +254,7 @@ class StayEnquireView(APIView):
                 customer=request.user,
                 property_id=data["property_id"],
                 unit_id=data.get("unit_id"),
+                look_id=data.get("look_id"),
                 check_in=data["check_in"],
                 check_out=data.get("check_out"),
                 length=data.get("length"),
@@ -371,6 +382,7 @@ class PartnerPropertyCollectionView(APIView):
             .prefetch_related(
                 "units__rooms",
                 "units__media",
+                "units__looks__media",
                 "media",
                 "reviews",
                 "visit_slots",
@@ -515,6 +527,93 @@ class PartnerUnitMediaDeleteView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+def _partner_look(partner: Any, look_id: UUID) -> RoomLook:
+    return get_object_or_404(
+        RoomLook.objects.select_related("unit__property"),
+        id=look_id,
+        unit__property__host=partner,
+    )
+
+
+def _look_payload(look: RoomLook) -> dict[str, Any]:
+    unit = Unit.objects.prefetch_related("looks__media", "rooms").get(id=look.unit_id)
+    row = next(x for x in unit_looks(unit) if x["id"] == look.id)
+    return dict(RoomLookSerializer(row).data)
+
+
+class PartnerUnitLookCollectionView(APIView):
+    """Add a look (a named photo set) to a room type. Rooms join it from the room screens."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(request=CreateLookSerializer, responses={201: RoomLookSerializer})
+    def post(self, request: Any, unit_id: UUID) -> Response:
+        ser = CreateLookSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        partner = _partner(request.user)
+        unit = get_object_or_404(
+            Unit.objects.select_related("property"), id=unit_id, property__host=partner
+        )
+        try:
+            look = create_look(
+                unit=unit,
+                host=partner,
+                name=ser.validated_data["name"],
+                image_urls=ser.validated_data["image_urls"],
+            )
+        except (StayStateError, PermissionError) as exc:
+            _raise_domain_error(exc)
+        return Response(_look_payload(look), status=status.HTTP_201_CREATED)
+
+
+class PartnerLookDetailView(APIView):
+    """Rename a look, or remove an empty one."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(request=UpdateLookSerializer, responses=RoomLookSerializer)
+    def patch(self, request: Any, look_id: UUID) -> Response:
+        ser = UpdateLookSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        partner = _partner(request.user)
+        look = _partner_look(partner, look_id)
+        try:
+            look = rename_look(look=look, host=partner, name=ser.validated_data["name"])
+        except (StayStateError, PermissionError) as exc:
+            _raise_domain_error(exc)
+        return Response(_look_payload(look))
+
+    @extend_schema(request=None, responses={204: None})
+    def delete(self, request: Any, look_id: UUID) -> Response:
+        partner = _partner(request.user)
+        look = _partner_look(partner, look_id)
+        try:
+            delete_look(look=look, host=partner)
+        except (StayStateError, PermissionError) as exc:
+            _raise_domain_error(exc)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class PartnerLookMediaCreateView(APIView):
+    """Add a photo to one look. Removing uses the room type's photo delete."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(request=AddLookMediaSerializer, responses={201: UnitMediaSerializer})
+    def post(self, request: Any, look_id: UUID) -> Response:
+        ser = AddLookMediaSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        partner = _partner(request.user)
+        look = _partner_look(partner, look_id)
+        try:
+            media = add_unit_media(
+                unit=look.unit, host=partner, url=ser.validated_data["url"], look=look
+            )
+        except (StayStateError, PermissionError) as exc:
+            _raise_domain_error(exc)
+        return Response(UnitMediaSerializer(media).data, status=status.HTTP_201_CREATED)
+
+
 class PartnerEnquiryCollectionView(APIView):
     permission_classes = (IsPartnerUser,)
 
@@ -555,7 +654,14 @@ class OpsStayCollectionView(APIView):
     def get(self, _request: Any) -> Response:
         rows = (
             Property.objects.all()
-            .prefetch_related("units__media", "media", "reviews", "variant__a9_configurations")
+            .prefetch_related(
+                "units__media",
+                "units__looks__media",
+                "units__rooms",
+                "media",
+                "reviews",
+                "variant__a9_configurations",
+            )
             .select_related("host", "variant")
         )
         return Response(PropertySerializer(rows, many=True).data)
@@ -854,11 +960,15 @@ class PartnerUnitRoomCollectionView(APIView):
             Unit.objects.select_related("property"), id=unit_id, property__host=partner
         )
         try:
+            new_look = ser.validated_data.get("new_look")
             room = add_room(
                 unit=unit,
                 host=partner,
                 number=ser.validated_data["number"],
                 available=ser.validated_data["available"],
+                look_id=ser.validated_data.get("look_id"),
+                new_look_name=new_look["name"] if new_look else None,
+                new_look_image_urls=new_look.get("image_urls", []) if new_look else None,
             )
         except (StayStateError, PermissionError) as exc:
             _raise_domain_error(exc)
@@ -883,6 +993,8 @@ class PartnerRoomDetailView(APIView):
                 room = set_room_available(
                     room=room, host=partner, available=ser.validated_data["available"]
                 )
+            if "look_id" in ser.validated_data:
+                room = move_room(room=room, host=partner, look_id=ser.validated_data["look_id"])
         except (StayStateError, PermissionError) as exc:
             _raise_domain_error(exc)
         return Response(RoomSerializer(room).data)
@@ -999,6 +1111,7 @@ class StayVisitCreateView(APIView):
                 slot_id=data["slot_id"],
                 visit_date=data["visit_date"],
                 unit_id=data.get("unit_id"),
+                look_id=data.get("look_id"),
                 message=data.get("message", ""),
             )
         except (StayStateError, PermissionError, Property.DoesNotExist) as exc:
@@ -1185,4 +1298,3 @@ class PartnerStaySubscriptionView(APIView):
         except (StayStateError, PermissionError) as exc:
             _raise_domain_error(exc)
         return Response(StaySubscriptionSerializer(sub).data, status=status.HTTP_201_CREATED)
-

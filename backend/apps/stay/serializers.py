@@ -10,6 +10,7 @@ from apps.stay.models import (
     Property,
     PropertyMedia,
     Room,
+    RoomLook,
     StayEnquiry,
     StayReservation,
     StayReview,
@@ -28,15 +29,68 @@ class UnitMediaSerializer(serializers.ModelSerializer[UnitMedia]):
         fields = ("id", "url", "display_order")
 
 
+class RoomLookSerializer(serializers.Serializer[dict[str, Any]]):
+    """One look of a room type, as guests see it: its photos and how many of its rooms are
+    available. Never the room numbers."""
+
+    id = serializers.UUIDField()
+    #: The host's label. Blank on a type's first look.
+    name = serializers.CharField(allow_blank=True)
+    #: "1 BHK" or "1 BHK · With balcony": the card's title.
+    display_name = serializers.CharField()
+    display_order = serializers.IntegerField()
+    media = UnitMediaSerializer(many=True)
+    available_count = serializers.IntegerField()
+    room_count = serializers.IntegerField()
+
+
+def _unit_and_look_name(unit: Unit | None, look: RoomLook | None, *, fallback: str) -> str:
+    from apps.stay.services import look_display_name  # noqa: PLC0415
+
+    if unit is None:
+        return fallback
+    return look_display_name(unit=unit, look=look)
+
+
+def unit_looks(unit: Unit) -> list[dict[str, Any]]:
+    """The type's looks with per-look room counts. Reads prefetched ``looks``/``rooms`` when the
+    caller loaded them, so a list of properties costs no query per room type."""
+    from apps.stay.services import look_display_name  # noqa: PLC0415
+
+    rooms = list(unit.rooms.all())
+    out = []
+    for look in sorted(unit.looks.all(), key=lambda lk: (lk.display_order, lk.created_at)):
+        mine = [r for r in rooms if r.look_id == look.id]
+        out.append(
+            {
+                "id": look.id,
+                "name": look.name,
+                "display_name": look_display_name(unit=unit, look=look),
+                "display_order": look.display_order,
+                "media": sorted(look.media.all(), key=lambda m: (m.display_order, m.created_at)),
+                "available_count": sum(1 for r in mine if r.status == Room.Status.AVAILABLE),
+                "room_count": len(mine),
+            }
+        )
+    return out
+
+
 class UnitSerializer(serializers.ModelSerializer):
     #: Photos of this room type; the property gallery shows the building.
     media = UnitMediaSerializer(many=True, read_only=True)
+    #: The type's looks: one guest card each. A type made before looks has one.
+    looks = serializers.SerializerMethodField()
+
+    @extend_schema_field(RoomLookSerializer(many=True))
+    def get_looks(self, obj: Unit) -> list[dict[str, Any]]:
+        return [dict(RoomLookSerializer(look).data) for look in unit_looks(obj)]
 
     class Meta:
         model = Unit
         fields: tuple[str, ...] = (
             "id",
             "media",
+            "looks",
             "name",
             "sharing_count",
             "quantity",
@@ -56,6 +110,7 @@ class RoomSerializer(serializers.ModelSerializer[Room]):
         model = Room
         fields = (
             "id",
+            "look",
             "number",
             "status",
             "occupant_name",
@@ -438,6 +493,22 @@ class AddUnitMediaSerializer(serializers.Serializer):
     url = serializers.CharField(max_length=1024)
 
 
+class CreateLookSerializer(serializers.Serializer[dict[str, Any]]):
+    #: Required: a second look needs a name guests can tell apart.
+    name = serializers.CharField(max_length=60)
+    image_urls = serializers.ListField(
+        child=serializers.CharField(max_length=1024), required=False, default=list, max_length=8
+    )
+
+
+class UpdateLookSerializer(serializers.Serializer[dict[str, Any]]):
+    name = serializers.CharField(max_length=60, allow_blank=True)
+
+
+class AddLookMediaSerializer(serializers.Serializer[dict[str, Any]]):
+    url = serializers.CharField(max_length=1024)
+
+
 class UpdateUnitSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=120, required=False)
     nightly_rate_paise = serializers.IntegerField(min_value=1, required=False)
@@ -456,6 +527,8 @@ class PartnerReservationActionSerializer(serializers.Serializer):
 class CreateEnquirySerializer(serializers.Serializer):
     property_id = serializers.UUIDField()
     unit_id = serializers.UUIDField(required=False, allow_null=True)
+    #: The look the guest picked on the room page, when the type has several.
+    look_id = serializers.UUIDField(required=False, allow_null=True)
     check_in = serializers.DateField()
     #: How long, in the property's ``price_period`` (nights or months). Send this or check_out.
     length = serializers.IntegerField(min_value=1, max_value=366, required=False, allow_null=True)
@@ -502,7 +575,8 @@ class StayEnquirySerializer(serializers.ModelSerializer):
 
     property_title = serializers.CharField(source="property.title", read_only=True)
     property_slug = serializers.CharField(source="property.slug", read_only=True)
-    unit_name = serializers.CharField(source="unit.name", read_only=True, default="Standard room")
+    #: "1 BHK · With balcony" when the guest picked a named look, so the host knows which room.
+    unit_name = serializers.SerializerMethodField()
     nightly_rate_paise = serializers.IntegerField(
         source="unit.nightly_rate_paise", read_only=True, default=0
     )
@@ -516,6 +590,7 @@ class StayEnquirySerializer(serializers.ModelSerializer):
             "property",
             "property_title",
             "unit",
+            "look",
             "unit_name",
             "nightly_rate_paise",
             "status",
@@ -534,6 +609,9 @@ class StayEnquirySerializer(serializers.ModelSerializer):
             "host_name",
             "host_phone",
         )
+
+    def get_unit_name(self, obj: StayEnquiry) -> str:
+        return _unit_and_look_name(obj.unit, obj.look, fallback="Standard room")
 
     def get_host_phone(self, obj: StayEnquiry) -> str:
         if obj.status in _HOST_CONTACT_HIDDEN:
@@ -639,10 +717,16 @@ class OpsCancelStayReservationSerializer(serializers.Serializer):
 class AddRoomSerializer(serializers.Serializer[dict[str, Any]]):
     number = serializers.CharField(max_length=40)
     available = serializers.BooleanField(required=False, default=True)
+    #: Share this existing look's photos. Omit (and omit ``new_look``) for the first look.
+    look_id = serializers.UUIDField(required=False, allow_null=True)
+    #: Or start a new look with its own name and photos.
+    new_look = CreateLookSerializer(required=False)
 
 
 class UpdateRoomSerializer(serializers.Serializer[dict[str, Any]]):
     number = serializers.CharField(max_length=40, required=False)
+    #: Move the room to another look of its type.
+    look_id = serializers.UUIDField(required=False)
     #: The ON / OFF switch. Not for booked rooms: use the "release" action.
     available = serializers.BooleanField(required=False)
 
@@ -703,6 +787,7 @@ class CreateVisitSerializer(serializers.Serializer[dict[str, Any]]):
     slot_id = serializers.UUIDField()
     visit_date = serializers.DateField()
     unit_id = serializers.UUIDField(required=False, allow_null=True)
+    look_id = serializers.UUIDField(required=False, allow_null=True)
     message = serializers.CharField(max_length=1000, required=False, allow_blank=True, default="")
 
 
@@ -721,7 +806,7 @@ class StayVisitSerializer(serializers.ModelSerializer[StayVisit]):
 
     property_title = serializers.CharField(source="property.title", read_only=True)
     property_slug = serializers.CharField(source="property.slug", read_only=True)
-    unit_name = serializers.CharField(source="unit.name", read_only=True, default="")
+    unit_name = serializers.SerializerMethodField()
     host_name = serializers.CharField(source="property.host.display_name", read_only=True)
     host_phone = serializers.SerializerMethodField()
     reason_text = serializers.SerializerMethodField()
@@ -734,6 +819,7 @@ class StayVisitSerializer(serializers.ModelSerializer[StayVisit]):
             "property_title",
             "property_slug",
             "unit",
+            "look",
             "unit_name",
             "visit_date",
             "start_time",
@@ -746,6 +832,9 @@ class StayVisitSerializer(serializers.ModelSerializer[StayVisit]):
             "responded_at",
             "created_at",
         )
+
+    def get_unit_name(self, obj: StayVisit) -> str:
+        return _unit_and_look_name(obj.unit, obj.look, fallback="")
 
     def get_host_phone(self, obj: StayVisit) -> str:
         if obj.status != StayVisit.Status.ACCEPTED:
@@ -846,4 +935,3 @@ class HostSubscriptionStatusSerializer(serializers.Serializer[dict[str, Any]]):
 
 class StartStaySubscriptionPurchaseSerializer(serializers.Serializer[dict[str, Any]]):
     plan_id = serializers.UUIDField()
-

@@ -746,8 +746,18 @@ class JobOptionsSerializer(serializers.Serializer[dict[str, Any]]):
 # --- job seekers ----------------------------------------------------------------------------
 
 
+class SkillGroupSerializer(serializers.Serializer[dict[str, Any]]):
+    """Skills grouped by the job category they were added from. Only the seeker sees these."""
+
+    category = serializers.CharField()
+    role = serializers.CharField()
+    skills = serializers.ListField(child=serializers.CharField())
+    added_at = serializers.CharField()
+
+
 class JobSeekerProfileSerializer(serializers.ModelSerializer[JobSeekerProfile]):
     has_resume = serializers.SerializerMethodField()
+    skill_groups = serializers.SerializerMethodField()
     phone = serializers.CharField(source="user.phone_number", read_only=True)
 
     class Meta:
@@ -758,6 +768,7 @@ class JobSeekerProfileSerializer(serializers.ModelSerializer[JobSeekerProfile]):
             "phone",
             "roles",
             "skills",
+            "skill_groups",
             "experience_band",
             "qualification",
             "languages",
@@ -771,7 +782,18 @@ class JobSeekerProfileSerializer(serializers.ModelSerializer[JobSeekerProfile]):
             "has_resume",
             "updated_at",
         )
-        read_only_fields = ("id", "phone", "resume_name", "has_resume", "updated_at")
+        read_only_fields = (
+            "id",
+            "phone",
+            "skill_groups",
+            "resume_name",
+            "has_resume",
+            "updated_at",
+        )
+
+    @extend_schema_field(SkillGroupSerializer(many=True))
+    def get_skill_groups(self, obj: JobSeekerProfile) -> list[dict[str, Any]]:
+        return [g for g in obj.skill_groups or [] if isinstance(g, dict)]
 
     def get_has_resume(self, obj: JobSeekerProfile) -> bool:
         return bool(obj.resume_file)
@@ -809,6 +831,10 @@ class JobForYouSerializer(serializers.Serializer[dict[str, Any]]):
 
 class QuickApplySerializer(serializers.Serializer[dict[str, Any]]):
     note = serializers.CharField(max_length=2000, required=False, allow_blank=True, default="")
+    #: The job's skills the seeker ticked as their own. Added to the profile, never replacing it.
+    skills = serializers.ListField(
+        child=serializers.CharField(max_length=60), required=False, default=list, max_length=60
+    )
 
 
 class CandidateMatchSerializer(serializers.Serializer[dict[str, Any]]):

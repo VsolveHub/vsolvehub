@@ -20,7 +20,7 @@ from django.utils import timezone
 from apps.notifications.models import NotificationIntent
 from apps.notifications.services import request_notification
 from apps.stay.models import Property, StayVisit, Unit, VisitBlockedDate, VisitSlot
-from apps.stay.services import StayStateError, _require_stay_capability
+from apps.stay.services import StayStateError, _require_stay_capability, resolve_look
 
 logger = logging.getLogger(__name__)
 
@@ -229,6 +229,7 @@ def request_visit(
     visit_date: date,
     unit_id: UUID | str | None = None,
     message: str = "",
+    look_id: UUID | str | None = None,
 ) -> StayVisit:
     prop = Property.objects.select_related("host").get(id=_as_uuid(property_id))
     if prop.public_state != "PUBLISHED":
@@ -252,10 +253,12 @@ def request_visit(
     if prop.visit_blocked_dates.filter(date=visit_date).exists():
         raise StayStateError("The owner isn't taking visits that day.", code="visit_date_blocked")
     unit = None
+    look = None
     if unit_id is not None:
         unit = Unit.objects.filter(id=_as_uuid(unit_id), property=prop, is_active=True).first()
         if unit is None:
             raise StayStateError("This room is not available.", code="room_unavailable")
+        look = resolve_look(unit=unit, look_id=look_id)
     duplicate = StayVisit.objects.filter(
         customer=customer, property=prop, visit_date=visit_date, status__in=_OPEN_STATUSES
     ).exists()
@@ -268,6 +271,7 @@ def request_visit(
             visit = StayVisit.objects.create(
                 property=prop,
                 unit=unit,
+                look=look,
                 customer=customer,
                 slot=slot,
                 visit_date=visit_date,

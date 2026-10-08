@@ -167,6 +167,19 @@ is D4 (`M3-BE-371`), not a Careers stub.
 
 - [ ] See design doc Wave D2. Do not implement on `feature/m3-a10-listings`.
 
+### D2a — Stay room looks (2026-10-08, see `07-job-skills-and-stay-room-looks.md`)
+
+- [~] `M3-BE-331` `RoomLook` (photo set per room type), looks on rooms/photos/enquiries/visits, migrations 0021/0022 (one look per existing type), look services and endpoints
+- [~] `M3-FE-331` Customer: one search card per look (cap 3, "+N more look"), "Other looks of this room" switcher, look sent with enquiry/visit
+- [~] `M3-FE-332` Partner: rooms grouped by look, Add-room sheet (reuse a look or new named look with photos), live "How guests see it" preview using shared `StayRoomCard`
+- Tests: `backend/tests/stay/test_room_looks.py`; `customer/features/stays/looks.test.ts`, `room-cards.test.ts`; `partner/features/stays/view/room-looks.test.ts`
+
+### D3a — Job skills accumulate (2026-10-08, see `07-job-skills-and-stay-room-looks.md`)
+
+- [~] `M3-BE-362` Applying merges skills and job title into the profile (form and quick apply), `skill_groups`, caps 60 skills / 10 roles
+- [~] `M3-FE-333` Quick apply "Which of these skills do you have?", grouped skills on the profile
+- Tests: `backend/tests/listings/test_skills_accumulate.py`, updated `test_jobs_seekers_matching.py`; `customer/features/listings/seeker-skills.test.ts`
+
 ### D3 — A10 listing engine
 
 **Dependencies:** D0 shared catalog/archetype wiring. May run in parallel with D1/D2.

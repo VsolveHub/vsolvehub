@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.68.0
+  version: 1.69.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -15019,6 +15019,90 @@ paths:
               schema:
                 $ref: '#/components/schemas/PartnerStayEnquiry'
           description: ''
+  /api/v1/partner/stays/looks/{look_id}:
+    patch:
+      operationId: partner_stays_looks_partial_update
+      description: Rename a look, or remove an empty one.
+      parameters:
+      - in: path
+        name: look_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateLookRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateLookRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateLookRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoomLook'
+          description: ''
+    delete:
+      operationId: partner_stays_looks_destroy
+      description: Rename a look, or remove an empty one.
+      parameters:
+      - in: path
+        name: look_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/partner/stays/looks/{look_id}/media:
+    post:
+      operationId: partner_stays_looks_media_create
+      description: Add a photo to one look. Removing uses the room type's photo delete.
+      parameters:
+      - in: path
+        name: look_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddLookMediaRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AddLookMediaRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AddLookMediaRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnitMedia'
+          description: ''
   /api/v1/partner/stays/photos:
     post:
       operationId: partner_stays_photos_create
@@ -15518,6 +15602,41 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PartnerUnit'
+          description: ''
+  /api/v1/partner/stays/units/{unit_id}/looks:
+    post:
+      operationId: partner_stays_units_looks_create
+      description: Add a look (a named photo set) to a room type. Rooms join it from
+        the room screens.
+      parameters:
+      - in: path
+        name: unit_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLookRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CreateLookRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CreateLookRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoomLook'
           description: ''
   /api/v1/partner/stays/units/{unit_id}/media:
     post:
@@ -19774,6 +19893,15 @@ components:
           nullable: true
       required:
       - active_role
+    AddLookMediaRequest:
+      type: object
+      properties:
+        url:
+          type: string
+          minLength: 1
+          maxLength: 1024
+      required:
+      - url
     AddPropertyMediaRequest:
       type: object
       properties:
@@ -19801,6 +19929,12 @@ components:
         available:
           type: boolean
           default: true
+        look_id:
+          type: string
+          format: uuid
+          nullable: true
+        new_look:
+          $ref: '#/components/schemas/CreateLookRequest'
       required:
       - number
     AddUnitMediaRequest:
@@ -22825,6 +22959,10 @@ components:
           type: string
           format: uuid
           nullable: true
+        look_id:
+          type: string
+          format: uuid
+          nullable: true
         check_in:
           type: string
           format: date
@@ -22847,6 +22985,22 @@ components:
       required:
       - check_in
       - property_id
+    CreateLookRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+        image_urls:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 1024
+          maxItems: 8
+      required:
+      - name
     CreatePropertyRequest:
       type: object
       properties:
@@ -23010,6 +23164,10 @@ components:
           type: string
           format: date
         unit_id:
+          type: string
+          format: uuid
+          nullable: true
+        look_id:
           type: string
           format: uuid
           nullable: true
@@ -27257,6 +27415,11 @@ components:
           readOnly: true
         roles: {}
         skills: {}
+        skill_groups:
+          type: array
+          items:
+            $ref: '#/components/schemas/SkillGroup'
+          readOnly: true
         experience_band:
           type: string
           maxLength: 12
@@ -27296,6 +27459,7 @@ components:
       - id
       - phone
       - resume_name
+      - skill_groups
       - updated_at
     JobSeekerProfileWriteRequest:
       type: object
@@ -32264,10 +32428,13 @@ components:
           type: string
           format: uuid
           nullable: true
+        look:
+          type: string
+          format: uuid
+          nullable: true
         unit_name:
           type: string
           readOnly: true
-          default: Standard room
         nightly_rate_paise:
           type: integer
           readOnly: true
@@ -32362,10 +32529,13 @@ components:
           type: string
           format: uuid
           nullable: true
+        look:
+          type: string
+          format: uuid
+          nullable: true
         unit_name:
           type: string
           readOnly: true
-          default: ''
         visit_date:
           type: string
           format: date
@@ -32439,6 +32609,11 @@ components:
           items:
             $ref: '#/components/schemas/UnitMedia'
           readOnly: true
+        looks:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoomLook'
+          readOnly: true
         name:
           type: string
           maxLength: 120
@@ -32475,6 +32650,7 @@ components:
           readOnly: true
       required:
       - id
+      - looks
       - media
       - name
       - nightly_rate_paise
@@ -33045,6 +33221,12 @@ components:
           maxLength: 6
         delivery_available:
           type: boolean
+    PatchedUpdateLookRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 60
     PatchedUpdatePropertyRequest:
       type: object
       properties:
@@ -33073,6 +33255,9 @@ components:
           type: string
           minLength: 1
           maxLength: 40
+        look_id:
+          type: string
+          format: uuid
         available:
           type: boolean
     PatchedUpdateUnitRequest:
@@ -36301,6 +36486,13 @@ components:
           type: string
           default: ''
           maxLength: 2000
+        skills:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 60
+          maxItems: 60
     Quote:
       type: object
       properties:
@@ -39368,6 +39560,9 @@ components:
           type: string
           format: uuid
           readOnly: true
+        look:
+          type: string
+          format: uuid
         number:
           type: string
           maxLength: 40
@@ -39390,7 +39585,39 @@ components:
           nullable: true
       required:
       - id
+      - look
       - number
+    RoomLook:
+      type: object
+      description: |-
+        One look of a room type, as guests see it: its photos and how many of its rooms are
+        available. Never the room numbers.
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        display_name:
+          type: string
+        display_order:
+          type: integer
+        media:
+          type: array
+          items:
+            $ref: '#/components/schemas/UnitMedia'
+        available_count:
+          type: integer
+        room_count:
+          type: integer
+      required:
+      - available_count
+      - display_name
+      - display_order
+      - id
+      - media
+      - name
+      - room_count
     RoomStatusEnum:
       enum:
       - AVAILABLE
@@ -40938,6 +41165,26 @@ components:
       required:
       - above_bps
       - below_bps
+    SkillGroup:
+      type: object
+      description: Skills grouped by the job category they were added from. Only the
+        seeker sees these.
+      properties:
+        category:
+          type: string
+        role:
+          type: string
+        skills:
+          type: array
+          items:
+            type: string
+        added_at:
+          type: string
+      required:
+      - added_at
+      - category
+      - role
+      - skills
     SourceEnum:
       enum:
       - MANUAL
@@ -41393,10 +41640,13 @@ components:
           type: string
           format: uuid
           nullable: true
+        look:
+          type: string
+          format: uuid
+          nullable: true
         unit_name:
           type: string
           readOnly: true
-          default: Standard room
         nightly_rate_paise:
           type: integer
           readOnly: true
@@ -41886,10 +42136,13 @@ components:
           type: string
           format: uuid
           nullable: true
+        look:
+          type: string
+          format: uuid
+          nullable: true
         unit_name:
           type: string
           readOnly: true
-          default: ''
         visit_date:
           type: string
           format: date
@@ -42419,6 +42672,11 @@ components:
           items:
             $ref: '#/components/schemas/UnitMedia'
           readOnly: true
+        looks:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoomLook'
+          readOnly: true
         name:
           type: string
           maxLength: 120
@@ -42447,6 +42705,7 @@ components:
         attributes: {}
       required:
       - id
+      - looks
       - media
       - name
       - nightly_rate_paise

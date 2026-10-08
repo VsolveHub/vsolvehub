@@ -457,7 +457,12 @@ class JobSeekerProfile(models.Model):
     full_name = models.CharField(max_length=120, blank=True, default="")
     #: Up to three job titles they want ("Sales Executive", "Cashier").
     roles = models.JSONField(default=list, blank=True)
+    #: Every skill the seeker has, from their own edits and every job they applied for. Matching
+    #: reads this flat list; applying adds to it and never replaces it.
     skills = models.JSONField(default=list, blank=True)
+    #: The same skills grouped by the job category they came from, for the seeker's own profile
+    #: page: ``[{"category", "role", "skills": [...], "added_at"}]``. Employers never see this.
+    skill_groups = models.JSONField(default=list, blank=True)
     experience_band = models.CharField(max_length=12, blank=True, default="")
     qualification = models.CharField(max_length=20, blank=True, default="")
     languages = models.JSONField(default=list, blank=True)

@@ -41,6 +41,21 @@ urlpatterns = [
         name="partner-stay-unit-rooms",
     ),
     path(
+        "partner/stays/units/<uuid:unit_id>/looks",
+        views.PartnerUnitLookCollectionView.as_view(),
+        name="partner-stay-unit-looks",
+    ),
+    path(
+        "partner/stays/looks/<uuid:look_id>",
+        views.PartnerLookDetailView.as_view(),
+        name="partner-stay-look-detail",
+    ),
+    path(
+        "partner/stays/looks/<uuid:look_id>/media",
+        views.PartnerLookMediaCreateView.as_view(),
+        name="partner-stay-look-media",
+    ),
+    path(
         "partner/stays/rooms/<uuid:room_id>",
         views.PartnerRoomDetailView.as_view(),
         name="partner-stay-room-detail",

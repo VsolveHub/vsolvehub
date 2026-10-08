@@ -1,6 +1,12 @@
 # Job skills that accumulate · Stay rooms grouped by look · Guest preview for hosts
 
-**Status:** Planned — owner decisions taken 8 Oct 2026 (below); not built
+**Status:** Built — owner verification pending (`task.md` D3a/D2a, `[~]`). Contract `1.69.0`.
+
+Built as planned, with these notes:
+- Guests' card title is `RoomLook.display_name` from the server ("1 BHK · With balcony").
+- Visits also carry `look_id`; reservations (paid nightly bookings) don't yet.
+- Photos are removed through the room type's existing photo delete; adding goes per look.
+- The partner preview and the guest search card share `StayRoomCard` in `packages/ui`.
 **Effective date:** 2026-10-08
 **Base:** `main` @ `4aab07f`
 
