@@ -22,6 +22,7 @@ work without redefining platform invariants.
 | --- | --- |
 | [Master task board](task.md) | Phase status, task ids, dependencies, gates |
 | [Wallet, V Coins & Referral](01-wallet-vcoins-referral.md) | Owner decisions, domain model, configuration, APIs, acceptance |
+| [Rental pickup, delivery & item options](06-rental-pickup-delivery-and-item-options.md) | A7 Self Pickup address + Maps link, partner-quoted delivery, colour/material dropdowns — audit and plan |
 
 **Planned (not written yet)**
 
