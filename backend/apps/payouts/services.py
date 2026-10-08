@@ -211,9 +211,10 @@ def settle_rental_earning(
     constraint ``payouts_one_earning_per_rental_booking``: a replayed settlement
     returns the existing row. Two concurrent callers cannot both win.
 
-    The owner's share is ``price_paise - platform_fee_paise``. The deposit is
-    excluded — it is the customer's refundable security. The platform fee is
-    V Solve Hub's revenue (commission).
+    The owner's share is ``price_paise - platform_fee_paise``, plus any agreed
+    transport less its commission (0% today). The deposit is excluded — it is
+    the customer's refundable security. The platform fee is V Solve Hub's
+    revenue (commission).
 
     Returns ``None`` for a booking that has not reached ``RETURNED`` or
     ``DISPUTED`` — the partner has not earned the fee yet.
@@ -233,8 +234,12 @@ def settle_rental_earning(
     if rb.status not in (RentalBooking.Status.RETURNED, RentalBooking.Status.DISPUTED):
         return None
 
-    gross = int(rb.price_paise)
-    commission = int(rb.platform_fee_paise)
+    # Transport is the owner's agreed delivery price, paid with the rent. Its commission is
+    # snapshotted on the booking at accept time (0% today), so it reaches the owner in full.
+    transport = int(rb.transport_paise)
+    transport_fee = int(rb.transport_fee_paise)
+    gross = int(rb.price_paise) + transport
+    commission = int(rb.platform_fee_paise) + transport_fee
     net = gross - commission
     if net <= 0:
         return None
@@ -252,14 +257,19 @@ def settle_rental_earning(
         currency="INR",
         calculation_snapshot={
             "booking_status": rb.status,
-            "price_paise": gross,
+            "price_paise": int(rb.price_paise),
             "platform_fee_percent": int(rb.platform_fee_percent),
-            "platform_fee_paise": commission,
+            "platform_fee_paise": int(rb.platform_fee_paise),
+            "transport_paise": transport,
+            "transport_fee_percent": int(rb.transport_fee_percent),
+            "transport_fee_paise": transport_fee,
+            "pickup_or_delivery_mode": rb.pickup_or_delivery_mode,
             "deposit_paise": int(rb.deposit.amount_paise) if rb.deposit_id else 0,
         },
         created_by=actor,
         idempotency_key=f"rental-earning:{rb.id}",
     )
+
 
 @transaction.atomic
 def release_payout_hold(
@@ -267,9 +277,7 @@ def release_payout_hold(
 ) -> PartnerLedgerEntry | None:
     """Move a held earning to `AVAILABLE` once the case that held it closes."""
 
-    qs = PartnerLedgerEntry.objects.select_for_update().filter(
-        kind=PartnerLedgerEntry.Kind.EARNING
-    )
+    qs = PartnerLedgerEntry.objects.select_for_update().filter(kind=PartnerLedgerEntry.Kind.EARNING)
     if booking_id is not None:
         qs = qs.filter(booking_id=booking_id)
     elif rental_booking_id is not None:

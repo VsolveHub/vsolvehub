@@ -14,20 +14,32 @@ from rest_framework.views import APIView
 from apps.foundation.slugs import lookup_by_slug_or_id
 from apps.partners.models import PartnerProfile
 from apps.partners.permissions import IsOperationsUser, IsPartnerUser
+from apps.rental import transport as transport_service
 from apps.rental.exceptions import RentalStateApiError
 from apps.rental.models import RentalAsset, RentalBooking, RentalDeposit
+from apps.rental.pickup_hours import (
+    DayHours,
+    PickupHoursError,
+    pickup_hours_payload,
+    save_pickup_hours,
+)
 from apps.rental.serializers import (
     CreateAssetSerializer,
     CreateBookingSerializer,
     OpsRentalDisputeDecisionSerializer,
     PartnerBookingActionSerializer,
     PartnerRentalBookingSerializer,
+    PickupHoursSerializer,
+    PickupHoursUpdateSerializer,
+    RentalAssetDetailSerializer,
     RentalAssetSerializer,
     RentalBookingSerializer,
     RentalModerationSerializer,
     RentalPhotoUploadSerializer,
     RentalPlatformFeeSerializer,
     RentalTaxonomySubcategorySerializer,
+    TransportNoteSerializer,
+    TransportQuoteSerializer,
     UpdateAssetSerializer,
 )
 from apps.rental.services import (
@@ -88,7 +100,28 @@ class RentalPlatformFeeView(APIView):
 
     @extend_schema(responses=RentalPlatformFeeSerializer)
     def get(self, _request: Any) -> Response:
-        return Response({"percent": current_platform_fee_percent()})
+        return Response(
+            {
+                "percent": current_platform_fee_percent(),
+                "transport_fee_percent": transport_service.transport_fee_percent(),
+            }
+        )
+
+
+#: Booking reads load the asset's owner hours and the delivery request in the same queries.
+BOOKING_RELATED = (
+    "asset",
+    "asset__partner",
+    "deposit",
+    "deposit__payment_attempt",
+)
+BOOKING_PREFETCH = ("lines", "asset__partner__rental_pickup_days", "asset__media", "transport")
+
+
+def _booking_rows() -> Any:
+    return RentalBooking.objects.select_related(*BOOKING_RELATED).prefetch_related(
+        *BOOKING_PREFETCH
+    )
 
 
 class RentalBrowseView(APIView):
@@ -138,11 +171,14 @@ class RentalBrowseView(APIView):
 class RentalDetailView(APIView):
     permission_classes = (permissions.AllowAny,)
 
-    @extend_schema(responses=RentalAssetSerializer)
+    @extend_schema(responses=RentalAssetDetailSerializer)
     def get(self, _request: Any, key: str) -> Response:
         """``key`` is the page slug; an old link's asset id still works."""
-        asset = get_object_or_404(public_assets(), **lookup_by_slug_or_id(key))
-        return Response(RentalAssetSerializer(asset).data)
+        asset = get_object_or_404(
+            public_assets().prefetch_related("partner__rental_pickup_days"),
+            **lookup_by_slug_or_id(key),
+        )
+        return Response(RentalAssetDetailSerializer(asset).data)
 
 
 class RentalBookView(APIView):
@@ -161,11 +197,15 @@ class RentalBookView(APIView):
                 mode=ser.validated_data.get("pickup_or_delivery_mode", "PICKUP"),
                 notes=ser.validated_data.get("notes", ""),
                 quantity=ser.validated_data.get("quantity", 1),
+                delivery_address=ser.validated_data.get("delivery_address"),
+                delivery_note=ser.validated_data.get("delivery_note", ""),
             )
         except (RentalStateError, PermissionError, RentalAsset.DoesNotExist) as exc:
             _raise_domain_error(exc)
         return Response(
-            RentalBookingSerializer(booking, context={"request": request}).data,
+            RentalBookingSerializer(
+                _booking_rows().get(id=booking.id), context={"request": request}
+            ).data,
             status=status.HTTP_201_CREATED,
         )
 
@@ -175,12 +215,46 @@ class MyRentalsView(APIView):
 
     @extend_schema(responses=RentalBookingSerializer(many=True))
     def get(self, request: Any) -> Response:
-        rows = (
-            RentalBooking.objects.filter(customer=request.user)
-            .select_related("asset", "asset__partner", "deposit", "deposit__payment_attempt")
-            .prefetch_related("lines")
-        )
+        rows = _booking_rows().filter(customer=request.user)
         return Response(RentalBookingSerializer(rows, many=True, context={"request": request}).data)
+
+
+class MyRentalTransportView(APIView):
+    """The customer answers the owner's transport price, or drops delivery.
+
+    ``accept`` starts the one payment for rent, fee, deposit and transport; the response's
+    ``deposit.payment_attempt_id`` opens checkout. ``switch-to-pickup`` starts the pickup payment.
+    """
+
+    permission_classes = (permissions.IsAuthenticated,)
+
+    @extend_schema(
+        operation_id="me_rentals_transport_action",
+        request=TransportNoteSerializer,
+        responses=RentalBookingSerializer,
+    )
+    def post(self, request: Any, booking_id: UUID, action: str) -> Response:
+        booking = get_object_or_404(RentalBooking, id=booking_id, customer=request.user)
+        body = TransportNoteSerializer(data=request.data)
+        body.is_valid(raise_exception=True)
+        try:
+            if action == "accept":
+                transport_service.accept_quote(booking=booking, customer=request.user)
+            elif action == "reject":
+                transport_service.reject_quote(
+                    booking=booking, customer=request.user, note=body.validated_data["note"]
+                )
+            elif action == "switch-to-pickup":
+                transport_service.switch_to_pickup(booking=booking, customer=request.user)
+            else:
+                raise RentalStateError("Unknown action.")
+        except (RentalStateError, PermissionError) as exc:
+            _raise_domain_error(exc)
+        return Response(
+            RentalBookingSerializer(
+                _booking_rows().get(id=booking.id), context={"request": request}
+            ).data
+        )
 
 
 class MyRentalCancelView(APIView):
@@ -199,10 +273,36 @@ class MyRentalCancelView(APIView):
             booking = cancel_booking(booking=booking, customer=request.user)
         except (RentalStateError, PermissionError) as exc:
             _raise_domain_error(exc)
-        booking = RentalBooking.objects.select_related(
-            "asset", "asset__partner", "deposit", "deposit__payment_attempt"
-        ).get(id=booking.id)
-        return Response(RentalBookingSerializer(booking).data)
+        return Response(
+            RentalBookingSerializer(
+                _booking_rows().get(id=booking.id), context={"request": request}
+            ).data
+        )
+
+
+class PartnerPickupHoursView(APIView):
+    """The owner's open days and hours, used by all their rental items."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(responses=PickupHoursSerializer)
+    def get(self, request: Any) -> Response:
+        return Response(pickup_hours_payload(_partner(request.user).id))
+
+    @extend_schema(request=PickupHoursUpdateSerializer, responses=PickupHoursSerializer)
+    def put(self, request: Any) -> Response:
+        partner = _partner(request.user)
+        ser = PickupHoursUpdateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        days = [
+            DayHours(weekday=d["weekday"], opens_at=d["opens_at"], closes_at=d["closes_at"])
+            for d in ser.validated_data["days"]
+        ]
+        try:
+            save_pickup_hours(partner=partner, days=days)
+        except PickupHoursError as exc:
+            _raise_domain_error(exc)
+        return Response(pickup_hours_payload(partner.id))
 
 
 class PartnerRentalPhotoUploadView(APIView):
@@ -350,11 +450,7 @@ class PartnerBookingCollectionView(APIView):
     )
     def get(self, request: Any) -> Response:
         partner = _partner(request.user)
-        rows = (
-            RentalBooking.objects.filter(asset__partner=partner)
-            .select_related("asset", "deposit", "customer")
-            .prefetch_related("lines")
-        )
+        rows = _booking_rows().select_related("customer").filter(asset__partner=partner)
         status_filter = (request.query_params.get("status") or "").strip().upper()
         if status_filter:
             rows = rows.filter(status=status_filter)
@@ -408,7 +504,56 @@ class PartnerBookingActionView(APIView):
                 raise RentalStateError("Unknown action.")
         except (RentalStateError, PermissionError) as exc:
             _raise_domain_error(exc)
-        return Response(PartnerRentalBookingSerializer(booking, context={"request": request}).data)
+        return Response(
+            PartnerRentalBookingSerializer(
+                _booking_rows().select_related("customer").get(id=booking.id),
+                context={"request": request},
+            ).data
+        )
+
+
+class PartnerBookingTransportView(APIView):
+    """The owner prices a delivery request, declines it, or sends the item out."""
+
+    permission_classes = (IsPartnerUser,)
+
+    @extend_schema(
+        operation_id="partner_rentals_booking_transport_quote",
+        request=TransportQuoteSerializer,
+        responses=PartnerRentalBookingSerializer,
+    )
+    def post(self, request: Any, booking_id: UUID, action: str) -> Response:
+        partner = _partner(request.user)
+        booking = get_object_or_404(RentalBooking, id=booking_id, asset__partner=partner)
+        try:
+            if action == "quote":
+                body = TransportQuoteSerializer(data=request.data)
+                body.is_valid(raise_exception=True)
+                transport_service.quote_transport(
+                    booking=booking,
+                    partner=partner,
+                    amount_paise=body.validated_data["amount_paise"],
+                    trip=body.validated_data["trip"],
+                    note=body.validated_data["note"],
+                )
+            elif action == "decline":
+                note = TransportNoteSerializer(data=request.data)
+                note.is_valid(raise_exception=True)
+                transport_service.decline_transport(
+                    booking=booking, partner=partner, reason=note.validated_data["note"]
+                )
+            elif action == "out-for-delivery":
+                transport_service.mark_out_for_delivery(booking=booking, partner=partner)
+            else:
+                raise RentalStateError("Unknown action.")
+        except (RentalStateError, PermissionError) as exc:
+            _raise_domain_error(exc)
+        return Response(
+            PartnerRentalBookingSerializer(
+                _booking_rows().select_related("customer").get(id=booking.id),
+                context={"request": request},
+            ).data
+        )
 
 
 def _ops_dispute_row(booking: RentalBooking, request: Any) -> dict[str, Any]:
@@ -537,7 +682,8 @@ class OpsRentalBookingCancelView(APIView):
         except (RentalStateError, PermissionError) as exc:
             _raise_domain_error(exc)
 
-        booking = RentalBooking.objects.select_related(
-            "asset", "asset__partner", "deposit", "deposit__payment_attempt"
-        ).get(id=booking.id)
-        return Response(RentalBookingSerializer(booking, context={"request": request}).data)
+        return Response(
+            RentalBookingSerializer(
+                _booking_rows().get(id=booking.id), context={"request": request}
+            ).data
+        )

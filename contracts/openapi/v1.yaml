@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.67.0
+  version: 1.68.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -5305,6 +5305,48 @@ paths:
         required: true
       tags:
       - me
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RentalBooking'
+          description: ''
+  /api/v1/me/rentals/{booking_id}/transport/{action}:
+    post:
+      operationId: me_rentals_transport_action
+      description: |-
+        The customer answers the owner's transport price, or drops delivery.
+
+        ``accept`` starts the one payment for rent, fee, deposit and transport; the response's
+        ``deposit.payment_attempt_id`` opens checkout. ``switch-to-pickup`` starts the pickup payment.
+      parameters:
+      - in: path
+        name: action
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - me
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransportNoteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TransportNoteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TransportNoteRequest'
       security:
       - cookieAuth: []
       responses:
@@ -14675,6 +14717,46 @@ paths:
               schema:
                 $ref: '#/components/schemas/PartnerRentalBooking'
           description: ''
+  /api/v1/partner/rentals/bookings/{booking_id}/transport/{action}:
+    post:
+      operationId: partner_rentals_booking_transport_quote
+      description: The owner prices a delivery request, declines it, or sends the
+        item out.
+      parameters:
+      - in: path
+        name: action
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransportQuoteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TransportQuoteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TransportQuoteRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerRentalBooking'
+          description: ''
   /api/v1/partner/rentals/photos:
     post:
       operationId: partner_rentals_photos_create
@@ -14693,6 +14775,47 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RentalPhotoUpload'
+          description: ''
+  /api/v1/partner/rentals/pickup-hours:
+    get:
+      operationId: partner_rentals_pickup_hours_retrieve
+      description: The owner's open days and hours, used by all their rental items.
+      tags:
+      - partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PickupHours'
+          description: ''
+    put:
+      operationId: partner_rentals_pickup_hours_update
+      description: The owner's open days and hours, used by all their rental items.
+      tags:
+      - partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PickupHoursUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PickupHoursUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PickupHoursUpdateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PickupHours'
           description: ''
   /api/v1/partner/required-consents/:
     get:
@@ -16530,7 +16653,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RentalAsset'
+                $ref: '#/components/schemas/RentalAssetDetail'
           description: ''
   /api/v1/rentals/book:
     post:
@@ -22622,6 +22745,25 @@ components:
           type: string
           default: ''
         structured_fields: {}
+        pickup_address_line:
+          type: string
+          default: ''
+          maxLength: 240
+        pickup_area:
+          type: string
+          default: ''
+          maxLength: 120
+        pickup_city:
+          type: string
+          default: ''
+          maxLength: 120
+        pickup_pincode:
+          type: string
+          default: ''
+          maxLength: 6
+        delivery_available:
+          type: boolean
+          default: false
         media:
           type: array
           items:
@@ -22657,9 +22799,15 @@ components:
           minimum: 1
           default: 1
         pickup_or_delivery_mode:
-          type: string
-          minLength: 1
+          allOf:
+          - $ref: '#/components/schemas/RentalBookingModeEnum'
           default: PICKUP
+        delivery_address:
+          $ref: '#/components/schemas/DeliveryAddressRequest'
+        delivery_note:
+          type: string
+          default: ''
+          maxLength: 480
         notes:
           type: string
           default: ''
@@ -24532,6 +24680,34 @@ components:
           maxLength: 1000
       required:
       - title
+    DeliveryAddressRequest:
+      type: object
+      properties:
+        line:
+          type: string
+          minLength: 1
+          maxLength: 240
+        area:
+          type: string
+          default: ''
+          maxLength: 120
+        city:
+          type: string
+          minLength: 1
+          maxLength: 120
+        pincode:
+          type: string
+          minLength: 1
+          maxLength: 6
+        contact_phone:
+          type: string
+          minLength: 1
+          maxLength: 20
+      required:
+      - city
+      - contact_phone
+      - line
+      - pincode
     DemandPreview:
       type: object
       properties:
@@ -31837,7 +32013,7 @@ components:
           format: uuid
           readOnly: true
         status:
-          $ref: '#/components/schemas/StatusD8aEnum'
+          $ref: '#/components/schemas/RentalBookingStatusEnum'
         start_date:
           type: string
           format: date
@@ -31860,8 +32036,32 @@ components:
           maximum: 2147483647
           minimum: 0
         pickup_or_delivery_mode:
-          type: string
-          maxLength: 32
+          $ref: '#/components/schemas/RentalBookingModeEnum'
+        delivery_address: {}
+        transport_paise:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        transport_fee_percent:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        transport_fee_paise:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        amount_due_paise:
+          type: integer
+          readOnly: true
+        transport:
+          allOf:
+          - $ref: '#/components/schemas/RentalTransport'
+          nullable: true
+          readOnly: true
+        pickup_hours:
+          allOf:
+          - $ref: '#/components/schemas/PickupHours'
+          readOnly: true
         notes:
           type: string
         asset:
@@ -31889,6 +32089,7 @@ components:
           nullable: true
           readOnly: true
       required:
+      - amount_due_paise
       - asset
       - created_at
       - customer_name
@@ -31897,9 +32098,11 @@ components:
       - end_date
       - handover_pin
       - id
+      - pickup_hours
       - price_paise
       - quantity
       - start_date
+      - transport
     PartnerReservationActionRequest:
       type: object
       properties:
@@ -32828,6 +33031,20 @@ components:
           type: integer
           minimum: 1
         structured_fields: {}
+        pickup_address_line:
+          type: string
+          maxLength: 240
+        pickup_area:
+          type: string
+          maxLength: 120
+        pickup_city:
+          type: string
+          maxLength: 120
+        pickup_pincode:
+          type: string
+          maxLength: 6
+        delivery_available:
+          type: boolean
     PatchedUpdatePropertyRequest:
       type: object
       properties:
@@ -33360,6 +33577,102 @@ components:
         * `PAID` - Paid
         * `FAILED` - Failed
         * `CANCELLED` - Cancelled
+    PickupAddress:
+      type: object
+      description: Where a Self Pickup customer collects the item. ``maps_url`` opens
+        Google Maps.
+      properties:
+        partner_name:
+          type: string
+        line:
+          type: string
+        area:
+          type: string
+        city:
+          type: string
+        pincode:
+          type: string
+        maps_url:
+          type: string
+          description: Google Maps search for the address. Empty if none.
+      required:
+      - area
+      - city
+      - line
+      - maps_url
+      - partner_name
+      - pincode
+    PickupDay:
+      type: object
+      properties:
+        weekday:
+          type: integer
+          maximum: 6
+          minimum: 0
+          description: Monday = 0.
+        day_name:
+          type: string
+          readOnly: true
+        is_open:
+          type: boolean
+        opens_at:
+          type: string
+          nullable: true
+          description: HH:MM, 24-hour. Null if closed.
+        closes_at:
+          type: string
+          nullable: true
+          description: HH:MM, 24-hour. Null if closed.
+      required:
+      - closes_at
+      - day_name
+      - is_open
+      - opens_at
+      - weekday
+    PickupDayInputRequest:
+      type: object
+      properties:
+        weekday:
+          type: integer
+          maximum: 6
+          minimum: 0
+        opens_at:
+          type: string
+          format: time
+        closes_at:
+          type: string
+          format: time
+      required:
+      - closes_at
+      - opens_at
+      - weekday
+    PickupHours:
+      type: object
+      properties:
+        is_set:
+          type: boolean
+          description: False until the owner saves their hours.
+        days:
+          type: array
+          items:
+            $ref: '#/components/schemas/PickupDay'
+        summary:
+          type: string
+          description: e.g. "Mon-Sat 9 AM-9 PM · Sun 9 AM-6 PM".
+      required:
+      - days
+      - is_set
+      - summary
+    PickupHoursUpdateRequest:
+      type: object
+      description: The open days only. A day left out is closed.
+      properties:
+        days:
+          type: array
+          items:
+            $ref: '#/components/schemas/PickupDayInputRequest'
+      required:
+      - days
     PlanQuoteCreateRequest:
       type: object
       properties:
@@ -37509,6 +37822,25 @@ components:
           items:
             $ref: '#/components/schemas/RentalAssetMedia'
           readOnly: true
+        pickup_address_line:
+          type: string
+          readOnly: true
+        pickup_area:
+          type: string
+          readOnly: true
+        pickup_city:
+          type: string
+          readOnly: true
+        pickup_pincode:
+          type: string
+          readOnly: true
+        pickup_address:
+          allOf:
+          - $ref: '#/components/schemas/PickupAddress'
+          readOnly: true
+        delivery_available:
+          type: boolean
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -37518,6 +37850,7 @@ components:
       - created_at
       - current_status
       - daily_rate_paise
+      - delivery_available
       - deposit_paise
       - description
       - id
@@ -37525,6 +37858,122 @@ components:
       - media
       - moderation_status
       - partner_name
+      - pickup_address
+      - pickup_address_line
+      - pickup_area
+      - pickup_city
+      - pickup_pincode
+      - public_state
+      - quantity_available
+      - slug
+      - structured_fields
+      - title
+      - variant
+    RentalAssetDetail:
+      type: object
+      description: 'One item''s page: adds the owner''s pickup hours.'
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        slug:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        title:
+          type: string
+          readOnly: true
+        description:
+          type: string
+          readOnly: true
+        location_text:
+          type: string
+          readOnly: true
+        daily_rate_paise:
+          type: integer
+          readOnly: true
+        deposit_paise:
+          type: integer
+          readOnly: true
+        quantity_available:
+          type: integer
+          readOnly: true
+        condition_grade:
+          allOf:
+          - $ref: '#/components/schemas/ConditionGradeEnum'
+          readOnly: true
+        current_status:
+          allOf:
+          - $ref: '#/components/schemas/CurrentStatusEnum'
+          readOnly: true
+        moderation_status:
+          allOf:
+          - $ref: '#/components/schemas/RentalAssetModerationStatusEnum'
+          readOnly: true
+        public_state:
+          type: string
+          readOnly: true
+        partner_name:
+          type: string
+          readOnly: true
+        variant:
+          type: string
+          format: uuid
+          readOnly: true
+        structured_fields:
+          readOnly: true
+        media:
+          type: array
+          items:
+            $ref: '#/components/schemas/RentalAssetMedia'
+          readOnly: true
+        pickup_address_line:
+          type: string
+          readOnly: true
+        pickup_area:
+          type: string
+          readOnly: true
+        pickup_city:
+          type: string
+          readOnly: true
+        pickup_pincode:
+          type: string
+          readOnly: true
+        pickup_address:
+          allOf:
+          - $ref: '#/components/schemas/PickupAddress'
+          readOnly: true
+        delivery_available:
+          type: boolean
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        pickup_hours:
+          allOf:
+          - $ref: '#/components/schemas/PickupHours'
+          readOnly: true
+      required:
+      - condition_grade
+      - created_at
+      - current_status
+      - daily_rate_paise
+      - delivery_available
+      - deposit_paise
+      - description
+      - id
+      - location_text
+      - media
+      - moderation_status
+      - partner_name
+      - pickup_address
+      - pickup_address_line
+      - pickup_area
+      - pickup_city
+      - pickup_hours
+      - pickup_pincode
       - public_state
       - quantity_available
       - slug
@@ -37589,7 +38038,7 @@ components:
           format: uuid
           readOnly: true
         status:
-          $ref: '#/components/schemas/StatusD8aEnum'
+          $ref: '#/components/schemas/RentalBookingStatusEnum'
         start_date:
           type: string
           format: date
@@ -37612,8 +38061,32 @@ components:
           maximum: 2147483647
           minimum: 0
         pickup_or_delivery_mode:
-          type: string
-          maxLength: 32
+          $ref: '#/components/schemas/RentalBookingModeEnum'
+        delivery_address: {}
+        transport_paise:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        transport_fee_percent:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        transport_fee_paise:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        amount_due_paise:
+          type: integer
+          readOnly: true
+        transport:
+          allOf:
+          - $ref: '#/components/schemas/RentalTransport'
+          nullable: true
+          readOnly: true
+        pickup_hours:
+          allOf:
+          - $ref: '#/components/schemas/PickupHours'
+          readOnly: true
         notes:
           type: string
         asset:
@@ -37634,15 +38107,44 @@ components:
           format: date-time
           readOnly: true
       required:
+      - amount_due_paise
       - asset
       - created_at
       - deposit
       - end_date
       - handover_pin
       - id
+      - pickup_hours
       - price_paise
       - quantity
       - start_date
+      - transport
+    RentalBookingModeEnum:
+      enum:
+      - PICKUP
+      - DELIVERY
+      type: string
+      description: |-
+        * `PICKUP` - Self pickup
+        * `DELIVERY` - Partner-arranged delivery
+    RentalBookingStatusEnum:
+      enum:
+      - AWAITING_TRANSPORT_QUOTE
+      - PENDING_PAYMENT
+      - CONFIRMED
+      - HANDOVER
+      - RETURNED
+      - CANCELLED
+      - DISPUTED
+      type: string
+      description: |-
+        * `AWAITING_TRANSPORT_QUOTE` - Awaiting transport quote
+        * `PENDING_PAYMENT` - Pending payment
+        * `CONFIRMED` - Confirmed
+        * `HANDOVER` - Handed over
+        * `RETURNED` - Returned
+        * `CANCELLED` - Cancelled
+        * `DISPUTED` - Disputed
     RentalDeposit:
       type: object
       properties:
@@ -37733,8 +38235,14 @@ components:
           type: integer
           maximum: 100
           minimum: 0
+        transport_fee_percent:
+          type: integer
+          readOnly: true
+          description: Commission on an owner's transport price. 0 means the owner
+            keeps all of it.
       required:
       - percent
+      - transport_fee_percent
     RentalPlatformFeeRequest:
       type: object
       properties:
@@ -37801,6 +38309,112 @@ components:
       - default_deposit_paise
       - id
       - name
+    RentalTransport:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/RentalTransportStatusEnum'
+          readOnly: true
+        trip:
+          readOnly: true
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/RentalTransportTripEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        customer_note:
+          type: string
+          readOnly: true
+        reject_note:
+          type: string
+          readOnly: true
+        decline_reason:
+          type: string
+          readOnly: true
+        quote_paise:
+          type: integer
+          readOnly: true
+          nullable: true
+        quote_note:
+          type: string
+          readOnly: true
+        quote_count:
+          type: integer
+          readOnly: true
+        max_quotes:
+          type: integer
+          readOnly: true
+        respond_by:
+          type: string
+          format: date-time
+          readOnly: true
+        requested_at:
+          type: string
+          format: date-time
+          readOnly: true
+        quoted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        accepted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        delivered_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - accepted_at
+      - customer_note
+      - decline_reason
+      - delivered_at
+      - id
+      - max_quotes
+      - quote_count
+      - quote_note
+      - quote_paise
+      - quoted_at
+      - reject_note
+      - requested_at
+      - respond_by
+      - status
+      - trip
+    RentalTransportStatusEnum:
+      enum:
+      - REQUESTED
+      - QUOTED
+      - ACCEPTED
+      - OUT_FOR_DELIVERY
+      - DELIVERED
+      - DECLINED
+      - EXPIRED
+      - CANCELLED
+      type: string
+      description: |-
+        * `REQUESTED` - Requested
+        * `QUOTED` - Quoted
+        * `ACCEPTED` - Accepted
+        * `OUT_FOR_DELIVERY` - Out for delivery
+        * `DELIVERED` - Delivered
+        * `DECLINED` - Declined
+        * `EXPIRED` - Expired
+        * `CANCELLED` - Cancelled
+    RentalTransportTripEnum:
+      enum:
+      - ONE_WAY
+      - ROUND_TRIP
+      type: string
+      description: |-
+        * `ONE_WAY` - Drop only
+        * `ROUND_TRIP` - Drop and collect
     ReportRequest:
       type: object
       properties:
@@ -40747,22 +41361,6 @@ components:
         * `REJECTED` - Rejected
         * `WITHDRAWN` - Withdrawn
         * `EXPIRED` - Expired
-    StatusD8aEnum:
-      enum:
-      - PENDING_PAYMENT
-      - CONFIRMED
-      - HANDOVER
-      - RETURNED
-      - CANCELLED
-      - DISPUTED
-      type: string
-      description: |-
-        * `PENDING_PAYMENT` - Pending payment
-        * `CONFIRMED` - Confirmed
-        * `HANDOVER` - Handed over
-        * `RETURNED` - Returned
-        * `CANCELLED` - Cancelled
-        * `DISPUTED` - Disputed
     StayAmenity:
       type: object
       properties:
@@ -41775,6 +42373,28 @@ components:
       required:
       - amount_paise
       - stage_id
+    TransportNoteRequest:
+      type: object
+      properties:
+        note:
+          type: string
+          default: ''
+          maxLength: 480
+    TransportQuoteRequest:
+      type: object
+      properties:
+        amount_paise:
+          type: integer
+          minimum: 1
+        trip:
+          $ref: '#/components/schemas/RentalTransportTripEnum'
+        note:
+          type: string
+          default: ''
+          maxLength: 480
+      required:
+      - amount_paise
+      - trip
     UnavailableReasonEnum:
       enum:
       - PAST

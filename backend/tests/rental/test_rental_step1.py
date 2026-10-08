@@ -9,7 +9,7 @@
 - Customer contact exposure on partner booking serializer
 """
 
-from datetime import timedelta
+from datetime import time, timedelta
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -30,6 +30,7 @@ from apps.partners.capabilities.eligibility import is_approved_rental_owner, wor
 from apps.partners.models import PartnerApplication, PartnerCapability, PartnerProfile
 from apps.partners.services.base import _base_application_is_complete
 from apps.rental.models import RentalAsset, RentalPlatformFee
+from apps.rental.pickup_hours import DayHours, save_pickup_hours
 from apps.rental.serializers import PartnerRentalBookingSerializer, RentalBookingSerializer
 from apps.rental.services import (
     RentalStateError,
@@ -47,6 +48,14 @@ from apps.rental.services import (
 from tests.helpers import force_role_client
 
 User = get_user_model()
+
+#: A complete Self Pickup address. Publishing needs address line, city and pincode.
+PICKUP = {
+    "pickup_address_line": "12 Residency Road",
+    "pickup_area": "Koramangala",
+    "pickup_city": "Bangalore",
+    "pickup_pincode": "560034",
+}
 
 
 @pytest.fixture
@@ -104,6 +113,18 @@ def rental_world(db):  # noqa: ARG001
     }
 
 
+@pytest.fixture(autouse=True)
+def _owner_has_pickup_hours(request):
+    """Publishing also needs the owner's pickup hours. Set them for every test using a world."""
+    if "rental_world" not in request.fixturenames:
+        return
+    world = request.getfixturevalue("rental_world")
+    save_pickup_hours(
+        partner=world["partner"],
+        days=[DayHours(weekday=d, opens_at=time(9), closes_at=time(21)) for d in range(7)],
+    )
+
+
 @pytest.mark.django_db
 def test_rental_owner_track_onboarding_and_grants(rental_world):
     partner = rental_world["partner"]
@@ -126,6 +147,7 @@ def test_auto_publish_asset_success(rental_world):
     variant = rental_world["variant"]
 
     asset = auto_publish_asset(
+        **PICKUP,
         partner=partner,
         variant_id=variant.id,
         title="Profoto B10X",
@@ -148,6 +170,7 @@ def test_auto_publish_asset_requires_photo(rental_world):
 
     with pytest.raises(RentalStateError, match="at least 1 photo"):
         auto_publish_asset(
+            **PICKUP,
             partner=partner,
             variant_id=variant.id,
             title="Profoto B10X No Photo",
@@ -164,6 +187,7 @@ def test_update_asset_service(rental_world):
     variant = rental_world["variant"]
 
     asset = auto_publish_asset(
+        **PICKUP,
         partner=partner,
         variant_id=variant.id,
         title="Original Title",
@@ -189,6 +213,7 @@ def test_pause_and_resume_asset(rental_world):
     variant = rental_world["variant"]
 
     asset = auto_publish_asset(
+        **PICKUP,
         partner=partner,
         variant_id=variant.id,
         title="Pausable Item",
@@ -218,6 +243,7 @@ def test_delete_asset_archives_item(rental_world):
     variant = rental_world["variant"]
 
     asset = auto_publish_asset(
+        **PICKUP,
         partner=partner,
         variant_id=variant.id,
         title="Deletable Item",
@@ -237,6 +263,7 @@ def test_remove_media(rental_world):
     variant = rental_world["variant"]
 
     asset = auto_publish_asset(
+        **PICKUP,
         partner=partner,
         variant_id=variant.id,
         title="Multi Photo Item",
@@ -272,6 +299,7 @@ def test_partner_booking_serializer_customer_contact(rental_world):
     variant = rental_world["variant"]
 
     asset = auto_publish_asset(
+        **PICKUP,
         partner=partner,
         variant_id=variant.id,
         title="Booking Test Item",
@@ -311,6 +339,7 @@ def test_partner_asset_api_actions(rental_world):
     variant = rental_world["variant"]
 
     asset = auto_publish_asset(
+        **PICKUP,
         partner=partner,
         variant_id=variant.id,
         title="API Action Item",
@@ -348,6 +377,7 @@ def test_partner_asset_api_actions(rental_world):
 
 def _fee_asset(rental_world):
     return auto_publish_asset(
+        **PICKUP,
         partner=rental_world["partner"],
         variant_id=rental_world["variant"].id,
         title="Fee Drill",

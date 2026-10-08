@@ -18,6 +18,16 @@ urlpatterns = [
         name="my-rental-cancel",
     ),
     path(
+        "me/rentals/<uuid:booking_id>/transport/<slug:action>",
+        views.MyRentalTransportView.as_view(),
+        name="my-rental-transport",
+    ),
+    path(
+        "partner/rentals/pickup-hours",
+        views.PartnerPickupHoursView.as_view(),
+        name="partner-rental-pickup-hours",
+    ),
+    path(
         "partner/rentals/photos",
         views.PartnerRentalPhotoUploadView.as_view(),
         name="partner-rental-photos",
@@ -46,6 +56,11 @@ urlpatterns = [
         "partner/rentals/bookings",
         views.PartnerBookingCollectionView.as_view(),
         name="partner-rental-bookings",
+    ),
+    path(
+        "partner/rentals/bookings/<uuid:booking_id>/transport/<slug:action>",
+        views.PartnerBookingTransportView.as_view(),
+        name="partner-rental-booking-transport",
     ),
     path(
         "partner/rentals/bookings/<uuid:booking_id>/<slug:action>",

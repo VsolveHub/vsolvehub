@@ -153,6 +153,16 @@ is D4 (`M3-BE-371`), not a Careers stub.
 
 - [ ] See design doc Wave D1. Do not implement on `feature/m3-a10-listings`.
 
+### D1a — Rental pickup, delivery and item options (2026-10-08, see `06-rental-pickup-delivery-and-item-options.md`)
+
+- [~] `M3-BE-321` Pickup hours per weekday (`RentalPickupDay`), booking refused on a closed pickup/return day, publish needs hours; `GET/PUT /partner/rentals/pickup-hours`
+- [~] `M3-BE-322` Structured pickup address on the item + server-built Google Maps link (`pickup_address.maps_url`)
+- [~] `M3-BE-323` Partner-arranged delivery: `RentalTransportRequest`, quote/decline/accept/reject/switch/out-for-delivery, expiry sweep, one payment incl. transport, earning incl. transport at 0% commission
+- [~] `M3-BE-324` Colour/material dropdown lists applied at serve time, matched by normalised name
+- [~] `M3-FE-321` Customer: Self Pickup / Request Delivery chooser, pickup address + View Location + hours, delivery form, quote accept/reject/switch on the booking card
+- [~] `M3-FE-322` Partner: pickup-hours card, structured address + delivery switch, colour/material dropdown with Other on the routed form, delivery quote panel with 0% commission, delivery requests on home
+- Tests: `backend/tests/rental/test_pickup_hours.py`, `test_pickup_address.py`, `test_transport_flow.py`, `test_field_options.py`, updated `test_a7_flow.py`, `test_rental_step1.py`; frontend `customer/features/rentals/pickup.test.ts`, `view/rental-book-panel.test.tsx`, `view/rental-booking-card.test.tsx`, `partner/features/rentals/view/delivery-section.test.tsx`, `view/pickup-hours-card.test.ts`, `booking-actions.test.ts`
+
 ### D2 — A9 stay (out of this session)
 
 - [ ] See design doc Wave D2. Do not implement on `feature/m3-a10-listings`.
@@ -256,4 +266,5 @@ Do not mark `[x]` until owner manual pass. Agents do not run pytest; owner runs 
 | 2026-09-01 | C2 `CustomerCompletion` ledger with `UNIQUE(customer_id, source_type, source_id)` — `get_or_create`; unlock only on `created=True`; M1/M2 stay separate event types |
 | 2026-09-13 | A10 Career/Jobs implements Wave D3 IDs `M3-BE-351`…`361` / `M3-FE-331`/`332` on `feature/m3-a10-listings`. Stub `M3-BE-303` dropped. ADR-0012 Proposed; proposal 0017. A7/A9 and wallet stay off this branch. |
 | 2026-10-06 | Client spec update: coin referral rewards in flat tiers (fee-% dropped), 100 coins = ₹10, 20% max burn, 7-day waiting period, signup-only via OTP verify, reject/reverse + monthly cap. Phase C marked `[~]` |
+| 2026-10-08 | Rentals: two ways to receive — Self Pickup (partner address + Google Maps link, no map integration yet) or partner-quoted delivery. Delivery: nothing charged until the transport price is agreed, then rent + fee + deposit + transport in one payment. Transport commission 0%, shown in the partner portal. Partners set pickup hours per weekday, no time slots. Colour/material dropdown + Other only where the category already has those fields. D1a marked `[~]` |
 | 2026-09-13 | A10 Wave D3 code port marked `[~]` (BE + FE). Living handoff: `srikar-prompts/A10_CONTINUE_HERE.md`. Do not mark `[x]` until owner migrate/seed/`--no-cov` pytest + smoke. |

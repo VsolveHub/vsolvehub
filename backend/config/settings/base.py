@@ -384,7 +384,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.67.0",
+    "VERSION": "1.68.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -599,6 +599,15 @@ SPECTACULAR_SETTINGS = {
         # Stays/rentals and listings moderation status choice sets
         "ModerationStatusEnum": "apps.stay.models.Property.ModerationStatus",
         "ListingModerationStatusEnum": "apps.listings.models.Listing.ModerationStatus",
+        # A7 rental delivery. The booking status set gained AWAITING_TRANSPORT_QUOTE, which
+        # changes its hash name (it was `StatusD8aEnum`, unreferenced by name in the apps), so
+        # it is named here once and for good, with the three new choice sets beside it.
+        # Pinned so the new `RentalAssetDetail` component doesn't push it to a hash name.
+        "RentalAssetModerationStatusEnum": "apps.rental.models.RentalAsset.ModerationStatus",
+        "RentalBookingStatusEnum": "apps.rental.models.RentalBooking.Status",
+        "RentalBookingModeEnum": "apps.rental.models.RentalBooking.Mode",
+        "RentalTransportStatusEnum": "apps.rental.models.RentalTransportRequest.Status",
+        "RentalTransportTripEnum": "apps.rental.models.RentalTransportRequest.Trip",
     },
 }
 API_DOCS_ENABLED = env.bool("API_DOCS_ENABLED")
@@ -1157,6 +1166,12 @@ CELERY_BEAT_SCHEDULE = {
     "sweep-expired-subscriptions": {
         "task": "apps.listings.tasks.expire_vendor_subscriptions",
         "schedule": 60.0 * 15,
+    },
+    # A7 rental delivery. A quote has a 24-hour answer window, so 5 minutes late is close enough;
+    # an expired request only lets go of dates nobody has paid for.
+    "expire-rental-transport-requests": {
+        "task": "apps.rental.tasks.expire_rental_transport_requests",
+        "schedule": 60.0 * 5,
     },
 }
 

@@ -1,5 +1,31 @@
 # API Contract Changelog
 
+## 1.68.0 - Rentals: self pickup address and hours, partner-arranged delivery
+
+A rental is now received one of two ways, chosen at booking.
+
+**Self pickup.** `RentalAsset` carries the pickup address as text (`pickup_address_line`,
+`pickup_area`, `pickup_city`, `pickup_pincode`) and a server-built `pickup_address` object whose
+`maps_url` is a Google Maps search for that address. The item page (`GET /rentals/{key}`, now
+`RentalAssetDetail`) and every booking carry `pickup_hours`: the owner's open weekdays and hours
+(`days[]` Monday first, `is_set`, `summary`). Owners read and replace their hours with
+`GET`/`PUT /partner/rentals/pickup-hours`. A booking whose pickup or return day falls on a closed
+day is refused (`pickup_day_closed`, `return_day_closed`).
+
+**Partner-arranged delivery.** `POST /rentals/book` accepts `pickup_or_delivery_mode: DELIVERY`
+with `delivery_address` and `delivery_note` on items whose `delivery_available` is true. Nothing
+is charged: the booking is `AWAITING_TRANSPORT_QUOTE` and carries a `transport` object. The owner
+answers with `POST /partner/rentals/bookings/{id}/transport/{quote|decline|out-for-delivery}`; the
+customer with `POST /me/rentals/{id}/transport/{accept|reject|switch-to-pickup}`. `accept` starts
+one payment for rent, platform fee, deposit and transport (`amount_due_paise`). The booking
+snapshots `transport_paise`, `transport_fee_percent` and `transport_fee_paise`;
+`GET /rentals/platform-fee` adds `transport_fee_percent` (0).
+
+- Renamed: the booking status enum `StatusD8aEnum` is now `RentalBookingStatusEnum` (it gained
+  `AWAITING_TRANSPORT_QUOTE`, which changed its generated name). No app referenced it by name.
+- Removed: none. `pickup_or_delivery_mode` was a free string that the server always forced to
+  `PICKUP`; it is now the `RentalBookingModeEnum` choice and `DELIVERY` is honoured.
+
 ## 1.66.0 - A requested price reduction becomes an overall estimate discount
 
 The Partner no longer has to rebuild an estimate to answer a Customer's price request. Two new

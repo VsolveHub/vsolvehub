@@ -221,8 +221,12 @@ def test_rental_filters(rental_world):
 
 
 @pytest.mark.django_db
-def test_create_booking_forces_pickup_even_when_delivery_requested(rental_world):
-    """OLX model: doorstep delivery is not offered; mode is always PICKUP."""
+def test_delivery_is_refused_when_the_owner_does_not_offer_it(rental_world):
+    """Delivery is now a real option, but only on items whose owner offers it.
+
+    Replaces the old "always forced to PICKUP" rule: a DELIVERY request is no longer silently
+    rewritten, it is refused with a reason the customer can act on.
+    """
     asset = create_asset(
         partner=rental_world["partner"],
         variant_id=rental_world["variant"].id,
@@ -233,15 +237,23 @@ def test_create_booking_forces_pickup_even_when_delivery_requested(rental_world)
     submit_asset(asset=asset, partner=rental_world["partner"])
     moderate_asset(asset=asset, actor=rental_world["owner"], action="APPROVE", reason="ok for test")
     start = timezone.localdate() + timedelta(days=5)
-    booking = create_booking(
-        customer=rental_world["customer"],
-        asset_id=asset.id,
-        start_date=start,
-        end_date=start + timedelta(days=1),
-        mode="DELIVERY",
-        hold_deposit_for_demo=True,
-    )
-    assert booking.pickup_or_delivery_mode == "PICKUP"
+    with pytest.raises(RentalStateError) as refused:
+        create_booking(
+            customer=rental_world["customer"],
+            asset_id=asset.id,
+            start_date=start,
+            end_date=start + timedelta(days=1),
+            mode="DELIVERY",
+            delivery_address={
+                "line": "4 Lake View",
+                "city": "Hyderabad",
+                "pincode": "500081",
+                "contact_phone": "9876543210",
+            },
+            hold_deposit_for_demo=True,
+        )
+    assert refused.value.code == "delivery_not_offered"
+    assert not RentalBooking.objects.filter(asset=asset).exists()
 
 
 @pytest.mark.django_db

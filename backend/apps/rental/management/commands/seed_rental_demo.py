@@ -1,6 +1,6 @@
 """Seed A7 rental catalog + demo partner/customer/ops walkthrough data."""
 
-from datetime import timedelta
+from datetime import time, timedelta
 from typing import Any
 
 from django.contrib.auth import get_user_model
@@ -20,6 +20,7 @@ from apps.identity.models import Role, UserRole
 from apps.partners.models import PartnerApplication, PartnerCapability, PartnerProfile
 from apps.rental.field_options import with_suggestions
 from apps.rental.models import RentalAsset, RentalAssetMedia, RentalBooking
+from apps.rental.pickup_hours import DayHours, hours_are_set, save_pickup_hours
 from apps.rental.services import create_asset, create_booking, moderate_asset, submit_asset
 
 User = get_user_model()
@@ -308,6 +309,24 @@ class Command(BaseCommand):
                 url="https://images.unsplash.com/photo-1504148455328-c376907d081c?w=800",
                 caption="Demo drill",
                 display_order=0,
+            )
+        # Pickup address, delivery and pickup hours, so both ways of receiving an item can be
+        # tried: self pickup (address, View Location, hours) and a delivery request to quote.
+        RentalAsset.objects.filter(id=asset.id).update(
+            pickup_address_line="Plot 12, Road 3, KPHB Colony",
+            pickup_area="Kukatpally",
+            pickup_city="Hyderabad",
+            pickup_pincode="500072",
+            location_text="Kukatpally, Hyderabad",
+            delivery_available=True,
+        )
+        if not hours_are_set(profile.id):
+            weekday_hours = [
+                DayHours(weekday=d, opens_at=time(9), closes_at=time(21)) for d in range(6)
+            ]
+            save_pickup_hours(
+                partner=profile,
+                days=[*weekday_hours, DayHours(weekday=6, opens_at=time(9), closes_at=time(18))],
             )
         # Second approved rental asset: Carpentry & Hand Tool Kit
         carpenter_kit = RentalAsset.objects.filter(

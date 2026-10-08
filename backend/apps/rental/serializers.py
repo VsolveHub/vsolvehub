@@ -1,7 +1,60 @@
+from typing import Any
+
 from django.conf import settings
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from apps.rental.models import RentalAsset, RentalAssetMedia, RentalBooking, RentalDeposit
+from apps.rental.models import (
+    RentalAsset,
+    RentalAssetMedia,
+    RentalBooking,
+    RentalDeposit,
+    RentalTransportRequest,
+)
+from apps.rental.pickup_address import pickup_address_payload
+from apps.rental.pickup_hours import payload_from_rows
+from apps.rental.services import booking_amount_due
+
+
+class PickupAddressSerializer(serializers.Serializer):
+    """Where a Self Pickup customer collects the item. ``maps_url`` opens Google Maps."""
+
+    partner_name = serializers.CharField()
+    line = serializers.CharField()
+    area = serializers.CharField()
+    city = serializers.CharField()
+    pincode = serializers.CharField()
+    maps_url = serializers.CharField(help_text="Google Maps search for the address. Empty if none.")
+
+
+class PickupDaySerializer(serializers.Serializer):
+    weekday = serializers.IntegerField(min_value=0, max_value=6, help_text="Monday = 0.")
+    day_name = serializers.CharField(read_only=True)
+    is_open = serializers.BooleanField()
+    opens_at = serializers.CharField(allow_null=True, help_text="HH:MM, 24-hour. Null if closed.")
+    closes_at = serializers.CharField(allow_null=True, help_text="HH:MM, 24-hour. Null if closed.")
+
+
+class PickupHoursSerializer(serializers.Serializer):
+    is_set = serializers.BooleanField(help_text="False until the owner saves their hours.")
+    days = PickupDaySerializer(many=True)
+    summary = serializers.CharField(help_text='e.g. "Mon-Sat 9 AM-9 PM · Sun 9 AM-6 PM".')
+
+
+class PickupDayInputSerializer(serializers.Serializer):
+    weekday = serializers.IntegerField(min_value=0, max_value=6)
+    opens_at = serializers.TimeField()
+    closes_at = serializers.TimeField()
+
+
+class PickupHoursUpdateSerializer(serializers.Serializer):
+    """The open days only. A day left out is closed."""
+
+    days = PickupDayInputSerializer(many=True)
+
+
+def _pickup_hours(asset: RentalAsset) -> dict[str, Any]:
+    return payload_from_rows(list(asset.partner.rental_pickup_days.all()))
 
 
 class RentalAssetMediaSerializer(serializers.ModelSerializer):
@@ -17,10 +70,15 @@ class RentalAssetSerializer(serializers.ModelSerializer):
     public_state = serializers.CharField(read_only=True)
     partner_name = serializers.CharField(source="partner.display_name", read_only=True)
     media = RentalAssetMediaSerializer(many=True, read_only=True)
+    pickup_address = serializers.SerializerMethodField()
+
+    @extend_schema_field(PickupAddressSerializer)
+    def get_pickup_address(self, asset: RentalAsset) -> dict[str, Any]:
+        return pickup_address_payload(asset)
 
     class Meta:
         model = RentalAsset
-        fields = (
+        fields: tuple[str, ...] = (
             "id",
             "slug",
             "title",
@@ -37,9 +95,29 @@ class RentalAssetSerializer(serializers.ModelSerializer):
             "variant",
             "structured_fields",
             "media",
+            "pickup_address_line",
+            "pickup_area",
+            "pickup_city",
+            "pickup_pincode",
+            "pickup_address",
+            "delivery_available",
             "created_at",
         )
+        read_only_fields: tuple[str, ...] = fields
+
+
+class RentalAssetDetailSerializer(RentalAssetSerializer):
+    """One item's page: adds the owner's pickup hours."""
+
+    pickup_hours = serializers.SerializerMethodField()
+
+    class Meta(RentalAssetSerializer.Meta):
+        fields = (*RentalAssetSerializer.Meta.fields, "pickup_hours")
         read_only_fields = fields
+
+    @extend_schema_field(PickupHoursSerializer)
+    def get_pickup_hours(self, asset: RentalAsset) -> dict[str, Any]:
+        return _pickup_hours(asset)
 
 
 class RentalPhotoUploadSerializer(serializers.Serializer):
@@ -60,6 +138,19 @@ class CreateAssetSerializer(serializers.Serializer):
     quantity_available = serializers.IntegerField(min_value=1, required=False, default=1)
     asset_identifier = serializers.CharField(required=False, allow_blank=True, default="")
     structured_fields = serializers.JSONField(required=False, default=dict)
+    pickup_address_line = serializers.CharField(
+        max_length=240, required=False, allow_blank=True, default=""
+    )
+    pickup_area = serializers.CharField(
+        max_length=120, required=False, allow_blank=True, default=""
+    )
+    pickup_city = serializers.CharField(
+        max_length=120, required=False, allow_blank=True, default=""
+    )
+    pickup_pincode = serializers.CharField(
+        max_length=6, required=False, allow_blank=True, default=""
+    )
+    delivery_available = serializers.BooleanField(required=False, default=False)
     media = serializers.ListField(child=serializers.DictField(), required=False, default=list)
     image_urls = serializers.ListField(
         child=serializers.CharField(min_length=1),
@@ -98,17 +189,66 @@ class RentalTaxonomySubcategorySerializer(serializers.Serializer):
     services = RentalTaxonomyServiceSerializer(many=True)
 
 
+class DeliveryAddressSerializer(serializers.Serializer):
+    line = serializers.CharField(max_length=240)
+    area = serializers.CharField(max_length=120, required=False, allow_blank=True, default="")
+    city = serializers.CharField(max_length=120)
+    pincode = serializers.CharField(max_length=6)
+    contact_phone = serializers.CharField(max_length=20)
+
+
 class CreateBookingSerializer(serializers.Serializer):
     asset_id = serializers.UUIDField()
     start_date = serializers.DateField()
     end_date = serializers.DateField()
     quantity = serializers.IntegerField(min_value=1, required=False, default=1)
-    # Accepted for API compat; always coerced to PICKUP (OLX pickup-only model).
-    pickup_or_delivery_mode = serializers.CharField(required=False, default="PICKUP")
+    pickup_or_delivery_mode = serializers.ChoiceField(
+        choices=RentalBooking.Mode.choices, required=False, default=RentalBooking.Mode.PICKUP
+    )
+    #: Required for DELIVERY; ignored for PICKUP.
+    delivery_address = DeliveryAddressSerializer(required=False)
+    delivery_note = serializers.CharField(
+        max_length=480, required=False, allow_blank=True, default=""
+    )
     notes = serializers.CharField(required=False, allow_blank=True, default="")
 
-    def validate_pickup_or_delivery_mode(self, value: str) -> str:
-        return "PICKUP"
+
+class RentalTransportSerializer(serializers.ModelSerializer):
+    max_quotes = serializers.SerializerMethodField()
+
+    class Meta:
+        model = RentalTransportRequest
+        fields = (
+            "id",
+            "status",
+            "trip",
+            "customer_note",
+            "reject_note",
+            "decline_reason",
+            "quote_paise",
+            "quote_note",
+            "quote_count",
+            "max_quotes",
+            "respond_by",
+            "requested_at",
+            "quoted_at",
+            "accepted_at",
+            "delivered_at",
+        )
+        read_only_fields = fields
+
+    def get_max_quotes(self, _request: RentalTransportRequest) -> int:
+        return RentalTransportRequest.MAX_QUOTES
+
+
+class TransportQuoteSerializer(serializers.Serializer):
+    amount_paise = serializers.IntegerField(min_value=1)
+    trip = serializers.ChoiceField(choices=RentalTransportRequest.Trip.choices)
+    note = serializers.CharField(max_length=480, required=False, allow_blank=True, default="")
+
+
+class TransportNoteSerializer(serializers.Serializer):
+    note = serializers.CharField(max_length=480, required=False, allow_blank=True, default="")
 
 
 class OpsRentalDisputeDecisionSerializer(serializers.Serializer):
@@ -139,6 +279,11 @@ class UpdateAssetSerializer(serializers.Serializer):
     location_text = serializers.CharField(max_length=180, required=False)
     quantity_available = serializers.IntegerField(min_value=1, required=False)
     structured_fields = serializers.JSONField(required=False)
+    pickup_address_line = serializers.CharField(max_length=240, required=False, allow_blank=True)
+    pickup_area = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    pickup_city = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    pickup_pincode = serializers.CharField(max_length=6, required=False, allow_blank=True)
+    delivery_available = serializers.BooleanField(required=False)
 
 
 class RentalDepositSerializer(serializers.ModelSerializer):
@@ -171,10 +316,13 @@ class RentalBookingSerializer(serializers.ModelSerializer):
     deposit = RentalDepositSerializer(read_only=True)
     handover_pin = serializers.SerializerMethodField()
     quantity = serializers.SerializerMethodField()
+    transport = serializers.SerializerMethodField()
+    pickup_hours = serializers.SerializerMethodField()
+    amount_due_paise = serializers.SerializerMethodField()
 
     class Meta:
         model = RentalBooking
-        fields = (
+        fields: tuple[str, ...] = (
             "id",
             "status",
             "start_date",
@@ -184,12 +332,36 @@ class RentalBookingSerializer(serializers.ModelSerializer):
             "platform_fee_percent",
             "platform_fee_paise",
             "pickup_or_delivery_mode",
+            "delivery_address",
+            "transport_paise",
+            "transport_fee_percent",
+            "transport_fee_paise",
+            "amount_due_paise",
+            "transport",
+            "pickup_hours",
             "notes",
             "asset",
             "deposit",
             "handover_pin",
             "created_at",
         )
+
+    @extend_schema_field(RentalTransportSerializer(allow_null=True))
+    def get_transport(self, booking: RentalBooking) -> dict[str, Any] | None:
+        try:
+            request = booking.transport
+        except RentalTransportRequest.DoesNotExist:
+            return None
+        return dict(RentalTransportSerializer(request).data)
+
+    @extend_schema_field(PickupHoursSerializer)
+    def get_pickup_hours(self, booking: RentalBooking) -> dict[str, Any]:
+        return _pickup_hours(booking.asset)
+
+    @extend_schema_field(serializers.IntegerField())
+    def get_amount_due_paise(self, booking: RentalBooking) -> int:
+        """Rent + platform fee + deposit + agreed transport: the one charge for this booking."""
+        return booking_amount_due(booking)
 
     def get_quantity(self, booking: RentalBooking) -> int:
         line = booking.lines.order_by("id").first()
@@ -241,6 +413,10 @@ class PartnerRentalBookingSerializer(RentalBookingSerializer):
 
 class RentalPlatformFeeSerializer(serializers.Serializer):
     percent = serializers.IntegerField(min_value=0, max_value=100)
+    transport_fee_percent = serializers.IntegerField(
+        read_only=True,
+        help_text="Commission on an owner's transport price. 0 means the owner keeps all of it.",
+    )
 
 
 class RentalModerationSerializer(serializers.Serializer):

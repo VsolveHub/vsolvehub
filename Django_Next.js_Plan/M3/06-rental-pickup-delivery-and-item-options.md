@@ -1,10 +1,31 @@
 # A7 Rental — Self Pickup, Partner-Arranged Delivery, Item Options
 
-**Status:** Planned — audit complete; owner decisions R-0, R-1, R-5, R-9 taken 8 Oct 2026; not built
+**Status:** Built — owner verification pending (`task.md` D1a, `[~]`). Owner decisions R-0, R-1,
+R-5 and R-9 taken 8 Oct 2026; the other recommendations below were built as written.
 **Effective date:** 2026-10-08
-**Base:** `main` @ `4d4b105`
-**Ownership (per `AGENTS.md`):** backend + `contracts/openapi/**` → Codex; `frontend/**` +
-`contracts/proposals/**` → Claude. Any session doing both needs the owner's explicit go-ahead.
+**Base:** `main` @ `4d4b105`; plan commits `4b9c6cb`, `b833f46`, `d0d2e52`
+**Ownership:** the owner directed one session to build backend and frontend together ("build it",
+8 Oct 2026), overriding the Codex/Claude split in `AGENTS.md` for this change.
+
+### What changed from the plan while building
+
+- **Root cause of the colour/material text box.** The partner page that is actually routed,
+  `/rentals` → `rentals-workspace.tsx`, had its own form that turned only `enum` fields into a
+  dropdown and ignored the `examples` lists migration `0014` added. `RentalFieldInput` (dropdown +
+  Other…) was only used by `rental-ad-editor.tsx`, which no route renders. The routed form now uses
+  `RentalFieldInput`. The serve-time and name-matching fix in §6 also shipped.
+- **The pickup address is on the item, not the partner profile.** A new item is prefilled from the
+  partner's latest item, or from `default_location_text` for their first. No `partners` migration.
+- **An abandoned delivery payment cancels the booking**, the same as pickup, instead of returning to
+  `QUOTED` (§4.2). It keeps one expiry path and one idempotency rule. The customer books again.
+- **Delivery can't start today** (`delivery_too_soon`): the owner needs time to quote.
+- **A declined or expired request the customer never acts on is cancelled on its start day** by
+  the same sweep. Nothing was charged.
+- The transport commission is a server constant (`apps/rental/transport.TRANSPORT_FEE_PERCENT = 0`),
+  snapshotted per booking and published on `GET /rentals/platform-fee`. Making it
+  Operations-editable is a later change.
+- Contract `1.68.0`; see `contracts/openapi/CHANGELOG.md`. No separate proposal file was written
+  because the same session published the contract.
 
 ## 1. Client requirement
 
