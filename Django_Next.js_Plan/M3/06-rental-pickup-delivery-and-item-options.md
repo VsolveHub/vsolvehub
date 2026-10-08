@@ -1,6 +1,6 @@
 # A7 Rental — Self Pickup, Partner-Arranged Delivery, Item Options
 
-**Status:** Planned — audit complete, not built
+**Status:** Planned — audit complete; owner decisions R-1, R-5, R-9 taken 8 Oct 2026; not built
 **Effective date:** 2026-10-08
 **Base:** `main` @ `4d4b105`
 **Ownership (per `AGENTS.md`):** backend + `contracts/openapi/**` → Codex; `frontend/**` +
@@ -35,7 +35,7 @@ Separately, the client wants **colour and material shown as dropdowns** on renta
 | `CreateBookingSerializer` | `validate_pickup_or_delivery_mode` always returns `"PICKUP"` | Must become a `ChoiceField` |
 | `tests/rental/test_a7_flow.py:225` | Asserts that `DELIVERY` is coerced to `PICKUP` | The rule changes. Rewrite this test, don't delete it |
 | Transport request / quote | Doesn't exist | New model + state machine (§4) |
-| Payment purposes | `A7_RENTAL_BOOKING`, `A7_RENTAL_DEPOSIT` | Need `A7_RENTAL_TRANSPORT` and its capture/expiry/refund hooks |
+| Payment amount | `A7_RENTAL_BOOKING` charges rent + platform fee + deposit at booking | A delivery booking must not charge until the quote is accepted, then charge one amount that includes transport (§4.4) |
 | Partner earning | `settle_rental_earning` writes **one** EARNING per booking (`payouts_one_earning_per_rental_booking`): `price - platform_fee` | The transport amount must reach the partner (§4.5) |
 | Customer book panel | `rental-book-panel.tsx:224` fixed "Self pickup … Doorstep delivery is not offered." and sends `"PICKUP"` | Needs the two-option chooser |
 | Customer item page | `rentals/[slug]/page.tsx:106` shows `location_text` as one line | Needs the structured address + View Location link |
@@ -58,14 +58,11 @@ There is no area, city or pincode field, and no Maps link anywhere. Browsing fil
   migration `0014` applied that to existing `A7VariantConfiguration.asset_schema` rows.
 - **Partner side already works:** `partner/features/rentals/view/rental-field-input.tsx` renders
   any field that has `enum`/`examples` as a `<Select>` with an "Other…" box.
-- **Gap 1, coverage:** a dropdown only appears when the category's `asset_schema` *has* a `color`
-  / `material` property. In `seed_rental_demo.py` only one schema (line 226) declares them, and
-  nothing in Operations edits `asset_schema` (no admin UI references it). Most rental categories
-  therefore show no colour or material field at all.
-- **Gap 2, customer side:** the customer item page never renders `structured_fields`, so a colour
-  or material the partner picked is invisible. There is no filter by colour or material either.
-- **Gap 3, a choosable variant:** one ad holds one value. "Available in Red, Blue and Black" isn't
-  expressible, and stock is per ad, not per colour.
+- **Gap — the dropdown can silently fall back to a text box.** The list is added once by
+  migration `0014` and only to keys spelled exactly `color` / `material`. A category created or
+  edited later, or a key like `colour` / `Color`, gets a plain text box. Causes and fix in §6.
+- Customer screens don't show colour or material. The client hasn't asked for that, so it's out
+  of scope.
 
 ### 2.4 Defects found during the audit (pre-existing, outside this feature)
 
@@ -74,26 +71,38 @@ There is no area, city or pincode field, and no Maps link anywhere. Browsing fil
    `tests/rental/test_pickup_times.py` fails at collection, and with it the whole rental suite run.
    The frontend's `customer/features/rentals/pickup-time.ts`, `partner/.../pickup-time.ts` and
    `partner/.../rental-home.tsx` still carry the removed pickup-hours UI. **Fix first:** delete the
-   dead module, its test and the frontend leftovers, or restore the model. Owner decision R-0.
+   dead module, its test and the frontend leftovers. Owner decision R-0.
+
+   *In plain terms:* "pickup hours" was an earlier feature where the partner set opening days and
+   times and the customer picked an exact pickup time slot. Commit `d76309b` removed it from the
+   database, so bookings now use dates only. Some code from that feature was never deleted (the
+   "leftovers"). It does nothing for users, but it crashes the rental test run.
 2. **`RentalBooking.handover_pin_hash` holds the plaintext PIN.** `create_booking` writes the raw
    4-digit PIN and `RentalBookingSerializer.get_handover_pin` returns the field as is. The name
    says hash and the content isn't one. Not in scope here, but delivery adds a second handover, so
    flag it before reusing the PIN for delivery.
 
-## 3. Owner decisions needed
+## 3. Owner decisions
+
+### Decided — 8 October 2026
+
+| ID | Decision |
+| --- | --- |
+| R-1 | **On a delivery booking nothing is paid until the transport fee is agreed.** The customer then pays **one** amount: rent + platform fee + deposit + transport |
+| R-5 | **Commission on transport is 0%.** The partner portal shows this wherever the partner sees a transport amount (§4.6) |
+| R-9 | **Colour / material are not added to every product.** Where a product already has a colour or material field, the partner picks from a dropdown with an **Other** option that opens a box for a custom value (§6) |
+
+### Still open — recommendations stand unless the owner says otherwise
 
 | ID | Question | Recommendation |
 | --- | --- | --- |
-| R-0 | Pickup hours: delete the leftovers or restore the feature? | Delete. Bookings are date-based since `0016` |
-| R-1 | When is the rental paid on a delivery booking: before the quote, or with it? | **Before.** Rental + deposit are paid at booking, as today, so stock is held. Transport is a second, separate payment |
-| R-2 | If the partner declines delivery or the customer rejects the quote? | Customer may **switch to Self Pickup** or **cancel with a full refund** (rental + fee + deposit). No cancellation charge, since delivery was never agreed |
-| R-3 | Can the customer counter-offer? | No. Partner quotes, customer **accepts** or **rejects with a note**. The partner may re-quote, at most 3 quotes per booking |
-| R-4 | Does the quote cover the return trip? | One quote with a required choice: **one-way (drop only)** or **round trip (drop + collect)**. The partner states which |
-| R-5 | Platform fee on transport? | **0%** for now. Transport goes to the partner in full. Store a `transport_fee_percent` snapshot (0) so it can change later without a migration |
-| R-6 | Quote deadline? | The partner must quote within **24 h** of the request. The customer must accept and pay **before the rental start date**. Either miss → auto-expire to R-2 |
-| R-7 | Does every partner offer delivery? | No. A per-ad **"Delivery available on request"** toggle (default off). Self Pickup is always available |
-| R-8 | Show the full pickup address before payment? | Area + city on cards and the item page. The **full address and the Maps link appear when the customer selects Self Pickup**, as the client asked. It's public, so no house or flat numbers are required |
-| R-9 | Colour / material: describe only, or let the customer choose? | **Phase A: describe only.** Always offer colour and material as dropdowns to the partner, show them on the item page, filter by them. **Phase B (only if asked): selectable variants with per-option stock** |
+| R-0 | Remove the leftover "pickup hours" code (see §2.4 item 1)? | Yes. It's dead code that breaks the test run. Nothing visible to customers or partners changes |
+| R-2 | If the partner declines delivery, or the quote isn't agreed in time? | Nothing has been paid (R-1), so the customer either **switches to Self Pickup** and pays the rent as a normal pickup booking, or **cancels** at no cost |
+| R-3 | Can the customer counter-offer? | No. The partner quotes, and the customer **accepts** or **rejects with a note**. The partner may re-quote, at most 3 quotes per booking |
+| R-4 | Does the quote cover the return trip? | Yes, as a choice: the partner states **one-way (drop only)** or **round trip (drop + collect)** with the quote |
+| R-6 | How long is the item held while the quote is agreed? | Dates are **held tentatively**. The partner must quote within **24 h**. The customer must accept and pay within **24 h of the quote** and before the start date. A missed deadline releases the dates (R-2) |
+| R-7 | Does every partner offer delivery? | No. A per-ad **"Delivery available on request"** toggle, default off. Self Pickup is always available |
+| R-8 | Show the full pickup address before payment? | Area + city on cards. The **full address and View Location appear when the customer selects Self Pickup**, as the client asked |
 
 ## 4. Design — Delivery
 
@@ -101,89 +110,117 @@ There is no area, city or pincode field, and no Maps link anywhere. Browsing fil
 
 `RentalBooking`:
 - `pickup_or_delivery_mode` → `choices=("PICKUP", "DELIVERY")` + `CheckConstraint`.
+- New status **`AWAITING_TRANSPORT_QUOTE`**, used only by delivery bookings before payment.
+- `transport_paise` (`PositiveIntegerField`, default 0) and `transport_fee_percent` /
+  `transport_fee_paise` (snapshot, 0 by R-5), set when the quote is accepted. They're snapshots
+  on the booking, like `platform_fee_*`.
 - `delivery_address` (`JSONField`, default `{}`): `line`, `area`, `city`, `pincode`,
-  `contact_phone`. Required when mode is `DELIVERY`, enforced in the service and by a DB check
-  that it isn't `{}`.
+  `contact_phone`. Required when mode is `DELIVERY`.
+- DB checks: `transport_paise = 0` when mode is `PICKUP`. `delivery_address <> {}` when mode is
+  `DELIVERY`.
 
-New `RentalTransportRequest` (one per booking, `OneToOne`):
+New `RentalTransportRequest` (`OneToOne` to the booking):
 
 | Field | Notes |
 | --- | --- |
-| `booking` | `OneToOneField(RentalBooking, PROTECT)` |
-| `status` | `REQUESTED → QUOTED → ACCEPTED → PAID → OUT_FOR_DELIVERY → DELIVERED`; terminal `DECLINED`, `REJECTED`, `EXPIRED`, `CANCELLED` |
-| `trip` | `ONE_WAY` / `ROUND_TRIP` (set with the quote) |
-| `customer_note` | Free text when requesting (floor, lift, access) |
-| `quote_paise` | `PositiveIntegerField(null=True)`. Integer paise, server-stored, never computed |
+| `status` | `REQUESTED → QUOTED → ACCEPTED → OUT_FOR_DELIVERY → DELIVERED`; terminal `DECLINED`, `EXPIRED`, `CANCELLED`. A rejected quote returns to `REQUESTED` with the customer's note |
+| `trip` | `ONE_WAY` / `ROUND_TRIP`, set with the quote |
+| `customer_note`, `reject_note` | Free text |
+| `quote_paise` | `PositiveIntegerField(null=True)`: the partner's figure in integer paise, never computed |
 | `quote_note` | Partner's vehicle/arrangement note |
 | `quote_count` | ≤ 3 (DB check) |
-| `quote_expires_at`, `requested_at`, `quoted_at`, `accepted_at`, `delivered_at` | Timestamps |
-| `transport_fee_percent`, `transport_fee_paise` | Snapshot at accept (0 by R-5) |
-| `payment_attempt` | `FK(commerce.PaymentAttempt, null=True, PROTECT)` |
-
-Constraints: `quote_paise > 0` when status ∈ {QUOTED, ACCEPTED, PAID, OUT_FOR_DELIVERY, DELIVERED};
-`payment_attempt` not null when status ∈ {PAID, OUT_FOR_DELIVERY, DELIVERED}.
+| `respond_by` | The partner's quote deadline, then the customer's payment deadline (R-6) |
+| `requested_at`, `quoted_at`, `accepted_at`, `delivered_at` | Timestamps |
 
 `RentalAsset.delivery_available = BooleanField(default=False)` (R-7).
 
-### 4.2 Booking state interplay
+### 4.2 Booking lifecycle
 
-Booking status is unchanged (`PENDING_PAYMENT → CONFIRMED → HANDOVER → RETURNED`). For `DELIVERY`:
-- `handover_booking` is refused until the transport request is `PAID`. The partner hands over on
-  delivery with the same customer PIN, which also sets the transport request to `DELIVERED`.
+```
+PICKUP:    create → PENDING_PAYMENT → CONFIRMED → HANDOVER → RETURNED       (unchanged)
+
+DELIVERY:  create → AWAITING_TRANSPORT_QUOTE        reservation TENTATIVE, nothing charged
+                     │ partner quotes ₹X, customer accepts
+                     ▼
+                   PENDING_PAYMENT                  one payment: rent + fee + deposit + ₹X
+                     │ captured
+                     ▼
+                   CONFIRMED  (transport ACCEPTED)  reservation CONFIRMED
+                     │ partner: out for delivery → hands over with customer PIN
+                     ▼
+                   HANDOVER   (transport DELIVERED) → RETURNED
+```
+
+- `overlapping_reserved_quantity` already counts `TENTATIVE` reservations, so stock is held
+  while the quote is open.
+- The existing payment expiry (`release_booking_for_expired_payment`) returns an unpaid accepted
+  quote to `QUOTED` until `respond_by`, then `EXPIRED`.
+- `handover_booking` for a delivery booking also sets the transport to `DELIVERED`.
+- `switch_to_pickup(booking)` (R-2): allowed only in `AWAITING_TRANSPORT_QUOTE`. Mode becomes
+  `PICKUP`, transport becomes `CANCELLED`, and the booking moves to `PENDING_PAYMENT` with the
+  normal pickup amount.
 - `create_booking` refuses `DELIVERY` when `asset.delivery_available` is false
   (`delivery_not_offered`) or when the address is incomplete (`delivery_address_invalid`).
-- R-2 switch: `switch_to_pickup(booking)` sets mode to `PICKUP` and the transport request to
-  `CANCELLED`. Allowed only before the transport is `PAID`.
 
 ### 4.3 Commands (domain services in `apps/rental/transport.py`)
 
-All are `@transaction.atomic`, lock the transport row with `select_for_update`, check the actor,
-and are idempotent on replay.
+All are `@transaction.atomic`, lock the booking and the transport row, check the actor, and are
+idempotent on replay.
 
-| Command | Actor | From → To |
+| Command | Actor | Effect |
 | --- | --- | --- |
-| `request_delivery` (inside `create_booking`) | customer | — → `REQUESTED` |
-| `quote_transport(amount_paise, trip, note)` | partner | `REQUESTED`/`REJECTED` → `QUOTED` |
-| `decline_transport(reason)` | partner | `REQUESTED` → `DECLINED` |
-| `accept_quote()` → creates the `A7_RENTAL_TRANSPORT` PaymentAttempt | customer | `QUOTED` → `ACCEPTED` |
-| `reject_quote(note)` | customer | `QUOTED` → `REJECTED` |
-| capture callback `mark_transport_paid` | system | `ACCEPTED` → `PAID` |
-| payment expiry | system | `ACCEPTED` → `QUOTED` (quote stays, can be accepted again until R-6) |
-| `mark_out_for_delivery()` | partner | `PAID` → `OUT_FOR_DELIVERY` |
-| `handover_booking(pin)` | partner | `PAID`/`OUT_FOR_DELIVERY` → `DELIVERED` |
-| Celery beat `expire_transport_requests` | system | `REQUESTED`/`QUOTED` past R-6 → `EXPIRED` |
-| `cancel_booking` (existing, extended) | either | Any non-terminal → `CANCELLED`, refunds a captured transport payment |
+| `create_booking(mode="DELIVERY", address, note)` | customer | Booking `AWAITING_TRANSPORT_QUOTE`, transport `REQUESTED`, `respond_by = now + 24h` |
+| `quote_transport(amount_paise, trip, note)` | partner | `REQUESTED → QUOTED`, `quote_count += 1`, `respond_by = now + 24h` (capped at the start date) |
+| `decline_transport(reason)` | partner | `REQUESTED → DECLINED`. The customer is offered switch / cancel |
+| `accept_quote()` | customer | `QUOTED → ACCEPTED`. Snapshots `transport_paise` + fee (0) on the booking, booking → `PENDING_PAYMENT`, starts the one `A7_RENTAL_BOOKING` payment |
+| `reject_quote(note)` | customer | `QUOTED → REQUESTED` (partner may re-quote) or `DECLINED` once the cap is hit |
+| `mark_out_for_delivery()` | partner | `ACCEPTED → OUT_FOR_DELIVERY`, booking must be `CONFIRMED` |
+| `handover_booking(pin)` (existing) | partner | Also sets transport `DELIVERED` |
+| Celery beat `expire_transport_requests` | system | `REQUESTED`/`QUOTED` past `respond_by` → `EXPIRED`, reservation `RELEASED` |
+| `cancel_booking` (existing, extended) | either | Before payment: nothing to refund. After payment: refunds rent + fee + deposit + transport through the existing path, until `DELIVERED` |
 
 ### 4.4 Payments (`apps/commerce`)
 
-- Add `A7_RENTAL_TRANSPORT` to `PaymentAttempt.Purpose`, the purpose tuple at `models.py:140`, and
-  the checkout/purpose check constraint (migration). Follow how `4d4b105` added
-  `A9_STAY_SUBSCRIPTION`.
-- `capture.py`: dispatch the new purpose to `rental.transport.mark_transport_paid`.
-- `refunds.py`: full refund of the transport attempt on cancel before `DELIVERED`. After
-  `DELIVERED`, transport isn't refundable through the customer cancel path. That goes to
-  Operations.
-- Idempotency key `a7-transport:{transport_request.id}:{quote_count}`, so a re-quote gets a fresh
-  attempt and a replayed accept doesn't charge twice.
-- Reuse the existing Razorpay adapter and Checkout handoff. No SDK. Tests use the provider fake.
+**No new payment purpose.** R-1 makes it one charge, so the existing `A7_RENTAL_BOOKING` attempt
+carries `price + platform_fee + deposit + transport_paise`. Changes:
+- The amount computation moves into one helper `booking_amount_due(booking)`, used by both
+  `create_booking` (pickup) and `accept_quote` (delivery), so the two can't drift.
+- Idempotency key stays `a7-booking:{booking.id}`. A re-quote can't create a second attempt
+  because the payment starts only on accept, and accept is allowed once per quote.
+- Refunds use the existing booking refund. The refunded amount now includes `transport_paise`.
+  The regression test pins it.
+- Reuse the Razorpay adapter and Checkout handoff. Tests use the provider fake.
 
 ### 4.5 Partner earning (`apps/payouts`)
 
-Keep one EARNING per booking. `settle_rental_earning` adds the paid transport:
-`gross = price_paise + transport_quote_paise`,
-`commission = platform_fee_paise + transport_fee_paise`. The snapshot records `transport_paise`,
-`transport_fee_paise` and `trip`. Unpaid or cancelled transport adds 0. The regression test pins
-both the PICKUP (unchanged) and DELIVERY totals.
+Still one EARNING per booking. `settle_rental_earning` becomes
+`gross = price_paise + transport_paise`, `commission = platform_fee_paise + transport_fee_paise`
+(0). The snapshot adds `transport_paise`, `transport_fee_percent`, `transport_fee_paise` and
+`trip`. Pickup bookings settle exactly as today.
 
-### 4.6 API (proposal → `contracts/proposals/a7-rental-delivery.md`)
+### 4.6 Showing the 0% transport commission to the partner (R-5)
+
+| Partner portal place | What it shows |
+| --- | --- |
+| Quote form (booking sheet) | Under the amount box: **"Transport commission: 0% — you receive the full ₹X."** The figure updates as they type |
+| Booking sheet, after quote/payment | A line breakdown: Rent ₹A · Platform fee −₹B · **Transport ₹X (0% commission)** · **You receive ₹A−B+X** |
+| Earnings / ledger row for the booking | "Includes transport ₹X, no commission", read from the earning snapshot |
+| Ad editor, "Delivery available on request" toggle | Hint: *"You set the transport price for each request. V Solve Hub takes no commission on transport."* |
+
+The 0% shown comes from the server (`transport_fee_percent` on the booking, and a
+`transport_fee_percent` field on `GET /rentals/platform-fee`). The frontend doesn't hard-code it,
+so a later change needs no frontend release.
+
+### 4.7 API (proposal → `contracts/proposals/a7-rental-delivery.md`)
 
 | Method + path | Body / result |
 | --- | --- |
-| `POST /rentals/book` | Adds `pickup_or_delivery_mode: "PICKUP" \| "DELIVERY"`, `delivery_address{}`, `delivery_note` |
-| `GET /me/rentals`, `GET /partner/rentals/bookings` | Booking adds `transport` (nullable object above) and `pickup_address` (§5) |
-| `POST /me/rentals/{id}/transport/accept` | → `{payment: …}` same shape as booking payment init |
+| `POST /rentals/book` | Adds `pickup_or_delivery_mode: "PICKUP" \| "DELIVERY"`, `delivery_address{}`, `delivery_note`. A delivery booking returns no payment |
+| `GET /rentals/platform-fee` | Adds `transport_fee_percent` |
+| `GET /me/rentals`, `GET /partner/rentals/bookings` | Booking adds `transport` (nullable), `transport_paise`, `transport_fee_percent`, `transport_fee_paise`, `pickup_address` (§5) |
+| `POST /me/rentals/{id}/transport/accept` | → `{payment: …}`, same shape as booking payment init |
 | `POST /me/rentals/{id}/transport/reject` | `{note}` |
-| `POST /me/rentals/{id}/switch-to-pickup` | — |
+| `POST /me/rentals/{id}/switch-to-pickup` | → `{payment: …}` |
 | `POST /partner/rentals/bookings/{id}/transport/quote` | `{amount_paise, trip, note}` |
 | `POST /partner/rentals/bookings/{id}/transport/decline` | `{reason}` |
 | `POST /partner/rentals/bookings/{id}/transport/out-for-delivery` | — |
@@ -191,11 +228,11 @@ both the PICKUP (unchanged) and DELIVERY totals.
 Errors visible to the user: `delivery_not_offered`, `delivery_address_invalid`,
 `transport_state_invalid`, `quote_limit_reached`, `quote_expired`.
 
-### 4.7 Notifications
+### 4.8 Notifications
 
-Use the existing `_notify_rental` intents: delivery requested (→ partner), quote sent (→ customer),
-quote accepted/paid (→ partner), quote rejected (→ partner), declined/expired (→ customer, with the
-switch-or-cancel choice), out for delivery (→ customer).
+Use the existing `_notify_rental` intents: delivery requested (→ partner, with the 24 h deadline),
+quote sent (→ customer), quote accepted and paid (→ partner), quote rejected (→ partner),
+declined/expired (→ customer, with the switch-or-cancel choice), out for delivery (→ customer).
 
 ## 5. Design — Self Pickup address and Maps link
 
@@ -240,83 +277,103 @@ Customer book panel, a radio pair titled **"How do you want to receive it?"**:
   `maps_url`.
 - **Request Delivery** — only when `delivery_available`. Shows an address form (line, area, city,
   pincode, phone) and a note, plus the line *"The partner will check your requirement and send a
-  transport price. You pay it only if you accept."* Price summary: "Transport: quoted after
-  booking".
+  transport price. You pay nothing now. You pay the rent and transport together once you accept the
+  price."* The button reads **Send delivery request**, not Pay. Price summary: "Transport: the
+  partner will quote".
 
 Customer booking card: a transport status strip (Waiting for quote → Quote ₹X, one-way/round trip
-[Accept & pay] [Reject] → Paid → Out for delivery → Delivered), plus a "Switch to self pickup"
+[Accept & pay ₹total] [Reject] → Paid → Out for delivery → Delivered). The total breaks down rent,
+platform fee, deposit and transport, plus a "Switch to self pickup"
 action on decline/expiry. Self-pickup bookings show the same address block and View Location.
 
 Partner booking sheet: delivery address, customer note, a quote form (₹ amount, trip, note),
-Decline, Out for delivery. The ad editor gets structured address fields and a "Delivery available
+Decline, Out for delivery, and the 0% commission lines in §4.6. The ad editor gets structured address fields and a "Delivery available
 on request" toggle. The hint "There is no delivery." is removed.
 
-## 6. Design — Colour / material dropdowns
+## 6. Design — Colour / material dropdowns (R-9)
 
-### Phase A (recommended now, R-9)
+**Scope:** only products whose category already has a colour or material field. Nothing is added
+to other categories, and customers' screens don't change.
 
-1. **Always offer the fields.** Define `COMMON_RENTAL_FIELDS = {"color", "material"}` in
-   `field_options.py`. `get_rental_taxonomy()` merges them into every variant's `asset_schema`
-   (with `examples`) when the schema lacks them, as optional properties. They're added at the
-   serve layer, so there's no data migration and Operations-authored schemas still win.
-   `create_asset`/`update_asset` validate against the same merged schema.
-2. **Partner side:** no new component. `RentalFieldInput` already renders the dropdown and
-   "Other…". Check that the editor renders the merged fields.
-3. **Customer item page:** an "Item details" list rendering `structured_fields` with the schema
-   titles, with Colour shown as a swatch chip for the known names.
-4. **Customer browse:** Colour and Material `<select>` filters in `rental-filters.tsx`, options
-   from `SUGGESTIONS`. `public_assets` adds `color` / `material` query params filtering
-   `structured_fields__color__iexact`.
+**What already works:** `RentalFieldInput` (partner ad editor) renders any field that has
+`examples` as a dropdown + **Other…**, and choosing Other opens a text box whose value saves as
+is. Migration `0014` gave the existing colour/material fields their `examples`.
 
-### Phase B (only if the client confirms a choosable variant)
+**Why the client still sees a text box.** I can't see staging data from here, but the code
+allows three causes:
+1. **The category was created or edited after migration `0014`.** The migration ran once. A
+   category added later through Django admin, or a re-seeded one, has a plain
+   `{"type": "string"}` field with no list, so the form falls back to a text box.
+2. **The field key doesn't match exactly.** `SUGGESTIONS` matches only `color` and `material`. A
+   field named `colour`, `Color`, `frame_colour` or `Material type` gets no list.
+3. **Typed values.** Before `0014` the partner typed the value. An old ad whose value isn't in
+   the list opens on "Other…" with the text shown. That's correct, but it can look like typing.
 
-`RentalAssetOption(asset, color, material, quantity_available)`. The book panel shows a required
-dropdown per dimension, `RentalBookingLine.option` is snapshotted, and the availability sweep runs
-per option. This changes stock accounting, so it gets its own plan before any build.
+**Fix:**
+- Apply the suggestions **when the schema is served**, not only once in a migration:
+  `get_rental_taxonomy()` (and the partner asset detail) runs `with_suggestions()` on each
+  variant's `asset_schema`. New and edited categories get the dropdown with no further migration.
+- `with_suggestions()` matches keys by a normalised name, lower-cased, `colour` → `color`, with a
+  title fallback. So `colour`, `Color`, `body_colour` and a field titled "Colour" all get the colour
+  list, and likewise for material. It still adds a list only to fields that already exist and
+  never to other categories.
+- A schema author's own `enum`/`examples` still win.
+- The server keeps accepting any string, so an "Other" value always saves (`examples` don't
+  restrict).
+- Partner UI check: the dropdown's first option reads "Select colour"; "Other…" is last; choosing
+  Other focuses a box labelled "Your colour". All three behave the same on create and on edit.
+
+**Out of scope unless asked:** customers choosing a colour when booking, with stock per colour.
 
 ## 7. Work breakdown
 
 | # | Task | Owner | Depends |
 | --- | --- | --- | --- |
-| T0 | Remove pickup-hours leftovers (R-0): `pickup_hours.py`, `test_pickup_times.py`, both `pickup-time.ts`, `rental-home.tsx` usage | Codex + Claude | — |
-| T1 | Contract proposal `contracts/proposals/a7-rental-delivery.md` (§4.6, §5.2, §6 params) | Claude | R-1…R-9 |
+| T0 | Remove pickup-hours leftovers (R-0): `pickup_hours.py`, `test_pickup_times.py`, both `pickup-time.ts`, `rental-home.tsx` usage | Codex + Claude | R-0 |
+| T1 | Contract proposal `contracts/proposals/a7-rental-delivery.md` (§4.7, §5.2) | Claude | — |
 | T2 | Structured pickup address: fields, data migration, serializer `pickup_address` + `maps_url`, publish check | Codex | T1 |
-| T3 | Delivery domain: model, constraints, `transport.py` commands, `create_booking` change, beat expiry | Codex | T1 |
-| T4 | `A7_RENTAL_TRANSPORT` payment purpose: capture, expiry, refund | Codex | T3 |
-| T5 | Earning includes transport | Codex | T4 |
-| T6 | Colour/material Phase A backend: merged schema + browse filter | Codex | T1 |
-| T7 | Publish `contracts/openapi/v1.yaml`, regenerate `schema.d.ts` | Codex → Claude | T2–T6 |
-| T8 | Customer: receive-method chooser, pickup address + View Location, delivery form | Claude | T7 |
-| T9 | Customer: transport strip on the booking card (accept/pay, reject, switch) | Claude | T7 |
-| T10 | Partner: structured address + delivery toggle in the editor, quote/decline/out-for-delivery in the booking sheet | Claude | T7 |
-| T11 | Customer: item details list + colour/material filters | Claude | T7 |
+| T3 | Delivery domain: status, fields, `RentalTransportRequest`, `transport.py` commands, `create_booking` change, beat expiry | Codex | T1 |
+| T4 | One payment: `booking_amount_due` helper, accept → payment, expiry back to QUOTED, refund includes transport | Codex | T3 |
+| T5 | Earning includes transport at 0% commission, `transport_fee_percent` on platform-fee GET | Codex | T4 |
+| T6 | Colour/material: serve-time suggestions + key normalisation (§6) | Codex | — |
+| T7 | Publish `contracts/openapi/v1.yaml`, regenerate `schema.d.ts` | Codex → Claude | T2–T5 |
+| T8 | Customer book panel: receive-method chooser, pickup address + View Location, delivery form | Claude | T7 |
+| T9 | Customer booking card: transport status, accept & pay, reject, switch to pickup | Claude | T7 |
+| T10 | Partner: structured address + delivery toggle in the editor, quote/decline/out-for-delivery, 0% commission display (§4.6) | Claude | T7 |
+| T11 | Partner: verify the colour/material dropdown + Other on create and edit against T6 | Claude | T6 |
 
 ## 8. Tests to write
 
 Backend (`backend/tests/rental/`):
-- `test_transport_flow.py`: each transition in §4.3, every illegal transition refused, quote cap,
-  replayed accept charges once, payment expiry returns to QUOTED, R-6 expiry, switch-to-pickup,
-  cancel refunds rental + deposit + transport, handover blocked until PAID.
-- `test_a7_flow.py`: rewrite the coercion test so `DELIVERY` is kept when offered and refused with
+- `test_transport_flow.py`: every transition in §4.3, illegal transitions refused, the quote cap,
+  replayed accept starts one payment, payment expiry → QUOTED, `respond_by` expiry releases the
+  dates, switch-to-pickup charges the pickup amount, cancel before payment charges nothing, cancel
+  after payment refunds transport too, `out-for-delivery` refused before payment.
+- `test_a7_flow.py`: rewrite the coercion test. `DELIVERY` is kept when offered and refused with
   `delivery_not_offered` otherwise.
 - `test_pickup_address.py`: profile → asset copy, override, pincode check, `maps_url` encoding
   (commas, `&`, `#`, non-ASCII), legacy `location_text` migration.
-- `test_rental_payout.py`: earning with and without paid transport.
-- `test_field_options.py`: merged schema adds colour/material, keeps an Ops-authored property,
-  browse filter.
+- `test_rental_payout.py`: earning with and without transport, commission 0 on transport.
+- `test_field_options.py`: `colour` / `Color` / title "Colour" get the list, a category without
+  the field gets nothing, an author's `enum` is kept, a custom "Other" value saves.
 
-Frontend (Vitest): `rental-book-panel.test.tsx` (chooser, address block, link `href`/`target`/
-`rel`, delivery form validation), `rental-booking-card.test.tsx` (each transport state),
-partner booking-sheet quote form, item details list.
+Frontend (Vitest): `rental-book-panel.test.tsx` (chooser, address block, link
+`href`/`target`/`rel`, delivery form validation, no payment on a delivery request),
+`rental-booking-card.test.tsx` (each transport state), partner quote form ("0% — you receive the
+full ₹X" updates as the partner types), `rental-field-input` (dropdown, Other opens the box,
+custom value kept on edit).
 
 ## 9. Acceptance
 
-- Self Pickup: the customer sees the full address and View Location opens Google Maps searching
+- Self Pickup: the customer sees the full address, and View Location opens Google Maps searching
   for that address. No transport line in the price.
-- Delivery: booking → partner quote → customer accepts and pays through Razorpay test mode →
-  partner delivers with the PIN → rental starts. The partner's earning includes the transport.
-- Decline, reject or expiry always leaves the customer a working choice: switch to pickup or a full
-  refund.
-- No transport price is ever computed by the platform. Every amount is the partner's quote, stored
-  in paise.
-- Every rental ad offers colour and material dropdowns, and customers see and filter by them.
+- Delivery: request → partner quotes → customer accepts → **one payment** of rent + fee + deposit
+  + transport through Razorpay test mode → partner delivers with the PIN → rental starts.
+- The partner sees "0% commission" on the quote and the booking, and the earning includes the
+  full transport amount.
+- A declined or expired delivery request has charged the customer nothing and leaves them a
+  choice: switch to pickup or cancel.
+- No transport price is ever computed by the platform. Every amount is the partner's quote, in
+  paise.
+- Every product with a colour or material field shows a dropdown with Other. Products without
+  those fields are unchanged.
