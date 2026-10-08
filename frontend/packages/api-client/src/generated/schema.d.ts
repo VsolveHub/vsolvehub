@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.68.0)
- * Checksum: daa06a9834e9a201
+ * Source:   contracts/openapi/v1.yaml (version 1.69.0)
+ * Checksum: 8a77b8aa2f486f3f
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -6256,6 +6256,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/partner/stays/looks/{look_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Rename a look, or remove an empty one. */
+        delete: operations["partner_stays_looks_destroy"];
+        options?: never;
+        head?: never;
+        /** @description Rename a look, or remove an empty one. */
+        patch: operations["partner_stays_looks_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/partner/stays/looks/{look_id}/media": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Add a photo to one look. Removing uses the room type's photo delete. */
+        post: operations["partner_stays_looks_media_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/partner/stays/photos": {
         parameters: {
             query?: never;
@@ -6504,6 +6539,23 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["partner_stays_units_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/partner/stays/units/{unit_id}/looks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Add a look (a named photo set) to a room type. Rooms join it from the room screens. */
+        post: operations["partner_stays_units_looks_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/partner/stays/units/{unit_id}/media": {
@@ -8126,6 +8178,9 @@ export interface components {
         ActiveRole: {
             readonly active_role: string | null;
         };
+        AddLookMediaRequest: {
+            url: string;
+        };
         AddPropertyMediaRequest: {
             /** Format: uri */
             url: string;
@@ -8138,6 +8193,9 @@ export interface components {
             number: string;
             /** @default true */
             available: boolean;
+            /** Format: uuid */
+            look_id?: string | null;
+            new_look?: components["schemas"]["CreateLookRequest"];
         };
         AddUnitMediaRequest: {
             url: string;
@@ -9341,6 +9399,8 @@ export interface components {
             property_id: string;
             /** Format: uuid */
             unit_id?: string | null;
+            /** Format: uuid */
+            look_id?: string | null;
             /** Format: date */
             check_in: string;
             length?: number | null;
@@ -9350,6 +9410,10 @@ export interface components {
             guest_count: number;
             /** @default  */
             message: string;
+        };
+        CreateLookRequest: {
+            name: string;
+            image_urls?: string[];
         };
         CreatePropertyRequest: {
             /** Format: uuid */
@@ -9420,6 +9484,8 @@ export interface components {
             visit_date: string;
             /** Format: uuid */
             unit_id?: string | null;
+            /** Format: uuid */
+            look_id?: string | null;
             /** @default  */
             message: string;
         };
@@ -11095,6 +11161,7 @@ export interface components {
             readonly phone: string;
             roles?: unknown;
             skills?: unknown;
+            readonly skill_groups: components["schemas"]["SkillGroup"][];
             experience_band?: string;
             qualification?: string;
             languages?: unknown;
@@ -13037,7 +13104,8 @@ export interface components {
             readonly property_title: string;
             /** Format: uuid */
             unit?: string | null;
-            /** @default Standard room */
+            /** Format: uuid */
+            look?: string | null;
             readonly unit_name: string;
             /** @default 0 */
             readonly nightly_rate_paise: number;
@@ -13073,7 +13141,8 @@ export interface components {
             readonly property_slug: string;
             /** Format: uuid */
             unit?: string | null;
-            /** @default  */
+            /** Format: uuid */
+            look?: string | null;
             readonly unit_name: string;
             /** Format: date */
             visit_date: string;
@@ -13103,6 +13172,7 @@ export interface components {
             /** Format: uuid */
             readonly id: string;
             readonly media: components["schemas"]["UnitMedia"][];
+            readonly looks: components["schemas"]["RoomLook"][];
             name: string;
             sharing_count?: number;
             quantity?: number;
@@ -13353,6 +13423,9 @@ export interface components {
             pickup_pincode?: string;
             delivery_available?: boolean;
         };
+        PatchedUpdateLookRequest: {
+            name?: string;
+        };
         PatchedUpdatePropertyRequest: {
             title?: string;
             description?: string;
@@ -13364,6 +13437,8 @@ export interface components {
         };
         PatchedUpdateRoomRequest: {
             number?: string;
+            /** Format: uuid */
+            look_id?: string;
             available?: boolean;
         };
         PatchedUpdateUnitRequest: {
@@ -14652,6 +14727,7 @@ export interface components {
         QuickApplyRequest: {
             /** @default  */
             note: string;
+            skills?: string[];
         };
         Quote: {
             /** Format: uuid */
@@ -15879,6 +15955,8 @@ export interface components {
         Room: {
             /** Format: uuid */
             readonly id: string;
+            /** Format: uuid */
+            look: string;
             number: string;
             status?: components["schemas"]["RoomStatusEnum"];
             occupant_name?: string;
@@ -15888,6 +15966,20 @@ export interface components {
             booked_visit?: string | null;
             /** Format: date-time */
             booked_at?: string | null;
+        };
+        /**
+         * @description One look of a room type, as guests see it: its photos and how many of its rooms are
+         *     available. Never the room numbers.
+         */
+        RoomLook: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            display_name: string;
+            display_order: number;
+            media: components["schemas"]["UnitMedia"][];
+            available_count: number;
+            room_count: number;
         };
         /**
          * @description * `AVAILABLE` - Available
@@ -16498,6 +16590,13 @@ export interface components {
             below_bps: number;
             above_bps: number;
         };
+        /** @description Skills grouped by the job category they were added from. Only the seeker sees these. */
+        SkillGroup: {
+            category: string;
+            role: string;
+            skills: string[];
+            added_at: string;
+        };
         /**
          * @description * `MANUAL` - Manual
          *     * `REVERSE_GEOCODED` - Reverse geocoded
@@ -16729,7 +16828,8 @@ export interface components {
             readonly property_title: string;
             /** Format: uuid */
             unit?: string | null;
-            /** @default Standard room */
+            /** Format: uuid */
+            look?: string | null;
             readonly unit_name: string;
             /** @default 0 */
             readonly nightly_rate_paise: number;
@@ -16937,7 +17037,8 @@ export interface components {
             readonly property_slug: string;
             /** Format: uuid */
             unit?: string | null;
-            /** @default  */
+            /** Format: uuid */
+            look?: string | null;
             readonly unit_name: string;
             /** Format: date */
             visit_date: string;
@@ -17167,6 +17268,7 @@ export interface components {
             /** Format: uuid */
             readonly id: string;
             readonly media: components["schemas"]["UnitMedia"][];
+            readonly looks: components["schemas"]["RoomLook"][];
             name: string;
             sharing_count?: number;
             quantity?: number;
@@ -32084,6 +32186,80 @@ export interface operations {
             };
         };
     };
+    partner_stays_looks_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                look_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    partner_stays_looks_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                look_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedUpdateLookRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedUpdateLookRequest"];
+                "multipart/form-data": components["schemas"]["PatchedUpdateLookRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoomLook"];
+                };
+            };
+        };
+    };
+    partner_stays_looks_media_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                look_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddLookMediaRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AddLookMediaRequest"];
+                "multipart/form-data": components["schemas"]["AddLookMediaRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnitMedia"];
+                };
+            };
+        };
+    };
     partner_stays_photos_create: {
         parameters: {
             query?: never;
@@ -32531,6 +32707,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PartnerUnit"];
+                };
+            };
+        };
+    };
+    partner_stays_units_looks_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                unit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateLookRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CreateLookRequest"];
+                "multipart/form-data": components["schemas"]["CreateLookRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoomLook"];
                 };
             };
         };

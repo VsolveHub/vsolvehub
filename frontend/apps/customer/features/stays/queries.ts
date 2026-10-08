@@ -79,6 +79,8 @@ export function createStayEnquiry(payload: {
   child_count?: number;
   message?: string;
   unit_id?: string | null;
+  /** The look the guest picked, when the room type has several. */
+  look_id?: string | null;
 }) {
   return request(() =>
     getApiClient().POST("/api/v1/stays/enquire", {
@@ -93,6 +95,7 @@ export function createStayEnquiry(payload: {
         ...(payload.child_count !== undefined && { child_count: payload.child_count }),
         message: payload.message ?? "",
         unit_id: payload.unit_id ?? undefined,
+        look_id: payload.look_id ?? undefined,
       },
     }),
   );
@@ -153,6 +156,7 @@ export function createStayVisit(payload: {
   slot_id: string;
   visit_date: string;
   unit_id?: string | null;
+  look_id?: string | null;
   message?: string;
 }) {
   return request(() =>
@@ -162,6 +166,7 @@ export function createStayVisit(payload: {
         slot_id: payload.slot_id,
         visit_date: payload.visit_date,
         unit_id: payload.unit_id ?? undefined,
+        look_id: payload.look_id ?? undefined,
         message: payload.message ?? "",
       },
     }),

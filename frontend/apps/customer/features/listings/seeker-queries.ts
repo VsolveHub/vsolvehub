@@ -45,13 +45,28 @@ export async function fetchMyMatch(listingId: string): Promise<JobMatch | null> 
   return (data as JobMatch | undefined) ?? null;
 }
 
-export function quickApply(listingId: string, note: string) {
+/** `skills`: the job's skills the seeker ticked. They are added to the profile, never replacing it. */
+export function quickApply(listingId: string, note: string, skills: string[] = []) {
   return request(() =>
     getApiClient().POST("/api/v1/listings/{listing_id}/quick-apply", {
       params: { path: { listing_id: listingId } },
-      body: { note },
+      body: { note, skills },
     }),
   );
+}
+
+const skillKey = (text: string) => text.trim().replace(/\s+/g, " ").toLowerCase();
+
+/** The ticked skills that aren't on the profile yet — what applying will add. */
+export function newSkillsFrom(profileSkills: readonly string[], ticked: readonly string[]): string[] {
+  const have = new Set(profileSkills.map(skillKey));
+  const seen = new Set<string>();
+  return ticked.filter((s) => {
+    const key = skillKey(s);
+    if (!key || have.has(key) || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 export function fetchSavedJobs() {

@@ -392,21 +392,35 @@ export async function fetchPartnerStaySummary(): Promise<HostStaySummary> {
 
 // --- numbered rooms -------------------------------------------------------------------------
 
+/**
+ * Add a numbered room. It shares an existing look's photos (`look_id`), or starts a new look
+ * with its own name and photos (`new_look`), which guests see as its own card.
+ */
 export async function addPartnerStayRoom(
   unitId: string,
-  input: { number: string; available?: boolean },
+  input: {
+    number: string;
+    available?: boolean;
+    look_id?: string;
+    new_look?: { name: string; image_urls: string[] };
+  },
 ): Promise<StayRoom> {
   return request(() =>
     getApiClient().POST("/api/v1/partner/stays/units/{unit_id}/rooms", {
       params: { path: { unit_id: unitId } },
-      body: { number: input.number, available: input.available ?? true },
+      body: {
+        number: input.number,
+        available: input.available ?? true,
+        ...(input.new_look ? { new_look: input.new_look } : { look_id: input.look_id ?? null }),
+      },
     }),
   );
 }
 
+/** `look_id` moves the room to another look of its type. */
 export async function updatePartnerStayRoom(
   roomId: string,
-  input: { number?: string; available?: boolean },
+  input: { number?: string; available?: boolean; look_id?: string },
 ): Promise<StayRoom> {
   return request(() =>
     getApiClient().PATCH("/api/v1/partner/stays/rooms/{room_id}", {
@@ -542,6 +556,49 @@ export async function deletePartnerStayUnitMedia(unitId: string, mediaId: string
   await request(() =>
     getApiClient().DELETE("/api/v1/partner/stays/units/{unit_id}/media/{media_id}", {
       params: { path: { unit_id: unitId, media_id: mediaId } },
+    }),
+  );
+}
+
+// --- room looks -----------------------------------------------------------------------------
+
+/** One look of a room type: a photo set some of its rooms share. Guests see one card each. */
+export type StayLook = Schemas["RoomLook"];
+
+export async function createPartnerStayLook(
+  unitId: string,
+  input: { name: string; image_urls?: string[] },
+): Promise<StayLook> {
+  return request(() =>
+    getApiClient().POST("/api/v1/partner/stays/units/{unit_id}/looks", {
+      params: { path: { unit_id: unitId } },
+      body: { name: input.name, image_urls: input.image_urls ?? [] },
+    }),
+  );
+}
+
+export async function renamePartnerStayLook(lookId: string, name: string): Promise<StayLook> {
+  return request(() =>
+    getApiClient().PATCH("/api/v1/partner/stays/looks/{look_id}", {
+      params: { path: { look_id: lookId } },
+      body: { name },
+    }),
+  );
+}
+
+export async function deletePartnerStayLook(lookId: string): Promise<void> {
+  await request(() =>
+    getApiClient().DELETE("/api/v1/partner/stays/looks/{look_id}", {
+      params: { path: { look_id: lookId } },
+    }),
+  );
+}
+
+export async function addPartnerStayLookMedia(lookId: string, url: string): Promise<StayUnitMedia> {
+  return request(() =>
+    getApiClient().POST("/api/v1/partner/stays/looks/{look_id}/media", {
+      params: { path: { look_id: lookId } },
+      body: { url },
     }),
   );
 }

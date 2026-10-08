@@ -23,6 +23,10 @@ interface StayQuotePanelProps {
   onViewProperty?: () => void;
   embedded?: boolean;
   initialUnitId?: string;
+  /** The look the guest is looking at, sent with the enquiry so the host knows which room. */
+  lookId?: string;
+  /** "1 BHK · With balcony": shown so the guest sees what they are asking about. */
+  lookName?: string;
 }
 
 /** Server limits, in the property's unit: 24 months or 90 nights. */
@@ -66,6 +70,8 @@ export function StayQuotePanel({
   onViewProperty: _onViewProperty,
   embedded = false,
   initialUnitId,
+  lookId,
+  lookName,
 }: StayQuotePanelProps) {
   const router = useRouter();
   const period = pricePeriodOf(property.price_period);
@@ -86,6 +92,9 @@ export function StayQuotePanel({
   const [error, setError] = useState<string | null>(null);
 
   const selectedUnit = property.units.find((u) => u.id === selectedUnitId) ?? property.units[0];
+  // Only a look of the chosen room type travels with the enquiry.
+  const chosenLookId =
+    lookId && (selectedUnit?.looks ?? []).some((look) => look.id === lookId) ? lookId : undefined;
   // Room capacity gates the total headcount.
   const maxGuests = Math.max(selectedUnit?.max_guests ?? 1, 1);
   // Clamp adults to stay within capacity minus children.
@@ -115,6 +124,7 @@ export function StayQuotePanel({
       createStayEnquiry({
         property_id: property.id,
         unit_id: selectedUnitId || null,
+        look_id: chosenLookId ?? null,
         check_in: checkIn,
         length,
         guest_count: totalGuests,
@@ -203,6 +213,12 @@ export function StayQuotePanel({
             </div>
           </div>
         )}
+
+        {chosenLookId && lookName ? (
+          <p className="rounded-control bg-surface-sunken px-3 py-2 text-xs text-text-secondary" data-testid="enquiry-look">
+            You&apos;re asking about <strong className="text-text">{lookName}</strong>
+          </p>
+        ) : null}
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">

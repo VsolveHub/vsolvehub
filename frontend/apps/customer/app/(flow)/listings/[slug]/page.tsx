@@ -206,6 +206,7 @@ export default function ListingDetailPage() {
             listingId={listingId}
             posterName={listing.poster_name}
             profile={jobProfile.data}
+            jobSkills={[...asStringList(listing.required_skills), ...asStringList(listing.preferred_skills)]}
           />
         ) : (
         <ApplySteps
@@ -264,4 +265,9 @@ export default function ListingDetailPage() {
       />
     </main>
   );
+}
+
+/** The job's skill lists arrive untyped from the contract; keep only the text items. */
+function asStringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string" && v.trim() !== "") : [];
 }

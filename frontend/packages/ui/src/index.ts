@@ -169,3 +169,5 @@ export {
 } from "./command-palette";
 export { KeyboardHint } from "./keyboard-hint";
 export type { KeyboardHintProps } from "./keyboard-hint";
+export { StayRoomCard } from "./stay-room-card";
+export type { StayRoomCardChip, StayRoomCardProps } from "./stay-room-card";

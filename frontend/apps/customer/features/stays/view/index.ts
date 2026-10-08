@@ -12,3 +12,4 @@ export * from "./stay-enquiry-sent";
 export * from "./stay-payment-note";
 export * from "./owner-contact";
 export * from "./room-card";
+export * from "./look-switcher";

@@ -7,9 +7,11 @@ import { useRef, useState, type ChangeEvent } from "react";
 
 import {
   MAX_ROOM_PHOTOS,
+  addPartnerStayLookMedia,
   addPartnerStayUnitMedia,
   deletePartnerStayUnitMedia,
   uploadPartnerStayPhoto,
+  type StayLook,
   type StayUnit,
 } from "@/features/stays/queries";
 
@@ -186,6 +188,66 @@ export function RoomPhotosLive({ unit }: { unit: StayUnit }) {
       {media.length === 0 && uploading === 0 ? (
         <p className="rounded-control bg-warning-surface px-2.5 py-1.5 text-xs font-semibold text-warning-text">
           Hidden from guests until you add a photo of this room.
+        </p>
+      ) : null}
+      {error ? <p className="text-xs text-danger-text">{error}</p> : null}
+    </div>
+  );
+}
+
+/**
+ * Photos of one look of a room type: adding or removing one saves straight away. Guests see
+ * these on that look's own card.
+ */
+export function LookPhotosLive({ unit, look, label }: { unit: StayUnit; look: StayLook; label?: string }) {
+  const qc = useQueryClient();
+  const [uploading, setUploading] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const media = look.media ?? [];
+  const invalidate = () => void qc.invalidateQueries({ queryKey: ["partner-stays"] });
+
+  const remove = useMutation({
+    mutationFn: (mediaId: string) => deletePartnerStayUnitMedia(unit.id, mediaId),
+    onSuccess: invalidate,
+    onError: (err: unknown) => setError(friendlyErrorMessage(err)),
+  });
+
+  async function pick(files: FileList | null) {
+    if (!files?.length) return;
+    const room = MAX_ROOM_PHOTOS - media.length;
+    setUploading(Math.min(files.length, room));
+    setError(null);
+    try {
+      const result = await uploadAll(files, room);
+      for (const url of result.urls) {
+        await addPartnerStayLookMedia(look.id, url);
+      }
+      if (result.failed) setError(`${result.failed} photo(s) could not be uploaded.`);
+    } catch (err) {
+      setError(friendlyErrorMessage(err));
+    } finally {
+      setUploading(0);
+      invalidate();
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <ThumbGrid
+        label={label ?? (media.length ? `Photos (${media.length})` : "Photos")}
+        uploading={uploading}
+        canAdd={media.length + uploading < MAX_ROOM_PHOTOS}
+        onPick={(files) => void pick(files)}
+        thumbs={media.map((m) => ({
+          key: m.id,
+          url: m.url,
+          busy: remove.isPending && remove.variables === m.id,
+          onRemove: () => remove.mutate(m.id),
+        }))}
+      />
+      {media.length === 0 && uploading === 0 ? (
+        <p className="rounded-control bg-warning-surface px-2.5 py-1.5 text-xs font-semibold text-warning-text">
+          Guests won&rsquo;t see this look until you add a photo.
         </p>
       ) : null}
       {error ? <p className="text-xs text-danger-text">{error}</p> : null}

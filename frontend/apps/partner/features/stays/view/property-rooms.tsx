@@ -430,6 +430,7 @@ export function PropertyRooms({
           ) : (
             <RoomTypeBlock
               key={unit.id}
+              property={property}
               unit={unit}
               pricePeriod={property.price_period}
               summary={roomSummary(unit, style)}

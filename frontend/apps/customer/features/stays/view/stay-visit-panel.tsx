@@ -36,10 +36,13 @@ function visitRefusal(err: unknown): string {
 export function StayVisitPanel({
   property,
   initialUnitId,
+  initialLookId,
 }: {
   property: StayProperty;
   /** The room chosen to start with (the one opened from search). */
   initialUnitId?: string;
+  /** The look opened from search, sent with the visit while that room type stays chosen. */
+  initialLookId?: string;
 }) {
   const period = pricePeriodOf(property.price_period);
   const slots = useQuery({
@@ -69,6 +72,9 @@ export function StayVisitPanel({
         slot_id: slotId ?? "",
         visit_date: activeDay ?? "",
         unit_id: unitId || null,
+        // The look opened from search, as long as the guest kept its room type.
+        look_id:
+          initialLookId && unitId && unitId === initialUnitId ? initialLookId : null,
         message,
       }),
     onSuccess: (visit) => setRequested(visit as StayVisit),

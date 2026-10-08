@@ -155,11 +155,17 @@ export function JobProfileForm({ defaultName = "", returnTo }: { defaultName?: s
   const roleHits = roleSearch.trim()
     ? allRoles.filter((r) => `${r.name} ${r.category}`.toLowerCase().includes(roleSearch.trim().toLowerCase())).slice(0, 12)
     : [];
-  // Skills suggested by the jobs they picked.
+  // Skills added by applying, grouped by job category. The seeker's own view only.
+  const groups = skillGroupsOf(profile.data?.skill_groups);
+  const grouped = new Set(groups.flatMap((g) => g.skills));
+  // Skills suggested by the jobs they picked, plus any not in a group.
   const skillIdeas = useMemo(() => {
     const ideas = allRoles.filter((r) => form.roles.includes(r.name)).flatMap((r) => r.skills);
     return [...new Set([...ideas, ...form.skills])];
   }, [allRoles, form.roles, form.skills]);
+  const looseIdeas = skillIdeas.filter((s) => !grouped.has(s));
+  const toggleSkill = (s: string) =>
+    set({ skills: form.skills.includes(s) ? form.skills.filter((x) => x !== s) : [...form.skills, s] });
 
   const set = (patch: Partial<Form>) => {
     setSaved(false);
@@ -168,7 +174,7 @@ export function JobProfileForm({ defaultName = "", returnTo }: { defaultName?: s
   };
   const toggleRole = (name: string) => {
     if (form.roles.includes(name)) return set({ roles: form.roles.filter((r) => r !== name) });
-    if (form.roles.length >= 3) return setError("Pick up to 3 jobs.");
+    if (form.roles.length >= MAX_ROLES) return setError(`Pick up to ${MAX_ROLES} jobs.`);
     set({ roles: [...form.roles, name] });
   };
 
@@ -201,7 +207,7 @@ export function JobProfileForm({ defaultName = "", returnTo }: { defaultName?: s
           <Input value={form.full_name} maxLength={120} onChange={(e) => set({ full_name: e.target.value })} />
         </Field>
 
-        <Block title="Jobs you want" hint="Pick up to 3.">
+        <Block title="Jobs you want" hint={`Pick up to ${MAX_ROLES}. Jobs you apply for are added here too.`}>
           {form.roles.length > 0 ? (
             <div className="flex flex-wrap gap-2">
               {form.roles.map((r) => (
@@ -243,15 +249,26 @@ export function JobProfileForm({ defaultName = "", returnTo }: { defaultName?: s
         </Block>
 
         <Block title="Your skills" hint={form.roles.length ? "Tap the ones you have." : "Pick a job above to see suggestions."}>
+          {groups.map((group) => (
+            <div key={group.category} className="flex flex-col gap-1.5" data-testid="skill-group">
+              <p className="text-xs font-bold text-navy-900">
+                {group.category}
+                <span className="font-normal text-text-secondary"> · from your {group.role} application</span>
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {group.skills.map((s) => (
+                  <SkillChip key={s} skill={s} on={form.skills.includes(s)} onToggle={() => toggleSkill(s)} />
+                ))}
+              </div>
+            </div>
+          ))}
+          {groups.length > 0 && looseIdeas.length > 0 ? (
+            <p className="text-xs font-bold text-navy-900">Other skills</p>
+          ) : null}
           <div className="flex flex-wrap gap-2">
-            {skillIdeas.map((s) => {
-              const on = form.skills.includes(s);
-              return (
-                <button key={s} type="button" aria-pressed={on} onClick={() => set({ skills: on ? form.skills.filter((x) => x !== s) : [...form.skills, s] })} className={`inline-flex min-h-10 items-center gap-1.5 rounded-full border px-4 text-sm font-semibold ${on ? "border-action bg-action-surface text-action" : "border-line bg-surface text-text-secondary"}`}>
-                  {on ? <Check className="size-3.5" aria-hidden /> : <Plus className="size-3.5" aria-hidden />} {s}
-                </button>
-              );
-            })}
+            {looseIdeas.map((s) => (
+              <SkillChip key={s} skill={s} on={form.skills.includes(s)} onToggle={() => toggleSkill(s)} />
+            ))}
           </div>
           <div className="flex gap-2">
             <Input placeholder="Add a skill" maxLength={60} value={customSkill} onChange={(e) => setCustomSkill(e.target.value)} />
@@ -330,5 +347,35 @@ export function JobProfileForm({ defaultName = "", returnTo }: { defaultName?: s
         </div>
       </div>
     </div>
+  );
+}
+
+/** Jobs you want: applying adds the job title here too, up to this many. */
+const MAX_ROLES = 10;
+
+type SkillGroup = { category: string; role: string; skills: string[] };
+
+function skillGroupsOf(raw: unknown): SkillGroup[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((g) => {
+    if (!g || typeof g !== "object") return [];
+    const { category, role, skills } = g as Record<string, unknown>;
+    const list = Array.isArray(skills) ? skills.filter((s): s is string => typeof s === "string") : [];
+    return typeof category === "string" && list.length > 0
+      ? [{ category, role: typeof role === "string" ? role : category, skills: list }]
+      : [];
+  });
+}
+
+function SkillChip({ skill, on, onToggle }: { skill: string; on: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      onClick={onToggle}
+      className={`inline-flex min-h-10 items-center gap-1.5 rounded-full border px-4 text-sm font-semibold ${on ? "border-action bg-action-surface text-action" : "border-line bg-surface text-text-secondary"}`}
+    >
+      {on ? <Check className="size-3.5" aria-hidden /> : <Plus className="size-3.5" aria-hidden />} {skill}
+    </button>
   );
 }

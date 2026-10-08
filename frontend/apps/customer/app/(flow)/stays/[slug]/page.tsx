@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -35,6 +35,8 @@ import {
   uploadStayReviewPhoto,
 } from "@/features/stays/queries";
 import { StayCard, StayImageGallery, StayQuotePanel, amenityIcon } from "@/features/stays/view";
+import { LookSwitcher } from "@/features/stays/view/look-switcher";
+import { lookTitle, pickLook, visibleLooks } from "@/features/stays/looks";
 import { STAYS_HREF } from "@/lib/routes";
 import { useCanonicalSlug } from "@/lib/use-canonical-slug";
 
@@ -51,7 +53,10 @@ export default function StayDetailPage() {
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [reviewPhotos, setReviewPhotos] = useState<string[]>([]);
   const [photoUploading, setPhotoUploading] = useState(false);
-  const [selectedUnitId, setSelectedUnitId] = useState<string>("");
+  // A search card opens the page on its room type and look: ?room=<unit>&look=<look>.
+  const searchParams = useSearchParams();
+  const [selectedUnitId, setSelectedUnitId] = useState<string>(() => searchParams?.get("room") ?? "");
+  const [selectedLookId, setSelectedLookId] = useState<string>(() => searchParams?.get("look") ?? "");
 
   const {
     data: property,
@@ -168,17 +173,32 @@ export default function StayDetailPage() {
       </nav>
 
       {(() => {
-        const currentUnitId = selectedUnitId || property.units[0]?.id || "";
-        const currentUnit = property.units.find((u) => u.id === currentUnitId);
-        const unitMedia = (currentUnit as { media?: Array<{ id: string; url: string; display_order?: number; caption?: string }> })?.media;
-        const activeMedia = unitMedia && unitMedia.length > 0 ? (unitMedia as typeof property.media) : property.media;
-        const galleryTitle = currentUnit?.name ? `${property.title} · ${currentUnit.name}` : property.title;
+        const currentUnit =
+          property.units.find((u) => u.id === selectedUnitId) ?? property.units[0];
+        const currentLook = pickLook(currentUnit, selectedLookId);
+        const switchable = currentUnit ? visibleLooks(currentUnit) : [];
+        // The gallery shows the chosen look's photos; the building's own photos otherwise.
+        const lookMedia = currentLook?.media ?? [];
+        const activeMedia =
+          lookMedia.length > 0 ? (lookMedia as unknown as typeof property.media) : property.media;
+        const galleryTitle = currentUnit
+          ? `${property.title} · ${lookTitle(currentUnit, currentLook)}`
+          : property.title;
 
         return (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
             {/* Left Column: Property Details & Amenities */}
             <div className="lg:col-span-7 flex flex-col gap-6">
               <StayImageGallery media={activeMedia} title={galleryTitle} />
+
+              {currentLook ? (
+                <LookSwitcher
+                  looks={switchable}
+                  selectedId={currentLook.id}
+                  roomStyle={property.room_style}
+                  onSelect={setSelectedLookId}
+                />
+              ) : null}
 
               <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6 shadow-xs">
                 {/* The host's application was reviewed by Operations before any listing went live. */}
@@ -386,7 +406,16 @@ export default function StayDetailPage() {
 
         {/* Right Column: Interactive Quote and Enquiry Panel */}
         <div className="lg:col-span-5 sticky top-24">
-          <StayQuotePanel property={property} onSelectUnit={setSelectedUnitId} />
+          <StayQuotePanel
+            property={property}
+            initialUnitId={currentUnit?.id}
+            lookId={currentLook?.id || undefined}
+            lookName={currentUnit ? lookTitle(currentUnit, currentLook) : undefined}
+            onSelectUnit={(unitId) => {
+              setSelectedUnitId(unitId);
+              setSelectedLookId("");
+            }}
+          />
         </div>
       </div>
     );
