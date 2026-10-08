@@ -1,6 +1,6 @@
 # Job skills that accumulate · Stay rooms grouped by look · Guest preview for hosts
 
-**Status:** Planned — audit complete, not built
+**Status:** Planned — owner decisions taken 8 Oct 2026 (below); not built
 **Effective date:** 2026-10-08
 **Base:** `main` @ `4aab07f`
 
@@ -113,7 +113,7 @@ New `RoomLook`:
 | Field | Notes |
 | --- | --- |
 | `unit` | `FK(Unit, CASCADE, related_name="looks")` |
-| `name` | `CharField(60, blank)`, optional label the guest sees as a suffix ("Garden-facing"). Blank → no suffix |
+| `name` | `CharField(60, blank)`, the label guests see as a suffix ("With balcony"). The first look may stay blank (card reads "1 BHK"); **every other look must be named** once a type has two or more looks |
 | `display_order` | First look = the type's main card |
 
 Changes:
@@ -148,8 +148,15 @@ today. See open question Q-3.
 - **Search:** one card per *look* with ≥ 1 available room and ≥ 1 photo. Title: unit name, plus
   " · {look name}" when the type has more than one look and the look is named. Keep at most 2
   cards per property in search (Q-2); the property page shows them all.
-- **Property page:** the room list shows each look as its own option with its own gallery;
-  `?room=<unit>&look=<look>` preselects it; the enquiry carries `look_id`.
+- **Room page / property page — "Other looks of this room":** when a guest opens one look, a
+  switcher right under the title shows every look of the same room type as photo chips:
+  `[▣ 1 BHK] [▣ With balcony]`, with the line *"Same room, same price — different look. 2 looks
+  available."* Tapping a chip swaps the gallery and the availability count in place, without
+  leaving the page or changing the price, so the guest understands it's the same room type with
+  the same features. `?room=<unit>&look=<look>` preselects a look; the enquiry carries the chosen
+  `look_id`.
+- **Search card hint:** a look's card in search also says "+1 more look" when its room type has
+  other looks, so the guest knows to open it and compare.
 - Room numbers stay hidden everywhere.
 
 ---
@@ -199,15 +206,16 @@ drift.
 
 ---
 
-## Open questions (recommendation in bold)
+## Owner decisions — 8 October 2026
 
-| ID | Question | Recommendation |
-| --- | --- | --- |
-| Q-1 | Can a look have a different price from its room type? | **No.** Same type = same price; a different price is a new room type. Keeps quotes and reservations untouched |
-| Q-2 | Search cap: 2 cards per property counted per look or per type? | **Per look, cap 3.** A 1 BHK with two looks plus one other type fits; the property page shows the rest |
-| Q-3 | Should the look name be required? | **Optional.** If blank, the card shows just "1 BHK"; with two unnamed looks the second card shows its photo count to tell them apart |
-| Q-4 | Jobs: skills cap | **60 skills, 10 roles**, never auto-dropping |
-| Q-5 | Jobs: should employers see which category a skill came from? | **No.** Employers see the flat skills; the grouping is for the seeker's own profile |
+| ID | Decision |
+| --- | --- |
+| Q-1 | **A look can't have its own price.** Same room type = same price; a different price is a new room type |
+| Q-2 | **Search shows up to 3 cards per property**, counted per look. The property page shows them all |
+| Q-3 | **A look must be named once the type has more than one look.** Cards read "1 BHK" and "1 BHK · With balcony". Adding a second look asks for its name; the service refuses an unnamed non-first look (`look_name_required`) |
+| Q-4 | **60 skills, 10 roles**, never auto-dropping |
+| Q-5 | **Employers see the flat skills only.** The grouping is for the candidate's own profile |
+| Q-6 | **Guests can switch between looks** of the same room type on the room page ("Other looks of this room"), so they see it's the same room and price with a different look |
 
 ## Work breakdown
 
@@ -218,7 +226,7 @@ drift.
 | J3 | Tests in §1.4 | backend + customer |
 | S1 | `RoomLook` model, FKs, data migration, constraints | backend |
 | S2 | Look services, `add_room` with reuse/new look, `move_room`, enquiry/visit `look_id`, serializers, contract | backend |
-| S3 | Customer search and property page per look | customer |
+| S3 | Customer search per look (cap 3, "+1 more look"), room page look switcher, enquiry with `look_id` | customer |
 | S4 | `StayRoomCard` in `packages/ui`; customer `RoomCard` wraps it | ui + customer |
 | S5 | Partner room manager by look, Add-room sheet, live "How guests see it" preview | partner |
 | S6 | Tests: migration keeps today's output, per-look availability, look/unit invariant, no room numbers in public payloads, preview states | all |
