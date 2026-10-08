@@ -19,6 +19,7 @@ import { SectionNav } from "@/features/workspace/view/section-nav";
 
 const BOOKING_STATUS_FILTERS = [
   "ALL",
+  "AWAITING_TRANSPORT_QUOTE",
   "PENDING_PAYMENT",
   "CONFIRMED",
   "HANDOVER",

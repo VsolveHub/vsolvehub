@@ -34,6 +34,7 @@ describe("partnerBookingAction", () => {
 
 describe("canCancelBooking", () => {
   it("allows cancel before handover", () => {
+    expect(canCancelBooking("AWAITING_TRANSPORT_QUOTE")).toBe(true);
     expect(canCancelBooking("PENDING_PAYMENT")).toBe(true);
     expect(canCancelBooking("CONFIRMED")).toBe(true);
   });

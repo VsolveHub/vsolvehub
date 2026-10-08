@@ -40,6 +40,13 @@ function mockBooking(overrides: Partial<Schemas["RentalBooking"]> = {}): Schemas
     quantity: 1,
     price_paise: 150000,
     pickup_or_delivery_mode: "PICKUP",
+    delivery_address: {},
+    transport_paise: 0,
+    transport_fee_percent: 0,
+    transport_fee_paise: 0,
+    amount_due_paise: 300000,
+    transport: null,
+    pickup_hours: { is_set: false, days: [], summary: "" },
     notes: "",
     asset: {
       id: "asset-1",
@@ -58,6 +65,19 @@ function mockBooking(overrides: Partial<Schemas["RentalBooking"]> = {}): Schemas
       public_state: "PUBLISHED",
       structured_fields: {},
       media: [],
+      pickup_address_line: "Shop 4, Main Road",
+      pickup_area: "Koramangala",
+      pickup_city: "Bengaluru",
+      pickup_pincode: "560034",
+      pickup_address: {
+        partner_name: "Tool Master Rentals",
+        line: "Shop 4, Main Road",
+        area: "Koramangala",
+        city: "Bengaluru",
+        pincode: "560034",
+        maps_url: "https://www.google.com/maps/search/?api=1&query=Shop%204%2C%20Main%20Road",
+      },
+      delivery_available: false,
       created_at: "2026-08-01T10:00:00Z",
     },
     deposit: {
@@ -208,4 +228,100 @@ describe("RentalBookingCard", () => {
 
     expect(screen.getByRole("button", { name: "Pay Now" })).toBeInTheDocument();
   });
+
+  function transport(overrides: Partial<Schemas["RentalTransport"]> = {}): Schemas["RentalTransport"] {
+    return {
+      id: "transport-1",
+      status: "QUOTED",
+      trip: "ROUND_TRIP",
+      customer_note: "",
+      reject_note: "",
+      decline_reason: "",
+      quote_paise: 75000,
+      quote_note: "Tata Ace",
+      quote_count: 1,
+      max_quotes: 3,
+      respond_by: "2026-09-04T10:00:00Z",
+      requested_at: "2026-09-03T10:00:00Z",
+      quoted_at: "2026-09-03T12:00:00Z",
+      accepted_at: null,
+      delivered_at: null,
+      ...overrides,
+    };
+  }
+
+  function deliveryBooking(t: Partial<Schemas["RentalTransport"]>) {
+    return mockBooking({
+      status: "AWAITING_TRANSPORT_QUOTE",
+      pickup_or_delivery_mode: "DELIVERY",
+      handover_pin: null,
+      amount_due_paise: 300000,
+      delivery_address: { line: "Flat 302", city: "Hyderabad", pincode: "500032", contact_phone: "9876543210" },
+      deposit: {
+        id: "deposit-1",
+        amount_paise: 150000,
+        status: "REQUESTED",
+        payment_attempt_id: null,
+        simulated_capture_available: false,
+      },
+      transport: transport(t),
+    });
+  }
+
+  it("shows the owner's transport price and the one total to pay", () => {
+    render(<RentalBookingCard booking={deliveryBooking({})} />, { wrapper });
+
+    const panel = screen.getByTestId("delivery-request");
+    expect(panel).toHaveTextContent("Transport price received");
+    expect(panel).toHaveTextContent("₹750");
+    expect(panel).toHaveTextContent("Drop and collect");
+    expect(panel).toHaveTextContent("Owner’s note: Tata Ace");
+    // ₹3,000 rent, fee and deposit + ₹750 transport.
+    expect(screen.getByRole("button", { name: "Accept & pay ₹3,750" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reject" })).toBeInTheDocument();
+    expect(screen.queryByTestId("pickup-location")).not.toBeInTheDocument();
+  });
+
+  it("accepting posts accept for this booking", async () => {
+    client.POST.mockResolvedValue(ok(deliveryBooking({ status: "ACCEPTED" })));
+    render(<RentalBookingCard booking={deliveryBooking({})} />, { wrapper });
+
+    fireEvent.click(screen.getByRole("button", { name: "Accept & pay ₹3,750" }));
+    await waitFor(() => expect(client.POST).toHaveBeenCalled());
+    expect(client.POST.mock.calls[0]![1].params.path).toEqual({
+      booking_id: "booking-1",
+      action: "accept",
+    });
+  });
+
+  it("waiting for a price says nothing is charged yet", () => {
+    render(
+      <RentalBookingCard booking={deliveryBooking({ status: "REQUESTED", quote_paise: null, trip: null })} />,
+      { wrapper },
+    );
+    expect(screen.getByTestId("delivery-request")).toHaveTextContent(
+      "Nothing is charged until you accept it.",
+    );
+    expect(screen.queryByRole("button", { name: /Accept/ })).not.toBeInTheDocument();
+  });
+
+  it("a declined request offers self pickup instead", () => {
+    render(
+      <RentalBookingCard
+        booking={deliveryBooking({ status: "DECLINED", quote_paise: null, trip: null })}
+      />,
+      { wrapper },
+    );
+    expect(screen.getByText("The owner can’t deliver this one")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Switch to self pickup & pay ₹3,000" }),
+    ).toBeInTheDocument();
+  });
+
+  it("a self pickup booking shows where to collect it", () => {
+    render(<RentalBookingCard booking={mockBooking()} />, { wrapper });
+    expect(screen.getByTestId("pickup-location")).toHaveTextContent("Shop 4, Main Road");
+    expect(screen.getByRole("link", { name: /View Location/ })).toBeInTheDocument();
+  });
 });
+

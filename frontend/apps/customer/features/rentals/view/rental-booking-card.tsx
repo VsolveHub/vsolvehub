@@ -14,6 +14,8 @@ import {
   type RentalBooking,
 } from "../model";
 import { canCancelRentalBooking, cancelRentalBooking } from "../queries";
+import { DeliveryRequest } from "./delivery-request";
+import { PickupLocation } from "./pickup-location";
 
 const BUSINESS_NAME = "Vsolve Hub";
 
@@ -37,6 +39,9 @@ export function RentalBookingCard({ booking }: RentalBookingCardProps) {
     booking.deposit.payment_attempt_id != null
       ? String(booking.deposit.payment_attempt_id)
       : null;
+  const isDelivery = (booking.pickup_or_delivery_mode ?? "").toUpperCase() === "DELIVERY";
+  const transportPaise = booking.transport_paise ?? 0;
+  const active = !["CANCELLED", "RETURNED", "DISPUTED"].includes((booking.status ?? "").toUpperCase());
   const handoverPin =
     booking.handover_pin != null && String(booking.handover_pin).trim().length > 0
       ? String(booking.handover_pin).trim()
@@ -110,6 +115,11 @@ export function RentalBookingCard({ booking }: RentalBookingCardProps) {
           <div className="text-lg font-extrabold text-action">
             {formatPaise(booking.price_paise + (booking.platform_fee_paise ?? 0))}
           </div>
+          {transportPaise > 0 ? (
+            <div className="mt-0.5 text-[11px] text-text-secondary">
+              Transport: {formatPaise(transportPaise)}
+            </div>
+          ) : null}
           {(booking.platform_fee_paise ?? 0) > 0 ? (
             <div className="mt-0.5 text-[11px] text-text-secondary">
               Platform fee ({booking.platform_fee_percent ?? 0}%):{" "}
@@ -135,10 +145,21 @@ export function RentalBookingCard({ booking }: RentalBookingCardProps) {
         <div className="flex items-center gap-2">
           <Clock className="size-4 shrink-0 text-action" />
           <span>
-            Handover: <strong className="font-bold text-text">Self pickup</strong>
+            Handover:{" "}
+            <strong className="font-bold text-text">{isDelivery ? "Delivered by the owner" : "Self pickup"}</strong>
           </span>
         </div>
       </div>
+
+      {isDelivery ? <DeliveryRequest booking={booking} /> : null}
+
+      {!isDelivery && active ? (
+        <PickupLocation
+          className="mt-4"
+          address={booking.asset?.pickup_address}
+          hours={booking.pickup_hours}
+        />
+      ) : null}
 
       {handoverPin ? (
         <div
@@ -150,7 +171,9 @@ export function RentalBookingCard({ booking }: RentalBookingCardProps) {
             {handoverPin}
           </p>
           <p className="mt-1 text-[11px] text-text-secondary">
-            Share this PIN with the partner when you collect the equipment.
+            {isDelivery
+              ? "Share this PIN with the owner when they deliver the item."
+              : "Share this PIN with the partner when you collect the equipment."}
           </p>
         </div>
       ) : null}

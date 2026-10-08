@@ -251,6 +251,13 @@ export function RentalAdEditor({
       }
       const created = await createPartnerRentalAsset({
         ...rest,
+        // This editor still takes one free-text location; the routed form
+        // (rentals-workspace) collects the structured pickup address.
+        pickup_address_line: rest.location_text,
+        pickup_area: "",
+        pickup_city: "",
+        pickup_pincode: "",
+        delivery_available: false,
         variant_id: variantId,
         asset_identifier: "",
         image_urls: newUrls,
@@ -538,7 +545,7 @@ export function RentalAdEditor({
 
         <Section
           title="Pickup location"
-          hint="Customers come to this address to collect the item and return it here. There is no delivery."
+          hint="Customers come to this address to collect the item and return it here."
         >
           <Field label="Address" required>
             <Input

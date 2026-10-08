@@ -20,7 +20,8 @@ import {
   partnerBookingAction,
   type BookingAction,
 } from "@/features/rentals/booking-actions";
-import type { RentalBooking } from "@/features/rentals/queries";
+import type { PartnerRentalBooking, RentalBooking } from "@/features/rentals/queries";
+import { DeliverySection } from "@/features/rentals/view/delivery-section";
 import { InvoiceNotice } from "@/features/workspace/view/invoice-notice";
 
 /**
@@ -33,6 +34,7 @@ import { InvoiceNotice } from "@/features/workspace/view/invoice-notice";
  */
 export const RENTAL_BOOKING_STATUS_LABELS: Record<string, string> = {
   ALL: "All",
+  AWAITING_TRANSPORT_QUOTE: "Delivery request",
   PENDING_PAYMENT: "Pending payment",
   CONFIRMED: "Confirmed",
   HANDOVER: "Handover",
@@ -51,7 +53,7 @@ export function rentalBookingTone(
 ): "success" | "warning" | "neutral" | "danger" {
   const value = (status ?? "").toUpperCase();
   if (value === "CANCELLED" || value === "DISPUTED") return "danger";
-  if (value === "PENDING_PAYMENT") return "warning";
+  if (value === "PENDING_PAYMENT" || value === "AWAITING_TRANSPORT_QUOTE") return "warning";
   if (value === "CONFIRMED" || value === "HANDOVER") return "success";
   return "neutral";
 }
@@ -184,11 +186,15 @@ export function RentalBookingDetailSheet({
                 { label: "Quantity", value: String(booking.quantity ?? 1) },
                 {
                   label: "Collection",
-                  value: booking.pickup_or_delivery_mode || "Pickup",
+                  value: booking.pickup_or_delivery_mode === "DELIVERY" ? "You deliver" : "Self pickup",
                 },
               ]}
             />
           </SheetSection>
+
+          {booking.pickup_or_delivery_mode === "DELIVERY" ? (
+            <DeliverySection booking={booking as PartnerRentalBooking} />
+          ) : null}
 
           <SheetSection title="Amounts">
             <Readout
@@ -203,6 +209,31 @@ export function RentalBookingDetailSheet({
                 {
                   label: "Daily rate",
                   value: formatMoney(booking.asset.daily_rate_paise),
+                },
+                ...((booking.platform_fee_paise ?? 0) > 0
+                  ? [
+                      {
+                        label: `Platform fee (${booking.platform_fee_percent ?? 0}%)`,
+                        value: `−${formatMoney(booking.platform_fee_paise ?? 0)}`,
+                      },
+                    ]
+                  : []),
+                ...((booking.transport_paise ?? 0) > 0
+                  ? [
+                      {
+                        label: `Transport (${booking.transport_fee_percent ?? 0}% commission)`,
+                        value: formatMoney(booking.transport_paise ?? 0),
+                      },
+                    ]
+                  : []),
+                {
+                  label: "You receive",
+                  value: formatMoney(
+                    booking.price_paise -
+                      (booking.platform_fee_paise ?? 0) +
+                      (booking.transport_paise ?? 0) -
+                      (booking.transport_fee_paise ?? 0),
+                  ),
                 },
               ]}
             />

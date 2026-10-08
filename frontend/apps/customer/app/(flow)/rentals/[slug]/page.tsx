@@ -106,7 +106,10 @@ export default function RentalDetailPage() {
             {asset.location_text && (
               <div className="mt-2 flex items-center gap-1.5 text-xs text-text-secondary">
                 <MapPin className="size-3.5 shrink-0 text-action" />
-                <span>Self pickup: you collect it from the owner at <strong className="text-text">{asset.location_text}</strong> and return it there.</span>
+                <span>
+                  Self pickup from <strong className="text-text">{asset.location_text}</strong>
+                  {asset.delivery_available ? " · Delivery available on request" : ""}
+                </span>
               </div>
             )}
 

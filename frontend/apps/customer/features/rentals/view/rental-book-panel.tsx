@@ -3,19 +3,34 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Calendar, ShieldCheck, Store, Info, AlertCircle } from "lucide-react";
+import { Calendar, ShieldCheck, Truck, Info, AlertCircle } from "lucide-react";
 import { isApiRequestError } from "@vsolve/api-client";
 import { friendlyErrorMessage } from "@vsolve/query";
-import { Button, IsoDateField, useToast } from "@vsolve/ui";
+import { Button, ChoiceChips, Field, Input, IsoDateField, useToast } from "@vsolve/ui";
 
 import { completeOrOpenCheckout } from "../../payment/standalone-handoff";
 import { calculateRentalDays, formatPaise, type RentalAsset } from "../model";
-import { bookRental, fetchRentalPlatformFee } from "../queries";
+import { closedDayMessage, type PickupHours } from "../pickup";
+import { bookRental, fetchRentalPlatformFee, type RentalMode } from "../queries";
+import { PickupLocation } from "./pickup-location";
 
 const BUSINESS_NAME = "Vsolve Hub";
+const PINCODE = /^[1-9][0-9]{5}$/;
 
 interface RentalBookPanelProps {
-  asset: RentalAsset;
+  /** The item page passes the detail payload, which adds the owner's pickup hours. */
+  asset: RentalAsset & { pickup_hours?: PickupHours };
+}
+
+type DeliveryForm = { line: string; area: string; city: string; pincode: string; phone: string };
+const EMPTY_DELIVERY: DeliveryForm = { line: "", area: "", city: "", pincode: "", phone: "" };
+
+function deliveryProblem(form: DeliveryForm): string | null {
+  if (!form.line.trim()) return "Add the delivery address.";
+  if (!form.city.trim()) return "Add the delivery city.";
+  if (!PINCODE.test(form.pincode.trim())) return "Enter a 6-digit pincode for the delivery.";
+  if (form.phone.replace(/\D/g, "").length < 10) return "Add a 10-digit phone number for the delivery.";
+  return null;
 }
 
 function todayIso(): string {
@@ -40,6 +55,8 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
 
   const defaultStart = addDaysIso(todayIso(), 1);
   const defaultEnd = addDaysIso(todayIso(), 3);
+  const hours = asset.pickup_hours ?? null;
+  const deliveryOffered = Boolean(asset.delivery_available);
 
   const [startDate, setStartDate] = useState(defaultStart);
   const [endDate, setEndDate] = useState(defaultEnd);
@@ -47,6 +64,12 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
   const [quantity, setQuantity] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [isHandingOff, setIsHandingOff] = useState(false);
+  const [mode, setMode] = useState<RentalMode>("PICKUP");
+  const [delivery, setDelivery] = useState<DeliveryForm>(EMPTY_DELIVERY);
+  const [deliveryNote, setDeliveryNote] = useState("");
+  const isDelivery = mode === "DELIVERY";
+  const pickupDayProblem = closedDayMessage(hours, startDate, "pickup");
+  const returnDayProblem = closedDayMessage(hours, endDate, "return");
 
   const maxQty = Math.max(1, asset.quantity_available ?? 1);
   const clampedQty = Math.min(Math.max(1, quantity), maxQty);
@@ -68,11 +91,29 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
         asset_id: asset.id,
         start_date: startDate,
         end_date: endDate,
-        pickup_or_delivery_mode: "PICKUP",
+        pickup_or_delivery_mode: mode,
+        delivery_address: isDelivery
+          ? {
+              line: delivery.line.trim(),
+              area: delivery.area.trim(),
+              city: delivery.city.trim(),
+              pincode: delivery.pincode.trim(),
+              contact_phone: delivery.phone.trim(),
+            }
+          : undefined,
+        delivery_note: deliveryNote.trim(),
         notes,
         quantity: clampedQty,
       }),
     onSuccess: async (booking) => {
+      if (booking.status === "AWAITING_TRANSPORT_QUOTE") {
+        // Nothing to pay yet: the owner prices the transport first.
+        toast.notify(
+          "Delivery request sent. You pay once you accept the owner's transport price.",
+        );
+        router.push("/rentals/mine");
+        return;
+      }
       const deposit = booking.deposit as
         | (typeof booking.deposit & { payment_attempt_id?: string | null })
         | undefined;
@@ -152,10 +193,25 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
       setError("Rental return date must be after pickup date.");
       return;
     }
+    if (pickupDayProblem || returnDayProblem) {
+      setError(pickupDayProblem ?? returnDayProblem);
+      return;
+    }
+    if (isDelivery) {
+      if (startDate <= todayIso()) {
+        setError("Delivery needs at least a day to arrange. Choose a later pickup date.");
+        return;
+      }
+      const problem = deliveryProblem(delivery);
+      if (problem) {
+        setError(problem);
+        return;
+      }
+    }
     mutation.mutate();
   };
 
-  const minStart = todayIso();
+  const minStart = isDelivery ? addDaysIso(todayIso(), 1) : todayIso();
   const permanentlyOutOfStock = asset.quantity_available === 0;
   const isOutOfStockCode = (err: unknown): boolean => {
     if (!err) return false;
@@ -198,6 +254,11 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
                 mutation.reset();
               }}
             />
+            {pickupDayProblem ? (
+              <p role="alert" className="text-[11px] font-medium text-danger-text">
+                {pickupDayProblem}
+              </p>
+            ) : null}
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -215,16 +276,110 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
                 mutation.reset();
               }}
             />
+            {returnDayProblem ? (
+              <p role="alert" className="text-[11px] font-medium text-danger-text">
+                {returnDayProblem}
+              </p>
+            ) : null}
           </div>
         </div>
 
-        <div className="flex items-center gap-2 rounded-control border border-line bg-surface-sunken p-3 text-xs text-text-secondary">
-          <Store className="size-4 shrink-0 text-action" />
-          <div>
-            <div className="font-bold text-text">Self pickup</div>
-            <div className="text-[10px]">Collect and return at the partner location. Doorstep delivery is not offered.</div>
-          </div>
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-bold text-text">How do you want to receive it?</span>
+          <ChoiceChips
+            label="How do you want to receive it?"
+            name="rental-receive-mode"
+            layout="bar"
+            value={mode}
+            onChange={(value) => {
+              setMode(value === "DELIVERY" ? "DELIVERY" : "PICKUP");
+              setError(null);
+              mutation.reset();
+            }}
+            options={
+              deliveryOffered
+                ? [
+                    { value: "PICKUP", label: "Self Pickup" },
+                    { value: "DELIVERY", label: "Request Delivery" },
+                  ]
+                : [{ value: "PICKUP", label: "Self Pickup" }]
+            }
+          />
+          {!deliveryOffered ? (
+            <p className="text-[11px] text-text-secondary">This owner offers self pickup only.</p>
+          ) : null}
         </div>
+
+        {isDelivery ? (
+          <div className="flex flex-col gap-3 rounded-control border border-line bg-surface-sunken p-3">
+            <p className="flex items-start gap-2 text-xs text-text-secondary">
+              <Truck className="mt-0.5 size-4 shrink-0 text-action" aria-hidden />
+              <span>
+                The owner checks your requirement, arranges a vehicle and sends a transport price.
+                <strong className="text-text"> You pay nothing now.</strong> You pay the rent and
+                transport together once you accept the price.
+              </span>
+            </p>
+            <Field label="Delivery address" required>
+              <Input
+                id="delivery-line"
+                value={delivery.line}
+                maxLength={240}
+                placeholder="House / flat, street"
+                onChange={(e) => setDelivery((d) => ({ ...d, line: e.target.value }))}
+              />
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Area" showOptional={false}>
+                <Input
+                  id="delivery-area"
+                  value={delivery.area}
+                  maxLength={120}
+                  onChange={(e) => setDelivery((d) => ({ ...d, area: e.target.value }))}
+                />
+              </Field>
+              <Field label="City" required>
+                <Input
+                  id="delivery-city"
+                  value={delivery.city}
+                  maxLength={120}
+                  onChange={(e) => setDelivery((d) => ({ ...d, city: e.target.value }))}
+                />
+              </Field>
+              <Field label="Pincode" required>
+                <Input
+                  id="delivery-pincode"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={delivery.pincode}
+                  onChange={(e) =>
+                    setDelivery((d) => ({ ...d, pincode: e.target.value.replace(/\D/g, "") }))
+                  }
+                />
+              </Field>
+              <Field label="Phone for delivery" required>
+                <Input
+                  id="delivery-phone"
+                  inputMode="tel"
+                  maxLength={15}
+                  value={delivery.phone}
+                  onChange={(e) => setDelivery((d) => ({ ...d, phone: e.target.value }))}
+                />
+              </Field>
+            </div>
+            <Field label="Anything the owner should know?" showOptional={false}>
+              <Input
+                id="delivery-note"
+                value={deliveryNote}
+                maxLength={480}
+                placeholder="e.g. 3rd floor, lift available"
+                onChange={(e) => setDeliveryNote(e.target.value)}
+              />
+            </Field>
+          </div>
+        ) : (
+          <PickupLocation address={asset.pickup_address} hours={hours} />
+        )}
 
         {maxQty > 1 ? (
           <div className="flex flex-col gap-1.5">
@@ -291,8 +446,15 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
             <span className="font-semibold text-text">{formatPaise(depositPaise)}</span>
           </div>
 
+          <div className="flex justify-between items-center text-text-secondary">
+            <span>Transport</span>
+            <span className="font-semibold text-text">
+              {isDelivery ? "Quoted by the owner" : "Free (self pickup)"}
+            </span>
+          </div>
+
           <div className="border-t border-line pt-2.5 flex justify-between items-center font-bold text-sm text-text">
-            <span>Total Value</span>
+            <span>{isDelivery ? "Total before transport" : "Total Value"}</span>
             <span className="text-action text-base">{formatPaise(totalDuePaise)}</span>
           </div>
 
@@ -313,14 +475,22 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
           type="submit"
           disabled={mutation.isPending || isHandingOff || blockBooking}
           loading={mutation.isPending || isHandingOff}
-          loadingLabel={isHandingOff ? "Opening payment…" : "Creating rental booking…"}
+          loadingLabel={
+            isHandingOff
+              ? "Opening payment…"
+              : isDelivery
+                ? "Sending delivery request…"
+                : "Creating rental booking…"
+          }
           className="w-full py-3 text-sm font-bold"
         >
           {permanentlyOutOfStock
             ? "Out of stock"
             : dateAwareUnavailable
               ? "Unavailable for these dates"
-              : "Confirm Rental Booking"}
+              : isDelivery
+                ? "Send delivery request"
+                : "Confirm Rental Booking"}
         </Button>
       </form>
     </div>

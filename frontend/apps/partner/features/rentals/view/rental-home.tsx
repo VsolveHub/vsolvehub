@@ -3,12 +3,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { friendlyErrorMessage } from "@vsolve/query";
 import { Badge, Card, Spinner, buttonStyles } from "@vsolve/ui";
-import { ArrowRight, PackageCheck, PackageOpen, Phone, Plus } from "lucide-react";
+import { ArrowRight, Clock, PackageCheck, PackageOpen, Phone, Plus, Truck } from "lucide-react";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
 import { dateLabel, isSameLocalDay } from "@/features/rentals/pickup-time";
 import {
+  fetchPartnerPickupHours,
   fetchPartnerRentalAssets,
   fetchPartnerRentalBookings,
   type PartnerRentalBooking,
@@ -34,8 +35,12 @@ export function RentalHome() {
     queryFn: () => fetchPartnerRentalBookings(),
   });
   const assets = useQuery({ queryKey: ["partner-rentals", "assets"], queryFn: fetchPartnerRentalAssets });
+  const hours = useQuery({ queryKey: ["partner-rentals", "pickup-hours"], queryFn: fetchPartnerPickupHours });
 
   const rows = (bookings.data ?? []) as PartnerRentalBooking[];
+  const deliveryRequests = rows.filter(
+    (b) => b.status === "AWAITING_TRANSPORT_QUOTE" && b.transport?.status === "REQUESTED",
+  );
   const pickups = rows
     .filter((b) => b.status === "CONFIRMED" && isSameLocalDay(b.start_date, now))
     .sort((a, b) => time(a.start_date) - time(b.start_date));
@@ -78,6 +83,32 @@ export function RentalHome() {
 
   return (
     <div className="flex flex-col gap-5">
+      {hours.data && !hours.data.is_set ? (
+        <Link
+          href="/rentals#pickup-hours"
+          className="flex items-center gap-3 rounded-card border border-warning-text/30 bg-warning-surface px-4 py-3 text-sm"
+        >
+          <Clock className="size-5 shrink-0 text-warning-text" aria-hidden />
+          <span className="flex-1">
+            <span className="block font-semibold text-navy-900">Set your pickup hours</span>
+            <span className="block text-text-secondary">
+              Customers see when they can collect, and new items go live only once these are set.
+            </span>
+          </span>
+          <ArrowRight className="size-4 text-text-muted" aria-hidden />
+        </Link>
+      ) : null}
+
+      {deliveryRequests.length > 0 ? (
+        <Group
+          title="Delivery requests — send your price"
+          icon={<Truck className="size-4" />}
+          empty=""
+          rows={deliveryRequests}
+          when={(b) => `Needed ${dateLabel(b.start_date)} · open it in Bookings to quote`}
+        />
+      ) : null}
+
       <div className="grid grid-cols-3 gap-2">
         <Tally label="Live pieces" value={pieces} />
         <Tally label="Booked now" value={booked} tone="text-warning-text" />
@@ -90,7 +121,7 @@ export function RentalHome() {
           icon={<PackageOpen className="size-4" />}
           empty="No one is collecting an item today."
           rows={pickups}
-          when={(b) => dateLabel(b.start_date)}
+          when={(b) => (b.pickup_or_delivery_mode === "DELIVERY" ? `Deliver · ${dateLabel(b.start_date)}` : dateLabel(b.start_date))}
         />
         <Group
           title="Returns today"

@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.67.0)
- * Checksum: d0a8df7300950076
+ * Source:   contracts/openapi/v1.yaml (version 1.68.0)
+ * Checksum: daa06a9834e9a201
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -2254,6 +2254,28 @@ export interface paths {
         put?: never;
         /** @description Customer cancel: PENDING_PAYMENT or CONFIRMED only. Fail-closed after handover. */
         post: operations["me_rentals_cancel_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/rentals/{booking_id}/transport/{action}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description The customer answers the owner's transport price, or drops delivery.
+         *
+         *     ``accept`` starts the one payment for rent, fee, deposit and transport; the response's
+         *     ``deposit.payment_attempt_id`` opens checkout. ``switch-to-pickup`` starts the pickup payment.
+         */
+        post: operations["me_rentals_transport_action"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6068,6 +6090,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/partner/rentals/bookings/{booking_id}/transport/{action}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description The owner prices a delivery request, declines it, or sends the item out. */
+        post: operations["partner_rentals_booking_transport_quote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/partner/rentals/photos": {
         parameters: {
             query?: never;
@@ -6078,6 +6117,24 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["partner_rentals_photos_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/rentals/pickup-hours": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The owner's open days and hours, used by all their rental items. */
+        get: operations["partner_rentals_pickup_hours_retrieve"];
+        /** @description The owner's open days and hours, used by all their rental items. */
+        put: operations["partner_rentals_pickup_hours_update"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -9247,6 +9304,16 @@ export interface components {
             /** @default  */
             asset_identifier: string;
             structured_fields?: unknown;
+            /** @default  */
+            pickup_address_line: string;
+            /** @default  */
+            pickup_area: string;
+            /** @default  */
+            pickup_city: string;
+            /** @default  */
+            pickup_pincode: string;
+            /** @default false */
+            delivery_available: boolean;
             media?: {
                 [key: string]: unknown;
             }[];
@@ -9262,7 +9329,10 @@ export interface components {
             /** @default 1 */
             quantity: number;
             /** @default PICKUP */
-            pickup_or_delivery_mode: string;
+            pickup_or_delivery_mode: components["schemas"]["RentalBookingModeEnum"];
+            delivery_address?: components["schemas"]["DeliveryAddressRequest"];
+            /** @default  */
+            delivery_note: string;
             /** @default  */
             notes: string;
         };
@@ -10022,6 +10092,14 @@ export interface components {
              * @default
              */
             external_url: string;
+        };
+        DeliveryAddressRequest: {
+            line: string;
+            /** @default  */
+            area: string;
+            city: string;
+            pincode: string;
+            contact_phone: string;
         };
         DemandPreview: {
             readonly summaries: components["schemas"]["DemandSummary"][];
@@ -12859,7 +12937,7 @@ export interface components {
         PartnerRentalBooking: {
             /** Format: uuid */
             readonly id: string;
-            status?: components["schemas"]["StatusD8aEnum"];
+            status?: components["schemas"]["RentalBookingStatusEnum"];
             /** Format: date */
             start_date: string;
             /** Format: date */
@@ -12868,7 +12946,14 @@ export interface components {
             price_paise: number;
             platform_fee_percent?: number;
             platform_fee_paise?: number;
-            pickup_or_delivery_mode?: string;
+            pickup_or_delivery_mode?: components["schemas"]["RentalBookingModeEnum"];
+            delivery_address?: unknown;
+            transport_paise?: number;
+            transport_fee_percent?: number;
+            transport_fee_paise?: number;
+            readonly amount_due_paise: number;
+            readonly transport: components["schemas"]["RentalTransport"] | null;
+            readonly pickup_hours: components["schemas"]["PickupHours"];
             notes?: string;
             readonly asset: components["schemas"]["RentalAsset"];
             readonly deposit: components["schemas"]["RentalDeposit"];
@@ -13262,6 +13347,11 @@ export interface components {
             location_text?: string;
             quantity_available?: number;
             structured_fields?: unknown;
+            pickup_address_line?: string;
+            pickup_area?: string;
+            pickup_city?: string;
+            pickup_pincode?: string;
+            delivery_available?: boolean;
         };
         PatchedUpdatePropertyRequest: {
             title?: string;
@@ -13469,6 +13559,44 @@ export interface components {
          * @enum {string}
          */
         PayoutBatchStatusEnum: "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "PAYING" | "PAID" | "FAILED" | "CANCELLED";
+        /** @description Where a Self Pickup customer collects the item. ``maps_url`` opens Google Maps. */
+        PickupAddress: {
+            partner_name: string;
+            line: string;
+            area: string;
+            city: string;
+            pincode: string;
+            /** @description Google Maps search for the address. Empty if none. */
+            maps_url: string;
+        };
+        PickupDay: {
+            /** @description Monday = 0. */
+            weekday: number;
+            readonly day_name: string;
+            is_open: boolean;
+            /** @description HH:MM, 24-hour. Null if closed. */
+            opens_at: string | null;
+            /** @description HH:MM, 24-hour. Null if closed. */
+            closes_at: string | null;
+        };
+        PickupDayInputRequest: {
+            weekday: number;
+            /** Format: time */
+            opens_at: string;
+            /** Format: time */
+            closes_at: string;
+        };
+        PickupHours: {
+            /** @description False until the owner saves their hours. */
+            is_set: boolean;
+            days: components["schemas"]["PickupDay"][];
+            /** @description e.g. "Mon-Sat 9 AM-9 PM · Sun 9 AM-6 PM". */
+            summary: string;
+        };
+        /** @description The open days only. A day left out is closed. */
+        PickupHoursUpdateRequest: {
+            days: components["schemas"]["PickupDayInputRequest"][];
+        };
         PlanQuoteCreateRequest: {
             /** Format: uuid */
             plan_id: string;
@@ -15128,8 +15256,44 @@ export interface components {
             readonly variant: string;
             readonly structured_fields: unknown;
             readonly media: components["schemas"]["RentalAssetMedia"][];
+            readonly pickup_address_line: string;
+            readonly pickup_area: string;
+            readonly pickup_city: string;
+            readonly pickup_pincode: string;
+            readonly pickup_address: components["schemas"]["PickupAddress"];
+            readonly delivery_available: boolean;
             /** Format: date-time */
             readonly created_at: string;
+        };
+        /** @description One item's page: adds the owner's pickup hours. */
+        RentalAssetDetail: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly slug: string;
+            readonly title: string;
+            readonly description: string;
+            readonly location_text: string;
+            readonly daily_rate_paise: number;
+            readonly deposit_paise: number;
+            readonly quantity_available: number;
+            readonly condition_grade: components["schemas"]["ConditionGradeEnum"];
+            readonly current_status: components["schemas"]["CurrentStatusEnum"];
+            readonly moderation_status: components["schemas"]["RentalAssetModerationStatusEnum"];
+            readonly public_state: string;
+            readonly partner_name: string;
+            /** Format: uuid */
+            readonly variant: string;
+            readonly structured_fields: unknown;
+            readonly media: components["schemas"]["RentalAssetMedia"][];
+            readonly pickup_address_line: string;
+            readonly pickup_area: string;
+            readonly pickup_city: string;
+            readonly pickup_pincode: string;
+            readonly pickup_address: components["schemas"]["PickupAddress"];
+            readonly delivery_available: boolean;
+            /** Format: date-time */
+            readonly created_at: string;
+            readonly pickup_hours: components["schemas"]["PickupHours"];
         };
         RentalAssetMedia: {
             /** Format: uuid */
@@ -15156,7 +15320,7 @@ export interface components {
         RentalBooking: {
             /** Format: uuid */
             readonly id: string;
-            status?: components["schemas"]["StatusD8aEnum"];
+            status?: components["schemas"]["RentalBookingStatusEnum"];
             /** Format: date */
             start_date: string;
             /** Format: date */
@@ -15165,7 +15329,14 @@ export interface components {
             price_paise: number;
             platform_fee_percent?: number;
             platform_fee_paise?: number;
-            pickup_or_delivery_mode?: string;
+            pickup_or_delivery_mode?: components["schemas"]["RentalBookingModeEnum"];
+            delivery_address?: unknown;
+            transport_paise?: number;
+            transport_fee_percent?: number;
+            transport_fee_paise?: number;
+            readonly amount_due_paise: number;
+            readonly transport: components["schemas"]["RentalTransport"] | null;
+            readonly pickup_hours: components["schemas"]["PickupHours"];
             notes?: string;
             readonly asset: components["schemas"]["RentalAsset"];
             readonly deposit: components["schemas"]["RentalDeposit"];
@@ -15174,6 +15345,23 @@ export interface components {
             /** Format: date-time */
             readonly created_at: string;
         };
+        /**
+         * @description * `PICKUP` - Self pickup
+         *     * `DELIVERY` - Partner-arranged delivery
+         * @enum {string}
+         */
+        RentalBookingModeEnum: "PICKUP" | "DELIVERY";
+        /**
+         * @description * `AWAITING_TRANSPORT_QUOTE` - Awaiting transport quote
+         *     * `PENDING_PAYMENT` - Pending payment
+         *     * `CONFIRMED` - Confirmed
+         *     * `HANDOVER` - Handed over
+         *     * `RETURNED` - Returned
+         *     * `CANCELLED` - Cancelled
+         *     * `DISPUTED` - Disputed
+         * @enum {string}
+         */
+        RentalBookingStatusEnum: "AWAITING_TRANSPORT_QUOTE" | "PENDING_PAYMENT" | "CONFIRMED" | "HANDOVER" | "RETURNED" | "CANCELLED" | "DISPUTED";
         RentalDeposit: {
             /** Format: uuid */
             readonly id: string;
@@ -15211,6 +15399,8 @@ export interface components {
         };
         RentalPlatformFee: {
             percent: number;
+            /** @description Commission on an owner's transport price. 0 means the owner keeps all of it. */
+            readonly transport_fee_percent: number;
         };
         RentalPlatformFeeRequest: {
             percent: number;
@@ -15237,6 +15427,47 @@ export interface components {
             asset_schema: unknown;
             default_deposit_paise: number;
         };
+        RentalTransport: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly status: components["schemas"]["RentalTransportStatusEnum"];
+            readonly trip: (components["schemas"]["RentalTransportTripEnum"] | components["schemas"]["NullEnum"]) | null;
+            readonly customer_note: string;
+            readonly reject_note: string;
+            readonly decline_reason: string;
+            readonly quote_paise: number | null;
+            readonly quote_note: string;
+            readonly quote_count: number;
+            readonly max_quotes: number;
+            /** Format: date-time */
+            readonly respond_by: string;
+            /** Format: date-time */
+            readonly requested_at: string;
+            /** Format: date-time */
+            readonly quoted_at: string | null;
+            /** Format: date-time */
+            readonly accepted_at: string | null;
+            /** Format: date-time */
+            readonly delivered_at: string | null;
+        };
+        /**
+         * @description * `REQUESTED` - Requested
+         *     * `QUOTED` - Quoted
+         *     * `ACCEPTED` - Accepted
+         *     * `OUT_FOR_DELIVERY` - Out for delivery
+         *     * `DELIVERED` - Delivered
+         *     * `DECLINED` - Declined
+         *     * `EXPIRED` - Expired
+         *     * `CANCELLED` - Cancelled
+         * @enum {string}
+         */
+        RentalTransportStatusEnum: "REQUESTED" | "QUOTED" | "ACCEPTED" | "OUT_FOR_DELIVERY" | "DELIVERED" | "DECLINED" | "EXPIRED" | "CANCELLED";
+        /**
+         * @description * `ONE_WAY` - Drop only
+         *     * `ROUND_TRIP` - Drop and collect
+         * @enum {string}
+         */
+        RentalTransportTripEnum: "ONE_WAY" | "ROUND_TRIP";
         ReportRequest: {
             reason: string;
             detail?: string;
@@ -16480,16 +16711,6 @@ export interface components {
          * @enum {string}
          */
         StatusD32Enum: "SUBMITTED" | "UNDER_REVIEW" | "SHORTLISTED" | "INTERVIEW" | "CONNECTED" | "CONTACTED" | "REJECTED" | "WITHDRAWN" | "EXPIRED";
-        /**
-         * @description * `PENDING_PAYMENT` - Pending payment
-         *     * `CONFIRMED` - Confirmed
-         *     * `HANDOVER` - Handed over
-         *     * `RETURNED` - Returned
-         *     * `CANCELLED` - Cancelled
-         *     * `DISPUTED` - Disputed
-         * @enum {string}
-         */
-        StatusD8aEnum: "PENDING_PAYMENT" | "CONFIRMED" | "HANDOVER" | "RETURNED" | "CANCELLED" | "DISPUTED";
         StayAmenity: {
             key: string;
             label: string;
@@ -16923,6 +17144,16 @@ export interface components {
             /** Format: uuid */
             stage_id: string;
             amount_paise: number;
+        };
+        TransportNoteRequest: {
+            /** @default  */
+            note: string;
+        };
+        TransportQuoteRequest: {
+            amount_paise: number;
+            trip: components["schemas"]["RentalTransportTripEnum"];
+            /** @default  */
+            note: string;
         };
         /**
          * @description * `PAST` - PAST
@@ -22504,6 +22735,34 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RentalBooking"];
+                };
+            };
+        };
+    };
+    me_rentals_transport_action: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                action: string;
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["TransportNoteRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["TransportNoteRequest"];
+                "multipart/form-data": components["schemas"]["TransportNoteRequest"];
+            };
+        };
         responses: {
             200: {
                 headers: {
@@ -31543,6 +31802,34 @@ export interface operations {
             };
         };
     };
+    partner_rentals_booking_transport_quote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                action: string;
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransportQuoteRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["TransportQuoteRequest"];
+                "multipart/form-data": components["schemas"]["TransportQuoteRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerRentalBooking"];
+                };
+            };
+        };
+    };
     partner_rentals_photos_create: {
         parameters: {
             query?: never;
@@ -31562,6 +31849,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RentalPhotoUpload"];
+                };
+            };
+        };
+    };
+    partner_rentals_pickup_hours_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PickupHours"];
+                };
+            };
+        };
+    };
+    partner_rentals_pickup_hours_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PickupHoursUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PickupHoursUpdateRequest"];
+                "multipart/form-data": components["schemas"]["PickupHoursUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PickupHours"];
                 };
             };
         };
@@ -33205,7 +33536,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RentalAsset"];
+                    "application/json": components["schemas"]["RentalAssetDetail"];
                 };
             };
         };

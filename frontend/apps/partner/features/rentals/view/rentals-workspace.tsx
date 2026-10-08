@@ -26,6 +26,8 @@ import {
   uploadPartnerRentalPhoto,
   type RentalTaxonomySubcategory,
 } from "@/features/rentals/queries";
+import { PickupHoursCard } from "@/features/rentals/view/pickup-hours-card";
+import { RentalFieldInput, fieldLabel, type SchemaProperty } from "@/features/rentals/view/rental-field-input";
 import { RENTAL_SECTIONS } from "@/features/rentals/view/rental-sections";
 import { SectionNav } from "@/features/workspace/view/section-nav";
 
@@ -39,10 +41,9 @@ type PhotoDraft = {
   error?: string;
 };
 
-type SchemaProperty = {
-  type?: string;
-  enum?: unknown[];
-};
+type PickupAddressForm = { line: string; area: string; city: string; pincode: string };
+const EMPTY_ADDRESS: PickupAddressForm = { line: "", area: "", city: "", pincode: "" };
+const PINCODE = /^[1-9][0-9]{5}$/;
 
 function schemaPropertyMap(
   schema: Record<string, unknown> | undefined,
@@ -98,8 +99,9 @@ export function PartnerRentalsWorkspace() {
   const [dailyRate, setDailyRate] = useState("");
   const [depositOverride, setDepositOverride] = useState<string | null>(null);
   const [quantity, setQuantity] = useState("1");
-  const [location, setLocation] = useState("");
-  const [defaultLocation, setDefaultLocation] = useState("");
+  const [address, setAddress] = useState<PickupAddressForm>(EMPTY_ADDRESS);
+  const [defaultAddress, setDefaultAddress] = useState<PickupAddressForm>(EMPTY_ADDRESS);
+  const [deliveryAvailable, setDeliveryAvailable] = useState(false);
   const [photos, setPhotos] = useState<PhotoDraft[]>([]);
   const [structuredFields, setStructuredFields] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -126,17 +128,31 @@ export function PartnerRentalsWorkspace() {
     depositOverride ??
     (backendDepositPaise == null ? "" : paiseToRupeeInput(backendDepositPaise));
 
+  // A new item starts at the owner's last pickup address; a first item at their profile address.
+  const latest = assets.data?.find((a) => a.pickup_address_line || a.pickup_city);
   useEffect(() => {
     let cancelled = false;
+    if (latest) {
+      const fromLatest = {
+        line: latest.pickup_address_line,
+        area: latest.pickup_area,
+        city: latest.pickup_city,
+        pincode: latest.pickup_pincode,
+      };
+      setDefaultAddress(fromLatest);
+      setAddress((current) => (current.line.trim() ? current : fromLatest));
+      return;
+    }
     void fetchPartnerDefaultLocation().then((loc) => {
-      if (cancelled) return;
-      setDefaultLocation(loc);
-      setLocation((current) => (current.trim() ? current : loc));
+      if (cancelled || !loc) return;
+      const fromProfile = { ...EMPTY_ADDRESS, line: loc };
+      setDefaultAddress(fromProfile);
+      setAddress((current) => (current.line.trim() ? current : fromProfile));
     });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [latest]);
 
   useEffect(() => {
     return () => {
@@ -162,7 +178,8 @@ export function PartnerRentalsWorkspace() {
       setDailyRate("");
       setDepositOverride(null);
       setQuantity("1");
-      setLocation(defaultLocation);
+      setAddress(defaultAddress);
+      setDeliveryAvailable(false);
       setPhotos([]);
       setStructuredFields({});
       setFormError(null);
@@ -233,8 +250,12 @@ export function PartnerRentalsWorkspace() {
       setFormError("Choose what you are renting, and add a title.");
       return;
     }
-    if (!location.trim()) {
-      setFormError("Add the pickup location for this ad.");
+    if (!address.line.trim() || !address.city.trim()) {
+      setFormError("Add the pickup address and city. Customers come here to collect the item.");
+      return;
+    }
+    if (!PINCODE.test(address.pincode.trim())) {
+      setFormError("Enter the 6-digit pincode of the pickup address.");
       return;
     }
     if (dailyPaise == null || dailyPaise < 1) {
@@ -267,13 +288,15 @@ export function PartnerRentalsWorkspace() {
       const raw = structuredFields[key]?.trim() ?? "";
       if (!raw) {
         if (requiredSchemaKeys.has(key)) {
-          setFormError(`Fill in ${key.replace(/_/g, " ")}.`);
+          setFormError(`Fill in ${fieldLabel(key, schemaProps[key] ?? {}).toLowerCase()}.`);
           return;
         }
         continue;
       }
-      if (raw === "true" || raw === "false") fields[key] = raw === "true";
-      else if (/^\d+$/.test(raw)) fields[key] = Number(raw);
+      const spec = schemaProps[key] ?? {};
+      if (spec.type === "boolean") fields[key] = raw === "true";
+      else if ((spec.type === "integer" || spec.type === "number") && /^\d+(\.\d+)?$/.test(raw))
+        fields[key] = Number(raw);
       else fields[key] = raw;
     }
     setFormError(null);
@@ -281,7 +304,12 @@ export function PartnerRentalsWorkspace() {
       variant_id: variantId,
       title: title.trim(),
       description: description.trim(),
-      location_text: location.trim(),
+      location_text: "",
+      pickup_address_line: address.line.trim(),
+      pickup_area: address.area.trim(),
+      pickup_city: address.city.trim(),
+      pickup_pincode: address.pincode.trim(),
+      delivery_available: deliveryAvailable,
       daily_rate_paise: dailyPaise,
       deposit_paise: depositPaise,
       quantity_available: quantityAvailable,
@@ -305,6 +333,8 @@ export function PartnerRentalsWorkspace() {
       </div>
 
       <SectionNav label="Rental sections" items={RENTAL_SECTIONS} />
+
+      <PickupHoursCard />
 
       <Card padding="lg">
         <form className="flex flex-col gap-6" onSubmit={onCreate}>
@@ -460,74 +490,21 @@ export function PartnerRentalsWorkspace() {
                 placeholder="Condition, what is included, and pickup notes."
               />
             </Field>
-            {schemaKeys.map((key) => {
-              const spec = schemaProps[key] ?? {};
-              const enums = Array.isArray(spec.enum) ? spec.enum.map(String) : null;
-              const required = requiredSchemaKeys.has(key);
-              const label = key.replace(/_/g, " ");
-              const currentValue = structuredFields[key] ?? "";
-
-              if (enums || spec.type === "boolean") {
-                const options = enums ?? ["true", "false"];
-                // Determine whether the current value is one of the known enum options.
-                const isOtherSelected = currentValue !== "" && !options.includes(currentValue);
-                const selectValue = isOtherSelected ? "__other__" : currentValue;
-
-                return (
-                  <Field key={key} label={label} required={required} showOptional={false}>
-                    <div className="flex flex-col gap-2">
-                      <Select
-                        id={`rental-field-${key}`}
-                        value={selectValue}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (val === "__other__") {
-                            // Clear stored value so user types in the text input below
-                            setStructuredFields((current) => ({ ...current, [key]: "" }));
-                          } else {
-                            setStructuredFields((current) => ({ ...current, [key]: val }));
-                          }
-                        }}
-                      >
-                        <option value="">Select {label}</option>
-                        {options.map((option) => (
-                          <option key={option} value={option}>
-                            {spec.type === "boolean" ? (option === "true" ? "Yes" : "No") : option}
-                          </option>
-                        ))}
-                        {/* Boolean fields don't need an Other option */}
-                        {spec.type !== "boolean" && (
-                          <option value="__other__">Other…</option>
-                        )}
-                      </Select>
-                      {(selectValue === "__other__" || isOtherSelected) && (
-                        <Input
-                          id={`rental-field-${key}-other`}
-                          value={currentValue}
-                          placeholder={`Describe the ${label.toLowerCase()}`}
-                          autoFocus
-                          onChange={(e) =>
-                            setStructuredFields((current) => ({ ...current, [key]: e.target.value }))
-                          }
-                        />
-                      )}
-                    </div>
-                  </Field>
-                );
-              }
-              return (
-                <Field key={key} label={label} required={required} showOptional={false}>
-                  <Input
-                    id={`rental-field-${key}`}
-                    inputMode={spec.type === "number" ? "numeric" : "text"}
-                    value={currentValue}
-                    onChange={(e) =>
-                      setStructuredFields((current) => ({ ...current, [key]: e.target.value }))
-                    }
+            {schemaKeys.length > 0 ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {schemaKeys.map((key) => (
+                  // Colour, material and the like are a dropdown with "Other…" for anything else.
+                  <RentalFieldInput
+                    key={`${variantId}-${key}`}
+                    fieldKey={key}
+                    spec={schemaProps[key] ?? {}}
+                    required={requiredSchemaKeys.has(key)}
+                    value={structuredFields[key] ?? ""}
+                    onChange={(next) => setStructuredFields((current) => ({ ...current, [key]: next }))}
                   />
-                </Field>
-              );
-            })}
+                ))}
+              </div>
+            ) : null}
           </section>
 
           <section className="grid gap-3 sm:grid-cols-3">
@@ -575,22 +552,71 @@ export function PartnerRentalsWorkspace() {
             </Field>
           </section>
 
-          <Field
-            label="Pickup location"
-            required
-            description={
-              defaultLocation
-                ? "Prefills from your profile default address. Edit if this pickup differs."
-                : "Customers collect from this address."
-            }
-          >
-            <Input
-              id="rental-location"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="Area, city — customers collect from here"
+          <section className="flex flex-col gap-3">
+            <div>
+              <h2 className="text-sm font-bold text-navy-900">Pickup address</h2>
+              <p className="mt-0.5 text-xs text-text-secondary">
+                Customers who choose Self Pickup see this address and a View Location button that
+                opens Google Maps. Prefilled from your last item; edit it if this one is elsewhere.
+              </p>
+            </div>
+            <Field label="Address" required>
+              <Input
+                id="rental-pickup-line"
+                value={address.line}
+                maxLength={240}
+                onChange={(e) => setAddress((a) => ({ ...a, line: e.target.value }))}
+                placeholder="Shop / building, street"
+              />
+            </Field>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Field label="Area" showOptional={false}>
+                <Input
+                  id="rental-pickup-area"
+                  value={address.area}
+                  maxLength={120}
+                  onChange={(e) => setAddress((a) => ({ ...a, area: e.target.value }))}
+                  placeholder="e.g. Kukatpally"
+                />
+              </Field>
+              <Field label="City" required>
+                <Input
+                  id="rental-pickup-city"
+                  value={address.city}
+                  maxLength={120}
+                  onChange={(e) => setAddress((a) => ({ ...a, city: e.target.value }))}
+                  placeholder="e.g. Hyderabad"
+                />
+              </Field>
+              <Field label="Pincode" required>
+                <Input
+                  id="rental-pickup-pincode"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={address.pincode}
+                  onChange={(e) => setAddress((a) => ({ ...a, pincode: e.target.value.replace(/\D/g, "") }))}
+                />
+              </Field>
+            </div>
+          </section>
+
+          <label className="flex items-start gap-3 rounded-control border border-line bg-surface-sunken p-3">
+            <input
+              id="rental-delivery-available"
+              type="checkbox"
+              className="mt-0.5 size-4 accent-[var(--color-action)]"
+              checked={deliveryAvailable}
+              onChange={(e) => setDeliveryAvailable(e.target.checked)}
             />
-          </Field>
+            <span className="text-sm">
+              <span className="font-semibold text-navy-900">Delivery available on request</span>
+              <span className="mt-0.5 block text-xs text-text-secondary">
+                Customers can ask you to deliver. You check each request, arrange a vehicle and send
+                the transport price. V Solve Hub takes no commission on transport — you receive the
+                full amount.
+              </span>
+            </span>
+          </label>
 
           {formError ? <p className="text-sm text-danger-text">{formError}</p> : null}
           <Button type="submit" size="lg" className="w-full sm:w-auto" disabled={create.isPending || uploadingCount > 0}>
@@ -639,6 +665,13 @@ export function PartnerRentalsWorkspace() {
                       <p className="inline-flex items-center gap-1 text-sm text-text-secondary">
                         <MapPin className="size-3.5 shrink-0" />
                         {asset.location_text}
+                      </p>
+                    ) : null}
+                    {asset.delivery_available ? <Badge tone="neutral">Delivery on request</Badge> : null}
+                    {asset.public_state === "DRAFT" ? (
+                      <p className="text-xs text-text-secondary">
+                        Not live yet. It needs a photo, the full pickup address (address, city,
+                        pincode) and your pickup hours.
                       </p>
                     ) : null}
                     {canSubmitAsset(asset.moderation_status) ? (

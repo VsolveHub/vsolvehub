@@ -4,6 +4,7 @@
  */
 
 export type RentalBookingStatus =
+  | "AWAITING_TRANSPORT_QUOTE"
   | "PENDING_PAYMENT"
   | "CONFIRMED"
   | "HANDOVER"
@@ -44,9 +45,9 @@ export function partnerBookingAction(
   return null;
 }
 
-/** Pre-handover cancel: PENDING_PAYMENT or CONFIRMED only. */
+/** Pre-handover cancel: a delivery request, PENDING_PAYMENT or CONFIRMED only. */
 export function canCancelBooking(status: RentalBookingStatus): boolean {
-  return status === "PENDING_PAYMENT" || status === "CONFIRMED";
+  return status === "AWAITING_TRANSPORT_QUOTE" || status === "PENDING_PAYMENT" || status === "CONFIRMED";
 }
 
 /** After return with held deposit, partner may raise a dispute instead of full release. */

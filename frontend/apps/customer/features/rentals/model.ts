@@ -44,6 +44,8 @@ export function getRentalStatusBadge(status?: string): {
   tone: "success" | "warning" | "neutral" | "brand" | "danger";
 } {
   switch ((status ?? "").toUpperCase()) {
+    case "AWAITING_TRANSPORT_QUOTE":
+      return { label: "Delivery requested", tone: "warning" };
     case "PENDING_PAYMENT":
     case "REQUESTED":
       return { label: "Requested / Pending", tone: "warning" };
