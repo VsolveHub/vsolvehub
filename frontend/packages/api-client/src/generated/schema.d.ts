@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.69.0)
- * Checksum: 8a77b8aa2f486f3f
+ * Source:   contracts/openapi/v1.yaml (version 1.70.0)
+ * Checksum: 2ab97f0ff052abdc
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -4295,6 +4295,28 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["ops_rentals_moderate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/rentals/bookings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Every rental booking, so Operations can see delivery requests, payments and cancellations.
+         *
+         *     `?status=` narrows to one `RentalBooking.Status`; an unknown value is refused rather than
+         *     silently ignored, because an empty list would read as "nothing to do".
+         */
+        get: operations["ops_rentals_bookings_list"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -11754,6 +11776,9 @@ export interface components {
             readonly evidence: components["schemas"]["OperationsCaseEvidence"][];
             /** Format: date-time */
             readonly server_now: string;
+            readonly source_kind: string | null;
+            /** Format: uuid */
+            readonly source_id: string | null;
             /** Format: date-time */
             readonly created_at: string;
         };
@@ -12144,6 +12169,40 @@ export interface components {
             coins_amount?: number;
             /** Format: date-time */
             readonly paid_at: string;
+        };
+        /** @description Operations' view of a booking: both parties, so a cancel or a dispute call has a name. */
+        OpsRentalBooking: {
+            /** Format: uuid */
+            readonly id: string;
+            status?: components["schemas"]["RentalBookingStatusEnum"];
+            /** Format: date */
+            start_date: string;
+            /** Format: date */
+            end_date: string;
+            readonly quantity: number;
+            price_paise: number;
+            platform_fee_percent?: number;
+            platform_fee_paise?: number;
+            pickup_or_delivery_mode?: components["schemas"]["RentalBookingModeEnum"];
+            delivery_address?: unknown;
+            transport_paise?: number;
+            transport_fee_percent?: number;
+            transport_fee_paise?: number;
+            readonly amount_due_paise: number;
+            readonly transport: components["schemas"]["RentalTransport"] | null;
+            readonly pickup_hours: components["schemas"]["PickupHours"];
+            notes?: string;
+            readonly asset: components["schemas"]["RentalAsset"];
+            readonly deposit: components["schemas"]["RentalDeposit"];
+            /** @description Plaintext PIN for the customer only, once the booking is paid/active. */
+            readonly handover_pin: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            readonly customer_name: string;
+            readonly customer_phone: string | null;
+            /** Format: uuid */
+            readonly partner_id: string;
+            readonly partner_name: string;
         };
         OpsReportCatalogItem: {
             id: string;
@@ -27680,6 +27739,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RentalAsset"];
+                };
+            };
+        };
+    };
+    ops_rentals_bookings_list: {
+        parameters: {
+            query?: {
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpsRentalBooking"][];
                 };
             };
         };

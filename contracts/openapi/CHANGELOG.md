@@ -1,5 +1,18 @@
 # API Contract Changelog
 
+## 1.70.0 - Operations: rental booking list, case source
+
+Additive, Operations only.
+
+- New `GET /ops/rentals/bookings` (`?status=` one `RentalBooking.Status`, unknown value → 400):
+  newest 200 bookings as `OpsRentalBooking` — every `RentalBooking` field plus
+  `customer_name`, `customer_phone`, `partner_id`, `partner_name`. `handover_pin` is always
+  `null` here. Gives Operations the delivery requests, payments and cancellations it could not see.
+- `OperationsCase` adds `source_kind` and `source_id` (both nullable): the row that opened an M2
+  case, e.g. `engagement_stage` or `safety_incident`. The console uses them to decide the disputed
+  stage or the safety report from the case. `null` for cases opened by hand or by M1.
+- Removed: none. Renamed: none.
+
 ## 1.69.0 - Stay room looks; job skills accumulate
 
 **Stays: looks.** A room type can now hold rooms that look different. `RoomLook` is a named photo

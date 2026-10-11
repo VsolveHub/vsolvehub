@@ -411,6 +411,20 @@ class PartnerRentalBookingSerializer(RentalBookingSerializer):
         return getattr(customer, "phone", None) or getattr(customer, "phone_number", None)
 
 
+class OpsRentalBookingSerializer(PartnerRentalBookingSerializer):
+    """Operations' view of a booking: both parties, so a cancel or a dispute call has a name."""
+
+    partner_name = serializers.CharField(source="asset.partner.display_name", read_only=True)
+    partner_id = serializers.UUIDField(source="asset.partner_id", read_only=True)
+
+    class Meta(PartnerRentalBookingSerializer.Meta):
+        fields = (
+            *PartnerRentalBookingSerializer.Meta.fields,
+            "partner_id",
+            "partner_name",
+        )
+
+
 class RentalPlatformFeeSerializer(serializers.Serializer):
     percent = serializers.IntegerField(min_value=0, max_value=100)
     transport_fee_percent = serializers.IntegerField(

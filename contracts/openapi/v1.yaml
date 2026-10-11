@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.69.0
+  version: 1.70.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -10371,6 +10371,32 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RentalAsset'
+          description: ''
+  /api/v1/ops/rentals/bookings:
+    get:
+      operationId: ops_rentals_bookings_list
+      description: |-
+        Every rental booking, so Operations can see delivery requests, payments and cancellations.
+
+        `?status=` narrows to one `RentalBooking.Status`; an unknown value is refused rather than
+        silently ignored, because an empty list would read as "nothing to do".
+      parameters:
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - ops
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OpsRentalBooking'
           description: ''
   /api/v1/ops/rentals/bookings/{booking_id}/cancel:
     post:
@@ -28875,6 +28901,15 @@ components:
           type: string
           format: date-time
           readOnly: true
+        source_kind:
+          type: string
+          nullable: true
+          readOnly: true
+        source_id:
+          type: string
+          format: uuid
+          nullable: true
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -28912,6 +28947,8 @@ components:
       - response_due_at
       - server_now
       - severity
+      - source_id
+      - source_kind
       - status
       - summary
       - version
@@ -29861,6 +29898,115 @@ components:
       - paid_at
       - payout_sequence_n
       - reward_side
+    OpsRentalBooking:
+      type: object
+      description: 'Operations'' view of a booking: both parties, so a cancel or a
+        dispute call has a name.'
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/RentalBookingStatusEnum'
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        quantity:
+          type: integer
+          readOnly: true
+        price_paise:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        platform_fee_percent:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        platform_fee_paise:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        pickup_or_delivery_mode:
+          $ref: '#/components/schemas/RentalBookingModeEnum'
+        delivery_address: {}
+        transport_paise:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        transport_fee_percent:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        transport_fee_paise:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        amount_due_paise:
+          type: integer
+          readOnly: true
+        transport:
+          allOf:
+          - $ref: '#/components/schemas/RentalTransport'
+          nullable: true
+          readOnly: true
+        pickup_hours:
+          allOf:
+          - $ref: '#/components/schemas/PickupHours'
+          readOnly: true
+        notes:
+          type: string
+        asset:
+          allOf:
+          - $ref: '#/components/schemas/RentalAsset'
+          readOnly: true
+        deposit:
+          allOf:
+          - $ref: '#/components/schemas/RentalDeposit'
+          readOnly: true
+        handover_pin:
+          type: string
+          nullable: true
+          description: Plaintext PIN for the customer only, once the booking is paid/active.
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        customer_name:
+          type: string
+          readOnly: true
+        customer_phone:
+          type: string
+          nullable: true
+          readOnly: true
+        partner_id:
+          type: string
+          format: uuid
+          readOnly: true
+        partner_name:
+          type: string
+          readOnly: true
+      required:
+      - amount_due_paise
+      - asset
+      - created_at
+      - customer_name
+      - customer_phone
+      - deposit
+      - end_date
+      - handover_pin
+      - id
+      - partner_id
+      - partner_name
+      - pickup_hours
+      - price_paise
+      - quantity
+      - start_date
+      - transport
     OpsReportCatalogItem:
       type: object
       properties:

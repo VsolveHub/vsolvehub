@@ -6,6 +6,7 @@ complaint verbatim and name a Partner in a safety report, so there is no Custome
 Partner-facing shape to publish.
 """
 
+import uuid
 from typing import Any
 
 from django.utils import timezone
@@ -62,6 +63,18 @@ class OperationsCaseEvidenceSerializer(serializers.ModelSerializer[OperationsCas
         read_only_fields = fields
 
 
+def case_source(idempotency_key: str) -> tuple[str, str] | None:
+    """Split `m2:{source_kind}:{uuid}` into its parts, or `None` when the key is not that shape."""
+    prefix, _, rest = (idempotency_key or "").partition(":")
+    source_kind, _, raw_id = rest.partition(":")
+    if prefix != "m2" or not source_kind or ":" in raw_id:
+        return None
+    try:
+        return source_kind, str(uuid.UUID(raw_id))
+    except ValueError:
+        return None
+
+
 class OperationsCaseSerializer(serializers.ModelSerializer[OperationsCase]):
     """One case, with the vocabulary a reviewer needs to close it.
 
@@ -88,6 +101,8 @@ class OperationsCaseSerializer(serializers.ModelSerializer[OperationsCase]):
     events = serializers.SerializerMethodField()
     evidence = serializers.SerializerMethodField()
     server_now = serializers.SerializerMethodField()
+    source_kind = serializers.SerializerMethodField()
+    source_id = serializers.SerializerMethodField()
 
     class Meta:
         model = OperationsCase
@@ -126,9 +141,27 @@ class OperationsCaseSerializer(serializers.ModelSerializer[OperationsCase]):
             "events",
             "evidence",
             "server_now",
+            "source_kind",
+            "source_id",
             "created_at",
         )
         read_only_fields = fields
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_source_kind(self, instance: OperationsCase) -> str | None:
+        """The row that opened an M2 case, e.g. `engagement_stage` or `safety_incident`.
+
+        Read back from the `m2:{source_kind}:{source_id}` idempotency key the opener wrote, so a
+        console can drive the source's own decision (a disputed stage, a safety report) from the
+        case. `null` for a case opened by hand or by M1.
+        """
+        source = case_source(instance.idempotency_key)
+        return source[0] if source else None
+
+    @extend_schema_field(serializers.UUIDField(allow_null=True))
+    def get_source_id(self, instance: OperationsCase) -> str | None:
+        source = case_source(instance.idempotency_key)
+        return source[1] if source else None
 
     @extend_schema_field(serializers.ListField(child=serializers.CharField()))
     def get_allowed_resolutions(self, instance: OperationsCase) -> list[str]:

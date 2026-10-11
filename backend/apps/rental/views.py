@@ -26,6 +26,7 @@ from apps.rental.pickup_hours import (
 from apps.rental.serializers import (
     CreateAssetSerializer,
     CreateBookingSerializer,
+    OpsRentalBookingSerializer,
     OpsRentalDisputeDecisionSerializer,
     PartnerBookingActionSerializer,
     PartnerRentalBookingSerializer,
@@ -666,6 +667,37 @@ class OpsRentalModerateView(APIView):
         except RentalStateError as exc:
             _raise_domain_error(exc)
         return Response(RentalAssetSerializer(asset).data)
+
+
+#: Newest first, and capped: the ops list is a working queue, not an export.
+OPS_BOOKING_LIMIT = 200
+
+
+class OpsRentalBookingCollectionView(APIView):
+    """Every rental booking, so Operations can see delivery requests, payments and cancellations.
+
+    `?status=` narrows to one `RentalBooking.Status`; an unknown value is refused rather than
+    silently ignored, because an empty list would read as "nothing to do".
+    """
+
+    permission_classes = (IsOperationsUser,)
+
+    @extend_schema(
+        parameters=[OpenApiParameter("status", OpenApiTypes.STR, OpenApiParameter.QUERY)],
+        responses=OpsRentalBookingSerializer(many=True),
+    )
+    def get(self, request: Any) -> Response:
+        rows = _booking_rows().select_related("customer").order_by("-created_at")
+        wanted = (request.query_params.get("status") or "").strip().upper()
+        if wanted:
+            if wanted not in RentalBooking.Status.values:
+                raise ValidationError({"status": ["That is not a booking status."]})
+            rows = rows.filter(status=wanted)
+        return Response(
+            OpsRentalBookingSerializer(
+                rows[:OPS_BOOKING_LIMIT], many=True, context={"request": request}
+            ).data
+        )
 
 
 class OpsRentalBookingCancelView(APIView):

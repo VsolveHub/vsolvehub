@@ -89,6 +89,11 @@ urlpatterns = [
         name="ops-rental-moderate",
     ),
     path(
+        "ops/rentals/bookings",
+        views.OpsRentalBookingCollectionView.as_view(),
+        name="ops-rental-bookings",
+    ),
+    path(
         "ops/rentals/bookings/<uuid:booking_id>/cancel",
         views.OpsRentalBookingCancelView.as_view(),
         name="ops-rental-booking-cancel",
