@@ -14,6 +14,14 @@ Additive, Operations only.
 - `OperationsPartnerDetail` adds `business_profile` (`PartnerBusinessProfile`, nullable): the
   legal name, GSTIN and verification time Operations checks before
   `POST /operations/partners/{partner_id}/tax-profile/verify/`.
+- `OperationsBooking` adds `replacement_offer_id` (nullable): the committed replacement offer
+  `POST /operations/bookings/{booking_id}/recover/` adopts. Set only while the Booking is
+  `RECOVERY_REQUIRED` and a replacement Partner has committed.
+- New `GET /operations/commercial-policies/` (`m2_operations_commercial_policy_list`): every
+  `CommercialPolicy` version, newest first (at most 50). Read-only; activation is unchanged.
+- New `GET /operations/engagements/{engagement_id}/project/` (`m2_operations_project_read`): the
+  same `ProjectPlan` the parties read, for Operations, so it can price a transfer or end a project.
+- `RequestTimeline` adds `engagement_id` (nullable): the request's engagement once booked.
 - Removed: none. Renamed: none.
 
 ## 1.69.0 - Stay room looks; job skills accumulate

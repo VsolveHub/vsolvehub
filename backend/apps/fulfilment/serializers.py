@@ -21,6 +21,7 @@ from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
+from apps.assignments.models import PartnerOffer
 from apps.carts.models import QuoteLine
 from apps.commerce.models import Booking
 from apps.fulfilment.models import (
@@ -651,6 +652,7 @@ class OperationsBookingSerializer(serializers.ModelSerializer[Booking]):
     work_tasks = serializers.SerializerMethodField()
     evidence = serializers.SerializerMethodField()
     status_history = serializers.SerializerMethodField()
+    replacement_offer_id = serializers.SerializerMethodField()
     server_now = serializers.SerializerMethodField()
 
     class Meta:
@@ -676,9 +678,33 @@ class OperationsBookingSerializer(serializers.ModelSerializer[Booking]):
             "work_tasks",
             "evidence",
             "status_history",
+            "replacement_offer_id",
             "server_now",
         )
         read_only_fields = fields
+
+    @extend_schema_field(serializers.UUIDField(allow_null=True))
+    def get_replacement_offer_id(self, instance: Booking) -> Any:
+        """The committed replacement offer `recover/` adopts, while the Booking awaits one.
+
+        `null` unless the Booking is `RECOVERY_REQUIRED` and a replacement Partner has accepted
+        and committed — so the console offers "Confirm replacement" only when the server will
+        take it, instead of asking an operator to paste an offer id.
+        """
+        awaiting = instance.status == Booking.Status.RECOVERY_REQUIRED
+        if not awaiting or instance.fulfilment_unit_id is None:
+            return None
+        offer = (
+            PartnerOffer.objects.filter(
+                fulfilment_unit_id=instance.fulfilment_unit_id,
+                status=PartnerOffer.Status.COMMITTED,
+                reservation__isnull=False,
+            )
+            .exclude(reservation_id=instance.reservation_id)
+            .order_by("-created_at")
+            .first()
+        )
+        return None if offer is None else offer.id
 
     @extend_schema_field(serializers.UUIDField(allow_null=True))
     def get_booking_group_id(self, instance: Booking) -> Any:

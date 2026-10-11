@@ -233,6 +233,9 @@ class RequestTimelineSerializer(serializers.Serializer[dict[str, Any]]):
     requirement_id = serializers.UUIDField()
     archetype = serializers.CharField()
     status = serializers.CharField()
+    #: The request's engagement once a vendor or crew is booked, so the console can open the
+    #: project and its recovery commands. `null` before that.
+    engagement_id = serializers.UUIDField(allow_null=True)
     events = TimelineEventSerializer(many=True)
     server_now = serializers.DateTimeField()
 

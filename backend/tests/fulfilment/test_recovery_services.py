@@ -18,6 +18,7 @@ from apps.fulfilment.recovery_services import (
     release_booking_partner,
     start_partner_recovery_offer,
 )
+from apps.fulfilment.serializers import OperationsBookingSerializer
 from apps.fulfilment.services import (
     BookingVersionConflictApiError,
     mark_arrived,
@@ -398,3 +399,34 @@ def test_full_release_and_recovery_round_trip_keeps_one_booking_row() -> None:
     assert recovered.partner_id == replacement.id
     assert recovered.partner_id != old_partner_id
     assert recovered.status == Booking.Status.CONFIRMED
+
+
+# --- OperationsBooking.replacement_offer_id ------------------------------------------------------
+
+
+def test_ops_booking_names_the_committed_replacement_offer_only_while_recovery_is_needed() -> None:
+    """The console offers "Confirm replacement" from this field instead of a pasted offer id."""
+    booked = create_booked_group(key_prefix="recover-field")
+    assert OperationsBookingSerializer(booked.booking).data["replacement_offer_id"] is None
+
+    released = release_booking_partner(
+        booking_id=booked.booking.id,
+        partner_id=booked.partner.id,
+        reason="Reassigned.",
+        expected_version=booked.booking.version,
+    )
+    released.refresh_from_db()
+    assert OperationsBookingSerializer(released).data["replacement_offer_id"] is None
+
+    replacement = _replacement_partner("switch-socket-repair")
+    offer = _committed_replacement_offer(unit_id=booked.unit.id, partner=replacement)
+    released.refresh_from_db()
+    assert OperationsBookingSerializer(released).data["replacement_offer_id"] == str(offer.id)
+
+    recovered = recover_booking_partner(
+        booking_id=released.id,
+        offer_id=offer.id,
+        operator=_operator(),
+        expected_version=released.version,
+    )
+    assert OperationsBookingSerializer(recovered).data["replacement_offer_id"] is None

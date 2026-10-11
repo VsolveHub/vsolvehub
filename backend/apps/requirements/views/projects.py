@@ -112,6 +112,36 @@ class EngagementProjectView(APIView):
         return _project_payload_response(engagement)
 
 
+class OperationsEngagementProjectView(APIView):
+    """The same project read, for Operations, who is neither party to it.
+
+    Operations needs the unfinished milestones to price a transfer or end the project, and the
+    participant read answers `404` to anyone who is not the Customer or the vendor.
+    """
+
+    permission_classes = (IsAuthenticated, IsOperationsUser)
+
+    @extend_schema(
+        tags=["M2 - Operations"],
+        operation_id="m2_operations_project_read",
+        responses={200: ProjectPlanSerializer, 404: ApiErrorSerializer, 409: ApiErrorSerializer},
+    )
+    def get(self, _request: Request, engagement_id: uuid.UUID) -> Response:
+        engagement = (
+            Engagement.objects.select_related("requirement", "partner", "proposal")
+            .prefetch_related("stages")
+            .filter(id=engagement_id)
+            .first()
+        )
+        if engagement is None:
+            _raise_api_error(RequirementNotFoundError())
+        try:
+            projects.assert_project_engagement(engagement)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        return _project_payload_response(engagement)
+
+
 class EngagementStageDelayClaimView(APIView):
     """The vendor asks for days back on one milestone (`M2-BE-544`)."""
 

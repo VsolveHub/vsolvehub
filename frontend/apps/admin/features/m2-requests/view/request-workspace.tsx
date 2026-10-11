@@ -6,6 +6,7 @@ import Link from "next/link";
 import { maskId } from "@/features/shared/identifiers";
 
 import { useRequestTimeline } from "../queries";
+import { ProjectRecovery } from "./project-recovery";
 import { RecoveryActions } from "./recovery-actions";
 import { RequestTimelineView } from "./request-timeline";
 
@@ -56,6 +57,10 @@ export function RequestWorkspace({ requirementId }: { requirementId: string }) {
       </div>
 
       <RequestTimelineView requirementId={requirementId} />
+
+      {data?.engagement_id && data.archetype === "A5_CUSTOM_PROJECT" ? (
+        <ProjectRecovery engagementId={data.engagement_id} />
+      ) : null}
 
       {data !== null ? (
         <RecoveryActions requirementId={requirementId} archetype={data.archetype} />

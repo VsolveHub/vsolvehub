@@ -75,13 +75,14 @@ export function TaxProfileSection({
             <p className="w-full text-sm text-text-secondary">
               Check the GSTIN and legal name on the GST portal, then confirm.
             </p>
-            <Field label="State code">
+            <Field label="State code" description="As on the GST certificate, e.g. 36 or TG">
               <Input
                 value={stateCode}
-                maxLength={2}
-                inputMode="numeric"
-                className="w-20"
-                onChange={(event) => setStateCode(event.target.value.replace(/\D/g, ""))}
+                maxLength={8}
+                className="w-24"
+                onChange={(event) =>
+                  setStateCode(event.target.value.replace(/[^0-9a-z]/gi, "").toUpperCase())
+                }
               />
             </Field>
             <Button loading={verify.isPending} onClick={() => verify.mutate(stateCode)}>

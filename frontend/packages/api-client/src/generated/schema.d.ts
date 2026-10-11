@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.70.0)
- * Checksum: e91f6a83ccfe549d
+ * Checksum: 3d7034071bc191b9
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -2834,6 +2834,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/commercial-policies/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The active policy and its history, newest version first.
+         *
+         *     Read-only. The console shows what is in force and prefills the next version from it, so
+         *     activating a change does not mean retyping eighteen numbers from memory.
+         */
+        get: operations["m2_operations_commercial_policy_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/commercial-policies/activate/": {
         parameters: {
             query?: never;
@@ -3069,6 +3091,28 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["m2_operations_custom_item_review_resolve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/engagements/{engagement_id}/project/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The same project read, for Operations, who is neither party to it.
+         *
+         *     Operations needs the unfinished milestones to price a transfer or end the project, and the
+         *     participant read answers `404` to anyone who is not the Customer or the vendor.
+         */
+        get: operations["m2_operations_project_read"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -11713,6 +11757,8 @@ export interface components {
             readonly work_tasks: components["schemas"]["WorkTask"][];
             readonly evidence: components["schemas"]["WorkEvidence"][];
             readonly status_history: components["schemas"]["BookingStatusHistory"][];
+            /** Format: uuid */
+            readonly replacement_offer_id: string | null;
             /** Format: date-time */
             readonly server_now: string;
         };
@@ -15614,6 +15660,8 @@ export interface components {
             requirement_id: string;
             archetype: string;
             status: string;
+            /** Format: uuid */
+            engagement_id: string | null;
             events: components["schemas"]["TimelineEvent"][];
             /** Format: date-time */
             server_now: string;
@@ -24128,6 +24176,25 @@ export interface operations {
             };
         };
     };
+    m2_operations_commercial_policy_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommercialPolicy"][];
+                };
+            };
+        };
+    };
     m2_operations_commercial_policy_activate: {
         parameters: {
             query?: never;
@@ -24769,6 +24836,43 @@ export interface operations {
                 };
             };
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_operations_project_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectPlan"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

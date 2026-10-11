@@ -321,3 +321,27 @@ def test_customer_procured_submission_cannot_publish_turnkey_supplies(world: M2W
             invitation_id=invitation.id,
             included_supply_list=[{"title": "Copper wire", "quantity": "2", "unit": "coil"}],
         )
+
+
+def test_operations_reads_the_policy_history_newest_first(world: M2World) -> None:
+    """The console shows what is in force and prefills the next version from it."""
+    old = _policy(world)
+    old.status = CommercialPolicy.Status.RETIRED
+    old.save(update_fields=("status",))
+    newer = _policy(world)
+    newer.version = 2
+    newer.approval_reference = "FINANCE-TEST-2"
+    newer.save(update_fields=("version", "approval_reference"))
+
+    response = world.operations_client.get("/api/v1/operations/commercial-policies/")
+
+    assert response.status_code == HTTPStatus.OK
+    body = response.json()
+    assert [row["version"] for row in body] == [2, 1]
+    assert body[0]["status"] == CommercialPolicy.Status.ACTIVE
+    assert body[0]["tax_rates_bps"] == {"labour": 1_800}
+
+
+def test_only_operations_reads_the_policy_history(world: M2World) -> None:
+    response = world.customer_client.get("/api/v1/operations/commercial-policies/")
+    assert response.status_code == HTTPStatus.FORBIDDEN
