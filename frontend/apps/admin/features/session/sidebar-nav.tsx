@@ -1,86 +1,11 @@
 "use client";
 
-import {
-  Home,
-  ClipboardCheck,
-  Briefcase,
-  BriefcaseBusiness,
-  Building2,
-  HardHat,
-  Inbox,
-  IndianRupee,
-  Coins,
-  Wallet,
-  RotateCcw,
-  Truck,
-  Tag,
-  ShoppingCart,
-  Sliders,
-  Calendar,
-  BadgePercent,
-  ToggleLeft,
-  Users,
-  FileCheck2,
-  MessageSquareHeart,
-  PanelLeftClose,
-  PanelLeftOpen,
-  User,
-} from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { SidebarLink } from "./sidebar-link";
+import { usePathname } from "next/navigation";
+
+import { NAV_GROUPS, isNavLinkActive } from "./nav-groups";
 import { useCaseQueueSummary } from "../cases/queries";
-
-const WORK_LINKS = [
-  { href: "/", label: "Home", icon: Home },
-  { href: "/operations/requests", label: "Requests", icon: Inbox, badgeKey: "requests_open" },
-  { href: "/operations/cases", label: "Cases", icon: Briefcase, badgeKey: "mine_open" },
-  { href: "/operations/listings", label: "Job Listings", icon: BriefcaseBusiness },
-  { href: "/operations/work-items", label: "Work Items", icon: ClipboardCheck },
-  { href: "/operations/rentals", label: "Rentals", icon: HardHat },
-  { href: "/operations/stays", label: "Stays", icon: Building2 },
-  { href: "/operations/dispatch", label: "Dispatch", icon: Truck },
-  { href: "/operations/manual-offers", label: "Manual offers", icon: Tag },
-  { href: "/operations/assisted-checkouts", label: "Assisted checkout", icon: ShoppingCart },
-];
-
-const PEOPLE_LINKS = [
-  { href: "/operations/partners", label: "Partners", icon: Users },
-  { href: "/operations/partners/import", label: "Import partners", icon: FileCheck2 },
-  { href: "/operations/crew-documents", label: "Crew documents", icon: FileCheck2 },
-  { href: "/operations/feedback", label: "Service feedback", icon: MessageSquareHeart },
-  { href: "/reviews", label: "Partner reviews", icon: ClipboardCheck },
-  { href: "/operations/partner-availability", label: "Availability", icon: Calendar },
-];
-
-const MONEY_LINKS = [
-  { href: "/operations/rate-cards", label: "Rate cards", icon: IndianRupee },
-  { href: "/operations/vendor-plans", label: "Vendor plans", icon: BadgePercent },
-  { href: "/operations/payouts", label: "Payouts", icon: Wallet },
-  { href: "/operations/loyalty", label: "Wallet and loyalty", icon: Coins },
-  { href: "/operations/reports", label: "Reports", icon: FileCheck2 },
-  { href: "/finance", label: "Refunds", icon: RotateCcw },
-];
-
-const DASHBOARD_LINKS = [
-  { href: "/operations/dashboards/overview", label: "Overview", icon: Home },
-  { href: "/operations/dashboards/categories", label: "Categories", icon: HardHat },
-  { href: "/operations/dashboards/customer", label: "Customer", icon: Users },
-  { href: "/operations/dashboards/vendor", label: "Vendor", icon: BriefcaseBusiness },
-  { href: "/operations/dashboards/booking", label: "Booking", icon: HardHat },
-];
-
-const SYSTEM_LINKS = [
-  { href: "/operations/compatibility-rules", label: "Compatibility rules", icon: Sliders },
-  { href: "/operations/kill-switches", label: "Kill switches", icon: ToggleLeft },
-  { href: "/operations/profile", label: "Profile", icon: User },
-];
-
-const GROUPS = [
-  { label: "Work", links: WORK_LINKS },
-  { label: "People", links: PEOPLE_LINKS },
-  { label: "Money", links: MONEY_LINKS },
-  { label: "Dashboards", links: DASHBOARD_LINKS },
-  { label: "System", links: SYSTEM_LINKS },
-];
 
 export function SidebarNavContent({
   isCollapsed,
@@ -93,11 +18,12 @@ export function SidebarNavContent({
   onLinkClick?: () => void;
 }) {
   const { data: counts } = useCaseQueueSummary();
+  const pathname = usePathname();
 
   return (
     <div className="flex flex-col h-full">
       <nav aria-label="Operations workspaces" className="flex-1 flex flex-col gap-4 p-2 overflow-y-auto">
-        {GROUPS.map((group) => (
+        {NAV_GROUPS.map((group) => (
           <div key={group.label} className="flex flex-col gap-1">
             {!isCollapsed && (
               <h3 className="px-3 text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">
@@ -106,11 +32,10 @@ export function SidebarNavContent({
             )}
             <ul className="flex flex-col gap-0.5 list-none p-0 m-0">
               {group.links.map((entry) => {
-                let badgeCount = 0;
-                const e = entry as Record<string, unknown>;
-                if (counts && e.badgeKey) {
-                  badgeCount = Number((counts as Record<string, unknown>)[e.badgeKey as string]) || 0;
-                }
+                const badgeCount =
+                  counts && entry.badgeKey
+                    ? Number((counts as Record<string, unknown>)[entry.badgeKey]) || 0
+                    : 0;
                 return (
                   <li key={entry.href}>
                     <SidebarLink
@@ -119,6 +44,7 @@ export function SidebarNavContent({
                       icon={entry.icon}
                       isCollapsed={isCollapsed}
                       badgeCount={badgeCount}
+                      active={isNavLinkActive(entry, pathname)}
                       onClick={onLinkClick}
                     />
                   </li>

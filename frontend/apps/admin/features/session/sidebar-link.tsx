@@ -11,17 +11,26 @@ interface SidebarLinkProps {
   icon: LucideIcon;
   isCollapsed?: boolean;
   badgeCount?: number;
+  /** Decided by the nav, which knows the sibling links; falls back to a prefix match. */
+  active?: boolean;
   /** Called when the link is clicked — e.g. to close a mobile drawer. */
   onClick?: () => void;
 }
 
-export function SidebarLink({ href, label, icon: Icon, isCollapsed, badgeCount, onClick }: SidebarLinkProps) {
+export function SidebarLink({
+  href,
+  label,
+  icon: Icon,
+  isCollapsed,
+  badgeCount,
+  active: activeProp,
+  onClick,
+}: SidebarLinkProps) {
   const pathname = usePathname();
-  
+
   const active =
-    href === "/"
-      ? pathname === "/"
-      : pathname === href || pathname.startsWith(`${href}/`);
+    activeProp ??
+    (href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`));
 
   const link = (
     <Link
