@@ -192,3 +192,41 @@ export function useUnpayablePartners(period: { start: string; end: string } | nu
     enabled: period !== null,
   });
 }
+
+/**
+ * Correct what a Partner is owed by adding a ledger entry — never by editing one.
+ *
+ * `net_paise` is signed: positive pays the Partner more, negative recovers an overpayment.
+ * Step-up, because it changes what the next payout run sends.
+ */
+export function useLedgerAdjustment() {
+  return useMutation({
+    mutationFn: ({
+      idempotencyKey,
+      ...body
+    }: {
+      partner_id: string;
+      net_paise: number;
+      reason: string;
+      /** Minted once per form attempt, so a retry cannot add the correction twice. */
+      idempotencyKey: string;
+    }) =>
+      request(() =>
+        getApiClient().POST("/api/v1/operations/ledger-adjustments/", {
+          params: { header: { "Idempotency-Key": idempotencyKey } },
+          body,
+        }),
+      ),
+    retry: false,
+  });
+}
+
+/** `yyyy-mm-dd` from a date input → the start of that day, local time, as ISO. */
+export function dayStartIso(day: string): string {
+  return new Date(`${day}T00:00:00`).toISOString();
+}
+
+/** `yyyy-mm-dd` → the last millisecond of that day, local time, as ISO. */
+export function dayEndIso(day: string): string {
+  return new Date(`${day}T23:59:59.999`).toISOString();
+}

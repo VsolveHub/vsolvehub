@@ -22,6 +22,7 @@ import {
   resolutionMeaning,
   type OperationsCase,
 } from "../model/cases";
+import { SourceDecisionPanel } from "./source-decision";
 
 /**
  * Every action on this screen states its consequence before it happens (`M2-FE-707`).
@@ -588,6 +589,7 @@ export function CaseCommands({ item }: { item: OperationsCase }) {
       {notes}
       {closed ? <OverridePanel item={item} /> : null}
       {!closed ? <ResponseDeadlinePanel item={item} /> : null}
+      {!closed ? <SourceDecisionPanel item={item} /> : null}
       {!closed ? <ResolvePanel item={item} /> : null}
     </div>
   );

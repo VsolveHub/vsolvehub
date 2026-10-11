@@ -16,6 +16,7 @@ from rest_framework import serializers
 
 from apps.partners.models import PartnerApplication, PartnerDocument, PartnerProfile
 
+from .m2 import PartnerBusinessProfileSerializer
 from .onboarding import PartnerApplicationTransitionSerializer
 
 
@@ -119,6 +120,7 @@ class OperationsPartnerDetailSerializer(serializers.ModelSerializer[PartnerProfi
     service_areas = serializers.SerializerMethodField()
     documents = serializers.SerializerMethodField()
     transitions = serializers.SerializerMethodField()
+    business_profile = serializers.SerializerMethodField()
 
     class Meta:
         model = PartnerProfile
@@ -138,9 +140,21 @@ class OperationsPartnerDetailSerializer(serializers.ModelSerializer[PartnerProfi
             "service_areas",
             "documents",
             "transitions",
+            "business_profile",
             "created_at",
         )
         read_only_fields = fields
+
+    @extend_schema_field(PartnerBusinessProfileSerializer(allow_null=True))
+    def get_business_profile(self, partner: PartnerProfile) -> dict[str, object] | None:
+        """The legal name and GSTIN Operations checks before verifying the tax profile.
+
+        `null` when the Partner has not filled one in, which is most individual Partners.
+        """
+        profile = getattr(partner, "business_profile", None)
+        if profile is None:
+            return None
+        return dict(PartnerBusinessProfileSerializer(profile).data)
 
     @extend_schema_field(PartnerSkillChipSerializer(many=True))
     def get_skills(self, partner: PartnerProfile) -> list[dict[str, object]]:

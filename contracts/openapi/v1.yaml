@@ -29348,6 +29348,11 @@ components:
           items:
             $ref: '#/components/schemas/PartnerApplicationTransition'
           readOnly: true
+        business_profile:
+          allOf:
+          - $ref: '#/components/schemas/PartnerBusinessProfile'
+          nullable: true
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -29357,6 +29362,7 @@ components:
       - application_status
       - application_version
       - biography
+      - business_profile
       - change_request_message
       - created_at
       - display_name

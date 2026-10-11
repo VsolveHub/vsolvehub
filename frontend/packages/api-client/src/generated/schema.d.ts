@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.70.0)
- * Checksum: 2ab97f0ff052abdc
+ * Checksum: e91f6a83ccfe549d
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -11963,6 +11963,7 @@ export interface components {
             readonly service_areas: components["schemas"]["PartnerSkillChip"][];
             readonly documents: components["schemas"]["OperationsPartnerDocumentState"][];
             readonly transitions: components["schemas"]["PartnerApplicationTransition"][];
+            readonly business_profile: components["schemas"]["PartnerBusinessProfile"] | null;
             /** Format: date-time */
             readonly created_at: string;
         };

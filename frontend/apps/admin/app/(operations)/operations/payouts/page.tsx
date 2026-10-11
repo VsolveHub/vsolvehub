@@ -1,19 +1,17 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
-import { PayoutConsole } from "@/features/payouts/view/payout-console";
-
+import { PayoutsWorkspace } from "@/features/payouts/view/payouts-workspace";
 
 export const metadata: Metadata = {
-  title: "Payout runs",
+  title: "Payouts",
   robots: { index: false, follow: false },
 };
 
 export default function PayoutsPage() {
   return (
-    <>
-      <div className="mt-6">
-        <PayoutConsole />
-      </div>
-    </>
+    <Suspense fallback={null}>
+      <PayoutsWorkspace />
+    </Suspense>
   );
 }

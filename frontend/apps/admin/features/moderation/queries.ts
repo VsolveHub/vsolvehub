@@ -117,3 +117,65 @@ export async function fetchOpsStayEnquiries(): Promise<OpsStayEnquiry[]> {
   const data = await request(() => getApiClient().GET("/api/v1/ops/stays/enquiries"));
   return Array.isArray(data) ? data : [];
 }
+
+/* --- Bookings and plans: what Operations runs after a listing is live ------------------- */
+
+export type OpsRentalBooking = Schemas["OpsRentalBooking"];
+export type OpsRentalBookingStatus = Schemas["RentalBookingStatusEnum"];
+export type OpsStaySubscriptionPlan = Schemas["StaySubscriptionPlan"];
+
+export async function fetchOpsRentalBookings(status?: string): Promise<OpsRentalBooking[]> {
+  const data = await request(() =>
+    getApiClient().GET("/api/v1/ops/rentals/bookings", {
+      params: { query: status ? { status } : {} },
+    }),
+  );
+  return Array.isArray(data) ? data : [];
+}
+
+export function cancelOpsRentalBooking(bookingId: string) {
+  return request(() =>
+    getApiClient().POST("/api/v1/ops/rentals/bookings/{booking_id}/cancel", {
+      params: { path: { booking_id: bookingId } },
+    }),
+  );
+}
+
+export function cancelOpsStayReservation(reservationId: string, reason: string) {
+  return request(() =>
+    getApiClient().POST("/api/v1/ops/stays/reservations/{reservation_id}/cancel", {
+      params: { path: { reservation_id: reservationId } },
+      body: { reason },
+    }),
+  );
+}
+
+export async function fetchOpsStayPlans(): Promise<OpsStaySubscriptionPlan[]> {
+  const data = await request(() => getApiClient().GET("/api/v1/ops/stay-subscription-plans"));
+  return Array.isArray(data) ? data : [];
+}
+
+export type StayPlanDraft = {
+  code: string;
+  name: string;
+  price_paise: number;
+  duration_days: number;
+  max_properties: number;
+  details: string;
+  is_active: boolean;
+};
+
+export function createOpsStayPlan(draft: StayPlanDraft) {
+  return request(() =>
+    getApiClient().POST("/api/v1/ops/stay-subscription-plans", { body: draft }),
+  );
+}
+
+export function updateOpsStayPlan(planId: string, draft: Omit<StayPlanDraft, "code">) {
+  return request(() =>
+    getApiClient().PATCH("/api/v1/ops/stay-subscription-plans/{plan_id}", {
+      params: { path: { plan_id: planId } },
+      body: draft,
+    }),
+  );
+}

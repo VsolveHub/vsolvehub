@@ -11,6 +11,9 @@ Additive, Operations only.
 - `OperationsCase` adds `source_kind` and `source_id` (both nullable): the row that opened an M2
   case, e.g. `engagement_stage` or `safety_incident`. The console uses them to decide the disputed
   stage or the safety report from the case. `null` for cases opened by hand or by M1.
+- `OperationsPartnerDetail` adds `business_profile` (`PartnerBusinessProfile`, nullable): the
+  legal name, GSTIN and verification time Operations checks before
+  `POST /operations/partners/{partner_id}/tax-profile/verify/`.
 - Removed: none. Renamed: none.
 
 ## 1.69.0 - Stay room looks; job skills accumulate

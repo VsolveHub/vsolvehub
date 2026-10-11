@@ -13,6 +13,7 @@ from rest_framework.test import APIClient
 from apps.identity.models import User
 from apps.partners.models import (
     PartnerApplication,
+    PartnerBusinessProfile,
     PartnerProfile,
     PartnerService,
     PartnerServiceArea,
@@ -238,3 +239,35 @@ def test_an_unknown_partner_is_a_404_not_an_empty_record(operations_user: User) 
     response = client.get(f"{DIRECTORY_URL}00000000-0000-0000-0000-000000000000/")
 
     assert response.status_code == HTTPStatus.NOT_FOUND
+
+
+def test_the_detail_carries_the_business_profile_for_tax_verification(
+    partner_setup: PartnerSetup, operations_user: User
+) -> None:
+    """Operations reads the GSTIN it is about to verify; `null` when there is none."""
+    without = _partner(
+        phone="+919000000230",
+        name="Solo Suresh",
+        status=PartnerApplication.Status.APPROVED,
+        skills=(partner_setup.skill,),
+    )
+    with_profile = _partner(
+        phone="+919000000231",
+        name="Agency Asha",
+        status=PartnerApplication.Status.APPROVED,
+        skills=(partner_setup.skill,),
+    )
+    PartnerBusinessProfile.objects.create(
+        partner=with_profile,
+        business_type=PartnerBusinessProfile.BusinessType.WORKFORCE_AGENCY,
+        legal_name="Asha Staffing Pvt Ltd",
+        gst_registered=True,
+        gstin="36ABCDE1234F1Z5",
+    )
+    client = _ops_client(operations_user)
+
+    assert client.get(f"{DIRECTORY_URL}{without.id}/").json()["business_profile"] is None
+    profile = client.get(f"{DIRECTORY_URL}{with_profile.id}/").json()["business_profile"]
+    assert profile["legal_name"] == "Asha Staffing Pvt Ltd"
+    assert profile["gstin"] == "36ABCDE1234F1Z5"
+    assert profile["gstin_verified_at"] is None

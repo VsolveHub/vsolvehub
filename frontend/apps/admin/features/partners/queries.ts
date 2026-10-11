@@ -2,7 +2,7 @@
 
 import { request, type Schemas } from "@vsolve/api-client";
 import { EXPIRING_STATE, cursorFromNextUrl, queryKeys } from "@vsolve/query";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getApiClient } from "@/lib/api/browser";
 
@@ -87,5 +87,23 @@ export function usePartnerSkills() {
     queryKey: [...queryKeys.operations.all, "partner-skills"] as const,
     queryFn: () => request(() => getApiClient().GET("/api/v1/partner/skills/", {})),
     staleTime: 5 * 60_000,
+  });
+}
+
+/** Mark a Partner's GSTIN as checked. Optionally corrects the two-digit registered state code. */
+export function useVerifyTaxProfile(partnerId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (registeredStateCode: string) =>
+      request(() =>
+        getApiClient().POST("/api/v1/operations/partners/{partner_id}/tax-profile/verify/", {
+          params: { path: { partner_id: partnerId } },
+          body: { registered_state_code: registeredStateCode },
+        }),
+      ),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.operations.partnerRecord(partnerId),
+      }),
   });
 }

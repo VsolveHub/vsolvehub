@@ -90,7 +90,10 @@ export function MarketplaceQueue({
   load,
   moderate,
   leading,
+  embedded = false,
 }: {
+  /** Inside a section tab: the tab already names the area, so drop the page frame and title. */
+  embedded?: boolean;
   heading: string;
   queryKey: string;
   load: () => Promise<MarketplaceQueueRow[]>;
@@ -139,10 +142,14 @@ export function MarketplaceQueue({
   const copy = decision ? ACTION_COPY[decision.action] : null;
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-6">
+    <main
+      className={
+        embedded ? "flex flex-col gap-4" : "mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-6"
+      }
+    >
       {leading}
       <div>
-        <h1 className="text-xl font-bold text-navy-900">{heading}</h1>
+        {embedded ? null : <h1 className="text-xl font-bold text-navy-900">{heading}</h1>}
         <p className="text-sm text-text-secondary">
           Review what partners submitted. Approve, reject, take down, or reinstate — each
           decision needs a reason.

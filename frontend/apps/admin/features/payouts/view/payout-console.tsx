@@ -17,6 +17,7 @@ import {
   usePayoutBatches,
   type PayoutBatch,
 } from "../queries";
+import { NewPayoutRun } from "./new-payout-run";
 
 /**
  * Payout runs.
@@ -240,6 +241,8 @@ export function PayoutConsole() {
   const rows = batches.data?.pages.flatMap((page) => page.results) ?? [];
 
   return (
+    <div className="flex flex-col gap-6">
+    <NewPayoutRun onProposed={setSelectedId} />
     <div className="grid gap-6 lg:grid-cols-[22rem_1fr]">
       <div>
         {batches.isPending ? (
@@ -299,6 +302,7 @@ export function PayoutConsole() {
       ) : (
         <BatchDetail batchId={selectedId} />
       )}
+    </div>
     </div>
   );
 }

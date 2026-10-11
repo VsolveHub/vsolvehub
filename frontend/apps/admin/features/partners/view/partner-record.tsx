@@ -4,6 +4,7 @@ import { Badge, EmptyState, ErrorState, Spinner } from "@vsolve/ui";
 
 import { usePartnerRecord } from "@/features/partners/queries";
 import { STATUS_LABELS, STATUS_TONE } from "./partner-directory";
+import { TaxProfileSection } from "./tax-profile";
 
 /**
  * One Partner's record.
@@ -145,6 +146,10 @@ export function PartnerRecord({ partnerId }: { partnerId: string | null }) {
 
       <Section title="Service areas">
         <Chips items={partner.service_areas} empty="No service areas assigned." />
+      </Section>
+
+      <Section title="Business and tax">
+        <TaxProfileSection partnerId={partner.id} profile={partner.business_profile} />
       </Section>
 
       <Section title="Documents">
