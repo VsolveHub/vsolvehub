@@ -26,13 +26,16 @@ from apps.loyalty.services.coins import (
     calculate_coin_burn,
     get_active_burn_policy,
     get_customer_coin_balances,
+    get_loyalty_settings,
 )
 from apps.loyalty.services.referral import (
     ReferralValidationError,
     get_active_referral_program,
     get_or_create_referral_code,
     referee_reward_summary,
+    referrer_rewards_for,
     validate_referral_code,
+    welcome_reward_for,
 )
 from common.pagination import (
     CURSOR_PARAMETER,
@@ -128,6 +131,16 @@ class CustomerReferralView(APIView):
 
         made = ReferralAttribution.objects.filter(referrer=user)
         successful = made.filter(status=ReferralAttribution.Status.REWARDED).count()
+        waiting_booking = made.filter(status=ReferralAttribution.Status.PENDING).count()
+        # Booked friends whose reward is waiting out the hold, priced as the sweep will pay them.
+        on_the_way = list(
+            made.filter(status=ReferralAttribution.Status.QUALIFIED)
+            .select_related("program_version")
+            .prefetch_related("program_version__tiers")
+        )
+        on_the_way_rewards = [
+            shown for shown in referrer_rewards_for(user, on_the_way).values() if shown is not None
+        ]
         pending = made.filter(
             status__in=(
                 ReferralAttribution.Status.PENDING,
@@ -159,6 +172,12 @@ class CustomerReferralView(APIView):
             "invited_count": made.count(),
             "successful_referral_count": successful,
             "pending_referral_count": pending,
+            "waiting_booking_count": waiting_booking,
+            "reward_on_the_way_count": len(on_the_way),
+            "on_the_way_paise": sum(shown.wallet_paise for shown in on_the_way_rewards),
+            "on_the_way_coins": sum(shown.coins for shown in on_the_way_rewards),
+            "reward_hold_days": get_loyalty_settings().reward_hold_days,
+            "welcome_reward": welcome_reward_for(user),
             "current_tier_min": current,
             "next_tier_min": upcoming,
             "referrals_to_next_tier": (upcoming - successful) if upcoming else None,
@@ -178,15 +197,19 @@ class CustomerReferralAttributionsView(APIView):
         tags=["referral"],
     )
     def get(self, request: Request) -> Response:
-        attributions = ReferralAttribution.objects.filter(
-            referrer=cast(User, request.user)
-        ).select_related("referee")
-        return paginated(
-            request,
-            self,
-            attributions,
-            ReferralAttributionSerializer,
-            pagination=ReferralPagination,
+        user = cast(User, request.user)
+        attributions = (
+            ReferralAttribution.objects.filter(referrer=user)
+            .select_related("referee", "program_version")
+            .prefetch_related("rewards", "program_version__tiers")
+        )
+        paginator = ReferralPagination()
+        page = list(paginator.paginate_queryset(attributions, request, self) or [])
+        rewards = referrer_rewards_for(user, page)
+        return paginator.get_paginated_response(
+            ReferralAttributionSerializer(
+                page, many=True, context={"request": request, "rewards": rewards}
+            ).data
         )
 
 

@@ -1,16 +1,10 @@
 "use client";
 
-import { Button, formatMoney } from "@vsolve/ui";
+import { Button } from "@vsolve/ui";
 import { Check, Copy, Gift, MessageCircle, Share2 } from "lucide-react";
 import { useState } from "react";
+import { rewardLabel } from "../model";
 import type { CustomerReferralSummary } from "../queries";
-
-function rewardLabel(paise: number, coins: number): string {
-  const parts: string[] = [];
-  if (paise > 0) parts.push(formatMoney(paise));
-  if (coins > 0) parts.push(`${coins} V Coins`);
-  return parts.join(" + ");
-}
 
 interface ReferralShareCardProps {
   summary: CustomerReferralSummary;
@@ -148,10 +142,12 @@ export function ReferralShareCard({ summary }: ReferralShareCardProps) {
 
 function ReferralStats({ summary }: ReferralShareCardProps) {
   const earned = rewardLabel(summary.total_earned_paise, summary.total_earned_coins) || "0 V Coins";
+  const onTheWay = rewardLabel(summary.on_the_way_paise, summary.on_the_way_coins);
   const rows: Array<[string, number]> = [
     ["Friends invited", summary.invited_count],
     ["Successful referrals", summary.successful_referral_count],
-    ["Pending", summary.pending_referral_count],
+    ["Reward on the way", summary.reward_on_the_way_count],
+    ["Waiting for first booking", summary.waiting_booking_count],
   ];
   const nextTierCopy =
     summary.next_tier_min != null && summary.referrals_to_next_tier != null
@@ -172,6 +168,11 @@ function ReferralStats({ summary }: ReferralShareCardProps) {
         >
           {earned}
         </span>
+        {onTheWay ? (
+          <span className="mt-1 block text-xs font-semibold text-navy-900">
+            On the way: <span data-numeric>{onTheWay}</span>
+          </span>
+        ) : null}
       </div>
 
       <dl className="space-y-1.5 border-t border-[#eee9e0] pt-2.5 text-xs">

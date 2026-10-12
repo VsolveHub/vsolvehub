@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.71.0
+  version: 1.72.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -24890,6 +24890,20 @@ components:
           type: integer
         pending_referral_count:
           type: integer
+        waiting_booking_count:
+          type: integer
+        reward_on_the_way_count:
+          type: integer
+        on_the_way_paise:
+          type: integer
+        on_the_way_coins:
+          type: integer
+        reward_hold_days:
+          type: integer
+        welcome_reward:
+          allOf:
+          - $ref: '#/components/schemas/WelcomeReward'
+          nullable: true
         current_tier_min:
           type: integer
           nullable: true
@@ -24907,13 +24921,19 @@ components:
       - current_tier_min
       - invited_count
       - next_tier_min
+      - on_the_way_coins
+      - on_the_way_paise
       - pending_referral_count
       - referrals_to_next_tier
+      - reward_hold_days
+      - reward_on_the_way_count
       - share_message
       - share_url
       - successful_referral_count
       - total_earned_coins
       - total_earned_paise
+      - waiting_booking_count
+      - welcome_reward
     CustomerRequestedVisitSlots:
       type: object
       properties:
@@ -38278,10 +38298,24 @@ components:
           type: string
           format: date-time
           nullable: true
+        reward_wallet_paise:
+          type: integer
+          nullable: true
+          readOnly: true
+        reward_coins:
+          type: integer
+          nullable: true
+          readOnly: true
+        reward_is_estimate:
+          type: boolean
+          readOnly: true
       required:
       - attributed_at
       - id
       - referee_display
+      - reward_coins
+      - reward_is_estimate
+      - reward_wallet_paise
     ReferralAttributionPage:
       type: object
       properties:
@@ -44663,6 +44697,34 @@ components:
       required:
       - accepted
       - duplicate
+    WelcomeReward:
+      type: object
+      description: The new customer's own reward for joining with a code, while it
+        is on its way.
+      properties:
+        status:
+          $ref: '#/components/schemas/WelcomeRewardStatusEnum'
+        wallet_paise:
+          type: integer
+        coins:
+          type: integer
+        reward_available_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - coins
+      - reward_available_at
+      - status
+      - wallet_paise
+    WelcomeRewardStatusEnum:
+      enum:
+      - PENDING
+      - QUALIFIED
+      type: string
+      description: |-
+        * `PENDING` - PENDING
+        * `QUALIFIED` - QUALIFIED
     WorkEvidence:
       type: object
       description: |-

@@ -13,6 +13,7 @@ PENDING, so the referee's next completed booking can qualify instead.
 """
 
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from uuid import UUID
 
@@ -281,6 +282,47 @@ def _rewarded_this_month(referrer_id: UUID, now: datetime) -> int:
     ).count()
 
 
+@dataclass(frozen=True, slots=True)
+class RewardAmounts:
+    """What one referral pays each side, for the referrer's `n`th successful referral."""
+
+    tier: ReferralProgramRewardTier | None
+    pays_referrer: bool
+    pays_referee: bool
+    referrer_wallet_paise: int
+    referrer_coins: int
+    referee_wallet_paise: int
+    referee_coins: int
+
+
+def reward_for_payout(program: ReferralProgramVersion, n: int) -> RewardAmounts:
+    """The one place a referral's reward is worked out, for payouts and for the "on the way"
+    figures customers see, so the two cannot disagree."""
+
+    tiers = sorted(program.tiers.all(), key=lambda tier: tier.min_qualified_referrals)
+    reached = [tier for tier in tiers if tier.min_qualified_referrals <= n]
+    matching_tier = reached[-1] if reached else (tiers[0] if tiers else None)
+    sides = program.reward_sides
+    reward_sides = ReferralProgramVersion.RewardSides
+    return RewardAmounts(
+        tier=matching_tier,
+        pays_referrer=sides in (reward_sides.REFERRER_ONLY, reward_sides.BOTH),
+        pays_referee=sides in (reward_sides.REFEREE_ONLY, reward_sides.BOTH),
+        referrer_wallet_paise=matching_tier.referrer_wallet_paise if matching_tier else 0,
+        referrer_coins=matching_tier.referrer_coins_amount if matching_tier else 0,
+        referee_wallet_paise=(
+            matching_tier.referee_wallet_paise
+            if (matching_tier and matching_tier.referee_wallet_paise is not None)
+            else program.referee_wallet_paise
+        ),
+        referee_coins=(
+            matching_tier.referee_coins_amount
+            if (matching_tier and matching_tier.referee_coins_amount is not None)
+            else program.referee_coins_amount
+        ),
+    )
+
+
 def _pay_attribution(attribution: ReferralAttribution) -> bool:
     """Issue rewards for one QUALIFIED referral. Caller holds the row lock.
 
@@ -303,39 +345,27 @@ def _pay_attribution(attribution: ReferralAttribution) -> bool:
         ).count()
         + 1
     )
-    matching_tier = (
-        program.tiers.filter(min_qualified_referrals__lte=n)
-        .order_by("-min_qualified_referrals")
-        .first()
-    ) or program.tiers.order_by("min_qualified_referrals").first()
-
-    referrer_wallet_paise = matching_tier.referrer_wallet_paise if matching_tier else 0
-    referrer_coins = matching_tier.referrer_coins_amount if matching_tier else 0
-    referee_wallet_paise = (
-        matching_tier.referee_wallet_paise
-        if (matching_tier and matching_tier.referee_wallet_paise is not None)
-        else program.referee_wallet_paise
-    )
-    referee_coins = (
-        matching_tier.referee_coins_amount
-        if (matching_tier and matching_tier.referee_coins_amount is not None)
-        else program.referee_coins_amount
-    )
+    amounts = reward_for_payout(program, n)
+    matching_tier = amounts.tier
 
     sides = []
-    if program.reward_sides in (
-        ReferralProgramVersion.RewardSides.REFERRER_ONLY,
-        ReferralProgramVersion.RewardSides.BOTH,
-    ):
+    if amounts.pays_referrer:
         sides.append(
-            (ReferralReward.RewardSide.REFERRER, referrer, referrer_wallet_paise, referrer_coins)
+            (
+                ReferralReward.RewardSide.REFERRER,
+                referrer,
+                amounts.referrer_wallet_paise,
+                amounts.referrer_coins,
+            )
         )
-    if program.reward_sides in (
-        ReferralProgramVersion.RewardSides.REFEREE_ONLY,
-        ReferralProgramVersion.RewardSides.BOTH,
-    ):
+    if amounts.pays_referee:
         sides.append(
-            (ReferralReward.RewardSide.REFEREE, referee, referee_wallet_paise, referee_coins)
+            (
+                ReferralReward.RewardSide.REFEREE,
+                referee,
+                amounts.referee_wallet_paise,
+                amounts.referee_coins,
+            )
         )
 
     for side, recipient, wallet_paise, coins in sides:
@@ -527,3 +557,102 @@ def publish_referral_program(
             sort_order=index,
         )
     return program
+
+
+# --- What customers are shown before a reward lands ------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class ShownReward:
+    wallet_paise: int
+    coins: int
+    #: True until the reward is paid: the tier, a monthly cap or a refund can still change it.
+    is_estimate: bool
+
+
+def referrer_rewards_for(
+    referrer: User, attributions: list[ReferralAttribution]
+) -> dict[UUID, ShownReward | None]:
+    """The referrer's reward for each referral: what was paid, or what is expected.
+
+    Expected rewards follow the payout order the sweep uses — referrals already booked are paid
+    in the order their hold ends, then friends who have not booked yet — so each is priced at
+    the tier it is likely to land in. Not eligible and reversed referrals pay nothing.
+    """
+
+    rewarded = ReferralAttribution.objects.filter(
+        referrer=referrer, status=ReferralAttribution.Status.REWARDED
+    ).count()
+    queued = list(
+        ReferralAttribution.objects.filter(
+            referrer=referrer, status=ReferralAttribution.Status.QUALIFIED
+        )
+        .order_by("reward_available_at", "id")
+        .values_list("id", flat=True)
+    )
+    position = {attribution_id: index for index, attribution_id in enumerate(queued)}
+
+    shown: dict[UUID, ShownReward | None] = {}
+    for attribution in attributions:
+        status = attribution.status
+        if status == ReferralAttribution.Status.REWARDED:
+            paid = [
+                reward
+                for reward in attribution.rewards.all()
+                if reward.reward_side == ReferralReward.RewardSide.REFERRER
+            ]
+            shown[attribution.id] = ShownReward(
+                wallet_paise=sum(reward.wallet_paise for reward in paid),
+                coins=sum(reward.coins_amount for reward in paid),
+                is_estimate=False,
+            )
+            continue
+        if status == ReferralAttribution.Status.QUALIFIED:
+            n = rewarded + 1 + position.get(attribution.id, 0)
+        elif status == ReferralAttribution.Status.PENDING:
+            n = rewarded + len(queued) + 1
+        else:
+            shown[attribution.id] = None
+            continue
+        amounts = reward_for_payout(attribution.program_version, n)
+        shown[attribution.id] = ShownReward(
+            wallet_paise=amounts.referrer_wallet_paise if amounts.pays_referrer else 0,
+            coins=amounts.referrer_coins if amounts.pays_referrer else 0,
+            is_estimate=True,
+        )
+    return shown
+
+
+def welcome_reward_for(referee: User) -> dict[str, object] | None:
+    """The new customer's own reward for joining with a code, while it is still on its way.
+
+    `None` once paid (it is then in their wallet and coin history), when they did not join with
+    a code, when the referral did not qualify, or when the programme rewards only the referrer.
+    """
+
+    attribution = (
+        ReferralAttribution.objects.filter(
+            referee=referee,
+            status__in=(
+                ReferralAttribution.Status.PENDING,
+                ReferralAttribution.Status.QUALIFIED,
+            ),
+        )
+        .select_related("program_version")
+        .first()
+    )
+    if attribution is None:
+        return None
+    # A tier can change the new customer's reward too; it is the referrer's next payout's tier.
+    referrer_paid = ReferralAttribution.objects.filter(
+        referrer_id=attribution.referrer_id, status=ReferralAttribution.Status.REWARDED
+    ).count()
+    amounts = reward_for_payout(attribution.program_version, referrer_paid + 1)
+    if not amounts.pays_referee:
+        return None
+    return {
+        "status": attribution.status,
+        "wallet_paise": amounts.referee_wallet_paise,
+        "coins": amounts.referee_coins,
+        "reward_available_at": attribution.reward_available_at,
+    }

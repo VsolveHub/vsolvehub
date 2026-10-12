@@ -1,6 +1,8 @@
 "use client";
 
 import { ErrorState, Spinner, LoadMore } from "@vsolve/ui";
+import { WelcomeRewardBanner } from "@/features/referral/view/welcome-reward-banner";
+
 import { useWallet, useWalletTransactions } from "../queries";
 import { WalletHeroCard } from "./wallet-hero-card";
 import { WalletTopUpForm } from "./wallet-top-up-form";
@@ -35,6 +37,7 @@ export function WalletScreen() {
 
   return (
     <div className="space-y-6">
+      <WelcomeRewardBanner />
       <WalletHeroCard wallet={wallet} />
       <WalletTopUpForm wallet={wallet} />
       <WalletTransactionList transactions={transactions} />

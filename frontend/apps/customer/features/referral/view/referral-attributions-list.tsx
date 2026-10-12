@@ -2,10 +2,13 @@
 
 import { Badge , formatDate} from "@vsolve/ui";
 import { Gift, Users } from "lucide-react";
+import { holdExplanation, referralRewardLine } from "../model";
 import type { ReferralAttribution } from "../queries";
 
 interface ReferralAttributionsListProps {
   attributions: ReferralAttribution[];
+  /** Days a reward waits after the friend's booking; explained under the list. */
+  holdDays: number;
 }
 
 function getReferralStatusMeta(attr: ReferralAttribution) {
@@ -18,11 +21,11 @@ function getReferralStatusMeta(attr: ReferralAttribution) {
       };
     case "QUALIFIED":
       return {
-        label: "Booking completed",
+        label: "Reward on the way",
         tone: "info" as const,
         description: attr.reward_available_at
-          ? `Reward on ${formatDate(attr.reward_available_at)}`
-          : "Reward coming soon",
+          ? `Booked · reward on ${formatDate(attr.reward_available_at)}`
+          : "Booked · reward coming soon",
       };
     case "INELIGIBLE":
       return {
@@ -39,14 +42,14 @@ function getReferralStatusMeta(attr: ReferralAttribution) {
     case "PENDING":
     default:
       return {
-        label: "Pending booking",
+        label: "Waiting for booking",
         tone: "warning" as const,
-        description: "Waiting for their first completed booking",
+        description: "Joined · no completed booking yet",
       };
   }
 }
 
-export function ReferralAttributionsList({ attributions }: ReferralAttributionsListProps) {
+export function ReferralAttributionsList({ attributions, holdDays }: ReferralAttributionsListProps) {
   if (attributions.length === 0) {
     return (
       <div className="rounded-card border border-[#e7e2da] bg-white p-8 text-center shadow-sm">
@@ -70,6 +73,7 @@ export function ReferralAttributionsList({ attributions }: ReferralAttributionsL
       <div className="divide-y divide-[#eee9e0]">
         {attributions.map((attr) => {
           const meta = getReferralStatusMeta(attr);
+          const reward = referralRewardLine(attr);
           const formattedDate = formatDate(attr.attributed_at || "");
 
           return (
@@ -93,12 +97,26 @@ export function ReferralAttributionsList({ attributions }: ReferralAttributionsL
                   <span className="block text-xs text-text-muted mt-0.5">
                     Invited on {formattedDate} • {meta.description}
                   </span>
+                  {reward ? (
+                    <span
+                      className={`mt-1 block text-xs font-semibold ${
+                        attr.status === "REWARDED" ? "text-emerald-700" : "text-navy-900"
+                      }`}
+                    >
+                      {attr.status === "REWARDED" ? "You got " : "You get "}
+                      {reward}
+                      {attr.reward_is_estimate && attr.status !== "REWARDED" ? " *" : ""}
+                    </span>
+                  ) : null}
                 </div>
               </div>
             </div>
           );
         })}
       </div>
+      <p className="border-t border-[#eee9e0] px-6 py-3 text-[11px] text-text-secondary">
+        {holdExplanation(holdDays)} * Amounts on the way follow your reward tier when they are paid.
+      </p>
     </div>
   );
 }

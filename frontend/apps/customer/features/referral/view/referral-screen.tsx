@@ -5,6 +5,7 @@ import { useCustomerReferral, useReferralAttributions } from "../queries";
 import { ReferralAttributionsList } from "./referral-attributions-list";
 import { ReferralShareCard } from "./referral-share-card";
 import { ReferralTiersStepper } from "./referral-tiers-stepper";
+import { WelcomeRewardBanner } from "./welcome-reward-banner";
 
 export function ReferralScreen() {
   const referralQuery = useCustomerReferral();
@@ -35,9 +36,10 @@ export function ReferralScreen() {
 
   return (
     <div className="space-y-6">
+      <WelcomeRewardBanner />
       <ReferralShareCard summary={summary} />
       <ReferralTiersStepper summary={summary} />
-      <ReferralAttributionsList attributions={attributions} />
+      <ReferralAttributionsList attributions={attributions} holdDays={summary.reward_hold_days} />
       <LoadMore
         hasMore={attributionsQuery.hasMore}
         loading={attributionsQuery.loadingMore}

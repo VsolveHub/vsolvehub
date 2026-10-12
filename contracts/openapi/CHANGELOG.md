@@ -1,5 +1,21 @@
 # API Contract Changelog
 
+## 1.72.0 - Referral rewards on their way
+
+Additive. Customers can see what a referral will pay and when, before it lands.
+
+- `ReferralAttribution` adds `reward_wallet_paise`, `reward_coins` (nullable) and
+  `reward_is_estimate`. Paid referrals show what was paid; pending and booked ones show what is
+  expected at the tier they are likely to be paid in (`reward_is_estimate: true`). `null` for not
+  eligible and reversed referrals.
+- `CustomerReferralSummary` adds `waiting_booking_count` (joined, no completed booking yet),
+  `reward_on_the_way_count`, `on_the_way_paise`, `on_the_way_coins` (booked, reward held),
+  `reward_hold_days`, and `welcome_reward` (`WelcomeReward`, nullable): the signed-in customer's
+  own reward for joining with a code — `{status, wallet_paise, coins, reward_available_at}` —
+  until it is paid.
+- Payout amounts are unchanged; payouts and these figures now share one calculation.
+- Removed: none. Renamed: none.
+
 ## 1.71.0 - Cancellation rules; pagination
 
 **Cancellations.**

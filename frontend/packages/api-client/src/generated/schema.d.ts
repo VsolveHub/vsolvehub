@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.71.0)
- * Checksum: ce04691c339466b0
+ * Source:   contracts/openapi/v1.yaml (version 1.72.0)
+ * Checksum: b82b25d9faf70e34
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -10125,6 +10125,12 @@ export interface components {
             invited_count: number;
             successful_referral_count: number;
             pending_referral_count: number;
+            waiting_booking_count: number;
+            reward_on_the_way_count: number;
+            on_the_way_paise: number;
+            on_the_way_coins: number;
+            reward_hold_days: number;
+            welcome_reward: components["schemas"]["WelcomeReward"] | null;
             current_tier_min: number | null;
             next_tier_min: number | null;
             referrals_to_next_tier: number | null;
@@ -15389,6 +15395,9 @@ export interface components {
             reward_available_at?: string | null;
             /** Format: date-time */
             rewarded_at?: string | null;
+            readonly reward_wallet_paise: number | null;
+            readonly reward_coins: number | null;
+            readonly reward_is_estimate: boolean;
         };
         ReferralAttributionPage: {
             /** Format: uri */
@@ -18056,6 +18065,20 @@ export interface components {
             readonly accepted: boolean;
             readonly duplicate: boolean;
         };
+        /** @description The new customer's own reward for joining with a code, while it is on its way. */
+        WelcomeReward: {
+            status: components["schemas"]["WelcomeRewardStatusEnum"];
+            wallet_paise: number;
+            coins: number;
+            /** Format: date-time */
+            reward_available_at: string | null;
+        };
+        /**
+         * @description * `PENDING` - PENDING
+         *     * `QUALIFIED` - QUALIFIED
+         * @enum {string}
+         */
+        WelcomeRewardStatusEnum: "PENDING" | "QUALIFIED";
         /**
          * @description Evidence metadata only.
          *

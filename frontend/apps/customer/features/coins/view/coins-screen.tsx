@@ -1,6 +1,8 @@
 "use client";
 
 import { ErrorState, LoadMore, Spinner } from "@vsolve/ui";
+import { WelcomeRewardBanner } from "@/features/referral/view/welcome-reward-banner";
+
 import { useCustomerCoins, useCoinTransactions } from "../queries";
 import { CoinsBucketsCard } from "./coins-buckets-card";
 import { CoinsBurnExplainer } from "./coins-burn-explainer";
@@ -35,6 +37,7 @@ export function CoinsScreen() {
 
   return (
     <div className="space-y-6">
+      <WelcomeRewardBanner />
       <CoinsBucketsCard summary={summary} />
       <CoinsBurnExplainer summary={summary} />
       <CoinsTransactionList transactions={transactions} />
