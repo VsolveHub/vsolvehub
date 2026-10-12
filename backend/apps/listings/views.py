@@ -406,12 +406,27 @@ class ApplicationReportView(APIView):
 
 class MyApplicationsView(APIView):
     @extend_schema(
-        parameters=[STATUS_PARAMETER, CURSOR_PARAMETER],
+        parameters=[
+            STATUS_PARAMETER,
+            OpenApiParameter(
+                "listing",
+                OpenApiTypes.UUID,
+                OpenApiParameter.QUERY,
+                description="Only applications to this job, e.g. to show 'You applied'.",
+            ),
+            CURSOR_PARAMETER,
+        ],
         responses=page_serializer(ApplicationSerializer, "ApplicationPage"),
     )
     def get(self, request: Any) -> Response:
         rows = Application.objects.select_related("listing").filter(applicant=request.user)
         rows = filter_statuses(rows, request, Application.Status.values)
+        listing_id = (request.query_params.get("listing") or "").strip()
+        if listing_id:
+            try:
+                rows = rows.filter(listing_id=UUID(listing_id))
+            except ValueError as exc:
+                raise ValidationError({"listing": ["That is not a job id."]}) from exc
         return paginated(request, self, rows, ApplicationSerializer)
 
 
@@ -710,12 +725,28 @@ class OpsListingCollectionView(APIView):
                 OpenApiParameter.QUERY,
                 description="e.g. PENDING for the review queue.",
             ),
+            STATUS_PARAMETER,
+            OpenApiParameter(
+                "q",
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                description="Title, location, contact phone or email.",
+            ),
             CURSOR_PARAMETER,
         ],
         responses=page_serializer(PartnerListingSerializer, "OpsListingPage"),
     )
     def get(self, request: Any) -> Response:
         rows = Listing.objects.select_related("poster", "variant", "variant__service")
+        rows = filter_statuses(rows, request, Listing.Status.values)
+        query = (request.query_params.get("q") or "").strip()
+        if query:
+            rows = rows.filter(
+                Q(title__icontains=query)
+                | Q(location_text__icontains=query)
+                | Q(contact_phone__icontains=query)
+                | Q(contact_email__icontains=query)
+            )
         wanted = (request.query_params.get("moderation_status") or "").strip().upper()
         if wanted:
             if wanted not in Listing.ModerationStatus.values:

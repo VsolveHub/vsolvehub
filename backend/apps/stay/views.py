@@ -639,7 +639,7 @@ class PartnerEnquiryCollectionView(APIView):
     permission_classes = (IsPartnerUser,)
 
     @extend_schema(
-        parameters=[CURSOR_PARAMETER],
+        parameters=[STATUS_PARAMETER, CURSOR_PARAMETER],
         responses=page_serializer(PartnerStayEnquirySerializer, "PartnerStayEnquiryPage"),
     )
     def get(self, request: Any) -> Response:
@@ -647,6 +647,7 @@ class PartnerEnquiryCollectionView(APIView):
         rows = StayEnquiry.objects.filter(property__host=partner).select_related(
             "property", "unit", "customer"
         )
+        rows = filter_statuses(rows, request, StayEnquiry.Status.values)
         return paginated(request, self, rows, PartnerStayEnquirySerializer)
 
 
@@ -796,7 +797,7 @@ class PartnerReservationCollectionView(APIView):
     permission_classes = (IsPartnerUser,)
 
     @extend_schema(
-        parameters=[CURSOR_PARAMETER],
+        parameters=[STATUS_PARAMETER, CURSOR_PARAMETER],
         responses=page_serializer(StayReservationSerializer, "PartnerStayReservationPage"),
     )
     def get(self, request: Any) -> Response:
@@ -804,6 +805,7 @@ class PartnerReservationCollectionView(APIView):
         rows = StayReservation.objects.filter(property__host=partner).select_related(
             "property", "unit", "customer"
         )
+        rows = filter_statuses(rows, request, StayReservation.Status.values)
         return paginated(request, self, rows, StayReservationSerializer)
 
 

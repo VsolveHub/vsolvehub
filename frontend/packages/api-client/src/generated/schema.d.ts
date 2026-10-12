@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.71.0)
- * Checksum: 201b572f2fbbaef1
+ * Checksum: ce04691c339466b0
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -23087,6 +23087,8 @@ export interface operations {
             query?: {
                 /** @description Opaque page cursor from `next`. */
                 cursor?: string;
+                /** @description One state, or several separated by commas. */
+                status?: string;
             };
             header?: never;
             path?: never;
@@ -23334,6 +23336,8 @@ export interface operations {
             query?: {
                 /** @description Opaque page cursor from `next`. */
                 cursor?: string;
+                /** @description Only applications to this job, e.g. to show 'You applied'. */
+                listing?: string;
                 /** @description One state, or several separated by commas. */
                 status?: string;
             };
@@ -27546,6 +27550,10 @@ export interface operations {
                 cursor?: string;
                 /** @description e.g. PENDING for the review queue. */
                 moderation_status?: string;
+                /** @description Title, location, contact phone or email. */
+                q?: string;
+                /** @description One state, or several separated by commas. */
+                status?: string;
             };
             header?: never;
             path?: never;
@@ -28049,6 +28057,7 @@ export interface operations {
                 /** @description Opaque page cursor from `next`. */
                 cursor?: string;
                 q?: string;
+                /** @description One state, or several separated by commas. */
                 status?: string;
             };
             header?: never;
@@ -32268,6 +32277,7 @@ export interface operations {
             query?: {
                 /** @description Opaque page cursor from `next`. */
                 cursor?: string;
+                /** @description One state, or several separated by commas. */
                 status?: string;
             };
             header?: never;
@@ -32507,6 +32517,8 @@ export interface operations {
             query?: {
                 /** @description Opaque page cursor from `next`. */
                 cursor?: string;
+                /** @description One state, or several separated by commas. */
+                status?: string;
             };
             header?: never;
             path?: never;
@@ -32917,6 +32929,8 @@ export interface operations {
             query?: {
                 /** @description Opaque page cursor from `next`. */
                 cursor?: string;
+                /** @description One state, or several separated by commas. */
+                status?: string;
             };
             header?: never;
             path?: never;

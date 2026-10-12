@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
+import { usePagedList } from "@vsolve/query";
+import { LoadMore } from "@vsolve/ui";
 import { AlertTriangle, RefreshCw, ShieldAlert } from "lucide-react";
 
 import {
-  fetchOpsListings,
+  fetchOpsListingsPage,
   moderateOpsListing,
   reinstateOpsListing,
   removeOpsListing,
@@ -20,6 +22,13 @@ import {
   MetricsRow,
   ModerationDialog,
 } from "@/features/listings/view";
+import { useDebounced } from "@/features/shared/use-debounced";
+
+/** "50+" when the first page is full and the server has more. */
+function pageCount(page: { results: unknown[]; next: string | null } | undefined): number | string {
+  if (!page) return 0;
+  return page.next ? `${page.results.length}+` : page.results.length;
+}
 
 export default function AdminListingsPage() {
   const queryClient = useQueryClient();
@@ -31,16 +40,19 @@ export default function AdminListingsPage() {
   const [actionReason, setActionReason] = useState("");
   const [isApproving, setIsApproving] = useState(true);
 
-  const {
-    data: listings = [],
-    isLoading: loading,
-    error,
-    refetch,
-    isFetching,
-  } = useQuery({
-    queryKey: ["ops-listings"],
-    queryFn: fetchOpsListings,
-  });
+  const q = useDebounced(searchQuery.trim());
+  const listingsPage = usePagedList(["ops-listings", filter, q], (cursor) =>
+    fetchOpsListingsPage(cursor, filter, q),
+  );
+  const { items: listings, isLoading: loading, error, refetch } = listingsPage;
+  const isFetching = loading || listingsPage.loadingMore;
+  // Counts for the tiles: the first page of each queue, so a full page reads "50+".
+  const [totalPage, pendingPage, activePage, removedPage] = useQueries({
+    queries: ["ALL", "PENDING", "ACTIVE", "REMOVED"].map((name) => ({
+      queryKey: ["ops-listings", name, "", "count"],
+      queryFn: () => fetchOpsListingsPage(undefined, name, ""),
+    })),
+  }).map((query) => query.data);
 
   const invalidate = () => {
     closeModal();
@@ -87,36 +99,10 @@ export default function AdminListingsPage() {
     }
   }
 
-  const filteredListings = listings.filter((item) => {
-    if (filter === "PENDING") {
-      if (item.moderation_status !== "PENDING" && item.public_state !== "PENDING_REVIEW") return false;
-    } else if (filter === "ACTIVE") {
-      if (item.status !== "PUBLISHED") return false;
-    } else if (filter === "REMOVED") {
-      if (item.status !== "REMOVED" && item.moderation_status !== "REMOVED") return false;
-    } else if (filter === "DRAFT") {
-      if ((item.public_state || item.status) !== "DRAFT") return false;
-    } else if (filter === "CLOSED") {
-      if (!["CLOSED", "EXPIRED"].includes(item.status)) return false;
-    }
-
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      item.title.toLowerCase().includes(q) ||
-      (item.location_text || "").toLowerCase().includes(q) ||
-      (item.contact_phone || "").toLowerCase().includes(q) ||
-      (item.contact_email || "").toLowerCase().includes(q)
-    );
-  });
-
-  const pendingCount = listings.filter(
-    (l) => l.moderation_status === "PENDING" || l.public_state === "PENDING_REVIEW",
-  ).length;
-  const activeCount = listings.filter((l) => l.status === "PUBLISHED").length;
-  const removedCount = listings.filter(
-    (l) => l.status === "REMOVED" || l.moderation_status === "REMOVED",
-  ).length;
+  const filteredListings = listings;
+  const pendingCount = pageCount(pendingPage);
+  const activeCount = pageCount(activePage);
+  const removedCount = pageCount(removedPage);
 
   const submitting =
     moderateMutation.isPending || removeMutation.isPending || reinstateMutation.isPending;
@@ -167,7 +153,7 @@ export default function AdminListingsPage() {
       )}
 
       <MetricsRow
-        totalCount={listings.length}
+        totalCount={pageCount(totalPage)}
         pendingCount={pendingCount}
         activeCount={activeCount}
         removedCount={removedCount}
@@ -206,6 +192,12 @@ export default function AdminListingsPage() {
           setActionReason("Verified compliant by operations");
           setModalAction("REINSTATE");
         }}
+      />
+      <LoadMore
+        hasMore={listingsPage.hasMore}
+        loading={listingsPage.loadingMore}
+        onLoadMore={listingsPage.loadMore}
+        label="Load more listings"
       />
 
       <ListingDetailDialog

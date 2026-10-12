@@ -48,6 +48,8 @@ export function fetchListings(
     salary_band?: string;
     min_salary?: number;
     max_salary?: number;
+    limit?: number;
+    offset?: number;
   } = {},
 ) {
   return request(() =>
@@ -64,6 +66,8 @@ export function fetchListings(
           salary_band: filters.salary_band,
           min_salary: filters.min_salary,
           max_salary: filters.max_salary,
+          limit: filters.limit,
+          offset: filters.offset,
         },
       },
     }),
@@ -95,8 +99,29 @@ export function fetchListing(key: string) {
   );
 }
 
-export function fetchMyApplications() {
-  return request(() => getApiClient().GET("/api/v1/my/listing-applications"));
+/** "My applications" tabs as the application states the server filters on. */
+export const APPLICATION_TAB_STATUSES: Record<string, string> = {
+  ALL: "",
+  ACTIVE: "SUBMITTED,UNDER_REVIEW,SHORTLISTED,CONTACTED",
+  SHORTLISTED: "SHORTLISTED",
+  CLOSED: "REJECTED,WITHDRAWN,EXPIRED",
+};
+
+export function fetchMyApplicationsPage(
+  cursor?: string,
+  filters: { listing?: string; status?: string } = {},
+) {
+  return request(() =>
+    getApiClient().GET("/api/v1/my/listing-applications", {
+      params: {
+        query: {
+          ...(cursor ? { cursor } : {}),
+          ...(filters.listing ? { listing: filters.listing } : {}),
+          ...(filters.status ? { status: filters.status } : {}),
+        },
+      },
+    }),
+  );
 }
 
 export function withdrawApplication(applicationId: string) {

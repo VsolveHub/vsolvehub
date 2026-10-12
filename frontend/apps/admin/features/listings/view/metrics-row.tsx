@@ -1,10 +1,11 @@
 import { BriefcaseBusiness, CheckCircle2, Clock, ShieldAlert } from "lucide-react";
 
 export interface MetricsRowProps {
-  totalCount: number;
-  pendingCount: number;
-  activeCount: number;
-  removedCount: number;
+  /** A number, or "50+" when only the first page was counted. */
+  totalCount: number | string;
+  pendingCount: number | string;
+  activeCount: number | string;
+  removedCount: number | string;
   onSelectFilter: (filter: string) => void;
 }
 
@@ -30,14 +31,14 @@ export function MetricsRow({
       <div
         onClick={() => onSelectFilter("PENDING")}
         className={`flex cursor-pointer items-center gap-4 rounded-xl border p-4 shadow-sm transition-all ${
-          pendingCount > 0
+          Number.parseInt(String(pendingCount), 10) > 0
             ? "border-amber-300 bg-amber-50/70 hover:bg-amber-100/50"
             : "border-slate-200 bg-white hover:bg-slate-50"
         }`}
       >
         <div
           className={`rounded-lg p-3 ${
-            pendingCount > 0 ? "bg-amber-200 text-amber-900" : "bg-slate-100 text-slate-600"
+            Number.parseInt(String(pendingCount), 10) > 0 ? "bg-amber-200 text-amber-900" : "bg-slate-100 text-slate-600"
           }`}
         >
           <Clock className="size-6" />
@@ -45,7 +46,7 @@ export function MetricsRow({
         <div>
           <div className="flex items-center gap-2">
             <span className="text-2xl font-bold text-slate-900">{pendingCount}</span>
-            {pendingCount > 0 && (
+            {Number.parseInt(String(pendingCount), 10) > 0 && (
               <span className="rounded-full bg-amber-500 px-2 py-0.5 text-xs font-bold text-white">
                 Action Needed
               </span>

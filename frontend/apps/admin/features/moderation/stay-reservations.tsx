@@ -1,7 +1,7 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { friendlyErrorMessage } from "@vsolve/query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { friendlyErrorMessage, usePagedList } from "@vsolve/query";
 import {
   Badge,
   Button,
@@ -10,19 +10,22 @@ import {
   EmptyState,
   Field,
   Input,
+  LoadMore,
   Select,
   Textarea,
   formatDate,
   formatMoney,
 } from "@vsolve/ui";
 import { Phone } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
-import { STAY_STATUS_LABEL, canCancelStay, matchesSearch } from "./model/bookings";
+import { useDebounced } from "@/features/shared/use-debounced";
+
+import { STAY_STATUS_LABEL, canCancelStay } from "./model/bookings";
 import {
   cancelOpsStayReservation,
-  fetchOpsStayEnquiries,
-  fetchOpsStayReservations,
+  fetchOpsStayEnquiriesPage,
+  fetchOpsStayReservationsPage,
   type OpsStayReservation,
 } from "./queries";
 
@@ -48,27 +51,11 @@ export function StayReservations() {
   const [cancelling, setCancelling] = useState<OpsStayReservation | null>(null);
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const reservations = useQuery({
-    queryKey: ["ops-stays-reservations"],
-    queryFn: fetchOpsStayReservations,
-  });
-
-  const rows = useMemo(
-    () =>
-      [...(reservations.data ?? [])]
-        .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""))
-        .filter((row) => !status || row.status === status)
-        .filter((row) =>
-          matchesSearch(search, [
-            row.id,
-            row.property_title,
-            row.unit_name,
-            row.customer_name,
-            row.customer_phone,
-          ]),
-        ),
-    [reservations.data, search, status],
+  const q = useDebounced(search.trim());
+  const reservations = usePagedList(["ops-stays-reservations", status, q], (cursor) =>
+    fetchOpsStayReservationsPage(cursor, { status: status || undefined, q: q || undefined }),
   );
+  const rows = reservations.items;
 
   const cancel = useMutation({
     mutationFn: ({ id, note }: { id: string; note: string }) => cancelOpsStayReservation(id, note),
@@ -161,6 +148,11 @@ export function StayReservations() {
           </li>
         ))}
       </ul>
+      <LoadMore
+        hasMore={reservations.hasMore}
+        loading={reservations.loadingMore}
+        onLoadMore={reservations.loadMore}
+      />
 
       <ConfirmAction
         open={cancelling !== null}
@@ -190,7 +182,9 @@ export function StayReservations() {
 
 /** Guest questions to hosts. Read-only: hosts answer them. */
 export function StayEnquiries() {
-  const enquiries = useQuery({ queryKey: ["ops-stays-enquiries"], queryFn: fetchOpsStayEnquiries });
+  const enquiries = usePagedList(["ops-stays-enquiries"], (cursor) =>
+    fetchOpsStayEnquiriesPage(cursor),
+  );
   return (
     <section className="flex flex-col gap-3">
       <p className="text-sm text-text-secondary">
@@ -200,11 +194,11 @@ export function StayEnquiries() {
       {enquiries.error ? (
         <p className="text-sm text-danger-text">{friendlyErrorMessage(enquiries.error)}</p>
       ) : null}
-      {enquiries.data && enquiries.data.length === 0 ? (
+      {!enquiries.isLoading && enquiries.items.length === 0 ? (
         <EmptyState title="No enquiries" description="Guest questions show up here." />
       ) : null}
       <ul className="flex flex-col gap-3">
-        {enquiries.data?.map((enquiry) => (
+        {enquiries.items.map((enquiry) => (
           <li key={enquiry.id}>
             <Card>
               <div className="flex flex-wrap items-start justify-between gap-2">
@@ -229,6 +223,7 @@ export function StayEnquiries() {
           </li>
         ))}
       </ul>
+      <LoadMore hasMore={enquiries.hasMore} loading={enquiries.loadingMore} onLoadMore={enquiries.loadMore} />
     </section>
   );
 }

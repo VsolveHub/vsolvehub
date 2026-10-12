@@ -1,6 +1,6 @@
 "use client";
 
-import { ErrorState, Spinner } from "@vsolve/ui";
+import { ErrorState, Spinner, LoadMore } from "@vsolve/ui";
 import { useWallet, useWalletTransactions } from "../queries";
 import { WalletHeroCard } from "./wallet-hero-card";
 import { WalletTopUpForm } from "./wallet-top-up-form";
@@ -31,13 +31,19 @@ export function WalletScreen() {
   }
 
   const wallet = walletQuery.data;
-  const transactions = txnsQuery.data ?? [];
+  const transactions = txnsQuery.items;
 
   return (
     <div className="space-y-6">
       <WalletHeroCard wallet={wallet} />
       <WalletTopUpForm wallet={wallet} />
       <WalletTransactionList transactions={transactions} />
+      <LoadMore
+        hasMore={txnsQuery.hasMore}
+        loading={txnsQuery.loadingMore}
+        onLoadMore={txnsQuery.loadMore}
+        label="Show older transactions"
+      />
     </div>
   );
 }

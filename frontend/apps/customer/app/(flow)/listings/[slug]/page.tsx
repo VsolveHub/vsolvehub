@@ -17,7 +17,7 @@ import {
 } from "@/features/listings/model";
 import {
   fetchListing,
-  fetchMyApplications,
+  fetchMyApplicationsPage,
   reportListing,
   submitListingApplication,
 } from "@/features/listings/queries";
@@ -79,14 +79,15 @@ export default function ListingDetailPage() {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["saved-jobs"] }),
   });
 
+  // Only this job's applications: asking for all of them would miss one on a later page.
   const myApplicationsQuery = useQuery({
-    queryKey: ["my-listing-applications"],
-    queryFn: fetchMyApplications,
-    enabled: session.isAuthenticated,
+    queryKey: ["my-listing-applications", "for", listingId],
+    queryFn: () => fetchMyApplicationsPage(undefined, { listing: listingId }),
+    enabled: session.isAuthenticated && Boolean(listingId),
   });
 
   const activeApplication = (() => {
-    const rows = (myApplicationsQuery.data ?? []) as Array<{
+    const rows = (myApplicationsQuery.data?.results ?? []) as Array<{
       listing?: string;
       status?: string;
       created_at?: string;

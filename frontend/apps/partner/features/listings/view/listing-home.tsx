@@ -1,5 +1,6 @@
 "use client";
 
+import { fetchAllPages } from "@vsolve/query";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { friendlyErrorMessage } from "@vsolve/query";
 import { Badge, Card, Spinner, buttonStyles } from "@vsolve/ui";
@@ -8,7 +9,7 @@ import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
 import {
-  fetchListingApplications,
+  fetchListingApplicationsPage,
   fetchListingHome,
   fetchPartnerListings,
   type PartnerApplication,
@@ -67,7 +68,15 @@ export function ListingHome() {
   const applications = useQueries({
     queries: withApplicants.map((listing) => ({
       queryKey: ["partner-listings", "applications", listing.id],
-      queryFn: () => fetchListingApplications(listing.id),
+      // Only applicants who still need the employer, all of their pages.
+      queryFn: () =>
+        fetchAllPages((cursor) =>
+          fetchListingApplicationsPage(
+            listing.id,
+            cursor,
+            "SUBMITTED,UNDER_REVIEW,SHORTLISTED,INTERVIEW",
+          ),
+        ),
     })),
   });
 

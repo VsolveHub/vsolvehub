@@ -4,6 +4,8 @@ export { cn } from "./cn";
 export { Button, buttonStyles } from "./button";
 export type { ButtonProps } from "./button";
 export { Spinner } from "./spinner";
+export { LoadMore } from "./load-more";
+export type { LoadMoreProps } from "./load-more";
 
 // Form controls
 export { Field, useFieldContext, controlChrome } from "./field";

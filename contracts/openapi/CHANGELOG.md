@@ -23,22 +23,22 @@ partners, 50 for Operations. A blank or stale `cursor` → `400 cursor_invalid`.
 | `GET /customer/wallet/transactions/` | `WalletTransactionPage` | — (was limit/offset at runtime while the contract said array) |
 | `GET /customer/coins/transactions/` | `CoinTransactionPage` | — |
 | `GET /customer/referral/attributions/` | `ReferralAttributionPage` | — (was capped at 100) |
-| `GET /me/rentals` | `RentalBookingPage` | — |
+| `GET /me/rentals` | `RentalBookingPage` | `status` (comma list) |
 | `GET /me/stay-reservations` | `StayReservationPage` | — |
 | `GET /me/stay-enquiries` | `StayEnquiryPage` | — |
 | `GET /me/stay-visits` | `StayVisitPage` | — |
-| `GET /my/listing-applications` | `ApplicationPage` | `status` |
-| `GET /partner/rentals/bookings` | `PartnerRentalBookingPage` | `status` (unknown → 400) |
-| `GET /partner/stays/reservations` | `PartnerStayReservationPage` | — |
-| `GET /partner/stays/enquiries` | `PartnerStayEnquiryPage` | — |
+| `GET /my/listing-applications` | `ApplicationPage` | `status`, `listing` |
+| `GET /partner/rentals/bookings` | `PartnerRentalBookingPage` | `status` (comma list; unknown → 400) |
+| `GET /partner/stays/reservations` | `PartnerStayReservationPage` | `status` (comma list) |
+| `GET /partner/stays/enquiries` | `PartnerStayEnquiryPage` | `status` (comma list) |
 | `GET /partner/stays/visits` | `PartnerStayVisitPage` | `status` (comma list); ordered by visit date |
 | `GET /partner/listings/{listing_id}/applications` | `PartnerApplicationPage` | `status` |
 | `GET /ops/rentals` | `RentalAssetPage` | `moderation_status` |
-| `GET /ops/rentals/bookings` | `OpsRentalBookingPage` | `status`, `q` (was capped at 200) |
+| `GET /ops/rentals/bookings` | `OpsRentalBookingPage` | `status` (comma list), `q` (was capped at 200) |
 | `GET /ops/stays` | `PropertyPage` | `moderation_status` |
 | `GET /ops/stays/reservations` | `OpsStayReservationPage` | `status`, `q` |
 | `GET /ops/stays/enquiries` | `OpsStayEnquiryPage` | — |
-| `GET /ops/listings` | `OpsListingPage` | `moderation_status` |
+| `GET /ops/listings` | `OpsListingPage` | `moderation_status`, `status` (comma list), `q` |
 | `GET /ops/referral/attributions/` | `OpsReferralAttributionPage` | — (was capped at 200) |
 
 `status` accepts one state or several separated by commas where noted.

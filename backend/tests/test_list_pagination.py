@@ -147,3 +147,28 @@ def test_rental_browse_is_never_unbounded(rental_world):  # noqa: F811
     rest = client.get("/api/v1/rentals", {"offset": BROWSE_PAGE_SIZE}).json()
     assert {row["id"] for row in first}.isdisjoint({row["id"] for row in rest})
     assert len(first) + len(rest) == BROWSE_PAGE_SIZE + EXTRA
+
+
+@pytest.mark.django_db
+def test_ops_listings_filter_by_status_on_the_server() -> None:
+    client = _ops_client()
+    ok = client.get("/api/v1/ops/listings", {"status": "PUBLISHED,DRAFT", "q": "plumber"})
+    assert ok.status_code == HTTPStatus.OK
+    assert ok.data["results"] == []
+    assert client.get("/api/v1/ops/listings", {"status": "NOPE"}).status_code == (
+        HTTPStatus.BAD_REQUEST
+    )
+
+
+@pytest.mark.django_db
+def test_my_applications_filter_by_job() -> None:
+    user = User.objects.create_user(phone_number="+919876599003")
+    client = APIClient()
+    client.force_authenticate(user)
+    none = client.get(
+        "/api/v1/my/listing-applications", {"listing": "00000000-0000-0000-0000-000000000000"}
+    )
+    assert none.status_code == HTTPStatus.OK
+    assert none.data["results"] == []
+    bad = client.get("/api/v1/my/listing-applications", {"listing": "nope"})
+    assert bad.status_code == HTTPStatus.BAD_REQUEST

@@ -101,14 +101,20 @@ export function createStayEnquiry(payload: {
   );
 }
 
-export function fetchMyStayEnquiries() {
-  return request(() => getApiClient().GET("/api/v1/me/stay-enquiries"));
+export function fetchMyStayEnquiriesPage(cursor?: string) {
+  return request(() =>
+    getApiClient().GET("/api/v1/me/stay-enquiries", { params: { query: cursor ? { cursor } : {} } }),
+  );
 }
 
 export type StayReservation = Schemas["StayReservation"];
 
-export function fetchMyStayReservations() {
-  return request(() => getApiClient().GET("/api/v1/me/stay-reservations"));
+export function fetchMyStayReservationsPage(cursor?: string) {
+  return request(() =>
+    getApiClient().GET("/api/v1/me/stay-reservations", {
+      params: { query: cursor ? { cursor } : {} },
+    }),
+  );
 }
 
 export function cancelStayEnquiry(enquiryId: string) {
@@ -139,8 +145,10 @@ export function canCancelStayReservation(status?: string): boolean {
 
 export type StayVisit = Schemas["StayVisit"];
 
-export function fetchMyStayVisits() {
-  return request(() => getApiClient().GET("/api/v1/me/stay-visits"));
+export function fetchMyStayVisitsPage(cursor?: string) {
+  return request(() =>
+    getApiClient().GET("/api/v1/me/stay-visits", { params: { query: cursor ? { cursor } : {} } }),
+  );
 }
 
 export function fetchVisitSlots(propertyId: string) {

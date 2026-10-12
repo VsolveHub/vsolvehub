@@ -1,4 +1,5 @@
 import { request, type Schemas } from "@vsolve/api-client";
+import type { Page } from "@vsolve/query";
 
 import { getApiClient } from "@/lib/api/browser";
 
@@ -57,9 +58,21 @@ export async function decideOpsRentalDispute(
   );
 }
 
-export async function fetchOpsRentals(): Promise<OpsRentalAsset[]> {
-  const data = await request(() => getApiClient().GET("/api/v1/ops/rentals"));
-  return Array.isArray(data) ? data : [];
+/** One page of rental listings; `moderationStatus` "PENDING" is the review queue. */
+export function fetchOpsRentalsPage(
+  cursor?: string,
+  moderationStatus?: string,
+): Promise<Page<OpsRentalAsset>> {
+  return request(() =>
+    getApiClient().GET("/api/v1/ops/rentals", {
+      params: {
+        query: {
+          ...(cursor ? { cursor } : {}),
+          ...(moderationStatus ? { moderation_status: moderationStatus } : {}),
+        },
+      },
+    }),
+  );
 }
 
 export async function moderateOpsRental(
@@ -75,9 +88,21 @@ export async function moderateOpsRental(
   );
 }
 
-export async function fetchOpsStays(): Promise<OpsStayProperty[]> {
-  const data = await request(() => getApiClient().GET("/api/v1/ops/stays"));
-  return Array.isArray(data) ? data : [];
+/** One page of stay properties; `moderationStatus` "PENDING" is the review queue. */
+export function fetchOpsStaysPage(
+  cursor?: string,
+  moderationStatus?: string,
+): Promise<Page<OpsStayProperty>> {
+  return request(() =>
+    getApiClient().GET("/api/v1/ops/stays", {
+      params: {
+        query: {
+          ...(cursor ? { cursor } : {}),
+          ...(moderationStatus ? { moderation_status: moderationStatus } : {}),
+        },
+      },
+    }),
+  );
 }
 
 export function fetchOpsRentalPlatformFee() {
@@ -108,14 +133,29 @@ export async function moderateOpsStay(
 export type OpsStayReservation = Schemas["StayReservation"];
 export type OpsStayEnquiry = Schemas["StayEnquiry"];
 
-export async function fetchOpsStayReservations(): Promise<OpsStayReservation[]> {
-  const data = await request(() => getApiClient().GET("/api/v1/ops/stays/reservations"));
-  return Array.isArray(data) ? data : [];
+export function fetchOpsStayReservationsPage(
+  cursor: string | undefined,
+  filters: { status?: string; q?: string } = {},
+): Promise<Page<OpsStayReservation>> {
+  return request(() =>
+    getApiClient().GET("/api/v1/ops/stays/reservations", {
+      params: {
+        query: {
+          ...(cursor ? { cursor } : {}),
+          ...(filters.status ? { status: filters.status } : {}),
+          ...(filters.q ? { q: filters.q } : {}),
+        },
+      },
+    }),
+  );
 }
 
-export async function fetchOpsStayEnquiries(): Promise<OpsStayEnquiry[]> {
-  const data = await request(() => getApiClient().GET("/api/v1/ops/stays/enquiries"));
-  return Array.isArray(data) ? data : [];
+export function fetchOpsStayEnquiriesPage(cursor?: string): Promise<Page<OpsStayEnquiry>> {
+  return request(() =>
+    getApiClient().GET("/api/v1/ops/stays/enquiries", {
+      params: { query: cursor ? { cursor } : {} },
+    }),
+  );
 }
 
 /* --- Bookings and plans: what Operations runs after a listing is live ------------------- */
@@ -124,13 +164,21 @@ export type OpsRentalBooking = Schemas["OpsRentalBooking"];
 export type OpsRentalBookingStatus = Schemas["RentalBookingStatusEnum"];
 export type OpsStaySubscriptionPlan = Schemas["StaySubscriptionPlan"];
 
-export async function fetchOpsRentalBookings(status?: string): Promise<OpsRentalBooking[]> {
-  const data = await request(() =>
+export function fetchOpsRentalBookingsPage(
+  cursor: string | undefined,
+  filters: { status?: string; q?: string } = {},
+): Promise<Page<OpsRentalBooking>> {
+  return request(() =>
     getApiClient().GET("/api/v1/ops/rentals/bookings", {
-      params: { query: status ? { status } : {} },
+      params: {
+        query: {
+          ...(cursor ? { cursor } : {}),
+          ...(filters.status ? { status: filters.status } : {}),
+          ...(filters.q ? { q: filters.q } : {}),
+        },
+      },
     }),
   );
-  return Array.isArray(data) ? data : [];
 }
 
 export function cancelOpsRentalBooking(bookingId: string, reason: string) {

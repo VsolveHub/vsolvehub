@@ -5306,6 +5306,11 @@ paths:
         schema:
           type: string
         description: Opaque page cursor from `next`.
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: One state, or several separated by commas.
       tags:
       - me
       security:
@@ -5572,6 +5577,12 @@ paths:
         schema:
           type: string
         description: Opaque page cursor from `next`.
+      - in: query
+        name: listing
+        schema:
+          type: string
+          format: uuid
+        description: Only applications to this job, e.g. to show 'You applied'.
       - in: query
         name: status
         schema:
@@ -9976,6 +9987,16 @@ paths:
         schema:
           type: string
         description: e.g. PENDING for the review queue.
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: Title, location, contact phone or email.
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: One state, or several separated by commas.
       tags:
       - ops
       security:
@@ -10521,6 +10542,7 @@ paths:
         name: status
         schema:
           type: string
+        description: One state, or several separated by commas.
       tags:
       - ops
       security:
@@ -14878,6 +14900,7 @@ paths:
         name: status
         schema:
           type: string
+        description: One state, or several separated by commas.
       tags:
       - partner
       security:
@@ -15133,6 +15156,11 @@ paths:
         schema:
           type: string
         description: Opaque page cursor from `next`.
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: One state, or several separated by commas.
       tags:
       - partner
       security:
@@ -15591,6 +15619,11 @@ paths:
         schema:
           type: string
         description: Opaque page cursor from `next`.
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: One state, or several separated by commas.
       tags:
       - partner
       security:

@@ -17,6 +17,15 @@ export interface RentalFilterParams {
 
 export type RentalMineTab = "ALL" | "UPCOMING" | "ONGOING" | "RETURNED" | "INACTIVE";
 
+/** Each tab as the booking states the server filters on. `ALL` asks for every state. */
+export const RENTAL_TAB_STATUSES: Record<RentalMineTab, string> = {
+  ALL: "",
+  UPCOMING: "AWAITING_TRANSPORT_QUOTE,PENDING_PAYMENT,CONFIRMED",
+  ONGOING: "HANDOVER",
+  RETURNED: "RETURNED",
+  INACTIVE: "CANCELLED,DISPUTED",
+};
+
 export function rentalMineBucket(status?: string): Exclude<RentalMineTab, "ALL"> {
   const value = (status ?? "").toUpperCase();
   // Cancelled / disputed leave the Returned bucket (T19).

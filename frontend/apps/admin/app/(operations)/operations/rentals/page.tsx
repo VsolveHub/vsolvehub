@@ -9,15 +9,14 @@ import { RentalDisputeQueue } from "@/features/moderation/rental-disputes";
 import { RentalPlatformFeeForm } from "@/features/moderation/rental-platform-fee";
 import {
   fetchOpsRentalDisputes,
-  fetchOpsRentals,
+  fetchOpsRentalsPage,
   moderateOpsRental,
+  type OpsRentalAsset,
 } from "@/features/moderation/queries";
 import { SectionTabs } from "@/features/shared/section-tabs";
 
-async function loadRentalListings() {
-  const rows = await fetchOpsRentals();
-  return rows.map((row) => {
-    const media = (row as { media?: { url?: string }[] }).media;
+function toQueueRow(row: OpsRentalAsset) {
+  const media = (row as { media?: { url?: string }[] }).media;
     const daily = moneyLine(row.daily_rate_paise, "/ day");
     const deposit = moneyLine(row.deposit_paise, "deposit");
     return {
@@ -31,16 +30,21 @@ async function loadRentalListings() {
       moneyLines: [daily, deposit].filter((line): line is string => Boolean(line)),
       facts: factEntries(row.structured_fields),
     };
-  });
+}
+
+async function loadRentalListings(cursor: string | undefined, pendingOnly: boolean) {
+  const page = await fetchOpsRentalsPage(cursor, pendingOnly ? "PENDING" : undefined);
+  return { ...page, results: page.results.map(toQueueRow) };
 }
 
 function RentalsConsole() {
   const disputes = useQuery({ queryKey: ["ops-rental-disputes"], queryFn: fetchOpsRentalDisputes });
-  const listings = useQuery({ queryKey: ["ops-rentals"], queryFn: loadRentalListings });
+  const pending = useQuery({
+    queryKey: ["ops-rentals", "PENDING", "count"],
+    queryFn: () => fetchOpsRentalsPage(undefined, "PENDING"),
+  });
   const waitingDisputes = (disputes.data ?? []).filter((row) => row.awaiting_decision).length;
-  const waitingListings = (listings.data ?? []).filter(
-    (row) => row.moderation_status === "PENDING" || row.public_state === "PENDING_REVIEW",
-  ).length;
+  const waitingListings = pending.data?.results.length ?? 0;
 
   return (
     <SectionTabs
@@ -57,7 +61,7 @@ function RentalsConsole() {
               embedded
               heading="Rental listings"
               queryKey="ops-rentals"
-              load={loadRentalListings}
+              loadPage={loadRentalListings}
               moderate={moderateOpsRental}
             />
           ),

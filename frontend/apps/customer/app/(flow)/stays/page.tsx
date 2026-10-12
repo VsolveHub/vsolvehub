@@ -3,14 +3,14 @@
 import Link from "next/link";
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useBrowseList } from "@vsolve/query";
 import {
   Building2,
   FileCheck2,
   MapPin,
   Search,
 } from "lucide-react";
-import { Button, EmptyState, ErrorState, Skeleton } from "@vsolve/ui";
+import { Button, EmptyState, ErrorState, LoadMore, Skeleton } from "@vsolve/ui";
 
 import { fetchStays } from "@/features/stays/queries";
 import { type ActiveFilters, StayCard, StayFilters } from "@/features/stays/view";
@@ -27,13 +27,11 @@ function StaysBrowseContent() {
   const [filters, setFilters] = useState<ActiveFilters>(
     initCategory ? { categorySlug: initCategory } : {}
   );
-  const [visible, setVisible] = useState(6);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setAppliedQuery(draftQuery);
     setAppliedLocation(draftLocation);
-    setVisible(6);
   };
 
   const clearFilters = () => {
@@ -43,16 +41,18 @@ function StaysBrowseContent() {
     setAppliedLocation("");
     setFilters({});
     setSort("newest");
-    setVisible(6);
   };
 
   const {
-    data: stays = [],
+    items: stays,
+    hasMore,
+    loadMore,
+    loadingMore,
     isLoading,
     error,
     refetch,
-  } = useQuery({
-    queryKey: [
+  } = useBrowseList(
+    [
       "stays",
       appliedQuery,
       appliedLocation,
@@ -65,7 +65,7 @@ function StaysBrowseContent() {
       filters.serviceSlug,
       sort,
     ],
-    queryFn: () =>
+    (offset, limit) =>
       fetchStays({
         q: appliedQuery,
         location: appliedLocation,
@@ -76,13 +76,12 @@ function StaysBrowseContent() {
         tenant_preference: filters.tenantPreference,
         service: filters.serviceSlug || filters.categorySlug,
         sort,
-        limit: 100,
-        offset: 0,
+        limit,
+        offset,
       }),
-    staleTime: 30_000,
-  });
+  );
 
-  const displayedStays = stays.slice(0, visible);
+  const displayedStays = stays;
 
 
   return (
@@ -172,7 +171,6 @@ function StaysBrowseContent() {
               value={sort}
               onChange={(e) => {
                 setSort(e.target.value);
-                setVisible(6);
               }}
               className="rounded-control border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-text shadow-xs transition hover:border-line-strong focus:border-line-strong focus:outline-none"
             >
@@ -221,13 +219,7 @@ function StaysBrowseContent() {
           ))}
         </div>
       )}
-      {stays.length > visible ? (
-        <div className="flex justify-center pt-4">
-          <Button type="button" variant="secondary" onClick={() => setVisible((count) => count + 6)}>
-            Load more ({stays.length - visible} remaining)
-          </Button>
-        </div>
-      ) : null}
+      <LoadMore hasMore={hasMore} loading={loadingMore} onLoadMore={loadMore} label="Show more stays" />
     </main>
   );
 }

@@ -9,9 +9,19 @@ import OpsStaysPage from "@/app/(operations)/operations/stays/page";
 
 vi.mock("@/lib/api/browser", () => ({
   getApiClient: () => ({
-    GET: vi.fn(async () => ({ data: [], error: undefined, response: { ok: true } })),
+    GET: vi.fn(async () => ({
+      data: { next: null, previous: null, results: [] },
+      error: undefined,
+      response: { ok: true },
+    })),
     POST: vi.fn(),
   }),
+}));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn() }),
+  usePathname: () => "/operations/rentals",
+  useSearchParams: () => new URLSearchParams("tab=listings"),
 }));
 
 let queryClient: QueryClient;
@@ -30,15 +40,18 @@ describe("operations moderation queue", () => {
       <MarketplaceQueue
         heading="Rental assets"
         queryKey="ops-rentals-test"
-        load={async () => [
-          {
-            id: "asset-1",
-            title: "Drill",
-            public_state: "PENDING_REVIEW",
-            partyName: "Host",
-            moderation_status: "PENDING",
-          },
-        ]}
+        loadPage={async () => ({
+          next: null,
+          results: [
+            {
+              id: "asset-1",
+              title: "Drill",
+              public_state: "PENDING_REVIEW",
+              partyName: "Host",
+              moderation_status: "PENDING",
+            },
+          ],
+        })}
         moderate={async () => undefined}
       />,
       { wrapper },
@@ -55,12 +68,12 @@ describe("operations moderation queue", () => {
 
   it("does not mount a second operations shell on rentals or stays", async () => {
     const { unmount } = render(<OpsRentalsPage />, { wrapper });
-    expect(await screen.findByRole("heading", { name: "Rental assets" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Rentals" })).toBeInTheDocument();
     expect(screen.queryByText("Checking your access")).not.toBeInTheDocument();
     unmount();
 
     render(<OpsStaysPage />, { wrapper });
-    expect(await screen.findByRole("heading", { name: "Stay properties" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Stays" })).toBeInTheDocument();
     expect(screen.queryByText("Checking your access")).not.toBeInTheDocument();
   });
 });

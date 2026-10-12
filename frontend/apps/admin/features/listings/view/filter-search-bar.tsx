@@ -5,8 +5,8 @@ export interface FilterSearchBarProps {
   onFilterChange: (filter: string) => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
-  pendingCount: number;
-  removedCount: number;
+  pendingCount: number | string;
+  removedCount: number | string;
 }
 
 export function FilterSearchBar({

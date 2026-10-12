@@ -1,5 +1,6 @@
 "use client";
 
+import { usePagedList } from "@vsolve/query";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { request, type Schemas } from "@vsolve/api-client";
 import { VOLATILE_STATE } from "@vsolve/query";
@@ -27,14 +28,13 @@ export function useCustomerCoins() {
 }
 
 export function useCoinTransactions() {
-  return useQuery({
-    queryKey: coinsKeys.transactions,
-    queryFn: () =>
-      request(() =>
-        getApiClient().GET("/api/v1/customer/coins/transactions/"),
-      ),
-    ...VOLATILE_STATE,
-  });
+  return usePagedList(coinsKeys.transactions, (cursor) =>
+    request(() =>
+      getApiClient().GET("/api/v1/customer/coins/transactions/", {
+        params: { query: cursor ? { cursor } : {} },
+      }),
+    ),
+  );
 }
 
 export function useCoinBurnPreview() {

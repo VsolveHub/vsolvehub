@@ -1,16 +1,16 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { friendlyErrorMessage } from "@vsolve/query";
-import { Badge, Card, EmptyState, formatDate } from "@vsolve/ui";
+import { friendlyErrorMessage, usePagedList } from "@vsolve/query";
+import { Badge, Card, EmptyState, LoadMore, formatDate } from "@vsolve/ui";
 import { ChevronRight, Phone } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import {
   cancelPartnerStayEnquiry,
   confirmPartnerStayEnquiry,
-  fetchPartnerStayEnquiries,
+  fetchPartnerStayEnquiriesPage,
   respondPartnerStayEnquiry,
   stayLengthLabel,
 } from "@/features/stays/queries";
@@ -32,14 +32,16 @@ const FILTER_LABELS: Record<EnquiryFilter, string> = {
   ALL: "All",
 };
 
+/** Enquiries the host still has to call about. */
 const OPEN = new Set(["SUBMITTED", "RESPONDED"]);
 
-function matches(filter: EnquiryFilter, status: string | undefined): boolean {
-  if (filter === "ALL") return true;
-  if (filter === "OPEN") return OPEN.has(status ?? "");
-  if (filter === "CONFIRMED") return status === "CONFIRMED";
-  return !OPEN.has(status ?? "") && status !== "CONFIRMED";
-}
+/** Each tab as the enquiry states the server filters on. Exported for tests. */
+export const ENQUIRY_FILTER_STATUSES: Record<EnquiryFilter, string> = {
+  OPEN: "SUBMITTED,RESPONDED",
+  CONFIRMED: "CONFIRMED",
+  CLOSED: "DECLINED,WITHDRAWN,EXPIRED,CANCELLED",
+  ALL: "",
+};
 
 /**
  * The host's stay inbox. Every stay starts as an enquiry: the host sees who is asking,
@@ -68,9 +70,14 @@ export function PartnerStayEnquiriesWorkspace() {
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }
 
-  const enquiries = useQuery({
-    queryKey: ["partner-stays", "enquiries"],
-    queryFn: fetchPartnerStayEnquiries,
+  const statuses = ENQUIRY_FILTER_STATUSES[filter];
+  const enquiries = usePagedList(["partner-stays", "enquiries", statuses], (cursor) =>
+    fetchPartnerStayEnquiriesPage(cursor, statuses || undefined),
+  );
+  // The "To call" count comes from its own first page, so it is right on every tab.
+  const open = useQuery({
+    queryKey: ["partner-stays", "enquiries", "open-count"],
+    queryFn: () => fetchPartnerStayEnquiriesPage(undefined, ENQUIRY_FILTER_STATUSES.OPEN),
   });
 
   const invalidate = () => void qc.invalidateQueries({ queryKey: ["partner-stays"] });
@@ -94,14 +101,13 @@ export function PartnerStayEnquiriesWorkspace() {
     onSuccess: invalidate,
   });
 
-  const rows = useMemo(
-    () => (enquiries.data ?? []).filter((enquiry) => matches(filter, enquiry.status)),
-    [enquiries.data, filter],
-  );
-  const openCount = (enquiries.data ?? []).filter((e) => OPEN.has(e.status ?? "")).length;
+  const rows = enquiries.items;
+  const openCount = open.data
+    ? `${open.data.results.length}${open.data.next ? "+" : ""}`
+    : "";
 
   const selected = selectedId
-    ? (enquiries.data ?? []).find((enquiry) => enquiry.id === selectedId) ?? null
+    ? enquiries.items.find((enquiry) => enquiry.id === selectedId) ?? null
     : null;
 
   return (
@@ -131,7 +137,7 @@ export function PartnerStayEnquiriesWorkspace() {
               }`}
             >
               {FILTER_LABELS[option]}
-              {option === "OPEN" && openCount > 0 ? ` (${openCount})` : ""}
+              {option === "OPEN" && openCount && openCount !== "0" ? ` (${openCount})` : ""}
             </button>
           ))}
         </div>
@@ -194,6 +200,7 @@ export function PartnerStayEnquiriesWorkspace() {
             </li>
           ))}
         </ul>
+        <LoadMore hasMore={enquiries.hasMore} loading={enquiries.loadingMore} onLoadMore={enquiries.loadMore} />
       </Card>
 
       <StayEnquiryDetailSheet

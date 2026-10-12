@@ -1,5 +1,6 @@
 "use client";
 
+import { usePagedList } from "@vsolve/query";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { request, type Schemas } from "@vsolve/api-client";
 import { VOLATILE_STATE } from "@vsolve/query";
@@ -27,20 +28,13 @@ export function useWallet() {
 }
 
 export function useWalletTransactions() {
-  return useQuery({
-    queryKey: walletKeys.transactions,
-    queryFn: async () => {
-      const data = await request(() =>
-        getApiClient().GET("/api/v1/customer/wallet/transactions/"),
-      );
-      if (Array.isArray(data)) {
-        return data;
-      }
-      const page = data as { results?: WalletTransaction[] } | null;
-      return page?.results ?? [];
-    },
-    ...VOLATILE_STATE,
-  });
+  return usePagedList(walletKeys.transactions, (cursor) =>
+    request(() =>
+      getApiClient().GET("/api/v1/customer/wallet/transactions/", {
+        params: { query: cursor ? { cursor } : {} },
+      }),
+    ),
+  );
 }
 
 export function useInitiateWalletTopUp() {

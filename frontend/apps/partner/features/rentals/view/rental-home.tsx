@@ -1,5 +1,6 @@
 "use client";
 
+import { fetchAllPages } from "@vsolve/query";
 import { useQuery } from "@tanstack/react-query";
 import { friendlyErrorMessage } from "@vsolve/query";
 import { Badge, Card, Spinner, buttonStyles } from "@vsolve/ui";
@@ -11,7 +12,7 @@ import { dateLabel, isSameLocalDay } from "@/features/rentals/pickup-time";
 import {
   fetchPartnerPickupHours,
   fetchPartnerRentalAssets,
-  fetchPartnerRentalBookings,
+  fetchPartnerRentalBookingsPage,
   type PartnerRentalBooking,
 } from "@/features/rentals/queries";
 
@@ -30,9 +31,13 @@ function time(value: string | undefined): number {
  */
 export function RentalHome() {
   const [now] = useState(() => new Date());
+  // Only live bookings matter here, and there are few of them, so all of their pages are read.
   const bookings = useQuery({
     queryKey: ["partner-rentals", "bookings", "home"],
-    queryFn: () => fetchPartnerRentalBookings(),
+    queryFn: () =>
+      fetchAllPages((cursor) =>
+        fetchPartnerRentalBookingsPage(cursor, "AWAITING_TRANSPORT_QUOTE,CONFIRMED,HANDOVER"),
+      ),
   });
   const assets = useQuery({ queryKey: ["partner-rentals", "assets"], queryFn: fetchPartnerRentalAssets });
   const hours = useQuery({ queryKey: ["partner-rentals", "pickup-hours"], queryFn: fetchPartnerPickupHours });

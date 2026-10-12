@@ -73,8 +73,10 @@ from apps.rental.services import (
 from common.pagination import (
     BROWSE_PARAMETERS,
     CURSOR_PARAMETER,
+    STATUS_PARAMETER,
     OperationsNewestFirstPagination,
     browse_window,
+    filter_statuses,
     page_serializer,
     paginated,
 )
@@ -228,11 +230,12 @@ class MyRentalsView(APIView):
     permission_classes = (permissions.IsAuthenticated,)
 
     @extend_schema(
-        parameters=[CURSOR_PARAMETER],
+        parameters=[STATUS_PARAMETER, CURSOR_PARAMETER],
         responses=page_serializer(RentalBookingSerializer, "RentalBookingPage"),
     )
     def get(self, request: Any) -> Response:
         rows = _booking_rows().filter(customer=request.user)
+        rows = filter_statuses(rows, request, RentalBooking.Status.values)
         return paginated(request, self, rows, RentalBookingSerializer)
 
 
@@ -461,7 +464,7 @@ class PartnerBookingCollectionView(APIView):
 
     @extend_schema(
         parameters=[
-            OpenApiParameter("status", OpenApiTypes.STR, OpenApiParameter.QUERY),
+            STATUS_PARAMETER,
             CURSOR_PARAMETER,
         ],
         responses=page_serializer(PartnerRentalBookingSerializer, "PartnerRentalBookingPage"),
@@ -704,14 +707,8 @@ def _is_uuid(value: str) -> bool:
 
 
 def _filter_booking_status(rows: Any, request: Any) -> Any:
-    """`?status=` narrows to one `RentalBooking.Status`. An unknown value is refused rather than
-    ignored, because an empty or unfiltered list would both read as an answer."""
-    wanted = (request.query_params.get("status") or "").strip().upper()
-    if not wanted:
-        return rows
-    if wanted not in RentalBooking.Status.values:
-        raise ValidationError({"status": ["That is not a booking status."]})
-    return rows.filter(status=wanted)
+    """`?status=` narrows to one or more `RentalBooking.Status` values, comma-separated."""
+    return filter_statuses(rows, request, RentalBooking.Status.values)
 
 
 class OpsRentalBookingCollectionView(APIView):
@@ -725,7 +722,7 @@ class OpsRentalBookingCollectionView(APIView):
 
     @extend_schema(
         parameters=[
-            OpenApiParameter("status", OpenApiTypes.STR, OpenApiParameter.QUERY),
+            STATUS_PARAMETER,
             OpenApiParameter("q", OpenApiTypes.STR, OpenApiParameter.QUERY),
             CURSOR_PARAMETER,
         ],

@@ -1,9 +1,10 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, Card, EmptyState, Field, Textarea, formatMoney } from "@vsolve/ui";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { usePagedList, type Page } from "@vsolve/query";
+import { Button, Card, EmptyState, Field, LoadMore, Textarea, formatMoney } from "@vsolve/ui";
 import { MapPin } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import type { ModerationAction } from "./queries";
 
@@ -80,14 +81,10 @@ function actionsFor(row: MarketplaceQueueRow): ModerationAction[] {
   return [];
 }
 
-function isPending(row: MarketplaceQueueRow): boolean {
-  return row.moderation_status === "PENDING" || row.public_state === "PENDING_REVIEW";
-}
-
 export function MarketplaceQueue({
   heading,
   queryKey,
-  load,
+  loadPage,
   moderate,
   leading,
   embedded = false,
@@ -96,7 +93,8 @@ export function MarketplaceQueue({
   embedded?: boolean;
   heading: string;
   queryKey: string;
-  load: () => Promise<MarketplaceQueueRow[]>;
+  /** One page; `pendingOnly` asks the server for the review queue only. */
+  loadPage: (cursor: string | undefined, pendingOnly: boolean) => Promise<Page<MarketplaceQueueRow>>;
   moderate: (id: string, action: ModerationAction, reason: string) => Promise<void>;
   leading?: ReactNode;
 }) {
@@ -107,13 +105,8 @@ export function MarketplaceQueue({
     row: MarketplaceQueueRow;
     action: ModerationAction;
   } | null>(null);
-  const queue = useQuery({ queryKey: [queryKey], queryFn: load });
-  const rows = useMemo(() => queue.data ?? [], [queue.data]);
-  const pendingCount = rows.filter(isPending).length;
-  const visible = useMemo(
-    () => (filter === "PENDING" ? rows.filter(isPending) : rows),
-    [filter, rows],
-  );
+  const queue = usePagedList([queryKey, filter], (cursor) => loadPage(cursor, filter === "PENDING"));
+  const visible = queue.items;
 
   const command = useMutation({
     mutationFn: ({
@@ -158,7 +151,9 @@ export function MarketplaceQueue({
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-text-secondary">
-          {pendingCount} waiting for a decision
+          {filter === "PENDING"
+            ? `${visible.length}${queue.hasMore ? "+" : ""} waiting for a decision`
+            : "Every listing, newest first"}
         </p>
         <div className="flex gap-2">
           <Button
@@ -255,6 +250,7 @@ export function MarketplaceQueue({
           );
         })}
       </ul>
+      <LoadMore hasMore={queue.hasMore} loading={queue.loadingMore} onLoadMore={queue.loadMore} />
 
       {decision && copy ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-900/50 p-4 backdrop-blur-sm">

@@ -1,4 +1,5 @@
 import { request, type Schemas } from "@vsolve/api-client";
+import type { Page } from "@vsolve/query";
 import { getApiClient } from "@/lib/api/browser";
 
 export type AdminListing = Schemas["PartnerListing"] & {
@@ -16,9 +17,40 @@ export function listingFields(
     : {};
 }
 
-export async function fetchOpsListings(): Promise<AdminListing[]> {
-  const data = await request(() => getApiClient().GET("/api/v1/ops/listings"));
-  return Array.isArray(data) ? data : [];
+/** The screen's filter chips, as the server filters they mean. Exported for tests. */
+export function listingFilterQuery(filter: string): { status?: string; moderation_status?: string } {
+  switch (filter) {
+    case "PENDING":
+      return { moderation_status: "PENDING" };
+    case "ACTIVE":
+      return { status: "PUBLISHED" };
+    case "REMOVED":
+      return { status: "REMOVED" };
+    case "DRAFT":
+      return { status: "DRAFT" };
+    case "CLOSED":
+      return { status: "CLOSED,EXPIRED" };
+    default:
+      return {};
+  }
+}
+
+export function fetchOpsListingsPage(
+  cursor: string | undefined,
+  filter: string,
+  q: string,
+): Promise<Page<AdminListing>> {
+  return request(() =>
+    getApiClient().GET("/api/v1/ops/listings", {
+      params: {
+        query: {
+          ...listingFilterQuery(filter),
+          ...(q ? { q } : {}),
+          ...(cursor ? { cursor } : {}),
+        },
+      },
+    }),
+  ) as Promise<Page<AdminListing>>;
 }
 
 export async function moderateOpsListing(

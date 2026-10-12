@@ -1,8 +1,8 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { friendlyErrorMessage } from "@vsolve/query";
-import { Badge, Button, Card, Dialog, EmptyState, Field, Textarea } from "@vsolve/ui";
+import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
+import { friendlyErrorMessage, usePagedList } from "@vsolve/query";
+import { Badge, Button, Card, Dialog, EmptyState, Field, LoadMore, Textarea } from "@vsolve/ui";
 import { CalendarClock, Phone } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -10,7 +10,7 @@ import {
   VISIT_DECLINE_REASONS,
   clockWindow,
   dayLabel,
-  fetchPartnerStayVisits,
+  fetchPartnerStayVisitsPage,
   partnerStayRoomAction,
   partnerStayVisitAction,
   type PartnerStayVisit,
@@ -35,10 +35,12 @@ const STATUS: Record<string, { label: string; tone: "info" | "success" | "danger
   EXPIRED: { label: "Expired", tone: "neutral" },
 };
 
-function inFilter(filter: Filter, status: string | undefined) {
-  if (filter === "CLOSED") return status !== "REQUESTED" && status !== "ACCEPTED";
-  return status === filter;
-}
+/** Each tab as the visit states the server filters on. Exported for tests. */
+export const VISIT_FILTER_STATUSES: Record<Filter, string> = {
+  REQUESTED: "REQUESTED",
+  ACCEPTED: "ACCEPTED",
+  CLOSED: "DECLINED,CANCELLED,EXPIRED",
+};
 
 /**
  * Visit requests, grouped by day and slot ("Sat 12 Oct · 5 PM – 6 PM · 3 visitors"). The owner
@@ -55,7 +57,16 @@ export function PartnerStayVisitsWorkspace() {
   const [roomId, setRoomId] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const visits = useQuery({ queryKey: ["partner-stays", "visits"], queryFn: fetchPartnerStayVisits });
+  const visits = usePagedList(["partner-stays", "visits", filter], (cursor) =>
+    fetchPartnerStayVisitsPage(cursor, VISIT_FILTER_STATUSES[filter]),
+  );
+  // Tab badges count their own first page, so they stay right whichever tab is open.
+  const [requestedPage, acceptedPage] = useQueries({
+    queries: (["REQUESTED", "ACCEPTED"] as const).map((name) => ({
+      queryKey: ["partner-stays", "visits", "count", name],
+      queryFn: () => fetchPartnerStayVisitsPage(undefined, name),
+    })),
+  }).map((query) => query.data);
   const rooms = useBookableRooms(booking?.property, booking?.unit);
 
   const act = useMutation({
@@ -69,14 +80,17 @@ export function PartnerStayVisitsWorkspace() {
     onError: (err: unknown) => setError(friendlyErrorMessage(err)),
   });
 
-  const all = useMemo(() => visits.data ?? [], [visits.data]);
-  const counts = {
-    REQUESTED: all.filter((v) => v.status === "REQUESTED").length,
-    ACCEPTED: all.filter((v) => v.status === "ACCEPTED").length,
+  const all = visits.items;
+  const countOf = (page: typeof requestedPage) =>
+    page ? `${page.results.length}${page.next ? "+" : ""}` : "0";
+  const counts: Record<Filter, string> = {
+    REQUESTED: countOf(requestedPage),
+    ACCEPTED: countOf(acceptedPage),
+    CLOSED: "0",
   };
   const groups = useMemo(() => {
     const map = new Map<string, PartnerStayVisit[]>();
-    for (const visit of all.filter((v) => inFilter(filter, v.status))) {
+    for (const visit of all) {
       const key = `${visit.visit_date}|${visit.start_time}|${visit.end_time}|${visit.property}`;
       map.set(key, [...(map.get(key) ?? []), visit]);
     }
@@ -111,7 +125,7 @@ export function PartnerStayVisitsWorkspace() {
               }`}
             >
               {label}
-              {value !== "CLOSED" && counts[value] > 0 ? ` (${counts[value]})` : ""}
+              {value !== "CLOSED" && counts[value] !== "0" ? ` (${counts[value]})` : ""}
             </button>
           ))}
         </div>
@@ -234,6 +248,7 @@ export function PartnerStayVisitsWorkspace() {
             );
           })}
         </ul>
+        <LoadMore hasMore={visits.hasMore} loading={visits.loadingMore} onLoadMore={visits.loadMore} />
       </Card>
 
       <Dialog

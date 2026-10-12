@@ -114,3 +114,92 @@ Checks run by the agent: admin `pnpm typecheck`, `pnpm lint`, `pnpm build` pass;
 10. Commission and tax: the active version reads correctly; activate version N+1 with a new
     approval reference.
 11. An A5 request with a booked vendor shows the Project panel; End the project asks to confirm.
+
+## 7. Follow-up (contract 1.71.0): cancellation rules and pagination
+
+Status: **built — owner verification pending.**
+
+### Cancellations (owner decisions)
+
+- Operations can no longer cancel a stay that is checked in, checked out or a no-show. Only
+  held, awaiting-payment or confirmed reservations get the full-refund cancel. Already-cancelled
+  stays come back unchanged.
+- An Operations rental cancel requires a reason. Every rental cancel now stores `cancelled_at`
+  and `cancellation_reason` (migration `rental 0018`). The admin dialog asks for the reason and
+  the booking row shows it. Refunds from an Operations cancel use `ops_cancelled_rental`.
+
+### Pagination
+
+Lists that grow with use load one page at a time ("Load more"); see the contract CHANGELOG for
+the endpoint table.
+
+- **Shared pieces:** `common/pagination.py` (`NewestFirstPagination`, `paginated`,
+  `page_serializer`, `filter_statuses`, `browse_window`); `@vsolve/query` `usePagedList`,
+  `useBrowseList`, `fetchAllPages`; `@vsolve/ui` `LoadMore`.
+- **Page sizes:** 20 for customers and partners, 50 for Operations, 24 for public browse
+  (60 max).
+- **Tabs filter on the server,** so a tab never hides rows that are on a page not yet loaded:
+  My Rentals, My Job Applications, partner stay enquiries and visits, partner rental bookings,
+  job applicants, Operations job listings, rental bookings and stay reservations (including
+  search).
+- **Home screens** (partner rentals, stays, jobs) ask only for *active* states and read all of
+  their pages. Those sets are small; history lives on the paged screens.
+- **"You applied"** on a job page asks for that job only (`?listing=`), so it can't miss an
+  application that sits on a later page.
+- **Speed:** `created_at` indexes on rental bookings, stay reservations, stay enquiries and job
+  applications (`rental 0019`, `stay 0023`, `listings 0017`).
+- **Fixed along the way:** wallet transactions were already paged at runtime while the contract
+  said "array", and stays search returned every row when no limit was sent.
+- **Left unpaged on purpose:** categories, taxonomies, settings and policy lists, addresses,
+  sessions, a partner's own properties/assets/listings, saved jobs, "jobs for you" (capped at
+  30), report presets.
+
+### Tests written (not run)
+
+Backend:
+
+- `backend/tests/test_list_pagination.py` (new)
+- `backend/tests/rental/test_cancel_booking.py::test_ops_cancel_requires_a_reason`,
+  `::test_customer_cancel_stamps_the_time_without_a_reason`, updated `::test_ops_force_cancel_booking`
+- `backend/tests/stay/test_stay_fixes.py::test_ops_cannot_cancel_and_refund_once_the_guest_has_arrived`
+- Updated for the page envelope: `tests/rental/test_ops_booking_list.py`,
+  `tests/rental/test_quantity_pin_dispute.py`, `tests/stay/test_enquiry_call_flow.py`,
+  `tests/stay/test_rooms_visits_owner_contact.py`, `tests/listings/test_a10_flow.py`,
+  `tests/wallet/test_wallet_core.py`
+
+Frontend:
+
+- `packages/query/src/paged-list.test.ts`
+- `apps/partner/features/stays/view/stay-tab-statuses.test.ts`
+- `apps/customer/features/listings/application-tabs.test.ts`
+- `apps/customer/features/rentals/model.test.ts` (tab mapping case added)
+- `apps/admin/features/listings/queries.test.ts`
+- `apps/admin/features/moderation/moderation-queue.test.tsx` (updated)
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe -m pytest tests/test_list_pagination.py tests/rental tests/stay tests/listings tests/wallet tests/loyalty
+
+cd ..\frontend
+pnpm test
+```
+
+Checks run by the agent: admin, customer and partner typecheck, lint and production build pass;
+shared packages typecheck; `pnpm contract:check` is up to date; `makemigrations --check` shows
+no changes; `manage.py check` is clean. Full ruff (173) and mypy (147) totals are no higher than
+before this work, and every remaining finding is pre-existing.
+
+### Manual smoke list
+
+1. Customer → Wallet, V Coins, Referrals: with more than 20 entries, "Show older…" loads the
+   rest with no duplicates.
+2. Customer → My Rentals: each tab shows only its bookings, including ones older than the first
+   page.
+3. Customer → Jobs: scroll the list and "Show more jobs"; changing a filter starts again.
+4. A job you applied to says so even if you have more than 20 applications.
+5. Partner → Stays → Visits: badges show counts; "Closed" shows past visits; "Load more" works.
+6. Partner → Job → Applicants: switch tabs; shortlisting updates the card at once.
+7. Admin → Rentals → Bookings: searching a phone number finds a booking that is not on page one.
+8. Admin → Rentals → Bookings → Cancel: the dialog needs a reason, and the reason shows on the
+   row afterwards.
+9. Admin → Stays → Reservations: a checked-in reservation has no Cancel, and the API refuses it.

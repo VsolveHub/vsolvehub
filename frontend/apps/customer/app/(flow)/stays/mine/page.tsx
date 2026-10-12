@@ -3,14 +3,14 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { usePagedList } from "@vsolve/query";
 import { ArrowLeft } from "lucide-react";
-import { Button, EmptyState, ErrorState, Skeleton } from "@vsolve/ui";
+import { Button, EmptyState, ErrorState, LoadMore, Skeleton } from "@vsolve/ui";
 
 import {
-  fetchMyStayEnquiries,
-  fetchMyStayReservations,
-  fetchMyStayVisits,
+  fetchMyStayEnquiriesPage,
+  fetchMyStayReservationsPage,
+  fetchMyStayVisitsPage,
 } from "@/features/stays/queries";
 import { StayEnquiryCard, StayReservationCard, StayVisitCard } from "@/features/stays/view";
 
@@ -23,24 +23,30 @@ function MyStays() {
   const activeTab: Tab =
     requested === "visits" || requested === "reservations" ? requested : "enquiries";
 
-  const enquiries = useQuery({ queryKey: ["my-stay-enquiries"], queryFn: fetchMyStayEnquiries });
-  const visits = useQuery({ queryKey: ["my-stay-visits"], queryFn: fetchMyStayVisits });
+  const enquiries = usePagedList(["my-stay-enquiries"], (cursor) => fetchMyStayEnquiriesPage(cursor));
+  const visits = usePagedList(["my-stay-visits"], (cursor) => fetchMyStayVisitsPage(cursor));
   // Paid reservations are a legacy mode; the tab only appears for guests who have one.
-  const reservations = useQuery({
-    queryKey: ["my-stay-reservations"],
-    queryFn: fetchMyStayReservations,
-  });
+  const reservations = usePagedList(["my-stay-reservations"], (cursor) =>
+    fetchMyStayReservationsPage(cursor),
+  );
 
-  const enquiryRows = enquiries.data ?? [];
-  const visitRows = visits.data ?? [];
-  const reservationRows = reservations.data ?? [];
+  const enquiryRows = enquiries.items;
+  const visitRows = visits.items;
+  const reservationRows = reservations.items;
   const openVisits = visitRows.filter((v) => v.status === "REQUESTED" || v.status === "ACCEPTED");
+  // Counts are of what has loaded; "+" says the server has more.
+  const count = (n: number, more: boolean) => `${n}${more ? "+" : ""}`;
 
   const tabs: Array<{ key: Tab; label: string }> = [
-    { key: "enquiries", label: `Enquiries (${enquiryRows.length})` },
-    { key: "visits", label: `Visits (${openVisits.length})` },
+    { key: "enquiries", label: `Enquiries (${count(enquiryRows.length, enquiries.hasMore)})` },
+    { key: "visits", label: `Visits (${count(openVisits.length, visits.hasMore)})` },
     ...(reservationRows.length > 0
-      ? [{ key: "reservations" as const, label: `Reservations (${reservationRows.length})` }]
+      ? [
+          {
+            key: "reservations" as const,
+            label: `Reservations (${count(reservationRows.length, reservations.hasMore)})`,
+          },
+        ]
       : []),
   ];
 
@@ -132,6 +138,7 @@ function MyStays() {
             {visitRows.map((visit) => (
               <StayVisitCard key={visit.id} visit={visit} />
             ))}
+            <LoadMore hasMore={visits.hasMore} loading={visits.loadingMore} onLoadMore={visits.loadMore} />
           </div>
         )
       ) : activeTab === "reservations" ? (
@@ -139,6 +146,11 @@ function MyStays() {
           {reservationRows.map((reservation) => (
             <StayReservationCard key={reservation.id} reservation={reservation} />
           ))}
+          <LoadMore
+            hasMore={reservations.hasMore}
+            loading={reservations.loadingMore}
+            onLoadMore={reservations.loadMore}
+          />
         </div>
       ) : enquiryRows.length === 0 ? (
         <EmptyState
@@ -151,6 +163,11 @@ function MyStays() {
           {enquiryRows.map((enquiry) => (
             <StayEnquiryCard key={enquiry.id} enquiry={enquiry} />
           ))}
+          <LoadMore
+            hasMore={enquiries.hasMore}
+            loading={enquiries.loadingMore}
+            onLoadMore={enquiries.loadMore}
+          />
         </div>
       )}
     </main>

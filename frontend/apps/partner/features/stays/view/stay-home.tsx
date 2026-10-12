@@ -1,5 +1,6 @@
 "use client";
 
+import { fetchAllPages } from "@vsolve/query";
 import { useQuery } from "@tanstack/react-query";
 import { friendlyErrorMessage } from "@vsolve/query";
 import { Card, Spinner, buttonStyles } from "@vsolve/ui";
@@ -10,10 +11,10 @@ import { useState, type ReactNode } from "react";
 import {
   clockWindow,
   dayLabel,
-  fetchPartnerStayEnquiries,
-  fetchPartnerStayReservations,
+  fetchPartnerStayEnquiriesPage,
+  fetchPartnerStayReservationsPage,
   fetchPartnerStaySummary,
-  fetchPartnerStayVisits,
+  fetchPartnerStayVisitsPage,
 } from "@/features/stays/queries";
 
 type Row = {
@@ -48,11 +49,22 @@ export function StayHome() {
   const today = isoToday(now);
 
   const summary = useQuery({ queryKey: ["partner-stays", "summary"], queryFn: fetchPartnerStaySummary });
-  const enquiries = useQuery({ queryKey: ["partner-stays", "enquiries"], queryFn: fetchPartnerStayEnquiries });
-  const visits = useQuery({ queryKey: ["partner-stays", "visits"], queryFn: fetchPartnerStayVisits });
+  // The home only reads what still needs the owner, so it asks for those states and reads all
+  // of their pages; closed history stays on the section screens, which page.
+  const enquiries = useQuery({
+    queryKey: ["partner-stays", "enquiries", "home"],
+    queryFn: () =>
+      fetchAllPages((cursor) => fetchPartnerStayEnquiriesPage(cursor, "SUBMITTED,CONFIRMED")),
+  });
+  const visits = useQuery({
+    queryKey: ["partner-stays", "visits", "home"],
+    queryFn: () =>
+      fetchAllPages((cursor) => fetchPartnerStayVisitsPage(cursor, "REQUESTED,ACCEPTED")),
+  });
   const reservations = useQuery({
-    queryKey: ["partner-stays", "reservations"],
-    queryFn: fetchPartnerStayReservations,
+    queryKey: ["partner-stays", "reservations", "home"],
+    queryFn: () =>
+      fetchAllPages((cursor) => fetchPartnerStayReservationsPage(cursor, "CONFIRMED,CHECKED_IN")),
   });
 
   if (summary.isPending || enquiries.isPending || visits.isPending) {

@@ -4,12 +4,13 @@ import Link from "next/link";
 import { Suspense, useCallback, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { useBrowseList } from "@vsolve/query";
 import {
   FileCheck2,
   MapPin,
   Search,
 } from "lucide-react";
-import { Button, EmptyState, ErrorState, Skeleton } from "@vsolve/ui";
+import { Button, EmptyState, ErrorState, LoadMore, Skeleton } from "@vsolve/ui";
 
 import { fetchListingFilters, fetchListings, type Listing } from "@/features/listings/queries";
 import { ListingOpportunityCard } from "@/features/listings/listing-opportunity-card";
@@ -61,12 +62,15 @@ function ListingsBrowseContent() {
   });
 
   const {
-    data: listings = [],
+    items: listings,
     isLoading,
     isFetching,
     error,
-  } = useQuery({
-    queryKey: [
+    hasMore,
+    loadMore,
+    loadingMore,
+  } = useBrowseList(
+    [
       "listings",
       appliedQuery,
       appliedLocation,
@@ -76,7 +80,7 @@ function ListingsBrowseContent() {
       minSalary,
       sort,
     ],
-    queryFn: () =>
+    (offset, limit) =>
       fetchListings({
         q: appliedQuery,
         location: appliedLocation,
@@ -85,11 +89,10 @@ function ListingsBrowseContent() {
         employment_type: employmentType,
         work_mode: workMode,
         min_salary: minSalary,
+        limit,
+        offset,
       }),
-    staleTime: 30_000,
-    placeholderData: (previous) => previous,
-    refetchOnWindowFocus: false,
-  });
+  );
 
 
   const hasActiveFilters = Boolean(draftQuery || draftLocation || selectedCategory);
@@ -230,6 +233,7 @@ function ListingsBrowseContent() {
           <ListingOpportunityCard key={listing.id} listing={listing} />
         ))}
       </section>
+      <LoadMore hasMore={hasMore} loading={loadingMore} onLoadMore={loadMore} label="Show more jobs" />
     </main>
   );
 }

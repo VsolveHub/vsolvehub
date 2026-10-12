@@ -7,10 +7,10 @@ import type { ReactNode } from "react";
 import { useCrewVerificationQueue } from "@/features/crew-verification/queries";
 import { useCustomItemReviews } from "@/features/m2-work-items/queries";
 import {
-  fetchOpsRentalBookings,
+  fetchOpsRentalBookingsPage,
   fetchOpsRentalDisputes,
-  fetchOpsRentals,
-  fetchOpsStays,
+  fetchOpsRentalsPage,
+  fetchOpsStaysPage,
 } from "@/features/moderation/queries";
 import { useApplicationQueue } from "@/features/partner-review/queries";
 
@@ -50,13 +50,19 @@ export function AttentionStrip(): ReactNode {
   const applications = useApplicationQueue({ status: "SUBMITTED" });
   const crew = useCrewVerificationQueue("PENDING");
   const customItems = useCustomItemReviews();
-  const rentalListings = useQuery({ queryKey: ["ops-rentals-attention"], queryFn: fetchOpsRentals });
+  const rentalListings = useQuery({
+    queryKey: ["ops-rentals", "PENDING", "count"],
+    queryFn: () => fetchOpsRentalsPage(undefined, "PENDING"),
+  });
   const disputes = useQuery({ queryKey: ["ops-rental-disputes"], queryFn: fetchOpsRentalDisputes });
   const deliveryQuotes = useQuery({
-    queryKey: ["ops-rental-bookings", "AWAITING_TRANSPORT_QUOTE"],
-    queryFn: () => fetchOpsRentalBookings("AWAITING_TRANSPORT_QUOTE"),
+    queryKey: ["ops-rental-bookings", "AWAITING_TRANSPORT_QUOTE", "count"],
+    queryFn: () => fetchOpsRentalBookingsPage(undefined, { status: "AWAITING_TRANSPORT_QUOTE" }),
   });
-  const stays = useQuery({ queryKey: ["ops-stays-attention"], queryFn: fetchOpsStays });
+  const stays = useQuery({
+    queryKey: ["ops-stays", "PENDING", "count"],
+    queryFn: () => fetchOpsStaysPage(undefined, "PENDING"),
+  });
 
   const firstPage = applications.data?.pages[0];
   const items = itemsToShow([
@@ -71,7 +77,8 @@ export function AttentionStrip(): ReactNode {
     {
       label: "Rental listings to review",
       href: "/operations/rentals?tab=listings",
-      count: rentalListings.data ? pendingReviewCount(rentalListings.data) : null,
+      count: rentalListings.data ? pendingReviewCount(rentalListings.data.results) : null,
+      more: Boolean(rentalListings.data?.next),
     },
     {
       label: "Rental deposit disputes",
@@ -81,12 +88,14 @@ export function AttentionStrip(): ReactNode {
     {
       label: "Deliveries waiting for an owner's price",
       href: "/operations/rentals?tab=bookings",
-      count: deliveryQuotes.data?.length ?? null,
+      count: deliveryQuotes.data?.results.length ?? null,
+      more: Boolean(deliveryQuotes.data?.next),
     },
     {
       label: "Stay properties to review",
       href: "/operations/stays?tab=properties",
-      count: stays.data ? pendingReviewCount(stays.data) : null,
+      count: stays.data ? pendingReviewCount(stays.data.results) : null,
+      more: Boolean(stays.data?.next),
     },
   ]);
 

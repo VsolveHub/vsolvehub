@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { usePagedList } from "@vsolve/query";
 import { request, type Schemas } from "@vsolve/api-client";
 
 import { getApiClient } from "@/lib/api/browser";
@@ -88,20 +89,19 @@ export function usePublishReferralProgram() {
 }
 
 export function useReferralAttributions(status: string, phone: string) {
-  return useQuery({
-    queryKey: loyaltyKeys.attributions(status, phone),
-    queryFn: () =>
-      request(() =>
-        getApiClient().GET("/api/v1/ops/referral/attributions/", {
-          params: {
-            query: {
-              ...(status ? { status } : {}),
-              ...(phone ? { phone } : {}),
-            },
+  return usePagedList(loyaltyKeys.attributions(status, phone), (cursor) =>
+    request(() =>
+      getApiClient().GET("/api/v1/ops/referral/attributions/", {
+        params: {
+          query: {
+            ...(status ? { status } : {}),
+            ...(phone ? { phone } : {}),
+            ...(cursor ? { cursor } : {}),
           },
-        }),
-      ),
-  });
+        },
+      }),
+    ),
+  );
 }
 
 export function useReviewReferral() {

@@ -1,7 +1,7 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { friendlyErrorMessage } from "@vsolve/query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { friendlyErrorMessage, usePagedList } from "@vsolve/query";
 import {
   Badge,
   Button,
@@ -10,13 +10,16 @@ import {
   EmptyState,
   Field,
   Input,
+  LoadMore,
   Select,
   Textarea,
   formatDate,
   formatMoney,
 } from "@vsolve/ui";
 import { Phone, Truck, Warehouse } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
+
+import { useDebounced } from "@/features/shared/use-debounced";
 
 import {
   RENTAL_STATUS_LABEL,
@@ -24,9 +27,8 @@ import {
   TRANSPORT_STATUS_LABEL,
   addressLine,
   canCancelRental,
-  matchesSearch,
 } from "./model/bookings";
-import { cancelOpsRentalBooking, fetchOpsRentalBookings, type OpsRentalBooking } from "./queries";
+import { cancelOpsRentalBooking, fetchOpsRentalBookingsPage, type OpsRentalBooking } from "./queries";
 
 const STATUS_FILTERS = ["", ...Object.keys(RENTAL_STATUS_LABEL)];
 
@@ -46,24 +48,11 @@ export function RentalBookings() {
   const [error, setError] = useState<string | null>(null);
   const [reason, setReason] = useState("");
 
-  const bookings = useQuery({
-    queryKey: ["ops-rental-bookings", status],
-    queryFn: () => fetchOpsRentalBookings(status || undefined),
-  });
-
-  const rows = useMemo(
-    () =>
-      (bookings.data ?? []).filter((row) =>
-        matchesSearch(search, [
-          row.id,
-          row.asset?.title,
-          row.customer_name,
-          row.customer_phone,
-          row.partner_name,
-        ]),
-      ),
-    [bookings.data, search],
+  const q = useDebounced(search.trim());
+  const bookings = usePagedList(["ops-rental-bookings", status, q], (cursor) =>
+    fetchOpsRentalBookingsPage(cursor, { status: status || undefined, q: q || undefined }),
   );
+  const rows = bookings.items;
 
   const cancel = useMutation({
     mutationFn: ({ id, note }: { id: string; note: string }) => cancelOpsRentalBooking(id, note),
@@ -77,8 +66,8 @@ export function RentalBookings() {
   return (
     <section className="flex flex-col gap-4">
       <p className="text-sm text-text-secondary">
-        Newest 200 bookings. Use the filter to find delivery requests waiting on an owner, or
-        payments that never finished.
+        Newest first. Search covers every booking, not just the ones on screen. Use the status to
+        find delivery requests waiting on an owner, or payments that never finished.
       </p>
       <div className="grid gap-3 sm:grid-cols-[1fr_16rem]">
         <Field label="Search">
@@ -195,6 +184,7 @@ export function RentalBookings() {
           );
         })}
       </ul>
+      <LoadMore hasMore={bookings.hasMore} loading={bookings.loadingMore} onLoadMore={bookings.loadMore} />
 
       <ConfirmAction
         open={cancelling !== null}

@@ -435,7 +435,7 @@ class RentalPlatformFeeSerializer(serializers.Serializer):
     )
 
 
-class OpsCancelRentalBookingSerializer(serializers.Serializer):
+class OpsCancelRentalBookingSerializer(serializers.Serializer[dict[str, Any]]):
     """Operations says why. The reason is kept on the booking."""
 
     reason = serializers.CharField(max_length=480)

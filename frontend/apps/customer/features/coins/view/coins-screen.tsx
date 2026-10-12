@@ -1,6 +1,6 @@
 "use client";
 
-import { ErrorState, Spinner } from "@vsolve/ui";
+import { ErrorState, LoadMore, Spinner } from "@vsolve/ui";
 import { useCustomerCoins, useCoinTransactions } from "../queries";
 import { CoinsBucketsCard } from "./coins-buckets-card";
 import { CoinsBurnExplainer } from "./coins-burn-explainer";
@@ -31,13 +31,19 @@ export function CoinsScreen() {
   }
 
   const summary = coinsQuery.data;
-  const transactions = txnsQuery.data ?? [];
+  const transactions = txnsQuery.items;
 
   return (
     <div className="space-y-6">
       <CoinsBucketsCard summary={summary} />
       <CoinsBurnExplainer summary={summary} />
       <CoinsTransactionList transactions={transactions} />
+      <LoadMore
+        hasMore={txnsQuery.hasMore}
+        loading={txnsQuery.loadingMore}
+        onLoadMore={txnsQuery.loadMore}
+        label="Show older activity"
+      />
     </div>
   );
 }

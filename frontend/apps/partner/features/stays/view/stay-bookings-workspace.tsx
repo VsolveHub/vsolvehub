@@ -1,13 +1,13 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { friendlyErrorMessage } from "@vsolve/query";
-import { Badge, Card, EmptyState, formatDate, formatMoney } from "@vsolve/ui";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { friendlyErrorMessage, usePagedList } from "@vsolve/query";
+import { Badge, Card, EmptyState, LoadMore, formatDate, formatMoney } from "@vsolve/ui";
 import { ChevronRight } from "lucide-react";
 import { useState } from "react";
 
 import {
-  fetchPartnerStayReservations,
+  fetchPartnerStayReservationsPage,
   partnerStayReservationAction,
   type StayReservation,
   type StayReservationAction,
@@ -33,10 +33,9 @@ export function PartnerStayBookingsWorkspace() {
   const qc = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const reservations = useQuery({
-    queryKey: ["partner-stays", "reservations"],
-    queryFn: fetchPartnerStayReservations,
-  });
+  const reservations = usePagedList(["partner-stays", "reservations"], (cursor) =>
+    fetchPartnerStayReservationsPage(cursor),
+  );
 
   const invalidate = () => {
     void qc.invalidateQueries({ queryKey: ["partner-stays"] });
@@ -56,7 +55,7 @@ export function PartnerStayBookingsWorkspace() {
   });
 
   const selected: StayReservation | null = selectedId
-    ? (reservations.data ?? []).find((row) => row.id === selectedId) ?? null
+    ? reservations.items.find((row) => row.id === selectedId) ?? null
     : null;
 
   return (
@@ -77,7 +76,7 @@ export function PartnerStayBookingsWorkspace() {
         {reservations.error ? (
           <p className="text-sm text-danger-text">{friendlyErrorMessage(reservations.error)}</p>
         ) : null}
-        {reservations.data && reservations.data.length === 0 ? (
+        {!reservations.isLoading && reservations.items.length === 0 ? (
           <EmptyState
             compact
             title="No paid reservations yet"
@@ -86,7 +85,7 @@ export function PartnerStayBookingsWorkspace() {
         ) : null}
 
         <ul className="flex flex-col gap-3">
-          {reservations.data?.map((reservation) => (
+          {reservations.items.map((reservation) => (
             <li key={reservation.id}>
               <button
                 type="button"
@@ -120,6 +119,11 @@ export function PartnerStayBookingsWorkspace() {
             </li>
           ))}
         </ul>
+        <LoadMore
+          hasMore={reservations.hasMore}
+          loading={reservations.loadingMore}
+          onLoadMore={reservations.loadMore}
+        />
       </Card>
 
       <StayReservationDetailSheet

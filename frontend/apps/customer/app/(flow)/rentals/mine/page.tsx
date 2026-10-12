@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { usePagedList } from "@vsolve/query";
 import { ArrowLeft } from "lucide-react";
-import { Button, EmptyState, ErrorState, Skeleton } from "@vsolve/ui";
+import { Button, EmptyState, ErrorState, LoadMore, Skeleton } from "@vsolve/ui";
 
-import { rentalMineBucket, type RentalMineTab } from "@/features/rentals/model";
-import { fetchMyRentals } from "@/features/rentals/queries";
+import { RENTAL_TAB_STATUSES, type RentalMineTab } from "@/features/rentals/model";
+import { fetchMyRentalsPage } from "@/features/rentals/queries";
 import { RentalBookingCard } from "@/features/rentals/view";
 
 const TABS: { key: RentalMineTab; label: string }[] = [
@@ -21,21 +21,12 @@ const TABS: { key: RentalMineTab; label: string }[] = [
 export default function MyRentalsPage() {
   const [activeTab, setActiveTab] = useState<RentalMineTab>("ALL");
 
-  const {
-    data: bookings = [],
-    isLoading,
-    error,
-    refetch,
-  } = useQuery({
-    queryKey: ["my-rentals"],
-    queryFn: fetchMyRentals,
-  });
-
-  const filteredBookings = bookings.filter((b) => {
-    const s = (b.status ?? "").toUpperCase();
-    if (activeTab !== "ALL" && rentalMineBucket(s) !== activeTab) return false;
-    return true;
-  });
+  const statuses = RENTAL_TAB_STATUSES[activeTab];
+  const list = usePagedList(["my-rentals", statuses], (cursor) =>
+    fetchMyRentalsPage(cursor, statuses || undefined),
+  );
+  const { isLoading, error, refetch } = list;
+  const filteredBookings = list.items;
 
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8">
@@ -64,10 +55,6 @@ export default function MyRentalsPage() {
 
       <div className="flex flex-wrap items-center gap-2 border-b border-line pb-2">
         {TABS.map((tab) => {
-          const count =
-            tab.key === "ALL"
-              ? bookings.length
-              : bookings.filter((b) => rentalMineBucket(b.status) === tab.key).length;
           return (
             <button
               key={tab.key}
@@ -80,7 +67,6 @@ export default function MyRentalsPage() {
               }`}
             >
               {tab.label}
-              {tab.key === "ALL" ? ` (${count})` : count > 0 ? ` (${count})` : ""}
             </button>
           );
         })}
@@ -124,6 +110,7 @@ export default function MyRentalsPage() {
           {filteredBookings.map((booking) => (
             <RentalBookingCard key={booking.id} booking={booking} />
           ))}
+          <LoadMore hasMore={list.hasMore} loading={list.loadingMore} onLoadMore={list.loadMore} />
         </div>
       )}
     </main>

@@ -1,5 +1,6 @@
 "use client";
 
+import { usePagedList } from "@vsolve/query";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { request, type Schemas } from "@vsolve/api-client";
 import { VOLATILE_STATE } from "@vsolve/query";
@@ -27,14 +28,13 @@ export function useCustomerReferral() {
 }
 
 export function useReferralAttributions() {
-  return useQuery({
-    queryKey: referralKeys.attributions,
-    queryFn: () =>
-      request(() =>
-        getApiClient().GET("/api/v1/customer/referral/attributions/"),
-      ),
-    ...VOLATILE_STATE,
-  });
+  return usePagedList(referralKeys.attributions, (cursor) =>
+    request(() =>
+      getApiClient().GET("/api/v1/customer/referral/attributions/", {
+        params: { query: cursor ? { cursor } : {} },
+      }),
+    ),
+  );
 }
 
 export function useValidateReferralCode() {
