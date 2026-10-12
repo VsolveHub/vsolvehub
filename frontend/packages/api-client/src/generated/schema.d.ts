@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.70.0)
- * Checksum: 3d7034071bc191b9
+ * Source:   contracts/openapi/v1.yaml (version 1.71.0)
+ * Checksum: 5228843ebe2142c7
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -12105,6 +12105,10 @@ export interface components {
             target_status: components["schemas"]["TargetStatusEnum"];
             reason?: string;
         };
+        /** @description Operations says why. The reason is kept on the booking. */
+        OpsCancelRentalBookingRequest: {
+            reason: string;
+        };
         OpsCancelStayReservationRequest: {
             /** @default  */
             reason: string;
@@ -12243,6 +12247,9 @@ export interface components {
             readonly deposit: components["schemas"]["RentalDeposit"];
             /** @description Plaintext PIN for the customer only, once the booking is paid/active. */
             readonly handover_pin: string | null;
+            /** Format: date-time */
+            cancelled_at?: string | null;
+            cancellation_reason?: string;
             /** Format: date-time */
             readonly created_at: string;
             readonly customer_name: string;
@@ -13132,6 +13139,9 @@ export interface components {
             readonly deposit: components["schemas"]["RentalDeposit"];
             /** @description Plaintext PIN for the customer only, once the booking is paid/active. */
             readonly handover_pin: string | null;
+            /** Format: date-time */
+            cancelled_at?: string | null;
+            cancellation_reason?: string;
             /** Format: date-time */
             readonly created_at: string;
             readonly customer_name: string;
@@ -15524,6 +15534,9 @@ export interface components {
             readonly deposit: components["schemas"]["RentalDeposit"];
             /** @description Plaintext PIN for the customer only, once the booking is paid/active. */
             readonly handover_pin: string | null;
+            /** Format: date-time */
+            cancelled_at?: string | null;
+            cancellation_reason?: string;
             /** Format: date-time */
             readonly created_at: string;
         };
@@ -27878,7 +27891,13 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OpsCancelRentalBookingRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["OpsCancelRentalBookingRequest"];
+                "multipart/form-data": components["schemas"]["OpsCancelRentalBookingRequest"];
+            };
+        };
         responses: {
             200: {
                 headers: {

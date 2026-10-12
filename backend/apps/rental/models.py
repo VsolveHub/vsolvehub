@@ -230,6 +230,9 @@ class RentalBooking(models.Model):
     transport_fee_paise = models.PositiveIntegerField(default=0)
     notes = models.TextField(blank=True)
     handover_pin_hash = models.CharField(max_length=255, blank=True, default="")
+    #: Set when the booking is cancelled, by whoever cancelled it. Operations must give a reason.
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancellation_reason = models.CharField(max_length=480, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

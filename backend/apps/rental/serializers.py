@@ -343,6 +343,8 @@ class RentalBookingSerializer(serializers.ModelSerializer):
             "asset",
             "deposit",
             "handover_pin",
+            "cancelled_at",
+            "cancellation_reason",
             "created_at",
         )
 
@@ -431,6 +433,12 @@ class RentalPlatformFeeSerializer(serializers.Serializer):
         read_only=True,
         help_text="Commission on an owner's transport price. 0 means the owner keeps all of it.",
     )
+
+
+class OpsCancelRentalBookingSerializer(serializers.Serializer):
+    """Operations says why. The reason is kept on the booking."""
+
+    reason = serializers.CharField(max_length=480)
 
 
 class RentalModerationSerializer(serializers.Serializer):

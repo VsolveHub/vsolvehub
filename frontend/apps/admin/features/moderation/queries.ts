@@ -133,10 +133,11 @@ export async function fetchOpsRentalBookings(status?: string): Promise<OpsRental
   return Array.isArray(data) ? data : [];
 }
 
-export function cancelOpsRentalBooking(bookingId: string) {
+export function cancelOpsRentalBooking(bookingId: string, reason: string) {
   return request(() =>
     getApiClient().POST("/api/v1/ops/rentals/bookings/{booking_id}/cancel", {
       params: { path: { booking_id: bookingId } },
+      body: { reason },
     }),
   );
 }

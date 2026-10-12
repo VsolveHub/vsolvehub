@@ -26,6 +26,7 @@ from apps.rental.pickup_hours import (
 from apps.rental.serializers import (
     CreateAssetSerializer,
     CreateBookingSerializer,
+    OpsCancelRentalBookingSerializer,
     OpsRentalBookingSerializer,
     OpsRentalDisputeDecisionSerializer,
     PartnerBookingActionSerializer,
@@ -703,14 +704,18 @@ class OpsRentalBookingCollectionView(APIView):
 class OpsRentalBookingCancelView(APIView):
     permission_classes = (IsOperationsUser,)
 
-    @extend_schema(request=None, responses=RentalBookingSerializer)
+    @extend_schema(request=OpsCancelRentalBookingSerializer, responses=RentalBookingSerializer)
     def post(self, request: Any, booking_id: UUID) -> Response:
+        ser = OpsCancelRentalBookingSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
         booking = get_object_or_404(
             RentalBooking.objects.select_related("asset", "deposit", "deposit__payment_attempt"),
             id=booking_id,
         )
         try:
-            booking = cancel_booking(booking=booking, is_ops=True, reason="Ops force-cancel")
+            booking = cancel_booking(
+                booking=booking, is_ops=True, reason=ser.validated_data["reason"]
+            )
         except (RentalStateError, PermissionError) as exc:
             _raise_domain_error(exc)
 

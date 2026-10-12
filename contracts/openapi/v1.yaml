@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.70.0
+  version: 1.71.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -10469,6 +10469,18 @@ paths:
         required: true
       tags:
       - ops
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpsCancelRentalBookingRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OpsCancelRentalBookingRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OpsCancelRentalBookingRequest'
+        required: true
       security:
       - cookieAuth: []
       responses:
@@ -29671,6 +29683,16 @@ components:
       required:
       - expected_version
       - target_status
+    OpsCancelRentalBookingRequest:
+      type: object
+      description: Operations says why. The reason is kept on the booking.
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 480
+      required:
+      - reason
     OpsCancelStayReservationRequest:
       type: object
       properties:
@@ -30043,6 +30065,13 @@ components:
           nullable: true
           description: Plaintext PIN for the customer only, once the booking is paid/active.
           readOnly: true
+        cancelled_at:
+          type: string
+          format: date-time
+          nullable: true
+        cancellation_reason:
+          type: string
+          maxLength: 480
         created_at:
           type: string
           format: date-time
@@ -32458,6 +32487,13 @@ components:
           nullable: true
           description: Plaintext PIN for the customer only, once the booking is paid/active.
           readOnly: true
+        cancelled_at:
+          type: string
+          format: date-time
+          nullable: true
+        cancellation_reason:
+          type: string
+          maxLength: 480
         created_at:
           type: string
           format: date-time
@@ -38511,6 +38547,13 @@ components:
           nullable: true
           description: Plaintext PIN for the customer only, once the booking is paid/active.
           readOnly: true
+        cancelled_at:
+          type: string
+          format: date-time
+          nullable: true
+        cancellation_reason:
+          type: string
+          maxLength: 480
         created_at:
           type: string
           format: date-time

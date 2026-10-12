@@ -11,6 +11,7 @@ import {
   Field,
   Input,
   Select,
+  Textarea,
   formatDate,
   formatMoney,
 } from "@vsolve/ui";
@@ -43,6 +44,7 @@ export function RentalBookings() {
   const [search, setSearch] = useState("");
   const [cancelling, setCancelling] = useState<OpsRentalBooking | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reason, setReason] = useState("");
 
   const bookings = useQuery({
     queryKey: ["ops-rental-bookings", status],
@@ -64,7 +66,7 @@ export function RentalBookings() {
   );
 
   const cancel = useMutation({
-    mutationFn: (bookingId: string) => cancelOpsRentalBooking(bookingId),
+    mutationFn: ({ id, note }: { id: string; note: string }) => cancelOpsRentalBooking(id, note),
     onSuccess: () => {
       setCancelling(null);
       void qc.invalidateQueries({ queryKey: ["ops-rental-bookings"] });
@@ -167,6 +169,10 @@ export function RentalBookings() {
                   </div>
                 </div>
 
+                {row.cancellation_reason ? (
+                  <p className="mt-2 text-sm text-text-secondary">Cancelled: {row.cancellation_reason}</p>
+                ) : null}
+
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                   <p className="text-xs text-text-muted">Booking {row.id}</p>
                   {canCancelRental(row.status) ? (
@@ -175,6 +181,7 @@ export function RentalBookings() {
                       variant="danger"
                       onClick={() => {
                         setError(null);
+                        setReason("");
                         cancel.reset();
                         setCancelling(row);
                       }}
@@ -202,8 +209,14 @@ export function RentalBookings() {
         confirmLabel="Cancel and refund"
         destructive
         pending={cancel.isPending}
-        onConfirm={() => cancelling && cancel.mutate(cancelling.id)}
+        onConfirm={() => {
+          if (!reason.trim()) return setError("Write why, so the customer and owner can be told.");
+          if (cancelling) cancel.mutate({ id: cancelling.id, note: reason.trim() });
+        }}
       >
+        <Field label="Reason" required>
+          <Textarea value={reason} maxLength={480} onChange={(event) => setReason(event.target.value)} />
+        </Field>
         {error ? (
           <p role="alert" className="text-sm text-danger-text">
             {error}

@@ -307,6 +307,42 @@ def test_ops_cancel_reservation(stay_env, client):
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize(
+    "stayed_status",
+    [
+        StayReservation.Status.CHECKED_IN,
+        StayReservation.Status.CHECKED_OUT,
+        StayReservation.Status.NO_SHOW,
+    ],
+)
+def test_ops_cannot_cancel_and_refund_once_the_guest_has_arrived(stay_env, client, stayed_status):
+    """Regression: Operations could cancel a checked-in stay and refund it in full."""
+    prop = _create_published_prop(stay_env["variant_res"], stay_env["partner"])
+    unit = prop.units.first()
+    check_in = timezone.localdate() + timedelta(days=7)
+    res = create_reservation(
+        customer=stay_env["guest"],
+        property_id=prop.id,
+        unit_id=unit.id,
+        check_in=check_in,
+        check_out=check_in + timedelta(days=2),
+    )
+    StayReservation.objects.filter(id=res.id).update(status=stayed_status)
+
+    force_role_client(client, stay_env["ops"], Role.OPERATIONS)
+    resp = client.post(
+        f"/api/v1/ops/stays/reservations/{res.id}/cancel",
+        data={"reason": "Guest complained"},
+        content_type="application/json",
+    )
+
+    assert resp.status_code >= status.HTTP_400_BAD_REQUEST
+    res.refresh_from_db()
+    assert res.status == stayed_status
+    assert res.cancelled_at is None
+
+
+@pytest.mark.django_db
 def test_partner_property_media_management(stay_env, client):
     prop = _create_published_prop(stay_env["variant_res"], stay_env["partner"])
 

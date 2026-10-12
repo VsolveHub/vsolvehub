@@ -1885,6 +1885,16 @@ def check_out_reservation(*, reservation: Any, host: Any) -> Any:
     return reservation
 
 
+#: What Operations may cancel with a full refund: nothing a guest has started staying in.
+OPS_CANCELLABLE_RESERVATION_STATUSES = frozenset(
+    {
+        StayReservation.Status.HELD,
+        StayReservation.Status.PAYMENT_PENDING,
+        StayReservation.Status.CONFIRMED,
+    }
+)
+
+
 @transaction.atomic
 def cancel_reservation_ops(
     *,
@@ -1904,6 +1914,10 @@ def cancel_reservation_ops(
 
     if reservation.status == StayReservation.Status.CANCELLED:
         return reservation
+    # Same rule the guest has: a full refund is only honest before anyone has stayed. After
+    # check-in the money is for nights already given, and that is a refund decision, not a cancel.
+    if reservation.status not in OPS_CANCELLABLE_RESERVATION_STATUSES:
+        raise StayStateError("Reservation cannot be cancelled after check-in. Contact support.")
 
     attempt = reservation.payment_attempt
     if attempt is not None and attempt.status in PAYMENT_FINAL_STATES:

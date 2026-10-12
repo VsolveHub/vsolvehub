@@ -1,5 +1,18 @@
 # API Contract Changelog
 
+## 1.71.0 - Cancellation rules; pagination
+
+**Cancellations.**
+
+- `POST /ops/rentals/bookings/{booking_id}/cancel` now **requires** a body `{reason}` (max 480).
+  A missing or blank reason → `400`.
+- `RentalBooking` (and `OpsRentalBooking`, `PartnerRentalBooking`) add `cancelled_at` and
+  `cancellation_reason`, stamped on every cancel. Customer and partner cancels may leave the
+  reason blank.
+- `POST /ops/stays/reservations/{reservation_id}/cancel` refuses a reservation that is
+  `CHECKED_IN`, `CHECKED_OUT` or `NO_SHOW` (state error). Only `HELD`, `PAYMENT_PENDING` and
+  `CONFIRMED` can be cancelled with a full refund; an already `CANCELLED` one is returned as is.
+
 ## 1.70.0 - Operations: rental booking list, case source
 
 Additive, Operations only.
