@@ -6,7 +6,6 @@ from django.http import HttpResponse
 from drf_spectacular.utils import extend_schema
 from rest_framework import permissions, status
 from rest_framework.exceptions import ValidationError
-from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -28,6 +27,7 @@ from apps.wallet.services import (
     get_or_create_wallet,
     initiate_wallet_top_up,
 )
+from common.pagination import CURSOR_PARAMETER, page_serializer, paginated
 
 
 class CustomerWalletView(APIView):
@@ -49,18 +49,13 @@ class CustomerWalletTransactionsView(APIView):
 
     @extend_schema(
         summary="Customer wallet transaction ledger",
-        responses={200: WalletTransactionSerializer(many=True)},
+        parameters=[CURSOR_PARAMETER],
+        responses={200: page_serializer(WalletTransactionSerializer, "WalletTransactionPage")},
         tags=["wallet"],
     )
     def get(self, request: Request) -> Response:
         wallet = get_or_create_wallet(cast(User, request.user))
-        paginator = LimitOffsetPagination()
-        paginator.default_limit = 20
-        paginator.max_limit = 100
-        txns = wallet.transactions.all()
-        page = paginator.paginate_queryset(txns, request, view=self)
-        serializer = WalletTransactionSerializer(page, many=True)
-        return paginator.get_paginated_response(serializer.data)
+        return paginated(request, self, wallet.transactions.all(), WalletTransactionSerializer)
 
 
 class CustomerWalletTopUpView(APIView):

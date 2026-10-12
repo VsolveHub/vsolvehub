@@ -4,10 +4,12 @@ from typing import Any
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import DataError
+from drf_spectacular.utils import OpenApiParameter
 from rest_framework import serializers, status
 from rest_framework.exceptions import APIException, NotFound
 from rest_framework.pagination import CursorPagination
 from rest_framework.request import Request
+from rest_framework.response import Response
 
 
 class CursorInvalidApiError(APIException):
@@ -96,3 +98,132 @@ class StrictCursorPagination(CursorPagination):
             if raw is None:
                 raise
             raise CursorInvalidApiError from exc
+
+
+# ---------------------------------------------------------------------------------------------
+# Newest-first pages for history and activity lists
+# ---------------------------------------------------------------------------------------------
+
+#: Customer and partner screens: a phone's worth of rows per page.
+DEFAULT_PAGE_SIZE = 20
+#: Operations screens work through queues, so a page holds more.
+OPERATIONS_PAGE_SIZE = 50
+
+
+class NewestFirstPagination(StrictCursorPagination):
+    """Newest first, by creation time with `id` as the tiebreak. For any list that only grows."""
+
+    page_size = DEFAULT_PAGE_SIZE
+    ordering: tuple[str, ...] = ("-created_at", "-id")
+
+
+class OperationsNewestFirstPagination(NewestFirstPagination):
+    page_size = OPERATIONS_PAGE_SIZE
+
+
+_PAGE_SERIALIZERS: dict[str, type[serializers.Serializer[dict[str, Any]]]] = {}
+
+
+def page_serializer(
+    item: type[serializers.BaseSerializer[Any]], name: str
+) -> type[serializers.Serializer[dict[str, Any]]]:
+    """The `{next, previous, results}` envelope as a named schema component.
+
+    Named rather than generated from `item` because two lists can page the same item shape (a
+    partner's and Operations' rental bookings) and the contract wants one component each.
+    """
+
+    if name not in _PAGE_SERIALIZERS:
+        _PAGE_SERIALIZERS[name] = type(
+            name,
+            (serializers.Serializer,),
+            {
+                "next": serializers.URLField(allow_null=True),
+                "previous": serializers.URLField(allow_null=True),
+                "results": item(many=True),
+                "__module__": __name__,
+            },
+        )
+    return _PAGE_SERIALIZERS[name]
+
+
+#: The query parameter every cursor-paged list publishes.
+CURSOR_PARAMETER = OpenApiParameter(
+    "cursor", str, OpenApiParameter.QUERY, description="Opaque page cursor from `next`."
+)
+
+
+def paginated(
+    request: Request,
+    view: Any,
+    queryset: Any,
+    serializer: type[serializers.BaseSerializer[Any]],
+    *,
+    pagination: type[NewestFirstPagination] = NewestFirstPagination,
+    context: dict[str, Any] | None = None,
+) -> Response:
+    """Serialise one page of `queryset` in the shared envelope. Ordering comes from `pagination`."""
+
+    paginator = pagination()
+    page = paginator.paginate_queryset(queryset, request, view)
+    data = serializer(page or [], many=True, context=context or {"request": request}).data
+    return paginator.get_paginated_response(data)
+
+
+# ---------------------------------------------------------------------------------------------
+# Public browse: limit/offset, so user-chosen sorts (price, rating) still page correctly
+# ---------------------------------------------------------------------------------------------
+
+BROWSE_PAGE_SIZE = 24
+BROWSE_MAX_PAGE_SIZE = 60
+
+BROWSE_PARAMETERS = [
+    OpenApiParameter(
+        "limit",
+        int,
+        OpenApiParameter.QUERY,
+        description=f"Rows to return. Default {BROWSE_PAGE_SIZE}, at most {BROWSE_MAX_PAGE_SIZE}.",
+    ),
+    OpenApiParameter("offset", int, OpenApiParameter.QUERY, description="Rows to skip. Default 0."),
+]
+
+
+def browse_window(request: Request) -> tuple[int, int]:
+    """`(limit, offset)` from the query, clamped. Junk falls back to the defaults.
+
+    A browse page is never unbounded: a missing limit means the default page, not every row.
+    The client knows there is more when it receives a full page.
+    """
+
+    def _number(name: str) -> int | None:
+        raw = (request.query_params.get(name) or "").strip()
+        return int(raw) if raw.isdigit() else None
+
+    limit = _number("limit") or BROWSE_PAGE_SIZE
+    return min(limit, BROWSE_MAX_PAGE_SIZE), _number("offset") or 0
+
+
+def filter_statuses(queryset: Any, request: Request, allowed: Any, field: str = "status") -> Any:
+    """`?status=A` or `?status=A,B`: keep rows in any of the named states.
+
+    A screen that splits a list into tabs filters on the server, because splitting one loaded page
+    in the browser hides whatever is on the pages not yet loaded. An unknown state is refused
+    rather than ignored, so a typo cannot read as "nothing here".
+    """
+
+    raw = (request.query_params.get("status") or "").strip()
+    if not raw:
+        return queryset
+    wanted = [part.strip().upper() for part in raw.split(",") if part.strip()]
+    unknown = sorted(set(wanted) - set(allowed))
+    if unknown:
+        raise serializers.ValidationError({"status": [f"Unknown status: {', '.join(unknown)}."]})
+    return queryset.filter(**{f"{field}__in": wanted})
+
+
+STATUS_PARAMETER = OpenApiParameter(
+    "status",
+    str,
+    OpenApiParameter.QUERY,
+    description="One state, or several separated by commas.",
+)

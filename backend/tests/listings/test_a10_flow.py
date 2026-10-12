@@ -788,7 +788,7 @@ def test_ops_listings_moderation_and_lifecycle(poster, a10_variant):
     # List all ops listings
     res = op_client.get("/api/v1/ops/listings")
     assert res.status_code == 200
-    assert any(item["id"] == str(listing.id) for item in res.data)
+    assert any(item["id"] == str(listing.id) for item in res.data["results"])
 
     # Moderate: Approve
     mod_res = op_client.post(

@@ -11,6 +11,7 @@ from django.urls import reverse
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import permissions, status
+from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -110,6 +111,16 @@ from apps.listings.services import (
 )
 from apps.partners.models import PartnerProfile
 from apps.partners.permissions import IsOperationsUser, IsPartnerUser
+from common.pagination import (
+    BROWSE_PARAMETERS,
+    CURSOR_PARAMETER,
+    STATUS_PARAMETER,
+    OperationsNewestFirstPagination,
+    browse_window,
+    filter_statuses,
+    page_serializer,
+    paginated,
+)
 
 
 def _idempotency_key(request: Any) -> str:
@@ -195,6 +206,7 @@ class ListingBrowseView(APIView):
             OpenApiParameter("experience_band", OpenApiTypes.STR, OpenApiParameter.QUERY),
             OpenApiParameter("category", OpenApiTypes.STR, OpenApiParameter.QUERY),
             OpenApiParameter("city", OpenApiTypes.STR, OpenApiParameter.QUERY),
+            *BROWSE_PARAMETERS,
         ],
         responses=ListingSummarySerializer(many=True),
     )
@@ -217,6 +229,9 @@ class ListingBrowseView(APIView):
                 "max_salary": request.query_params.get("max_salary"),
             }
         )
+        limit, offset = browse_window(request)
+        # The chosen sort, then `id`, so a row cannot appear on two pages or on neither.
+        rows = rows.order_by(*rows.query.order_by, "-id")[offset : offset + limit]
         return Response(ListingSummarySerializer(rows, many=True).data)
 
 
@@ -390,10 +405,14 @@ class ApplicationReportView(APIView):
 
 
 class MyApplicationsView(APIView):
-    @extend_schema(responses=ApplicationSerializer(many=True))
+    @extend_schema(
+        parameters=[STATUS_PARAMETER, CURSOR_PARAMETER],
+        responses=page_serializer(ApplicationSerializer, "ApplicationPage"),
+    )
     def get(self, request: Any) -> Response:
         rows = Application.objects.select_related("listing").filter(applicant=request.user)
-        return Response(ApplicationSerializer(rows, many=True).data)
+        rows = filter_statuses(rows, request, Application.Status.values)
+        return paginated(request, self, rows, ApplicationSerializer)
 
 
 class MyApplicationWithdrawView(APIView):
@@ -586,12 +605,16 @@ class PartnerListingActionView(APIView):
 class PartnerListingApplicationsView(APIView):
     permission_classes = (IsPartnerUser,)
 
-    @extend_schema(responses=ApplicationSerializer(many=True))
+    @extend_schema(
+        parameters=[STATUS_PARAMETER, CURSOR_PARAMETER],
+        responses=page_serializer(ApplicationSerializer, "PartnerApplicationPage"),
+    )
     def get(self, request: Any, listing_id: UUID) -> Response:
         poster = _partner_profile(request.user)
         listing = get_object_or_404(Listing, id=listing_id, poster=poster)
         rows = Application.objects.select_related("listing").filter(listing=listing)
-        return Response(ApplicationSerializer(rows, many=True).data)
+        rows = filter_statuses(rows, request, Application.Status.values)
+        return paginated(request, self, rows, ApplicationSerializer)
 
 
 class PartnerApplicationActionView(APIView):
@@ -679,10 +702,32 @@ class VendorSubscriptionPurchaseView(APIView):
 class OpsListingCollectionView(APIView):
     permission_classes = (IsOperationsUser,)
 
-    @extend_schema(responses=PartnerListingSerializer(many=True))
-    def get(self, _request: Any) -> Response:
-        rows = Listing.objects.select_related("poster", "variant", "variant__service").all()
-        return Response(PartnerListingSerializer(rows, many=True).data)
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                "moderation_status",
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                description="e.g. PENDING for the review queue.",
+            ),
+            CURSOR_PARAMETER,
+        ],
+        responses=page_serializer(PartnerListingSerializer, "OpsListingPage"),
+    )
+    def get(self, request: Any) -> Response:
+        rows = Listing.objects.select_related("poster", "variant", "variant__service")
+        wanted = (request.query_params.get("moderation_status") or "").strip().upper()
+        if wanted:
+            if wanted not in Listing.ModerationStatus.values:
+                raise ValidationError({"moderation_status": ["That is not a listing status."]})
+            rows = rows.filter(moderation_status=wanted)
+        return paginated(
+            request,
+            self,
+            rows,
+            PartnerListingSerializer,
+            pagination=OperationsNewestFirstPagination,
+        )
 
 
 class OpsListingModerateView(APIView):

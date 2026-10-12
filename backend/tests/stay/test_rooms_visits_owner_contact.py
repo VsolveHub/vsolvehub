@@ -169,7 +169,7 @@ def test_enquiry_response_carries_the_owners_name_and_number(world):
     assert response.data["host_name"] == "Sri Sai PG"
     assert response.data["host_phone"] == HOST_PHONE
     assert response.data["property_slug"] == prop.slug
-    mine = client.get("/api/v1/me/stay-enquiries").data
+    mine = client.get("/api/v1/me/stay-enquiries").data["results"]
     assert mine[0]["host_phone"] == HOST_PHONE
 
 
@@ -709,5 +709,5 @@ def test_owner_api_sets_hours_manages_rooms_and_answers_visits(world):
         format="json",
     )
     assert declined.data["status"] == "DECLINED"
-    mine = guest.get("/api/v1/me/stay-visits").data
+    mine = guest.get("/api/v1/me/stay-visits").data["results"]
     assert mine[0]["reason_text"] == "Date doesn't match"

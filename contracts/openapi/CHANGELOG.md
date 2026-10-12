@@ -13,6 +13,45 @@
   `CHECKED_IN`, `CHECKED_OUT` or `NO_SHOW` (state error). Only `HELD`, `PAYMENT_PENDING` and
   `CONFIRMED` can be cancelled with a full refund; an already `CANCELLED` one is returned as is.
 
+**Pagination — BREAKING for the lists below.** Lists that grow with use now return one page at a
+time in the envelope the older lists already use: `{next, previous, results}`. Follow `next` (an
+absolute URL carrying `?cursor=`) until it is `null`. Newest first; 20 per page for customers and
+partners, 50 for Operations. A blank or stale `cursor` → `400 cursor_invalid`.
+
+| Endpoint | Page component | New filters |
+|---|---|---|
+| `GET /customer/wallet/transactions/` | `WalletTransactionPage` | — (was limit/offset at runtime while the contract said array) |
+| `GET /customer/coins/transactions/` | `CoinTransactionPage` | — |
+| `GET /customer/referral/attributions/` | `ReferralAttributionPage` | — (was capped at 100) |
+| `GET /me/rentals` | `RentalBookingPage` | — |
+| `GET /me/stay-reservations` | `StayReservationPage` | — |
+| `GET /me/stay-enquiries` | `StayEnquiryPage` | — |
+| `GET /me/stay-visits` | `StayVisitPage` | — |
+| `GET /my/listing-applications` | `ApplicationPage` | `status` |
+| `GET /partner/rentals/bookings` | `PartnerRentalBookingPage` | `status` (unknown → 400) |
+| `GET /partner/stays/reservations` | `PartnerStayReservationPage` | — |
+| `GET /partner/stays/enquiries` | `PartnerStayEnquiryPage` | — |
+| `GET /partner/stays/visits` | `PartnerStayVisitPage` | `status` (comma list); ordered by visit date |
+| `GET /partner/listings/{listing_id}/applications` | `PartnerApplicationPage` | `status` |
+| `GET /ops/rentals` | `RentalAssetPage` | `moderation_status` |
+| `GET /ops/rentals/bookings` | `OpsRentalBookingPage` | `status`, `q` (was capped at 200) |
+| `GET /ops/stays` | `PropertyPage` | `moderation_status` |
+| `GET /ops/stays/reservations` | `OpsStayReservationPage` | `status`, `q` |
+| `GET /ops/stays/enquiries` | `OpsStayEnquiryPage` | — |
+| `GET /ops/listings` | `OpsListingPage` | `moderation_status` |
+| `GET /ops/referral/attributions/` | `OpsReferralAttributionPage` | — (was capped at 200) |
+
+`status` accepts one state or several separated by commas where noted.
+
+**Public browse stays an array**, now bounded: `GET /rentals`, `GET /listings` and `GET /stays`
+take `limit` (default 24, max 60) and `offset`. A full page means there may be more. `/stays`
+used to return every row when `limit` was omitted.
+
+Indexes on `created_at` for rental bookings, stay reservations, stay enquiries and job
+applications (migrations `rental 0019`, `stay 0023`, `listings 0017`).
+
+- Removed: none. Renamed: none.
+
 ## 1.70.0 - Operations: rental booking list, case source
 
 Additive, Operations only.

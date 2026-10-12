@@ -34,6 +34,13 @@ from apps.loyalty.services.referral import (
     referee_reward_summary,
     validate_referral_code,
 )
+from common.pagination import (
+    CURSOR_PARAMETER,
+    OPERATIONS_PAGE_SIZE,
+    NewestFirstPagination,
+    page_serializer,
+    paginated,
+)
 
 
 class CustomerCoinsView(APIView):
@@ -55,18 +62,29 @@ class CustomerCoinsView(APIView):
         return Response(serializer.data)
 
 
+class ReferralPagination(NewestFirstPagination):
+    """Referrals carry `attributed_at` rather than `created_at`."""
+
+    ordering = ("-attributed_at", "-id")
+
+
+class OpsReferralPagination(ReferralPagination):
+    page_size = OPERATIONS_PAGE_SIZE
+
+
 class CustomerCoinTransactionsView(APIView):
     permission_classes = (permissions.IsAuthenticated,)
 
     @extend_schema(
         summary="Customer V Coins activity transactions",
-        responses={200: CoinTransactionSerializer(many=True)},
+        parameters=[CURSOR_PARAMETER],
+        responses={200: page_serializer(CoinTransactionSerializer, "CoinTransactionPage")},
         tags=["loyalty"],
     )
     def get(self, request: Request) -> Response:
         customer = cast(User, request.user)
-        txns = CoinTransaction.objects.filter(customer=customer).order_by("-created_at")
-        return Response(CoinTransactionSerializer(txns, many=True).data)
+        txns = CoinTransaction.objects.filter(customer=customer)
+        return paginated(request, self, txns, CoinTransactionSerializer)
 
 
 class CustomerCoinsBurnPreviewView(APIView):
@@ -155,16 +173,21 @@ class CustomerReferralAttributionsView(APIView):
 
     @extend_schema(
         summary="Customer's referrals list",
-        responses={200: ReferralAttributionSerializer(many=True)},
+        parameters=[CURSOR_PARAMETER],
+        responses={200: page_serializer(ReferralAttributionSerializer, "ReferralAttributionPage")},
         tags=["referral"],
     )
     def get(self, request: Request) -> Response:
-        attributions = (
-            ReferralAttribution.objects.filter(referrer=cast(User, request.user))
-            .select_related("referee")
-            .order_by("-attributed_at")[:100]  # Hard cap at 100 — most customers have < 20
+        attributions = ReferralAttribution.objects.filter(
+            referrer=cast(User, request.user)
+        ).select_related("referee")
+        return paginated(
+            request,
+            self,
+            attributions,
+            ReferralAttributionSerializer,
+            pagination=ReferralPagination,
         )
-        return Response(ReferralAttributionSerializer(attributions, many=True).data)
 
 
 class PublicReferralValidateView(APIView):

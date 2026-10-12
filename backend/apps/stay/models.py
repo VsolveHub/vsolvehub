@@ -273,6 +273,7 @@ class StayEnquiry(models.Model):
     class Meta:
         ordering = ("-created_at",)
         verbose_name_plural = "stay enquiries"
+        indexes = [models.Index(fields=("-created_at",), name="stay_enquiry_created_idx")]
 
 
 class VisitSlot(models.Model):
@@ -617,6 +618,7 @@ class StayReservation(models.Model):
                 name="stay_reservation_positive_total",
             ),
         ]
+        indexes = [models.Index(fields=("-created_at",), name="stay_reservation_created_idx")]
 
     def __str__(self) -> str:
         return str(self.id)

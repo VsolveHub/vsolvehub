@@ -24,7 +24,7 @@ def test_ops_lists_bookings_with_both_parties(rental_world):  # noqa: F811
     booking = _booked(rental_world)
     response = _ops_client().get("/api/v1/ops/rentals/bookings")
     assert response.status_code == status.HTTP_200_OK
-    row = next(item for item in response.data if item["id"] == str(booking.id))
+    row = next(item for item in response.data["results"] if item["id"] == str(booking.id))
     assert row["customer_name"] == "Customer Cancel"
     assert row["customer_phone"] == "+919922220002"
     assert row["partner_name"] == "Owner Cancel Co"
@@ -38,9 +38,9 @@ def test_ops_booking_list_filters_by_status(rental_world):  # noqa: F811
     booking = _booked(rental_world)
     client = _ops_client()
     same = client.get(f"/api/v1/ops/rentals/bookings?status={booking.status.lower()}")
-    assert [row["id"] for row in same.data] == [str(booking.id)]
+    assert [row["id"] for row in same.data["results"]] == [str(booking.id)]
     other = client.get(f"/api/v1/ops/rentals/bookings?status={RentalBooking.Status.RETURNED}")
-    assert other.data == []
+    assert other.data["results"] == []
 
 
 @pytest.mark.django_db

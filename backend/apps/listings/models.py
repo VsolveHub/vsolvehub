@@ -229,6 +229,7 @@ class Application(models.Model):
         indexes = [
             models.Index(fields=("listing", "status"), name="listings_app_status_idx"),
             models.Index(fields=("applicant", "status"), name="listings_app_actor_idx"),
+            models.Index(fields=("-created_at",), name="listings_app_created_idx"),
         ]
 
     def __str__(self) -> str:

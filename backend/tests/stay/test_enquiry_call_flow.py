@@ -249,7 +249,9 @@ def test_host_sees_the_guests_name_and_number(world):
     prop = _live(world, "monthly", rate=MONTHLY_RENT)
     create_enquiry(customer=world["guest"], property_id=prop.id, check_in=_start(), length=1)
 
-    rows = _partner_client(world["host_user"]).get("/api/v1/partner/stays/enquiries").data
+    rows = (
+        _partner_client(world["host_user"]).get("/api/v1/partner/stays/enquiries").data["results"]
+    )
 
     assert rows[0]["customer_name"] == "Priya Guest"
     assert rows[0]["customer_phone"] == "+919966660002"
@@ -261,7 +263,7 @@ def test_the_guests_own_list_does_not_echo_contact_fields(world):
     prop = _live(world, "monthly", rate=MONTHLY_RENT)
     create_enquiry(customer=world["guest"], property_id=prop.id, check_in=_start(), length=1)
 
-    rows = _customer_client(world["guest"]).get("/api/v1/me/stay-enquiries").data
+    rows = _customer_client(world["guest"]).get("/api/v1/me/stay-enquiries").data["results"]
 
     assert "customer_phone" not in rows[0]
 

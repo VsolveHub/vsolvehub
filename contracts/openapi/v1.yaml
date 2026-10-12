@@ -2302,8 +2302,14 @@ paths:
           description: ''
   /api/v1/customer/coins/transactions/:
     get:
-      operationId: customer_coins_transactions_list
+      operationId: customer_coins_transactions_retrieve
       summary: Customer V Coins activity transactions
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
       tags:
       - loyalty
       security:
@@ -2313,9 +2319,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/CoinTransaction'
+                $ref: '#/components/schemas/CoinTransactionPage'
           description: ''
   /api/v1/customer/referral/:
     get:
@@ -2334,8 +2338,14 @@ paths:
           description: ''
   /api/v1/customer/referral/attributions/:
     get:
-      operationId: customer_referral_attributions_list
+      operationId: customer_referral_attributions_retrieve
       summary: Customer's referrals list
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
       tags:
       - referral
       security:
@@ -2345,9 +2355,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ReferralAttribution'
+                $ref: '#/components/schemas/ReferralAttributionPage'
           description: ''
   /api/v1/customer/referral/validate/:
     post:
@@ -2421,8 +2429,14 @@ paths:
           description: ''
   /api/v1/customer/wallet/transactions/:
     get:
-      operationId: customer_wallet_transactions_list
+      operationId: customer_wallet_transactions_retrieve
       summary: Customer wallet transaction ledger
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
       tags:
       - wallet
       security:
@@ -2432,9 +2446,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/WalletTransaction'
+                $ref: '#/components/schemas/WalletTransactionPage'
           description: ''
   /api/v1/engagement-amendments/{engagement_amendment_id}/accept/:
     post:
@@ -4926,6 +4938,11 @@ paths:
         schema:
           type: string
       - in: query
+        name: limit
+        schema:
+          type: integer
+        description: Rows to return. Default 24, at most 60.
+      - in: query
         name: location
         schema:
           type: string
@@ -4937,6 +4954,11 @@ paths:
         name: min_salary
         schema:
           type: integer
+      - in: query
+        name: offset
+        schema:
+          type: integer
+        description: Rows to skip. Default 0.
       - in: query
         name: q
         schema:
@@ -5277,7 +5299,13 @@ paths:
           description: ''
   /api/v1/me/rentals:
     get:
-      operationId: me_rentals_list
+      operationId: me_rentals_retrieve
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
       tags:
       - me
       security:
@@ -5287,9 +5315,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/RentalBooking'
+                $ref: '#/components/schemas/RentalBookingPage'
           description: ''
   /api/v1/me/rentals/{booking_id}/cancel:
     post:
@@ -5374,7 +5400,13 @@ paths:
           description: ''
   /api/v1/me/stay-enquiries:
     get:
-      operationId: me_stay_enquiries_list
+      operationId: me_stay_enquiries_retrieve
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
       tags:
       - me
       security:
@@ -5384,9 +5416,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/StayEnquiry'
+                $ref: '#/components/schemas/StayEnquiryPage'
           description: ''
   /api/v1/me/stay-enquiries/{enquiry_id}/cancel:
     post:
@@ -5412,7 +5442,13 @@ paths:
           description: ''
   /api/v1/me/stay-reservations:
     get:
-      operationId: me_stay_reservations_list
+      operationId: me_stay_reservations_retrieve
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
       tags:
       - me
       security:
@@ -5422,9 +5458,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/StayReservation'
+                $ref: '#/components/schemas/StayReservationPage'
           description: ''
   /api/v1/me/stay-reservations/{reservation_id}/cancel:
     post:
@@ -5451,7 +5485,13 @@ paths:
           description: ''
   /api/v1/me/stay-visits:
     get:
-      operationId: me_stay_visits_list
+      operationId: me_stay_visits_retrieve
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
       tags:
       - me
       security:
@@ -5461,9 +5501,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/StayVisit'
+                $ref: '#/components/schemas/StayVisitPage'
           description: ''
   /api/v1/me/stay-visits/{visit_id}/cancel:
     post:
@@ -5527,7 +5565,18 @@ paths:
           description: ''
   /api/v1/my/listing-applications:
     get:
-      operationId: my_listing_applications_list
+      operationId: my_listing_applications_retrieve
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: One state, or several separated by commas.
       tags:
       - my
       security:
@@ -5537,9 +5586,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Application'
+                $ref: '#/components/schemas/ApplicationPage'
           description: ''
   /api/v1/my/listing-applications/{application_id}/withdraw:
     post:
@@ -9917,7 +9964,18 @@ paths:
           description: ''
   /api/v1/ops/listings:
     get:
-      operationId: ops_listings_list
+      operationId: ops_listings_retrieve
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
+      - in: query
+        name: moderation_status
+        schema:
+          type: string
+        description: e.g. PENDING for the review queue.
       tags:
       - ops
       security:
@@ -9927,9 +9985,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/PartnerListing'
+                $ref: '#/components/schemas/OpsListingPage'
           description: ''
   /api/v1/ops/listings/{listing_id}/moderate:
     post:
@@ -10249,11 +10305,16 @@ paths:
           description: ''
   /api/v1/ops/referral/attributions/:
     get:
-      operationId: ops_referral_attributions_list
+      operationId: ops_referral_attributions_retrieve
       description: |-
         Referral review queue. Filter with `?status=PENDING|QUALIFIED|REWARDED|INELIGIBLE|REVERSED`
         and `?phone=` (referrer or referee).
       parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
       - in: query
         name: phone
         schema:
@@ -10271,9 +10332,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/OpsReferralAttribution'
+                $ref: '#/components/schemas/OpsReferralAttributionPage'
           description: ''
   /api/v1/ops/referral/attributions/{attribution_id}/reject/:
     post:
@@ -10384,7 +10443,18 @@ paths:
           description: ''
   /api/v1/ops/rentals:
     get:
-      operationId: ops_rentals_list
+      operationId: ops_rentals_retrieve
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
+      - in: query
+        name: moderation_status
+        schema:
+          type: string
+        description: e.g. PENDING for the review queue.
       tags:
       - ops
       security:
@@ -10394,9 +10464,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/RentalAsset'
+                $ref: '#/components/schemas/RentalAssetPage'
           description: ''
   /api/v1/ops/rentals/{asset_id}/moderate:
     post:
@@ -10433,13 +10501,22 @@ paths:
           description: ''
   /api/v1/ops/rentals/bookings:
     get:
-      operationId: ops_rentals_bookings_list
+      operationId: ops_rentals_bookings_retrieve
       description: |-
         Every rental booking, so Operations can see delivery requests, payments and cancellations.
 
-        `?status=` narrows to one `RentalBooking.Status`; an unknown value is refused rather than
-        silently ignored, because an empty list would read as "nothing to do".
+        `?status=` narrows to one `RentalBooking.Status`; `?q=` matches the customer's name or phone,
+        the owner's name, the equipment title, or a booking id.
       parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
+      - in: query
+        name: q
+        schema:
+          type: string
       - in: query
         name: status
         schema:
@@ -10453,9 +10530,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/OpsRentalBooking'
+                $ref: '#/components/schemas/OpsRentalBookingPage'
           description: ''
   /api/v1/ops/rentals/bookings/{booking_id}/cancel:
     post:
@@ -10842,7 +10917,18 @@ paths:
           description: No response body
   /api/v1/ops/stays:
     get:
-      operationId: ops_stays_list
+      operationId: ops_stays_retrieve
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
+      - in: query
+        name: moderation_status
+        schema:
+          type: string
+        description: e.g. PENDING for the review queue.
       tags:
       - ops
       security:
@@ -10852,9 +10938,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Property'
+                $ref: '#/components/schemas/PropertyPage'
           description: ''
   /api/v1/ops/stays/{property_id}/moderate:
     post:
@@ -10891,7 +10975,13 @@ paths:
           description: ''
   /api/v1/ops/stays/enquiries:
     get:
-      operationId: ops_stays_enquiries_list
+      operationId: ops_stays_enquiries_retrieve
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
       tags:
       - ops
       security:
@@ -10901,13 +10991,26 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/StayEnquiry'
+                $ref: '#/components/schemas/OpsStayEnquiryPage'
           description: ''
   /api/v1/ops/stays/reservations:
     get:
-      operationId: ops_stays_reservations_list
+      operationId: ops_stays_reservations_retrieve
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: Guest name or phone, property title, or a reservation id.
+      - in: query
+        name: status
+        schema:
+          type: string
       tags:
       - ops
       security:
@@ -10917,9 +11020,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/StayReservation'
+                $ref: '#/components/schemas/OpsStayReservationPage'
           description: ''
   /api/v1/ops/stays/reservations/{reservation_id}/cancel:
     post:
@@ -14030,14 +14131,24 @@ paths:
           description: ''
   /api/v1/partner/listings/{listing_id}/applications:
     get:
-      operationId: partner_listings_applications_list
+      operationId: partner_listings_applications_retrieve
       parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
       - in: path
         name: listing_id
         schema:
           type: string
           format: uuid
         required: true
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: One state, or several separated by commas.
       tags:
       - partner
       security:
@@ -14047,9 +14158,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Application'
+                $ref: '#/components/schemas/PartnerApplicationPage'
           description: ''
   /api/v1/partner/listings/home:
     get:
@@ -14758,8 +14867,13 @@ paths:
           description: No response body
   /api/v1/partner/rentals/bookings:
     get:
-      operationId: partner_rentals_bookings_list
+      operationId: partner_rentals_bookings_retrieve
       parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
       - in: query
         name: status
         schema:
@@ -14773,9 +14887,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/PartnerRentalBooking'
+                $ref: '#/components/schemas/PartnerRentalBookingPage'
           description: ''
   /api/v1/partner/rentals/bookings/{booking_id}/{action}:
     post:
@@ -15014,7 +15126,13 @@ paths:
           description: ''
   /api/v1/partner/stays/enquiries:
     get:
-      operationId: partner_stays_enquiries_list
+      operationId: partner_stays_enquiries_retrieve
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
       tags:
       - partner
       security:
@@ -15024,9 +15142,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/PartnerStayEnquiry'
+                $ref: '#/components/schemas/PartnerStayEnquiryPage'
           description: ''
   /api/v1/partner/stays/enquiries/{enquiry_id}/cancel:
     post:
@@ -15468,7 +15584,13 @@ paths:
           description: ''
   /api/v1/partner/stays/reservations:
     get:
-      operationId: partner_stays_reservations_list
+      operationId: partner_stays_reservations_retrieve
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
       tags:
       - partner
       security:
@@ -15478,9 +15600,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/StayReservation'
+                $ref: '#/components/schemas/PartnerStayReservationPage'
           description: ''
   /api/v1/partner/stays/reservations/{reservation_id}/{action}:
     post:
@@ -15830,7 +15950,18 @@ paths:
           description: ''
   /api/v1/partner/stays/visits:
     get:
-      operationId: partner_stays_visits_list
+      operationId: partner_stays_visits_retrieve
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor from `next`.
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: One state, or several separated by commas.
       tags:
       - partner
       security:
@@ -15840,9 +15971,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/PartnerStayVisit'
+                $ref: '#/components/schemas/PartnerStayVisitPage'
           description: ''
   /api/v1/partner/stays/visits/{visit_id}/{action}:
     post:
@@ -16807,6 +16936,11 @@ paths:
           type: string
           format: date
       - in: query
+        name: limit
+        schema:
+          type: integer
+        description: Rows to return. Default 24, at most 60.
+      - in: query
         name: location
         schema:
           type: string
@@ -16822,6 +16956,11 @@ paths:
         name: min_price
         schema:
           type: integer
+      - in: query
+        name: offset
+        schema:
+          type: integer
+        description: Rows to skip. Default 0.
       - in: query
         name: q
         schema:
@@ -20392,6 +20531,25 @@ components:
       - created_at
       - file_url
       - id
+    ApplicationPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Application'
+      required:
+      - next
+      - previous
+      - results
     ApplicationReport:
       type: object
       properties:
@@ -22371,6 +22529,25 @@ components:
       - created_at
       - id
       - kind
+    CoinTransactionPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/CoinTransaction'
+      required:
+      - next
+      - previous
+      - results
     CommercialAmountBasisEnum:
       enum:
       - PARTNER_QUOTE
@@ -29887,6 +30064,25 @@ components:
         pinned_tiles:
           description: List of tile IDs pinned by the operator. e.g. ['open_cases',
             'overdue_bookings', 'captured_today', 'wallet_liability']
+    OpsListingPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerListing'
+      required:
+      - next
+      - previous
+      - results
     OpsReferralAttribution:
       type: object
       description: 'Operations view: full phone numbers, program version, terms and
@@ -29965,6 +30161,25 @@ components:
       - referrer_phone
       - reviewed_by_phone
       - rewards
+    OpsReferralAttributionPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsReferralAttribution'
+      required:
+      - next
+      - previous
+      - results
     OpsReferralReward:
       type: object
       properties:
@@ -30107,6 +30322,25 @@ components:
       - quantity
       - start_date
       - transport
+    OpsRentalBookingPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsRentalBooking'
+      required:
+      - next
+      - previous
+      - results
     OpsReportCatalogItem:
       type: object
       properties:
@@ -30205,6 +30439,44 @@ components:
       - rows
       - total_rows_count
       - totals
+    OpsStayEnquiryPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/StayEnquiry'
+      required:
+      - next
+      - previous
+      - results
+    OpsStayReservationPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/StayReservation'
+      required:
+      - next
+      - previous
+      - results
     OpsVendorPlanServiceOption:
       type: object
       properties:
@@ -30589,6 +30861,25 @@ components:
       - transitions
       - updated_at
       - version
+    PartnerApplicationPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Application'
+      required:
+      - next
+      - previous
+      - results
     PartnerApplicationStatusEnum:
       enum:
       - DRAFT
@@ -32520,6 +32811,25 @@ components:
       - quantity
       - start_date
       - transport
+    PartnerRentalBookingPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerRentalBooking'
+      required:
+      - next
+      - previous
+      - results
     PartnerReservationActionRequest:
       type: object
       properties:
@@ -32760,6 +33070,44 @@ components:
       - property_slug
       - property_title
       - unit_name
+    PartnerStayEnquiryPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerStayEnquiry'
+      required:
+      - next
+      - previous
+      - results
+    PartnerStayReservationPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/StayReservation'
+      required:
+      - next
+      - previous
+      - results
     PartnerStayVisit:
       type: object
       description: 'The host''s view: who is coming, with their number, and the reason
@@ -32847,6 +33195,25 @@ components:
       - start_time
       - unit_name
       - visit_date
+    PartnerStayVisitPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerStayVisit'
+      required:
+      - next
+      - previous
+      - results
     PartnerUnit:
       type: object
       description: |-
@@ -35254,6 +35621,25 @@ components:
       - created_at
       - id
       - url
+    PropertyPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Property'
+      required:
+      - next
+      - previous
+      - results
     PropertySummary:
       type: object
       properties:
@@ -37863,6 +38249,25 @@ components:
       - attributed_at
       - id
       - referee_display
+    ReferralAttributionPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReferralAttribution'
+      required:
+      - next
+      - previous
+      - results
     ReferralProgramSummary:
       type: object
       properties:
@@ -38475,6 +38880,25 @@ components:
         * `REJECTED` - Rejected
         * `REMOVED` - Removed
         * `PAUSED` - Paused
+    RentalAssetPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/RentalAsset'
+      required:
+      - next
+      - previous
+      - results
     RentalBooking:
       type: object
       properties:
@@ -38579,6 +39003,25 @@ components:
       description: |-
         * `PICKUP` - Self pickup
         * `DELIVERY` - Partner-arranged delivery
+    RentalBookingPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/RentalBooking'
+      required:
+      - next
+      - previous
+      - results
     RentalBookingStatusEnum:
       enum:
       - AWAITING_TRANSPORT_QUOTE
@@ -41976,6 +42419,25 @@ components:
       - property_slug
       - property_title
       - unit_name
+    StayEnquiryPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/StayEnquiry'
+      required:
+      - next
+      - previous
+      - results
     StayEnquiryStatusEnum:
       enum:
       - SUBMITTED
@@ -42153,6 +42615,25 @@ components:
       - property_title
       - unit
       - unit_name
+    StayReservationPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/StayReservation'
+      required:
+      - next
+      - previous
+      - results
     StayReservationStatusEnum:
       enum:
       - HELD
@@ -42451,6 +42932,25 @@ components:
       - start_time
       - unit_name
       - visit_date
+    StayVisitPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/StayVisit'
+      required:
+      - next
+      - previous
+      - results
     StayVisitSlot:
       type: object
       properties:
@@ -44085,6 +44585,25 @@ components:
         * `REFUND_CREDIT` - Refund credit
         * `REFERRAL_CREDIT` - Referral credit
         * `ADJUSTMENT` - Adjustment
+    WalletTransactionPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/WalletTransaction'
+      required:
+      - next
+      - previous
+      - results
     WarrantyClaimRequest:
       type: object
       description: The Customer calls on a warranty the retention was held against.

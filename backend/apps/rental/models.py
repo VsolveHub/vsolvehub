@@ -238,6 +238,8 @@ class RentalBooking(models.Model):
 
     class Meta:
         ordering = ("-created_at",)
+        #: Newest-first pages (customer, partner and Operations lists) walk this index.
+        indexes = [models.Index(fields=("-created_at",), name="rental_booking_created_idx")]
         constraints = [
             models.CheckConstraint(
                 condition=models.Q(pickup_or_delivery_mode__in=("PICKUP", "DELIVERY")),

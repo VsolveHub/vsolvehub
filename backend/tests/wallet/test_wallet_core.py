@@ -190,7 +190,8 @@ def test_customer_wallet_transactions_api() -> None:
     response = client.get("/api/v1/customer/wallet/transactions/")
     assert response.status_code == HTTPStatus.OK
     data = response.json()
-    assert data["count"] == 2
+    # Cursor pages carry no total: counting every row is what paging avoids.
+    assert data["next"] is None
     assert len(data["results"]) == 2
 
 
