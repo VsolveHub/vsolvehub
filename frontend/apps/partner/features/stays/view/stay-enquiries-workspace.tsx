@@ -2,16 +2,17 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { friendlyErrorMessage, usePagedList } from "@vsolve/query";
-import { Badge, Card, EmptyState, LoadMore, formatDate } from "@vsolve/ui";
-import { ChevronRight, Phone } from "lucide-react";
+import { Badge, Button, Card, Dialog, EmptyState, Field, LoadMore, Textarea, formatDate } from "@vsolve/ui";
+import { Check, ChevronRight, Phone, X } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   cancelPartnerStayEnquiry,
   confirmPartnerStayEnquiry,
   fetchPartnerStayEnquiriesPage,
   respondPartnerStayEnquiry,
+  type StayEnquiry,
   stayLengthLabel,
 } from "@/features/stays/queries";
 import { STAY_SECTIONS } from "@/features/stays/view/stay-sections";
@@ -19,6 +20,8 @@ import {
   StayEnquiryDetailSheet,
   stayEnquiryStatusLabel,
   stayEnquiryTone,
+  RoomChoice,
+  useBookableRooms,
 } from "@/features/stays/view/stay-record-sheets";
 import { SectionNav } from "@/features/workspace/view/section-nav";
 
@@ -82,6 +85,24 @@ export function PartnerStayEnquiriesWorkspace() {
 
   const invalidate = () => void qc.invalidateQueries({ queryKey: ["partner-stays"] });
 
+  // Booked / Not available straight from the card: the host has just hung up and records the
+  // outcome without opening Details. Both still confirm, because both message the guest.
+  const [booking, setBooking] = useState<StayEnquiry | null>(null);
+  const [declining, setDeclining] = useState<StayEnquiry | null>(null);
+  const [roomId, setRoomId] = useState("");
+  const [note, setNote] = useState("");
+  const rooms = useBookableRooms(booking?.property, booking?.unit);
+  useEffect(() => {
+    // The room the guest asked about comes first, so the first free one is the likely answer.
+    if (booking && !rooms.some((room) => room.id === roomId)) setRoomId(rooms[0]?.id ?? "");
+  }, [booking, rooms, roomId]);
+  const closeQuick = () => {
+    setBooking(null);
+    setDeclining(null);
+    setNote("");
+    setRoomId("");
+  };
+
   const act = useMutation({
     mutationFn: ({
       id,
@@ -98,7 +119,10 @@ export function PartnerStayEnquiriesWorkspace() {
       if (action === "not_available") return respondPartnerStayEnquiry(id, note ?? "", true);
       return cancelPartnerStayEnquiry(id);
     },
-    onSuccess: invalidate,
+    onSuccess: () => {
+      closeQuick();
+      invalidate();
+    },
   });
 
   const rows = enquiries.items;
@@ -187,14 +211,40 @@ export function PartnerStayEnquiriesWorkspace() {
                     <ChevronRight className="size-3.5" aria-hidden />
                   </span>
                 </button>
-                {enquiry.customer_phone && OPEN.has(enquiry.status ?? "") ? (
-                  <a
-                    href={`tel:${enquiry.customer_phone}`}
-                    className="inline-flex items-center justify-center gap-2 rounded-control bg-action px-4 py-2 text-sm font-bold text-action-text shadow-sm hover:bg-action-hover"
-                  >
-                    <Phone className="size-4" aria-hidden />
-                    Call
-                  </a>
+                {OPEN.has(enquiry.status ?? "") ? (
+                  <div className="flex flex-wrap gap-2 sm:flex-col sm:items-stretch lg:flex-row">
+                    {enquiry.customer_phone ? (
+                      <a
+                        href={`tel:${enquiry.customer_phone}`}
+                        className="inline-flex flex-1 items-center justify-center gap-2 rounded-control bg-action px-4 py-2 text-sm font-bold text-action-text shadow-sm hover:bg-action-hover sm:flex-none"
+                      >
+                        <Phone className="size-4" aria-hidden />
+                        Call
+                      </a>
+                    ) : null}
+                    <Button
+                      variant="secondary"
+                      onClick={() => {
+                        act.reset();
+                        setRoomId("");
+                        setBooking(enquiry);
+                      }}
+                    >
+                      <Check className="size-4" aria-hidden />
+                      Booked
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        act.reset();
+                        setNote("");
+                        setDeclining(enquiry);
+                      }}
+                    >
+                      <X className="size-4" aria-hidden />
+                      Not available
+                    </Button>
+                  </div>
                 ) : null}
               </div>
             </li>
@@ -217,6 +267,81 @@ export function PartnerStayEnquiriesWorkspace() {
         isPending={act.isPending}
         actionError={act.error ? friendlyErrorMessage(act.error) : null}
       />
+
+      <Dialog
+        open={booking !== null}
+        onOpenChange={(next) => !next && closeQuick()}
+        title="Booking confirmed?"
+        description={
+          booking
+            ? `${booking.customer_name || "The guest"} is taking a room at ${booking.property_title}. It shows as Booked and stops appearing as available. The guest is told.`
+            : undefined
+        }
+        footer={
+          <>
+            <Button variant="ghost" disabled={act.isPending} onClick={closeQuick}>
+              Not yet
+            </Button>
+            <Button
+              loading={act.isPending}
+              loadingLabel="Saving…"
+              onClick={() => booking && act.mutate({ id: booking.id, action: "booked", roomId: roomId || null })}
+            >
+              Yes – Mark Room Booked
+            </Button>
+          </>
+        }
+      >
+        <RoomChoice rooms={rooms} value={roomId} onChange={setRoomId} />
+        {act.error ? (
+          <p role="alert" className="mt-2 text-sm text-danger-text">
+            {friendlyErrorMessage(act.error)}
+          </p>
+        ) : null}
+      </Dialog>
+
+      <Dialog
+        open={declining !== null}
+        onOpenChange={(next) => !next && closeQuick()}
+        title="Room not available?"
+        description={
+          declining
+            ? `${declining.customer_name || "The guest"} is told the room is not available. A note is optional.`
+            : undefined
+        }
+        footer={
+          <>
+            <Button variant="ghost" disabled={act.isPending} onClick={closeQuick}>
+              Back
+            </Button>
+            <Button
+              variant="danger"
+              loading={act.isPending}
+              loadingLabel="Sending…"
+              onClick={() =>
+                declining && act.mutate({ id: declining.id, action: "not_available", note: note.trim() })
+              }
+            >
+              Tell the guest
+            </Button>
+          </>
+        }
+      >
+        <Field label="Note for the guest" showOptional>
+          <Textarea
+            value={note}
+            rows={3}
+            maxLength={480}
+            onChange={(event) => setNote(event.target.value)}
+            placeholder="e.g. Fully occupied till the 20th."
+          />
+        </Field>
+        {act.error ? (
+          <p role="alert" className="mt-2 text-sm text-danger-text">
+            {friendlyErrorMessage(act.error)}
+          </p>
+        ) : null}
+      </Dialog>
     </div>
   );
 }
