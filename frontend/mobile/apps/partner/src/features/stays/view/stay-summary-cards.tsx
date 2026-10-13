@@ -16,7 +16,7 @@ import { fetchPartnerStaySummary } from "../queries";
 export function StaySummaryCards({
   onSelectTab,
 }: {
-  onSelectTab?: (tab: "enquiries" | "visits") => void;
+  onSelectTab?: (tab: "enquiries" | "visits" | "bookings") => void;
 }) {
   const summary = useQuery({
     queryKey: ["partner-stays", "summary"],
@@ -73,7 +73,10 @@ export function StaySummaryCards({
         </View>
 
         {/* Booked */}
-        <View className="flex-1 min-w-[95px] rounded-2xl border border-line bg-surface p-3 shadow-xs">
+        <Pressable
+          onPress={() => onSelectTab?.("bookings")}
+          className="flex-1 min-w-[95px] rounded-2xl border border-line bg-surface p-3 shadow-xs active:bg-surface-hover"
+        >
           <View className="flex-row items-center justify-between">
             <Text className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
               Booked
@@ -83,7 +86,7 @@ export function StaySummaryCards({
           <Text className="mt-1 text-lg font-black text-navy-900">
             {data.booked_rooms}
           </Text>
-        </View>
+        </Pressable>
 
         {/* Reviews */}
         <View className="flex-1 min-w-[95px] rounded-2xl border border-amber-200 bg-amber-50/60 p-3 shadow-xs">

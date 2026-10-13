@@ -3,7 +3,7 @@ import { blocksNewSelection } from "@vsolve/query/native";
 import { Badge, Button, Disclosure, ErrorState, Skeleton, Text, buttonStyles, cn } from "@vsolve/mobile-ui";
 import { Link, useRouter } from "expo-router";
 import { useState, type ReactNode } from "react";
-import { Pressable, ScrollView, Share, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, Share, View } from "react-native";
 
 import { useRequirement } from "@/features/requirement/queries";
 import { estimateConfirmHref, estimateQuestionsHref, requestQuotesHref } from "@/lib/routes";
@@ -51,6 +51,13 @@ export function EstimateDetail({
   const revision = useRequestRevision();
   const [rejecting, setRejecting] = useState(false);
   const [asking, setAsking] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([access.refetch(), selectionQuery.refetch(), requirementQuery.refetch()]);
+    setRefreshing(false);
+  };
 
   const cards = access.list?.cards ?? [];
   const card = cards.find((entry) => entry.proposalId === proposalId) ?? null;
@@ -140,7 +147,13 @@ export function EstimateDetail({
 
   return (
     <View className="flex-1 bg-canvas">
-      <ScrollView className="flex-1" contentContainerClassName="mx-auto w-full max-w-3xl gap-5 px-4 pb-8 pt-5">
+      <ScrollView
+        className="flex-1"
+        contentContainerClassName="mx-auto w-full max-w-3xl gap-5 px-4 pb-8 pt-5"
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
+        }
+      >
         <View className="mb-4 flex-row items-center justify-between gap-3">
           <View className="flex-row items-center gap-2.5">
             <Pressable

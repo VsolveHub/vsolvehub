@@ -7,10 +7,11 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { ChevronLeft, ClipboardList, X } from "lucide-react-native";
 
 import { iconForService } from "@/features/catalog/icon-catalogue/service-icon";
-import { useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { useEffect, useState } from "react";
+import { Modal, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { LOCAL_CATEGORY_TILES, resolveImageUrl } from "@/features/catalog/category-artwork";
 import { useCategories, useCategoryServices, useServiceDetail, type Category, type ServiceCard } from "@/features/catalog/client-queries";
 import { serviceHref } from "@/features/catalog/service-href";
 import { AddToCartButton } from "@/features/catalog/view/add-to-cart-button";
@@ -124,21 +125,44 @@ function TradeMark({ iconKey }: { iconKey: string }) {
 }
 
 function Thumb({ uri, px, iconKey }: { uri: string; px: number; iconKey: string }) {
-  const cover = uri.includes("/Service%20Cover/") || uri.includes("/Service Cover/");
+  const [loadError, setLoadError] = useState(false);
+  const resolved = resolveImageUrl(uri);
+  const cover = resolved ? (resolved.includes("/Service%20Cover/") || resolved.includes("/Service Cover/")) : false;
   const Icon = iconForService(iconKey);
   return (
     <View className="shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[#F4F1EC]" style={{ width: px, height: px }}>
-      {uri ? (
+      {resolved && !loadError ? (
         <Image
-          source={{ uri }}
+          source={{ uri: resolved }}
           contentFit={cover ? "contain" : "cover"}
           style={cover ? { width: "80%", height: "80%" } : { width: "100%", height: "100%" }}
+          onError={() => setLoadError(true)}
         />
       ) : (
         <Icon color="#453f37" size={28} strokeWidth={1.6} />
       )}
     </View>
   );
+}
+
+function TileGraphic({ tile }: { tile: TileGroup }) {
+  const [error, setError] = useState(false);
+  const localAsset = LOCAL_CATEGORY_TILES[tile.slug];
+  if (localAsset) {
+    return <Image source={localAsset} contentFit="contain" style={{ width: 48, height: 48 }} />;
+  }
+  const resolved = resolveImageUrl(tile.imageUrl);
+  if (resolved && !error) {
+    return (
+      <Image
+        source={{ uri: resolved }}
+        contentFit="contain"
+        style={{ width: 48, height: 48 }}
+        onError={() => setError(true)}
+      />
+    );
+  }
+  return <TradeMark iconKey={tile.iconKey} />;
 }
 
 function WhatYouCanBookModal({
@@ -247,10 +271,14 @@ function CategoryTileBrowser({
   category,
   services,
   activeTileSlug,
+  onRefresh,
+  refreshing,
 }: {
   category: Category;
   services: readonly ServiceCard[];
   activeTileSlug: string | null;
+  onRefresh?: () => Promise<void>;
+  refreshing?: boolean;
 }) {
   const router = useRouter();
   const [selectedServiceForModal, setSelectedServiceForModal] = useState<ServiceCard | null>(null);
@@ -288,11 +316,7 @@ function CategoryTileBrowser({
               )}
             >
               {isActive ? <View className="absolute bottom-2 left-0 top-2 w-1 rounded-r bg-signal-500" /> : null}
-              {tile.imageUrl ? (
-                <Image source={{ uri: tile.imageUrl }} contentFit="contain" style={{ width: 48, height: 48 }} />
-              ) : (
-                <TradeMark iconKey={tile.iconKey} />
-              )}
+              <TileGraphic tile={tile} />
               <Text
                 numberOfLines={2}
                 className={cn("px-0.5 text-center text-[10px] font-bold leading-tight", isActive ? "text-signal-700" : "text-navy-900")}
@@ -304,7 +328,20 @@ function CategoryTileBrowser({
         })}
       </ScrollView>
 
-      <ScrollView style={{ flex: 1, minWidth: 0 }} contentContainerStyle={{ gap: 12, paddingBottom: 64, paddingLeft: 4 }}>
+      <ScrollView
+        style={{ flex: 1, minWidth: 0 }}
+        contentContainerStyle={{ gap: 12, paddingBottom: 64, paddingLeft: 4 }}
+        refreshControl={
+          onRefresh ? (
+            <RefreshControl
+              refreshing={Boolean(refreshing)}
+              onRefresh={onRefresh}
+              colors={["#EA580C"]}
+              tintColor="#EA580C"
+            />
+          ) : undefined
+        }
+      >
         <View className="shrink-0 flex-row items-baseline justify-between gap-3 border-b border-line/60 pb-1">
           <Text className="text-lg font-extrabold tracking-tight text-navy-900">{activeTile.name}</Text>
           <Text className="shrink-0 text-xs font-semibold text-text-secondary">
@@ -361,29 +398,41 @@ function CategoryTileBrowser({
   );
 }
 
+const REDIRECT_TARGETS: Record<string, string> = {
+  "rental-services": "/rentals",
+  "rooms-pg-hostel-hotels": "/stays",
+  "career-jobs": "/listings",
+};
+
 export function CategoryScreen({ categorySlug }: { categorySlug: string }) {
   const router = useRouter();
+  const redirectTarget = REDIRECT_TARGETS[categorySlug];
 
-  useState(() => {
-    if (categorySlug === "rental-services") {
-      router.replace("/rentals" as never);
-    } else if (categorySlug === "rooms-pg-hostel-hotels") {
-      router.replace("/stays" as never);
-    } else if (categorySlug === "career-jobs") {
-      router.replace("/listings" as never);
+  useEffect(() => {
+    if (redirectTarget) {
+      router.replace(redirectTarget as never);
     }
-  });
+  }, [redirectTarget, router]);
 
   const params = useLocalSearchParams<{ tile?: string | string[] }>();
   const tileValue = oneParam(params.tile);
   const activeTileSlug = tileValue !== "" ? tileValue : null;
   const categories = useCategories();
   const services = useCategoryServices(categorySlug);
+  const [refreshing, setRefreshing] = useState(false);
 
   const retry = () => {
     void categories.refetch();
     void services.refetch();
   };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([categories.refetch(), services.refetch()]);
+    setRefreshing(false);
+  };
+
+  if (redirectTarget) return <ListSkeleton />;
 
   if (categories.isPending) return <ListSkeleton />;
   if (categories.isError) return <CatalogDown onRetry={retry} />;
@@ -397,13 +446,19 @@ export function CategoryScreen({ categorySlug }: { categorySlug: string }) {
     <View style={{ flex: 1, width: "100%", paddingHorizontal: 8, paddingTop: 8 }}>
       <View className="shrink-0 flex-row items-center gap-1 pb-2">
         <Pressable
-          accessibilityRole="link"
-          accessibilityLabel="Back to home"
-          onPress={() => router.push("/" as never)}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.push("/catalog" as never);
+            }
+          }}
           className="min-h-9 flex-row items-center gap-1"
         >
           <ChevronLeft color="#a94900" size={16} strokeWidth={2.5} />
-          <Text className="text-xs font-bold text-signal-700">Home</Text>
+          <Text className="text-xs font-bold text-signal-700">Back</Text>
         </Pressable>
         <Text numberOfLines={1} className="min-w-0 flex-1 px-1 text-[19px] font-extrabold tracking-tight text-text">
           {category.name}
@@ -413,7 +468,13 @@ export function CategoryScreen({ categorySlug }: { categorySlug: string }) {
         {services.isPending || services.data == null ? (
           <ListSkeleton />
         ) : (
-          <CategoryTileBrowser category={category} services={services.data} activeTileSlug={activeTileSlug} />
+          <CategoryTileBrowser
+            category={category}
+            services={services.data}
+            activeTileSlug={activeTileSlug}
+            onRefresh={onRefresh}
+            refreshing={refreshing}
+          />
         )}
       </View>
     </View>

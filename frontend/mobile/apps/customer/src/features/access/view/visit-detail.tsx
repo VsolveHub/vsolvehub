@@ -4,7 +4,7 @@ import { Badge, Button, ConfirmAction, EmptyState, Readout, Skeleton, Text, butt
 import { Link, useLocalSearchParams, useRouter } from "expo-router";
 import { ChevronLeft } from "lucide-react-native";
 import { useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 
 import { calendarDay, formatVisitSlot, toVisitTrackerView, type VisitSlotRow } from "@/features/access/adapters";
 import {
@@ -36,6 +36,14 @@ export function VisitDetail({ visitId }: { visitId: string }) {
   const requirementId = typeof params.requirementId === "string" ? params.requirementId : null;
   const planQuery = useVisitPlan(requirementId);
   const codeQuery = useVisitArrivalCode(visitId);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await planQuery.refetch();
+    setRefreshing(false);
+  };
+
   const tracker = planQuery.data === undefined ? null : toVisitTrackerView(planQuery.data);
   const row = tracker?.rows.find((candidate) => candidate.visitId === visitId) ?? null;
 
@@ -89,7 +97,13 @@ export function VisitDetail({ visitId }: { visitId: string }) {
   }
 
   return (
-    <ScrollView className="flex-1" contentContainerClassName="gap-4 px-4 pb-28 pt-6">
+    <ScrollView
+      className="flex-1"
+      contentContainerClassName="gap-4 px-4 pb-28 pt-6"
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
+      }
+    >
       <VisitBreadcrumb requirementId={requirementId} position={row.position} planSize={tracker?.planSize ?? 1} />
       <VisitPrimary row={row} planSize={tracker?.planSize ?? 1} requirementId={requirementId} />
       <ArrivalCode visitId={visitId} enabled={row.state === "scheduled" || row.state === "in_progress"} />
@@ -113,7 +127,13 @@ function VisitBreadcrumb({
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Go back"
-        onPress={() => router.back()}
+        onPress={() => {
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.replace("/activity" as never);
+          }
+        }}
         className="size-9 items-center justify-center rounded-full border border-line bg-surface"
       >
         <ChevronLeft size={20} color="#00112e" />

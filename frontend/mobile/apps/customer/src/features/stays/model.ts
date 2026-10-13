@@ -56,7 +56,7 @@ export interface StayEnquiry {
   guest_count?: number;
   message?: string;
   status: string;
-  property?: StayProperty;
+  property?: StayProperty | string;
   property_title?: string;
   property_slug?: string;
   unit?: StayUnit;

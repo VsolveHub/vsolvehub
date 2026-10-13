@@ -89,3 +89,17 @@ export function formatFieldLabel(key: string): string {
       .join(" ")
   );
 }
+
+export function issuesToFieldErrors(input: z.ZodError | z.ZodIssue[]): Record<string, string> {
+  const issues = Array.isArray(input) ? input : input.issues;
+  const errors: Record<string, string> = {};
+  for (const issue of issues) {
+    const key = issue.path[0];
+    if (typeof key === "string" && !errors[key]) {
+      errors[key] = issue.message;
+    }
+  }
+  return errors;
+}
+
+

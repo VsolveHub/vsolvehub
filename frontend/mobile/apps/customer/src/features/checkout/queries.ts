@@ -1,12 +1,12 @@
 // Ported from frontend/apps/customer/features/checkout/queries.ts (cart read and add).
-import { ApiRequestError, request, type Schemas } from "@vsolve/api-client";
+import { isApiRequestError, ApiRequestError, request, type Schemas } from "@vsolve/api-client";
 import { EXPIRING_STATE, SESSION_STATE, VOLATILE_STATE, queryKeys } from "@vsolve/query/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getApiClient } from "@vsolve/mobile-core";
 import { toWindowsView, type WindowsView } from "@/features/booking/adapters";
 
-import { type MergeAction } from "./conflicts";
+import { cartVersionConflict, type MergeAction } from "./conflicts";
 import { checkoutIntentKey, planQuoteIntentKey, planSetIntentKey } from "./intents";
 
 export type Cart = Schemas["Cart"];
@@ -21,8 +21,13 @@ export function useCart(enabled = true) {
     queryFn: () => request(() => getApiClient().GET("/api/v1/cart/")),
     enabled,
     ...SESSION_STATE,
-    retry: (failureCount, error) =>
-      error instanceof ApiRequestError && (error.status === 409 || error.status === 404) ? false : failureCount < 2,
+    retry: (failureCount, error: any) => {
+      const isRefusal =
+        (isApiRequestError(error) && (error.status === 409 || error.status === 404)) ||
+        error?.status === 409 ||
+        error?.status === 404;
+      return isRefusal ? false : failureCount < 2;
+    },
   });
 }
 
@@ -95,26 +100,65 @@ export function useRemoveCartItem() {
 }
 
 export function useSchedulingGroups(input: { cartVersion: number; addressId: string } | null) {
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: queryKeys.booking.schedulingGroups({
       cartVersion: input?.cartVersion ?? 0,
       addressId: input?.addressId ?? "",
     }),
-    queryFn: async () =>
-      (
-        await request(() =>
+    queryFn: async () => {
+      try {
+        const response = await request(() =>
           getApiClient().POST("/api/v1/cart/scheduling-groups/", {
             body: {
               address_id: input!.addressId,
               expected_cart_version: input!.cartVersion,
             },
           }),
-        )
-      ).groups,
-    enabled: input !== null,
+        );
+        return response.groups;
+      } catch (error) {
+        // Only attempt recovery if the server explicitly raised a cart_version_conflict.
+        // Other 409 codes (e.g. fulfilment_plan_unavailable, cart_merge_conflict)
+        // are semantic refusals that must be surfaced without blind retries.
+        const versionConflict = cartVersionConflict(error);
+        if (versionConflict !== null) {
+          // Stale cart version detected (e.g. after session cart merge).
+          // Refetch authoritative cart, update the cache, and retry with the updated version.
+          const freshCart = await request(() => getApiClient().GET("/api/v1/cart/"));
+          queryClient.setQueryData(queryKeys.booking.cart(), freshCart);
+
+          const targetVersion = versionConflict.currentVersion ?? freshCart.version;
+          const retryResponse = await request(() =>
+            getApiClient().POST("/api/v1/cart/scheduling-groups/", {
+              body: {
+                address_id: input!.addressId,
+                expected_cart_version: targetVersion,
+              },
+            }),
+          );
+          queryClient.setQueryData(
+            queryKeys.booking.schedulingGroups({
+              cartVersion: targetVersion,
+              addressId: input!.addressId,
+            }),
+            retryResponse.groups,
+          );
+          return retryResponse.groups;
+        }
+        throw error;
+      }
+    },
+    enabled: Boolean(input && input.addressId),
     ...VOLATILE_STATE,
-    retry: (failureCount, error) =>
-      error instanceof ApiRequestError && (error.status === 409 || error.status === 404) ? false : failureCount < 2,
+    retry: (failureCount, error: any) => {
+      const isRefusal =
+        (isApiRequestError(error) && (error.status === 409 || error.status === 404 || error.status === 400)) ||
+        error?.status === 409 ||
+        error?.status === 404 ||
+        error?.status === 400;
+      return isRefusal ? false : failureCount < 2;
+    },
   });
 }
 
@@ -141,6 +185,11 @@ export function useCreatePlanSet() {
       ),
     onSuccess: (planSet) => {
       queryClient.setQueryData(queryKeys.booking.planSet(planSet.id), planSet);
+    },
+    onError: (error) => {
+      if (error instanceof ApiRequestError && error.status === 409) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.booking.cart() });
+      }
     },
     retry: false,
   });

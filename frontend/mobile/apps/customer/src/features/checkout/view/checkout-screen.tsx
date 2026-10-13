@@ -5,12 +5,14 @@ import { useAuthStore } from "@vsolve/mobile-core";
 import { Button, Spinner, Text, formatMoney } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle, Path, Rect } from "react-native-svg";
 
 import { useAddresses } from "@/features/addresses/queries";
 import { useCustomerProfile } from "@/features/account/queries";
 import { useServiceability } from "@/features/booking/queries";
+import { cartMergeConflict, cartVersionConflict } from "@/features/checkout/conflicts";
 import {
   useCart,
   useCreateCheckout,
@@ -55,9 +57,11 @@ function OrangeShieldIcon() {
 }
 
 export function CheckoutScreen() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const status = useAuthStore((state) => state.status);
   const [loginOpen, setLoginOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const profileQuery = useCustomerProfile(status === "signedIn");
   const cartQuery = useCart(status === "signedIn");
@@ -81,8 +85,16 @@ export function CheckoutScreen() {
     serviceVariantId: null,
   });
 
+  const isAddressKnownUnserviceable = Boolean(
+    serviceabilityQuery.data && !serviceabilityQuery.data.is_serviceable,
+  );
+
+  const hasItems = Boolean(cart && cart.items && cart.items.length > 0);
+
   const groupsQuery = useSchedulingGroups(
-    cart && effectiveAddressId ? { cartVersion: cart.version, addressId: effectiveAddressId } : null,
+    hasItems && effectiveAddressId && !isAddressKnownUnserviceable
+      ? { cartVersion: cart!.version, addressId: effectiveAddressId }
+      : null,
   );
   const groups = groupsQuery.data ?? [];
 
@@ -130,7 +142,17 @@ export function CheckoutScreen() {
           if (!recommended) return;
           createQuote.mutate(recommended.id, {
             onSuccess: (priced) => setQuoteId(priced.id),
+            onError: (err) => {
+              if (cartVersionConflict(err) !== null) {
+                rescheduleFromScratch();
+              }
+            },
           });
+        },
+        onError: (err) => {
+          if (cartVersionConflict(err) !== null) {
+            rescheduleFromScratch();
+          }
         },
       },
     );
@@ -180,7 +202,17 @@ export function CheckoutScreen() {
                 },
               });
             },
+            onError: (err) => {
+              if (cartVersionConflict(err) !== null) {
+                rescheduleFromScratch();
+              }
+            },
           });
+        },
+        onError: (err) => {
+          if (cartVersionConflict(err) !== null) {
+            rescheduleFromScratch();
+          }
         },
       },
     );
@@ -190,13 +222,39 @@ export function CheckoutScreen() {
     return (
       <View className="flex-1 items-center justify-center gap-4 bg-canvas px-6 py-12">
         <View className="w-full max-w-sm rounded-[1.5rem] border border-line bg-surface p-6 shadow-sm">
+          <Pressable
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace("/cart" as never);
+              }
+            }}
+            accessibilityLabel="Back to cart"
+            className="mb-4 size-10 items-center justify-center rounded-full border border-line bg-surface shadow-xs active:bg-surface-sunken"
+          >
+            <ChevronLeftIcon />
+          </Pressable>
           <Text className="text-xl font-bold text-text">Sign in to checkout</Text>
           <Text className="mt-2 text-sm leading-relaxed text-text-secondary">
             Keep your saved cart, addresses, and track real-time technician assignments.
           </Text>
-          <View className="mt-6">
+          <View className="mt-6 gap-2.5">
             <Button size="lg" onPress={() => setLoginOpen(true)}>
               Log in / Sign up
+            </Button>
+            <Button
+              variant="outline"
+              size="lg"
+              onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.replace("/cart" as never);
+                }
+              }}
+            >
+              Return to cart
             </Button>
           </View>
         </View>
@@ -209,12 +267,25 @@ export function CheckoutScreen() {
     return (
       <View className="flex-1 items-center justify-center bg-canvas px-6 py-12">
         <View className="w-full max-w-sm rounded-[1.5rem] border border-line bg-surface p-6 text-center">
+          <Pressable
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace("/cart" as never);
+              }
+            }}
+            accessibilityLabel="Back to cart"
+            className="mb-4 size-10 items-center justify-center rounded-full border border-line bg-surface shadow-xs active:bg-surface-sunken"
+          >
+            <ChevronLeftIcon />
+          </Pressable>
           <Text className="text-xl font-bold text-text">Your cart is empty</Text>
           <Text className="mt-2 text-sm leading-relaxed text-text-secondary">
             There is nothing to check out. Nothing has been booked or charged.
           </Text>
           <View className="mt-6">
-            <Button size="lg" onPress={() => router.replace("/(tabs)" as never)}>
+            <Button size="lg" onPress={() => router.replace("/catalog" as never)}>
               Browse services
             </Button>
           </View>
@@ -227,17 +298,32 @@ export function CheckoutScreen() {
   const isConfirming = createCheckout.isPending || isPricing;
   const phoneNumber = profileQuery.data?.phone_number ?? "+919640169854";
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([profileQuery.refetch(), cartQuery.refetch(), addressesQuery.refetch()]);
+    setRefreshing(false);
+  };
+
   return (
     <View className="flex-1 bg-canvas">
       <ScrollView
         className="flex-1"
         contentContainerClassName="gap-4 px-4 py-4 pb-20"
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
+        }
       >
         {/* Top: Circular Back Button matching Image 1 */}
-        <View className="pt-2">
+        <View style={{ paddingTop: Math.max(insets.top, 24) + 6 }}>
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace("/cart" as never);
+              }
+            }}
             accessibilityLabel="Back to cart"
             className="size-10 items-center justify-center rounded-full border border-line bg-surface shadow-xs active:bg-surface-sunken"
           >
@@ -292,7 +378,7 @@ export function CheckoutScreen() {
             icon={<ClockIcon />}
             label={groups.length > 1 ? "Slots" : "Slot"}
             actionLabel={
-              !effectiveAddressId || groups.length === 0
+              !effectiveAddressId || groups.length === 0 || groupsQuery.isError
                 ? undefined
                 : isScheduled
                 ? "Edit"
@@ -300,13 +386,25 @@ export function CheckoutScreen() {
             }
             actionVariant="outline"
             onAction={() => {
-              if (effectiveAddressId && groups.length > 0) {
+              if (effectiveAddressId && groups.length > 0 && !groupsQuery.isError) {
                 setSlotsSheetOpen(true);
               }
             }}
           >
             {!effectiveAddressId ? (
               <Text className="text-sm text-text-secondary">Pick an address first — times depend on area.</Text>
+            ) : isAddressKnownUnserviceable ? (
+              <View className="rounded-lg bg-critical-50 p-2.5">
+                <Text className="text-xs font-semibold text-danger-text">
+                  Service not available in this pincode ({selectedAddress?.postal_code ?? ""})
+                </Text>
+                <Text className="mt-1 text-xs text-text-secondary leading-relaxed">
+                  We do not currently have verified technicians covering this address. Please choose a different address.
+                </Text>
+                <Pressable onPress={() => setAddressSheetOpen(true)} className="mt-1.5">
+                  <Text className="text-xs font-bold text-accent">Change address &rarr;</Text>
+                </Pressable>
+              </View>
             ) : groupsQuery.isPending ? (
               <View className="flex-row items-center gap-2 py-1">
                 <Spinner size="sm" />
@@ -317,9 +415,25 @@ export function CheckoutScreen() {
                 <Text className="text-xs font-semibold text-danger-text">
                   {describeError(groupsQuery.error, "read").message}
                 </Text>
-                <Pressable onPress={() => setAddressSheetOpen(true)} className="mt-1.5">
-                  <Text className="text-xs font-bold text-accent">Change address &rarr;</Text>
-                </Pressable>
+                {cartMergeConflict(groupsQuery.error) !== null ? (
+                  <View className="mt-1.5">
+                    <Text className="text-xs text-text-secondary leading-relaxed">
+                      You have overlapping items from a previous session. Please review your cart to continue.
+                    </Text>
+                    <Pressable onPress={() => router.replace("/cart" as never)} className="mt-1">
+                      <Text className="text-xs font-bold text-accent">Review cart &rarr;</Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <>
+                    <Text className="mt-1 text-xs text-text-secondary leading-relaxed">
+                      We do not currently have verified technicians covering this address ({selectedAddress?.postal_code ?? ""}) for all selected services. Please choose a different address.
+                    </Text>
+                    <Pressable onPress={() => setAddressSheetOpen(true)} className="mt-1.5">
+                      <Text className="text-xs font-bold text-accent">Change address &rarr;</Text>
+                    </Pressable>
+                  </>
+                )}
               </View>
             ) : isScheduled ? (
               <View className="gap-1">
@@ -351,7 +465,7 @@ export function CheckoutScreen() {
             </Button>
           ) : (
             <Pressable
-              disabled={!isScheduled || isPricing}
+              disabled={!isScheduled || isPricing || groupsQuery.isError}
               onPress={handleConfirmBooking}
               className="w-full items-center justify-center rounded-xl bg-[#E6E0D6] py-3.5"
             >

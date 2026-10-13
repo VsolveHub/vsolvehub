@@ -16,7 +16,7 @@ import {
 import { Link, useRouter } from "expo-router";
 import { ChevronLeft } from "lucide-react-native";
 import { useEffect, useState, type ReactNode } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 
 import { useAddresses } from "@/features/addresses/queries";
 import { toEngagementLists } from "@/features/engagement/adapters";
@@ -279,14 +279,34 @@ function RequestDetailLayout({
   const hideStateSummary =
     state === "MATCHING" || state === "ENGAGED" || (visualLifecycle === true && state !== null && !isClosedState(state));
   const hideInlineFacts = state === "MATCHING";
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    onRetryRequest();
+    onRetryTimeline();
+    setRefreshing(false);
+  };
 
   return (
-    <ScrollView className="flex-1" contentContainerClassName="gap-6 px-4 pb-28 pt-5">
+    <ScrollView
+      className="flex-1"
+      contentContainerClassName="gap-6 px-4 pb-28 pt-5"
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
+      }
+    >
       <View className="mb-4 flex-row items-center gap-3">
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Go back"
-          onPress={() => router.back()}
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace("/activity" as never);
+            }
+          }}
           className="size-9 items-center justify-center rounded-full border border-line bg-surface"
         >
           <ChevronLeft size={20} color="#00112e" />

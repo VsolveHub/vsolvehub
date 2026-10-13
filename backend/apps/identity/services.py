@@ -215,6 +215,10 @@ def create_authenticated_session(
     request.session.save()
     session_key = request.session.session_key
     if not session_key:
+        request.session.cycle_key()
+        request.session.save()
+        session_key = request.session.session_key
+    if not session_key:
         raise RuntimeError("Django did not create a session key.")
 
     device = None
@@ -236,12 +240,15 @@ def create_authenticated_session(
         .values_list("role", flat=True)
         .first()
     )
-    session = UserSession.objects.create(
-        user=user,
-        device=device,
-        active_role_id=active_role,
+    session, _ = UserSession.objects.update_or_create(
         session_key_hash=keyed_hash(session_key),
-        expires_at=request.session.get_expiry_date(),
+        defaults={
+            "user": user,
+            "device": device,
+            "active_role_id": active_role,
+            "expires_at": request.session.get_expiry_date(),
+            "revoked_at": None,
+        },
     )
     return session
 

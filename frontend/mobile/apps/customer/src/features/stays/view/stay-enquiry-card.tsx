@@ -6,7 +6,6 @@ import {
   Clock,
   MessageSquare,
   Phone,
-  ShieldCheck,
 } from "lucide-react-native";
 import { useState } from "react";
 import { Linking, Pressable, View } from "react-native";
@@ -33,16 +32,17 @@ export function StayEnquiryCard({ enquiry }: StayEnquiryCardProps) {
 
   const statusInfo = getEnquiryStatusBadge(enquiry.status);
   const cancellable = canCancelStayEnquiry(enquiry.status);
-  const period = pricePeriodOf(enquiry.price_period || enquiry.property?.price_period);
+  const propObj = typeof enquiry.property === "object" ? enquiry.property : undefined;
+  const period = pricePeriodOf(enquiry.price_period || propObj?.price_period);
 
   const hostPhone =
     enquiry.host_phone ||
-    enquiry.property?.partner?.phone_number ||
-    (enquiry.property as any)?.partner?.phone;
+    propObj?.partner?.phone_number ||
+    (propObj as any)?.partner?.phone;
   const hostName =
     enquiry.host_name ||
-    enquiry.property?.host_name ||
-    enquiry.property?.partner?.full_name ||
+    propObj?.host_name ||
+    propObj?.partner?.full_name ||
     "Host";
 
   const cancel = useMutation({
@@ -54,7 +54,7 @@ export function StayEnquiryCard({ enquiry }: StayEnquiryCardProps) {
   });
 
   const propertyTitle =
-    enquiry.property_title || enquiry.property?.title || "Stay Property";
+    enquiry.property_title || propObj?.title || "Stay Property";
   const unitName =
     enquiry.unit_name || enquiry.unit?.name || "Standard room";
   const guestCount = enquiry.guest_count ?? 1;
@@ -62,6 +62,11 @@ export function StayEnquiryCard({ enquiry }: StayEnquiryCardProps) {
   const durationStr = enquiry.stay_length
     ? stayLengthLabel(enquiry.stay_length, period)
     : `${enquiry.nights ?? enquiry.length ?? 1} ${(enquiry.nights ?? enquiry.length ?? 1) === 1 ? "night" : "nights"}`;
+
+  const targetSlugOrId =
+    enquiry.property_slug ||
+    propObj?.slug ||
+    (typeof enquiry.property === "string" ? enquiry.property : propObj?.id);
 
   return (
     <View className="overflow-hidden rounded-2xl border border-line bg-surface p-4 shadow-xs">
@@ -74,10 +79,8 @@ export function StayEnquiryCard({ enquiry }: StayEnquiryCardProps) {
 
           <Pressable
             onPress={() => {
-              if (enquiry.property_slug || enquiry.property?.slug || enquiry.property?.id) {
-                router.push(
-                  `/stays/${enquiry.property_slug || enquiry.property?.slug || enquiry.property?.id}` as never,
-                );
+              if (targetSlugOrId) {
+                router.push(`/stays/${targetSlugOrId}` as never);
               }
             }}
           >

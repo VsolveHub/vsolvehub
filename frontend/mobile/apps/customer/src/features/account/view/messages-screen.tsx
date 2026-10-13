@@ -2,6 +2,7 @@
 // Exact match with Image 1 (Messages tab)
 import { describeError } from "@vsolve/query/native";
 import { Badge, ErrorState, Spinner, Text } from "@vsolve/mobile-ui";
+import { useState } from "react";
 import { Pressable, Switch, View } from "react-native";
 
 import { useCommunicationPreferences, useSetCommunicationPreference } from "@/features/account/queries";
@@ -37,10 +38,17 @@ function humanise(slug: string): string {
 export function MessagesScreen() {
   const preferences = useCommunicationPreferences();
   const update = useSetCommunicationPreference();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await preferences.refetch();
+    setRefreshing(false);
+  };
 
   if (preferences.isPending) {
     return (
-      <AccountPageShell activeTab="messages">
+      <AccountPageShell activeTab="messages" onRefresh={onRefresh} refreshing={refreshing}>
         <View className="items-center justify-center py-12">
           <Spinner size="sm" />
         </View>
@@ -50,7 +58,7 @@ export function MessagesScreen() {
 
   if (preferences.isError) {
     return (
-      <AccountPageShell activeTab="messages">
+      <AccountPageShell activeTab="messages" onRefresh={onRefresh} refreshing={refreshing}>
         <ErrorState
           title="We could not load your message settings"
           message={describeError(preferences.error, "read").message}
@@ -64,7 +72,7 @@ export function MessagesScreen() {
   const rows = preferences.data ?? [];
 
   return (
-    <AccountPageShell activeTab="messages">
+    <AccountPageShell activeTab="messages" onRefresh={onRefresh} refreshing={refreshing}>
       <View className="overflow-hidden rounded-2xl border border-line bg-surface p-5 shadow-xs">
         {/* Section Header */}
         <Text className="text-xl font-extrabold tracking-tight text-navy-950">Messages</Text>

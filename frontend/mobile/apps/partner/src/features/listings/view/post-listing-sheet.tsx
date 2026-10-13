@@ -1,5 +1,5 @@
 import { Button, Dialog, Input, Text } from "@vsolve/mobile-ui";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ScrollView, View, Alert, Pressable } from "react-native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -32,7 +32,11 @@ export function PostListingSheet({
   const [experience, setExperience] = useState("");
   const [description, setDescription] = useState("");
 
-  useEffect(() => {
+  const [prevEditing, setPrevEditing] = useState<unknown>(null);
+  const [prevOpen, setPrevOpen] = useState(false);
+  if (editingListing !== prevEditing || open !== prevOpen) {
+    setPrevEditing(editingListing);
+    setPrevOpen(open);
     if (editingListing) {
       setTitle(editingListing.title || "");
       setEmploymentType(editingListing.employment_type || "Full Time");
@@ -60,7 +64,7 @@ export function PostListingSheet({
       setExperience("");
       setDescription("");
     }
-  }, [editingListing, open]);
+  }
 
   const mutation = useMutation({
     mutationFn: async () => {

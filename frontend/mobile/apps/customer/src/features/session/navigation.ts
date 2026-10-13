@@ -8,7 +8,6 @@ const GATED_PREFIXES = [
   "/jobs",
   "/rentals/mine",
   "/stays/mine",
-  "/listings/my-applications",
   "/listings/profile",
 ];
 

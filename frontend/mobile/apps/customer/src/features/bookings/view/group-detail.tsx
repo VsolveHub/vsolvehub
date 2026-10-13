@@ -4,7 +4,7 @@ import { Button, Dialog, ErrorState, Skeleton, Text, Textarea, buttonStyles } fr
 import { Link } from "expo-router";
 import { ChevronLeft } from "lucide-react-native";
 import { useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 
 import { bookingVisitHref } from "@/lib/routes";
 import { Money } from "@/features/payment/view/money";
@@ -252,8 +252,15 @@ export function GroupDetail({ groupId }: { groupId: string }) {
   const cancelGroup = useCancelBookingGroup();
   const [isCancelOpen, setIsCancelOpen] = useState(false);
   const [isSearchDismissed, setIsSearchDismissed] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const group = groupQuery.data;
   const expiry = useServerCountdown(group?.expires_at ?? null, 1000);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await groupQuery.refetch();
+    setRefreshing(false);
+  };
 
   if (groupQuery.isPending) {
     return (
@@ -312,7 +319,12 @@ export function GroupDetail({ groupId }: { groupId: string }) {
   return (
     <View className="flex-1 bg-canvas">
       {isSearching ? <FullScreenPartnerSearch group={group} onDismiss={() => setIsSearchDismissed(true)} /> : null}
-      <ScrollView contentContainerClassName={isAwaitingPayment ? "gap-4 px-4 pb-8 pt-4" : "gap-4 px-4 pb-8 pt-4"}>
+      <ScrollView
+        contentContainerClassName={isAwaitingPayment ? "gap-4 px-4 pb-8 pt-4" : "gap-4 px-4 pb-8 pt-4"}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
+        }
+      >
         <BackToBookingsLink />
         {isMultiPaidVisit ? <Text className="text-2xl font-bold text-text">Your visits</Text> : null}
         {showBookingSummaryCard ? (

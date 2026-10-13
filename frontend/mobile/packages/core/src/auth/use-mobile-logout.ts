@@ -1,11 +1,12 @@
 import { request } from "@vsolve/api-client";
 import { router } from "expo-router";
 
+import { appKind } from "../config";
 import { getApiClient } from "../api/client";
 import { useAuthStore } from "./auth-store";
 import { readRegisteredPushToken } from "../push/register";
 
-/** Unregister this phone, end the Django session, then leave for the login screen. */
+/** Unregister this phone, end the Django session, then leave for home or login. */
 export function useMobileLogout(): () => Promise<void> {
   return async () => {
     const api = getApiClient();
@@ -27,6 +28,10 @@ export function useMobileLogout(): () => Promise<void> {
       // The local token is deleted either way.
     }
     await useAuthStore.getState().signOut();
-    router.replace("/login");
+    if (appKind() === "customer") {
+      router.replace("/");
+    } else {
+      router.replace("/login");
+    }
   };
 }

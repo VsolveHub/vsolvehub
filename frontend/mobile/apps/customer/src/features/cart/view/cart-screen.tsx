@@ -4,9 +4,11 @@ import { Button, EmptyState, ErrorState, Spinner, Text, formatMoney } from "@vso
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
 
+import { resolveImageUrl } from "@/features/catalog/category-artwork";
 import { useServiceDetail } from "@/features/catalog/client-queries";
 import {
   useAddCartItem,
@@ -51,14 +53,15 @@ function CartItemRow({
   isPending: boolean;
 }) {
   const detail = useServiceDetail(item.service_slug);
-  const imageUrl = detail.data?.cover?.url ?? "";
+  const rawImageUrl = detail.data?.cover?.url;
+  const imageUrl = resolveImageUrl(rawImageUrl);
 
   return (
     <View className="rounded-2xl border border-line bg-surface p-4 shadow-2xs">
       <View className="flex-row items-start gap-3">
         {/* Thumbnail */}
         <View className="size-16 items-center justify-center overflow-hidden rounded-xl bg-[#F4F1EC]">
-          {imageUrl !== "" ? (
+          {imageUrl ? (
             <Image
               source={{ uri: imageUrl }}
               contentFit={
@@ -140,6 +143,7 @@ function CartItemRow({
 }
 
 export function CartScreen() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const cartQuery = useCart();
   const addItem = useAddCartItem();
@@ -148,6 +152,21 @@ export function CartScreen() {
 
   const [pendingItemId, setPendingItemId] = useState<string | null>(null);
   const [addingVariantId, setAddingVariantId] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/catalog" as never);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([cartQuery.refetch(), suggestionsQuery.refetch()]);
+    setRefreshing(false);
+  };
 
   const cart = cartQuery.data;
   const suggestionsQuery = useCartSuggestions(cart?.version ?? null);
@@ -179,8 +198,11 @@ export function CartScreen() {
   if (isEmpty) {
     return (
       <View className="flex-1 bg-canvas">
-        <View className="flex-row items-center border-b border-line bg-surface px-4 py-3">
-          <Pressable onPress={() => router.back()} className="mr-3 p-1 rounded-full active:bg-surface-sunken">
+        <View
+          style={{ paddingTop: Math.max(insets.top, 24) + 8 }}
+          className="flex-row items-center border-b border-line bg-surface px-4 pb-3"
+        >
+          <Pressable onPress={handleBack} className="mr-3 p-1 rounded-full active:bg-surface-sunken">
             <BackIcon />
           </Pressable>
           <Text className="text-lg font-bold text-navy-900">Your Cart</Text>
@@ -205,9 +227,12 @@ export function CartScreen() {
   return (
     <View className="flex-1 bg-canvas">
       {/* Header */}
-      <View className="flex-row items-center justify-between border-b border-line bg-surface px-4 py-3">
+      <View
+        style={{ paddingTop: Math.max(insets.top, 24) + 8 }}
+        className="flex-row items-center justify-between border-b border-line bg-surface px-4 pb-3"
+      >
         <View className="flex-row items-center gap-3">
-          <Pressable onPress={() => router.back()} className="p-1 rounded-full active:bg-surface-sunken">
+          <Pressable onPress={handleBack} className="p-1 rounded-full active:bg-surface-sunken">
             <BackIcon />
           </Pressable>
           <Text className="text-lg font-bold text-navy-900">Your Cart</Text>
@@ -217,7 +242,14 @@ export function CartScreen() {
         </Text>
       </View>
 
-      <ScrollView className="flex-1" contentContainerClassName="gap-4 p-4 pb-28" showsVerticalScrollIndicator={false}>
+      <ScrollView
+        className="flex-1"
+        contentContainerClassName="gap-4 p-4 pb-28"
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
+        }
+      >
         {/* Items List */}
         <View className="gap-3">
           {cart.items.map((item) => (

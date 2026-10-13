@@ -66,11 +66,11 @@ export function StayVisitSheet({
     enabled: Boolean(property.id && open),
   });
 
-  const days: Array<{
+  const days: {
     date: string;
     day_name?: string;
-    slots: Array<{ id: string; start_time: string; end_time: string; label?: string }>;
-  }> = useMemo(() => (slotsQuery.data as any[]) ?? [], [slotsQuery.data]);
+    slots: { id: string; start_time: string; end_time: string; label?: string }[];
+  }[] = useMemo(() => (slotsQuery.data as any[]) ?? [], [slotsQuery.data]);
 
   const openDays = useMemo(() => new Set(days.map((row) => row.date)), [days]);
   const activeDay = day ?? days[0]?.date ?? null;
@@ -171,7 +171,7 @@ export function StayVisitSheet({
               </View>
               <Text className="mt-1 text-[11px] leading-relaxed text-emerald-900/80">
                 The owner will review your visiting slot. Once accepted, you will
-                receive a notification and the owner's phone number will become
+                receive a notification and the owner&apos;s phone number will become
                 available in My Visits.
               </Text>
             </View>

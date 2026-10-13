@@ -88,6 +88,9 @@ export function createStayEnquiry(payload: {
   message?: string;
   unit_id?: string | null;
 }): Promise<StayEnquiry> {
+  const sanitizedUnitId =
+    payload.unit_id && payload.unit_id.trim() !== "" ? payload.unit_id.trim() : undefined;
+
   return request(() =>
     (getApiClient() as any).POST("/api/v1/stays/enquire", {
       body: {
@@ -98,7 +101,7 @@ export function createStayEnquiry(payload: {
         ...(payload.adult_count !== undefined && { adult_count: payload.adult_count }),
         ...(payload.child_count !== undefined && { child_count: payload.child_count }),
         message: payload.message ?? "",
-        unit_id: payload.unit_id ?? undefined,
+        unit_id: sanitizedUnitId,
       },
     }),
   );

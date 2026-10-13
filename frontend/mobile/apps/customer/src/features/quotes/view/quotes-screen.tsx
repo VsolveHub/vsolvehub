@@ -11,7 +11,7 @@ import {
 import { Button, EmptyState, ErrorState, Skeleton, Text, buttonStyles } from "@vsolve/mobile-ui";
 import { Link, useRouter } from "expo-router";
 import { useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 
 import { useVisitPlan } from "@/features/access/queries";
 import { useRequirement } from "@/features/requirement/queries";
@@ -56,7 +56,13 @@ function QuoteBreadcrumb({ requestLabel, requestHref: href }: { requestLabel: st
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Go back"
-        onPress={() => router.back()}
+        onPress={() => {
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.replace("/activity" as never);
+          }
+        }}
         className="size-9 shrink-0 items-center justify-center rounded-full border border-line bg-surface shadow-sm active:scale-95"
       >
         <Text className="text-lg text-text">‹</Text>
@@ -152,10 +158,23 @@ export function QuotesScreen({ requirementId, requestHref: requestHrefProp }: Qu
   const waiting = list === null ? [] : unansweredVendorQuestions(list.cards);
   const spread = list === null ? null : priceSpread(list.cards, list.isComparableOnOneBasis);
   const noun = isA5 ? "estimate" : "quote";
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([access.refetch(), planQuery.refetch(), requirementQuery.refetch(), selectionQuery.refetch()]);
+    setRefreshing(false);
+  };
 
   return (
     <View className="flex-1 bg-canvas">
-      <ScrollView className="flex-1" contentContainerClassName="mx-auto w-full max-w-[1180px] gap-4 px-4 pb-8 pt-5">
+      <ScrollView
+        className="flex-1"
+        contentContainerClassName="mx-auto w-full max-w-[1180px] gap-4 px-4 pb-8 pt-5"
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
+        }
+      >
         <QuoteBreadcrumb requestLabel={requestLabel} requestHref={backHref} />
 
         <View>

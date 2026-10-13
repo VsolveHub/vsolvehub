@@ -1,14 +1,17 @@
-import { Button, EmptyState, ErrorState, Spinner, Text, cn } from "@vsolve/mobile-ui";
+import { Button, COLOR_TOKENS, EmptyState, ErrorState, Spinner, Text, cn } from "@vsolve/mobile-ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react-native";
-import { useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useMemo, useState } from "react";
 import { Alert, Pressable, RefreshControl, ScrollView, View } from "react-native";
 
 import {
+  type PartnerBookingActionRequest,
   type PartnerRentalAsset,
   type PartnerRentalBooking,
 } from "../model";
 import {
+  deletePartnerRentalAsset,
   fetchPartnerRentalAssets,
   fetchPartnerRentalBookings,
   partnerRentalAssetAction,
@@ -39,12 +42,61 @@ type BookingFilter = (typeof BOOKING_STATUS_FILTERS)[number];
 
 export function PartnerRentalsScreen({ initialTab = "ads" }: { initialTab?: "ads" | "bookings" }) {
   const queryClient = useQueryClient();
+  const localParams = useLocalSearchParams<{ add?: string; status?: string }>();
   const [tab, setTab] = useState<"ads" | "bookings">(initialTab);
+  const [prevInitialTab, setPrevInitialTab] = useState(initialTab);
+  if (prevInitialTab !== initialTab) {
+    setPrevInitialTab(initialTab);
+    setTab(initialTab);
+  }
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingAsset, setEditingAsset] = useState<PartnerRentalAsset | null>(null);
 
-  // Status filter for bookings (Web W-032)
-  const [bookingStatusFilter, setBookingStatusFilter] = useState<BookingFilter>("ALL");
+  const initialStatusFilter =
+    localParams.status &&
+    BOOKING_STATUS_FILTERS.includes(localParams.status.toUpperCase() as BookingFilter)
+      ? (localParams.status.toUpperCase() as BookingFilter)
+      : "ALL";
+
+  // Status filter for bookings (Web W-032 / W-090)
+  const [bookingStatusFilter, setBookingStatusFilter] = useState<BookingFilter>(initialStatusFilter);
+
+  const router = useRouter();
+
+  const handleTabChange = (nextTab: "ads" | "bookings") => {
+    setTab(nextTab);
+    if (nextTab === "bookings") {
+      router.replace("/rentals/bookings" as never);
+    } else {
+      router.replace("/rentals" as never);
+    }
+  };
+
+  const handleSelectStatusFilter = (st: BookingFilter) => {
+    setBookingStatusFilter(st);
+    router.setParams({ status: st === "ALL" ? "" : st.toLowerCase() });
+  };
+
+  const [prevAddParam, setPrevAddParam] = useState(localParams.add);
+  if (localParams.add !== prevAddParam) {
+    setPrevAddParam(localParams.add);
+    if (localParams.add === "1" || localParams.add === "true") {
+      setTab("ads");
+      setEditingAsset(null);
+      setSheetOpen(true);
+    }
+  }
+
+  const [prevStatusParam, setPrevStatusParam] = useState(localParams.status);
+  if (localParams.status !== prevStatusParam) {
+    setPrevStatusParam(localParams.status);
+    if (
+      localParams.status &&
+      BOOKING_STATUS_FILTERS.includes(localParams.status.toUpperCase() as BookingFilter)
+    ) {
+      setBookingStatusFilter(localParams.status.toUpperCase() as BookingFilter);
+    }
+  }
 
   // Dialog states
   const [handoverBooking, setHandoverBooking] = useState<PartnerRentalBooking | null>(null);
@@ -64,6 +116,39 @@ export function PartnerRentalsScreen({ initialTab = "ads" }: { initialTab?: "ads
     queryFn: () => fetchPartnerRentalBookings(bookingStatusFilter === "ALL" ? undefined : bookingStatusFilter),
   });
 
+  // Defensive client-side filtering matching web (W-090)
+  const filteredBookings = useMemo(() => {
+    const rows = bookingsQuery.data ?? [];
+    if (bookingStatusFilter === "ALL") return rows;
+    return rows.filter((b) => (b.status ?? "").toUpperCase() === bookingStatusFilter);
+  }, [bookingsQuery.data, bookingStatusFilter]);
+
+  const deleteAssetMutation = useMutation({
+    mutationFn: (assetId: string) => deletePartnerRentalAsset(assetId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["partner-rental-assets"] });
+      Alert.alert("Deleted", "Rental equipment listing was removed.");
+    },
+    onError: (err: Error) => {
+      Alert.alert("Error", err?.message || "Could not delete equipment listing.");
+    },
+  });
+
+  const handleDeleteAsset = (asset: PartnerRentalAsset) => {
+    Alert.alert(
+      "Delete Listing",
+      `Are you sure you want to delete "${asset.title}"? This cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => deleteAssetMutation.mutate(asset.id),
+        },
+      ],
+    );
+  };
+
   const assetActionMutation = useMutation({
     mutationFn: ({ id, action }: { id: string; action: "submit" | "pause" | "resume" }) =>
       partnerRentalAssetAction(id, action),
@@ -71,7 +156,7 @@ export function PartnerRentalsScreen({ initialTab = "ads" }: { initialTab?: "ads
       void queryClient.invalidateQueries({ queryKey: ["partner-rental-assets"] });
       Alert.alert("Success", "Equipment ad updated successfully.");
     },
-    onError: (err: any) => {
+    onError: (err: Error) => {
       Alert.alert("Action Failed", err?.message || "Could not update status.");
     },
   });
@@ -84,7 +169,7 @@ export function PartnerRentalsScreen({ initialTab = "ads" }: { initialTab?: "ads
     }: {
       bookingId: string;
       action: "handover" | "return" | "release-deposit" | "dispute-deposit" | "cancel";
-      payload?: any;
+      payload?: PartnerBookingActionRequest;
     }) => partnerRentalBookingAction(bookingId, action, payload),
     onSuccess: (_data, vars) => {
       void queryClient.invalidateQueries({ queryKey: ["partner-rental-bookings"] });
@@ -103,7 +188,7 @@ export function PartnerRentalsScreen({ initialTab = "ads" }: { initialTab?: "ads
         Alert.alert("Success", "Booking status updated successfully.");
       }
     },
-    onError: (err: any, vars) => {
+    onError: (err: Error, vars) => {
       if (vars.action === "handover") {
         setServerHandoverError(err?.message || "Invalid handover PIN. Please check with customer.");
       } else {
@@ -223,16 +308,22 @@ export function PartnerRentalsScreen({ initialTab = "ads" }: { initialTab?: "ads
             }}
             className="flex-row items-center gap-1 px-3"
           >
-            <Plus size={15} color="#ffffff" />
+            <Plus size={15} color={COLOR_TOKENS.textInverse} />
             <Text className="text-xs font-bold text-white">Post Ad</Text>
           </Button>
         </View>
 
         {/* Tab switch */}
-        <View className="mt-4 flex-row rounded-xl bg-surface-muted p-1">
+        <View
+          accessibilityRole="tablist"
+          accessibilityLabel="Rentals sections"
+          className="mt-4 flex-row rounded-xl bg-surface-muted p-1"
+        >
           <Button
             variant="ghost"
-            onPress={() => setTab("ads")}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: tab === "ads" }}
+            onPress={() => handleTabChange("ads")}
             className={cn(
               "flex-1 rounded-lg py-2",
               tab === "ads" ? "bg-surface shadow-xs" : "bg-transparent",
@@ -249,7 +340,9 @@ export function PartnerRentalsScreen({ initialTab = "ads" }: { initialTab?: "ads
           </Button>
           <Button
             variant="ghost"
-            onPress={() => setTab("bookings")}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: tab === "bookings" }}
+            onPress={() => handleTabChange("bookings")}
             className={cn(
               "flex-1 rounded-lg py-2",
               tab === "bookings" ? "bg-surface shadow-xs" : "bg-transparent",
@@ -276,7 +369,7 @@ export function PartnerRentalsScreen({ initialTab = "ads" }: { initialTab?: "ads
             {BOOKING_STATUS_FILTERS.map((st) => (
               <Pressable
                 key={st}
-                onPress={() => setBookingStatusFilter(st)}
+                onPress={() => handleSelectStatusFilter(st)}
                 className={`rounded-full px-3 py-1 border ${
                   bookingStatusFilter === st
                     ? "border-navy-900 bg-navy-900"
@@ -342,7 +435,8 @@ export function PartnerRentalsScreen({ initialTab = "ads" }: { initialTab?: "ads
                   }}
                   onToggleStatus={handleToggleStatus}
                   onSubmitForReview={handleSubmitForReview}
-                  isSubmitting={assetActionMutation.isPending}
+                  onDelete={handleDeleteAsset}
+                  isSubmitting={assetActionMutation.isPending || deleteAssetMutation.isPending}
                 />
               ))}
             </View>
@@ -359,14 +453,22 @@ export function PartnerRentalsScreen({ initialTab = "ads" }: { initialTab?: "ads
             actionLabel="Retry"
             onAction={() => void bookingsQuery.refetch()}
           />
-        ) : (bookingsQuery.data?.length ?? 0) === 0 ? (
+        ) : filteredBookings.length === 0 ? (
           <EmptyState
-            title="No bookings yet"
-            description="When customers book your rental equipment, active orders and handover schedules will appear here."
+            title={
+              bookingStatusFilter === "ALL"
+                ? "No bookings yet"
+                : `No ${bookingStatusFilter.replace(/_/g, " ").toLowerCase()} bookings`
+            }
+            description={
+              bookingStatusFilter === "ALL"
+                ? "When customers book your rental equipment, active orders and handover schedules will appear here."
+                : "Try another status filter to see more."
+            }
           />
         ) : (
           <View className="flex-col gap-3">
-            {bookingsQuery.data?.map((booking) => (
+            {filteredBookings.map((booking) => (
               <RentalBookingCard
                 key={booking.id}
                 booking={booking}

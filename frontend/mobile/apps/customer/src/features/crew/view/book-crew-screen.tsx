@@ -242,6 +242,10 @@ function BookCrewFlow({ service, variant }: { service: RequirementService; varia
   const rate = state === null ? null : toRateDisclosureView(state.preview);
   const unavailable = state === null ? null : toRateUnavailableView(state.preview);
 
+  const handleRefresh = async () => {
+    await Promise.all([addressesQuery.refetch(), requestsQuery.refetch(), previewQuery.refetch()]);
+  };
+
   const formComplete =
     requiredAnswersPresent(questions, answers) &&
     effectiveAddressId !== null &&
@@ -539,6 +543,7 @@ function BookCrewFlow({ service, variant }: { service: RequirementService; varia
         selectedWorkEyebrow="Your event"
         selectedWorkLabel={joinPresent([eventTypeLabel, mixLabel]) ?? "Your crew"}
         onChangeWork={() => setBookingStep("crew")}
+        onRefresh={handleRefresh}
         onBack={() => setBookingStep("crew")}
       />
     ) : (
@@ -566,6 +571,7 @@ function BookCrewFlow({ service, variant }: { service: RequirementService; varia
         stepLabel={workQuestion === null ? "Step 1 of 2" : "Step 2 of 3"}
         selectedWorkLabel={workQuestion === null ? null : (workLabel ?? "Selected work")}
         onChangeWork={workQuestion === null ? undefined : () => setBookingStep("work")}
+        onRefresh={handleRefresh}
         aboutPanel={
           workQuestion === null ? (
             <View className="gap-3">
@@ -614,7 +620,7 @@ function FixedTeamAssurance() {
     <View className="rounded-[18px] border border-selected-line bg-selected-surface p-4">
       <Text className="text-sm font-bold text-text">Your cook brings their own helpers.</Text>
       <Text className="mt-1 text-sm leading-6 text-text-secondary">
-        For 25–50 guests that's usually a master cook and 2 helpers. You don't pay them separately — it's one price.
+        For 25–50 guests that’s usually a master cook and 2 helpers. You don’t pay them separately — it’s one price.
       </Text>
     </View>
   );
@@ -632,7 +638,7 @@ function LargeFunctionHandoff({ guestLimit }: { guestLimit: number }) {
           <View className="min-w-0 flex-1">
             <Text className="text-sm font-bold text-white">Get quotes from event cooks</Text>
             <Text className="mt-0.5 text-xs leading-5 text-white/70">
-              Up to 3 written quotes, priced per plate. You still buy the groceries — they'll send you the shopping list.
+              Up to 3 written quotes, priced per plate. You still buy the groceries — they’ll send you the shopping list.
             </Text>
           </View>
           <Text className="shrink-0 text-lg text-white">→</Text>

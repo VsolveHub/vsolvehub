@@ -1,5 +1,5 @@
 import { Button, Dialog, Input, Text } from "@vsolve/mobile-ui";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Image, Pressable, ScrollView, View } from "react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as ImagePicker from "expo-image-picker";
@@ -8,7 +8,6 @@ import { Camera, Check, X } from "lucide-react-native";
 import {
   type StayProperty,
   type StayPropertyType,
-  type StayTaxonomyVariant,
   stayPropertyTypes,
 } from "../model";
 import {
@@ -39,99 +38,103 @@ export function PropertySheet({
   onOpenChange: (open: boolean) => void;
   editingProperty?: StayProperty | null;
 }) {
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={editingProperty ? "Edit Stay Details" : "Add a Property"}
+      description="List your hostel, co-living space, PG, or serviced apartment."
+    >
+      {open ? (
+        <PropertySheetContent
+          key={editingProperty?.id ?? "new"}
+          editingProperty={editingProperty}
+          onOpenChange={onOpenChange}
+        />
+      ) : null}
+    </Dialog>
+  );
+}
+
+function PropertySheetContent({
+  editingProperty,
+  onOpenChange,
+}: {
+  editingProperty?: StayProperty | null;
+  onOpenChange: (open: boolean) => void;
+}) {
   const qc = useQueryClient();
 
   // Queries
   const taxonomyQuery = useQuery({
     queryKey: ["stay-taxonomy"],
     queryFn: fetchStayTaxonomy,
-    enabled: open,
   });
 
   const defaultLocationQuery = useQuery({
     queryKey: ["partner-default-location"],
     queryFn: fetchPartnerDefaultLocation,
-    enabled: open && !editingProperty,
+    enabled: !editingProperty,
   });
-
-  // State
-  const [variantId, setVariantId] = useState("");
-  const [title, setTitle] = useState("");
-  const [locationText, setLocationText] = useState("");
-  const [description, setDescription] = useState("");
-  const [houseRules, setHouseRules] = useState("");
-  const [minStay, setMinStay] = useState("1");
-  const [tenantPreference, setTenantPreference] = useState("ANY");
-
-  // Dynamic answers & amenities
-  const [schemaAnswers, setSchemaAnswers] = useState<Record<string, string>>({});
-  const [amenities, setAmenities] = useState<Record<string, boolean>>({});
-
-  // Photos
-  const [photos, setPhotos] = useState<Array<{ uri: string; remoteUrl?: string; uploading?: boolean }>>([]);
-  const [error, setError] = useState<string | null>(null);
 
   const isEditing = Boolean(editingProperty);
   const propertyTypes: StayPropertyType[] = stayPropertyTypes(taxonomyQuery.data ?? []);
+
+  // State
+  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
+  const variantId =
+    selectedVariantId ??
+    (editingProperty?.variant?.id ?? propertyTypes[0]?.variant.id ?? "");
   const selectedType = propertyTypes.find((t) => t.variant.id === variantId);
 
-  useEffect(() => {
-    if (open) {
-      queueMicrotask(() => {
-        setError(null);
-        if (editingProperty) {
-          setTitle(editingProperty.title || "");
-          setLocationText(editingProperty.location_text || "");
-          setDescription(editingProperty.description || "");
-          setHouseRules(editingProperty.house_rules || "");
-          setMinStay(String(editingProperty.min_stay_nights || 1));
-          setVariantId(editingProperty.variant?.id || "");
-          setTenantPreference(
-            (editingProperty.structured_fields as any)?.tenant_preference || "ANY",
-          );
+  const [title, setTitle] = useState(editingProperty?.title ?? "");
 
-          // Prepopulate existing photos
-          const existingMedia = editingProperty.media ?? [];
-          if (existingMedia.length > 0) {
-            setPhotos(existingMedia.map((m) => ({ uri: m.url, remoteUrl: m.url })));
-          } else if (editingProperty.image_urls?.length) {
-            setPhotos(editingProperty.image_urls.map((u) => ({ uri: u, remoteUrl: u })));
-          } else {
-            setPhotos([]);
-          }
+  const [userLocationText, setUserLocationText] = useState<string | null>(null);
+  const locationText =
+    userLocationText ??
+    (editingProperty?.location_text ?? defaultLocationQuery.data ?? "");
 
-          // Prepopulate structured fields
-          const structured = editingProperty.structured_fields ?? {};
-          const ans: Record<string, string> = {};
-          const am: Record<string, boolean> = {};
-          for (const [k, v] of Object.entries(structured)) {
-            if (typeof v === "boolean") am[k] = v;
-            else if (v != null) ans[k] = String(v);
-          }
-          setSchemaAnswers(ans);
-          setAmenities(am);
-        } else {
-          setTitle("");
-          setLocationText(defaultLocationQuery.data || "");
-          setDescription("");
-          setHouseRules("");
-          setMinStay("1");
-          setVariantId(propertyTypes[0]?.variant.id || "");
-          setTenantPreference("ANY");
-          setSchemaAnswers({});
-          setAmenities({});
-          setPhotos([]);
-        }
-      });
+  const [description, setDescription] = useState(editingProperty?.description ?? "");
+  const [houseRules, setHouseRules] = useState(editingProperty?.house_rules ?? "");
+  const [minStay, setMinStay] = useState(
+    editingProperty ? String(editingProperty.min_stay_nights || 1) : "1",
+  );
+  const [tenantPreference, setTenantPreference] = useState(
+    (editingProperty?.structured_fields as any)?.tenant_preference ?? "ANY",
+  );
+
+  // Dynamic answers & amenities
+  const [schemaAnswers, setSchemaAnswers] = useState<Record<string, string>>(() => {
+    const structured = editingProperty?.structured_fields ?? {};
+    const ans: Record<string, string> = {};
+    for (const [k, v] of Object.entries(structured)) {
+      if (typeof v !== "boolean" && v != null) ans[k] = String(v);
     }
-  }, [open, editingProperty, defaultLocationQuery.data, propertyTypes.length]);
-
-  // Handle default location if it loads later
-  useEffect(() => {
-    if (!editingProperty && defaultLocationQuery.data && !locationText) {
-      setLocationText(defaultLocationQuery.data);
+    return ans;
+  });
+  const [amenities, setAmenities] = useState<Record<string, boolean>>(() => {
+    const structured = editingProperty?.structured_fields ?? {};
+    const am: Record<string, boolean> = {};
+    for (const [k, v] of Object.entries(structured)) {
+      if (typeof v === "boolean") am[k] = v;
     }
-  }, [defaultLocationQuery.data, editingProperty, locationText]);
+    return am;
+  });
+
+  // Photos
+  const [photos, setPhotos] = useState<
+    { uri: string; remoteUrl?: string; uploading?: boolean }[]
+  >(() => {
+    const existingMedia = editingProperty?.media ?? [];
+    if (existingMedia.length > 0) {
+      return existingMedia.map((m) => ({ uri: m.url, remoteUrl: m.url }));
+    }
+    if (editingProperty?.image_urls?.length) {
+      return editingProperty.image_urls.map((u) => ({ uri: u, remoteUrl: u }));
+    }
+    return [];
+  });
+  const [error, setError] = useState<string | null>(null);
 
   const invalidate = () => {
     void qc.invalidateQueries({ queryKey: ["partner-stay-properties"] });
@@ -260,92 +263,36 @@ export function PropertySheet({
   const amenityOptions = selectedType?.variant?.amenity_options ?? [];
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={onOpenChange}
-      title={isEditing ? "Edit Stay Details" : "Add a Property"}
-      description="List your hostel, co-living space, PG, or serviced apartment."
-    >
-      <ScrollView className="max-h-[75vh]" showsVerticalScrollIndicator={false}>
-        <View className="flex-col gap-4 py-2">
-          {/* Property Type / Variant */}
-          {!isEditing && propertyTypes.length > 0 ? (
-            <View>
-              <Text className="text-xs font-semibold text-text">Type of property *</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-2">
-                <View className="flex-row gap-2">
-                  {propertyTypes.map((t) => {
-                    const isSelected = t.variant.id === variantId;
-                    return (
-                      <Pressable
-                        key={t.variant.id}
-                        onPress={() => {
-                          setVariantId(t.variant.id);
-                          setSchemaAnswers({});
-                          setAmenities({});
-                        }}
-                        className={`rounded-xl border px-3 py-2 ${
-                          isSelected
-                            ? "border-[#071328] bg-[#071328]"
-                            : "border-line bg-surface-muted"
-                        }`}
-                      >
-                        <Text
-                          className={`text-xs font-bold ${
-                            isSelected ? "text-white" : "text-text"
-                          }`}
-                        >
-                          {t.label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </ScrollView>
-            </View>
-          ) : null}
-
-          {/* Title */}
+    <ScrollView className="max-h-[75vh]" showsVerticalScrollIndicator={false}>
+      <View className="flex-col gap-4 py-2">
+        {/* Property Type / Variant */}
+        {!isEditing && propertyTypes.length > 0 ? (
           <View>
-            <Text className="text-xs font-semibold text-text">Property name *</Text>
-            <Input
-              value={title}
-              onChangeText={setTitle}
-              placeholder="e.g. Lakeview PG for working women"
-              className="mt-1.5"
-            />
-          </View>
-
-          {/* Location */}
-          <View>
-            <Text className="text-xs font-semibold text-text">Location *</Text>
-            <Text className="text-[11px] text-text-muted">Area and city guests search by.</Text>
-            <Input
-              value={locationText}
-              onChangeText={setLocationText}
-              placeholder="e.g. Madhapur, Hyderabad"
-              className="mt-1.5"
-            />
-          </View>
-
-          {/* Tenant Preference */}
-          <View>
-            <Text className="text-xs font-semibold text-text">Who can stay here?</Text>
-            <Text className="text-[11px] text-text-muted">Helps guests self-filter before enquiring.</Text>
+            <Text className="text-xs font-semibold text-text">Type of property *</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-2">
-              <View className="flex-row gap-1.5">
-                {TENANT_PREFERENCES.map((pref) => {
-                  const on = tenantPreference === pref.value;
+              <View className="flex-row gap-2">
+                {propertyTypes.map((t) => {
+                  const isSelected = t.variant.id === variantId;
                   return (
                     <Pressable
-                      key={pref.value}
-                      onPress={() => setTenantPreference(pref.value)}
-                      className={`rounded-full border px-2.5 py-1 ${
-                        on ? "border-[#071328] bg-[#071328]" : "border-line bg-surface-muted"
+                      key={t.variant.id}
+                      onPress={() => {
+                        setSelectedVariantId(t.variant.id);
+                        setSchemaAnswers({});
+                        setAmenities({});
+                      }}
+                      className={`rounded-xl border px-3 py-2 ${
+                        isSelected
+                          ? "border-navy-900 bg-navy-900"
+                          : "border-line bg-surface-muted"
                       }`}
                     >
-                      <Text className={`text-xs font-medium ${on ? "text-white" : "text-text"}`}>
-                        {pref.label}
+                      <Text
+                        className={`text-xs font-bold ${
+                          isSelected ? "text-white" : "text-text"
+                        }`}
+                      >
+                        {t.label}
                       </Text>
                     </Pressable>
                   );
@@ -353,188 +300,237 @@ export function PropertySheet({
               </View>
             </ScrollView>
           </View>
+        ) : null}
 
-          {/* Dynamic Schema Questions */}
-          {Object.keys(schemaProps).length > 0 ? (
-            <View className="flex-col gap-2 rounded-xl border border-line bg-surface-muted p-3">
-              <Text className="text-xs font-bold text-text">Property Details</Text>
-              {Object.entries(schemaProps).map(([key, prop]: [string, any]) => {
-                const label = key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-                const val = schemaAnswers[key] || "";
+        {/* Title */}
+        <View>
+          <Text className="text-xs font-semibold text-text">Property name *</Text>
+          <Input
+            value={title}
+            onChangeText={setTitle}
+            placeholder="e.g. Lakeview PG for working women"
+            className="mt-1.5"
+          />
+        </View>
 
-                if (prop?.enum && Array.isArray(prop.enum)) {
-                  return (
-                    <View key={key} className="mt-1">
-                      <Text className="text-[11px] font-semibold text-text">{label}</Text>
-                      <View className="flex-row flex-wrap gap-1.5 mt-1">
-                        {prop.enum.map((opt: string) => {
-                          const on = val === opt;
-                          return (
-                            <Pressable
-                              key={opt}
-                              onPress={() =>
-                                setSchemaAnswers((prev) => ({ ...prev, [key]: opt }))
-                              }
-                              className={`rounded-md border px-2 py-1 ${
-                                on ? "border-[#071328] bg-[#071328]" : "border-line bg-surface"
-                              }`}
-                            >
-                              <Text className={`text-[11px] ${on ? "text-white font-bold" : "text-text"}`}>
-                                {opt}
-                              </Text>
-                            </Pressable>
-                          );
-                        })}
-                      </View>
-                    </View>
-                  );
-                }
+        {/* Location */}
+        <View>
+          <Text className="text-xs font-semibold text-text">Location *</Text>
+          <Text className="text-[11px] text-text-muted">Area and city guests search by.</Text>
+          <Input
+            value={locationText}
+            onChangeText={setUserLocationText}
+            placeholder="e.g. Madhapur, Hyderabad"
+            className="mt-1.5"
+          />
+        </View>
 
+        {/* Tenant Preference */}
+        <View>
+          <Text className="text-xs font-semibold text-text">Who can stay here?</Text>
+          <Text className="text-[11px] text-text-muted">Helps guests self-filter before enquiring.</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-2">
+            <View className="flex-row gap-1.5">
+              {TENANT_PREFERENCES.map((pref) => {
+                const on = tenantPreference === pref.value;
                 return (
-                  <View key={key} className="mt-1">
-                    <Text className="text-[11px] font-semibold text-text">{label}</Text>
-                    <Input
-                      value={val}
-                      onChangeText={(t) => setSchemaAnswers((prev) => ({ ...prev, [key]: t }))}
-                      placeholder={`Enter ${label.toLowerCase()}`}
-                      className="mt-1 h-8 text-xs"
-                    />
-                  </View>
+                  <Pressable
+                    key={pref.value}
+                    onPress={() => setTenantPreference(pref.value)}
+                    className={`rounded-full border px-2.5 py-1 ${
+                      on ? "border-navy-900 bg-navy-900" : "border-line bg-surface-muted"
+                    }`}
+                  >
+                    <Text className={`text-xs font-medium ${on ? "text-white" : "text-text"}`}>
+                      {pref.label}
+                    </Text>
+                  </Pressable>
                 );
               })}
             </View>
-          ) : null}
-
-          {/* Amenities Checklist */}
-          {amenityOptions.length > 0 ? (
-            <View className="flex-col gap-2">
-              <Text className="text-xs font-semibold text-text">Amenities & Inclusions</Text>
-              <View className="flex-row flex-wrap gap-1.5">
-                {amenityOptions.map((opt: { key: string; label: string }) => {
-                  const checked = Boolean(amenities[opt.key]);
-                  return (
-                    <Pressable
-                      key={opt.key}
-                      onPress={() =>
-                        setAmenities((prev) => ({ ...prev, [opt.key]: !checked }))
-                      }
-                      className={`flex-row items-center gap-1.5 rounded-full border px-2.5 py-1 ${
-                        checked ? "border-[#071328] bg-[#071328]" : "border-line bg-surface-muted"
-                      }`}
-                    >
-                      {checked ? <Check size={11} color="#ffffff" /> : null}
-                      <Text className={`text-xs ${checked ? "text-white font-bold" : "text-text"}`}>
-                        {opt.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-          ) : null}
-
-          {/* Photos */}
-          <View className="flex-col gap-2">
-            <Text className="text-xs font-semibold text-text">Building & common area photos</Text>
-            <Text className="text-[11px] text-text-muted">
-              Entrance, kitchen, street. Up to {MAX_PHOTOS} photos, 10 MB each.
-            </Text>
-
-            <View className="flex-row flex-wrap gap-2">
-              {photos.map((p, index) => (
-                <View
-                  key={p.uri}
-                  className="relative h-20 w-20 overflow-hidden rounded-lg border border-line bg-surface-muted"
-                >
-                  <Image source={{ uri: p.uri }} className="h-full w-full" resizeMode="cover" />
-                  {index === 0 ? (
-                    <View className="absolute left-1 top-1 rounded bg-[#071328] px-1 py-0.5">
-                      <Text className="text-[9px] font-bold text-white uppercase">Cover</Text>
-                    </View>
-                  ) : null}
-                  {p.uploading ? (
-                    <View className="absolute inset-x-0 bottom-0 bg-[#071328]/80 py-0.5 items-center">
-                      <Text className="text-[9px] text-white">Uploading…</Text>
-                    </View>
-                  ) : null}
-                  <Pressable
-                    onPress={() => handleRemovePhoto(index)}
-                    className="absolute right-1 top-1 size-5 items-center justify-center rounded-full bg-white shadow-xs"
-                  >
-                    <X size={12} color="#071328" />
-                  </Pressable>
-                </View>
-              ))}
-
-              {photos.length < MAX_PHOTOS ? (
-                <Pressable
-                  onPress={handlePickPhotos}
-                  className="h-20 w-20 items-center justify-center rounded-lg border-2 border-dashed border-line bg-surface-muted"
-                >
-                  <Camera size={20} color="#71717a" />
-                  <Text className="mt-1 text-[10px] font-semibold text-text-muted">Add photo</Text>
-                </Pressable>
-              ) : null}
-            </View>
-          </View>
-
-          {/* Description */}
-          <View>
-            <Text className="text-xs font-semibold text-text">Description</Text>
-            <Input
-              value={description}
-              onChangeText={setDescription}
-              placeholder="What makes it a good place to stay — meals, Wi-Fi, what's nearby."
-              multiline
-              numberOfLines={3}
-              className="mt-1.5 min-h-[4.5rem] py-2"
-            />
-          </View>
-
-          {/* House Rules */}
-          <View>
-            <Text className="text-xs font-semibold text-text">House rules</Text>
-            <Input
-              value={houseRules}
-              onChangeText={setHouseRules}
-              placeholder="Gate time, visitors, smoking, quiet hours."
-              multiline
-              numberOfLines={2}
-              className="mt-1.5 min-h-[3.5rem] py-2"
-            />
-          </View>
-
-          {/* Minimum stay */}
-          <View>
-            <Text className="text-xs font-semibold text-text">Minimum stay (nights/months)</Text>
-            <Input
-              value={minStay}
-              onChangeText={setMinStay}
-              keyboardType="numeric"
-              placeholder="1"
-              className="mt-1.5 w-28"
-            />
-          </View>
-
-          {error ? <Text className="text-xs text-rose-600">{error}</Text> : null}
-
-          {/* Submit */}
-          <Button
-            variant="primary"
-            onPress={handleSubmit}
-            disabled={createMutation.isPending || updateMutation.isPending}
-            className="mt-2"
-          >
-            <Text className="font-bold text-white">
-              {createMutation.isPending || updateMutation.isPending
-                ? "Saving…"
-                : isEditing
-                  ? "Save details"
-                  : "Save and add rooms"}
-            </Text>
-          </Button>
+          </ScrollView>
         </View>
-      </ScrollView>
-    </Dialog>
+
+        {/* Dynamic Schema Questions */}
+        {Object.keys(schemaProps).length > 0 ? (
+          <View className="flex-col gap-2 rounded-xl border border-line bg-surface-muted p-3">
+            <Text className="text-xs font-bold text-text">Property Details</Text>
+            {Object.entries(schemaProps).map(([key, prop]: [string, any]) => {
+              const label = key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+              const val = schemaAnswers[key] || "";
+
+              if (prop?.enum && Array.isArray(prop.enum)) {
+                return (
+                  <View key={key} className="mt-1">
+                    <Text className="text-[11px] font-semibold text-text">{label}</Text>
+                    <View className="flex-row flex-wrap gap-1.5 mt-1">
+                      {prop.enum.map((opt: string) => {
+                        const on = val === opt;
+                        return (
+                          <Pressable
+                            key={opt}
+                            onPress={() =>
+                              setSchemaAnswers((prev) => ({ ...prev, [key]: opt }))
+                            }
+                            className={`rounded-md border px-2 py-1 ${
+                              on ? "border-navy-900 bg-navy-900" : "border-line bg-surface"
+                            }`}
+                          >
+                            <Text className={`text-[11px] ${on ? "text-white font-bold" : "text-text"}`}>
+                              {opt}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
+                );
+              }
+
+              return (
+                <View key={key} className="mt-1">
+                  <Text className="text-[11px] font-semibold text-text">{label}</Text>
+                  <Input
+                    value={val}
+                    onChangeText={(t) => setSchemaAnswers((prev) => ({ ...prev, [key]: t }))}
+                    placeholder={`Enter ${label.toLowerCase()}`}
+                    className="mt-1 h-8 text-xs"
+                  />
+                </View>
+              );
+            })}
+          </View>
+        ) : null}
+
+        {/* Amenities Checklist */}
+        {amenityOptions.length > 0 ? (
+          <View className="flex-col gap-2">
+            <Text className="text-xs font-semibold text-text">Amenities & Inclusions</Text>
+            <View className="flex-row flex-wrap gap-1.5">
+              {amenityOptions.map((opt: { key: string; label: string }) => {
+                const checked = Boolean(amenities[opt.key]);
+                return (
+                  <Pressable
+                    key={opt.key}
+                    onPress={() =>
+                      setAmenities((prev) => ({ ...prev, [opt.key]: !checked }))
+                    }
+                    className={`flex-row items-center gap-1.5 rounded-full border px-2.5 py-1 ${
+                      checked ? "border-navy-900 bg-navy-900" : "border-line bg-surface-muted"
+                    }`}
+                  >
+                    {checked ? <Check size={11} color="#ffffff" /> : null}
+                    <Text className={`text-xs ${checked ? "text-white font-bold" : "text-text"}`}>
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        ) : null}
+
+        {/* Photos */}
+        <View className="flex-col gap-2">
+          <Text className="text-xs font-semibold text-text">Building & common area photos</Text>
+          <Text className="text-[11px] text-text-muted">
+            Entrance, kitchen, street. Up to {MAX_PHOTOS} photos, 10 MB each.
+          </Text>
+
+          <View className="flex-row flex-wrap gap-2">
+            {photos.map((p, index) => (
+              <View
+                key={p.uri}
+                className="relative h-20 w-20 overflow-hidden rounded-lg border border-line bg-surface-muted"
+              >
+                <Image source={{ uri: p.uri }} className="h-full w-full" resizeMode="cover" />
+                {index === 0 ? (
+                  <View className="absolute left-1 top-1 rounded bg-navy-900 px-1 py-0.5">
+                    <Text className="text-[9px] font-bold text-white uppercase">Cover</Text>
+                  </View>
+                ) : null}
+                {p.uploading ? (
+                  <View className="absolute inset-x-0 bottom-0 bg-navy-900/80 py-0.5 items-center">
+                    <Text className="text-[9px] text-white">Uploading…</Text>
+                  </View>
+                ) : null}
+                <Pressable
+                  onPress={() => handleRemovePhoto(index)}
+                  className="absolute right-1 top-1 size-5 items-center justify-center rounded-full bg-white shadow-xs"
+                >
+                  <X size={12} color="#00112e" />
+                </Pressable>
+              </View>
+            ))}
+
+            {photos.length < MAX_PHOTOS ? (
+              <Pressable
+                onPress={handlePickPhotos}
+                className="h-20 w-20 items-center justify-center rounded-lg border-2 border-dashed border-line bg-surface-muted"
+              >
+                <Camera size={20} color="#71717a" />
+                <Text className="mt-1 text-[10px] font-semibold text-text-muted">Add photo</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+
+        {/* Description */}
+        <View>
+          <Text className="text-xs font-semibold text-text">Description</Text>
+          <Input
+            value={description}
+            onChangeText={setDescription}
+            placeholder="What makes it a good place to stay — meals, Wi-Fi, what's nearby."
+            multiline
+            numberOfLines={3}
+            className="mt-1.5 min-h-[4.5rem] py-2"
+          />
+        </View>
+
+        {/* House Rules */}
+        <View>
+          <Text className="text-xs font-semibold text-text">House rules</Text>
+          <Input
+            value={houseRules}
+            onChangeText={setHouseRules}
+            placeholder="Gate time, visitors, smoking, quiet hours."
+            multiline
+            numberOfLines={2}
+            className="mt-1.5 min-h-[3.5rem] py-2"
+          />
+        </View>
+
+        {/* Minimum stay */}
+        <View>
+          <Text className="text-xs font-semibold text-text">Minimum stay (nights/months)</Text>
+          <Input
+            value={minStay}
+            onChangeText={setMinStay}
+            keyboardType="numeric"
+            placeholder="1"
+            className="mt-1.5 w-28"
+          />
+        </View>
+
+        {error ? <Text className="text-xs text-rose-600">{error}</Text> : null}
+
+        {/* Submit */}
+        <Button
+          variant="primary"
+          onPress={handleSubmit}
+          disabled={createMutation.isPending || updateMutation.isPending}
+          className="mt-2"
+        >
+          <Text className="font-bold text-white">
+            {createMutation.isPending || updateMutation.isPending
+              ? "Saving…"
+              : isEditing
+                ? "Save details"
+                : "Save and add rooms"}
+          </Text>
+        </Button>
+      </View>
+    </ScrollView>
   );
 }

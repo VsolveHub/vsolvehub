@@ -20,7 +20,7 @@ import { resolveCustomerPush } from "@/features/notifications/push-routing";
 import { LogBox } from "react-native";
 import "../global.css";
 
-// LogBox.ignoreAllLogs();
+LogBox.ignoreAllLogs();
 
 configureCore({ appKind: "customer" });
 SplashScreen.preventAutoHideAsync();

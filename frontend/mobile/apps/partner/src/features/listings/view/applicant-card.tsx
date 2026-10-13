@@ -1,6 +1,15 @@
 import { Badge, Button, Card, Text, cn } from "@vsolve/mobile-ui";
-import { Alert, Linking, View } from "react-native";
-import { Check, ExternalLink, Mail, Phone, User, Eye } from "lucide-react-native";
+import { Alert, Linking, Pressable, View } from "react-native";
+import {
+  Calendar,
+  ExternalLink,
+  Eye,
+  Flag,
+  Mail,
+  MapPin,
+  Phone,
+  User,
+} from "lucide-react-native";
 
 import {
   type PartnerApplication,
@@ -11,10 +20,14 @@ export function ApplicantCard({
   application,
   onUpdateStatus,
   onRevealContact,
+  onScheduleInterview,
+  onReport,
 }: {
   application: PartnerApplication;
   onUpdateStatus: (application: PartnerApplication, newStatus: string) => void;
   onRevealContact: (application: PartnerApplication) => void;
+  onScheduleInterview?: (application: PartnerApplication) => void;
+  onReport?: (application: PartnerApplication) => void;
 }) {
   const badge = getApplicantStatusBadge(application.status);
   const status = (application.status ?? "").toUpperCase();
@@ -50,7 +63,18 @@ export function ApplicantCard({
             {application.candidate_name || "Applicant"}
           </Text>
         </View>
-        <Badge tone={badge.tone}>{badge.label}</Badge>
+        <View className="flex-row items-center gap-2">
+          <Badge tone={badge.tone}>{badge.label}</Badge>
+          {onReport ? (
+            <Pressable
+              onPress={() => onReport(application)}
+              accessibilityLabel="Report applicant"
+              className="p-1 active:opacity-60"
+            >
+              <Flag size={14} color="#94a3b8" />
+            </Pressable>
+          ) : null}
+        </View>
       </View>
 
       <View className="mt-3 flex-col gap-2">
@@ -73,8 +97,39 @@ export function ApplicantCard({
         {application.cover_note ? (
           <View className="mt-1 rounded-lg bg-surface-muted p-2.5">
             <Text className="text-xs text-text-muted" numberOfLines={3}>
-              "{application.cover_note}"
+              “{application.cover_note}”
             </Text>
+          </View>
+        ) : null}
+
+        {/* Scheduled Interview Card */}
+        {application.interview ? (
+          <View className="mt-2 rounded-xl border border-sky-200 bg-sky-50/70 p-3 gap-1">
+            <View className="flex-row items-center justify-between">
+              <Text className="text-xs font-bold text-sky-950">
+                {application.interview.status === "PROPOSED"
+                  ? "Interview Invitation Sent"
+                  : `Interview · ${application.interview.status_label || application.interview.status}`}
+              </Text>
+              <Badge tone="info">{application.interview.mode_label || application.interview.mode}</Badge>
+            </View>
+            <View className="flex-row items-center gap-1.5 mt-0.5">
+              <Calendar size={13} color="#0284c7" />
+              <Text className="text-xs text-sky-900">
+                {application.interview.scheduled_date} at {application.interview.start_time.slice(0, 5)}
+              </Text>
+            </View>
+            {application.interview.location_text ? (
+              <View className="flex-row items-center gap-1.5">
+                <MapPin size={13} color="#0284c7" />
+                <Text className="text-xs text-sky-800">{application.interview.location_text}</Text>
+              </View>
+            ) : null}
+            {application.interview.note ? (
+              <Text className="text-[11px] italic text-sky-700 mt-0.5">
+                “{application.interview.note}”
+              </Text>
+            ) : null}
           </View>
         ) : null}
       </View>
@@ -153,6 +208,23 @@ export function ApplicantCard({
         >
           <Text className={cn("text-[11px]", status === "SHORTLISTED" ? "text-white font-bold" : "text-text-muted")}>
             Shortlist
+          </Text>
+        </Button>
+
+        <Button
+          variant={status === "INTERVIEW" ? "primary" : "ghost"}
+          size="sm"
+          onPress={() => {
+            if (onScheduleInterview) {
+              onScheduleInterview(application);
+            } else {
+              onUpdateStatus(application, "INTERVIEW");
+            }
+          }}
+          className="h-7 px-2"
+        >
+          <Text className={cn("text-[11px]", status === "INTERVIEW" ? "text-white font-bold" : "text-text-muted")}>
+            Interview
           </Text>
         </Button>
 

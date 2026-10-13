@@ -1,5 +1,9 @@
-import { PartnerListingsScreen } from "@/features/listings/view/partner-listings-screen";
+import { useLocalSearchParams } from "expo-router";
+
+import { PostJobWizard } from "@/features/listings/view/post-job-wizard";
 
 export default function ListingPostRoute() {
-  return <PartnerListingsScreen />;
+  const { edit } = useLocalSearchParams<{ edit?: string }>();
+
+  return <PostJobWizard editId={edit || null} />;
 }

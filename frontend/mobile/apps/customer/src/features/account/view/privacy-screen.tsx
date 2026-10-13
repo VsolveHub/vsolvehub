@@ -20,6 +20,13 @@ export function PrivacyScreen() {
 
   const [confirmingErasure, setConfirmingErasure] = useState(false);
   const [confirmingAccess, setConfirmingAccess] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await requests.refetch();
+    setRefreshing(false);
+  };
 
   const requestList = requests.data ?? [];
   const openErasure = requestList.filter((r) => r.kind === "ERASURE").find(isRequestOpen);
@@ -27,7 +34,7 @@ export function PrivacyScreen() {
 
   if (requests.isPending) {
     return (
-      <AccountPageShell activeTab="privacy">
+      <AccountPageShell activeTab="privacy" onRefresh={onRefresh} refreshing={refreshing}>
         <View className="py-12 items-center justify-center">
           <Spinner size="sm" />
         </View>
@@ -37,7 +44,7 @@ export function PrivacyScreen() {
 
   if (requests.isError) {
     return (
-      <AccountPageShell activeTab="privacy">
+      <AccountPageShell activeTab="privacy" onRefresh={onRefresh} refreshing={refreshing}>
         <ErrorState
           title="We could not load your privacy requests"
           message={describeError(requests.error, "read").message}
@@ -49,7 +56,7 @@ export function PrivacyScreen() {
   }
 
   return (
-    <AccountPageShell activeTab="privacy">
+    <AccountPageShell activeTab="privacy" onRefresh={onRefresh} refreshing={refreshing}>
       <View className="gap-6">
         {/* Card 1: Consents matching Image 3 */}
         <View className="overflow-hidden rounded-2xl border border-line bg-surface p-5 shadow-xs">

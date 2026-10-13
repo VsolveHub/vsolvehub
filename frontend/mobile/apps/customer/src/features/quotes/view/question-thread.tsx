@@ -3,7 +3,7 @@ import { describeError } from "@vsolve/query/native";
 import { ErrorState, Skeleton, Text, Textarea, buttonStyles, cn } from "@vsolve/mobile-ui";
 import { Link, useRouter } from "expo-router";
 import { useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { requestEstimateHref, requestQuotesHref } from "@/lib/routes";
@@ -102,6 +102,7 @@ export function QuestionThread({ requirementId, proposalId }: { requirementId: s
             canAsk={access.entitled}
             isAnswering={answer.isPending}
             isAsking={ask.isPending}
+            onRefresh={() => void access.refetch()}
             onAnswer={(questionId, text) => answer.mutate({ requirementId, questionId, answer: text })}
             onAsk={(question) => ask.mutate({ requirementId, proposalId, question })}
           />
@@ -116,6 +117,7 @@ function ThreadBody({
   vendorName,
   onAnswer,
   onAsk,
+  onRefresh,
   isAnswering,
   isAsking,
   canAsk,
@@ -124,12 +126,23 @@ function ThreadBody({
   vendorName: string | null;
   onAnswer: (questionId: string, answer: string) => void;
   onAsk?: (question: string) => void;
+  onRefresh?: () => void;
   isAnswering: boolean;
   isAsking: boolean;
   canAsk: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const [draft, setDraft] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    if (onRefresh) {
+      setRefreshing(true);
+      await onRefresh();
+      setRefreshing(false);
+    }
+  };
+
   const openMine = questions.filter((question) => question.askedByRole === "CUSTOMER" && question.answer === null).length;
   const left = Math.max(0, MAX_OPEN_QUESTIONS - openMine);
   const who = vendorName ?? "Professional";
@@ -151,7 +164,18 @@ function ThreadBody({
 
   return (
     <View className="flex-1 justify-between">
-      <ScrollView className="flex-1" contentContainerClassName="gap-4 py-3">
+      <ScrollView
+        className="flex-1"
+        contentContainerClassName="gap-4 py-3"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={["#EA580C"]}
+            tintColor="#EA580C"
+          />
+        }
+      >
         {questions.length === 0 ? (
           <View className="rounded-card border border-line bg-surface-sunken p-6">
             <Text className="text-center text-sm font-semibold text-text">No questions asked yet</Text>

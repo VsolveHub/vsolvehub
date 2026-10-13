@@ -1,7 +1,14 @@
 from django.conf import settings
+from django.utils import timezone
 from rest_framework import serializers
 
-from apps.rental.models import RentalAsset, RentalAssetMedia, RentalBooking, RentalDeposit
+from apps.rental.models import (
+    AssetReservation,
+    RentalAsset,
+    RentalAssetMedia,
+    RentalBooking,
+    RentalDeposit,
+)
 
 
 class RentalAssetMediaSerializer(serializers.ModelSerializer):
@@ -17,6 +24,7 @@ class RentalAssetSerializer(serializers.ModelSerializer):
     public_state = serializers.CharField(read_only=True)
     partner_name = serializers.CharField(source="partner.display_name", read_only=True)
     media = RentalAssetMediaSerializer(many=True, read_only=True)
+    reserved_ranges = serializers.SerializerMethodField()
 
     class Meta:
         model = RentalAsset
@@ -37,9 +45,23 @@ class RentalAssetSerializer(serializers.ModelSerializer):
             "variant",
             "structured_fields",
             "media",
+            "reserved_ranges",
             "created_at",
         )
         read_only_fields = fields
+
+    def get_reserved_ranges(self, asset: RentalAsset) -> list[dict[str, str]]:
+        today = timezone.localdate()
+        return [
+            {
+                "start_date": r.start_date.isoformat(),
+                "end_date": r.end_date.isoformat(),
+            }
+            for r in asset.reservations.filter(
+                status__in=[AssetReservation.Status.CONFIRMED, AssetReservation.Status.TENTATIVE],
+                end_date__gte=today,
+            )
+        ]
 
 
 class RentalPhotoUploadSerializer(serializers.Serializer):

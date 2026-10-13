@@ -1,27 +1,26 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, ErrorState, Text } from "@vsolve/mobile-ui";
+import { useQuery } from "@tanstack/react-query";
+import { Button, COLOR_TOKENS, EmptyState, ErrorState, Text } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
 import { ArrowLeft, Plus } from "lucide-react-native";
 import { useState } from "react";
 import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 
 import { rentalMineBucket, type RentalMineTab } from "../model";
-import { cancelRentalBooking, fetchMyRentals } from "../queries";
+import { fetchMyRentals } from "../queries";
 import { RentalBookingCard } from "./rental-booking-card";
 
+// W-042: Exact tab list and labels matching web
 const TABS: { key: RentalMineTab; label: string }[] = [
-  { key: "ALL", label: "All" },
+  { key: "ALL", label: "All Rentals" },
   { key: "UPCOMING", label: "Upcoming" },
   { key: "ONGOING", label: "Ongoing" },
   { key: "RETURNED", label: "Returned" },
-  { key: "INACTIVE", label: "Cancelled" },
+  { key: "INACTIVE", label: "Cancelled / Disputed" },
 ];
 
 export function RentalMineScreen() {
   const router = useRouter();
-  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<RentalMineTab>("ALL");
-  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   const {
     data: bookings = [],
@@ -32,18 +31,6 @@ export function RentalMineScreen() {
   } = useQuery({
     queryKey: ["my-rentals"],
     queryFn: fetchMyRentals,
-  });
-
-  const cancelMutation = useMutation({
-    mutationFn: (bookingId: string) => cancelRentalBooking(bookingId),
-    onMutate: (bookingId) => setCancellingId(bookingId),
-    onSuccess: () => {
-      setCancellingId(null);
-      void queryClient.invalidateQueries({ queryKey: ["my-rentals"] });
-    },
-    onError: () => {
-      setCancellingId(null);
-    },
   });
 
   const filteredBookings = bookings.filter((b) => {
@@ -63,10 +50,16 @@ export function RentalMineScreen() {
       <View className="flex-row items-center justify-between">
         <Pressable
           accessibilityRole="button"
-          onPress={() => router.back()}
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.push("/rentals" as never);
+            }
+          }}
           className="flex-row items-center gap-1.5"
         >
-          <ArrowLeft size={16} color="#00112e" />
+          <ArrowLeft size={16} color={COLOR_TOKENS.text} />
           <Text className="text-sm font-bold text-navy-900">Equipment Rentals</Text>
         </Pressable>
 
@@ -75,7 +68,7 @@ export function RentalMineScreen() {
           onPress={() => router.push("/rentals" as never)}
           className="flex-row items-center gap-1 rounded-full bg-brand/10 px-3 py-1.5 active:bg-brand/20"
         >
-          <Plus size={14} color="#EA580C" />
+          <Plus size={14} color={COLOR_TOKENS.action} />
           <Text className="text-xs font-bold text-brand">Rent Gear</Text>
         </Pressable>
       </View>
@@ -134,9 +127,16 @@ export function RentalMineScreen() {
           onAction={() => void refetch()}
         />
       ) : filteredBookings.length === 0 ? (
+        /* W-043: Tab-specific empty state copy matching web */
         <EmptyState
-          title="No rentals in this tab"
-          description="You haven't reserved any gear in this status category."
+          title="No rental bookings found"
+          description={
+            activeTab === "ALL"
+              ? "You haven't rented any tools or equipment yet. Explore our verified rental catalog."
+              : activeTab === "INACTIVE"
+                ? "No cancelled or disputed rental bookings right now."
+                : `No ${activeTab.toLowerCase()} rental bookings right now.`
+          }
           action={
             <Button
               variant="primary"
@@ -151,12 +151,7 @@ export function RentalMineScreen() {
       ) : (
         <View className="gap-4">
           {filteredBookings.map((b) => (
-            <RentalBookingCard
-              key={b.id}
-              booking={b}
-              isCancelling={cancellingId === b.id}
-              onCancel={(id) => cancelMutation.mutate(id)}
-            />
+            <RentalBookingCard key={b.id} booking={b} />
           ))}
         </View>
       )}

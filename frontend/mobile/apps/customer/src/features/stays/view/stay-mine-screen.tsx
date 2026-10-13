@@ -1,8 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Button, EmptyState, ErrorState, Skeleton, Text } from "@vsolve/mobile-ui";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { ArrowLeft, Plus } from "lucide-react-native";
-import { useState } from "react";
 import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 
 import type { StayEnquiry, StayReservation, StayVisit } from "../model";
@@ -19,7 +18,14 @@ type Tab = "enquiries" | "visits" | "reservations";
 
 export function StayMineScreen() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<Tab>("enquiries");
+  const params = useLocalSearchParams<{ tab?: string }>();
+  const requested = params?.tab;
+  const activeTab: Tab =
+    requested === "visits" || requested === "reservations" ? requested : "enquiries";
+
+  const setTab = (next: Tab) => {
+    router.setParams({ tab: next });
+  };
 
   const enquiries = useQuery({
     queryKey: ["my-stay-enquiries"],
@@ -43,7 +49,7 @@ export function StayMineScreen() {
     (v) => v.status === "REQUESTED" || v.status === "ACCEPTED",
   );
 
-  const tabs: Array<{ key: Tab; label: string }> = [
+  const tabs: { key: Tab; label: string }[] = [
     { key: "enquiries", label: `Enquiries (${enquiryRows.length})` },
     { key: "visits", label: `Visits (${openVisits.length})` },
     ...(reservationRows.length > 0
@@ -95,7 +101,13 @@ export function StayMineScreen() {
       <View className="flex-row items-center justify-between">
         <Pressable
           accessibilityRole="button"
-          onPress={() => router.back()}
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.push("/stays" as never);
+            }
+          }}
           className="flex-row items-center gap-1.5"
         >
           <ArrowLeft size={16} color="#00112e" />
@@ -126,7 +138,7 @@ export function StayMineScreen() {
           return (
             <Pressable
               key={tab.key}
-              onPress={() => setActiveTab(tab.key)}
+              onPress={() => setTab(tab.key)}
               className={`rounded-full px-4 py-1.5 border ${
                 isSelected
                   ? "border-navy-900 bg-navy-900"

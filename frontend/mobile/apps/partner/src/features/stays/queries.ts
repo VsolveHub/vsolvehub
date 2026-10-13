@@ -8,10 +8,10 @@ import type {
   StayProperty,
   StayPropertyAction,
   StayReservation,
+  StayReservationAction,
   StayRoom,
   StayUnit,
   StayUnitMedia,
-  VisitSlotRow,
 } from "./model";
 
 export async function fetchPartnerDefaultLocation(): Promise<string> {
@@ -57,6 +57,34 @@ export async function fetchPartnerStayVisits(): Promise<PartnerStayVisit[]> {
   } catch {
     return [];
   }
+}
+
+export async function fetchPartnerStayReservations(): Promise<StayReservation[]> {
+  try {
+    const data = await request(() =>
+      (getApiClient() as any).GET("/api/v1/partner/stays/reservations"),
+    );
+    return Array.isArray(data) ? (data as StayReservation[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function partnerStayReservationAction(
+  reservationId: string,
+  action: StayReservationAction,
+  reason: string = "",
+): Promise<StayReservation> {
+  const data = await request(() =>
+    (getApiClient() as any).POST(
+      "/api/v1/partner/stays/reservations/{reservation_id}/{action}",
+      {
+        params: { path: { reservation_id: reservationId, action } },
+        body: { reason },
+      },
+    ),
+  );
+  return data as StayReservation;
 }
 
 export async function uploadPartnerStayPhoto(
@@ -252,7 +280,7 @@ export async function setPartnerVisitingHours(
   propertyId: string,
   input: {
     visits_enabled: boolean;
-    slots: Array<{ weekday: number; start_time: string; end_time: string }>;
+    slots: { weekday: number; start_time: string; end_time: string }[];
     blocked_dates: string[];
   },
 ): Promise<StayProperty> {

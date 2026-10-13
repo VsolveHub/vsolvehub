@@ -1,7 +1,72 @@
-import type { Schemas } from "@vsolve/api-client";
+export interface RentalAssetMedia {
+  id: string;
+  url: string;
+}
 
-export type RentalAsset = Schemas["RentalAsset"];
-export type RentalBooking = Schemas["RentalBooking"];
+export interface RentalPartner {
+  id?: string;
+  full_name?: string;
+  company_name?: string;
+  phone_number?: string;
+}
+
+export interface RentalAsset {
+  id: string;
+  title: string;
+  slug?: string;
+  description?: string;
+  location_text?: string;
+  daily_rate_paise: number;
+  deposit_paise: number;
+  quantity_available?: number;
+  thumbnail_url?: string;
+  partner_name?: string;
+  variant?: string;
+  condition_grade?: string;
+  current_status?: string;
+  moderation_status?: string;
+  public_state?: string;
+  media?: RentalAssetMedia[];
+  structured_fields?: Record<string, string | number | boolean>;
+  partner?: RentalPartner;
+  reserved_ranges?: Array<{ start_date: string; end_date: string }>;
+  created_at?: string;
+}
+
+export interface RentalDeposit {
+  id?: string;
+  amount_paise: number;
+  status: string;
+  consumed_paise?: number;
+  requested_consume_paise?: number;
+  provider_note?: string;
+  payment_attempt_id?: string | null;
+  simulated_capture_available?: boolean;
+}
+
+export interface RentalBooking {
+  id: string;
+  asset_id: string;
+  start_date: string;
+  end_date: string;
+  quantity?: number;
+  pickup_or_delivery_mode?: string;
+  status: string;
+  price_paise?: number;
+  platform_fee_paise?: number;
+  platform_fee_percent?: number;
+  total_charge_paise?: number;
+  deposit_paise?: number;
+  handover_pin?: string;
+  notes?: string;
+  created_at?: string;
+  asset?: RentalAsset;
+  deposit?: RentalDeposit;
+}
+
+export interface RentalPlatformFee {
+  percent: number;
+}
 
 export interface RentalFilterParams {
   q?: string;

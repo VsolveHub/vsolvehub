@@ -5,7 +5,8 @@ import { Dialog, ErrorState, Input, Spinner, Text } from "@vsolve/mobile-ui";
 import * as WebBrowser from "expo-web-browser";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle, Defs, Path, Pattern, Rect } from "react-native-svg";
 
 import { useCustomerProfile, useUpdateCustomerProfile } from "@/features/account/queries";
@@ -14,6 +15,7 @@ import { requestOpenNotifications } from "@/features/notifications/alerts-bus";
 const WEB_BASE = process.env.EXPO_PUBLIC_WEB_BASE_URL ?? "https://vsolvehub.com";
 
 export function AccountHome() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const profile = useCustomerProfile();
   const update = useUpdateCustomerProfile();
@@ -22,6 +24,13 @@ export function AccountHome() {
   const [editName, setEditName] = useState("");
   const [editDisplay, setEditDisplay] = useState("");
   const [editEmail, setEditEmail] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await profile.refetch();
+    setRefreshing(false);
+  };
 
   if (profile.isPending) {
     return (
@@ -60,7 +69,14 @@ export function AccountHome() {
   };
 
   return (
-    <ScrollView className="flex-1 bg-[#FAF9F7]" contentContainerClassName="gap-4 px-4 pb-20 pt-5">
+    <ScrollView
+      className="flex-1 bg-[#FAF9F7]"
+      style={{ paddingTop: Math.max(insets.top, 20) }}
+      contentContainerClassName="gap-4 px-4 pb-20 pt-2"
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
+      }
+    >
       {/* Top Header matching previous customer portal */}
       <View className="flex-row items-start justify-between gap-3">
         <Text className="min-w-0 text-[1.875rem] font-extrabold leading-[1.15] tracking-tight text-navy-900">

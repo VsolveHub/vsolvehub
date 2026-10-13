@@ -32,8 +32,8 @@ export function EnquiryCard({
       : `${enquiry.guest_count ?? 1} guest${(enquiry.guest_count ?? 1) === 1 ? "" : "s"}`;
 
   const handleCall = () => {
-    if (enquiry.user_phone) {
-      void Linking.openURL(`tel:${enquiry.user_phone}`);
+    if (enquiry.customer_phone) {
+      void Linking.openURL(`tel:${enquiry.customer_phone}`);
     }
   };
 
@@ -45,7 +45,7 @@ export function EnquiryCard({
           <View className="flex-row items-center gap-2">
             <User size={15} color="#71717a" />
             <Text className="text-base font-bold text-text">
-              {enquiry.user_name || "Guest"}
+              {enquiry.customer_name || "Guest"}
             </Text>
           </View>
           <Badge tone={badge.tone}>{badge.label}</Badge>
@@ -69,7 +69,7 @@ export function EnquiryCard({
         {enquiry.total_quote_paise ? (
           <View className="flex-row items-center gap-1">
             <Text className="text-xs text-text-muted">Estimate:</Text>
-            <Text className="text-xs font-bold text-[#f87000]">
+            <Text className="text-xs font-bold text-action">
               {formatPaise(enquiry.total_quote_paise)}
             </Text>
           </View>
@@ -91,11 +91,11 @@ export function EnquiryCard({
           onPress={() => onSelect(enquiry)}
           className="flex-row items-center gap-1"
         >
-          <Text className="text-xs font-semibold text-[#071328]">Details</Text>
-          <ChevronRight size={13} color="#071328" />
+          <Text className="text-xs font-semibold text-navy-900">Details</Text>
+          <ChevronRight size={13} color="#00112e" />
         </Pressable>
 
-        {enquiry.user_phone && isOpen ? (
+        {enquiry.customer_phone && isOpen ? (
           <Button
             variant="primary"
             size="sm"

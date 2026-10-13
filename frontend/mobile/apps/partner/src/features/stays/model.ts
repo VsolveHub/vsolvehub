@@ -4,18 +4,18 @@ export interface StayTaxonomyVariant {
   name?: string;
   property_schema?: Record<string, unknown>;
   room_schema?: Record<string, unknown>;
-  amenity_options?: Array<{ key: string; label: string }>;
+  amenity_options?: { key: string; label: string }[];
   room_name_suggestions?: string[];
 }
 
 export interface StayTaxonomySubcategory {
   id: string;
   name: string;
-  services: Array<{
+  services: {
     id: string;
     name: string;
     variants: StayTaxonomyVariant[];
-  }>;
+  }[];
 }
 
 export type StayPropertyType = {
@@ -149,8 +149,8 @@ export interface StayEnquiry {
   unit?: StayUnit;
   unit_name?: string;
   total_quote_paise?: number;
-  user_name?: string;
-  user_phone?: string;
+  customer_name?: string;
+  customer_phone?: string;
   host_response?: string;
   responded_at?: string;
   created_at?: string;
@@ -164,28 +164,77 @@ export interface PartnerStayVisit {
   property_title?: string;
   property_slug?: string;
   unit_name?: string;
-  user_name?: string;
-  user_phone?: string;
+  customer_name?: string;
+  customer_phone?: string;
   message?: string;
   slot_label?: string;
   start_time?: string;
   end_time?: string;
   reason?: string;
   reason_text?: string;
+  decline_reason?: string;
+  decline_note?: string;
   note?: string;
 }
 
 export interface StayReservation {
   id: string;
+  property?: string;
   property_title?: string;
+  unit?: string;
   unit_name?: string;
+  customer?: string;
   customer_name?: string;
   customer_phone?: string;
   status: string;
   check_in: string;
   check_out: string;
+  guest_count?: number;
+  adult_count?: number;
+  child_count?: number;
+  nights?: number;
   total_paise?: number;
+  checked_in_at?: string | null;
+  checked_out_at?: string | null;
+  cancelled_at?: string | null;
+  cancellation_reason?: string | null;
+  created_at?: string;
 }
+
+export type StayReservationAction = "check_in" | "check_out" | "no_show" | "cancel";
+
+export const STAY_RESERVATION_STATUS_LABELS: Record<string, string> = {
+  HELD: "Held",
+  PAYMENT_PENDING: "Payment pending",
+  CONFIRMED: "Confirmed",
+  CHECKED_IN: "Checked in",
+  CHECKED_OUT: "Checked out",
+  CANCELLED: "Cancelled",
+  NO_SHOW: "No show",
+};
+
+export function stayReservationStatusLabel(status: string | undefined): string {
+  if (!status) return "Unknown";
+  return STAY_RESERVATION_STATUS_LABELS[status] ?? status;
+}
+
+export function stayReservationTone(
+  status: string | undefined,
+): "success" | "neutral" | "danger" {
+  if (status === "CANCELLED" || status === "NO_SHOW") return "danger";
+  if (status === "CONFIRMED" || status === "CHECKED_IN" || status === "CHECKED_OUT") {
+    return "success";
+  }
+  return "neutral";
+}
+
+export const STAY_SECTIONS = [
+  { id: "properties", label: "Properties", href: "/stays" },
+  { id: "enquiries", label: "Enquiries", href: "/stays/enquiries" },
+  { id: "visits", label: "Visits", href: "/stays/visits" },
+  { id: "bookings", label: "Bookings", href: "/stays/bookings" },
+] as const;
+export type StaySectionId = (typeof STAY_SECTIONS)[number]["id"];
 
 export type StayPropertyAction = "publish" | "pause" | "resume" | "archive" | "restore";
 

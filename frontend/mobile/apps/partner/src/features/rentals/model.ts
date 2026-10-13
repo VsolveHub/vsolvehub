@@ -4,6 +4,27 @@ export interface PartnerRentalAssetMedia {
   kind?: string;
 }
 
+export interface TaxonomyVariant {
+  id: string;
+  name: string;
+  default_deposit_paise?: number;
+  asset_schema?: Record<string, unknown>;
+}
+
+export interface TaxonomyService {
+  id: string;
+  name: string;
+  slug?: string;
+  variants?: TaxonomyVariant[];
+}
+
+export interface TaxonomySubcategory {
+  id: string;
+  name: string;
+  slug: string;
+  services?: TaxonomyService[];
+}
+
 export interface PartnerRentalAsset {
   id: string;
   title: string;
@@ -15,11 +36,13 @@ export interface PartnerRentalAsset {
   location_text?: string;
   description?: string;
   variant_id?: string;
+  variant?: string;
   status: "DRAFT" | "SUBMITTED" | "ACTIVE" | "PAUSED" | "ARCHIVED" | string;
   moderation_status?: "DRAFT" | "PENDING_REVIEW" | "PUBLISHED" | "PAUSED" | "REJECTED" | string;
+  public_state?: "PUBLISHED" | "UNLISTED" | "ARCHIVED" | string;
   media?: PartnerRentalAssetMedia[];
   image_urls?: string[];
-  structured_fields?: Record<string, any>;
+  structured_fields?: Record<string, string | number | boolean>;
   created_at?: string;
 }
 
@@ -57,6 +80,7 @@ export interface PartnerRentalBooking {
     amount_paise?: number;
     payment_attempt_id?: string;
   };
+  created_at?: string;
 }
 
 export function formatPaise(paise?: number | null): string {
@@ -105,7 +129,7 @@ export function getRentalBookingStatusBadge(status?: string): {
     case "DISPUTED":
       return { label: "Disputed", tone: "danger" };
     case "CANCELLED":
-      return { label: "Cancelled", tone: "neutral" };
+      return { label: "Cancelled", tone: "danger" };
     case "PENDING_PAYMENT":
       return { label: "Pending Payment", tone: "warning" };
     default:
@@ -123,4 +147,47 @@ export function canCancelBooking(status: string): boolean {
 export function canSubmitAsset(moderationStatus?: string): boolean {
   const m = (moderationStatus ?? "").toUpperCase();
   return m === "DRAFT" || m === "REJECTED";
+}
+
+export interface CreateAssetRequest {
+  variant_id?: string;
+  title: string;
+  description?: string;
+  location_text?: string;
+  daily_rate_paise: number;
+  deposit_paise: number;
+  quantity_available?: number;
+  asset_identifier?: string;
+  structured_fields?: Record<string, string | number | boolean>;
+  image_urls: string[];
+}
+
+export interface UpdateAssetRequest {
+  title?: string;
+  description?: string;
+  daily_rate_paise?: number;
+  deposit_paise?: number;
+  location_text?: string;
+  quantity_available?: number;
+  structured_fields?: Record<string, string | number | boolean>;
+}
+
+export interface PartnerBookingActionRequest {
+  pin?: string;
+  reason?: string;
+  consume_paise?: number;
+  photo_ids?: string[];
+}
+
+export interface AssetSchemaProperty {
+  type?: string;
+  title?: string;
+  description?: string;
+  enum?: (string | number | boolean)[];
+  examples?: (string | number | boolean)[];
+}
+
+export interface AssetSchema {
+  properties?: Record<string, AssetSchemaProperty>;
+  required?: string[];
 }

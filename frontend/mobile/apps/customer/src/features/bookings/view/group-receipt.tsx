@@ -4,7 +4,7 @@ import { Badge, Button, ErrorState, Logo, Skeleton, Text } from "@vsolve/mobile-
 import { apiBaseUrl, getApiClient } from "@vsolve/mobile-core";
 import { Link } from "expo-router";
 import { useState } from "react";
-import { Pressable, ScrollView, Share, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, Share, View } from "react-native";
 
 import { useBookingGroup } from "@/features/bookings/queries";
 import { Money } from "@/features/payment/view/money";
@@ -102,6 +102,13 @@ export function GroupReceipt({ groupId }: { groupId: string }) {
   const group = groupQuery.data;
   const orderId = group?.order_id ?? null;
   const orderQuery = useOrder(orderId);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([groupQuery.refetch(), orderQuery.refetch()]);
+    setRefreshing(false);
+  };
 
   if (groupQuery.isPending) {
     return (
@@ -155,7 +162,13 @@ export function GroupReceipt({ groupId }: { groupId: string }) {
   const invoice = order.tax_documents.find((document) => document.kind === "INVOICE") ?? null;
 
   return (
-    <ScrollView className="flex-1" contentContainerClassName="gap-6 px-4 py-6">
+    <ScrollView
+      className="flex-1"
+      contentContainerClassName="gap-6 px-4 py-6"
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
+      }
+    >
       <View className="gap-3">
         <Link href={`/bookings/${group.id}`} asChild>
           <Pressable className="min-h-11 justify-center">

@@ -57,55 +57,56 @@ export function StayCard({ property }: { property: StayPropertySummary }) {
 
   return (
     <Pressable
-      accessibilityRole="button"
+      accessibilityLabel={`View ${property.title}`}
       onPress={handlePress}
       className="overflow-hidden rounded-2xl border border-line bg-surface shadow-xs active:border-line-strong active:shadow-raised"
     >
-      {/* Cover Image & Badges */}
+      {/* Cover Image */}
       <View className="relative aspect-[16/10] w-full bg-[#f0ede6]">
         <Image
           source={{ uri: imageUrl }}
           contentFit="cover"
           style={{ width: "100%", height: "100%" }}
         />
-
-        {/* Heart Save Button */}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={isHearted ? "Remove from saved" : "Save stay"}
-          onPress={(e) => {
-            e.stopPropagation();
-            saved.toggle(property.id);
-          }}
-          className="absolute right-3 top-3 size-9 items-center justify-center rounded-full bg-navy-950/60 backdrop-blur-md active:bg-navy-950"
-        >
-          <Heart
-            size={16}
-            color={isHearted ? "#f87000" : "#ffffff"}
-            fill={isHearted ? "#f87000" : "transparent"}
-          />
-        </Pressable>
-
-        {/* Verified Host Badge & Rating Badge */}
-        <View className="absolute bottom-3 left-3 flex-row items-center gap-1.5">
-          <View className="flex-row items-center gap-1 rounded-md bg-emerald-950/80 px-2 py-0.5 backdrop-blur-xs border border-emerald-500/30">
-            <ShieldCheck size={11} color="#34d399" />
-            <Text className="text-[10px] font-bold text-white">Verified host</Text>
-          </View>
-          {property.average_rating ? (
-            <View className="flex-row items-center gap-1 rounded-md bg-amber-950/80 px-2 py-0.5 backdrop-blur-xs border border-amber-500/30">
-              <Star size={10} color="#fbbf24" fill="#fbbf24" />
-              <Text className="text-[10px] font-bold text-amber-300">
-                {Number(property.average_rating).toFixed(1)}
-                {property.review_count ? ` (${property.review_count})` : ""}
-              </Text>
-            </View>
-          ) : null}
-        </View>
       </View>
 
       {/* Card Content */}
       <View className="gap-2.5 p-4">
+        {/* Top Badges & Heart Save Button */}
+        <View className="flex-row items-center justify-between">
+          <View className="flex-row items-center gap-2">
+            <View className="flex-row items-center gap-1">
+              <ShieldCheck size={14} color="#059669" />
+              <Text className="text-xs font-semibold text-emerald-700">Verified host</Text>
+            </View>
+            {property.average_rating ? (
+              <View className="flex-row items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 border border-amber-200">
+                <Star size={10} color="#d97706" fill="#d97706" />
+                <Text className="text-[10px] font-bold text-amber-800">
+                  {Number(property.average_rating).toFixed(1)}
+                  {property.review_count ? ` (${property.review_count})` : ""}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={isHearted ? "Remove from saved" : "Save stay"}
+            onPress={(e) => {
+              e.stopPropagation();
+              saved.toggle(property.id);
+            }}
+            className="size-8 items-center justify-center rounded-full bg-surface-sunken border border-line active:bg-surface-hover"
+          >
+            <Heart
+              size={15}
+              color={isHearted ? "#ea580c" : "#6B6560"}
+              fill={isHearted ? "#ea580c" : "transparent"}
+            />
+          </Pressable>
+        </View>
+
         {/* Title and Host */}
         <View>
           <Text className="text-base font-extrabold text-navy-900" numberOfLines={1}>

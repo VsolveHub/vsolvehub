@@ -1,5 +1,5 @@
 import { Button, Dialog, Input, QuantityStepper, Text } from "@vsolve/mobile-ui";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Image, Pressable, ScrollView, View } from "react-native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as ImagePicker from "expo-image-picker";
@@ -52,14 +52,55 @@ export function UnitSheet({
   property?: StayProperty | null;
   editingUnit?: StayUnit | null;
 }) {
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={editingUnit ? `Edit ${editingUnit.name}` : "Add room type"}
+      description={
+        property
+          ? `Configure pricing and availability for ${property.title}`
+          : "Configure room type and numbers"
+      }
+    >
+      {open ? (
+        <UnitSheetContent
+          key={editingUnit?.id ?? "new"}
+          property={property}
+          editingUnit={editingUnit}
+          onOpenChange={onOpenChange}
+        />
+      ) : null}
+    </Dialog>
+  );
+}
+
+function UnitSheetContent({
+  property,
+  editingUnit,
+  onOpenChange,
+}: {
+  property?: StayProperty | null;
+  editingUnit?: StayUnit | null;
+  onOpenChange: (open: boolean) => void;
+}) {
   const qc = useQueryClient();
+  const isEditing = Boolean(editingUnit);
+  const style = property?.room_style ?? "MIXED";
+  const pricePeriod = property?.price_period ?? "MONTH";
 
   // Basic fields
-  const [name, setName] = useState("");
-  const [rateRupees, setRateRupees] = useState("");
-  const [sharingCount, setSharingCount] = useState(1);
-  const [maxGuests, setMaxGuests] = useState(1);
-  const [quantity, setQuantity] = useState(1);
+  const [name, setName] = useState(editingUnit?.name ?? "");
+  const [rateRupees, setRateRupees] = useState(
+    editingUnit ? String(Math.round(editingUnit.nightly_rate_paise / 100)) : "",
+  );
+  const [sharingCount, setSharingCount] = useState(
+    editingUnit?.sharing_count ?? (style === "PRIVATE" ? 1 : 2),
+  );
+  const [maxGuests, setMaxGuests] = useState(
+    editingUnit?.max_guests ?? (style === "SHARED" ? 1 : 2),
+  );
+  const [quantity, setQuantity] = useState(editingUnit?.quantity ?? 1);
   const [roomNumbersText, setRoomNumbersText] = useState("");
 
   // Photos
@@ -76,42 +117,6 @@ export function UnitSheet({
 
   // Error & Status
   const [error, setError] = useState<string | null>(null);
-
-  const isEditing = Boolean(editingUnit);
-  const style = property?.room_style ?? "MIXED";
-  const pricePeriod = property?.price_period ?? "MONTH";
-
-  useEffect(() => {
-    if (open) {
-      queueMicrotask(() => {
-        setError(null);
-        setBookingRoom(null);
-        setOccupantName("");
-        setReleaseRoom(null);
-        setOffRoom(null);
-        setAddingRoomNum(false);
-        setNewRoomNumber("");
-
-        if (editingUnit) {
-          setName(editingUnit.name);
-          setRateRupees(String(Math.round(editingUnit.nightly_rate_paise / 100)));
-          setSharingCount(editingUnit.sharing_count ?? 1);
-          setMaxGuests(editingUnit.max_guests ?? 1);
-          setQuantity(editingUnit.quantity ?? 1);
-          setRoomNumbersText("");
-          setDraftPhotos([]);
-        } else {
-          setName("");
-          setRateRupees("");
-          setSharingCount(style === "PRIVATE" ? 1 : 2);
-          setMaxGuests(style === "SHARED" ? 1 : 2);
-          setQuantity(1);
-          setRoomNumbersText("");
-          setDraftPhotos([]);
-        }
-      });
-    }
-  }, [open, editingUnit, style]);
 
   const invalidate = () => {
     void qc.invalidateQueries({ queryKey: ["partner-stay-properties"] });
@@ -265,17 +270,7 @@ export function UnitSheet({
 
   return (
     <>
-      <Dialog
-        open={open}
-        onOpenChange={onOpenChange}
-        title={isEditing ? `Edit ${editingUnit?.name}` : "Add room type"}
-        description={
-          property
-            ? `Configure pricing and availability for ${property.title}`
-            : "Configure room type and numbers"
-        }
-      >
-        <ScrollView className="max-h-[75vh]" showsVerticalScrollIndicator={false}>
+      <ScrollView className="max-h-[75vh]" showsVerticalScrollIndicator={false}>
           <View className="flex-col gap-4 py-2">
             {/* Room Name & Suggestions */}
             <View>
@@ -294,7 +289,7 @@ export function UnitSheet({
                       onPress={() => setName(suggestion)}
                       className={`rounded-full border px-2.5 py-1 ${
                         name === suggestion
-                          ? "border-[#071328] bg-[#071328]"
+                          ? "border-navy-900 bg-navy-900"
                           : "border-line bg-surface-muted"
                       }`}
                     >
@@ -424,7 +419,7 @@ export function UnitSheet({
                         onPress={() => handleRemovePhoto(m.id)}
                         className="absolute right-1 top-1 size-5 items-center justify-center rounded-full bg-white shadow-xs"
                       >
-                        <X size={12} color="#071328" />
+                        <X size={12} color="#00112e" />
                       </Pressable>
                     </View>
                   ))}
@@ -441,7 +436,7 @@ export function UnitSheet({
                         onPress={() => handleRemovePhoto(index)}
                         className="absolute right-1 top-1 size-5 items-center justify-center rounded-full bg-white shadow-xs"
                       >
-                        <X size={12} color="#071328" />
+                        <X size={12} color="#00112e" />
                       </Pressable>
                     </View>
                   ))}
@@ -469,8 +464,8 @@ export function UnitSheet({
                     onPress={() => setAddingRoomNum((prev) => !prev)}
                     className="flex-row items-center gap-1"
                   >
-                    <Plus size={13} color="#071328" />
-                    <Text className="text-xs font-semibold text-[#071328]">Add Room</Text>
+                    <Plus size={13} color="#00112e" />
+                    <Text className="text-xs font-semibold text-navy-900">Add Room</Text>
                   </Pressable>
                 </View>
 
@@ -607,7 +602,6 @@ export function UnitSheet({
             </Button>
           </View>
         </ScrollView>
-      </Dialog>
 
       {/* Turn off room dialog */}
       <Dialog

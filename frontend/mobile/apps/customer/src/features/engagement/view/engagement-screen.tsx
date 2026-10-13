@@ -2,8 +2,9 @@
 import { describeError, isStageNotFundable, type StageKind } from "@vsolve/query/native";
 import { Badge, Button, Dialog, EmptyState, ErrorState, Readout, Sheet, Skeleton, Text, Timeline, TimelineEvent, buttonStyles } from "@vsolve/mobile-ui";
 import { Link, useRouter } from "expo-router";
+import { ChevronLeft } from "lucide-react-native";
 import { useState } from "react";
-import { Linking, Pressable, ScrollView, View } from "react-native";
+import { Linking, Pressable, RefreshControl, ScrollView, View } from "react-native";
 
 import { AccessRefusal } from "@/features/access/view/access-refusal";
 import {
@@ -37,11 +38,40 @@ import { EngagementTimeline } from "@/features/engagement/view/engagement-timeli
 import { ProjectCompletionCodePanel } from "@/features/engagement/view/project-completion-code";
 import { REQUESTS_HREF, bookCrewHref, engagementListHref, receiptHref, requestHref, stageHref } from "@/lib/routes";
 
+function BackToBookingsButton() {
+  const router = useRouter();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Back to Bookings"
+      onPress={() => {
+        if (router.canGoBack()) {
+          router.back();
+        } else {
+          router.push("/activity");
+        }
+      }}
+      className="mb-4 flex-row items-center gap-1.5 self-start rounded-full border border-line bg-surface px-3 py-1.5 shadow-2xs active:bg-surface-hover"
+    >
+      <ChevronLeft size={16} color="#00112e" />
+      <Text className="text-xs font-bold text-navy-900">Back to Bookings</Text>
+    </Pressable>
+  );
+}
+
 export function EngagementScreen({ engagementId }: { engagementId: string }) {
   const engagementQuery = useEngagement(engagementId);
   const amendmentsQuery = useEngagementAmendments(engagementId);
   const fund = useFundStage();
   const [fundingStageId, setFundingStageId] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const refetchAll = async () => {
+    setRefreshing(true);
+    await Promise.all([engagementQuery.refetch(), amendmentsQuery.refetch()]);
+    setRefreshing(false);
+  };
+
   const view = engagementQuery.data === undefined ? null : toEngagementView(engagementQuery.data);
   const amendments = amendmentsQuery.data === undefined ? null : toAmendmentsView(amendmentsQuery.data);
   const isProject = view?.mode === "managed";
@@ -79,21 +109,30 @@ export function EngagementScreen({ engagementId }: { engagementId: string }) {
     );
   }
 
-  const refetchAll = () => {
-    void engagementQuery.refetch();
-    void amendmentsQuery.refetch();
-  };
-
   if (view.mode === "lead_only") {
     return (
-      <ScrollView className="flex-1" contentContainerClassName="gap-4 px-4 pb-16 pt-6">
+      <ScrollView
+        className="flex-1"
+        contentContainerClassName="gap-4 px-4 pb-16 pt-6"
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={refetchAll} colors={["#EA580C"]} tintColor="#EA580C" />
+        }
+      >
+        <BackToBookingsButton />
         <LeadOnlyHub view={view} onRefresh={refetchAll} />
       </ScrollView>
     );
   }
 
   return (
-    <ScrollView className="flex-1" contentContainerClassName="px-4 pb-16 pt-6">
+    <ScrollView
+      className="flex-1"
+      contentContainerClassName="px-4 pb-16 pt-6"
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={refetchAll} colors={["#EA580C"]} tintColor="#EA580C" />
+      }
+    >
+      <BackToBookingsButton />
       {isProject ? (
         <ProjectHero view={view} nouns={nouns} onFund={setFundingStageId} isFunding={fund.isPending} />
       ) : (

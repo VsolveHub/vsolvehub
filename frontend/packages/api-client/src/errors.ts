@@ -280,8 +280,15 @@ const RECOVERY_BY_CODE: Record<string, RecoveryIntent> = {
   m2_provider_unavailable: "retry",
 
   // A7 rentals / A9 stays — domain refusals the booking UIs surface
+  duplicate_enquiry: "choose_again",
   min_stay_not_met: "fix_input",
+  max_stay_exceeded: "fix_input",
   dates_unavailable: "choose_again",
+  check_in_in_past: "fix_input",
+  length_required: "fix_input",
+  room_unavailable: "choose_again",
+  room_required: "fix_input",
+  too_many_guests: "fix_input",
   out_of_stock: "choose_again",
   insufficient_quantity: "choose_again",
   handover_pin_invalid: "fix_input",
@@ -317,6 +324,7 @@ export abstract class ApiClientError extends Error {
     super(message);
     this.name = new.target.name;
     this.requestId = requestId;
+    Object.setPrototypeOf(this, new.target.prototype);
   }
 }
 
@@ -457,11 +465,24 @@ export function parseErrorEnvelope(body: unknown): ApiErrorDetail | null {
 }
 
 export function isApiRequestError(error: unknown): error is ApiRequestError {
-  return error instanceof ApiRequestError;
+  return (
+    error instanceof ApiRequestError ||
+    (typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      "status" in error &&
+      typeof (error as any).code === "string" &&
+      typeof (error as any).status === "number")
+  );
 }
 
 export function isApiClientError(error: unknown): error is ApiClientError {
-  return error instanceof ApiClientError;
+  return (
+    error instanceof ApiClientError ||
+    isApiRequestError(error) ||
+    error instanceof ApiNetworkError ||
+    error instanceof ApiContractError
+  );
 }
 
 /** True when the failure is safe for an automatic transport-level retry. */

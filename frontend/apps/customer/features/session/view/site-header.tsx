@@ -14,6 +14,7 @@ import { readPendingReferral } from "@/features/referral/pending-referral";
 import { getApiClient } from "@/lib/api/browser";
 import { useCart } from "@/features/checkout/queries";
 
+import { CustomerLoginModal } from "./customer-login-modal";
 import { useCustomerSession } from "../queries";
 import { ProfileMark, profileName } from "./profile-mark";
 import { CUSTOMER_VIEWPORT_WIDTH_CLASS } from "./app-chrome-layout";
@@ -225,26 +226,11 @@ export function SiteHeader() {
 
       {/* Global Interactive Login Dialog Modal */}
       {hydrated ? (
-      <Dialog
-        open={loginDialogOpen}
-        onOpenChange={handleOpenChange}
-        title="Log in to V Solve Hub"
-        description="Verify your mobile number to view bookings and checkout"
-      >
-        <div className="py-2 flex flex-col gap-4">
-          <Logo className="h-8 w-auto self-start" />
-          <p className="text-xs text-text-secondary">
-            Use the mobile number you book with. We will text you a code — there is no password.
-          </p>
-          <OtpForm
-            {...flow}
-            heading="Your mobile number"
-            headingLevel={2}
-            description="We will text you a code. There is no password."
-            verifyLabel="Verify and continue"
-          />
-        </div>
-      </Dialog>
+        <CustomerLoginModal
+          open={loginDialogOpen}
+          onOpenChange={handleOpenChange}
+          flow={flow}
+        />
       ) : null}
     </header>
   );

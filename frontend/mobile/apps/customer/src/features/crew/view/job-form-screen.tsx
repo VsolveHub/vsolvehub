@@ -37,6 +37,7 @@ export interface JobFormScreenProps {
   onChangeWork?: () => void;
   aboutPanel?: ReactNode;
   afterQuestions?: ReactNode;
+  onRefresh?: () => Promise<void> | void;
 }
 
 function formatDay(isoDate: string | null): string | null {
@@ -91,12 +92,14 @@ export function JobFormScreen({
   onChangeWork,
   aboutPanel,
   afterQuestions,
+  onRefresh,
 }: JobFormScreenProps) {
   const offset = onReportingTime === undefined ? 0 : 1;
   return (
     <PhoneFrame
       title={title}
       onBack={onBack}
+      onRefresh={onRefresh}
       step={stepLabel}
       reassurance="Free. Nothing is booked yet."
       action={

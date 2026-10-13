@@ -96,34 +96,37 @@ function LoginPhoneField({
   phone,
   onPhoneChange,
   phoneError,
-  codeLength,
 }: {
   phone: string;
   onPhoneChange: (value: string) => void;
   phoneError?: string | null;
-  codeLength: number;
+  codeLength?: number;
 }) {
   return (
-    <Field
-      required
-      label="Mobile number"
-      description={`We will send a ${codeLength}-digit code by SMS.`}
-      error={phoneError ?? undefined}
-    >
+    <div className="flex flex-col">
+      <label htmlFor="login-phone-input" className="sr-only">
+        Mobile number
+      </label>
       <div
         className={cn(
-          "flex min-h-12 items-stretch overflow-hidden rounded-control border bg-white transition-colors",
-          phoneError ? "border-danger" : "border-line focus-within:border-navy-300 focus-within:ring-2 focus-within:ring-focus-ring/20",
+          "flex h-[50px] sm:h-[52px] items-stretch overflow-hidden rounded-xl border bg-white transition-all duration-200",
+          phoneError
+            ? "border-danger ring-2 ring-danger/20"
+            : "border-[#E2E8F0] focus-within:border-[#EA580C] focus-within:ring-2 focus-within:ring-[#EA580C]/20",
         )}
       >
-        <span className="flex items-center gap-1.5 border-r border-line bg-surface-sunken px-3 text-sm font-semibold text-navy-900">
-          <span aria-hidden>🇮🇳</span>
-          <span data-numeric>+91</span>
-          <svg viewBox="0 0 12 12" aria-hidden className="size-3 text-text-muted">
+        <span
+          className="flex items-center gap-1.5 border-r border-[#E2E8F0] bg-[#F8F6F2] px-3.5 select-none"
+          title="India (+91)"
+        >
+          <span className="text-[13px] font-bold text-navy-900">IN</span>
+          <span className="text-[14px] font-bold text-navy-900">+91</span>
+          <svg viewBox="0 0 12 12" aria-hidden className="size-3 text-[#64748B]">
             <path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
         </span>
-        <Input
+        <input
+          id="login-phone-input"
           name="phone"
           type="tel"
           inputMode="numeric"
@@ -134,20 +137,29 @@ function LoginPhoneField({
           placeholder="9876543210"
           maxLength={10}
           value={phone}
-          onChange={(event) => onPhoneChange(event.target.value)}
-          className="min-h-12 flex-1 border-0 bg-transparent px-3 py-2 shadow-none focus:ring-0"
+          onChange={(event) => onPhoneChange(event.target.value.replace(/\D/g, ""))}
+          aria-invalid={Boolean(phoneError)}
+          aria-describedby={phoneError ? "login-phone-error" : undefined}
+          className="flex-1 border-0 bg-transparent px-3.5 text-[16px] font-medium text-navy-900 placeholder:text-[#94A3B8] focus:outline-none"
         />
       </div>
-    </Field>
+      {phoneError ? (
+        <p id="login-phone-error" role="alert" className="mt-1.5 text-xs font-semibold text-danger">
+          {phoneError}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
 function CustomerLoginForm({
   flow,
   verifyLabel = "Verify and continue",
+  mobileFocused = false,
 }: {
   flow: OtpFlow;
   verifyLabel?: string;
+  mobileFocused?: boolean;
 }) {
   const codeInputRef = useRef<HTMLInputElement>(null);
 
@@ -197,47 +209,42 @@ function CustomerLoginForm({
       ) : null}
 
       {flow.phase === "phone" ? (
-        <form className="flex flex-col gap-5" onSubmit={submitPhone} noValidate>
-          <div className="rounded-[0.85rem] border border-[#FDE6D5] bg-[#FFF7F0] px-4 py-3.5">
-            <div className="flex items-start gap-2.5">
-              <ShieldIcon className="mt-0.5 size-4 shrink-0 text-action" />
-              <div>
-                <p className="text-sm font-bold text-navy-900">Quick &amp; Secure Login</p>
-                <p className="mt-1 text-sm leading-relaxed text-text-secondary">
-                  Use the mobile number you book with.
-                  <br />
-                  We will text you a{" "}
-                  <span className="font-semibold text-[#EA580C]">{flow.codeLength}-digit code</span>.
-                </p>
-              </div>
-            </div>
-          </div>
-
+        <form className="flex flex-col gap-4" onSubmit={submitPhone} noValidate>
           <LoginPhoneField
             phone={flow.phone}
             onPhoneChange={flow.onPhoneChange}
             phoneError={flow.phoneError}
-            codeLength={flow.codeLength}
           />
 
-          <LoginReferralInput />
+          {!mobileFocused && variant === "page" ? (
+            <div className="hidden lg:block">
+              <LoginReferralInput />
+            </div>
+          ) : null}
 
-          <Button
+          <button
             type="submit"
-            size="lg"
-            block
-            disabled={!flow.canRequest}
-            loading={flow.isRequesting}
-            loadingLabel="Sending code"
-            className="min-h-12 rounded-control bg-navy-900 text-white hover:bg-navy-800"
+            disabled={!flow.canRequest || flow.isRequesting}
+            className={cn(
+              "flex h-[50px] sm:h-[52px] w-full items-center justify-center rounded-xl text-[15px] sm:text-[16px] font-bold text-white transition-all duration-200",
+              "bg-[#EA580C] hover:bg-[#D94E07] active:scale-[0.99] shadow-sm",
+              "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#EA580C]",
+              (!flow.canRequest || flow.isRequesting) &&
+                "opacity-50 cursor-not-allowed hover:bg-[#EA580C] active:scale-100 shadow-none",
+            )}
           >
-            Send code →
-          </Button>
-
-          <p className="flex items-center justify-center gap-2 text-center text-xs text-text-secondary">
-            <ShieldIcon className="size-3.5 shrink-0 text-text-muted" />
-            Your number is safe with us. We never share it with anyone.
-          </p>
+            {flow.isRequesting ? (
+              <span className="flex items-center gap-2">
+                <svg className="size-4 animate-spin text-white" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                </svg>
+                <span>Sending code…</span>
+              </span>
+            ) : (
+              <span>Send code →</span>
+            )}
+          </button>
         </form>
       ) : null}
 
@@ -304,7 +311,7 @@ function CustomerLoginForm({
             disabled={!flow.canVerify}
             loading={flow.isVerifying}
             loadingLabel="Verifying code"
-            className="min-h-12 rounded-control bg-navy-900 text-white hover:bg-navy-800"
+            className="min-h-12 rounded-xl bg-[#EA580C] hover:bg-[#D94E07] text-white font-bold text-[15px] shadow-sm disabled:opacity-50 disabled:hover:bg-[#EA580C] transition-all"
           >
             {verifyLabel}
           </Button>
@@ -351,55 +358,81 @@ export function CustomerLoginExperience({
   mobileFocused?: boolean;
   footer?: ReactNode;
 }) {
+  const isModal = variant === "modal";
+
   const formPanel = (
     <section
+      aria-label="Login with mobile number"
       className={cn(
-        "relative flex min-h-0 flex-col",
-        mobileFocused
-          ? "px-5 py-5"
-          : "min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-8 sm:py-8 lg:w-1/2 lg:px-10 lg:py-9",
+        "relative flex min-h-0 flex-col bg-white",
+        mobileFocused || isModal
+          ? "p-5 sm:p-7"
+          : "min-h-0 flex-1 overflow-y-auto px-6 py-7 sm:px-8 sm:py-8 lg:w-1/2 lg:px-10 lg:py-10",
       )}
     >
-      {onClose ? (
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close"
-          className="absolute right-4 top-4 z-10 inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-line/70 bg-white text-text-secondary shadow-2xs hover:bg-surface-hover hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring sm:right-5 sm:top-5 lg:right-6 lg:top-6"
-        >
-          <svg
-            aria-hidden
-            viewBox="0 0 20 20"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={1.75}
-            strokeLinecap="round"
-            className="size-5"
-          >
-            <path d="M6 6l8 8M14 6l-8 8" />
-          </svg>
-        </button>
-      ) : null}
-
-      <header
-        className={cn(
-          "flex flex-col",
-          onClose ? "items-center text-center pr-12" : "items-start",
-          mobileFocused ? "pt-1" : onClose ? "pt-2 lg:pt-4" : "",
-        )}
-      >
+      <header className="flex items-center justify-between">
         <h1 className="sr-only">Log in to V Solve Hub</h1>
-        <Logo className="mb-3 h-7 w-auto" />
-        <p className="text-sm leading-relaxed text-text-secondary">
-          Verify your mobile number to view bookings and checkout
-        </p>
+        <Logo className="h-7 w-auto" />
+        {onClose ? (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close login dialog"
+            className="inline-flex size-8.5 shrink-0 items-center justify-center rounded-full bg-[#F4F1EC] text-[#64748B] hover:bg-[#EAE4DC] hover:text-navy-900 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#EA580C]"
+          >
+            <svg
+              aria-hidden
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              className="size-4"
+            >
+              <path d="M5 5l10 10M15 5l-10 10" />
+            </svg>
+          </button>
+        ) : null}
       </header>
 
-      <div className={cn("h-px bg-line", mobileFocused ? "my-4" : "my-5 lg:my-6")} aria-hidden />
+      <div className="mt-6 mb-6">
+        {flow.phase === "phone" ? (
+          <>
+            <h2 className="text-[22px] sm:text-[24px] font-bold tracking-tight text-navy-900 leading-tight">
+              Enter your mobile number
+            </h2>
+            <p className="mt-1.5 text-[14px] text-[#64748B] leading-normal">
+              We’ll send you a 6-digit code to continue.
+            </p>
+          </>
+        ) : flow.phase === "code" ? (
+          <>
+            <h2 className="text-[22px] sm:text-[24px] font-bold tracking-tight text-navy-900 leading-tight">
+              Verify your number
+            </h2>
+            <p className="mt-1.5 text-[14px] text-[#64748B] leading-normal">
+              Enter the 6-digit code sent to{" "}
+              <span data-numeric className="font-semibold text-navy-900">
+                {flow.phone}
+              </span>
+              .
+            </p>
+          </>
+        ) : (
+          <>
+            <h2 className="text-[22px] sm:text-[24px] font-bold tracking-tight text-navy-900 leading-tight">
+              Signed in
+            </h2>
+            <p className="mt-1.5 text-[14px] text-[#64748B] leading-normal">
+              You are currently signed in.
+            </p>
+          </>
+        )}
+      </div>
 
-      <CustomerLoginForm flow={flow} />
+      <CustomerLoginForm flow={flow} mobileFocused={mobileFocused} />
 
-      {footer ? <div className="mt-4 text-sm leading-relaxed text-text-secondary">{footer}</div> : null}
+      {footer && flow.phase === "phone" ? <div className="mt-4">{footer}</div> : null}
     </section>
   );
 
@@ -417,11 +450,6 @@ export function CustomerLoginExperience({
     >
       <LoginPromoPanel />
       {formPanel}
-      {!mobileFocused ? (
-        <div className="mt-6 px-5 pb-6 lg:hidden">
-          <LoginBenefits />
-        </div>
-      ) : null}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useRouter } from "expo-router";
-import { Pressable, ScrollView, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 import Svg, { Circle, Path, Rect } from "react-native-svg";
 import { Text } from "@vsolve/mobile-ui";
 
@@ -25,9 +25,13 @@ const TABS: TabItem[] = [
 export function AccountPageShell({
   activeTab,
   children,
+  onRefresh,
+  refreshing,
 }: {
   activeTab: AccountTabKey;
   children: ReactNode;
+  onRefresh?: () => Promise<void>;
+  refreshing?: boolean;
 }) {
   const router = useRouter();
 
@@ -36,12 +40,49 @@ export function AccountPageShell({
       className="flex-1 bg-[#FAF9F7]"
       contentContainerClassName="gap-4 px-4 pb-24 pt-5"
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        onRefresh ? (
+          <RefreshControl
+            refreshing={Boolean(refreshing)}
+            onRefresh={onRefresh}
+            colors={["#EA580C"]}
+            tintColor="#EA580C"
+          />
+        ) : undefined
+      }
     >
       {/* Top Header matching customer portal */}
-      <View className="flex-row items-start justify-between gap-3">
-        <Text className="min-w-0 text-[1.875rem] font-extrabold leading-[1.15] tracking-tight text-navy-900">
-          Your profile
-        </Text>
+      <View className="flex-row items-center justify-between gap-3">
+        <View className="flex-row items-center gap-2.5">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.push("/account");
+              }
+            }}
+            className="size-9 items-center justify-center rounded-full border border-[#e7e2da] bg-white shadow-2xs active:bg-surface-hover"
+          >
+            <Svg
+              viewBox="0 0 24 24"
+              width={18}
+              height={18}
+              fill="none"
+              stroke="#071328"
+              strokeWidth={2.2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <Path d="m15 18-6-6 6-6" />
+            </Svg>
+          </Pressable>
+          <Text className="min-w-0 text-[1.875rem] font-extrabold leading-[1.15] tracking-tight text-navy-900">
+            Your profile
+          </Text>
+        </View>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Notifications"

@@ -69,7 +69,7 @@ module.exports = {
         },
         selected: { DEFAULT: navy[700], surface: navy[50], line: navy[200] },
         "focus-ring": { DEFAULT: navy[600], inverse: warm[0] },
-        info: { surface: navy[50], line: navy[200], text: navy[700] },
+        info: { DEFAULT: navy[700], surface: navy[50], line: navy[200], text: navy[700] },
         success: {
           DEFAULT: "#0e7c3a",
           surface: "#e8f6ed",
@@ -77,7 +77,7 @@ module.exports = {
           text: "#0e7c3a",
           active: "#0a5c2b",
         },
-        warning: { surface: signal[50], line: signal[200], text: "#8a5200" },
+        warning: { DEFAULT: "#8a5200", surface: signal[50], line: signal[200], text: "#8a5200" },
         danger: { DEFAULT: "#b3261e", surface: "#fdecea", line: "#f4b8b3", text: "#b3261e" },
         brand: { 50: navy[50], 100: navy[100], 500: navy[600], 600: navy[700], 700: navy[800], 900: navy[900] },
         accent: { 400: signal[400], 500: signal[500], 600: signal[600] },

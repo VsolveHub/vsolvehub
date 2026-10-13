@@ -4,8 +4,9 @@ import { RazorpayCheckout } from "@vsolve/mobile-core";
 import { describeError, useServerCountdown } from "@vsolve/query/native";
 import { Badge, Button, ErrorState, Skeleton, Text } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
+import { ChevronLeft } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
-import { AppState, ScrollView, View } from "react-native";
+import { AppState, Pressable, RefreshControl, ScrollView, View } from "react-native";
 
 import { useProfileCompletionGate } from "@/features/account/view/profile-completion-dialog";
 import { useBookingGroup, type BookingGroup } from "@/features/bookings/queries";
@@ -60,6 +61,27 @@ function bookingPageHref(groupId: string): string {
   return `/bookings/${groupId}`;
 }
 
+function BackToBookingButton({ groupId }: { groupId: string }) {
+  const router = useRouter();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Back to booking"
+      onPress={() => {
+        if (router.canGoBack()) {
+          router.back();
+        } else {
+          router.replace(`/bookings/${groupId}` as never);
+        }
+      }}
+      className="mb-4 flex-row items-center gap-1.5 self-start rounded-full border border-line bg-surface px-3 py-1.5 shadow-2xs active:bg-surface-hover"
+    >
+      <ChevronLeft size={16} color="#00112e" />
+      <Text className="text-xs font-bold text-navy-900">Back to Booking</Text>
+    </Pressable>
+  );
+}
+
 function shouldReturnToBooking(group: BookingGroup | null, attempt: PaymentAttempt | null): boolean {
   if (attempt !== null && paymentPhase(attempt, serverNow()) === "paid") return true;
   return group !== null && group.order_id !== null && group.recovery_action !== "PAYMENT_REQUIRED";
@@ -101,10 +123,17 @@ export function PayScreen({ groupId }: { groupId: string }) {
     router.replace(bookingPageHref(groupId) as never);
   }, [returnToBooking, groupId, router]);
 
+  const [refreshing, setRefreshing] = useState(false);
   const refreshAttempt = useCallback(() => {
     void attemptQuery.refetch();
     void checkoutPayment.refetch();
     void groupQuery.refetch();
+  }, [attemptQuery, checkoutPayment, groupQuery]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([attemptQuery.refetch(), checkoutPayment.refetch(), groupQuery.refetch()]);
+    setRefreshing(false);
   }, [attemptQuery, checkoutPayment, groupQuery]);
 
   useEffect(() => {
@@ -213,7 +242,14 @@ export function PayScreen({ groupId }: { groupId: string }) {
 
   if (attempt === null) {
     return (
-      <ScrollView className="flex-1" contentContainerClassName="px-4 py-6">
+      <ScrollView
+        className="flex-1"
+        contentContainerClassName="px-4 py-6"
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
+        }
+      >
+        <BackToBookingButton groupId={groupId} />
         <Text className="text-lg font-bold text-text">Pay for your booking</Text>
         <Text className="mt-1 text-sm text-text-secondary">
           Every visit has a professional committed to it. Paying now confirms the booking; until then the professionals are held, not booked.
@@ -245,7 +281,14 @@ export function PayScreen({ groupId }: { groupId: string }) {
   const phase = paymentPhase(attempt, serverNow());
 
   return (
-    <ScrollView className="flex-1" contentContainerClassName="px-4 py-6">
+    <ScrollView
+      className="flex-1"
+      contentContainerClassName="px-4 py-6"
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
+      }
+    >
+      <BackToBookingButton groupId={groupId} />
       <View className="flex-row flex-wrap items-start justify-between gap-3">
         <View>
           <Text className="text-lg font-bold text-text">

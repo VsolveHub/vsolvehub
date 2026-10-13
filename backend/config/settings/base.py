@@ -67,12 +67,11 @@ MIDDLEWARE = [
     "common.observability.middleware.RequestIdMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "corsheaders.middleware.CorsMiddleware",
-    "apps.mobile.middleware.BearerAwareSessionMiddleware",
     # Ahead of SessionMiddleware so its response hook runs afterwards and can
     # re-issue the sign-out Set-Cookie with the Secure flag Django's own
     # delete omits. See apps.identity.middleware.
     "apps.identity.middleware.ClearAuthCookiesMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware",
+    "apps.mobile.middleware.BearerAwareSessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",

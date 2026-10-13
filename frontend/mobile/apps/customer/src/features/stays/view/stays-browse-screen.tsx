@@ -162,7 +162,7 @@ export function StaysBrowseScreen() {
       ListHeaderComponent={
         <View className="gap-5 pb-2">
           {/* Hero Section */}
-          <View className="overflow-hidden rounded-3xl bg-[#00112e] p-6 shadow-md">
+          <View className="overflow-hidden rounded-3xl bg-navy-900 p-6 shadow-md">
             <View className="gap-2.5">
               <View className="self-start flex-row items-center gap-1.5 rounded-full border border-sky-400/30 bg-sky-500/15 px-3 py-1">
                 <Building2 size={13} color="#93c5fd" />

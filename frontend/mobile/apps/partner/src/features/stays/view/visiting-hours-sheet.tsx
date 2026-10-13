@@ -1,5 +1,5 @@
 import { Button, Dialog, Input, Text } from "@vsolve/mobile-ui";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { ScrollView, View, Pressable } from "react-native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Calendar, Clock, Copy, Plus, Trash2, X } from "lucide-react-native";
@@ -86,7 +86,7 @@ function MobileTimePickerModal({
                 key={h}
                 onPress={() => onChange(toValue(h, minute, pm))}
                 className={`h-9 w-11 items-center justify-center rounded-lg ${
-                  on ? "bg-[#071328]" : "bg-surface-muted"
+                  on ? "bg-navy-900" : "bg-surface-muted"
                 }`}
               >
                 <Text className={`text-sm font-semibold ${on ? "text-white" : "text-text"}`}>{h}</Text>
@@ -106,7 +106,7 @@ function MobileTimePickerModal({
                 key={m}
                 onPress={() => onChange(toValue(hour12, m, pm))}
                 className={`flex-1 h-9 items-center justify-center rounded-lg ${
-                  on ? "bg-[#071328]" : "bg-surface-muted"
+                  on ? "bg-navy-900" : "bg-surface-muted"
                 }`}
               >
                 <Text className={`text-sm font-semibold ${on ? "text-white" : "text-text"}`}>
@@ -128,7 +128,7 @@ function MobileTimePickerModal({
                   on ? "bg-surface shadow-xs" : ""
                 }`}
               >
-                <Text className={`text-sm font-bold ${on ? "text-[#071328]" : "text-text-muted"}`}>
+                <Text className={`text-sm font-bold ${on ? "text-navy-900" : "text-text-muted"}`}>
                   {p}
                 </Text>
               </Pressable>
@@ -153,10 +153,39 @@ export function VisitingHoursSheet({
   onOpenChange: (open: boolean) => void;
   property: StayProperty | null;
 }) {
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Visiting hours"
+      description="Guests choose one of these times for “Schedule a visit”. Several guests can pick the same time; you accept or decline each one."
+    >
+      {open && property ? (
+        <VisitingHoursSheetContent
+          key={property.id}
+          property={property}
+        />
+      ) : null}
+    </Dialog>
+  );
+}
+
+function VisitingHoursSheetContent({
+  property,
+}: {
+  property: StayProperty;
+}) {
   const qc = useQueryClient();
-  const [enabled, setEnabled] = useState(property?.visits_enabled ?? true);
-  const [rows, setRows] = useState<SlotRow[]>([]);
-  const [blocked, setBlocked] = useState<string[]>([]);
+  const [enabled, setEnabled] = useState(property.visits_enabled ?? true);
+  const [rows, setRows] = useState<SlotRow[]>(() =>
+    (property.visit_slots ?? []).map((slot: VisitSlotRow) => ({
+      key: slot.id,
+      weekday: slot.weekday,
+      start: hhmm(slot.start_time),
+      end: hhmm(slot.end_time),
+    })),
+  );
+  const [blocked, setBlocked] = useState<string[]>(() => property.visit_blocked_dates ?? []);
   const [newBlocked, setNewBlocked] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -168,25 +197,6 @@ export function VisitingHoursSheet({
     label: string;
     value: string;
   } | null>(null);
-
-  useEffect(() => {
-    if (property && open) {
-      queueMicrotask(() => {
-        setEnabled(property.visits_enabled ?? true);
-        setRows(
-          (property.visit_slots ?? []).map((slot: VisitSlotRow) => ({
-            key: slot.id,
-            weekday: slot.weekday,
-            start: hhmm(slot.start_time),
-            end: hhmm(slot.end_time),
-          })),
-        );
-        setBlocked(property.visit_blocked_dates ?? []);
-        setError(null);
-        setSaved(false);
-      });
-    }
-  }, [property, open]);
 
   const save = useMutation({
     mutationFn: () => {
@@ -260,13 +270,7 @@ export function VisitingHoursSheet({
 
   return (
     <>
-      <Dialog
-        open={open}
-        onOpenChange={onOpenChange}
-        title="Visiting hours"
-        description="Guests choose one of these times for “Schedule a visit”. Several guests can pick the same time; you accept or decline each one."
-      >
-        <ScrollView className="max-h-[75vh]" showsVerticalScrollIndicator={false}>
+      <ScrollView className="max-h-[75vh]" showsVerticalScrollIndicator={false}>
           <View className="flex-col gap-4 py-2">
             {/* Toggle Visits */}
             <View className="flex-row items-center justify-between rounded-xl border border-line bg-surface-muted p-3">
@@ -309,12 +313,12 @@ export function VisitingHoursSheet({
                       >
                         <View
                           className={`size-4 items-center justify-center rounded border ${
-                            isOpen ? "border-[#071328] bg-[#071328]" : "border-line bg-surface"
+                            isOpen ? "border-navy-900 bg-navy-900" : "border-line bg-surface"
                           }`}
                         >
                           {isOpen ? <Text className="text-[10px] text-white font-bold">✓</Text> : null}
                         </View>
-                        <Text className={`text-sm font-bold ${isOpen ? "text-[#071328]" : "text-text-muted"}`}>
+                        <Text className={`text-sm font-bold ${isOpen ? "text-navy-900" : "text-text-muted"}`}>
                           {name}
                         </Text>
                       </Pressable>
@@ -325,13 +329,13 @@ export function VisitingHoursSheet({
                             onPress={() => addSlot(weekday)}
                             className="size-7 items-center justify-center rounded-full bg-surface-muted"
                           >
-                            <Plus size={14} color="#071328" />
+                            <Plus size={14} color="#00112e" />
                           </Pressable>
                           <Pressable
                             onPress={() => copyToAllDays(weekday)}
                             className="size-7 items-center justify-center rounded-full bg-surface-muted"
                           >
-                            <Copy size={13} color="#071328" />
+                            <Copy size={13} color="#00112e" />
                           </Pressable>
                         </View>
                       ) : null}
@@ -355,7 +359,7 @@ export function VisitingHoursSheet({
                               className="h-8 flex-row items-center gap-1.5 rounded-full border border-line bg-surface px-2.5"
                             >
                               <Clock size={12} color="#71717a" />
-                              <Text className="text-xs font-bold text-[#071328]">
+                              <Text className="text-xs font-bold text-navy-900">
                                 {clockText(row.start)}
                               </Text>
                             </Pressable>
@@ -374,7 +378,7 @@ export function VisitingHoursSheet({
                               className="h-8 flex-row items-center gap-1.5 rounded-full border border-line bg-surface px-2.5"
                             >
                               <Clock size={12} color="#71717a" />
-                              <Text className="text-xs font-bold text-[#071328]">{clockText(row.end)}</Text>
+                              <Text className="text-xs font-bold text-navy-900">{clockText(row.end)}</Text>
                             </Pressable>
 
                             <Text className="text-[11px] text-text-muted">
@@ -470,7 +474,6 @@ export function VisitingHoursSheet({
             </Button>
           </View>
         </ScrollView>
-      </Dialog>
 
       {/* Sub time picker */}
       {pickerTarget ? (

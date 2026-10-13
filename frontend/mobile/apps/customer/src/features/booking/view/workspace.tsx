@@ -3,8 +3,9 @@ import type { Schemas } from "@vsolve/api-client";
 import { Button, Text } from "@vsolve/mobile-ui";
 import { describeError } from "@vsolve/query/native";
 import { useRouter } from "expo-router";
+import { ChevronLeft } from "lucide-react-native";
 import { useState } from "react";
-import { ScrollView, View } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
 
 import { cartVersionConflict, duplicateCartItemConflict } from "@/features/checkout/conflicts";
 import { useAddCartItem, useCart } from "@/features/checkout/queries";
@@ -62,7 +63,23 @@ export function BookingWorkspace({
   return (
     <View className="flex-1 bg-canvas">
       <ScrollView className="flex-1" contentContainerClassName="px-4 pb-6 pt-6">
-        <Text className="text-xl font-bold text-text">{service.name}</Text>
+        <View className="flex-row items-center gap-2.5">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Back to service"
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.push(`/catalog/${service.category_slug}/${service.slug}` as never);
+              }
+            }}
+            className="size-9 items-center justify-center rounded-full border border-line bg-surface shadow-2xs active:bg-surface-hover"
+          >
+            <ChevronLeft size={18} color="#00112e" />
+          </Pressable>
+          <Text className="text-xl font-bold text-text">{service.name}</Text>
+        </View>
         <View className="mt-4">
           <ScopeStage
             questions={variant.questions}

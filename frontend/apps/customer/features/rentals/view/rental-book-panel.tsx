@@ -9,7 +9,7 @@ import { friendlyErrorMessage } from "@vsolve/query";
 import { Button, IsoDateField, useToast } from "@vsolve/ui";
 
 import { completeOrOpenCheckout } from "../../payment/standalone-handoff";
-import { calculateRentalDays, formatPaise, type RentalAsset } from "../model";
+import { calculateRentalDays, formatPaise, type RentalAsset, type RentalDeposit } from "../model";
 import { bookRental, fetchRentalPlatformFee } from "../queries";
 
 const BUSINESS_NAME = "Vsolve Hub";
@@ -34,15 +34,59 @@ function addDaysIso(baseIso: string, days: number): string {
   return `${date.getFullYear()}-${month}-${day}`;
 }
 
+function getInitialAvailableDates(
+  minIso: string,
+  reservedRanges?: Array<{ start_date: string; end_date: string }>,
+  defaultDuration = 2,
+): { start: string; end: string } {
+  let candidateStart = addDaysIso(minIso, 1);
+  let candidateEnd = addDaysIso(candidateStart, defaultDuration);
+
+  if (!reservedRanges || reservedRanges.length === 0) {
+    return { start: candidateStart, end: candidateEnd };
+  }
+
+  let hasOverlap = true;
+  let attempts = 0;
+  while (hasOverlap && attempts < 30) {
+    attempts++;
+    hasOverlap = false;
+    for (const range of reservedRanges) {
+      if (candidateStart < range.end_date && candidateEnd > range.start_date) {
+        hasOverlap = true;
+        candidateStart = range.end_date;
+        candidateEnd = addDaysIso(candidateStart, defaultDuration);
+        break;
+      }
+    }
+  }
+
+  return { start: candidateStart, end: candidateEnd };
+}
+
+function checkDateOverlap(
+  start: string,
+  end: string,
+  reservedRanges?: Array<{ start_date: string; end_date: string }>,
+): { start_date: string; end_date: string } | null {
+  if (!reservedRanges || reservedRanges.length === 0) return null;
+  for (const range of reservedRanges) {
+    if (start < range.end_date && end > range.start_date) {
+      return range;
+    }
+  }
+  return null;
+}
+
 export function RentalBookPanel({ asset }: RentalBookPanelProps) {
   const router = useRouter();
   const toast = useToast();
 
-  const defaultStart = addDaysIso(todayIso(), 1);
-  const defaultEnd = addDaysIso(todayIso(), 3);
+  const minStart = todayIso();
+  const initialDates = getInitialAvailableDates(minStart, asset.reserved_ranges, 2);
 
-  const [startDate, setStartDate] = useState(defaultStart);
-  const [endDate, setEndDate] = useState(defaultEnd);
+  const [startDate, setStartDate] = useState(initialDates.start);
+  const [endDate, setEndDate] = useState(initialDates.end);
   const [notes, setNotes] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [error, setError] = useState<string | null>(null);
@@ -73,11 +117,7 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
         quantity: clampedQty,
       }),
     onSuccess: async (booking) => {
-      const deposit = booking.deposit as
-        | (typeof booking.deposit & { payment_attempt_id?: string | null })
-        | undefined;
-
-      const attemptId = deposit?.payment_attempt_id;
+      const attemptId = booking?.deposit?.payment_attempt_id;
 
       if (!attemptId) {
         toast.notify("Rental booking confirmed.");
@@ -119,6 +159,10 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
     },
     onError: (err: unknown) => {
       if (isApiRequestError(err)) {
+        if (err.status === 401 || err.status === 403 || err.code === "not_authenticated") {
+          setError("Please sign in to reserve this rental.");
+          return;
+        }
         if (err.code === "out_of_stock") {
           setError("Out of stock for these dates. Try different dates or another listing.");
           return;
@@ -141,6 +185,8 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
     },
   });
 
+  const overlap = checkDateOverlap(startDate, endDate, asset.reserved_ranges);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -152,10 +198,15 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
       setError("Rental return date must be after pickup date.");
       return;
     }
+    if (overlap) {
+      setError(
+        `This equipment is already reserved from ${overlap.start_date} to ${overlap.end_date}. Please select dates after ${overlap.end_date}.`,
+      );
+      return;
+    }
     mutation.mutate();
   };
 
-  const minStart = todayIso();
   const permanentlyOutOfStock = asset.quantity_available === 0;
   const isOutOfStockCode = (err: unknown): boolean => {
     if (!err) return false;
@@ -165,7 +216,7 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
     const code = (err as { code?: string })?.code;
     return code === "out_of_stock" || code === "insufficient_quantity";
   };
-  const dateAwareUnavailable = isOutOfStockCode(mutation.error);
+  const dateAwareUnavailable = Boolean(overlap) || isOutOfStockCode(mutation.error);
   const blockBooking = permanentlyOutOfStock || dateAwareUnavailable;
 
   return (
@@ -174,6 +225,12 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
       <p className="mt-1 text-xs text-text-secondary">
         Select your rental dates (DD/MM/YYYY). Zero hidden charges.
       </p>
+      {overlap ? (
+        <div className="mt-4 flex items-center gap-2 rounded-control border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-800">
+          <AlertCircle className="size-4 shrink-0" />
+          <span>Already reserved from {overlap.start_date} to {overlap.end_date}. Please choose dates after {overlap.end_date}.</span>
+        </div>
+      ) : null}
       {permanentlyOutOfStock ? (
         <div className="mt-4 flex items-center gap-2 rounded-control border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-800">
           <AlertCircle className="size-4 shrink-0" />
@@ -216,6 +273,32 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
               }}
             />
           </div>
+        </div>
+
+        {/* Quick Duration Shortcuts */}
+        <div className="flex gap-2">
+          {[1, 2, 3, 7, 14].map((numDays) => {
+            const isSelected = days === numDays;
+            return (
+              <button
+                key={numDays}
+                type="button"
+                onClick={() => {
+                  setEndDate(addDaysIso(startDate, numDays));
+                  setError(null);
+                  mutation.reset();
+                }}
+                disabled={permanentlyOutOfStock}
+                className={`flex-1 items-center justify-center rounded-control border py-2 text-xs font-bold transition-colors ${
+                  isSelected
+                    ? "border-navy-900 bg-surface text-navy-900 shadow-2xs"
+                    : "border-line bg-surface-sunken/60 text-text-secondary hover:bg-surface-hover hover:text-text"
+                }`}
+              >
+                {numDays}d
+              </button>
+            );
+          })}
         </div>
 
         <div className="flex items-center gap-2 rounded-control border border-line bg-surface-sunken p-3 text-xs text-text-secondary">

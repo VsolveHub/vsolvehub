@@ -1,15 +1,17 @@
-import { request } from "@vsolve/api-client";
+import { createIdempotencyKey, request } from "@vsolve/api-client";
 import { getApiClient } from "@vsolve/mobile-core";
 
-import type { PartnerApplication, PartnerListing } from "./model";
+import type {
+  ListingHome,
+  PartnerApplication,
+  PartnerListing,
+  VendorSubscription,
+  VendorSubscriptionPlan,
+} from "./model";
 
 export async function fetchPartnerListings(): Promise<PartnerListing[]> {
-  try {
-    const data = await request(() => (getApiClient() as any).GET("/api/v1/partner/listings"));
-    return Array.isArray(data) ? (data as PartnerListing[]) : [];
-  } catch {
-    return [];
-  }
+  const data = await request(() => (getApiClient() as any).GET("/api/v1/partner/listings"));
+  return Array.isArray(data) ? (data as PartnerListing[]) : [];
 }
 
 export async function fetchPartnerListing(id: string): Promise<PartnerListing> {
@@ -20,6 +22,16 @@ export async function fetchPartnerListing(id: string): Promise<PartnerListing> {
   );
   return data as PartnerListing;
 }
+
+export const fetchPartnerListingDetail = fetchPartnerListing;
+
+export function fetchListingHome(): Promise<ListingHome> {
+  return request(() =>
+    (getApiClient() as any).GET("/api/v1/partner/listings/home"),
+  ) as Promise<ListingHome>;
+}
+
+export const fetchPartnerListingHome = fetchListingHome;
 
 export async function createPartnerListing(payload: {
   title: string;
@@ -32,6 +44,8 @@ export async function createPartnerListing(payload: {
   experience?: string;
   description?: string;
   requirements?: string;
+  structured_fields?: Record<string, any>;
+  [key: string]: any;
 }): Promise<PartnerListing> {
   const data = await request(() =>
     (getApiClient() as any).POST("/api/v1/partner/listings", {
@@ -59,7 +73,7 @@ export async function updatePartnerListing(
 
 export async function runListingAction(
   listingId: string,
-  action: "submit" | "publish" | "republish" | "close",
+  action: "submit" | "publish" | "republish" | "close" | "purchase-premium",
   reason: string = "",
 ): Promise<any> {
   const data = await request(() =>
@@ -72,16 +86,12 @@ export async function runListingAction(
 }
 
 export async function fetchListingApplications(listingId: string): Promise<PartnerApplication[]> {
-  try {
-    const data = await request(() =>
-      (getApiClient() as any).GET("/api/v1/partner/listings/{listing_id}/applications", {
-        params: { path: { listing_id: listingId } },
-      }),
-    );
-    return Array.isArray(data) ? (data as PartnerApplication[]) : [];
-  } catch {
-    return [];
-  }
+  const data = await request(() =>
+    (getApiClient() as any).GET("/api/v1/partner/listings/{listing_id}/applications", {
+      params: { path: { listing_id: listingId } },
+    }),
+  );
+  return Array.isArray(data) ? (data as PartnerApplication[]) : [];
 }
 
 export async function updateApplicationStatus(
@@ -111,4 +121,39 @@ export async function revealApplicationContact(applicationId: string): Promise<a
     ),
   );
   return data;
+}
+
+export function fetchSubscriptionPlans(): Promise<VendorSubscriptionPlan[]> {
+  return request(() =>
+    (getApiClient() as any).GET("/api/v1/partner/listing-subscription-plans"),
+  );
+}
+
+export function purchaseSubscription(planId: string): Promise<VendorSubscription> {
+  return request(() =>
+    (getApiClient() as any).POST(
+      "/api/v1/partner/listing-subscription-plans/{plan_id}/purchase",
+      {
+        params: { path: { plan_id: planId } },
+        header: { "Idempotency-Key": createIdempotencyKey() } as never,
+      },
+    ),
+  );
+}
+
+export function fetchCareerServices(): Promise<any[]> {
+  return request(() => (getApiClient() as any).GET("/api/v1/partner/listings/roles"));
+}
+
+export function reportApplicantApplication(
+  applicationId: string,
+  reason: string,
+  detail: string = "",
+): Promise<any> {
+  return request(() =>
+    (getApiClient() as any).POST("/api/v1/applications/{application_id}/reports", {
+      params: { path: { application_id: applicationId } },
+      body: { reason, detail },
+    }),
+  );
 }

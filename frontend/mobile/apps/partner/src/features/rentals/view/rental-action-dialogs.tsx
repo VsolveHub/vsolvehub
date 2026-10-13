@@ -1,4 +1,4 @@
-import { Button, Dialog, Text } from "@vsolve/mobile-ui";
+import { Button, COLOR_TOKENS, Dialog, Text } from "@vsolve/mobile-ui";
 import * as ImagePicker from "expo-image-picker";
 import { Camera, X } from "lucide-react-native";
 import { useState } from "react";
@@ -64,7 +64,7 @@ export function HandoverPinDialog({
               setLocalError(null);
             }}
             placeholder="0000"
-            placeholderTextColor="#9ca3af"
+            placeholderTextColor={COLOR_TOKENS.placeholderText}
             keyboardType="number-pad"
             maxLength={4}
             className="w-48 rounded-2xl border-2 border-line bg-canvas p-3 text-center text-3xl font-extrabold tracking-widest text-navy-900"
@@ -136,7 +136,7 @@ export function ReturnChoiceDialog({
               onOpenChange(false);
               onReleaseFull();
             }}
-            className="w-full py-3 bg-emerald-600 active:bg-emerald-700"
+            className="w-full py-3"
           >
             <Text className="font-bold text-white">Release Full Deposit (100% Intact)</Text>
           </Button>
@@ -209,9 +209,9 @@ export function DisputeDialog({
             p.uri === asset.uri ? { ...p, uploadId: upload.upload_id, isUploading: false } : p
           )
         );
-      } catch {
+      } catch (err: unknown) {
         setPhotos((prev) => prev.filter((p) => p.uri !== asset.uri));
-        setError("Failed to upload photo. Please retry.");
+        setError(err instanceof Error ? err.message : "Failed to upload photo. Please retry.");
       }
     }
   };
@@ -261,6 +261,7 @@ export function DisputeDialog({
             value={reason}
             onChangeText={setReason}
             placeholder="Describe scratches, broken parts, missing cords, late fees..."
+            placeholderTextColor={COLOR_TOKENS.placeholderText}
             multiline
             numberOfLines={3}
             className="rounded-xl border border-line bg-canvas p-3 text-xs text-navy-900"
@@ -275,6 +276,7 @@ export function DisputeDialog({
             value={consumeRupees}
             onChangeText={setConsumeRupees}
             placeholder={`e.g. ${Math.min(500, maxRupees)}`}
+            placeholderTextColor={COLOR_TOKENS.placeholderText}
             keyboardType="numeric"
             className="rounded-xl border border-line bg-canvas p-3 text-xs text-navy-900"
           />
@@ -294,7 +296,7 @@ export function DisputeDialog({
                 onPress={pickImage}
                 className="flex-row items-center gap-1 rounded-lg bg-surface-muted px-2.5 py-1"
               >
-                <Camera size={13} color="#071328" />
+                <Camera size={13} color={COLOR_TOKENS.text} />
                 <Text className="text-xs font-semibold text-navy-900">Add Photo</Text>
               </Pressable>
             ) : null}
@@ -306,14 +308,14 @@ export function DisputeDialog({
                 <Image source={{ uri: item.uri }} className="h-full w-full" resizeMode="cover" />
                 {item.isUploading ? (
                   <View className="absolute inset-0 items-center justify-center bg-black/40">
-                    <ActivityIndicator size="small" color="#ffffff" />
+                    <ActivityIndicator size="small" color={COLOR_TOKENS.textInverse} />
                   </View>
                 ) : null}
                 <Pressable
                   onPress={() => setPhotos((prev) => prev.filter((_, i) => i !== idx))}
                   className="absolute right-1 top-1 size-5 items-center justify-center rounded-full bg-black/60"
                 >
-                  <X size={10} color="#ffffff" />
+                  <X size={10} color={COLOR_TOKENS.textInverse} />
                 </Pressable>
               </View>
             ))}
@@ -397,6 +399,7 @@ export function PartnerCancelDialog({
             value={reason}
             onChangeText={setReason}
             placeholder="e.g. Equipment undergoing maintenance, owner unavailable..."
+            placeholderTextColor={COLOR_TOKENS.placeholderText}
             multiline
             numberOfLines={2}
             className="rounded-xl border border-line bg-canvas p-3 text-xs text-navy-900"

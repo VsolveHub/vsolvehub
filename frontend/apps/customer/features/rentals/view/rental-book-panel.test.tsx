@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { Schemas } from "@vsolve/api-client";
+import type { RentalAsset, RentalBooking } from "../model";
 import { ToastProvider } from "@vsolve/ui";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -40,7 +40,7 @@ function errorResponse(code: string, message: string, status = 400) {
   };
 }
 
-function mockAsset(overrides: Partial<Schemas["RentalAsset"]> = {}): Schemas["RentalAsset"] {
+function mockAsset(overrides: Partial<RentalAsset> = {}): RentalAsset {
   return {
     id: "asset-1",
     slug: "demo-mixer",
@@ -63,7 +63,7 @@ function mockAsset(overrides: Partial<Schemas["RentalAsset"]> = {}): Schemas["Re
   };
 }
 
-function mockBooking(overrides: Partial<Schemas["RentalBooking"]> = {}): Schemas["RentalBooking"] {
+function mockBooking(overrides: Partial<RentalBooking> = {}): RentalBooking {
   return {
     id: "booking-1",
     status: "CONFIRMED",
@@ -84,6 +84,7 @@ function mockBooking(overrides: Partial<Schemas["RentalBooking"]> = {}): Schemas
     handover_pin: "4821",
     created_at: "2026-09-01T10:00:00Z",
     ...overrides,
+    asset_id: overrides.asset_id ?? "asset-1",
   };
 }
 

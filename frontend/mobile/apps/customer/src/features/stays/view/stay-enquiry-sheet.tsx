@@ -5,10 +5,8 @@ import {
   AlertCircle,
   Calendar,
   CheckCircle2,
-  ChevronDown,
   Info,
   Phone,
-  ShieldCheck,
   Users,
 } from "lucide-react-native";
 import { useState } from "react";

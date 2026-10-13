@@ -2,8 +2,8 @@
 import { blocksNewSelection, isSelectionConflict } from "@vsolve/query/native";
 import { Button, ErrorState, Skeleton, Text, buttonStyles, cn } from "@vsolve/mobile-ui";
 import { Link, useRouter } from "expo-router";
-import type { ReactNode } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { useState, type ReactNode } from "react";
+import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 
 import { requestEstimateHref, requestQuotesHref } from "@/lib/routes";
 
@@ -19,6 +19,14 @@ export function ConfirmChoice({ requirementId, proposalId }: { requirementId: st
   const access = useEntitledQuoteList(requirementId);
   const selectionQuery = useSelection(requirementId);
   const select = useSelectProposal();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([access.refetch(), selectionQuery.refetch()]);
+    setRefreshing(false);
+  };
+
   const card = access.list?.cards.find((entry) => entry.proposalId === proposalId) ?? null;
   const canChoose = !blocksNewSelection(selectionQuery.data ?? null);
   const supportAction = (
@@ -61,7 +69,13 @@ export function ConfirmChoice({ requirementId, proposalId }: { requirementId: st
   const others = (access.list?.cards.length ?? 1) - 1;
 
   return (
-    <ScrollView className="flex-1 bg-canvas" contentContainerClassName="mx-auto w-full max-w-2xl gap-5 px-4 py-5">
+    <ScrollView
+      className="flex-1 bg-canvas"
+      contentContainerClassName="mx-auto w-full max-w-2xl gap-5 px-4 py-5"
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
+      }
+    >
       <Link href={requestEstimateHref(requirementId, proposalId) as never} asChild>
         <Pressable accessibilityRole="link">
           <Text className="text-sm font-semibold text-text-link">← Back to the estimate</Text>

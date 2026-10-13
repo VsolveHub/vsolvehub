@@ -4,7 +4,6 @@ import { useRouter } from "expo-router";
 import {
   CalendarClock,
   Phone,
-  ShieldCheck,
 } from "lucide-react-native";
 import { useState } from "react";
 import { Linking, Pressable, View } from "react-native";

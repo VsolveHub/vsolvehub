@@ -4,7 +4,6 @@ import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import {
   AlertCircle,
-  Camera,
   ImagePlus,
   Star,
   X,
@@ -18,9 +17,9 @@ import {
   View,
 } from "react-native";
 
+import { MAX_REVIEW_PHOTOS } from "../model";
 import { submitStayReview, uploadStayReviewPhoto } from "../queries";
 
-const MAX_REVIEW_PHOTOS = 4;
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024; // 10 MB
 const PHOTO_TOO_LARGE = "Each photo must be under 10 MB.";
 

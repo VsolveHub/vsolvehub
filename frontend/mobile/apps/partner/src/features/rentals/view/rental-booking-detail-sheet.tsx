@@ -1,4 +1,4 @@
-import { Badge, Button, Dialog, Text } from "@vsolve/mobile-ui";
+import { Badge, Button, COLOR_TOKENS, Dialog, Text, Timeline, TimelineEvent } from "@vsolve/mobile-ui";
 import { Alert, Linking, ScrollView, View } from "react-native";
 import { Calendar, Clock, Phone, User } from "lucide-react-native";
 
@@ -34,6 +34,99 @@ export function RentalBookingDetailSheet({
   const status = (booking.status ?? "").toUpperCase();
   const cancellable = canCancelBooking(status);
 
+  // W-104: Booking lifecycle timeline milestones
+  const timelineEvents: {
+    title: string;
+    timestamp: string;
+    tone: "neutral" | "active" | "success" | "warning" | "danger";
+    description: string;
+  }[] = [];
+
+  timelineEvents.push({
+    title: "Booked",
+    timestamp: booking.created_at || booking.start_date || "—",
+    tone: "active",
+    description: `Rental reservation created for ${booking.quantity ?? 1} unit(s).`,
+  });
+
+  if (status !== "PENDING_PAYMENT") {
+    timelineEvents.push({
+      title: "Confirmed",
+      timestamp: booking.start_date || "—",
+      tone: "success",
+      description: "Booking confirmed and payment authorized.",
+    });
+  }
+
+  if (status === "HANDOVER" || status === "HANDED_OVER") {
+    timelineEvents.push({
+      title: "Handover Active",
+      timestamp: booking.handover_at || booking.start_date || "—",
+      tone: "active",
+      description: "Equipment handed over with customer PIN verification.",
+    });
+  } else if (status === "RETURNED" || status === "COMPLETED" || status === "DISPUTED") {
+    timelineEvents.push({
+      title: "Handed Over",
+      timestamp: booking.handover_at || booking.start_date || "—",
+      tone: "success",
+      description: "Equipment was handed over to customer.",
+    });
+  } else if (status === "CONFIRMED") {
+    timelineEvents.push({
+      title: "Handover Pending",
+      timestamp: booking.start_date || "—",
+      tone: "neutral",
+      description: "Awaiting customer pickup and PIN verification.",
+    });
+  }
+
+  if (status === "RETURNED" || status === "COMPLETED") {
+    timelineEvents.push({
+      title: "Returned",
+      timestamp: booking.return_at || booking.end_date || "—",
+      tone: "success",
+      description: "Equipment returned safely by customer.",
+    });
+  } else if (status === "DISPUTED") {
+    timelineEvents.push({
+      title: "Returned (Disputed)",
+      timestamp: booking.return_at || booking.end_date || "—",
+      tone: "warning",
+      description: "Item returned with condition or deposit dispute.",
+    });
+  } else if (status === "HANDOVER" || status === "HANDED_OVER") {
+    timelineEvents.push({
+      title: "Return Due",
+      timestamp: booking.end_date || "—",
+      tone: "neutral",
+      description: `Scheduled return by ${booking.end_date}.`,
+    });
+  }
+
+  if (status === "CANCELLED") {
+    timelineEvents.push({
+      title: "Cancelled",
+      timestamp: "—",
+      tone: "danger",
+      description: "Booking was cancelled.",
+    });
+  } else if (status === "DISPUTED") {
+    timelineEvents.push({
+      title: "Deposit Dispute in Review",
+      timestamp: "—",
+      tone: "warning",
+      description: "Deposit held under operations dispute review.",
+    });
+  } else if (booking.deposit?.status === "RELEASED" || status === "COMPLETED") {
+    timelineEvents.push({
+      title: "Deposit Released & Completed",
+      timestamp: "—",
+      tone: "success",
+      description: "Security deposit refunded. Rental complete.",
+    });
+  }
+
   const handleCall = () => {
     if (booking.customer_phone) {
       void Linking.openURL(`tel:${booking.customer_phone}`);
@@ -62,7 +155,7 @@ export function RentalBookingDetailSheet({
           </Text>
           <View className="flex-row items-center justify-between">
             <View className="flex-row items-center gap-2">
-              <User size={15} color="#071328" />
+              <User size={15} color={COLOR_TOKENS.text} />
               <Text className="text-sm font-bold text-navy-900">
                 {booking.customer_name || "Customer"}
               </Text>
@@ -74,8 +167,8 @@ export function RentalBookingDetailSheet({
                 onPress={handleCall}
                 className="h-7 flex-row items-center gap-1.5 px-3"
               >
-                <Phone size={12} color="#f87000" />
-                <Text className="text-xs font-semibold text-[#f87000]">{booking.customer_phone}</Text>
+                <Phone size={12} color={COLOR_TOKENS.action} />
+                <Text className="text-xs font-semibold text-brand">{booking.customer_phone}</Text>
               </Button>
             ) : null}
           </View>
@@ -87,13 +180,13 @@ export function RentalBookingDetailSheet({
             Schedule & Units
           </Text>
           <View className="flex-row items-center gap-2">
-            <Calendar size={14} color="#6B6560" />
+            <Calendar size={14} color={COLOR_TOKENS.textMuted} />
             <Text className="text-xs text-text-secondary">
               Period: <Text className="font-bold text-navy-900">{booking.start_date} → {booking.end_date}</Text>
             </Text>
           </View>
           <View className="flex-row items-center gap-2">
-            <Clock size={14} color="#6B6560" />
+            <Clock size={14} color={COLOR_TOKENS.textMuted} />
             <Text className="text-xs text-text-secondary">
               Units: <Text className="font-bold text-navy-900">{booking.quantity ?? 1} unit(s)</Text>
             </Text>
@@ -112,7 +205,7 @@ export function RentalBookingDetailSheet({
           </Text>
           <View className="flex-row justify-between">
             <Text className="text-xs text-text-secondary">Rental Charges</Text>
-            <Text className="text-xs font-bold text-navy-900">
+            <Text className="text-xs font-bold text-navy-900 tabular-nums">
               {formatPaise((booking.price_paise ?? 0) + (booking.platform_fee_paise ?? 0))}
             </Text>
           </View>
@@ -121,14 +214,14 @@ export function RentalBookingDetailSheet({
               <Text className="text-xs text-text-secondary">
                 Platform fee ({booking.platform_fee_percent ?? 0}%)
               </Text>
-              <Text className="text-xs font-bold text-navy-900">
+              <Text className="text-xs font-bold text-navy-900 tabular-nums">
                 {formatPaise(booking.platform_fee_paise ?? 0)}
               </Text>
             </View>
           ) : null}
           <View className="flex-row justify-between">
             <Text className="text-xs text-text-secondary">Security Deposit</Text>
-            <Text className="text-xs font-bold text-emerald-600">
+            <Text className="text-xs font-bold text-success-text tabular-nums">
               {formatPaise(booking.deposit?.amount_paise ?? booking.deposit_paise ?? 0)}
             </Text>
           </View>
@@ -138,6 +231,35 @@ export function RentalBookingDetailSheet({
               {booking.deposit?.status || "HELD"}
             </Text>
           </View>
+
+          {/* W-093: Invoice Notice */}
+          <View className="mt-2 rounded-xl border border-dashed border-line bg-surface-muted p-3">
+            <Text className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
+              Invoice
+            </Text>
+            <Text className="mt-1 text-xs leading-relaxed text-text-secondary">
+              The tax invoice for this booking is not shared with Partner accounts yet. The amounts above are what the customer was charged.
+            </Text>
+          </View>
+        </View>
+
+        {/* W-104: Booking Lifecycle Timeline */}
+        <View className="gap-2.5 rounded-2xl border border-line bg-canvas p-3.5">
+          <Text className="text-xs font-bold uppercase tracking-wider text-text-secondary">
+            Lifecycle Timeline
+          </Text>
+          <Timeline label="Rental booking milestone history">
+            {timelineEvents.map((evt, idx) => (
+              <TimelineEvent
+                key={`${evt.title}-${idx}`}
+                title={evt.title}
+                timestamp={evt.timestamp}
+                tone={evt.tone}
+              >
+                <Text className="text-xs text-text-secondary">{evt.description}</Text>
+              </TimelineEvent>
+            ))}
+          </Timeline>
         </View>
 
         {/* Action Controls */}
@@ -162,7 +284,7 @@ export function RentalBookingDetailSheet({
                 onOpenChange(false);
                 onReturn(booking);
               }}
-              className="w-full py-2.5 bg-amber-600 active:bg-amber-700"
+              className="w-full py-2.5"
             >
               <Text className="font-bold text-white">Confirm Return</Text>
             </Button>
@@ -171,14 +293,14 @@ export function RentalBookingDetailSheet({
           {status === "RETURNED" ? (
             <View className="flex-row gap-2">
               <Button
-                variant="secondary"
+                variant="outline"
                 onPress={() => {
                   onOpenChange(false);
                   onDisputeDeposit(booking);
                 }}
                 className="flex-1 py-2.5"
               >
-                <Text className="font-bold text-rose-600">Claim Damage</Text>
+                <Text className="font-bold text-danger-text">Claim Damage</Text>
               </Button>
               <Button
                 variant="primary"
@@ -186,7 +308,7 @@ export function RentalBookingDetailSheet({
                   onOpenChange(false);
                   onReleaseDeposit(booking);
                 }}
-                className="flex-1 py-2.5 bg-emerald-600 active:bg-emerald-700"
+                className="flex-1 py-2.5"
               >
                 <Text className="font-bold text-white">Release Deposit</Text>
               </Button>

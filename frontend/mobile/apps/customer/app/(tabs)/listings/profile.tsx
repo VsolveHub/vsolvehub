@@ -13,7 +13,13 @@ export default function JobProfilePage() {
       <View className="flex-row items-center justify-between border-b border-line pb-3">
         <Pressable
           accessibilityRole="button"
-          onPress={() => router.back()}
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.push("/listings" as never);
+            }
+          }}
           className="flex-row items-center gap-1.5"
         >
           <ArrowLeft size={16} color="#00112e" />

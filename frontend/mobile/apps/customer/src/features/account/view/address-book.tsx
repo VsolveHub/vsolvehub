@@ -28,7 +28,15 @@ export function AddressBook() {
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
 
+  const [refreshing, setRefreshing] = useState(false);
+
   const addresses = addressesQuery.data ?? [];
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await addressesQuery.refetch();
+    setRefreshing(false);
+  };
 
   async function handleLocate() {
     try {
@@ -61,14 +69,14 @@ export function AddressBook() {
       {
         label: label || "Saved address",
         line1,
-        locality,
-        city,
+        locality: locality || "Hyderabad",
+        city: city || "Hyderabad",
         state: "Telangana",
-        postal_code: postal,
+        postal_code: postal.replace(/\D/g, "").slice(0, 6) || "500032",
         country_code: "IN",
-        latitude: latitude || "17.412345",
-        longitude: longitude || "78.365432",
-        source: "REVERSE_GEOCODED",
+        latitude: latitude || "17.414053",
+        longitude: longitude || "78.353554",
+        source: latitude ? "REVERSE_GEOCODED" : "MANUAL",
         is_default: addresses.length === 0,
       } as AddressInput,
       {
@@ -85,7 +93,7 @@ export function AddressBook() {
   }
 
   return (
-    <AccountPageShell activeTab="addresses">
+    <AccountPageShell activeTab="addresses" onRefresh={onRefresh} refreshing={refreshing}>
       <View className="overflow-hidden rounded-2xl border border-line bg-surface p-5 shadow-xs">
         {/* Section Header matching Image 2 */}
         <View className="mb-4 flex-row items-start justify-between gap-3">

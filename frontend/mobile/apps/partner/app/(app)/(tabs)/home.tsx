@@ -1,7 +1,7 @@
 import { usePartnerWorkspaceGrants } from "@/features/workspace/queries";
 import { resolveWorkspaces, specialtyShellHome } from "@/features/workspace/registry";
 import { WorkHome } from "@/features/work-stack/view/work-home";
-import { PartnerRentalsScreen } from "@/features/rentals/view/partner-rentals-screen";
+import { RentalHome } from "@/features/rentals/view/rental-home";
 import { PartnerStaysScreen } from "@/features/stays/view/partner-stays-screen";
 import { PartnerListingsScreen } from "@/features/listings/view/partner-listings-screen";
 
@@ -11,7 +11,7 @@ export default function HomeScreen() {
   const specialty = specialtyShellHome(resolved);
 
   if (specialty === "rentals") {
-    return <PartnerRentalsScreen initialTab="ads" />;
+    return <RentalHome />;
   }
   if (specialty === "stays") {
     return <PartnerStaysScreen initialTab="properties" />;

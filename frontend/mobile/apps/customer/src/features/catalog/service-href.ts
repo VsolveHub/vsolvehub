@@ -53,7 +53,7 @@ export function serviceHref(service: ServiceCard, categorySlug: string): string 
     return `/listings`;
   }
   if (service.request_archetypes.includes(A7_RENTAL) || categorySlug === RENTAL_SERVICES_CATEGORY_SLUG) {
-    return `/rentals`;
+    return service.slug ? `/rentals?category=${encodeURIComponent(service.slug)}` : `/rentals`;
   }
   if (service.request_archetypes.includes(A9_STAY) || categorySlug === STAY_CATEGORY_SLUG) {
     return `/stays`;

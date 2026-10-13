@@ -91,16 +91,12 @@ export function LoginScreen() {
         flow={flow}
         variant="page"
         footer={
-          <p>
-            New here?{" "}
-            <a
-              href="/catalog"
-              className="font-semibold text-info-text underline-offset-4 hover:underline"
-            >
-              Browse services
-            </a>{" "}
-            — you can add to your basket before signing in.
-          </p>
+          <a
+            href="/catalog"
+            className="block text-center text-[13px] font-medium text-[#64748B] hover:text-navy-900 hover:underline transition-colors"
+          >
+            Browse services first
+          </a>
         }
       />
     </main>

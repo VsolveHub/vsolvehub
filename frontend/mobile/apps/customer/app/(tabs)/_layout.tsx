@@ -12,6 +12,8 @@ import Svg, { Circle, Line, Path, Polyline, Rect } from "react-native-svg";
 import { useCustomerProfile } from "@/features/account/queries";
 import { useCart } from "@/features/checkout/queries";
 import { subscribeOpenNotifications } from "@/features/notifications/alerts-bus";
+import { unreadBadgeLabel } from "@/features/notifications/model/feed";
+import { useUnreadNotificationCount } from "@/features/notifications/queries";
 import { NotificationSheet } from "@/features/notifications/view/notification-sheet";
 import { appChromeLayout } from "@/features/session/app-chrome-layout";
 import { CustomerLoginSheet } from "@/features/session/customer-login-sheet";
@@ -33,6 +35,8 @@ export default function TabsLayout() {
   const chrome = appChromeLayout(pathname);
   const cart = useCart(status !== "loading");
   const cartCount = cart.data?.items.length ?? 0;
+  const unreadCount = useUnreadNotificationCount(status === "signedIn");
+  const unreadTotal = unreadCount.data?.unread ?? 0;
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [pendingRedirect, setPendingRedirect] = useState<string | null>(null);
@@ -50,7 +54,7 @@ export default function TabsLayout() {
 
   useEffect(() => {
     if (status === "signedOut" && requiresCustomerSignIn(pathname)) {
-      router.replace(`/login?next=${encodeURIComponent(pathname)}` as never);
+      router.replace("/");
     }
   }, [pathname, router, status]);
 
@@ -98,33 +102,48 @@ export default function TabsLayout() {
   return (
     <View className="flex-1 bg-canvas">
       {!hideHeader ? (
-        <View className="min-h-16 flex-row items-center justify-between gap-2 border-b border-line bg-[#FAF9F7] px-4 py-3">
+        <View
+          style={{ paddingTop: Math.max(insets.top, 24) + 10 }}
+          className="min-h-[76px] flex-row items-center justify-between gap-2 border-b border-line bg-[#FAF9F7] px-4 pb-3.5"
+        >
           <Pressable accessibilityRole="link" accessibilityLabel="V Solve Hub home" onPress={() => router.push("/")} className="flex-row items-center gap-2">
-            <Image source={require("../../assets/logo-mark.png")} style={{ width: 28, height: 28 }} contentFit="contain" />
-            <Text className="text-[1.15rem] font-extrabold tracking-tight text-navy-900">
-              V Solve <Text className="text-[1.15rem] font-extrabold text-[#EA580C]">Hub</Text>
+            <Image source={require("../../assets/logo-mark.png")} style={{ width: 30, height: 30 }} contentFit="contain" />
+            <Text className="text-[1.2rem] font-extrabold tracking-tight text-navy-900">
+              V Solve <Text className="text-[1.2rem] font-extrabold text-[#EA580C]">Hub</Text>
             </Text>
           </Pressable>
-          <View className="flex-row items-center gap-2">
-            <Pressable accessibilityRole="button" accessibilityLabel="View basket" onPress={() => router.push("/cart")} className="h-8 w-8 items-center justify-center">
-              <Svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="#6B6560" strokeWidth={1.9}>
+          <View className="flex-row items-center gap-2.5">
+            <Pressable accessibilityRole="button" accessibilityLabel="View basket" onPress={() => router.push("/cart")} className="h-9 w-9 items-center justify-center">
+              <Svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#6B6560" strokeWidth={1.9}>
                 <Circle cx={8} cy={21} r={1} />
                 <Circle cx={19} cy={21} r={1} />
                 <Path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" />
               </Svg>
               {cartCount > 0 ? (
-                <View className="absolute -right-1 -top-1 min-h-4 min-w-4 items-center justify-center rounded-full bg-[#EA580C] px-0.5">
+                <View className="absolute -right-0.5 -top-0.5 min-h-4 min-w-4 items-center justify-center rounded-full bg-[#EA580C] px-1">
                   <Text className="text-[8px] font-extrabold text-white">{cartCount}</Text>
                 </View>
               ) : null}
             </Pressable>
             {status === "loading" ? null : status === "signedIn" ? (
               <>
-                <Pressable accessibilityRole="button" accessibilityLabel="Notifications" onPress={() => setAlertsOpen(true)} className="h-8 w-8 items-center justify-center">
-                  <Svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="#6B6560" strokeWidth={1.9}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={unreadBadgeLabel(unreadTotal)}
+                  onPress={() => setAlertsOpen(true)}
+                  className="h-9 w-9 items-center justify-center"
+                >
+                  <Svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#6B6560" strokeWidth={1.9}>
                     <Path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
                     <Path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
                   </Svg>
+                  {unreadTotal > 0 ? (
+                    <View className="absolute -right-0.5 -top-0.5 min-h-4 min-w-4 items-center justify-center rounded-full bg-[#EA580C] px-1">
+                      <Text className="text-[8px] font-extrabold text-white">
+                        {unreadTotal > 99 ? "99+" : unreadTotal}
+                      </Text>
+                    </View>
+                  ) : null}
                 </Pressable>
                 <Pressable accessibilityRole="button" accessibilityLabel="Open profile" onPress={() => router.push("/account")} className="h-8 w-8 items-center justify-center rounded-full bg-navy-900">
                   <Text className="text-xs font-bold text-white">{initials}</Text>
@@ -138,6 +157,7 @@ export default function TabsLayout() {
                   setPendingRedirect("/account");
                   setLoginOpen(true);
                 }}
+                className="rounded-full bg-orange-50 px-3.5 py-1.5"
               >
                 <Text className="text-xs font-bold text-[#EA580C]">Log in</Text>
               </Pressable>

@@ -4,7 +4,8 @@ import { Badge, Button, EmptyState, ErrorState, Input, Skeleton, Text, buttonSty
 import { Link, useLocalSearchParams } from "expo-router";
 import { Search, X } from "lucide-react-native";
 import { useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { filterBookingsBySearch } from "@/features/activity/model/booking-search";
 import {
@@ -101,6 +102,7 @@ function titleForSlug(categorySlug: string): string {
 }
 
 export function ActivityScreen() {
+  const insets = useSafeAreaInsets();
   const requirementsQuery = useMyRequests();
   const engagementsQuery = useEngagements();
   const groupsQuery = useBookingGroups();
@@ -124,9 +126,23 @@ export function ActivityScreen() {
     (error): error is Error => error instanceof Error,
   );
   const hasDirectPay = items.some((item) => item.kind === "engagement" && item.row.mode === "lead_only");
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([requirementsQuery.refetch(), engagementsQuery.refetch(), groupsQuery.refetch()]);
+    setRefreshing(false);
+  };
 
   return (
-    <ScrollView className="flex-1" contentContainerClassName="mx-auto w-full max-w-4xl px-4 pb-16 pt-6">
+    <ScrollView
+      className="flex-1"
+      style={{ paddingTop: Math.max(insets.top, 20) }}
+      contentContainerClassName="mx-auto w-full max-w-4xl px-4 pb-16 pt-2"
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
+      }
+    >
       <View className="gap-3">
         <Text className="shrink-0 text-2xl font-extrabold tracking-tight text-navy-900">Your Bookings</Text>
         <BookingsSearchField value={searchQuery} onChange={setSearchQuery} />

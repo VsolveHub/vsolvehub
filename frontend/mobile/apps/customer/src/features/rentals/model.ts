@@ -22,8 +22,20 @@ export interface RentalAsset {
   thumbnail_url?: string;
   partner_name?: string;
   media?: RentalAssetMedia[];
-  structured_fields?: Record<string, any>;
+  structured_fields?: Record<string, string | number | boolean>;
   partner?: RentalPartner;
+  reserved_ranges?: Array<{ start_date: string; end_date: string }>;
+}
+
+export interface RentalDeposit {
+  id?: string;
+  amount_paise: number;
+  status: string;
+  consumed_paise?: number;
+  requested_consume_paise?: number;
+  provider_note?: string;
+  payment_attempt_id?: string | null;
+  simulated_capture_available?: boolean;
 }
 
 export interface RentalBooking {
@@ -41,11 +53,7 @@ export interface RentalBooking {
   deposit_paise?: number;
   handover_pin?: string;
   asset?: RentalAsset;
-  deposit?: {
-    status?: string;
-    payment_attempt_id?: string;
-    amount_paise?: number;
-  };
+  deposit?: RentalDeposit;
 }
 
 export function canCancelRentalBooking(status?: string): boolean {
@@ -129,4 +137,35 @@ export function getDepositStatusBadge(status?: string): {
     default:
       return { label: status ? `Deposit ${status}` : "Deposit Pending", tone: "neutral" };
   }
+}
+
+export interface CreateBookingRequest {
+  asset_id: string;
+  start_date: string;
+  end_date: string;
+  quantity?: number;
+  pickup_or_delivery_mode?: string;
+  notes?: string;
+}
+
+export interface RentalTaxonomyVariant {
+  id: string;
+  name: string;
+  code: string;
+  asset_schema: Record<string, unknown>;
+  default_deposit_paise: number;
+}
+
+export interface RentalTaxonomyService {
+  id: string;
+  name: string;
+  slug: string;
+  variants: RentalTaxonomyVariant[];
+}
+
+export interface RentalTaxonomySubcategory {
+  id: string;
+  name: string;
+  slug: string;
+  services: RentalTaxonomyService[];
 }

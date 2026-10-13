@@ -9,8 +9,8 @@ import {
 } from "@vsolve/query/native";
 import { Badge, Button, ErrorState, Skeleton, Text, buttonStyles } from "@vsolve/mobile-ui";
 import { Link, useRouter } from "expo-router";
-import type { ReactNode } from "react";
-import { Pressable, View } from "react-native";
+import { useState, type ReactNode } from "react";
+import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 
 import { requestHref } from "@/lib/routes";
 
@@ -29,6 +29,13 @@ export function BookCrewFeeScreen({ requirementId, requestHref: requestHrefProp 
   const backHref = requestHrefProp ?? requestHref(requirementId);
   const rateQuery = useRateCardState(requirementId);
   const checkout = useStartBookingFeeCheckout();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await rateQuery.refetch();
+    setRefreshing(false);
+  };
 
   const state = rateQuery.data ?? null;
   const booking = state?.booking ?? null;
@@ -85,8 +92,24 @@ export function BookCrewFeeScreen({ requirementId, requestHref: requestHrefProp 
   );
 
   return (
-    <View className="mx-auto w-full max-w-md gap-4 px-4 py-6">
-      <Pressable accessibilityRole="button" onPress={() => router.push(backHref as never)} className="self-start">
+    <ScrollView
+      className="flex-1 bg-canvas"
+      contentContainerClassName="mx-auto w-full max-w-md gap-4 px-4 py-6"
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
+      }
+    >
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => {
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.push(backHref as never);
+          }
+        }}
+        className="self-start"
+      >
         <Text className="text-sm font-semibold text-text-link">← Back</Text>
       </Pressable>
       <View className="gap-4">
@@ -125,7 +148,7 @@ export function BookCrewFeeScreen({ requirementId, requestHref: requestHrefProp 
         {refusal}
         <RateTermsLink terms={terms} />
       </View>
-    </View>
+    </ScrollView>
   );
 }
 

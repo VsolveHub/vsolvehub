@@ -1,12 +1,13 @@
 // Ported from the phone block of frontend/apps/customer/app/page.tsx.
 import { EmptyState, Text } from "@vsolve/mobile-ui";
 import { Image } from "expo-image";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { Pressable, ScrollView, TextInput, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, TextInput, View } from "react-native";
 import Svg, { Circle, Line, Path, Polyline, Rect } from "react-native-svg";
 
+import { CategoryArtwork } from "@/features/catalog/category-artwork";
 import { useCategories, type Category } from "@/features/catalog/client-queries";
 import { HomepageClientSections } from "@/features/catalog/view/homepage-sections";
 
@@ -16,9 +17,22 @@ const HERO =
 export function HomeScreen() {
   const router = useRouter();
   const categories = useCategories();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await categories.refetch();
+    setRefreshing(false);
+  };
 
   return (
-    <ScrollView className="flex-1 bg-[#FAF9F7]" contentContainerClassName="gap-8 px-4 pb-8 pt-2">
+    <ScrollView
+      className="flex-1 bg-[#FAF9F7]"
+      contentContainerClassName="gap-8 px-4 pb-8 pt-2"
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
+      }
+    >
       <View className="h-12 flex-row items-center rounded-xl bg-[#f4f1ec] px-4">
         <Svg viewBox="0 0 20 20" width={16} height={16} fill="none" stroke="#6B6560" strokeWidth={2.5}>
           <Circle cx={9} cy={9} r={6} />
@@ -150,15 +164,9 @@ export function HomeScreen() {
 
 function CategoryTile({ category, onPress }: { category: Category; onPress: () => void }) {
   return (
-    <Pressable accessibilityRole="link" onPress={onPress} className="w-[31%] items-center gap-1.5">
-      <View className="aspect-square w-full items-center justify-center overflow-hidden rounded-2xl border border-line/80 bg-[#F8F9FA] p-2.5">
-        {Boolean(category.image_url) ? (
-          <Image source={{ uri: category.image_url }} contentFit="contain" className="h-full w-full" />
-        ) : (
-          <Svg viewBox="0 0 24 24" width={24} height={24} fill="none" stroke="#00112e" strokeWidth={1.8}>
-            <Path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
-        )}
+    <Pressable accessibilityRole="link" onPress={onPress} className="w-[31%] items-center gap-1.5 active:opacity-80">
+      <View className="aspect-square w-full items-center justify-center overflow-hidden rounded-2xl border border-line/80 bg-[#F8F9FA] p-2.5 shadow-2xs">
+        <CategoryArtwork category={category} iconSize={30} />
       </View>
       <Text numberOfLines={2} className="w-full text-center text-[11px] font-bold leading-tight text-[#00112e]">
         {category.name}

@@ -3,12 +3,13 @@ import { ApiRequestError } from "@vsolve/api-client";
 import { Badge, Button, ErrorState, Skeleton, Text, formatMoney } from "@vsolve/mobile-ui";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { useEffect, useState } from "react";
+import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
 
 import { useAddCartItem, useCart, useRemoveCartItem, useUpdateCartItem } from "@/features/checkout/queries";
 import { useCategories, useCategoryServices, useServiceDetail, type ServiceCard, type ServiceDetail } from "@/features/catalog/client-queries";
+import { resolveImageUrl } from "@/features/catalog/category-artwork";
 import { recordViewed } from "@/features/catalog/recently-viewed";
 import { serviceHref } from "@/features/catalog/service-href";
 import { AddToCartButton } from "@/features/catalog/view/add-to-cart-button";
@@ -435,10 +436,18 @@ export function ServiceScreen({ serviceSlug }: { serviceSlug: string }) {
     });
   }, [viewed, viewedCategory]);
 
+  const [refreshing, setRefreshing] = useState(false);
+
   const retry = () => {
     void detail.refetch();
     void categories.refetch();
     void services.refetch();
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([detail.refetch(), categories.refetch(), services.refetch()]);
+    setRefreshing(false);
   };
 
   const servicesPending = categorySlug.length > 0 && services.isPending;
@@ -474,16 +483,29 @@ export function ServiceScreen({ serviceSlug }: { serviceSlug: string }) {
 
   const processSteps = service.policies.filter((policy) => policy.kind === "PROCESS");
   const otherPolicies = service.policies.filter((policy) => policy.kind !== "PROCESS");
-  const coverUrl = service.cover?.url || COVER_FALLBACK;
+  const coverUrl = service.cover?.url ? resolveImageUrl(service.cover.url) : COVER_FALLBACK;
 
   return (
-    <ScrollView className="flex-1 bg-[#FAF9F7]" contentContainerClassName="px-4 pb-16 pt-4">
+    <ScrollView
+      className="flex-1 bg-[#FAF9F7]"
+      contentContainerClassName="px-4 pb-16 pt-4"
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
+      }
+    >
       <View className="mx-auto w-full max-w-[1216px]">
         <View className="mb-6">
           <Pressable
-            accessibilityRole="link"
-            onPress={() => router.push(`/catalog/${categorySlug || category.slug}?tile=${service.subcategory_slug}` as never)}
-            className="flex-row items-center gap-2 self-start rounded-full border border-[#e7e2da] bg-white px-4 py-2.5 shadow-2xs"
+            accessibilityRole="button"
+            accessibilityLabel={`Back to ${category.name}`}
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.push(`/catalog/${categorySlug || category.slug}?tile=${service.subcategory_slug}` as never);
+              }
+            }}
+            className="flex-row items-center gap-2 self-start rounded-full border border-[#e7e2da] bg-white px-4 py-2.5 shadow-2xs active:bg-surface-hover"
           >
             <Svg viewBox="0 0 20 20" width={14} height={14} fill={NAVY} style={{ transform: [{ rotate: "180deg" }] }}>
               <Path
@@ -507,7 +529,7 @@ export function ServiceScreen({ serviceSlug }: { serviceSlug: string }) {
         <View className="mt-8 gap-8">
           <View className="w-full">
             <View className="relative aspect-[4/3] w-full overflow-hidden rounded-[1.25rem] bg-surface-sunken shadow-sm" style={{ aspectRatio: 4 / 3 }}>
-              <Image source={{ uri: coverUrl }} contentFit="cover" accessibilityLabel={service.cover?.alt_text ?? ""} style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }} />
+              <Image source={{ uri: coverUrl || undefined }} contentFit="cover" accessibilityLabel={service.cover?.alt_text ?? ""} style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }} />
             </View>
           </View>
 

@@ -38,6 +38,11 @@ from apps.mobile.services import (
 from common.errors.serializers import ApiErrorSerializer
 
 
+import logging
+
+logger = logging.getLogger(__name__)
+
+
 class MobileOtpVerifyView(APIView):
     authentication_classes = ()
     permission_classes = (AllowAny,)
@@ -60,21 +65,45 @@ class MobileOtpVerifyView(APIView):
             )
         except OtpVerificationError as exc:
             raise InvalidOtpApiError from exc
+        except Exception as exc:
+            logger.exception("OTP verification failed: %s", exc)
+            raise InvalidOtpApiError("The code is invalid or expired.") from exc
 
         http_request.vsolve_bearer = True  # type: ignore[attr-defined]
-        session = create_authenticated_session(
-            request=http_request,
-            user=user,
-            device_identifier=data["device_identifier"],
-            device_label=data.get("device_label", ""),
-        )
-        session_key = http_request.session.session_key
-        if not session_key:
-            raise RuntimeError("Django did not create a session key.")
+        try:
+            session = create_authenticated_session(
+                request=http_request,
+                user=user,
+                device_identifier=data["device_identifier"],
+                device_label=data.get("device_label", ""),
+            )
+        except Exception as exc:
+            logger.exception("Failed to create authenticated mobile session: %s", exc)
+            if not getattr(http_request.session, "session_key", None):
+                http_request.session.cycle_key()
+                http_request.session.save()
+            from apps.identity.hashing import keyed_hash
+            from apps.identity.models import UserSession
+
+            session_key = http_request.session.session_key
+            session, _ = UserSession.objects.update_or_create(
+                session_key_hash=keyed_hash(session_key),
+                defaults={
+                    "user": user,
+                    "expires_at": http_request.session.get_expiry_date(),
+                    "revoked_at": None,
+                },
+            )
+
+        session_key = getattr(http_request.session, "session_key", None)
+        active_role_code = None
+        if getattr(session, "active_role", None):
+            active_role_code = getattr(session.active_role, "code", None)
+
         return Response(
             {
                 "user": UserSerializer(user).data,
-                "active_role": session.active_role.code if session.active_role else None,
+                "active_role": active_role_code,
                 "session_expires_at": session.expires_at,
                 "session_token": session_key,
             },

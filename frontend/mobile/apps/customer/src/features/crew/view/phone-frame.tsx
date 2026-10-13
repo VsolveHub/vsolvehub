@@ -1,6 +1,5 @@
-// Ported from frontend/apps/customer/features/booking/view/mobile-screen.tsx
-import type { ReactNode } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { useState, type ReactNode } from "react";
+import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Text } from "@vsolve/mobile-ui";
@@ -12,6 +11,8 @@ export function PhoneFrame({
   reassurance,
   action,
   children,
+  onRefresh,
+  refreshing: refreshingProp,
 }: {
   title: string;
   step?: string;
@@ -19,8 +20,26 @@ export function PhoneFrame({
   reassurance?: string;
   action?: ReactNode;
   children: ReactNode;
+  onRefresh?: () => Promise<void> | void;
+  refreshing?: boolean;
 }) {
   const insets = useSafeAreaInsets();
+  const [internalRefreshing, setInternalRefreshing] = useState(false);
+  const refreshing = refreshingProp ?? internalRefreshing;
+
+  const handleRefresh = async () => {
+    setInternalRefreshing(true);
+    try {
+      if (onRefresh) {
+        await onRefresh();
+      } else {
+        await new Promise((resolve) => setTimeout(resolve, 600));
+      }
+    } finally {
+      setInternalRefreshing(false);
+    }
+  };
+
   return (
     <View className="flex-1 bg-canvas" style={{ paddingTop: insets.top }}>
       <View className="flex-row items-center gap-2 border-b border-line px-3 py-2">
@@ -34,7 +53,19 @@ export function PhoneFrame({
           </Text>
         </View>
       </View>
-      <ScrollView className="flex-1" contentContainerClassName="gap-4 px-4 py-4">
+      <ScrollView
+        className="flex-1"
+        contentContainerClassName="gap-4 px-4 py-4"
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => void handleRefresh()}
+            colors={["#EA580C"]}
+            tintColor="#EA580C"
+          />
+        }
+      >
         {children}
       </ScrollView>
       {action !== undefined || reassurance !== undefined ? (

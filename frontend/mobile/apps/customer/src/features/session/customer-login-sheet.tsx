@@ -54,21 +54,10 @@ export function CustomerLoginSheet({
           variant="modal"
           mobileFocused
           onClose={() => onOpenChange(false)}
-          footer={
-            <Text className="text-[13px] leading-relaxed text-text-secondary">
-              New here?{" "}
-              <Text
-                onPress={() => {
-                  onOpenChange(false);
-                  router.push("/catalog");
-                }}
-                className="font-bold text-navy-900 underline"
-              >
-                Browse services
-              </Text>
-              {" "}— you can add to your basket before signing in.
-            </Text>
-          }
+          onBrowseServices={() => {
+            onOpenChange(false);
+            router.push("/catalog" as never);
+          }}
         />
       </View>
     </Modal>

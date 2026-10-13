@@ -31,10 +31,17 @@ export function SessionsScreen() {
   const revoke = useRevokeSession(api);
   const signOut = useMobileLogout();
   const [revokingTarget, setRevokingTarget] = useState<UserSession | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await sessionsQuery.refetch();
+    setRefreshing(false);
+  };
 
   if (sessionsQuery.isPending) {
     return (
-      <AccountPageShell activeTab="devices">
+      <AccountPageShell activeTab="devices" onRefresh={onRefresh} refreshing={refreshing}>
         <View className="py-12 items-center justify-center">
           <Spinner size="sm" />
         </View>
@@ -44,7 +51,7 @@ export function SessionsScreen() {
 
   if (sessionsQuery.isError) {
     return (
-      <AccountPageShell activeTab="devices">
+      <AccountPageShell activeTab="devices" onRefresh={onRefresh} refreshing={refreshing}>
         <ErrorState
           title="We could not load your sessions"
           message={describeError(sessionsQuery.error, "read").message}
@@ -58,7 +65,7 @@ export function SessionsScreen() {
   const sessions = sessionsQuery.data ?? [];
 
   return (
-    <AccountPageShell activeTab="devices">
+    <AccountPageShell activeTab="devices" onRefresh={onRefresh} refreshing={refreshing}>
       <View className="overflow-hidden rounded-2xl border border-line bg-surface p-5 shadow-xs">
         {/* Section Header matching Image 4 */}
         <Text className="text-xl font-extrabold tracking-tight text-navy-950">

@@ -5,10 +5,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarClock, Plus } from "lucide-react-native";
 
 import {
-  type HostStaySummary,
   type PartnerStayVisit,
   type StayEnquiry,
   type StayProperty,
+  type StayReservation,
+  type StayReservationAction,
   type StayUnit,
   type VisitDeclineReason,
   clockWindow,
@@ -19,8 +20,10 @@ import {
   confirmPartnerStayEnquiry,
   fetchPartnerStayEnquiries,
   fetchPartnerStayProperties,
+  fetchPartnerStayReservations,
   fetchPartnerStaySummary,
   fetchPartnerStayVisits,
+  partnerStayReservationAction,
   partnerStayRoomAction,
   partnerStayVisitAction,
   respondPartnerStayEnquiry,
@@ -28,14 +31,17 @@ import {
 import { PropertyCard } from "./property-card";
 import { EnquiryCard } from "./enquiry-card";
 import { VisitCard } from "./visit-card";
+import { StayReservationCard } from "./stay-reservation-card";
 import { PropertySheet } from "./property-sheet";
 import { UnitSheet } from "./unit-sheet";
 import { VisitingHoursSheet } from "./visiting-hours-sheet";
 import { StaySummaryCards } from "./stay-summary-cards";
 import { StayEnquiryDetailSheet } from "./stay-enquiry-detail-sheet";
+import { StayReservationDetailSheet } from "./stay-reservation-detail-sheet";
 
-const ENQUIRY_FILTERS = ["OPEN", "CONFIRMED", "CLOSED", "ALL"] as const;
-type EnquiryFilter = (typeof ENQUIRY_FILTERS)[number];
+const OPEN_ENQUIRY = new Set(["SUBMITTED", "RESPONDED"]);
+
+type EnquiryFilter = "OPEN" | "CONFIRMED" | "CLOSED" | "ALL";
 
 const VISIT_FILTERS = [
   { value: "REQUESTED", label: "To answer" },
@@ -47,10 +53,10 @@ type VisitFilter = (typeof VISIT_FILTERS)[number]["value"];
 export function PartnerStaysScreen({
   initialTab = "properties",
 }: {
-  initialTab?: "properties" | "enquiries" | "visits";
+  initialTab?: "properties" | "enquiries" | "visits" | "bookings";
 }) {
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<"properties" | "enquiries" | "visits">(initialTab);
+  const [tab, setTab] = useState<"properties" | "enquiries" | "visits" | "bookings">(initialTab);
 
   // Property sub-filters & sheets
   const [propertyFilter, setPropertyFilter] = useState<"active" | "archived">("active");
@@ -74,6 +80,9 @@ export function PartnerStaysScreen({
   const [visitFilter, setVisitFilter] = useState<VisitFilter>("REQUESTED");
   const [actionError, setActionError] = useState<string | null>(null);
 
+  // Reservations Detail Sheet
+  const [selectedReservation, setSelectedReservation] = useState<StayReservation | null>(null);
+
   // Queries
   const summaryQuery = useQuery({
     queryKey: ["partner-stay-summary"],
@@ -95,11 +104,17 @@ export function PartnerStaysScreen({
     queryFn: fetchPartnerStayVisits,
   });
 
+  const reservationsQuery = useQuery({
+    queryKey: ["partner-stay-reservations"],
+    queryFn: fetchPartnerStayReservations,
+  });
+
   const invalidateAll = () => {
     void queryClient.invalidateQueries({ queryKey: ["partner-stay-properties"] });
     void queryClient.invalidateQueries({ queryKey: ["partner-stay-summary"] });
     void queryClient.invalidateQueries({ queryKey: ["partner-stay-enquiries"] });
     void queryClient.invalidateQueries({ queryKey: ["partner-stay-visits"] });
+    void queryClient.invalidateQueries({ queryKey: ["partner-stay-reservations"] });
   };
 
   // Mutations
@@ -163,21 +178,41 @@ export function PartnerStaysScreen({
     onError: (err: any) => setActionError(err?.message || "Failed to book room"),
   });
 
+  const reservationMutation = useMutation({
+    mutationFn: ({
+      id,
+      action,
+      reason,
+    }: {
+      id: string;
+      action: StayReservationAction;
+      reason?: string;
+    }) => partnerStayReservationAction(id, action, reason),
+    onSuccess: () => {
+      setActionError(null);
+      setSelectedReservation(null);
+      invalidateAll();
+    },
+    onError: (err: any) => setActionError(err?.message || "Failed to update reservation"),
+  });
+
   const isRefreshing =
     propertiesQuery.isRefetching ||
     summaryQuery.isRefetching ||
     enquiriesQuery.isRefetching ||
-    visitsQuery.isRefetching;
+    visitsQuery.isRefetching ||
+    reservationsQuery.isRefetching;
 
   const onRefresh = () => {
     void propertiesQuery.refetch();
     void summaryQuery.refetch();
     void enquiriesQuery.refetch();
     void visitsQuery.refetch();
+    void reservationsQuery.refetch();
   };
 
   // Filter properties (Active vs Archived)
-  const properties = propertiesQuery.data ?? [];
+  const properties = useMemo(() => propertiesQuery.data ?? [], [propertiesQuery.data]);
   const filteredProperties = useMemo(() => {
     if (propertyFilter === "archived") {
       return properties.filter((p) => p.listing_status === "ARCHIVED");
@@ -186,8 +221,7 @@ export function PartnerStaysScreen({
   }, [properties, propertyFilter]);
 
   // Filter enquiries
-  const OPEN_ENQUIRY = new Set(["SUBMITTED", "RESPONDED"]);
-  const allEnquiries = enquiriesQuery.data ?? [];
+  const allEnquiries = useMemo(() => enquiriesQuery.data ?? [], [enquiriesQuery.data]);
   const filteredEnquiries = useMemo(() => {
     return allEnquiries.filter((e) => {
       const s = e.status ?? "";
@@ -201,7 +235,7 @@ export function PartnerStaysScreen({
   const openEnquiriesCount = allEnquiries.filter((e) => OPEN_ENQUIRY.has(e.status ?? "")).length;
 
   // Filter & group visits by date + slot
-  const allVisits = visitsQuery.data ?? [];
+  const allVisits = useMemo(() => visitsQuery.data ?? [], [visitsQuery.data]);
   const filteredVisits = useMemo(() => {
     return allVisits.filter((v) => {
       const s = v.status ?? "";
@@ -221,6 +255,12 @@ export function PartnerStaysScreen({
   }, [filteredVisits, visitFilter]);
 
   const requestedVisitsCount = allVisits.filter((v) => v.status === "REQUESTED").length;
+
+  // Reservations
+  const allReservations = useMemo(() => reservationsQuery.data ?? [], [reservationsQuery.data]);
+  const confirmedReservationsCount = allReservations.filter(
+    (r) => r.status === "CONFIRMED",
+  ).length;
 
   return (
     <View className="flex-1 bg-canvas">
@@ -287,6 +327,28 @@ export function PartnerStaysScreen({
               </Badge>
             ) : null}
           </Pressable>
+
+          <Pressable
+            onPress={() => setTab("bookings")}
+            className={cn(
+              "pb-3 border-b-2 flex-row items-center gap-1.5",
+              tab === "bookings" ? "border-action" : "border-transparent",
+            )}
+          >
+            <Text
+              className={cn(
+                "text-sm font-bold",
+                tab === "bookings" ? "text-navy-900" : "text-text-muted",
+              )}
+            >
+              Bookings
+            </Text>
+            {confirmedReservationsCount > 0 ? (
+              <Badge tone="info">
+                {confirmedReservationsCount}
+              </Badge>
+            ) : null}
+          </Pressable>
         </View>
       </View>
 
@@ -315,7 +377,7 @@ export function PartnerStaysScreen({
                   onPress={() => setPropertyFilter("active")}
                   className={`rounded-full px-3 py-1 border ${
                     propertyFilter === "active"
-                      ? "border-[#071328] bg-[#071328]"
+                      ? "border-navy-900 bg-navy-900"
                       : "border-line bg-surface"
                   }`}
                 >
@@ -332,7 +394,7 @@ export function PartnerStaysScreen({
                   onPress={() => setPropertyFilter("archived")}
                   className={`rounded-full px-3 py-1 border ${
                     propertyFilter === "archived"
-                      ? "border-[#071328] bg-[#071328]"
+                      ? "border-navy-900 bg-navy-900"
                       : "border-line bg-surface"
                   }`}
                 >
@@ -412,6 +474,10 @@ export function PartnerStaysScreen({
                       setEditingUnit(null);
                       setUnitSheetOpen(true);
                     }}
+                    onManagePhotos={(p) => {
+                      setEditingProperty(p);
+                      setPropertySheetOpen(true);
+                    }}
                     onVisitingHours={(p) => {
                       setVisitingHoursProperty(p);
                       setVisitingHoursSheetOpen(true);
@@ -442,7 +508,7 @@ export function PartnerStaysScreen({
                     key={f.value}
                     onPress={() => setEnquiryFilter(f.value)}
                     className={`rounded-full px-3 py-1 border ${
-                      isSelected ? "border-[#071328] bg-[#071328]" : "border-line bg-surface"
+                      isSelected ? "border-navy-900 bg-navy-900" : "border-line bg-surface"
                     }`}
                   >
                     <Text
@@ -504,7 +570,7 @@ export function PartnerStaysScreen({
                     key={f.value}
                     onPress={() => setVisitFilter(f.value)}
                     className={`rounded-full px-3 py-1 border ${
-                      isSelected ? "border-[#071328] bg-[#071328]" : "border-line bg-surface"
+                      isSelected ? "border-navy-900 bg-navy-900" : "border-line bg-surface"
                     }`}
                   >
                     <Text
@@ -575,7 +641,7 @@ export function PartnerStaysScreen({
                               roomBookMutation.mutate({
                                 roomId,
                                 visitId: v.id,
-                                guestName: v.user_name,
+                                guestName: v.customer_name,
                               })
                             }
                           />
@@ -584,6 +650,40 @@ export function PartnerStaysScreen({
                     </View>
                   );
                 })}
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* ===================== TAB: BOOKINGS ===================== */}
+        {tab === "bookings" && (
+          <View className="flex-col gap-4 pb-12">
+            {reservationsQuery.isLoading ? (
+              <View className="items-center py-12">
+                <Spinner />
+              </View>
+            ) : reservationsQuery.error ? (
+              <ErrorState
+                title="Could not load reservations"
+                message={reservationsQuery.error?.message ?? "An error occurred"}
+                onAction={() => void reservationsQuery.refetch()}
+                actionLabel="Retry"
+              />
+            ) : allReservations.length === 0 ? (
+              <EmptyState
+                compact
+                title="No paid reservations yet"
+                description="Hotel and short-stay bookings that guests pay for appear here."
+              />
+            ) : (
+              <View className="flex-col gap-3">
+                {allReservations.map((reservation) => (
+                  <StayReservationCard
+                    key={reservation.id}
+                    reservation={reservation}
+                    onSelect={setSelectedReservation}
+                  />
+                ))}
               </View>
             )}
           </View>
@@ -620,6 +720,23 @@ export function PartnerStaysScreen({
         onNotAvailable={(id, note) => enquiryMutation.mutate({ id, action: "not_available", note })}
         onCancelBooking={(id) => enquiryMutation.mutate({ id, action: "cancel" })}
         isPending={enquiryMutation.isPending}
+        actionError={actionError}
+      />
+
+      <StayReservationDetailSheet
+        open={selectedReservation !== null}
+        reservation={selectedReservation}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedReservation(null);
+            reservationMutation.reset();
+          }
+        }}
+        onCheckIn={(id) => reservationMutation.mutate({ id, action: "check_in" })}
+        onCheckOut={(id) => reservationMutation.mutate({ id, action: "check_out" })}
+        onNoShow={(id) => reservationMutation.mutate({ id, action: "no_show" })}
+        onCancel={(id, reason) => reservationMutation.mutate({ id, action: "cancel", reason })}
+        isPending={reservationMutation.isPending}
         actionError={actionError}
       />
     </View>

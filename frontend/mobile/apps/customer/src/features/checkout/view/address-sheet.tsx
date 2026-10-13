@@ -6,7 +6,12 @@ import { useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
 
-import { useCreateAddress, useReverseGeocode, type Address } from "@/features/addresses/queries";
+import {
+  useCreateAddress,
+  useReverseGeocode,
+  useUpdateAddress,
+  type Address,
+} from "@/features/addresses/queries";
 
 export interface AddressSheetProps {
   open: boolean;
@@ -24,6 +29,7 @@ export function AddressSheet({
   onSelect,
 }: AddressSheetProps) {
   const createAddress = useCreateAddress();
+  const updateAddress = useUpdateAddress();
   const reverseGeocode = useReverseGeocode();
 
   const [pendingAddressId, setPendingAddressId] = useState<string | null>(
@@ -41,10 +47,12 @@ export function AddressSheet({
   const [longitude, setLongitude] = useState("");
   const [locating, setLocating] = useState(false);
   const [locateError, setLocateError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
 
   async function handleUseLocation() {
     setLocating(true);
     setLocateError(null);
+    setFormError(null);
     try {
       const permission = await Location.requestForegroundPermissionsAsync();
       if (permission.status !== "granted") {
@@ -53,8 +61,8 @@ export function AddressSheet({
         return;
       }
       const position = await Location.getCurrentPositionAsync({});
-      const lat = String(position.coords.latitude);
-      const lng = String(position.coords.longitude);
+      const lat = Number(position.coords.latitude).toFixed(6);
+      const lng = Number(position.coords.longitude).toFixed(6);
       setLatitude(lat);
       setLongitude(lng);
 
@@ -70,6 +78,8 @@ export function AddressSheet({
             setLocating(false);
           },
           onError: () => {
+            setLocality("Hyderabad");
+            setCity("Hyderabad");
             setMode("add");
             setLocating(false);
           },
@@ -82,25 +92,91 @@ export function AddressSheet({
   }
 
   function handleSaveAddress() {
-    if (!line1 || !postal) return;
+    setFormError(null);
+
+    const trimmedLine1 = line1.trim();
+    if (!trimmedLine1) {
+      setFormError("House, flat or building is required.");
+      return;
+    }
+
+    const cleanPostal = postal.replace(/\D/g, "").slice(0, 6);
+    if (cleanPostal.length !== 6) {
+      setFormError("Enter a valid 6-digit Indian PIN code (e.g. 500032).");
+      return;
+    }
+
+    const loc = locality.trim() || city.trim() || "Hyderabad";
+    const ct = city.trim() || "Hyderabad";
+    const lat =
+      latitude && latitude.trim() !== ""
+        ? latitude.trim()
+        : editingAddress?.latitude
+          ? String(editingAddress.latitude)
+          : "17.414053";
+    const lng =
+      longitude && longitude.trim() !== ""
+        ? longitude.trim()
+        : editingAddress?.longitude
+          ? String(editingAddress.longitude)
+          : "78.353554";
+
+    if (mode === "edit" && editingAddress) {
+      updateAddress.mutate(
+        {
+          addressId: editingAddress.id,
+          patch: {
+            label: label.trim() || "Home",
+            line1: trimmedLine1,
+            locality: loc,
+            city: ct,
+            postal_code: cleanPostal,
+            latitude: lat,
+            longitude: lng,
+            state: "Telangana",
+            country_code: "IN",
+          },
+        },
+        {
+          onSuccess: (updated) => {
+            onSelect(updated.id);
+            setPendingAddressId(updated.id);
+            setMode("list");
+            setEditingAddress(null);
+            setFormError(null);
+          },
+          onError: () => {
+            setFormError("Could not update address. Please verify your PIN code and details.");
+          },
+        },
+      );
+      return;
+    }
+
     createAddress.mutate(
       {
-        label,
-        line1,
-        locality,
-        city,
-        postal_code: postal,
-        latitude,
-        longitude,
+        label: label.trim() || "Home",
+        line1: trimmedLine1,
+        locality: loc,
+        city: ct,
+        postal_code: cleanPostal,
+        latitude: lat,
+        longitude: lng,
         state: "Telangana",
         country_code: "IN",
+        source: latitude ? "REVERSE_GEOCODED" : "MANUAL",
+        is_default: addresses.length === 0,
       },
       {
         onSuccess: (created) => {
           onSelect(created.id);
           setPendingAddressId(created.id);
           setMode("list");
+          setFormError(null);
           onOpenChange(false);
+        },
+        onError: () => {
+          setFormError("Could not save address. Please verify your PIN code and details.");
         },
       },
     );
@@ -112,6 +188,8 @@ export function AddressSheet({
     }
     onOpenChange(false);
   }
+
+  const isSaving = createAddress.isPending || updateAddress.isPending;
 
   const title =
     mode === "list"
@@ -131,6 +209,7 @@ export function AddressSheet({
       onOpenChange={(next) => {
         if (!next) {
           setMode("list");
+          setFormError(null);
           onOpenChange(false);
         }
       }}
@@ -160,7 +239,10 @@ export function AddressSheet({
           <View className="flex-row items-center justify-between gap-3 pt-2">
             <Pressable
               accessibilityRole="button"
-              onPress={() => setMode("list")}
+              onPress={() => {
+                setFormError(null);
+                setMode("list");
+              }}
               className="px-3 py-2"
             >
               <Text className="text-sm font-semibold text-text-secondary">
@@ -170,86 +252,70 @@ export function AddressSheet({
 
             <Pressable
               accessibilityRole="button"
+              disabled={isSaving}
               onPress={handleSaveAddress}
-              className="rounded-xl bg-[#EA580C] px-5 py-2.5 active:bg-[#C2410C]"
+              className="rounded-xl bg-[#EA580C] px-5 py-2.5 active:bg-[#C2410C] disabled:opacity-60"
             >
-              <Text className="text-sm font-bold text-white">Save address</Text>
+              {isSaving ? (
+                <View className="flex-row items-center gap-2">
+                  <Spinner size="sm" />
+                  <Text className="text-sm font-bold text-white">Saving…</Text>
+                </View>
+              ) : (
+                <Text className="text-sm font-bold text-white">Save address</Text>
+              )}
             </Pressable>
           </View>
         )
       }
     >
-      <ScrollView className="max-h-[460px]" showsVerticalScrollIndicator={false}>
+      <ScrollView className="max-h-[55vh]" showsVerticalScrollIndicator={false}>
         {mode === "list" ? (
-          <View className="gap-4 pb-2">
-            {/* Saved Addresses List */}
-            <View className="gap-3">
-              {addresses.map((address, idx) => {
-                const isSelected = (pendingAddressId ?? selectedAddressId) === address.id;
-                const isDefault = address.is_default || idx === 0;
-
+          <View className="gap-3 pb-2">
+            {/* List of saved addresses matching Image 2 */}
+            <View className="gap-2">
+              {addresses.map((address) => {
+                const isSelected = address.id === pendingAddressId;
                 return (
                   <Pressable
                     key={address.id}
                     onPress={() => setPendingAddressId(address.id)}
-                    className={
+                    className={`flex-row items-start justify-between rounded-2xl border p-4 transition-all ${
                       isSelected
-                        ? "flex-row items-start gap-3.5 rounded-xl border border-[#FDBA74] bg-[#FFF9F5] p-4"
-                        : "flex-row items-start gap-3.5 rounded-xl border border-line bg-surface p-4"
-                    }
+                        ? "border-[#EA580C] bg-[#FFF8F3]"
+                        : "border-line bg-surface active:bg-surface-sunken"
+                    }`}
                   >
-                    {/* Radio Button */}
-                    <View
-                      className={
-                        isSelected
-                          ? "mt-0.5 size-5 items-center justify-center rounded-full border-2 border-[#EA580C]"
-                          : "mt-0.5 size-5 items-center justify-center rounded-full border-2 border-[#D1CBC3]"
-                      }
-                    >
-                      {isSelected ? (
-                        <View className="size-2.5 rounded-full bg-[#EA580C]" />
-                      ) : null}
-                    </View>
-
-                    {/* Address Content */}
-                    <View className="flex-1 min-w-0">
-                      <View className="flex-row flex-wrap items-center gap-2">
-                        <Text className="text-base font-bold text-navy-950">
-                          {address.label || "Home"}
+                    <View className="min-w-0 flex-1">
+                      <View className="flex-row items-center gap-2">
+                        <Text className="text-sm font-bold text-navy-950">
+                          {address.label}
                         </Text>
-                        {isDefault ? (
-                          <View className="rounded bg-[#EFEBE4] px-2 py-0.5">
-                            <Text className="text-[11px] font-medium text-text-secondary">
-                              Default
-                            </Text>
-                          </View>
-                        ) : null}
-                        {isSelected ? (
-                          <View className="rounded bg-[#E6F4EA] px-2 py-0.5">
-                            <Text className="text-[11px] font-semibold text-[#137333]">
-                              Selected
-                            </Text>
-                          </View>
+                        {address.is_default ? (
+                          <Badge tone="neutral">Default</Badge>
                         ) : null}
                       </View>
-
-                      <Text className="mt-1.5 text-xs text-text-secondary leading-relaxed">
+                      <Text className="mt-1 text-sm font-normal text-text-secondary">
                         {address.line1}
                         {address.locality ? `, ${address.locality}` : ""}
-                        {address.city ? `, ${address.city}` : ""}
-                        {address.postal_code ? `, ${address.postal_code}` : ""}
+                      </Text>
+                      <Text className="mt-0.5 text-xs font-semibold text-text-muted">
+                        PIN {address.postal_code}
                       </Text>
                     </View>
 
-                    {/* Edit Action Button */}
                     <Pressable
+                      accessibilityRole="button"
                       onPress={() => {
                         setEditingAddress(address);
                         setLabel(address.label || "Home");
-                        setLine1(address.line1);
+                        setLine1(address.line1 || "");
                         setLocality(address.locality || "");
                         setCity(address.city || "Hyderabad");
                         setPostal(address.postal_code || "");
+                        setLatitude(address.latitude ? String(address.latitude) : "");
+                        setLongitude(address.longitude ? String(address.longitude) : "");
+                        setFormError(null);
                         setMode("edit");
                       }}
                       className="px-2 py-1"
@@ -282,11 +348,15 @@ export function AddressSheet({
               <Pressable
                 accessibilityRole="button"
                 onPress={() => {
+                  setEditingAddress(null);
                   setLabel("Home");
                   setLine1("");
                   setLocality("");
                   setCity("Hyderabad");
                   setPostal("");
+                  setLatitude("");
+                  setLongitude("");
+                  setFormError(null);
                   setMode("add");
                 }}
                 className="w-full items-center justify-center rounded-xl border border-line bg-surface py-3 active:bg-surface-sunken"
@@ -311,16 +381,26 @@ export function AddressSheet({
               <Text className="text-xs font-semibold text-text-secondary mb-1">
                 Label (Home, Work, etc.)
               </Text>
-              <Input value={label} onChangeText={setLabel} placeholder="Home" />
+              <Input
+                value={label}
+                onChangeText={(val) => {
+                  setLabel(val);
+                  setFormError(null);
+                }}
+                placeholder="Home"
+              />
             </View>
 
             <View>
               <Text className="text-xs font-semibold text-text-secondary mb-1">
-                House, flat or building
+                House, flat or building *
               </Text>
               <Input
                 value={line1}
-                onChangeText={setLine1}
+                onChangeText={(val) => {
+                  setLine1(val);
+                  setFormError(null);
+                }}
                 placeholder="Flat 402, Royal Palms"
               />
             </View>
@@ -329,7 +409,10 @@ export function AddressSheet({
               <Text className="text-xs font-semibold text-text-secondary mb-1">Locality</Text>
               <Input
                 value={locality}
-                onChangeText={setLocality}
+                onChangeText={(val) => {
+                  setLocality(val);
+                  setFormError(null);
+                }}
                 placeholder="Khajaguda, Gachibowli"
               />
             </View>
@@ -337,18 +420,35 @@ export function AddressSheet({
             <View className="flex-row gap-3">
               <View className="flex-1">
                 <Text className="text-xs font-semibold text-text-secondary mb-1">City</Text>
-                <Input value={city} onChangeText={setCity} placeholder="Hyderabad" />
+                <Input
+                  value={city}
+                  onChangeText={(val) => {
+                    setCity(val);
+                    setFormError(null);
+                  }}
+                  placeholder="Hyderabad"
+                />
               </View>
               <View className="flex-1">
-                <Text className="text-xs font-semibold text-text-secondary mb-1">PIN code</Text>
+                <Text className="text-xs font-semibold text-text-secondary mb-1">PIN code *</Text>
                 <Input
                   value={postal}
-                  onChangeText={setPostal}
+                  onChangeText={(val) => {
+                    setPostal(val);
+                    setFormError(null);
+                  }}
                   placeholder="500032"
                   keyboardType="numeric"
+                  maxLength={6}
                 />
               </View>
             </View>
+
+            {formError ? (
+              <View className="rounded-xl border border-red-200 bg-red-50 p-3">
+                <Text className="text-xs font-medium text-red-700">{formError}</Text>
+              </View>
+            ) : null}
           </View>
         )}
       </ScrollView>

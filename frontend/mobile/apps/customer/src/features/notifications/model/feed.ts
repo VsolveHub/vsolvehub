@@ -49,13 +49,12 @@ export type NotificationTarget = Schemas["NotificationTarget"];
 const HREF_BY_KIND: Record<string, (id: string) => string> = {
   ENGAGEMENT: engagementHref,
   REQUIREMENT: requestHref,
-  // Both ids here are requirement ids; the kinds differ only in where the notice
-  // wants to land. The server chooses `REQUIREMENT_QUOTES` for the two notices
-  // that are about quotes rather than about the request — a vendor's quote
-  // arriving, and the unlock that was paid to read it — because "unlock to read
-  // the full quote" pointing at the request page is a link the reader still has
-  // to navigate from.
   REQUIREMENT_QUOTES: requestQuotesHref,
+  RENTAL: () => "/activity",
+  BOOKING: () => "/activity",
+  STAY: () => "/activity",
+  ORDER: () => "/activity",
+  LISTING: () => "/activity",
 };
 
 /**

@@ -1,25 +1,29 @@
-import { request } from "@vsolve/api-client";
+import { request, type Schemas } from "@vsolve/api-client";
 import { getApiClient } from "@vsolve/mobile-core";
 import * as WebBrowser from "expo-web-browser";
 
+export type PaymentAttempt = Schemas["PaymentAttempt"] & {
+  checkout_url?: string;
+};
+
 export type PaymentHandoffResult = {
   mode: "simulated" | "checkout" | "pending";
-  attempt: any;
+  attempt: PaymentAttempt;
 };
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-export function fetchPaymentAttempt(attemptId: string): Promise<any> {
+export function fetchPaymentAttempt(attemptId: string): Promise<PaymentAttempt> {
   return request(() =>
-    (getApiClient() as any).GET("/api/v1/payment-attempts/{attempt_id}/", {
+    getApiClient().GET("/api/v1/payment-attempts/{attempt_id}/", {
       params: { path: { attempt_id: attemptId } },
     }),
   );
 }
 
-export function simulatePaymentCapture(attemptId: string): Promise<any> {
+export function simulatePaymentCapture(attemptId: string): Promise<PaymentAttempt> {
   return request(() =>
-    (getApiClient() as any).POST("/api/v1/payment-attempts/{attempt_id}/simulate-capture/", {
+    getApiClient().POST("/api/v1/payment-attempts/{attempt_id}/simulate-capture/", {
       params: { path: { attempt_id: attemptId } },
     }),
   );
@@ -40,7 +44,7 @@ const TERMINAL_STATUSES = new Set([
 export async function waitForPaymentHandoff(
   attemptId: string,
   options?: { timeoutMs?: number; intervalMs?: number },
-): Promise<any> {
+): Promise<PaymentAttempt> {
   const timeoutMs = options?.timeoutMs ?? 15_000;
   const intervalMs = options?.intervalMs ?? 600;
   const started = Date.now();

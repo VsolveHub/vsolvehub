@@ -39,8 +39,8 @@ export function VisitCard({
   const rooms = useBookableRooms(visit.property?.id);
 
   const handleCall = () => {
-    if (visit.user_phone) {
-      void Linking.openURL(`tel:${visit.user_phone}`);
+    if (visit.customer_phone) {
+      void Linking.openURL(`tel:${visit.customer_phone}`);
     }
   };
 
@@ -57,7 +57,7 @@ export function VisitCard({
         <View className="flex-row items-center justify-between border-b border-line/60 pb-3">
           <View className="flex-1 pr-2">
             <Text className="text-base font-bold text-text" numberOfLines={1}>
-              {visit.user_name || "Guest"}
+              {visit.customer_name || "Guest"}
             </Text>
             {visit.unit_name ? (
               <Text className="text-xs text-text-muted">Interested in: {visit.unit_name}</Text>
@@ -69,9 +69,9 @@ export function VisitCard({
         </View>
 
         <View className="mt-3 flex-col gap-2">
-          {visit.user_phone ? (
+          {visit.customer_phone ? (
             <View className="flex-row items-center justify-between">
-              <Text className="text-xs text-text-secondary">{visit.user_phone}</Text>
+              <Text className="text-xs text-text-secondary">{visit.customer_phone}</Text>
               {isRequested || isAccepted ? (
                 <Button
                   variant="secondary"
@@ -80,7 +80,7 @@ export function VisitCard({
                   className="h-7 flex-row items-center gap-1.5 px-2.5"
                 >
                   <Phone size={12} color="#f87000" />
-                  <Text className="text-xs font-semibold text-[#f87000]">Call</Text>
+                  <Text className="text-xs font-semibold text-action">Call</Text>
                 </Button>
               ) : null}
             </View>
@@ -169,11 +169,11 @@ export function VisitCard({
                     onPress={() => setSelectedReason(r.value)}
                     className={`rounded-lg border p-2.5 ${
                       isSelected
-                        ? "border-[#071328] bg-surface-muted"
+                        ? "border-navy-900 bg-surface-muted"
                         : "border-line bg-surface"
                     }`}
                   >
-                    <Text className={`text-xs ${isSelected ? "font-bold text-[#071328]" : "text-text"}`}>
+                    <Text className={`text-xs ${isSelected ? "font-bold text-navy-900" : "text-text"}`}>
                       {r.label}
                     </Text>
                   </Pressable>
@@ -219,7 +219,7 @@ export function VisitCard({
         open={bookDialogOpen}
         onOpenChange={setBookDialogOpen}
         title="Booking confirmed?"
-        description={`${visit.user_name || "The guest"} is taking a room. It will show as Booked and stop appearing as available.`}
+        description={`${visit.customer_name || "The guest"} is taking a room. It will show as Booked and stop appearing as available.`}
       >
         <View className="py-2 flex-col gap-3">
           <Text className="text-xs font-semibold text-text">Which room?</Text>
@@ -236,13 +236,13 @@ export function VisitCard({
                     key={r.id}
                     onPress={() => setSelectedRoomId(r.id)}
                     className={`rounded-lg border p-2.5 flex-row items-center justify-between ${
-                      on ? "border-[#071328] bg-surface-muted" : "border-line bg-surface"
+                      on ? "border-navy-900 bg-surface-muted" : "border-line bg-surface"
                     }`}
                   >
-                    <Text className={`text-xs ${on ? "font-bold text-[#071328]" : "text-text"}`}>
+                    <Text className={`text-xs ${on ? "font-bold text-navy-900" : "text-text"}`}>
                       {r.label}
                     </Text>
-                    {on ? <CheckCircle2 size={13} color="#071328" /> : null}
+                    {on ? <CheckCircle2 size={13} color="#00112e" /> : null}
                   </Pressable>
                 );
               })}

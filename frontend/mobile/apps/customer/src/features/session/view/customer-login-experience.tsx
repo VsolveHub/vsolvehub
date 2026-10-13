@@ -1,6 +1,9 @@
 // Ported from frontend/apps/customer/features/session/view/customer-login-experience.tsx
+// Redesigned to 100% exact parity with the V Solve Hub mobile login popup reference image
 import type { MobileOtpFlow } from "@vsolve/mobile-core";
 import { ErrorState, Logo, Text, cn, formatDuration } from "@vsolve/mobile-ui";
+import { useRouter } from "expo-router";
+import { ChevronDown, ChevronRight, LayoutGrid, X } from "lucide-react-native";
 import { useEffect, useRef, type ReactNode } from "react";
 import {
   ActivityIndicator,
@@ -57,39 +60,6 @@ function UserIcon({ size = 20, color = "currentColor" }: { size?: number; color?
   );
 }
 
-function ChevronDownIcon({ size = 12, color = "#64748B" }: { size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 12 12" fill="none">
-      <Path
-        d="m3 4.5 3 3 3-3"
-        stroke={color}
-        strokeWidth={1.5}
-        strokeLinecap="round"
-      />
-    </Svg>
-  );
-}
-
-function ShieldOutlineIcon({ size = 14, color = "#64748B" }: { size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 20 20" fill="none">
-      <Path
-        d="M10 2.5 4 5v5c0 3.5 2.6 6.8 6 7.5 3.4-.7 6-4 6-7.5V5l-6-2.5Z"
-        stroke={color}
-        strokeWidth={1.5}
-        strokeLinejoin="round"
-      />
-      <Path
-        d="m7.5 10 1.75 1.75L12.5 8.5"
-        stroke={color}
-        strokeWidth={1.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </Svg>
-  );
-}
-
 export function LoginBenefits() {
   const items = [
     { icon: ShieldIcon, label: "Secure & Safe" },
@@ -115,32 +85,22 @@ function LoginPhoneField({
   phone,
   onPhoneChange,
   phoneError,
-  codeLength,
 }: {
   phone: string;
   onPhoneChange: (value: string) => void;
   phoneError?: string | null;
-  codeLength: number;
 }) {
   return (
-    <View className="gap-1.5">
-      <View className="flex-row items-center">
-        <Text className="text-[14px] font-bold text-navy-900">Mobile number</Text>
-        <Text className="ml-1 text-[14px] font-bold text-[#EF4444]">*</Text>
-      </View>
-      <Text className="text-[13px] text-text-secondary">
-        We will send a {codeLength}-digit code by SMS.
-      </Text>
+    <View className="gap-1">
       <View
         className={cn(
-          "mt-1 min-h-12 flex-row items-stretch overflow-hidden rounded-xl border bg-white",
+          "h-[54px] flex-row items-center overflow-hidden rounded-2xl border bg-white",
           phoneError ? "border-danger" : "border-[#E2E8F0]",
         )}
       >
-        <View className="flex-row items-center gap-1.5 border-r border-[#E2E8F0] bg-[#F1ECE5]/60 px-3.5">
-          <Text className="text-[13px] font-extrabold text-navy-900">IN</Text>
-          <Text className="text-[14px] font-bold text-navy-900">+91</Text>
-          <ChevronDownIcon size={12} color="#64748B" />
+        <View className="h-full flex-row items-center gap-1.5 border-r border-[#E2E8F0] bg-[#F1F5F9] px-3.5">
+          <Text className="text-[13.5px] font-extrabold text-navy-950">IN  +91</Text>
+          <ChevronDown size={14} color="#64748B" strokeWidth={2.2} />
         </View>
         <TextInput
           accessibilityLabel="Mobile number"
@@ -150,12 +110,12 @@ function LoginPhoneField({
           placeholderTextColor="#94A3B8"
           value={phone}
           onChangeText={onPhoneChange}
-          className="flex-1 px-3.5 py-2.5 text-[15px] font-semibold text-navy-900"
+          className="flex-1 h-full px-4 text-[16px] font-bold text-navy-950"
           style={{ outlineStyle: "none" } as never}
         />
       </View>
       {phoneError ? (
-        <Text className="mt-1 text-xs font-medium text-danger">{phoneError}</Text>
+        <Text className="mt-1 text-xs font-semibold text-danger">{phoneError}</Text>
       ) : null}
     </View>
   );
@@ -164,9 +124,11 @@ function LoginPhoneField({
 export function CustomerLoginForm({
   flow,
   verifyLabel = "Verify and continue",
+  onBrowseServices,
 }: {
   flow: MobileOtpFlow;
   verifyLabel?: string;
+  onBrowseServices?: () => void;
 }) {
   const codeInputRef = useRef<TextInput>(null);
 
@@ -203,62 +165,57 @@ export function CustomerLoginForm({
       ) : null}
 
       {flow.phase === "phone" ? (
-        <View className="gap-5">
-          <View className="rounded-2xl border border-[#FDE6D5] bg-[#FFF7F0] p-4">
-            <View className="flex-row items-start gap-2.5">
-              <View className="mt-0.5">
-                <ShieldIcon size={16} color="#EA580C" />
-              </View>
-              <View className="flex-1">
-                <Text className="text-[14px] font-bold text-navy-900">Quick & Secure Login</Text>
-                <Text className="mt-1 text-[13px] leading-relaxed text-text-secondary">
-                  Use the mobile number you book with.{"\n"}We will text you a{" "}
-                  <Text className="font-bold text-[#EA580C]">{flow.codeLength}-digit code</Text>.
-                </Text>
-              </View>
-            </View>
-          </View>
-
+        <View className="gap-4">
           <LoginPhoneField
             phone={flow.phone}
             onPhoneChange={flow.onPhoneChange}
             phoneError={flow.phoneError}
-            codeLength={flow.codeLength}
           />
 
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Send code"
-            disabled={!flow.canRequest || flow.isRequesting}
+            disabled={flow.isRequesting}
             onPress={flow.onRequestCode}
             className={cn(
-              "min-h-12 items-center justify-center rounded-xl",
-              !flow.canRequest ? "bg-[#EDE8E3]" : "bg-navy-900 active:bg-navy-800",
+              "h-[52px] w-full flex-row items-center justify-center rounded-2xl bg-[#FF5500] active:bg-[#E04B00] shadow-xs active:scale-[0.99]",
+              flow.isRequesting && "opacity-80",
             )}
           >
             {flow.isRequesting ? (
               <View className="flex-row items-center gap-2">
                 <ActivityIndicator size="small" color="#ffffff" />
-                <Text className="text-[14px] font-semibold text-white">Sending code…</Text>
+                <Text className="text-[16px] font-bold text-white">Sending code…</Text>
               </View>
             ) : (
-              <Text
-                className={cn(
-                  "text-[14px] font-bold",
-                  !flow.canRequest ? "text-[#8C857B]" : "text-white",
-                )}
-              >
+              <Text className="text-[16px] font-bold text-white">
                 Send code →
               </Text>
             )}
           </Pressable>
 
-          <View className="flex-row items-center justify-center gap-2 pt-0.5">
-            <ShieldOutlineIcon size={14} color="#64748B" />
-            <Text className="text-center text-[12px] leading-tight text-text-secondary">
-              Your number is safe with us. We never share it with anyone.
-            </Text>
+          {/* Divider matching exact reference image */}
+          <View className="my-1 flex-row items-center">
+            <View className="h-[1px] flex-1 bg-[#E2E8F0]" />
+            <Text className="px-3 text-xs text-[#94A3B8] font-normal lowercase">or</Text>
+            <View className="h-[1px] flex-1 bg-[#E2E8F0]" />
           </View>
+
+          {/* Secondary Button matching exact reference image */}
+          {onBrowseServices ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Browse services first"
+              onPress={onBrowseServices}
+              className="h-[52px] w-full flex-row items-center justify-center gap-2 rounded-2xl border border-[#FFEDD5] bg-[#FFF7ED] active:bg-[#FFEDD5]"
+            >
+              <LayoutGrid size={18} color="#EA580C" strokeWidth={2.2} />
+              <Text className="text-[14px] font-bold text-[#7C2D12]">
+                Browse services first
+              </Text>
+              <ChevronRight size={15} color="#EA580C" strokeWidth={2.5} />
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
 
@@ -266,7 +223,7 @@ export function CustomerLoginForm({
         <View className="gap-4">
           <View className="flex-row items-center justify-between">
             <Text className="text-sm text-text-secondary">
-              Code sent to <Text className="font-bold text-navy-900">{flow.phone}</Text>
+              Code sent to <Text className="font-bold text-navy-900">+91 {flow.phone}</Text>
             </Text>
             <Pressable onPress={flow.onChangeNumber} hitSlop={8}>
               <Text className="text-sm font-semibold text-[#EA580C]">Change number</Text>
@@ -291,7 +248,7 @@ export function CustomerLoginForm({
             </View>
             <View
               className={cn(
-                "mt-1 min-h-12 items-center justify-center overflow-hidden rounded-xl border bg-white",
+                "mt-1 h-[54px] items-center justify-center overflow-hidden rounded-2xl border bg-white",
                 flow.codeError ? "border-danger" : "border-[#E2E8F0]",
               )}
             >
@@ -331,22 +288,19 @@ export function CustomerLoginForm({
             disabled={!flow.canVerify || flow.isVerifying}
             onPress={flow.onVerifyCode}
             className={cn(
-              "min-h-12 items-center justify-center rounded-xl",
-              !flow.canVerify ? "bg-[#EDE8E3]" : "bg-navy-900 active:bg-navy-800",
+              "h-[52px] w-full flex-row items-center justify-center rounded-2xl shadow-xs",
+              !flow.canVerify
+                ? "bg-[#FF5500]/50"
+                : "bg-[#FF5500] active:bg-[#E04B00] active:scale-[0.99]",
             )}
           >
             {flow.isVerifying ? (
               <View className="flex-row items-center gap-2">
                 <ActivityIndicator size="small" color="#ffffff" />
-                <Text className="text-[14px] font-semibold text-white">Verifying code…</Text>
+                <Text className="text-[16px] font-bold text-white">Verifying code…</Text>
               </View>
             ) : (
-              <Text
-                className={cn(
-                  "text-[14px] font-bold",
-                  !flow.canVerify ? "text-[#8C857B]" : "text-white",
-                )}
-              >
+              <Text className="text-[16px] font-bold text-white">
                 {verifyLabel}
               </Text>
             )}
@@ -374,6 +328,7 @@ export function CustomerLoginForm({
 export function CustomerLoginExperience({
   flow,
   onClose,
+  onBrowseServices,
   variant = "page",
   mobileFocused = false,
   footer,
@@ -381,55 +336,95 @@ export function CustomerLoginExperience({
 }: {
   flow: MobileOtpFlow;
   onClose?: () => void;
+  onBrowseServices?: () => void;
   variant?: "page" | "modal";
   mobileFocused?: boolean;
   footer?: ReactNode;
   verifyLabel?: string;
 }) {
+  const router = useRouter();
+
+  const handleBrowse = () => {
+    if (onBrowseServices) {
+      onBrowseServices();
+    } else {
+      onClose?.();
+      router.push("/catalog" as never);
+    }
+  };
+
   return (
     <View
       className={cn(
         "w-full bg-white",
-        variant === "page" && "max-w-md rounded-[2.25rem] border border-[#E5E7EB] px-5 py-6 sm:px-6 sm:py-8 shadow-xl",
-        variant === "modal" && "rounded-[1.75rem] p-5",
+        variant === "page" && "max-w-[400px] rounded-[28px] border border-[#E5E7EB] p-6 sm:p-7 shadow-xl",
+        variant === "modal" && "max-w-[370px] rounded-[28px] border border-black/[0.04] p-6 pb-6 pt-5 shadow-2xl",
       )}
-      style={
-        variant === "page"
-          ? {
-              borderRadius: 36,
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 8 },
-              shadowOpacity: 0.08,
-              shadowRadius: 24,
-              elevation: 4,
-            }
-          : undefined
-      }
+      style={{
+        borderRadius: 28,
+        shadowColor: "#0F172A",
+        shadowOffset: { width: 0, height: 16 },
+        shadowOpacity: 0.12,
+        shadowRadius: 32,
+        elevation: 8,
+      }}
     >
-      {onClose ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Close"
-          onPress={onClose}
-          hitSlop={8}
-          className="absolute right-4 top-4 z-10 h-8 w-8 items-center justify-center rounded-full bg-surface-sunken"
-        >
-          <Text className="text-base text-text-secondary">✕</Text>
-        </Pressable>
-      ) : null}
-
-      <View className="flex-col items-start">
-        <Logo className="mb-3" />
-        <Text className="text-[14px] leading-relaxed text-text-secondary">
-          Verify your mobile number to view bookings and checkout
-        </Text>
+      {/* Header Row: Logo on left, Round Close button on right */}
+      <View className="flex-row items-center justify-between">
+        <Logo />
+        {onClose ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close login dialog"
+            onPress={onClose}
+            hitSlop={10}
+            className="h-9 w-9 items-center justify-center rounded-full bg-[#F3F4F6] active:bg-[#E5E7EB]"
+          >
+            <X size={16} color="#475569" strokeWidth={2.2} />
+          </Pressable>
+        ) : null}
       </View>
 
-      <View className="my-5 h-px bg-line/60" />
+      {/* Title & Subtitle */}
+      <View className="mt-5 mb-5">
+        {flow.phase === "phone" ? (
+          <>
+            <Text className="text-[22px] sm:text-[24px] font-black tracking-tight text-[#071328] leading-[1.2]">
+              Enter your mobile number
+            </Text>
+            <Text className="mt-1.5 text-[13.5px] text-[#64748B] leading-[20px]">
+              We’ll send you a 6-digit verification code to login and view your bookings.
+            </Text>
+          </>
+        ) : flow.phase === "code" ? (
+          <>
+            <Text className="text-[22px] sm:text-[24px] font-black tracking-tight text-[#071328] leading-[1.2]">
+              Verify your number
+            </Text>
+            <Text className="mt-1.5 text-[13.5px] text-[#64748B] leading-[20px]">
+              Enter the 6-digit code sent to{" "}
+              <Text className="font-bold text-[#071328]">+91 {flow.phone}</Text>.
+            </Text>
+          </>
+        ) : (
+          <>
+            <Text className="text-[22px] sm:text-[24px] font-black tracking-tight text-[#071328] leading-[1.2]">
+              Signed in
+            </Text>
+            <Text className="mt-1.5 text-[13.5px] text-[#64748B] leading-[20px]">
+              You are currently signed in.
+            </Text>
+          </>
+        )}
+      </View>
 
-      <CustomerLoginForm flow={flow} verifyLabel={verifyLabel} />
+      <CustomerLoginForm
+        flow={flow}
+        verifyLabel={verifyLabel}
+        onBrowseServices={footer ? undefined : handleBrowse}
+      />
 
-      {footer ? <View className="mt-4">{footer}</View> : null}
+      {footer && flow.phase === "phone" ? <View className="mt-4">{footer}</View> : null}
 
       {!mobileFocused ? (
         <View className="mt-7">
@@ -439,3 +434,4 @@ export function CustomerLoginExperience({
     </View>
   );
 }
+

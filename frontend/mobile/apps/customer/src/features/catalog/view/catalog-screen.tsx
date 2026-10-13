@@ -4,9 +4,10 @@ import { Button, EmptyState, Skeleton, Text, formatMoney } from "@vsolve/mobile-
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Pressable, ScrollView, TextInput, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, TextInput, View } from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
 
+import { LOCAL_CATEGORY_TILES, getCategoryFallbackIcon, resolveImageUrl } from "@/features/catalog/category-artwork";
 import { useCatalogIndex, useCategories, type Category, type ServiceCard } from "@/features/catalog/client-queries";
 import { bookingModeLabel, rankCatalogMatches } from "@/features/catalog/search";
 import { serviceHref } from "@/features/catalog/service-href";
@@ -15,10 +16,23 @@ export function CatalogScreen() {
   const categories = useCategories();
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const open = searchOpen || query.trim().length > 0;
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await categories.refetch();
+    setRefreshing(false);
+  };
+
   return (
-    <ScrollView className="flex-1 bg-[#FAF9F7]" contentContainerClassName="px-4 pb-6 pt-4">
+    <ScrollView
+      className="flex-1 bg-[#FAF9F7]"
+      contentContainerClassName="px-4 pb-6 pt-4"
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
+      }
+    >
       <View className="flex-row items-center gap-2">
         <Text className="flex-1 text-[19px] font-extrabold tracking-tight text-text">All services</Text>
         <Pressable
@@ -137,7 +151,7 @@ function CategoryRows({ categories }: { categories: Category[] }) {
                 onPress={() => router.push(`/catalog/${category.slug}?tile=${subcategory.slug}` as never)}
                 className="w-[92px] items-center gap-2"
               >
-                <TilePhoto imageUrl={subcategory.image_url} />
+                <TilePhoto imageUrl={subcategory.image_url} slug={subcategory.slug} iconKey={subcategory.icon_key} />
                 <Text numberOfLines={2} className="w-full text-center text-[12px] font-semibold leading-tight text-text">
                   {subcategory.name}
                 </Text>
@@ -150,17 +164,33 @@ function CategoryRows({ categories }: { categories: Category[] }) {
   );
 }
 
-function TilePhoto({ imageUrl }: { imageUrl: string }) {
-  const isCover = imageUrl.includes("/Service%20Cover/") || imageUrl.includes("/Service Cover/");
+function TilePhoto({ imageUrl, slug, iconKey }: { imageUrl: string; slug?: string; iconKey?: string }) {
+  const [loadError, setLoadError] = useState(false);
+  const localAsset = slug ? LOCAL_CATEGORY_TILES[slug] : null;
+  if (localAsset) {
+    return (
+      <View className="aspect-square w-full items-center justify-center overflow-hidden rounded-card bg-[#F4F1EC]">
+        <Image source={localAsset} contentFit="contain" style={{ width: "76%", height: "76%" }} />
+      </View>
+    );
+  }
+
+  const resolved = resolveImageUrl(imageUrl);
+  const isCover = resolved ? (resolved.includes("/Service%20Cover/") || resolved.includes("/Service Cover/")) : false;
+  const FallbackIcon = getCategoryFallbackIcon(slug, iconKey);
+
   return (
     <View className="aspect-square w-full items-center justify-center overflow-hidden rounded-card bg-[#F4F1EC]">
-      {imageUrl !== "" ? (
+      {resolved && !loadError ? (
         <Image
-          source={{ uri: imageUrl }}
+          source={{ uri: resolved }}
           contentFit={isCover ? "contain" : "cover"}
-          style={isCover ? { width: "72%", height: "72%" } : { width: "100%", height: "100%" }}
+          style={isCover ? { width: "76%", height: "76%" } : { width: "100%", height: "100%" }}
+          onError={() => setLoadError(true)}
         />
-      ) : null}
+      ) : (
+        <FallbackIcon size={26} color="#00112e" strokeWidth={1.8} />
+      )}
     </View>
   );
 }

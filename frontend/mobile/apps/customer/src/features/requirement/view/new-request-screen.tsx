@@ -1,10 +1,10 @@
-// Ported from frontend/apps/customer/features/requirement/view/requirement-flow.tsx
 import { describeError } from "@vsolve/query/native";
 import { Button, Input, Spinner, Text } from "@vsolve/mobile-ui";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { ChevronLeft } from "lucide-react-native";
 import { useState } from "react";
-import { Pressable, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 
 import { useAddresses } from "@/features/addresses/queries";
 import { useServiceDetail } from "@/features/catalog/client-queries";
@@ -23,9 +23,12 @@ export function NewRequestScreen({ serviceSlug }: { serviceSlug: string }) {
   const variant = service.data?.requirement_variants[0];
   const variantId = variant?.id ?? service.data?.bookable_variant_id ?? null;
   const questions = variant?.questions ?? [];
+  const handleRefresh = async () => {
+    await service.refetch();
+  };
   if (service.isPending) return <Spinner size="sm" />;
   if (questions.length === 0) {
-    return <SimpleRequest serviceName={service.data?.name ?? "Request"} variantId={variantId} />;
+    return <SimpleRequest serviceName={service.data?.name ?? "Request"} variantId={variantId} onRefresh={handleRefresh} />;
   }
   return (
     <QuestionRequest
@@ -33,16 +36,33 @@ export function NewRequestScreen({ serviceSlug }: { serviceSlug: string }) {
       variantId={variantId}
       questions={questions}
       selectedService={params.selected_service}
+      onRefresh={handleRefresh}
     />
   );
 }
 
-function SimpleRequest({ serviceName, variantId }: { serviceName: string; variantId: string | null }) {
+function SimpleRequest({
+  serviceName,
+  variantId,
+  onRefresh,
+}: {
+  serviceName: string;
+  variantId: string | null;
+  onRefresh?: () => Promise<void>;
+}) {
   const create = useCreateRequirement();
   const save = useSaveRequirement();
   const submit = useSubmitRequirement();
   const router = useRouter();
   const [details, setDetails] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    if (!onRefresh) return;
+    setRefreshing(true);
+    await onRefresh();
+    setRefreshing(false);
+  };
 
   function send() {
     if (!variantId) return;
@@ -66,15 +86,38 @@ function SimpleRequest({ serviceName, variantId }: { serviceName: string; varian
   }
 
   return (
-    <View className="flex-1 gap-3 bg-canvas px-4 py-6">
-      <Text className="text-2xl font-extrabold text-text">{serviceName}</Text>
+    <ScrollView
+      className="flex-1 bg-canvas"
+      contentContainerClassName="gap-3 px-4 py-6"
+      keyboardShouldPersistTaps="handled"
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
+      }
+    >
+      <View className="flex-row items-center gap-2.5">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.push("/catalog");
+            }
+          }}
+          className="size-9 items-center justify-center rounded-full border border-line bg-surface shadow-2xs active:bg-surface-hover"
+        >
+          <ChevronLeft size={18} color="#00112e" />
+        </Pressable>
+        <Text className="text-2xl font-extrabold text-text">{serviceName}</Text>
+      </View>
       <Text className="text-sm text-text-secondary">Tell us what you need. Professionals quote from this.</Text>
       <Input value={details} onChangeText={setDetails} placeholder="What needs doing" />
       {create.error ? <Text className="text-sm text-danger-text">{describeError(create.error, "mutation").message}</Text> : null}
       <Button disabled={!variantId || details.trim() === ""} loading={create.isPending || save.isPending || submit.isPending} loadingLabel="Sending" onPress={send}>
         Send request
       </Button>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -83,11 +126,13 @@ function QuestionRequest({
   variantId,
   questions,
   selectedService,
+  onRefresh,
 }: {
   serviceName: string;
   variantId: string | null;
   questions: NonNullable<ReturnType<typeof useServiceDetail>["data"]>["requirement_variants"][number]["questions"];
   selectedService?: string;
+  onRefresh?: () => Promise<void>;
 }) {
   const create = useCreateRequirement();
   const save = useSaveRequirement();
@@ -100,6 +145,14 @@ function QuestionRequest({
   const [when, setWhen] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
   const [allowDuplicate, setAllowDuplicate] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([onRefresh?.(), addresses.refetch()]);
+    setRefreshing(false);
+  };
+
   const duplicates = useProbableDuplicates(
     addressId && when && variantId ? { addressId, requestedStart: when, variantId } : null,
   );
@@ -139,8 +192,35 @@ function QuestionRequest({
   }
 
   return (
-    <View className="flex-1 gap-3 bg-canvas px-4 py-6">
-      <Text className="text-2xl font-extrabold text-text">{serviceName}</Text>
+    <ScrollView
+      className="flex-1 bg-canvas"
+      contentContainerClassName="gap-3 px-4 py-6"
+      keyboardShouldPersistTaps="handled"
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
+      }
+    >
+      <View className="flex-row items-center gap-2.5">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          onPress={() => {
+            if (step === "send") {
+              setStep("where");
+            } else if (step === "where") {
+              setStep("what");
+            } else if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.push("/catalog");
+            }
+          }}
+          className="size-9 items-center justify-center rounded-full border border-line bg-surface shadow-2xs active:bg-surface-hover"
+        >
+          <ChevronLeft size={18} color="#00112e" />
+        </Pressable>
+        <Text className="text-2xl font-extrabold text-text">{serviceName}</Text>
+      </View>
       <Text className="text-sm text-text-secondary">
         {step === "what" ? "Step 1 of 3 — What needs doing?" : step === "where" ? "Step 2 of 3 — Where and when?" : "Step 3 of 3 — Choose visits and send"}
       </Text>
@@ -216,6 +296,6 @@ function QuestionRequest({
           Send request
         </Button>
       )}
-    </View>
+    </ScrollView>
   );
 }

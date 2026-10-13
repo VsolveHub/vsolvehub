@@ -1,6 +1,6 @@
 import { Badge, Button, Card, Dialog, Text } from "@vsolve/mobile-ui";
 import { useState } from "react";
-import { Image, Pressable, ScrollView, View } from "react-native";
+import { Image, ScrollView, View } from "react-native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   BedDouble,
@@ -8,9 +8,6 @@ import {
   Clock,
   Edit3,
   MapPin,
-  Pause,
-  Play,
-  Trash2,
 } from "lucide-react-native";
 
 import {
@@ -105,7 +102,7 @@ export function PropertyCard({
   const note = statusNote(property);
 
   // Photos fallback: building photos first; with none, room photos stand in.
-  const photoSlides: Array<{ id: string; url: string }> =
+  const photoSlides: { id: string; url: string }[] =
     media.length > 0
       ? media.filter((m) => Boolean(m.url)).map((m) => ({ id: m.id, url: m.url }))
       : rooms.flatMap((unit) =>
@@ -250,7 +247,7 @@ export function PropertyCard({
                   onPress={() => onManageRooms(property)}
                   className="h-8 flex-row items-center gap-1 px-2.5"
                 >
-                  <BedDouble size={13} color="#071328" />
+                  <BedDouble size={13} color="#00112e" />
                   <Text className="text-xs font-semibold text-text">Rooms</Text>
                 </Button>
 
@@ -260,8 +257,18 @@ export function PropertyCard({
                   onPress={() => onEditDetails(property)}
                   className="h-8 flex-row items-center gap-1 px-2.5"
                 >
-                  <Edit3 size={13} color="#071328" />
+                  <Edit3 size={13} color="#00112e" />
                   <Text className="text-xs font-semibold text-text">Edit Details</Text>
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onPress={() => onManagePhotos?.(property)}
+                  className="h-8 flex-row items-center gap-1 px-2.5"
+                >
+                  <Camera size={13} color="#00112e" />
+                  <Text className="text-xs font-semibold text-text">Building photos</Text>
                 </Button>
 
                 <Button
@@ -270,7 +277,7 @@ export function PropertyCard({
                   onPress={() => onVisitingHours(property)}
                   className="h-8 flex-row items-center gap-1 px-2.5"
                 >
-                  <Clock size={13} color="#071328" />
+                  <Clock size={13} color="#00112e" />
                   <Text className="text-xs font-semibold text-text">Visiting Hours</Text>
                 </Button>
 

@@ -2,8 +2,8 @@
 // frontend/apps/customer/features/catalog/components/homepage-client-sections.tsx
 import { Text } from "@vsolve/mobile-ui";
 import { LinearGradient } from "expo-linear-gradient";
-import { useEffect, useRef, useState } from "react";
-import { AccessibilityInfo, Animated, Easing, Platform, View, type ViewStyle } from "react-native";
+import { useEffect, useRef } from "react";
+import { Animated, Easing, Platform, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
 
 const REVIEWS = [
@@ -199,66 +199,37 @@ function ReviewCard({ review }: { review: (typeof REVIEWS)[number] }) {
 }
 
 export function ReviewsMarquee() {
-  const [reduceMotion, setReduceMotion] = useState(false);
   const shift = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
-    const subscription = AccessibilityInfo.addEventListener("reduceMotionChanged", setReduceMotion);
-    return () => subscription.remove();
-  }, []);
+    let isCancelled = false;
 
-  useEffect(() => {
-    if (Platform.OS === "web") return;
-    if (reduceMotion) {
+    const runMarquee = () => {
       shift.setValue(0);
-      return;
-    }
-    const animation = Animated.loop(
       Animated.timing(shift, {
         toValue: -SINGLE_SET_WIDTH,
         duration: MARQUEE_DURATION_MS,
         easing: Easing.linear,
-        useNativeDriver: true,
-      }),
-    );
-    shift.setValue(0);
-    animation.start();
-    return () => animation.stop();
-  }, [reduceMotion, shift]);
+        useNativeDriver: Platform.OS !== "web",
+      }).start(({ finished }) => {
+        if (finished && !isCancelled) {
+          runMarquee();
+        }
+      });
+    };
 
-  const cards = reduceMotion ? REVIEWS : [...REVIEWS, ...REVIEWS];
+    runMarquee();
+
+    return () => {
+      isCancelled = true;
+      shift.stopAnimation();
+    };
+  }, [shift]);
+
+  const cards = [...REVIEWS, ...REVIEWS];
 
   return (
     <View className="relative w-full overflow-hidden pt-8 pb-10">
-      {Platform.OS === "web" && (
-        <style
-          dangerouslySetInnerHTML={{
-            __html: `
-              @keyframes reviews-marquee {
-                from { transform: translateX(0); }
-                to { transform: translateX(-50%); }
-              }
-              .reviews-marquee-track {
-                display: flex !important;
-                flex-direction: row !important;
-                width: max-content !important;
-                animation: reviews-marquee 55s linear infinite !important;
-                will-change: transform;
-              }
-              .reviews-marquee-track:hover {
-                animation-play-state: paused !important;
-              }
-              @media (prefers-reduced-motion: reduce) {
-                .reviews-marquee-track {
-                  animation: none !important;
-                }
-              }
-            `,
-          }}
-        />
-      )}
-
       <View className="items-center gap-3 px-4 text-center">
         <View className="rounded-full border border-[#e7e2da] bg-white px-3 py-1">
           <Text className="text-[10px] font-black uppercase tracking-[0.2em] text-action">
@@ -274,29 +245,18 @@ export function ReviewsMarquee() {
       </View>
 
       <View className="relative mt-8 w-full overflow-hidden">
-        {Platform.OS === "web" ? (
-          <View
-            className="reviews-marquee-track flex-row pl-4"
-            style={{ width: "max-content" } as unknown as ViewStyle}
-          >
-            {cards.map((review, index) => (
-              <ReviewCard key={`${review.user}-${review.date}-${index}`} review={review} />
-            ))}
-          </View>
-        ) : (
-          <Animated.View
-            style={{
-              flexDirection: "row",
-              width: TOTAL_TRACK_WIDTH,
-              paddingLeft: 16,
-              transform: [{ translateX: shift }],
-            }}
-          >
-            {cards.map((review, index) => (
-              <ReviewCard key={`${review.user}-${review.date}-${index}`} review={review} />
-            ))}
-          </Animated.View>
-        )}
+        <Animated.View
+          style={{
+            flexDirection: "row",
+            width: TOTAL_TRACK_WIDTH,
+            paddingLeft: 16,
+            transform: [{ translateX: shift }],
+          }}
+        >
+          {cards.map((review, index) => (
+            <ReviewCard key={`${review.user}-${review.date}-${index}`} review={review} />
+          ))}
+        </Animated.View>
 
         <LinearGradient
           pointerEvents="none"
