@@ -203,3 +203,45 @@ before this work, and every remaining finding is pre-existing.
 8. Admin → Rentals → Bookings → Cancel: the dialog needs a reason, and the reason shows on the
    row afterwards.
 9. Admin → Stays → Reservations: a checked-in reservation has no Cancel, and the API refuses it.
+
+## 8. Follow-up: charts on the dashboards
+
+Charts only where there is a trend or a breakdown to read. Queues, consoles, reports, finance,
+payouts and settings stay as lists and forms.
+
+| Screen | Chart | Data |
+|---|---|---|
+| Dashboards → Overview | Money collected (GMV and refunds, area) and Completed bookings (bars), side by side — two units, so two charts, never a dual axis | new `series` |
+| Dashboards → Customers | New signups (bars) | new `series` |
+| Dashboards → Categories | Revenue by category, ranked bars with the booking count beside each | existing |
+| Dashboards → Bookings | How bookings ended up (donut: completed / in progress / disputed or in recovery / cancelled or aborted), plus bookings by status as ranked bars | existing |
+| Dashboards → Partners | Partner applications by stage, bars in pipeline order | existing |
+| Home → Unclaimed queue | Thin bar per team | existing |
+
+Every breakdown keeps its table under "View as table". Wallet liability now prints in rupees
+instead of raw paise.
+
+**Backend** (`apps/ops_reports/dashboards.py`). The overview and customer kinds add `series`
+(oldest first, zero-filled, bucketed in IST) and `series_granularity`: one point per day up to 62
+days, per week (Monday) beyond, never more than 366 days; the last 30 days when no range is
+picked. A bare `date_end` now includes that whole day — it used to stop at its midnight. A
+malformed date is a 400, not a 500. The response stays an untyped object; the two query
+parameters are declared on the view but the contract is **not regenerated** in this change,
+because `main` currently drifts from `v1.yaml` after `4ad77c4` and regenerating would publish
+that revert.
+
+**Frontend.** Recharts 3.2.1 in the admin app only (`features/charts/`); `react-is` pinned to
+19.2.0 so it matches React 19. Ranked bars are HTML so labels never collide. Colours are
+`signal-600` and `navy-500` (validated for colour-blind separation and 3:1 contrast); outcomes use
+the status colours and always carry a label.
+
+**Tests written (not run — owner verification pending)**
+
+- `backend/tests/ops_reports/test_dashboard_series.py`
+- `frontend/apps/admin/features/charts/charts.test.tsx`
+- `frontend/apps/admin/features/dashboard/dashboard.test.tsx` (chart cases added)
+
+```
+cd backend && .venv/Scripts/python.exe -m pytest tests/ops_reports -q
+cd frontend && pnpm --filter admin exec vitest run features/charts features/dashboard
+```

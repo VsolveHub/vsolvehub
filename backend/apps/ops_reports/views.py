@@ -1,7 +1,8 @@
 import logging
 
 from django.http import HttpResponse
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import generics, permissions, status
 from rest_framework.exceptions import NotFound
 from rest_framework.request import Request
@@ -137,7 +138,24 @@ class OpsReportExportView(APIView):
 class OpsDashboardView(APIView):
     permission_classes = (permissions.IsAuthenticated, IsOperationsUser)
 
-    @extend_schema(summary="Get dashboard aggregates", responses={200: dict}, tags=["operations"])
+    @extend_schema(
+        summary="Get dashboard aggregates",
+        parameters=[
+            OpenApiParameter(
+                "date_start", OpenApiTypes.DATE, OpenApiParameter.QUERY, description="Inclusive."
+            ),
+            OpenApiParameter(
+                "date_end", OpenApiTypes.DATE, OpenApiParameter.QUERY, description="Inclusive."
+            ),
+        ],
+        responses={200: dict},
+        tags=["operations"],
+        description=(
+            "Totals for the range. The overview and customer kinds add `series`, one point per"
+            " day (or per week past 62 days, capped at 366 days; the last 30 days when no range"
+            " is given), with `series_granularity` saying which."
+        ),
+    )
     def get(self, request: Request, kind: str) -> Response:
         if kind not in DASHBOARDS:
             raise NotFound("Dashboard kind not found")

@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { request } from "@vsolve/api-client";
-import { Button, Card, ErrorState, Field, Input, Spinner } from "@vsolve/ui";
+import { Button, Card, ErrorState, Field, Input, Spinner, formatMoney } from "@vsolve/ui";
 import { useEffect, useState } from "react";
 
 import { getApiClient } from "@/lib/api/browser";
@@ -91,7 +91,7 @@ export function LoyaltyBoard() {
         <p className="mt-1 text-sm">
           {liability.isError
             ? "Liability total is unavailable for this sign-in."
-            : `${liability.data?.total_liability_paise ?? 0} paise across ${liability.data?.active_wallets_count ?? 0} wallets`}
+            : `${formatMoney(liability.data?.total_liability_paise ?? 0, { showPaise: true })} across ${(liability.data?.active_wallets_count ?? 0).toLocaleString("en-IN")} wallets`}
         </p>
         <a
           className="mt-3 inline-flex text-sm font-semibold text-text-link"

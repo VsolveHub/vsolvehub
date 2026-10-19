@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Badge, ErrorState, Skeleton, Spinner } from "@vsolve/ui";
 
 import { useCaseQueueSummary, useOperationsCases } from "@/features/cases/queries";
+import { BarList } from "@/features/charts/bar-list";
 import { useKillSwitches } from "@/features/kill-switches/queries";
 import { maskId } from "@/features/shared/identifiers";
 import { DashboardPinStrip } from "./pin-strip";
@@ -307,24 +308,16 @@ export function DashboardView() {
             {summary.isPending || !counts ? (
               <Skeleton className="h-32 w-full" />
             ) : (
-              <ul className="divide-y divide-line text-sm">
-                {counts.teams.map((team) => (
-                  <li key={team.owner_team} className="py-2.5 flex items-center justify-between">
-                    <span className="text-text font-medium">
-                      {TEAM_LABELS[team.owner_team] ?? team.owner_team}
-                    </span>
-                    <span
-                      className={
-                        team.unclaimed === 0
-                          ? "font-bold text-text-secondary"
-                          : "font-bold text-text"
-                      }
-                    >
-                      {team.unclaimed}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              <BarList
+                compact
+                sort={false}
+                emptyText="Nothing is waiting to be claimed."
+                rows={counts.teams.map((team) => ({
+                  key: team.owner_team,
+                  label: TEAM_LABELS[team.owner_team] ?? team.owner_team,
+                  value: team.unclaimed,
+                }))}
+              />
             )}
           </div>
 

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -36,6 +36,28 @@ beforeEach(() => {
           active_partners: 24,
           payout_ready: 3,
           collected_gmv_paise: 5000000,
+        },
+        response: new Response(null, { status: 200 }),
+      });
+    }
+    if (path.includes("/api/v1/ops/dashboards/booking")) {
+      return Promise.resolve({
+        data: {
+          status_breakdown: { COMPLETED: 6, CANCELLED: 2, DISPUTED: 1, CONFIRMED: 1 },
+          completed_bookings: 6,
+        },
+        response: new Response(null, { status: 200 }),
+      });
+    }
+    if (path.includes("/api/v1/ops/dashboards/customer")) {
+      return Promise.resolve({
+        data: {
+          new_signups: 3,
+          series_granularity: "day",
+          series: [
+            { date: "2026-10-01", new_signups: 1 },
+            { date: "2026-10-02", new_signups: 2 },
+          ],
         },
         response: new Response(null, { status: 200 }),
       });
@@ -189,5 +211,33 @@ describe("Kind-Dashboard KPI tiles and table links", () => {
 
     const roomsStaysLink = await screen.findByRole("link", { name: /rooms \/ pg \/ hotels/i });
     expect(roomsStaysLink).toHaveAttribute("href", "/operations/stays");
+  });
+});
+
+describe("Kind-Dashboard charts", () => {
+  it("draws the signup trend and keeps the series out of the tiles", async () => {
+    render(<KindDashboardView kind="customer" />, { wrapper });
+
+    expect(await screen.findByRole("heading", { name: "New signups" })).toBeInTheDocument();
+    expect(screen.getByText("Per day, last 30 days")).toBeInTheDocument();
+    expect(screen.queryByText(/series/i)).not.toBeInTheDocument();
+  });
+
+  it("groups booking outcomes into a labelled donut", async () => {
+    render(<KindDashboardView kind="booking" />, { wrapper });
+
+    const donut = await screen.findByRole("img", { name: /how bookings ended up/i });
+    expect(donut).toHaveAccessibleName(/Completed: 6 \(60%\)/);
+    expect(donut).toHaveAccessibleName(/Disputed or in recovery: 1 \(10%\)/);
+    expect(donut).toHaveAccessibleName(/Cancelled or aborted: 2 \(20%\)/);
+  });
+
+  it("ranks categories by revenue", async () => {
+    render(<KindDashboardView kind="categories" />, { wrapper });
+
+    const heading = await screen.findByRole("heading", { name: "Revenue by category" });
+    const items = within(heading.closest("section")!).getAllByRole("listitem");
+    expect(items[0]).toHaveTextContent("Rooms / PG / Hotels");
+    expect(items[0]).toHaveTextContent("₹4,500");
   });
 });
