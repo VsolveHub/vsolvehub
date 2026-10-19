@@ -1,10 +1,9 @@
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { usePagedList, type Page } from "@vsolve/query";
-import { Button, Card, EmptyState, Field, LoadMore, Textarea, formatMoney } from "@vsolve/ui";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Button, Card, EmptyState, Field, Textarea, formatMoney } from "@vsolve/ui";
 import { MapPin } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 import type { ModerationAction } from "./queries";
 
@@ -81,20 +80,20 @@ function actionsFor(row: MarketplaceQueueRow): ModerationAction[] {
   return [];
 }
 
+function isPending(row: MarketplaceQueueRow): boolean {
+  return row.moderation_status === "PENDING" || row.public_state === "PENDING_REVIEW";
+}
+
 export function MarketplaceQueue({
   heading,
   queryKey,
-  loadPage,
+  load,
   moderate,
   leading,
-  embedded = false,
 }: {
-  /** Inside a section tab: the tab already names the area, so drop the page frame and title. */
-  embedded?: boolean;
   heading: string;
   queryKey: string;
-  /** One page; `pendingOnly` asks the server for the review queue only. */
-  loadPage: (cursor: string | undefined, pendingOnly: boolean) => Promise<Page<MarketplaceQueueRow>>;
+  load: () => Promise<MarketplaceQueueRow[]>;
   moderate: (id: string, action: ModerationAction, reason: string) => Promise<void>;
   leading?: ReactNode;
 }) {
@@ -105,8 +104,13 @@ export function MarketplaceQueue({
     row: MarketplaceQueueRow;
     action: ModerationAction;
   } | null>(null);
-  const queue = usePagedList([queryKey, filter], (cursor) => loadPage(cursor, filter === "PENDING"));
-  const visible = queue.items;
+  const queue = useQuery({ queryKey: [queryKey], queryFn: load });
+  const rows = useMemo(() => queue.data ?? [], [queue.data]);
+  const pendingCount = rows.filter(isPending).length;
+  const visible = useMemo(
+    () => (filter === "PENDING" ? rows.filter(isPending) : rows),
+    [filter, rows],
+  );
 
   const command = useMutation({
     mutationFn: ({
@@ -135,14 +139,10 @@ export function MarketplaceQueue({
   const copy = decision ? ACTION_COPY[decision.action] : null;
 
   return (
-    <main
-      className={
-        embedded ? "flex flex-col gap-4" : "mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-6"
-      }
-    >
+    <main className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-6">
       {leading}
       <div>
-        {embedded ? null : <h1 className="text-xl font-bold text-navy-900">{heading}</h1>}
+        <h1 className="text-xl font-bold text-navy-900">{heading}</h1>
         <p className="text-sm text-text-secondary">
           Review what partners submitted. Approve, reject, take down, or reinstate — each
           decision needs a reason.
@@ -151,9 +151,7 @@ export function MarketplaceQueue({
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-text-secondary">
-          {filter === "PENDING"
-            ? `${visible.length}${queue.hasMore ? "+" : ""} waiting for a decision`
-            : "Every listing, newest first"}
+          {pendingCount} waiting for a decision
         </p>
         <div className="flex gap-2">
           <Button
@@ -250,7 +248,6 @@ export function MarketplaceQueue({
           );
         })}
       </ul>
-      <LoadMore hasMore={queue.hasMore} loading={queue.loadingMore} onLoadMore={queue.loadMore} />
 
       {decision && copy ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-900/50 p-4 backdrop-blur-sm">

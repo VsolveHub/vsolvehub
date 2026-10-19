@@ -1,6 +1,5 @@
 "use client";
 
-import type { Page } from "@vsolve/query";
 import { request, type Schemas } from "@vsolve/api-client";
 
 import { getApiClient } from "@/lib/api/browser";
@@ -56,16 +55,13 @@ export async function fetchPartnerRentalAssets(): Promise<PartnerRentalAsset[]> 
   return Array.isArray(data) ? data : [];
 }
 
-/** One page of bookings, newest first; `status` narrows on the server. */
-export function fetchPartnerRentalBookingsPage(
-  cursor?: string,
-  status?: string,
-): Promise<Page<PartnerRentalBooking>> {
-  return request(() =>
+export async function fetchPartnerRentalBookings(status?: string): Promise<PartnerRentalBooking[]> {
+  const data = await request(() =>
     getApiClient().GET("/api/v1/partner/rentals/bookings", {
-      params: { query: { ...(cursor ? { cursor } : {}), ...(status ? { status } : {}) } },
+      params: status ? { query: { status } } : undefined,
     }),
   );
+  return Array.isArray(data) ? data : [];
 }
 
 export type RentalPhotoUpload = {

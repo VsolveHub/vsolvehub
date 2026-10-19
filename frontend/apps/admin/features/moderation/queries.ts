@@ -1,5 +1,4 @@
 import { request, type Schemas } from "@vsolve/api-client";
-import type { Page } from "@vsolve/query";
 
 import { getApiClient } from "@/lib/api/browser";
 
@@ -58,21 +57,9 @@ export async function decideOpsRentalDispute(
   );
 }
 
-/** One page of rental listings; `moderationStatus` "PENDING" is the review queue. */
-export function fetchOpsRentalsPage(
-  cursor?: string,
-  moderationStatus?: string,
-): Promise<Page<OpsRentalAsset>> {
-  return request(() =>
-    getApiClient().GET("/api/v1/ops/rentals", {
-      params: {
-        query: {
-          ...(cursor ? { cursor } : {}),
-          ...(moderationStatus ? { moderation_status: moderationStatus } : {}),
-        },
-      },
-    }),
-  );
+export async function fetchOpsRentals(): Promise<OpsRentalAsset[]> {
+  const data = await request(() => getApiClient().GET("/api/v1/ops/rentals"));
+  return Array.isArray(data) ? data : [];
 }
 
 export async function moderateOpsRental(
@@ -88,21 +75,9 @@ export async function moderateOpsRental(
   );
 }
 
-/** One page of stay properties; `moderationStatus` "PENDING" is the review queue. */
-export function fetchOpsStaysPage(
-  cursor?: string,
-  moderationStatus?: string,
-): Promise<Page<OpsStayProperty>> {
-  return request(() =>
-    getApiClient().GET("/api/v1/ops/stays", {
-      params: {
-        query: {
-          ...(cursor ? { cursor } : {}),
-          ...(moderationStatus ? { moderation_status: moderationStatus } : {}),
-        },
-      },
-    }),
-  );
+export async function fetchOpsStays(): Promise<OpsStayProperty[]> {
+  const data = await request(() => getApiClient().GET("/api/v1/ops/stays"));
+  return Array.isArray(data) ? data : [];
 }
 
 export function fetchOpsRentalPlatformFee() {
@@ -133,98 +108,12 @@ export async function moderateOpsStay(
 export type OpsStayReservation = Schemas["StayReservation"];
 export type OpsStayEnquiry = Schemas["StayEnquiry"];
 
-export function fetchOpsStayReservationsPage(
-  cursor: string | undefined,
-  filters: { status?: string; q?: string } = {},
-): Promise<Page<OpsStayReservation>> {
-  return request(() =>
-    getApiClient().GET("/api/v1/ops/stays/reservations", {
-      params: {
-        query: {
-          ...(cursor ? { cursor } : {}),
-          ...(filters.status ? { status: filters.status } : {}),
-          ...(filters.q ? { q: filters.q } : {}),
-        },
-      },
-    }),
-  );
-}
-
-export function fetchOpsStayEnquiriesPage(cursor?: string): Promise<Page<OpsStayEnquiry>> {
-  return request(() =>
-    getApiClient().GET("/api/v1/ops/stays/enquiries", {
-      params: { query: cursor ? { cursor } : {} },
-    }),
-  );
-}
-
-/* --- Bookings and plans: what Operations runs after a listing is live ------------------- */
-
-export type OpsRentalBooking = Schemas["OpsRentalBooking"];
-export type OpsRentalBookingStatus = Schemas["RentalBookingStatusEnum"];
-export type OpsStaySubscriptionPlan = Schemas["StaySubscriptionPlan"];
-
-export function fetchOpsRentalBookingsPage(
-  cursor: string | undefined,
-  filters: { status?: string; q?: string } = {},
-): Promise<Page<OpsRentalBooking>> {
-  return request(() =>
-    getApiClient().GET("/api/v1/ops/rentals/bookings", {
-      params: {
-        query: {
-          ...(cursor ? { cursor } : {}),
-          ...(filters.status ? { status: filters.status } : {}),
-          ...(filters.q ? { q: filters.q } : {}),
-        },
-      },
-    }),
-  );
-}
-
-export function cancelOpsRentalBooking(bookingId: string, reason: string) {
-  return request(() =>
-    getApiClient().POST("/api/v1/ops/rentals/bookings/{booking_id}/cancel", {
-      params: { path: { booking_id: bookingId } },
-      body: { reason },
-    }),
-  );
-}
-
-export function cancelOpsStayReservation(reservationId: string, reason: string) {
-  return request(() =>
-    getApiClient().POST("/api/v1/ops/stays/reservations/{reservation_id}/cancel", {
-      params: { path: { reservation_id: reservationId } },
-      body: { reason },
-    }),
-  );
-}
-
-export async function fetchOpsStayPlans(): Promise<OpsStaySubscriptionPlan[]> {
-  const data = await request(() => getApiClient().GET("/api/v1/ops/stay-subscription-plans"));
+export async function fetchOpsStayReservations(): Promise<OpsStayReservation[]> {
+  const data = await request(() => getApiClient().GET("/api/v1/ops/stays/reservations"));
   return Array.isArray(data) ? data : [];
 }
 
-export type StayPlanDraft = {
-  code: string;
-  name: string;
-  price_paise: number;
-  duration_days: number;
-  max_properties: number;
-  details: string;
-  is_active: boolean;
-};
-
-export function createOpsStayPlan(draft: StayPlanDraft) {
-  return request(() =>
-    getApiClient().POST("/api/v1/ops/stay-subscription-plans", { body: draft }),
-  );
-}
-
-export function updateOpsStayPlan(planId: string, draft: Omit<StayPlanDraft, "code">) {
-  return request(() =>
-    getApiClient().PATCH("/api/v1/ops/stay-subscription-plans/{plan_id}", {
-      params: { path: { plan_id: planId } },
-      body: draft,
-    }),
-  );
+export async function fetchOpsStayEnquiries(): Promise<OpsStayEnquiry[]> {
+  const data = await request(() => getApiClient().GET("/api/v1/ops/stays/enquiries"));
+  return Array.isArray(data) ? data : [];
 }

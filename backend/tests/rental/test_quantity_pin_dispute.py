@@ -293,7 +293,9 @@ def test_backfill_handover_pin_hash_for_in_flight_bookings(rental_world):
 
     from apps.rental.services import verify_handover_pin
 
-    backfill_mod = importlib.import_module("apps.rental.migrations.0007_backfill_handover_pin_hash")
+    backfill_mod = importlib.import_module(
+        "apps.rental.migrations.0007_backfill_handover_pin_hash"
+    )
     backfill_handover_pin_hashes = backfill_mod.backfill_handover_pin_hashes
 
     asset = _publish_asset(rental_world, deposit_paise=50000)
@@ -374,11 +376,11 @@ def test_partner_bookings_status_filter_and_dispute_http(rental_world):
 
     listed = client.get("/api/v1/partner/rentals/bookings", {"status": "CONFIRMED"})
     assert listed.status_code == status.HTTP_200_OK
-    assert any(row["id"] == str(booking.id) for row in listed.data["results"])
+    assert any(row["id"] == str(booking.id) for row in listed.data)
 
     empty = client.get("/api/v1/partner/rentals/bookings", {"status": "DISPUTED"})
     assert empty.status_code == status.HTTP_200_OK
-    assert empty.data["results"] == []
+    assert empty.data == []
 
     hand = client.post(
         f"/api/v1/partner/rentals/bookings/{booking.id}/handover",
@@ -508,13 +510,13 @@ def test_customer_handover_pin_visibility(rental_world):
     customer_client = force_role_client(user=rental_world["customer"], role_code="customer")
     mine = customer_client.get("/api/v1/me/rentals")
     assert mine.status_code == status.HTTP_200_OK
-    row = next(r for r in mine.data["results"] if r["id"] == str(booking.id))
+    row = next(r for r in mine.data if r["id"] == str(booking.id))
     assert row["handover_pin"] == pin
 
     partner_client = _partner_client(rental_world["owner"])
     partner_list = partner_client.get("/api/v1/partner/rentals/bookings")
     assert partner_list.status_code == status.HTTP_200_OK
-    partner_row = next(r for r in partner_list.data["results"] if r["id"] == str(booking.id))
+    partner_row = next(r for r in partner_list.data if r["id"] == str(booking.id))
     assert partner_row["handover_pin"] is None
 
 

@@ -1219,8 +1219,6 @@ def cancel_booking(
     from apps.commerce.services import _request_automatic_refund
     from apps.commerce.services.base import PAYMENT_FINAL_STATES
 
-    if is_ops and not (reason or "").strip():
-        raise RentalStateError("Write why Operations is cancelling this booking.")
     if not is_ops:
         if customer is not None:
             if booking.customer_id != getattr(customer, "id", None):
@@ -1258,10 +1256,7 @@ def cancel_booking(
     deposit = RentalDeposit.objects.select_for_update(of=("self",)).get(id=booking.deposit_id)
     attempt = deposit.payment_attempt
     if attempt is not None and attempt.status in PAYMENT_FINAL_STATES:
-        _request_automatic_refund(
-            attempt=attempt,
-            reason_code="ops_cancelled_rental" if is_ops else "customer_cancelled_rental",
-        )
+        _request_automatic_refund(attempt=attempt, reason_code="customer_cancelled_rental")
     elif (
         attempt is not None
         and attempt.status not in PAYMENT_FINAL_STATES
@@ -1281,9 +1276,7 @@ def cancel_booking(
         deposit.save(update_fields=("status", "updated_at"))
 
     booking.status = RentalBooking.Status.CANCELLED
-    booking.cancelled_at = timezone.now()
-    booking.cancellation_reason = (reason or "").strip()[:480]
-    booking.save(update_fields=("status", "cancelled_at", "cancellation_reason", "updated_at"))
+    booking.save(update_fields=("status", "updated_at"))
     _close_transport(booking_id=booking.id)
 
     reservation = AssetReservation.objects.select_for_update().get(id=booking.reservation_id)

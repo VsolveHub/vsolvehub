@@ -343,8 +343,6 @@ class RentalBookingSerializer(serializers.ModelSerializer):
             "asset",
             "deposit",
             "handover_pin",
-            "cancelled_at",
-            "cancellation_reason",
             "created_at",
         )
 
@@ -413,32 +411,12 @@ class PartnerRentalBookingSerializer(RentalBookingSerializer):
         return getattr(customer, "phone", None) or getattr(customer, "phone_number", None)
 
 
-class OpsRentalBookingSerializer(PartnerRentalBookingSerializer):
-    """Operations' view of a booking: both parties, so a cancel or a dispute call has a name."""
-
-    partner_name = serializers.CharField(source="asset.partner.display_name", read_only=True)
-    partner_id = serializers.UUIDField(source="asset.partner_id", read_only=True)
-
-    class Meta(PartnerRentalBookingSerializer.Meta):
-        fields = (
-            *PartnerRentalBookingSerializer.Meta.fields,
-            "partner_id",
-            "partner_name",
-        )
-
-
 class RentalPlatformFeeSerializer(serializers.Serializer):
     percent = serializers.IntegerField(min_value=0, max_value=100)
     transport_fee_percent = serializers.IntegerField(
         read_only=True,
         help_text="Commission on an owner's transport price. 0 means the owner keeps all of it.",
     )
-
-
-class OpsCancelRentalBookingSerializer(serializers.Serializer[dict[str, Any]]):
-    """Operations says why. The reason is kept on the booking."""
-
-    reason = serializers.CharField(max_length=480)
 
 
 class RentalModerationSerializer(serializers.Serializer):

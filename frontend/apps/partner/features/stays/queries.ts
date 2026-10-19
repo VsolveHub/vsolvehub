@@ -1,6 +1,5 @@
 import { request, type Schemas } from "@vsolve/api-client";
 
-import type { Page } from "@vsolve/query";
 import { getApiClient } from "@/lib/api/browser";
 
 export type StayProperty = Schemas["PartnerProperty"];
@@ -109,15 +108,9 @@ export async function fetchPartnerStayProperties(): Promise<StayProperty[]> {
   return Array.isArray(data) ? data : [];
 }
 
-export function fetchPartnerStayEnquiriesPage(
-  cursor?: string,
-  status?: string,
-): Promise<Page<StayEnquiry>> {
-  return request(() =>
-    getApiClient().GET("/api/v1/partner/stays/enquiries", {
-      params: { query: { ...(cursor ? { cursor } : {}), ...(status ? { status } : {}) } },
-    }),
-  ) as Promise<Page<StayEnquiry>>;
+export async function fetchPartnerStayEnquiries(): Promise<StayEnquiry[]> {
+  const data = await request(() => getApiClient().GET("/api/v1/partner/stays/enquiries"));
+  return Array.isArray(data) ? data : [];
 }
 
 export async function uploadPartnerStayPhoto(file: File): Promise<StayPhotoUpload> {
@@ -306,15 +299,9 @@ export async function cancelPartnerStayEnquiry(enquiryId: string): Promise<StayE
   return data as StayEnquiry;
 }
 
-export function fetchPartnerStayReservationsPage(
-  cursor?: string,
-  status?: string,
-): Promise<Page<StayReservation>> {
-  return request(() =>
-    getApiClient().GET("/api/v1/partner/stays/reservations", {
-      params: { query: { ...(cursor ? { cursor } : {}), ...(status ? { status } : {}) } },
-    }),
-  ) as Promise<Page<StayReservation>>;
+export async function fetchPartnerStayReservations(): Promise<StayReservation[]> {
+  const data = await request(() => getApiClient().GET("/api/v1/partner/stays/reservations"));
+  return Array.isArray(data) ? (data as StayReservation[]) : [];
 }
 
 export type StayReservationAction = "check_in" | "check_out" | "no_show" | "cancel";
@@ -481,16 +468,9 @@ export async function setPartnerVisitingHours(
   );
 }
 
-/** One page of visits in date order; `status` is one state or several, comma-separated. */
-export function fetchPartnerStayVisitsPage(
-  cursor?: string,
-  status?: string,
-): Promise<Page<PartnerStayVisit>> {
-  return request(() =>
-    getApiClient().GET("/api/v1/partner/stays/visits", {
-      params: { query: { ...(cursor ? { cursor } : {}), ...(status ? { status } : {}) } },
-    }),
-  );
+export async function fetchPartnerStayVisits(): Promise<PartnerStayVisit[]> {
+  const data = await request(() => getApiClient().GET("/api/v1/partner/stays/visits"));
+  return Array.isArray(data) ? data : [];
 }
 
 export type VisitDeclineReason = "ROOM_UNAVAILABLE" | "DATE_MISMATCH" | "ALREADY_OCCUPIED" | "OTHER";

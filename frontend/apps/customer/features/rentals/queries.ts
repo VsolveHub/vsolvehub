@@ -10,7 +10,7 @@ export type RentalAssetDetail = Schemas["RentalAssetDetail"];
 export type RentalBooking = Schemas["RentalBooking"];
 export type CreateBookingRequest = Schemas["CreateBookingRequest"];
 
-export function fetchRentals(params?: RentalFilterParams & { limit?: number; offset?: number }) {
+export function fetchRentals(params?: RentalFilterParams) {
   return request(() =>
     getApiClient().GET("/api/v1/rentals", {
       params: {
@@ -24,8 +24,6 @@ export function fetchRentals(params?: RentalFilterParams & { limit?: number; off
           max_deposit: params?.max_deposit,
           start_date: params?.start_date,
           end_date: params?.end_date,
-          limit: params?.limit,
-          offset: params?.offset,
         },
       },
     }),
@@ -43,12 +41,8 @@ export function fetchRentalAsset(key: string) {
   );
 }
 
-export function fetchMyRentalsPage(cursor?: string, status?: string) {
-  return request(() =>
-    getApiClient().GET("/api/v1/me/rentals", {
-      params: { query: { ...(cursor ? { cursor } : {}), ...(status ? { status } : {}) } },
-    }),
-  );
+export function fetchMyRentals() {
+  return request(() => getApiClient().GET("/api/v1/me/rentals"));
 }
 
 export function fetchRentalTaxonomy() {
