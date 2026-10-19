@@ -52,13 +52,7 @@ export function RentalPlatformFeeForm() {
           Save
         </Button>
       </div>
-      {typeof fee.data?.transport_fee_percent === "number" ? (
-        <p className="mt-2 text-sm text-text-secondary">
-          Commission on delivery charges: {fee.data.transport_fee_percent}%
-          {fee.data.transport_fee_percent === 0 ? " — owners keep the whole delivery price." : "."}
-        </p>
-      ) : null}
-            {save.isError ? (
+      {save.isError ? (
         <p className="mt-2 text-sm text-rose-700">The platform fee was not saved. Try again.</p>
       ) : null}
     </Card>

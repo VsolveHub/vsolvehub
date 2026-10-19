@@ -1,87 +1,41 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { Suspense } from "react";
-
 import { factEntries, MarketplaceQueue, moneyLine } from "@/features/moderation/marketplace-queue";
-import { RentalBookings } from "@/features/moderation/rental-bookings";
 import { RentalDisputeQueue } from "@/features/moderation/rental-disputes";
 import { RentalPlatformFeeForm } from "@/features/moderation/rental-platform-fee";
-import {
-  fetchOpsRentalDisputes,
-  fetchOpsRentalsPage,
-  moderateOpsRental,
-  type OpsRentalAsset,
-} from "@/features/moderation/queries";
-import { SectionTabs } from "@/features/shared/section-tabs";
-
-function toQueueRow(row: OpsRentalAsset) {
-  const media = (row as { media?: { url?: string }[] }).media;
-    const daily = moneyLine(row.daily_rate_paise, "/ day");
-    const deposit = moneyLine(row.deposit_paise, "deposit");
-    return {
-      id: row.id,
-      title: row.title,
-      public_state: row.public_state,
-      partyName: row.partner_name,
-      moderation_status: row.moderation_status,
-      photoUrl: media?.[0]?.url,
-      location: row.location_text || undefined,
-      moneyLines: [daily, deposit].filter((line): line is string => Boolean(line)),
-      facts: factEntries(row.structured_fields),
-    };
-}
-
-async function loadRentalListings(cursor: string | undefined, pendingOnly: boolean) {
-  const page = await fetchOpsRentalsPage(cursor, pendingOnly ? "PENDING" : undefined);
-  return { ...page, results: page.results.map(toQueueRow) };
-}
-
-function RentalsConsole() {
-  const disputes = useQuery({ queryKey: ["ops-rental-disputes"], queryFn: fetchOpsRentalDisputes });
-  const pending = useQuery({
-    queryKey: ["ops-rentals", "PENDING", "count"],
-    queryFn: () => fetchOpsRentalsPage(undefined, "PENDING"),
-  });
-  const waitingDisputes = (disputes.data ?? []).filter((row) => row.awaiting_decision).length;
-  const waitingListings = pending.data?.results.length ?? 0;
-
-  return (
-    <SectionTabs
-      title="Rentals"
-      description="Equipment owners list items, customers book them, and you keep the two honest."
-      tabs={[
-        { id: "bookings", label: "Bookings", render: () => <RentalBookings /> },
-        {
-          id: "listings",
-          label: "Listings to review",
-          count: waitingListings,
-          render: () => (
-            <MarketplaceQueue
-              embedded
-              heading="Rental listings"
-              queryKey="ops-rentals"
-              loadPage={loadRentalListings}
-              moderate={moderateOpsRental}
-            />
-          ),
-        },
-        {
-          id: "disputes",
-          label: "Deposit disputes",
-          count: waitingDisputes,
-          render: () => <RentalDisputeQueue />,
-        },
-        { id: "fees", label: "Fees", render: () => <RentalPlatformFeeForm /> },
-      ]}
-    />
-  );
-}
+import { fetchOpsRentals, moderateOpsRental } from "@/features/moderation/queries";
 
 export default function OpsRentalsPage() {
   return (
-    <Suspense fallback={null}>
-      <RentalsConsole />
-    </Suspense>
+    <MarketplaceQueue
+      leading={
+        <>
+          <RentalPlatformFeeForm />
+          <RentalDisputeQueue />
+        </>
+      }
+      heading="Rental assets"
+      queryKey="ops-rentals"
+      load={async () => {
+        const rows = await fetchOpsRentals();
+        return rows.map((row) => {
+          const media = (row as { media?: { url?: string }[] }).media;
+          const daily = moneyLine(row.daily_rate_paise, "/ day");
+          const deposit = moneyLine(row.deposit_paise, "deposit");
+          return {
+            id: row.id,
+            title: row.title,
+            public_state: row.public_state,
+            partyName: row.partner_name,
+            moderation_status: row.moderation_status,
+            photoUrl: media?.[0]?.url,
+            location: row.location_text || undefined,
+            moneyLines: [daily, deposit].filter((line): line is string => Boolean(line)),
+            facts: factEntries(row.structured_fields),
+          };
+        });
+      }}
+      moderate={moderateOpsRental}
+    />
   );
 }

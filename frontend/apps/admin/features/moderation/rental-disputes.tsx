@@ -31,7 +31,7 @@ export function RentalDisputeQueue() {
   return (
     <section className="flex flex-col gap-3">
       <div>
-        <h2 className="text-lg font-bold text-navy-900">Deposit disputes</h2>
+        <h1 className="text-xl font-bold text-navy-900">Deposit disputes</h1>
         <p className="text-sm text-text-secondary">
           A partner has asked to keep some of a rental deposit. The money stays held until you
           approve that amount or send the full deposit back.

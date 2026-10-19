@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useBrowseList } from "@vsolve/query";
+import { useQuery } from "@tanstack/react-query";
 import { FileCheck2, MapPin, Search, Wrench } from "lucide-react";
-import { Button, EmptyState, ErrorState, LoadMore, Skeleton } from "@vsolve/ui";
+import { Button, EmptyState, ErrorState, Skeleton } from "@vsolve/ui";
 
 import { fetchRentals } from "@/features/rentals/queries";
 import { type ActiveRentalFilters, RentalCard, RentalFilters } from "@/features/rentals/view";
@@ -37,15 +37,12 @@ function RentalsBrowseContent() {
   };
 
   const {
-    items: rentals,
+    data: rentals = [],
     isLoading,
     error,
     refetch,
-    hasMore,
-    loadMore,
-    loadingMore,
-  } = useBrowseList(
-    [
+  } = useQuery({
+    queryKey: [
       "rentals",
       appliedQuery,
       appliedLocation,
@@ -54,7 +51,7 @@ function RentalsBrowseContent() {
       filters.minPrice,
       filters.maxPrice,
     ],
-    (offset, limit) =>
+    queryFn: () =>
       fetchRentals({
         q: appliedQuery,
         location: appliedLocation,
@@ -62,10 +59,9 @@ function RentalsBrowseContent() {
         category: filters.categorySlug,
         min_price: filters.minPrice,
         max_price: filters.maxPrice,
-        limit,
-        offset,
       }),
-  );
+    staleTime: 30_000,
+  });
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8">
@@ -169,7 +165,6 @@ function RentalsBrowseContent() {
           ))}
         </div>
       )}
-      <LoadMore hasMore={hasMore} loading={loadingMore} onLoadMore={loadMore} label="Show more equipment" />
     </main>
   );
 }
