@@ -1,5 +1,6 @@
 "use client";
 
+import { X } from "lucide-react";
 import { Badge, Button, ErrorState, Field, Select, Spinner } from "@vsolve/ui";
 
 import {
@@ -7,6 +8,7 @@ import {
   usePartnerSkills,
   type PartnerDirectoryFilters,
 } from "@/features/partners/queries";
+import { PartnerSkillFilter } from "@/features/partners/view/partner-skill-filter";
 
 /**
  * The Partner list, with the two filters a manager actually reaches for.
@@ -46,6 +48,9 @@ export const STATUS_TONE: Record<string, "success" | "warning" | "danger" | "inf
   OFFBOARDED: "danger",
 };
 
+/** A row shows a few skills; the full list is in the partner record. */
+const ROW_SKILL_LIMIT = 4;
+
 interface PartnerDirectoryProps {
   filters: PartnerDirectoryFilters;
   onFiltersChange: (filters: PartnerDirectoryFilters) => void;
@@ -65,11 +70,10 @@ export function PartnerDirectory({
   const rows = directory.data?.pages.flatMap((page) => page.results) ?? [];
   const selectedSkills = filters.skills ?? [];
 
-  function toggleSkill(code: string) {
-    const next = selectedSkills.includes(code)
-      ? selectedSkills.filter((entry) => entry !== code)
-      : [...selectedSkills, code];
-    onFiltersChange({ ...filters, skills: next });
+  const skillNames = new Map((skills.data ?? []).map((skill) => [skill.code, skill.name]));
+
+  function removeSkill(code: string) {
+    onFiltersChange({ ...filters, skills: selectedSkills.filter((entry) => entry !== code) });
   }
 
   return (
@@ -91,55 +95,43 @@ export function PartnerDirectory({
           </Select>
         </Field>
 
-        <div>
-          <span className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
-            Skills
+        <div className="flex flex-col gap-1.5">
+          <span className="text-sm font-semibold text-text">
+            Skills <span className="font-normal text-text-secondary">(optional)</span>
           </span>
-          {skills.isError ? (
-            <p className="mt-2 text-sm text-text-secondary">
-              The skill list could not be loaded, so no skill filter is offered rather than a
-              partial one.
-            </p>
-          ) : skills.isPending ? (
-            <div className="mt-2 flex items-center gap-2 text-sm text-text-secondary">
-              <Spinner size="sm" />
-              Loading skills…
-            </div>
-          ) : (skills.data ?? []).length === 0 ? (
-            <p className="mt-2 text-sm text-text-secondary">No skills are configured yet.</p>
-          ) : (
-            <div className="mt-2 flex flex-wrap gap-2">
-              {(skills.data ?? []).map((skill) => {
-                const active = selectedSkills.includes(skill.code);
-                return (
-                  <button
-                    key={skill.code}
-                    type="button"
-                    aria-pressed={active}
-                    onClick={() => toggleSkill(skill.code)}
-                    className={
-                      active
-                        ? "px-3 py-1 rounded-full text-xs font-semibold bg-signal-50 text-signal-700 ring-1 ring-signal-200"
-                        : "px-3 py-1 rounded-full text-xs font-medium bg-surface-sunken text-text-secondary ring-1 ring-line hover:bg-surface-hover"
-                    }
-                  >
-                    {skill.name}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          {selectedSkills.length > 0 ? (
+          <PartnerSkillFilter
+            skills={skills.data ?? []}
+            selected={selectedSkills}
+            onChange={(codes) => onFiltersChange({ ...filters, skills: codes })}
+            isPending={skills.isPending}
+            isError={skills.isError}
+          />
+        </div>
+
+        {selectedSkills.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {selectedSkills.map((code) => (
+              <button
+                key={code}
+                type="button"
+                onClick={() => removeSkill(code)}
+                aria-label={`Remove ${skillNames.get(code) ?? code}`}
+                className="inline-flex items-center gap-1 rounded-full bg-signal-50 px-3 py-1 text-xs font-semibold text-signal-700 ring-1 ring-signal-200 hover:bg-signal-100"
+              >
+                {skillNames.get(code) ?? code}
+                <X className="h-3 w-3" aria-hidden />
+              </button>
+            ))}
             <button
               type="button"
               onClick={() => onFiltersChange({ ...filters, skills: [] })}
-              className="mt-3 text-xs font-semibold text-text underline"
+              className="text-xs font-semibold text-text underline"
             >
               Clear {selectedSkills.length} skill filter
               {selectedSkills.length === 1 ? "" : "s"}
             </button>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
       </div>
 
       <div className="bg-surface border border-line rounded-card shadow-card overflow-hidden">
@@ -189,7 +181,7 @@ export function PartnerDirectory({
                   </p>
                   {row.skills.length > 0 ? (
                     <div className="mt-2 flex flex-wrap gap-1.5">
-                      {row.skills.map((skill) => (
+                      {row.skills.slice(0, ROW_SKILL_LIMIT).map((skill) => (
                         <span
                           key={skill.code}
                           className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-surface-sunken text-text-secondary ring-1 ring-line"
@@ -197,6 +189,17 @@ export function PartnerDirectory({
                           {skill.name}
                         </span>
                       ))}
+                      {row.skills.length > ROW_SKILL_LIMIT ? (
+                        <span
+                          title={row.skills
+                            .slice(ROW_SKILL_LIMIT)
+                            .map((skill) => skill.name)
+                            .join(", ")}
+                          className="px-2 py-0.5 text-[11px] font-medium text-text-secondary"
+                        >
+                          +{row.skills.length - ROW_SKILL_LIMIT} more
+                        </span>
+                      ) : null}
                     </div>
                   ) : null}
                 </button>
