@@ -3,6 +3,7 @@
 import { cn } from "@vsolve/ui";
 import {
   Coins,
+  FileText,
   Gift,
   MapPin,
   MessageCircle,
@@ -39,6 +40,7 @@ const SECTIONS: readonly {
   { href: "/account/referrals", label: "Refer & Earn", hint: "Invite friends for rewards", icon: Gift },
   { href: "/account/addresses", label: "Addresses", hint: "Where we send someone", icon: MapPin },
   { href: "/account/messages", label: "Messages", hint: "What we send you", icon: MessageCircle },
+  { href: "/account/documents", label: "Your documents", hint: "Your verified documents", icon: FileText },
   { href: "/account/privacy", label: "Privacy", hint: "Your data and consents", icon: Shield },
   { href: "/account/sessions", label: "Devices", hint: "Where you are signed in", icon: Smartphone },
 ];
@@ -47,7 +49,7 @@ export function AccountNav() {
   const pathname = usePathname();
 
   return (
-    <nav aria-label="Account" className="min-w-0 lg:w-56 lg:shrink-0">
+    <nav aria-label="Account" className={cn("min-w-0 lg:w-56 lg:shrink-0", pathname === "/account" && "hidden lg:block")}>
       <ul
         className={cn(
           "no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-1",

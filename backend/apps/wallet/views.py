@@ -39,7 +39,33 @@ class CustomerWalletView(APIView):
         tags=["wallet"],
     )
     def get(self, request: Request) -> Response:
-        wallet = get_or_create_wallet(cast(User, request.user))
+        from django.conf import settings  # noqa: PLC0415
+
+        user = cast(User, request.user)
+        wallet = get_or_create_wallet(user)
+
+        if getattr(settings, "PAYMENTS_ALLOW_SIMULATED_CAPTURE", False):
+            pending_topups = list(
+                wallet.transactions.filter(
+                    kind=WalletTransaction.Kind.TOP_UP,
+                    status=WalletTransaction.Status.RESERVED,
+                    payment_attempt__isnull=False,
+                ).select_related("payment_attempt")
+            )
+            for txn in pending_topups:
+                if txn.payment_attempt and txn.payment_attempt.provider == "fake":
+                    try:
+                        from apps.commerce.services.simulation import simulate_capture  # noqa: PLC0415
+
+                        simulate_capture(
+                            attempt_id=txn.payment_attempt.id,
+                            customer_id=user.id,
+                        )
+                    except Exception:
+                        pass
+            if pending_topups:
+                wallet.refresh_from_db()
+
         serializer = WalletAccountSerializer(wallet)
         return Response(serializer.data)
 
@@ -53,7 +79,31 @@ class CustomerWalletTransactionsView(APIView):
         tags=["wallet"],
     )
     def get(self, request: Request) -> Response:
-        wallet = get_or_create_wallet(cast(User, request.user))
+        from django.conf import settings  # noqa: PLC0415
+
+        user = cast(User, request.user)
+        wallet = get_or_create_wallet(user)
+
+        if getattr(settings, "PAYMENTS_ALLOW_SIMULATED_CAPTURE", False):
+            pending_topups = list(
+                wallet.transactions.filter(
+                    kind=WalletTransaction.Kind.TOP_UP,
+                    status=WalletTransaction.Status.RESERVED,
+                    payment_attempt__isnull=False,
+                ).select_related("payment_attempt")
+            )
+            for txn in pending_topups:
+                if txn.payment_attempt and txn.payment_attempt.provider == "fake":
+                    try:
+                        from apps.commerce.services.simulation import simulate_capture  # noqa: PLC0415
+
+                        simulate_capture(
+                            attempt_id=txn.payment_attempt.id,
+                            customer_id=user.id,
+                        )
+                    except Exception:
+                        pass
+
         paginator = LimitOffsetPagination()
         paginator.default_limit = 20
         paginator.max_limit = 100
@@ -126,17 +176,17 @@ class OpsWalletLiabilityExcelView(APIView):
 
     @extend_schema(exclude=True)
     def get(self, request: Request) -> HttpResponse:  # noqa: ARG002
-        rows = [
+        rows: list[list[object]] = [
             [
-                str(txn.wallet.customer_id),
+                str(txn.wallet.customer.id),
                 txn.kind,
                 txn.status,
                 txn.amount_paise,
                 txn.created_at.isoformat(),
             ]
-            for txn in WalletTransaction.objects.select_related("wallet").order_by("-created_at")[
-                :5000
-            ]
+            for txn in WalletTransaction.objects.select_related("wallet__customer").order_by(
+                "-created_at"
+            )[:5000]
         ]
         payload = workbook_bytes(
             sheet_name="Wallet ledger",

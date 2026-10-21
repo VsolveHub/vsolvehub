@@ -118,7 +118,7 @@ export interface ListingApplication {
     experience?: string;
     skills?: string[];
     findable?: boolean;
-    [key: string]: any;
+    [key: string]: unknown;
   };
   attachments?: {
     id: string;
@@ -145,7 +145,7 @@ export interface SubmitApplicationPayload {
   cover_note?: string;
   skills?: string[];
   findable?: boolean;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface JobOption {
@@ -201,7 +201,7 @@ export function fetchListings(
   } = {},
 ): Promise<Listing[]> {
   return request(() =>
-    (getApiClient() as any).GET("/api/v1/listings", {
+    getApiClient().GET("/api/v1/listings", {
       params: {
         query: {
           q: filters.q,
@@ -217,28 +217,28 @@ export function fetchListings(
         },
       },
     }),
-  );
+  ) as Promise<Listing[]>;
 }
 
 /** `key` is the page slug; an old link's listing id works too. */
 export function fetchListing(key: string): Promise<ListingDetail> {
   return request(() =>
-    (getApiClient() as any).GET("/api/v1/listings/{key}", {
+    getApiClient().GET("/api/v1/listings/{key}", {
       params: { path: { key } },
     }),
-  );
+  ) as Promise<ListingDetail>;
 }
 
 export function fetchMyApplications(): Promise<ListingApplication[]> {
-  return request(() => (getApiClient() as any).GET("/api/v1/my/listing-applications"));
+  return request(() => getApiClient().GET("/api/v1/my/listing-applications")) as Promise<ListingApplication[]>;
 }
 
 export function withdrawApplication(applicationId: string): Promise<ListingApplication> {
   return request(() =>
-    (getApiClient() as any).POST("/api/v1/my/listing-applications/{application_id}/withdraw", {
+    getApiClient().POST("/api/v1/my/listing-applications/{application_id}/withdraw", {
       params: { path: { application_id: applicationId } },
     }),
-  );
+  ) as Promise<ListingApplication>;
 }
 
 export function submitListingApplication(
@@ -246,14 +246,14 @@ export function submitListingApplication(
   payload: SubmitApplicationPayload,
 ): Promise<ListingApplication> {
   return request(() =>
-    (getApiClient() as any).POST("/api/v1/listings/{listing_id}/applications", {
+    getApiClient().POST("/api/v1/listings/{listing_id}/applications", {
       params: {
         path: { listing_id: listingId },
         header: { "Idempotency-Key": createIdempotencyKey() } as never,
       },
       body: payload,
     }),
-  );
+  ) as Promise<ListingApplication>;
 }
 
 export function uploadListingResume(
@@ -268,31 +268,31 @@ export function uploadListingResume(
   } as any);
 
   return request(() =>
-    (getApiClient() as any).POST("/api/v1/listings/{listing_id}/resume-uploads", {
+    getApiClient().POST("/api/v1/listings/{listing_id}/resume-uploads", {
       params: { path: { listing_id: listingId } },
       body: formData,
       bodySerializer: () => formData,
     }),
-  );
+  ) as Promise<{ upload_id: string; resume_url: string; original_name: string }>;
 }
 
-export function reportListing(listingId: string, reason: string, detail: string = ""): Promise<any> {
+export function reportListing(listingId: string, reason: string, detail: string = ""): Promise<{ ok: boolean }> {
   return request(() =>
-    (getApiClient() as any).POST("/api/v1/listings/{listing_id}/reports", {
+    getApiClient().POST("/api/v1/listings/{listing_id}/reports", {
       params: { path: { listing_id: listingId } },
       body: { reason, detail },
     }),
-  );
+  ) as Promise<{ ok: boolean }>;
 }
 
 export function fetchListingFilters(): Promise<any> {
-  return request(() => (getApiClient() as any).GET("/api/v1/listings/filters"));
+  return request(() => getApiClient().GET("/api/v1/listings/filters"));
 }
 
 export function fetchJobOptions(): Promise<JobOptions> {
-  return request(() => (getApiClient() as any).GET("/api/v1/jobs/options"));
+  return request(() => getApiClient().GET("/api/v1/jobs/options")) as Promise<JobOptions>;
 }
 
-export function fetchJobCategories(): Promise<any> {
-  return request(() => (getApiClient() as any).GET("/api/v1/categories/"));
+export function fetchJobCategories(): Promise<any[]> {
+  return request(() => getApiClient().GET("/api/v1/categories/")) as Promise<any[]>;
 }

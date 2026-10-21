@@ -9,6 +9,7 @@ import {
   VISIT_DECLINE_REASONS,
   getVisitStatusBadge,
 } from "../model";
+import { THEME_COLORS } from "../theme-colors";
 import { useBookableRooms } from "./use-bookable-rooms";
 
 export function VisitCard({
@@ -79,7 +80,7 @@ export function VisitCard({
                   onPress={handleCall}
                   className="h-7 flex-row items-center gap-1.5 px-2.5"
                 >
-                  <Phone size={12} color="#f87000" />
+                  <Phone size={12} color={THEME_COLORS.action} />
                   <Text className="text-xs font-semibold text-action">Call</Text>
                 </Button>
               ) : null}
@@ -121,7 +122,7 @@ export function VisitCard({
                 onPress={() => onAccept(visit)}
                 className="h-8 flex-row items-center gap-1.5 px-3"
               >
-                <CheckCircle2 size={13} color="#ffffff" />
+                <CheckCircle2 size={13} color={THEME_COLORS.white} />
                 <Text className="text-xs font-bold text-white">Accept</Text>
               </Button>
             </>
@@ -142,7 +143,7 @@ export function VisitCard({
                 onPress={handleOpenBook}
                 className="h-8 flex-row items-center gap-1.5 px-3"
               >
-                <CheckCircle2 size={13} color="#ffffff" />
+                <CheckCircle2 size={13} color={THEME_COLORS.white} />
                 <Text className="text-xs font-bold text-white">Mark as Booked</Text>
               </Button>
             </>
@@ -242,7 +243,7 @@ export function VisitCard({
                     <Text className={`text-xs ${on ? "font-bold text-navy-900" : "text-text"}`}>
                       {r.label}
                     </Text>
-                    {on ? <CheckCircle2 size={13} color="#00112e" /> : null}
+                    {on ? <CheckCircle2 size={13} color={THEME_COLORS.navy900} /> : null}
                   </Pressable>
                 );
               })}

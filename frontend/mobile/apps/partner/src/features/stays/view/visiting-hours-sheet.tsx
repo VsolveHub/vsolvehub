@@ -14,6 +14,7 @@ import {
   type VisitSlotRow,
 } from "../model";
 import { setPartnerVisitingHours } from "../queries";
+import { THEME_COLORS } from "../theme-colors";
 
 type SlotRow = { key: string; weekday: number; start: string; end: string };
 
@@ -84,6 +85,7 @@ function MobileTimePickerModal({
             return (
               <Pressable
                 key={h}
+                hitSlop={6}
                 onPress={() => onChange(toValue(h, minute, pm))}
                 className={`h-9 w-11 items-center justify-center rounded-lg ${
                   on ? "bg-navy-900" : "bg-surface-muted"
@@ -104,6 +106,7 @@ function MobileTimePickerModal({
             return (
               <Pressable
                 key={m}
+                hitSlop={6}
                 onPress={() => onChange(toValue(hour12, m, pm))}
                 className={`flex-1 h-9 items-center justify-center rounded-lg ${
                   on ? "bg-navy-900" : "bg-surface-muted"
@@ -123,6 +126,7 @@ function MobileTimePickerModal({
             return (
               <Pressable
                 key={p}
+                hitSlop={8}
                 onPress={() => onChange(toValue(hour12, minute, p === "PM"))}
                 className={`flex-1 h-8 items-center justify-center rounded-md ${
                   on ? "bg-surface shadow-xs" : ""
@@ -279,6 +283,7 @@ function VisitingHoursSheetContent({
                 <Text className="text-xs text-text-muted">Turn off during renovations or holidays</Text>
               </View>
               <Pressable
+                hitSlop={8}
                 onPress={() => {
                   setSaved(false);
                   setEnabled((prev) => !prev);
@@ -326,16 +331,18 @@ function VisitingHoursSheetContent({
                       {isOpen ? (
                         <View className="flex-row items-center gap-1">
                           <Pressable
+                            hitSlop={10}
                             onPress={() => addSlot(weekday)}
                             className="size-7 items-center justify-center rounded-full bg-surface-muted"
                           >
-                            <Plus size={14} color="#00112e" />
+                            <Plus size={14} color={THEME_COLORS.navy900} />
                           </Pressable>
                           <Pressable
+                            hitSlop={10}
                             onPress={() => copyToAllDays(weekday)}
                             className="size-7 items-center justify-center rounded-full bg-surface-muted"
                           >
-                            <Copy size={13} color="#00112e" />
+                            <Copy size={13} color={THEME_COLORS.navy900} />
                           </Pressable>
                         </View>
                       ) : null}
@@ -358,7 +365,7 @@ function VisitingHoursSheetContent({
                               }
                               className="h-8 flex-row items-center gap-1.5 rounded-full border border-line bg-surface px-2.5"
                             >
-                              <Clock size={12} color="#71717a" />
+                              <Clock size={12} color={THEME_COLORS.zinc500} />
                               <Text className="text-xs font-bold text-navy-900">
                                 {clockText(row.start)}
                               </Text>
@@ -377,7 +384,7 @@ function VisitingHoursSheetContent({
                               }
                               className="h-8 flex-row items-center gap-1.5 rounded-full border border-line bg-surface px-2.5"
                             >
-                              <Clock size={12} color="#71717a" />
+                              <Clock size={12} color={THEME_COLORS.zinc500} />
                               <Text className="text-xs font-bold text-navy-900">{clockText(row.end)}</Text>
                             </Pressable>
 
@@ -386,13 +393,14 @@ function VisitingHoursSheetContent({
                             </Text>
 
                             <Pressable
+                              hitSlop={10}
                               onPress={() => {
                                 setSaved(false);
                                 setRows((current) => current.filter((r) => r.key !== row.key));
                               }}
                               className="size-7 items-center justify-center rounded-full bg-rose-50"
                             >
-                              <Trash2 size={13} color="#e11d48" />
+                              <Trash2 size={13} color={THEME_COLORS.rose600} />
                             </Pressable>
                           </View>
                         ))}
@@ -416,7 +424,7 @@ function VisitingHoursSheetContent({
                     key={day}
                     className="flex-row items-center gap-1 rounded-full border border-line bg-surface-muted px-2.5 py-1"
                   >
-                    <Calendar size={11} color="#71717a" />
+                    <Calendar size={11} color={THEME_COLORS.zinc500} />
                     <Text className="text-xs font-medium text-text">{dayLabel(day)}</Text>
                     <Pressable
                       onPress={() => {
@@ -424,7 +432,7 @@ function VisitingHoursSheetContent({
                         setBlocked((current) => current.filter((d) => d !== day));
                       }}
                     >
-                      <X size={12} color="#71717a" />
+                      <X size={12} color={THEME_COLORS.zinc500} />
                     </Pressable>
                   </View>
                 ))}

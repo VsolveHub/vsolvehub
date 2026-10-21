@@ -1,13 +1,17 @@
-import { Button, EmptyState, ErrorState, Spinner, Text, cn } from "@vsolve/mobile-ui";
 import { useState } from "react";
-import { Alert, Pressable, RefreshControl, ScrollView, View } from "react-native";
+import {
+  Alert,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  View,
+} from "react-native";
+import { EmptyState, ErrorState, Spinner, Text } from "@vsolve/mobile-ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import { ArrowLeft, Sparkles, Users } from "lucide-react-native";
+import { ArrowLeft } from "lucide-react-native";
 
-import {
-  type PartnerApplication,
-} from "../model";
+import { type PartnerApplication } from "../model";
 import {
   fetchListingApplications,
   fetchPartnerListing,
@@ -24,14 +28,14 @@ import { JobMatches } from "./job-matches";
 import { ReportApplicantDialog } from "./report-applicant-dialog";
 import { SubscriptionDialog } from "./subscription-dialog";
 
-const TABS = [
-  { key: "ALL", label: "All" },
-  { key: "NEW", label: "New" },
+const FILTER_TABS = [
+  { key: "ALL", label: "All Applicants" },
+  { key: "NEW", label: "New / In Review" },
   { key: "SHORTLISTED", label: "Shortlisted" },
   { key: "INTERVIEW", label: "Interview" },
   { key: "CONNECTED", label: "Connected" },
-  { key: "CLOSED", label: "Closed" },
-];
+  { key: "CLOSED", label: "Closed / Withdrawn" },
+] as const;
 
 export function ListingApplicantsScreen({ listingId }: { listingId: string }) {
   const router = useRouter();
@@ -129,6 +133,29 @@ export function ListingApplicantsScreen({ listingId }: { listingId: string }) {
   });
 
   const applications = applicantsQuery.data ?? [];
+
+  const tabCounts = {
+    ALL: applications.length,
+    NEW: applications.filter((app) => {
+      const s = (app.status ?? "").toUpperCase();
+      return s === "SUBMITTED" || s === "UNDER_REVIEW";
+    }).length,
+    SHORTLISTED: applications.filter(
+      (app) => (app.status ?? "").toUpperCase() === "SHORTLISTED",
+    ).length,
+    INTERVIEW: applications.filter(
+      (app) => (app.status ?? "").toUpperCase() === "INTERVIEW",
+    ).length,
+    CONNECTED: applications.filter((app) => {
+      const s = (app.status ?? "").toUpperCase();
+      return s === "CONNECTED" || s === "CONTACTED";
+    }).length,
+    CLOSED: applications.filter((app) => {
+      const s = (app.status ?? "").toUpperCase();
+      return ["REJECTED", "WITHDRAWN", "EXPIRED"].includes(s);
+    }).length,
+  };
+
   const filteredApps = applications.filter((app) => {
     const s = (app.status ?? "").toUpperCase();
     if (statusFilter === "ALL") return true;
@@ -146,160 +173,181 @@ export function ListingApplicantsScreen({ listingId }: { listingId: string }) {
     void applicantsQuery.refetch();
   };
 
+  const listingTitle = listingQuery.data?.title || "Cashier";
+  const serviceSubtitle = `${
+    listingQuery.data?.service_name || "Job listings (hiring partner)"
+  } • ${applications.length} total applicant(s) received`;
+
   return (
-    <View className="flex-1 bg-canvas">
-      {/* Top Bar */}
-      <View className="border-b border-line bg-surface px-4 pb-3 pt-4">
-        <View className="flex-row items-center gap-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            onPress={() => router.back()}
-            className="h-9 w-9 p-0 items-center justify-center rounded-full"
-          >
-            <ArrowLeft size={18} color="#071328" />
-          </Button>
-          <View className="flex-1">
-            <Text className="text-lg font-extrabold text-navy-900" numberOfLines={1}>
-              {listingQuery.data?.title || "Role Candidates"}
-            </Text>
-            <Text className="text-xs text-text-muted">
-              {applications.length} total applicant{applications.length === 1 ? "" : "s"} received
-            </Text>
-          </View>
+    <View className="flex-1 bg-[#faf8f5]">
+      {/* Main Content Area */}
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 40 }}
+        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
+      >
+        {/* Back Link Breadcrumb */}
+        <Pressable
+          onPress={() => router.back()}
+          className="flex-row items-center gap-1.5 self-start py-1"
+        >
+          <ArrowLeft size={14} color="#64748b" />
+          <Text className="text-sm font-medium text-[#64748b]">
+            Back to Listings Workspace
+          </Text>
+        </Pressable>
+
+        {/* Job Title */}
+        <Text className="mt-2 text-2xl font-bold tracking-tight text-[#071328]">
+          {listingTitle}
+        </Text>
+
+        {/* Subtitle */}
+        <Text className="mt-1 text-xs text-[#64748b]">
+          {serviceSubtitle}
+        </Text>
+
+        {/* Live & Active Status Pill */}
+        <View className="mt-2.5 w-full rounded-full border border-emerald-200 bg-emerald-50/70 px-3.5 py-1">
+          <Text className="text-xs font-semibold text-emerald-800">
+            Live & Active
+          </Text>
         </View>
 
-        {/* Section Segment (Applications vs Matching Candidates) */}
-        <View className="mt-3 flex-row rounded-xl bg-surface-muted p-1">
+        {/* Segmented Control (Applications vs Matching candidates) */}
+        <View className="mt-5 rounded-2xl bg-[#f4efe8] p-1.5 flex-row border border-[#e8e2d9]">
           <Pressable
             onPress={() => setSection("APPLICATIONS")}
-            className={`flex-1 flex-row items-center justify-center gap-1.5 rounded-lg py-2 ${
+            className={`flex-1 rounded-xl py-3 items-center justify-center ${
               section === "APPLICATIONS" ? "bg-white shadow-xs" : ""
             }`}
           >
-            <Users size={14} color={section === "APPLICATIONS" ? "#00112e" : "#64748b"} />
             <Text
-              className={`text-xs font-bold ${
-                section === "APPLICATIONS" ? "text-navy-900" : "text-text-muted"
+              className={`text-sm font-bold ${
+                section === "APPLICATIONS" ? "text-[#071328]" : "text-[#475569]"
               }`}
             >
-              Applicants ({applications.length})
+              Applications ({applications.length})
             </Text>
           </Pressable>
 
           <Pressable
             onPress={() => setSection("MATCHES")}
-            className={`flex-1 flex-row items-center justify-center gap-1.5 rounded-lg py-2 ${
+            className={`flex-1 rounded-xl py-3 items-center justify-center ${
               section === "MATCHES" ? "bg-white shadow-xs" : ""
             }`}
           >
-            <Sparkles size={14} color={section === "MATCHES" ? "#f59e0b" : "#64748b"} />
             <Text
-              className={`text-xs font-bold ${
-                section === "MATCHES" ? "text-navy-900" : "text-text-muted"
+              className={`text-sm font-bold text-center ${
+                section === "MATCHES" ? "text-[#071328]" : "text-[#475569]"
               }`}
             >
-              Matching Talent
+              Matching candidates
             </Text>
           </Pressable>
         </View>
 
-        {/* Pipeline Stage Pills (Only shown in Applications view) */}
         {section === "APPLICATIONS" ? (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            className="mt-3"
-            contentContainerClassName="flex-row gap-2"
-          >
-            {TABS.map((tab) => {
-              const count = applications.filter((app) => {
-                const s = (app.status ?? "").toUpperCase();
-                if (tab.key === "ALL") return true;
-                if (tab.key === "NEW") return s === "SUBMITTED" || s === "UNDER_REVIEW";
-                if (tab.key === "SHORTLISTED") return s === "SHORTLISTED";
-                if (tab.key === "INTERVIEW") return s === "INTERVIEW";
-                if (tab.key === "CONNECTED") return s === "CONNECTED" || s === "CONTACTED";
-                if (tab.key === "CLOSED") return ["REJECTED", "WITHDRAWN", "EXPIRED"].includes(s);
-                return s === tab.key;
-              }).length;
-
-              const isSelected = statusFilter === tab.key;
-              return (
-                <Button
-                  key={tab.key}
-                  variant="ghost"
-                  size="sm"
-                  onPress={() => setStatusFilter(tab.key)}
-                  className={cn(
-                    "h-7 rounded-full px-3",
-                    isSelected ? "bg-navy-900" : "bg-surface-muted",
-                  )}
-                >
-                  <Text
-                    className={cn(
-                      "text-[11px] font-bold",
-                      isSelected ? "text-white" : "text-text-muted",
-                    )}
+          <>
+            {/* Filter Pills Grid */}
+            <View className="mt-5 flex-row flex-wrap gap-2">
+              {FILTER_TABS.map((tab) => {
+                const count = tabCounts[tab.key] ?? 0;
+                const isSelected = statusFilter === tab.key;
+                return (
+                  <Pressable
+                    key={tab.key}
+                    onPress={() => setStatusFilter(tab.key)}
+                    className={`rounded-full px-3.5 py-1.5 flex-row items-center border ${
+                      isSelected
+                        ? "bg-[#071328] border-[#071328]"
+                        : "bg-white border-[#e2e8f0]"
+                    }`}
                   >
-                    {tab.label} {count > 0 ? `(${count})` : ""}
-                  </Text>
-                </Button>
-              );
-            })}
-          </ScrollView>
-        ) : null}
-      </View>
+                    <Text
+                      className={`text-xs font-semibold ${
+                        isSelected ? "text-white" : "text-[#334155]"
+                      }`}
+                    >
+                      {tab.label}
+                    </Text>
+                    <View
+                      className={`ml-1.5 rounded-full px-2 py-0.5 ${
+                        isSelected ? "bg-[#1e293b]" : "bg-[#f1f5f9]"
+                      }`}
+                    >
+                      <Text
+                        className={`text-[11px] font-bold ${
+                          isSelected ? "text-white" : "text-[#64748b]"
+                        }`}
+                      >
+                        {count}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
 
-      <ScrollView
-        className="flex-1 px-4 py-4"
-        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
-        contentContainerClassName="flex-grow pb-16"
-      >
-        {section === "APPLICATIONS" ? (
-          applicantsQuery.isPending ? (
-            <View className="items-center py-12">
-              <Spinner size="lg" />
-              <Text className="mt-2 text-xs text-text-muted">Loading applicants...</Text>
-            </View>
-          ) : applicantsQuery.isError ? (
-            <ErrorState
-              title="Failed to load candidates"
-              message="Check connection and try again."
-              actionLabel="Retry"
-              onAction={() => void applicantsQuery.refetch()}
-            />
-          ) : filteredApps.length === 0 ? (
-            <EmptyState
-              title={statusFilter === "ALL" ? "No applications yet" : "No candidates in this stage"}
-              description="When candidates apply for this job opening, their profiles and resumes will appear here."
-            />
-          ) : (
-            <View className="flex-col gap-3">
-              {filteredApps.map((app) => (
-                <ApplicantCard
-                  key={app.id}
-                  application={app}
-                  onUpdateStatus={(target, newStatus) =>
-                    statusMutation.mutate({ appId: target.id, status: newStatus })
-                  }
-                  onRevealContact={(target) => revealMutation.mutate(target.id)}
-                  onScheduleInterview={(target) => setInterviewing(target)}
-                  onReport={(target) => {
-                    setReportingApp(target);
-                    setReportReason("SPAM");
-                    setReportDetail("");
-                  }}
+            {/* Applications List */}
+            <View className="mt-4">
+              {applicantsQuery.isPending ? (
+                <View className="items-center py-16">
+                  <Spinner size="lg" />
+                  <Text className="mt-2 text-xs text-[#64748b]">Loading applicants...</Text>
+                </View>
+              ) : applicantsQuery.isError ? (
+                <ErrorState
+                  title="Failed to load candidates"
+                  message="Check connection and try again."
+                  actionLabel="Retry"
+                  onAction={() => void applicantsQuery.refetch()}
                 />
-              ))}
+              ) : filteredApps.length === 0 ? (
+                <EmptyState
+                  title={
+                    statusFilter === "ALL"
+                      ? "No applications yet"
+                      : "No candidates in this stage"
+                  }
+                  description={
+                    statusFilter === "ALL"
+                      ? "When candidates apply for this job opening, their profiles and resumes will appear here."
+                      : "No candidates match the selected filter."
+                  }
+                />
+              ) : (
+                <View className="flex-col gap-4">
+                  {filteredApps.map((app) => (
+                    <ApplicantCard
+                      key={app.id}
+                      application={app}
+                      onUpdateStatus={(target, newStatus) =>
+                        statusMutation.mutate({ appId: target.id, status: newStatus })
+                      }
+                      onRevealContact={(target) => revealMutation.mutate(target.id)}
+                      onScheduleInterview={(target) => setInterviewing(target)}
+                      onReport={(target) => {
+                        setReportingApp(target);
+                        setReportReason("SPAM");
+                        setReportDetail("");
+                      }}
+                    />
+                  ))}
+                </View>
+              )}
             </View>
-          )
+          </>
         ) : (
-          <JobMatches
-            listingId={listingId}
-            onOpenApplications={() => setSection("APPLICATIONS")}
-            onOpenSubscription={() => setShowSubscription(true)}
-          />
+          /* Matching Candidates Section */
+          <View className="mt-4">
+            <JobMatches
+              listingId={listingId}
+              hiddenMatchCount={listingQuery.data?.counts?.matches ?? 0}
+              onOpenApplications={() => setSection("APPLICATIONS")}
+              onOpenSubscription={() => setShowSubscription(true)}
+            />
+          </View>
         )}
       </ScrollView>
 
@@ -307,6 +355,7 @@ export function ListingApplicantsScreen({ listingId }: { listingId: string }) {
       <InterviewDialog
         open={interviewing !== null}
         candidateName={
+          interviewing?.applicant_name ||
           interviewing?.candidate_name ||
           interviewing?.applicant_snapshot?.name ||
           "the candidate"

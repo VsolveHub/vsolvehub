@@ -316,9 +316,11 @@ class PartnerPriceBookView(APIView):
         responses={200: PriceBookListSerializer, 403: ApiErrorSerializer, 404: ApiErrorSerializer},
     )
     def get(self, request: Request) -> Response:
-        profile = _partner_profile(request)
         try:
+            profile = _partner_profile(request)
             service_area = _partner_service_area(request=request)
+        except RequirementNotFoundError:
+            return Response(PriceBookListSerializer({"items": []}).data)
         except RequirementDomainError as exc:
             _raise_api_error(exc)
         skill = request.query_params.get("skill") or None

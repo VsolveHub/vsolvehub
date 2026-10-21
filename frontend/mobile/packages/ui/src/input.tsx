@@ -13,11 +13,14 @@ export interface InputProps extends Omit<TextInputProps, "id"> {
 
 export function Input({ className, id, ref, ...props }: InputProps) {
   const field = useFieldContext();
+  const labelId = field ? `${field.controlId}-label` : undefined;
   return (
     <TextInput
       ref={ref}
       nativeID={id ?? field?.controlId}
-      accessibilityLabelledBy={field ? undefined : undefined}
+      accessibilityLabelledBy={labelId ?? props.accessibilityLabelledBy}
+      aria-labelledby={labelId}
+      aria-describedby={field?.errorId ?? field?.descriptionId}
       aria-invalid={field?.invalid || undefined}
       className={cn(controlChrome, "py-2.5 text-base text-text", field?.invalid && "border-danger-text bg-danger-surface", className)}
       placeholderTextColor="#756c5e"
@@ -32,9 +35,13 @@ export interface TextareaProps extends InputProps {
 
 export function Textarea({ className, id, rows = 4, ...props }: TextareaProps) {
   const field = useFieldContext();
+  const labelId = field ? `${field.controlId}-label` : undefined;
   return (
     <TextInput
       nativeID={id ?? field?.controlId}
+      accessibilityLabelledBy={labelId ?? props.accessibilityLabelledBy}
+      aria-labelledby={labelId}
+      aria-describedby={field?.errorId ?? field?.descriptionId}
       multiline
       numberOfLines={rows}
       textAlignVertical="top"

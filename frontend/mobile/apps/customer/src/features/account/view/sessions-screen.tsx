@@ -118,6 +118,7 @@ export function SessionsScreen() {
                   {session.is_current ? (
                     <Pressable
                       accessibilityRole="button"
+                      hitSlop={8}
                       onPress={() => setRevokingTarget(session)}
                       className="h-9 shrink-0 items-center justify-center rounded-xl border border-line bg-white px-3.5 active:bg-[#FAF9F7]"
                     >
@@ -126,6 +127,7 @@ export function SessionsScreen() {
                   ) : (
                     <Pressable
                       accessibilityRole="button"
+                      hitSlop={8}
                       onPress={() => setRevokingTarget(session)}
                       className="h-9 shrink-0 items-center justify-center px-2 active:opacity-70"
                     >

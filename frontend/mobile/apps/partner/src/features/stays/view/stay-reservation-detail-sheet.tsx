@@ -18,6 +18,7 @@ import {
   stayReservationStatusLabel,
   stayReservationTone,
 } from "../model";
+import { THEME_COLORS } from "../theme-colors";
 
 const CANCELLABLE_RESERVATION_STATUSES = new Set(["HELD", "PAYMENT_PENDING", "CONFIRMED"]);
 
@@ -185,7 +186,7 @@ export function StayReservationDetailSheet({
                 <View className="flex-row items-center justify-between">
                   <View className="flex-col gap-0.5">
                     <View className="flex-row items-center gap-1.5">
-                      <User size={14} color="#71717a" />
+                      <User size={14} color={THEME_COLORS.muted} />
                       <Text className="text-sm font-bold text-text">
                         {reservation.customer_name || "—"}
                       </Text>
@@ -204,8 +205,8 @@ export function StayReservationDetailSheet({
                       onPress={handleCall}
                       className="h-7 flex-row items-center gap-1.5 px-2.5"
                     >
-                      <Phone size={12} color="#071328" />
-                      <Text className="text-xs font-semibold text-[#071328]">Call</Text>
+                      <Phone size={12} color={THEME_COLORS.navy900} />
+                      <Text className="text-xs font-semibold text-navy-900">Call</Text>
                     </Button>
                   ) : null}
                 </View>
@@ -329,7 +330,7 @@ export function StayReservationDetailSheet({
                   onPress={() => onCheckOut(reservation.id)}
                   className="w-full"
                 >
-                  <Text className="text-sm font-semibold text-[#071328]">
+                  <Text className="text-sm font-semibold text-navy-900">
                     {isPending ? "Updating…" : "Check out"}
                   </Text>
                 </Button>

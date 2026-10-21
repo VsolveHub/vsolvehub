@@ -67,6 +67,7 @@ function BackToBookingButton({ groupId }: { groupId: string }) {
     <Pressable
       accessibilityRole="button"
       accessibilityLabel="Back to booking"
+      hitSlop={8}
       onPress={() => {
         if (router.canGoBack()) {
           router.back();

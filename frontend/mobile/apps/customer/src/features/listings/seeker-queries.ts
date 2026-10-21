@@ -72,12 +72,12 @@ export interface JobForYou {
 }
 
 export async function fetchMyJobProfile(): Promise<JobProfile | null> {
-  const data = await request(() => (getApiClient() as any).GET("/api/v1/me/job-profile"));
+  const data = await request(() => getApiClient().GET("/api/v1/me/job-profile"));
   return (data as JobProfile | undefined) ?? null;
 }
 
 export function saveMyJobProfile(body: JobProfileWrite): Promise<JobProfile> {
-  return request(() => (getApiClient() as any).PUT("/api/v1/me/job-profile", { body }));
+  return request(() => getApiClient().PUT("/api/v1/me/job-profile", { body })) as Promise<JobProfile>;
 }
 
 export function uploadProfileResume(file: {
@@ -93,20 +93,20 @@ export function uploadProfileResume(file: {
   } as any);
 
   return request(() =>
-    (getApiClient() as any).POST("/api/v1/me/job-profile/resume", {
+    getApiClient().POST("/api/v1/me/job-profile/resume", {
       body: formData,
       bodySerializer: () => formData,
     }),
-  );
+  ) as Promise<JobProfile>;
 }
 
 export function fetchJobsForYou(): Promise<JobForYou[]> {
-  return request(() => (getApiClient() as any).GET("/api/v1/jobs/for-you"));
+  return request(() => getApiClient().GET("/api/v1/jobs/for-you")) as Promise<JobForYou[]>;
 }
 
 export async function fetchMyMatch(listingId: string): Promise<JobMatch | null> {
   const data = await request(() =>
-    (getApiClient() as any).GET("/api/v1/listings/{listing_id}/my-match", {
+    getApiClient().GET("/api/v1/listings/{listing_id}/my-match", {
       params: { path: { listing_id: listingId } },
     }),
   );
@@ -115,7 +115,7 @@ export async function fetchMyMatch(listingId: string): Promise<JobMatch | null> 
 
 export function quickApply(listingId: string, note: string = ""): Promise<any> {
   return request(() =>
-    (getApiClient() as any).POST("/api/v1/listings/{listing_id}/quick-apply", {
+    getApiClient().POST("/api/v1/listings/{listing_id}/quick-apply", {
       params: { path: { listing_id: listingId } },
       body: { note },
     }),
@@ -123,15 +123,15 @@ export function quickApply(listingId: string, note: string = ""): Promise<any> {
 }
 
 export function fetchSavedJobs(): Promise<Listing[]> {
-  return request(() => (getApiClient() as any).GET("/api/v1/me/saved-jobs"));
+  return request(() => getApiClient().GET("/api/v1/me/saved-jobs")) as Promise<Listing[]>;
 }
 
 export function setJobSaved(listingId: string, saved: boolean): Promise<any> {
   const path = { params: { path: { listing_id: listingId } } };
   return request(() =>
     saved
-      ? (getApiClient() as any).POST("/api/v1/listings/{listing_id}/save", path)
-      : (getApiClient() as any).DELETE("/api/v1/listings/{listing_id}/save", path),
+      ? getApiClient().POST("/api/v1/listings/{listing_id}/save", path)
+      : getApiClient().DELETE("/api/v1/listings/{listing_id}/save", path),
   );
 }
 
@@ -141,7 +141,7 @@ export function answerInterview(
   note: string = "",
 ): Promise<any> {
   return request(() =>
-    (getApiClient() as any).POST("/api/v1/my/interviews/{interview_id}/{action}", {
+    getApiClient().POST("/api/v1/my/interviews/{interview_id}/{action}", {
       params: { path: { interview_id: interviewId, action } },
       body: { note },
     }),

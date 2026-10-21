@@ -7,6 +7,7 @@ import {
 } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
 import {
+  Check,
   ChevronDown,
   FileCheck2,
   Filter,
@@ -25,6 +26,7 @@ import {
 } from "react-native";
 
 import { fetchListingFilters, fetchListings, type Listing } from "../queries";
+import { THEME_COLORS } from "../theme-colors";
 import { JobCard } from "./job-card";
 
 export interface CategoryOption {
@@ -88,6 +90,7 @@ export function ListingsBrowseScreen() {
   // Role search in category box
   const [roleSearch, setRoleSearch] = useState("");
   const [sortModalOpen, setSortModalOpen] = useState(false);
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
 
   const commitSearch = useCallback(() => {
     setAppliedQuery(draftQuery);
@@ -140,6 +143,11 @@ export function ListingsBrowseScreen() {
     );
   }, [allCategories, roleSearch]);
 
+  const selectedCategoryLabel = useMemo(() => {
+    if (!selectedCategory) return null;
+    return allCategories.find((c) => c.value === selectedCategory)?.label ?? selectedCategory;
+  }, [allCategories, selectedCategory]);
+
   const listingsQuery = useQuery({
     queryKey: [
       "listings",
@@ -170,7 +178,7 @@ export function ListingsBrowseScreen() {
 
   return (
     <ScrollView
-      className="flex-1 bg-[#fcfbfa]"
+      className="flex-1 bg-canvas"
       contentContainerClassName="gap-4 px-4 py-4 pb-20"
       keyboardShouldPersistTaps="handled"
       refreshControl={
@@ -197,16 +205,16 @@ export function ListingsBrowseScreen() {
           onPress={() => router.push("/listings/my-applications" as never)}
           className="flex-row items-center justify-center gap-2 rounded-xl border border-line bg-surface py-2.5 active:bg-surface-sunken"
         >
-          <FileCheck2 size={15} color="#00112e" />
+          <FileCheck2 size={15} color={THEME_COLORS.navy900} />
           <Text className="text-xs font-bold text-navy-900">My Applications</Text>
         </Pressable>
 
         {/* Search jobs input */}
-        <View className="flex-row items-center rounded-xl bg-[#f4f4f5] px-3.5 py-2.5 border border-line/40">
-          <Search size={15} color="#6B6560" />
+        <View className="flex-row items-center rounded-xl bg-surface-sunken px-3.5 py-2.5 border border-line/40">
+          <Search size={15} color={THEME_COLORS.muted} />
           <TextInput
             placeholder="Search jobs (e.g. accountant, dev..."
-            placeholderTextColor="rgba(107,101,96,0.6)"
+            placeholderTextColor="rgba(117,108,94,0.6)"
             value={draftQuery}
             onChangeText={setDraftQuery}
             onSubmitEditing={commitSearch}
@@ -220,17 +228,17 @@ export function ListingsBrowseScreen() {
                 setAppliedQuery("");
               }}
             >
-              <X size={14} color="#6B6560" />
+              <X size={14} color={THEME_COLORS.muted} />
             </Pressable>
           ) : null}
         </View>
 
         {/* Location input */}
-        <View className="flex-row items-center rounded-xl bg-[#f4f4f5] px-3.5 py-2.5 border border-line/40">
-          <MapPin size={15} color="#6B6560" />
+        <View className="flex-row items-center rounded-xl bg-surface-sunken px-3.5 py-2.5 border border-line/40">
+          <MapPin size={15} color={THEME_COLORS.muted} />
           <TextInput
             placeholder="Hyderabad"
-            placeholderTextColor="rgba(107,101,96,0.6)"
+            placeholderTextColor="rgba(117,108,94,0.6)"
             value={draftLocation}
             onChangeText={setDraftLocation}
             onSubmitEditing={commitSearch}
@@ -244,7 +252,7 @@ export function ListingsBrowseScreen() {
                 setAppliedLocation("");
               }}
             >
-              <X size={14} color="#6B6560" />
+              <X size={14} color={THEME_COLORS.muted} />
             </Pressable>
           ) : null}
         </View>
@@ -253,7 +261,7 @@ export function ListingsBrowseScreen() {
         <Pressable
           accessibilityRole="button"
           onPress={commitSearch}
-          className="items-center justify-center rounded-xl bg-[#ea580c] py-3 active:bg-[#c2410c]"
+          className="items-center justify-center rounded-xl bg-action py-3 active:bg-action-dark"
         >
           <Text className="text-xs font-bold text-white">
             {listingsQuery.isFetching ? "Searching..." : "Search Jobs"}
@@ -273,7 +281,7 @@ export function ListingsBrowseScreen() {
             }}
             className={`rounded-full px-4 py-1.5 border ${
               !employmentType && !workMode && minSalary === undefined
-                ? "border-[#ea580c] bg-[#ea580c]"
+                ? "border-action bg-action"
                 : "border-line bg-surface"
             }`}
           >
@@ -294,7 +302,7 @@ export function ListingsBrowseScreen() {
             }
             className={`rounded-full px-4 py-1.5 border ${
               employmentType === "Full-Time"
-                ? "border-[#ea580c] bg-[#ea580c]"
+                ? "border-action bg-action"
                 : "border-line bg-surface"
             }`}
           >
@@ -311,7 +319,7 @@ export function ListingsBrowseScreen() {
             onPress={() => setWorkMode((v) => (v === "On-site" ? "" : "On-site"))}
             className={`rounded-full px-4 py-1.5 border ${
               workMode === "On-site"
-                ? "border-[#ea580c] bg-[#ea580c]"
+                ? "border-action bg-action"
                 : "border-line bg-surface"
             }`}
           >
@@ -333,7 +341,7 @@ export function ListingsBrowseScreen() {
             }
             className={`rounded-full px-4 py-1.5 border ${
               minSalary === 2000000
-                ? "border-[#ea580c] bg-[#ea580c]"
+                ? "border-action bg-action"
                 : "border-line bg-surface"
             }`}
           >
@@ -352,7 +360,7 @@ export function ListingsBrowseScreen() {
             }
             className={`rounded-full px-4 py-1.5 border ${
               minSalary === 4000000
-                ? "border-[#ea580c] bg-[#ea580c]"
+                ? "border-action bg-action"
                 : "border-line bg-surface"
             }`}
           >
@@ -371,7 +379,7 @@ export function ListingsBrowseScreen() {
             }
             className={`rounded-full px-4 py-1.5 border ${
               minSalary === 6000000
-                ? "border-[#ea580c] bg-[#ea580c]"
+                ? "border-action bg-action"
                 : "border-line bg-surface"
             }`}
           >
@@ -386,61 +394,62 @@ export function ListingsBrowseScreen() {
         </View>
       </View>
 
-      {/* 3. Role & Category Card (Matching web screenshot card) */}
-      <View className="rounded-2xl border border-line bg-surface p-4 gap-3">
-        <View className="flex-row items-center justify-between">
-          <View className="flex-row items-center gap-1.5">
-            <Filter size={13} color="#6B6560" />
-            <Text className="text-xs font-bold uppercase tracking-wider text-text-muted">
-              ROLE & CATEGORY
-            </Text>
-          </View>
-
-          {/* Filter roles search pill */}
-          <View className="flex-row items-center rounded-full bg-[#f4f4f5] px-2.5 py-1 border border-line/40">
-            <Search size={12} color="#6B6560" />
-            <TextInput
-              placeholder="Filter roles..."
-              placeholderTextColor="rgba(107,101,96,0.6)"
-              value={roleSearch}
-              onChangeText={setRoleSearch}
-              className="ml-1.5 w-24 text-[11px] text-navy-900 p-0"
-            />
-            {roleSearch ? (
-              <Pressable onPress={() => setRoleSearch("")}>
-                <X size={11} color="#6B6560" />
-              </Pressable>
-            ) : null}
-          </View>
-        </View>
-
-        {/* Wrapping Category Pills */}
-        <View className="flex-row flex-wrap gap-2 pt-1">
-          {filteredCategories.map((cat) => {
-            const isSelected = selectedCategory === cat.value;
-            return (
-              <Pressable
-                key={cat.label}
-                onPress={() => setSelectedCategory(cat.value)}
-                className={`rounded-full px-3.5 py-1.5 border ${
-                  isSelected
-                    ? "border-navy-900 bg-navy-900"
-                    : "border-line/60 bg-[#f4f4f5]"
+      {/* 3. Role & Category Dropdown Button */}
+      <View className="flex-row items-center gap-2">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Filter by role and category"
+          onPress={() => setCategoryModalOpen(true)}
+          className={`flex-1 flex-row items-center justify-between rounded-2xl border px-4 py-3 shadow-2xs ${
+            selectedCategory
+              ? "border-navy-900 bg-navy-900"
+              : "border-line bg-surface active:bg-surface-sunken"
+          }`}
+        >
+          <View className="flex-row items-center gap-2.5 flex-1 mr-2 min-w-0">
+            <View
+              className={`size-7 items-center justify-center rounded-lg ${
+                selectedCategory ? "bg-white/15" : "bg-surface-sunken"
+              }`}
+            >
+              <Filter size={14} color={selectedCategory ? "#FFFFFF" : THEME_COLORS.muted} />
+            </View>
+            <View className="flex-1 min-w-0">
+              <Text
+                className={`text-[10px] font-bold uppercase tracking-wider ${
+                  selectedCategory ? "text-white/70" : "text-text-muted"
                 }`}
               >
-                <Text
-                  className={`text-xs ${
-                    isSelected
-                      ? "font-bold text-white"
-                      : "font-medium text-text-secondary"
-                  }`}
-                >
-                  {cat.label}
-                </Text>
+                ROLE & CATEGORY
+              </Text>
+              <Text
+                numberOfLines={1}
+                className={`text-xs font-bold mt-0.5 ${
+                  selectedCategory ? "text-white" : "text-navy-900"
+                }`}
+              >
+                {selectedCategoryLabel || "All Roles"}
+              </Text>
+            </View>
+          </View>
+          <View className="flex-row items-center gap-1.5">
+            {selectedCategory ? (
+              <Pressable
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Clear role filter"
+                onPress={(e) => {
+                  e.stopPropagation?.();
+                  setSelectedCategory("");
+                }}
+                className="size-6 items-center justify-center rounded-full bg-white/20 mr-1"
+              >
+                <X size={12} color="#FFFFFF" />
               </Pressable>
-            );
-          })}
-        </View>
+            ) : null}
+            <ChevronDown size={15} color={selectedCategory ? "#FFFFFF" : THEME_COLORS.navy900} />
+          </View>
+        </Pressable>
       </View>
 
       {/* 4. Results Header & Sort Dropdown */}
@@ -459,7 +468,7 @@ export function ListingsBrowseScreen() {
             <Text className="text-xs font-semibold text-navy-900">
               {currentSortLabel}
             </Text>
-            <ChevronDown size={12} color="#00112e" />
+            <ChevronDown size={12} color={THEME_COLORS.navy900} />
           </Pressable>
         </View>
       </View>
@@ -484,7 +493,7 @@ export function ListingsBrowseScreen() {
           action={
             <Pressable
               onPress={clearAllFilters}
-              className="mt-3 rounded-xl bg-[#ea580c] px-5 py-2.5 active:bg-[#c2410c]"
+              className="mt-3 rounded-xl bg-action px-5 py-2.5 active:bg-action-dark"
             >
               <Text className="text-xs font-bold text-white">Reset Filters</Text>
             </Pressable>
@@ -497,6 +506,94 @@ export function ListingsBrowseScreen() {
           ))}
         </View>
       )}
+
+      {/* Role & Category Dropdown Selection Modal */}
+      <Modal
+        visible={categoryModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCategoryModalOpen(false)}
+      >
+        <Pressable
+          onPress={() => setCategoryModalOpen(false)}
+          className="flex-1 items-center justify-center bg-black/50 px-5"
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation?.()}
+            className="w-full max-w-sm max-h-[80%] rounded-3xl border border-line bg-surface p-5 shadow-raised"
+          >
+            {/* Modal Header */}
+            <View className="flex-row items-center justify-between pb-3 border-b border-line">
+              <View className="flex-1 mr-2">
+                <Text className="text-base font-extrabold text-navy-900">Role & Category</Text>
+                <Text className="text-xs text-text-muted mt-0.5">Filter listings by department or field</Text>
+              </View>
+              <Pressable
+                onPress={() => setCategoryModalOpen(false)}
+                hitSlop={8}
+                className="size-7 items-center justify-center rounded-full bg-surface-sunken"
+              >
+                <X size={14} color={THEME_COLORS.muted} />
+              </Pressable>
+            </View>
+
+            {/* Live Search Input */}
+            <View className="mt-3.5 mb-2.5 flex-row items-center rounded-xl bg-surface-sunken px-3 py-2 border border-line/60">
+              <Search size={14} color={THEME_COLORS.muted} />
+              <TextInput
+                placeholder="Search roles..."
+                placeholderTextColor="rgba(117,108,94,0.6)"
+                value={roleSearch}
+                onChangeText={setRoleSearch}
+                className="ml-2 flex-1 text-xs text-navy-900 p-0"
+              />
+              {roleSearch ? (
+                <Pressable onPress={() => setRoleSearch("")} hitSlop={8}>
+                  <X size={13} color={THEME_COLORS.muted} />
+                </Pressable>
+              ) : null}
+            </View>
+
+            {/* Roles List */}
+            <ScrollView
+              className="mt-1"
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View className="gap-1.5 pb-2">
+                {filteredCategories.map((cat) => {
+                  const isSelected = selectedCategory === cat.value;
+                  return (
+                    <Pressable
+                      key={cat.label}
+                      onPress={() => {
+                        setSelectedCategory(cat.value);
+                        setCategoryModalOpen(false);
+                      }}
+                      className={`flex-row items-center justify-between rounded-xl px-3.5 py-3 border ${
+                        isSelected
+                          ? "border-navy-900 bg-navy-900"
+                          : "border-line/40 bg-white active:bg-surface-sunken"
+                      }`}
+                    >
+                      <Text
+                        className={`text-xs ${
+                          isSelected ? "font-bold text-white" : "font-semibold text-navy-900"
+                        }`}
+                      >
+                        {cat.label}
+                      </Text>
+                      {isSelected ? (
+                        <View className="size-2 rounded-full bg-action" />
+                      ) : null}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* Sort Options Modal */}
       <Modal
@@ -530,7 +627,7 @@ export function ListingsBrowseScreen() {
                   {option.label}
                 </Text>
                 {sort === option.value ? (
-                  <View className="size-2 rounded-full bg-[#ea580c]" />
+                  <View className="size-2 rounded-full bg-action" />
                 ) : null}
               </Pressable>
             ))}

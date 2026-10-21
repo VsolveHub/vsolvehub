@@ -75,18 +75,18 @@ export type JobUpdate = Partial<JobCreate> & {
 };
 
 export function fetchJobOptions(): Promise<JobOptions> {
-  return request(() => (getApiClient() as any).GET("/api/v1/jobs/options"));
+  return request(() => getApiClient().GET("/api/v1/jobs/options")) as Promise<JobOptions>;
 }
 
 export async function postJob(body: JobCreate): Promise<PartnerListing> {
   return (await request(() =>
-    (getApiClient() as any).POST("/api/v1/partner/jobs", { body }),
+    getApiClient().POST("/api/v1/partner/jobs", { body }),
   )) as PartnerListing;
 }
 
 export async function updateJob(id: string, body: JobUpdate): Promise<PartnerListing> {
   return (await request(() =>
-    (getApiClient() as any).PATCH("/api/v1/partner/jobs/{listing_id}", {
+    getApiClient().PATCH("/api/v1/partner/jobs/{listing_id}", {
       params: { path: { listing_id: id } },
       body,
     }),
@@ -95,7 +95,7 @@ export async function updateJob(id: string, body: JobUpdate): Promise<PartnerLis
 
 export async function publishJob(id: string): Promise<PartnerListing> {
   return (await request(() =>
-    (getApiClient() as any).POST("/api/v1/partner/jobs/{listing_id}/publish", {
+    getApiClient().POST("/api/v1/partner/jobs/{listing_id}/publish", {
       params: { path: { listing_id: id } },
     }),
   )) as PartnerListing;
@@ -103,7 +103,7 @@ export async function publishJob(id: string): Promise<PartnerListing> {
 
 export async function duplicateJob(id: string): Promise<PartnerListing> {
   return (await request(() =>
-    (getApiClient() as any).POST("/api/v1/partner/jobs/{listing_id}/duplicate", {
+    getApiClient().POST("/api/v1/partner/jobs/{listing_id}/duplicate", {
       params: { path: { listing_id: id } },
     }),
   )) as PartnerListing;
@@ -127,15 +127,15 @@ export function rupeesLabel(rupees: number): string {
 
 export function fetchJobMatches(id: string): Promise<CandidateMatch[]> {
   return request(() =>
-    (getApiClient() as any).GET("/api/v1/partner/jobs/{listing_id}/matches", {
+    getApiClient().GET("/api/v1/partner/jobs/{listing_id}/matches", {
       params: { path: { listing_id: id } },
     }),
-  );
+  ) as Promise<CandidateMatch[]>;
 }
 
 export function inviteToApply(listingId: string, profileId: string): Promise<any> {
   return request(() =>
-    (getApiClient() as any).POST("/api/v1/partner/jobs/{listing_id}/invite/{profile_id}", {
+    getApiClient().POST("/api/v1/partner/jobs/{listing_id}/invite/{profile_id}", {
       params: { path: { listing_id: listingId, profile_id: profileId } },
     }),
   );
@@ -160,7 +160,7 @@ export function proposeInterview(
   },
 ): Promise<any> {
   return request(() =>
-    (getApiClient() as any).POST(
+    getApiClient().POST(
       "/api/v1/partner/listing-applications/{application_id}/interview",
       {
         params: { path: { application_id: applicationId } },

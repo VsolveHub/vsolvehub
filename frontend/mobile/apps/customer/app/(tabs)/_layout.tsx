@@ -60,7 +60,7 @@ export default function TabsLayout() {
 
   const tabs: TabItem[] = [
     { name: "Home", href: "/", icon: "home" },
-    { name: "Services", href: "/catalog", icon: "services" },
+    { name: "Search", href: "/catalog", icon: "services" },
     { name: "Bookings", href: "/activity", icon: "bookings" },
     status === "signedIn"
       ? { name: "Profile", href: "/account", icon: "profile" }
@@ -113,7 +113,7 @@ export default function TabsLayout() {
             </Text>
           </Pressable>
           <View className="flex-row items-center gap-2.5">
-            <Pressable accessibilityRole="button" accessibilityLabel="View basket" onPress={() => router.push("/cart")} className="h-9 w-9 items-center justify-center">
+            <Pressable hitSlop={8} accessibilityRole="button" accessibilityLabel="View basket" onPress={() => router.push("/cart")} className="h-9 w-9 items-center justify-center">
               <Svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#6B6560" strokeWidth={1.9}>
                 <Circle cx={8} cy={21} r={1} />
                 <Circle cx={19} cy={21} r={1} />
@@ -128,6 +128,7 @@ export default function TabsLayout() {
             {status === "loading" ? null : status === "signedIn" ? (
               <>
                 <Pressable
+                  hitSlop={8}
                   accessibilityRole="button"
                   accessibilityLabel={unreadBadgeLabel(unreadTotal)}
                   onPress={() => setAlertsOpen(true)}
@@ -145,7 +146,7 @@ export default function TabsLayout() {
                     </View>
                   ) : null}
                 </Pressable>
-                <Pressable accessibilityRole="button" accessibilityLabel="Open profile" onPress={() => router.push("/account")} className="h-8 w-8 items-center justify-center rounded-full bg-navy-900">
+                <Pressable hitSlop={8} accessibilityRole="button" accessibilityLabel="Open profile" onPress={() => router.push("/account")} className="h-8 w-8 items-center justify-center rounded-full bg-navy-900">
                   <Text className="text-xs font-bold text-white">{initials}</Text>
                 </Pressable>
               </>
@@ -169,12 +170,12 @@ export default function TabsLayout() {
         {status === "signedIn" || !requiresCustomerSignIn(pathname) ? <Slot /> : null}
       </View>
       <View
-        className="flex-row items-center justify-around border-t border-line/60 bg-[#FAF9F7] px-2 pt-2"
+        className="flex-row items-center justify-around border-t border-[#EAE8E4] bg-white px-2 pt-2"
         style={{ paddingBottom: Math.max(8, insets.bottom) }}
       >
         {tabs.map((tab) => {
           const active = tab.href ? isCustomerTabActive(tab.href, pathname) : false;
-          const iconColor = active ? "#ffffff" : "#6B6560";
+          const iconColor = active ? "#EA580C" : "#6B6560";
           return (
             <Pressable
               key={tab.name}
@@ -183,20 +184,14 @@ export default function TabsLayout() {
               onPress={() => handleTabPress(tab)}
               className="min-w-16 items-center gap-1 px-2 py-0.5"
             >
-              <View
-                className={
-                  active
-                    ? "h-10 w-10 items-center justify-center rounded-full bg-[#f87000]"
-                    : "h-10 w-10 items-center justify-center bg-transparent"
-                }
-              >
+              <View className="h-7 w-7 items-center justify-center">
                 <TabIcon type={tab.icon} color={iconColor} />
               </View>
               <Text
                 className={
                   active
-                    ? "text-[11px] font-bold text-[#f87000]"
-                    : "text-[11px] font-semibold text-[#6B6560]"
+                    ? "text-[11px] font-bold text-[#EA580C]"
+                    : "text-[11px] font-medium text-[#6B6560]"
                 }
               >
                 {tab.name}

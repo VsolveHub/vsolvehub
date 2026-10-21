@@ -11,6 +11,7 @@ import {
   stayLengthLabel,
   type StayPropertySummary,
 } from "../model";
+import { THEME_COLORS } from "../theme-colors";
 import { useSavedItems } from "../use-saved-items";
 import { getAmenityIcon } from "./amenity-icon";
 
@@ -33,7 +34,9 @@ export function StayCard({ property }: { property: StayPropertySummary }) {
 
   const rawPref =
     property.tenant_preference ||
-    (property as any).structured_fields?.tenant_preference;
+    (typeof property.structured_fields?.tenant_preference === "string"
+      ? property.structured_fields.tenant_preference
+      : undefined);
   const tenantLabel =
     rawPref === "BACHELOR_MALE"
       ? "Bachelor (M)"
@@ -45,7 +48,7 @@ export function StayCard({ property }: { property: StayPropertySummary }) {
             ? "Professionals"
             : null;
 
-  const primaryUnit = (property as any).units?.[0];
+  const primaryUnit = property.units?.[0];
   const occupancy = primaryUnit
     ? roomOccupancyLabel(primaryUnit, property.room_style)
     : null;
@@ -76,12 +79,12 @@ export function StayCard({ property }: { property: StayPropertySummary }) {
         <View className="flex-row items-center justify-between">
           <View className="flex-row items-center gap-2">
             <View className="flex-row items-center gap-1">
-              <ShieldCheck size={14} color="#059669" />
+              <ShieldCheck size={14} color={THEME_COLORS.emerald600} />
               <Text className="text-xs font-semibold text-emerald-700">Verified host</Text>
             </View>
             {property.average_rating ? (
               <View className="flex-row items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 border border-amber-200">
-                <Star size={10} color="#d97706" fill="#d97706" />
+                <Star size={10} color={THEME_COLORS.amber} fill={THEME_COLORS.amber} />
                 <Text className="text-[10px] font-bold text-amber-800">
                   {Number(property.average_rating).toFixed(1)}
                   {property.review_count ? ` (${property.review_count})` : ""}
@@ -101,8 +104,8 @@ export function StayCard({ property }: { property: StayPropertySummary }) {
           >
             <Heart
               size={15}
-              color={isHearted ? "#ea580c" : "#6B6560"}
-              fill={isHearted ? "#ea580c" : "transparent"}
+              color={isHearted ? THEME_COLORS.actionDark : THEME_COLORS.muted}
+              fill={isHearted ? THEME_COLORS.actionDark : "transparent"}
             />
           </Pressable>
         </View>
@@ -118,16 +121,16 @@ export function StayCard({ property }: { property: StayPropertySummary }) {
         </View>
 
         {/* Description line-clamp */}
-        {(property as any).description ? (
+        {property.description ? (
           <Text className="text-xs leading-relaxed text-text-secondary" numberOfLines={2}>
-            {(property as any).description}
+            {property.description}
           </Text>
         ) : null}
 
         {/* Location Text */}
         {property.location_text ? (
           <View className="flex-row items-center gap-1">
-            <MapPin size={12} color="#6B6560" />
+            <MapPin size={12} color={THEME_COLORS.muted} />
             <Text className="flex-1 text-xs text-text-secondary" numberOfLines={1}>
               {property.location_text}
             </Text>
@@ -144,7 +147,7 @@ export function StayCard({ property }: { property: StayPropertySummary }) {
 
           {occupancy ? (
             <View className="flex-row items-center gap-1 rounded-md border border-line bg-surface-sunken px-2 py-0.5">
-              <Users size={10} color="#6B6560" />
+              <Users size={10} color={THEME_COLORS.muted} />
               <Text className="text-[10px] font-medium text-text-secondary">{occupancy}</Text>
             </View>
           ) : null}
@@ -156,7 +159,7 @@ export function StayCard({ property }: { property: StayPropertySummary }) {
                 key={amenity.key}
                 className="flex-row items-center gap-1 rounded-md border border-line bg-surface-sunken px-2 py-0.5"
               >
-                <Icon size={10} color="#f87000" />
+                <Icon size={10} color={THEME_COLORS.action} />
                 <Text className="text-[10px] font-medium text-text-secondary">{amenity.label}</Text>
               </View>
             );
@@ -182,7 +185,7 @@ export function StayCard({ property }: { property: StayPropertySummary }) {
 
           <View className="flex-row items-center gap-1 rounded-xl bg-brand px-3 py-2 active:bg-brand/90">
             <Text className="text-xs font-bold text-white">Check Dates</Text>
-            <ArrowRight size={13} color="#ffffff" />
+            <ArrowRight size={13} color={THEME_COLORS.white} />
           </View>
         </View>
       </View>

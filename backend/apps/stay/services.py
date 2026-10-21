@@ -1500,6 +1500,7 @@ def public_properties(  # noqa: PLR0912
     min_price_paise: int | None = None,
     max_price_paise: int | None = None,
     variant_code: str = "",
+    tenant_preference: str = "",
     sort: str = "newest",
     limit: int | None = None,
     offset: int = 0,
@@ -1576,6 +1577,16 @@ def public_properties(  # noqa: PLR0912
         qs = qs.filter(
             models.Q(structured_fields__food__in=_FOOD_YES)
             | models.Exists(rooms.filter(attributes__food__in=_FOOD_YES))
+        )
+    if tenant_preference and tenant_preference.strip().upper() not in ("", "ANY", "ALL"):
+        pref = tenant_preference.strip().upper()
+        qs = qs.filter(
+            models.Q(structured_fields__tenant_preference=pref)
+            | models.Q(structured_fields__tenant_preference__iexact=pref)
+            | models.Q(structured_fields__tenant_preference="ANY")
+            | models.Q(structured_fields__tenant_preference__iexact="ANY")
+            | models.Q(structured_fields__tenant_preference__isnull=True)
+            | ~models.Q(structured_fields__has_key="tenant_preference")
         )
     if sort in ("price_asc", "price_desc"):
         cheapest = (

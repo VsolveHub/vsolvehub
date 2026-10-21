@@ -5,7 +5,8 @@ export const applySchema = z.object({
     .string()
     .trim()
     .min(2, "Enter your full name (at least 2 characters).")
-    .max(120, "Name must be 120 characters or fewer."),
+    .max(120, "Name must be 120 characters or fewer.")
+    .refine((value) => /[a-zA-Z]/.test(value), "Enter your full name."),
   phone: z
     .string()
     .trim()

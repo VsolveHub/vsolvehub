@@ -4,6 +4,7 @@ import { VisitDetail } from "./visit-detail";
 
 jest.mock("@/features/access/queries", () => ({
   useVisitArrivalCode: () => ({ isPending: false, data: { code: "4821" } }),
+  useVisitPlan: () => ({ isPending: false, data: { plan: null } }),
 }));
 
 test("visit detail shows the arrival code", async () => {

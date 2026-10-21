@@ -27,6 +27,7 @@ import {
   uploadProfileResume,
   type JobProfile,
 } from "../seeker-queries";
+import { THEME_COLORS } from "../theme-colors";
 import { useResumeUpload } from "../use-document-upload";
 
 type Option = { value: string; label: string };
@@ -250,20 +251,25 @@ export function SeekerProfileForm({ returnTo }: { returnTo?: string }) {
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          colors={[THEME_COLORS.action]}
+          tintColor={THEME_COLORS.action}
+        />
       }
     >
       {/* Alert Notices */}
       {errorMessage ? (
         <View className="flex-row items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3">
-          <AlertCircle size={16} color="#e11d48" />
+          <AlertCircle size={16} color={THEME_COLORS.danger} />
           <Text className="flex-1 text-xs font-bold text-rose-700">{errorMessage}</Text>
         </View>
       ) : null}
 
       {successMessage ? (
         <View className="flex-row items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3">
-          <CheckCircle2 size={16} color="#059669" />
+          <CheckCircle2 size={16} color={THEME_COLORS.success} />
           <Text className="flex-1 text-xs font-bold text-emerald-800">{successMessage}</Text>
         </View>
       ) : null}
@@ -334,7 +340,7 @@ export function SeekerProfileForm({ returnTo }: { returnTo?: string }) {
                 }}
                 className="flex-row items-center gap-1 rounded-full border border-line bg-canvas px-3 py-1 active:border-brand"
               >
-                <Plus size={11} color="#EA580C" />
+                <Plus size={11} color={THEME_COLORS.action} />
                 <Text className="text-xs font-semibold text-navy-900">{r.name}</Text>
                 <Text className="text-[10px] text-text-muted">· {r.category}</Text>
               </Pressable>
@@ -413,7 +419,7 @@ export function SeekerProfileForm({ returnTo }: { returnTo?: string }) {
                       : "border-line bg-canvas active:bg-surface-hover"
                   }`}
                 >
-                  {on ? <Check size={11} color="#EA580C" /> : <Plus size={11} color="#6B6560" />}
+                  {on ? <Check size={11} color={THEME_COLORS.action} /> : <Plus size={11} color={THEME_COLORS.muted} />}
                   <Text
                     className={`text-xs font-semibold ${
                       on ? "text-brand" : "text-text-secondary"
@@ -557,7 +563,7 @@ export function SeekerProfileForm({ returnTo }: { returnTo?: string }) {
                       : "border-line bg-canvas active:bg-surface-hover"
                   }`}
                 >
-                  {isSelected ? <Check size={11} color="#ffffff" /> : null}
+                  {isSelected ? <Check size={11} color={THEME_COLORS.white} /> : null}
                   <Text
                     className={`text-xs font-bold ${
                       isSelected ? "text-white" : "text-text-secondary"
@@ -699,7 +705,7 @@ export function SeekerProfileForm({ returnTo }: { returnTo?: string }) {
                       : "border-line bg-canvas active:bg-surface-hover"
                   }`}
                 >
-                  {isSelected ? <Check size={11} color="#ffffff" /> : null}
+                  {isSelected ? <Check size={11} color={THEME_COLORS.white} /> : null}
                   <Text
                     className={`text-xs font-bold ${
                       isSelected ? "text-white" : "text-text-secondary"
@@ -763,10 +769,10 @@ export function SeekerProfileForm({ returnTo }: { returnTo?: string }) {
           className="flex-row items-center justify-center gap-2 rounded-xl border border-dashed border-brand/50 bg-brand/5 py-3 active:bg-brand/10"
         >
           {uploadResumeMutation.isPending ? (
-            <ActivityIndicator size="small" color="#EA580C" />
+            <ActivityIndicator size="small" color={THEME_COLORS.action} />
           ) : (
             <>
-              <FileUp size={16} color="#EA580C" />
+              <FileUp size={16} color={THEME_COLORS.action} />
               <Text className="text-xs font-bold text-brand">
                 {profileData?.has_resume
                   ? `Replace ${profileData.resume_name || "Resume"}`
@@ -813,7 +819,7 @@ export function SeekerProfileForm({ returnTo }: { returnTo?: string }) {
                 >
                   {vis.label}
                 </Text>
-                {isSelected ? <Check size={14} color="#00112e" /> : null}
+                {isSelected ? <Check size={14} color={THEME_COLORS.navy900} /> : null}
               </Pressable>
             );
           })}
@@ -829,7 +835,7 @@ export function SeekerProfileForm({ returnTo }: { returnTo?: string }) {
         className="mt-2 rounded-xl py-3.5"
       >
         {saveMutation.isPending ? (
-          <ActivityIndicator color="#fff" size="small" />
+          <ActivityIndicator color={THEME_COLORS.white} size="small" />
         ) : (
           "Save Job Profile"
         )}

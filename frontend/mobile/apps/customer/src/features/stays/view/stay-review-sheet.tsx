@@ -19,6 +19,7 @@ import {
 
 import { MAX_REVIEW_PHOTOS } from "../model";
 import { submitStayReview, uploadStayReviewPhoto } from "../queries";
+import { THEME_COLORS } from "../theme-colors";
 
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024; // 10 MB
 const PHOTO_TOO_LARGE = "Each photo must be under 10 MB.";
@@ -145,7 +146,7 @@ export function StayReviewSheet({
       >
         {error ? (
           <View className="flex-row items-center gap-2 rounded-xl bg-danger/10 p-3">
-            <AlertCircle size={16} color="#dc2626" />
+            <AlertCircle size={16} color={THEME_COLORS.red600} />
             <Text className="flex-1 text-xs font-medium text-danger">{error}</Text>
           </View>
         ) : null}
@@ -157,13 +158,16 @@ export function StayReviewSheet({
             {[1, 2, 3, 4, 5].map((star) => (
               <Pressable
                 key={star}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel={`${star} stars`}
                 onPress={() => setRating(star)}
                 className="p-1 active:scale-110"
               >
                 <Star
                   size={28}
-                  color="#f59e0b"
-                  fill={star <= rating ? "#f59e0b" : "transparent"}
+                  color={THEME_COLORS.amber}
+                  fill={star <= rating ? THEME_COLORS.amber : "transparent"}
                 />
               </Pressable>
             ))}
@@ -213,7 +217,7 @@ export function StayReviewSheet({
                   onPress={() => handleRemovePhoto(url)}
                   className="absolute right-1 top-1 size-5 items-center justify-center rounded-full bg-navy-950/70"
                 >
-                  <X size={12} color="#ffffff" />
+                  <X size={12} color={THEME_COLORS.white} />
                 </Pressable>
               </View>
             ))}
@@ -225,10 +229,10 @@ export function StayReviewSheet({
                 className="size-16 items-center justify-center rounded-xl border-2 border-dashed border-line active:border-brand"
               >
                 {uploading ? (
-                  <ActivityIndicator size="small" color="#ea580c" />
+                  <ActivityIndicator size="small" color={THEME_COLORS.action} />
                 ) : (
                   <View className="items-center gap-1">
-                    <ImagePlus size={16} color="#6B6560" />
+                    <ImagePlus size={16} color={THEME_COLORS.muted} />
                     <Text className="text-[9px] font-bold text-text-muted">Add</Text>
                   </View>
                 )}
@@ -255,7 +259,7 @@ export function StayReviewSheet({
             className="flex-1 rounded-xl"
           >
             {mutation.isPending ? (
-              <ActivityIndicator color="#ffffff" size="small" />
+              <ActivityIndicator color={THEME_COLORS.white} size="small" />
             ) : (
               "Submit Review"
             )}

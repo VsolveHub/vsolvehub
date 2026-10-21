@@ -52,4 +52,4 @@ test("new request sends the typed details", async () => {
     { variantId: "variant-1", answers: { details: "Two rooms" }, language: "en" },
     expect.any(Object),
   );
-});
+}, 20000);

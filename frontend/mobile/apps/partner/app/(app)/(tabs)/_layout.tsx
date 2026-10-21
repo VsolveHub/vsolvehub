@@ -1,10 +1,11 @@
 // Ported from frontend/apps/partner/features/session/partner-shell.tsx BottomTabBar
 import { useMobileLogout } from "@vsolve/mobile-core";
-import { Button, Logo, Text, cn } from "@vsolve/mobile-ui";
+import { Logo, Text, cn } from "@vsolve/mobile-ui";
 import { useRouter, usePathname, Slot } from "expo-router";
 import { ArrowLeft, Home, type LucideIcon } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { Pressable, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { NotificationPanel } from "@/features/notifications/view/notification-panel";
 import { LiveOfferSheet } from "@/features/crew-offer/view/live-offer-sheet";
@@ -12,12 +13,21 @@ import { subscribeOpenAlerts } from "@/features/notifications/alerts-bus";
 import { unreadBadgeDisplay, unreadBadgeLabel } from "@/features/notifications/model/feed";
 import { useUnreadNotificationCount } from "@/features/notifications/queries";
 import { focusedHeaderTitle, getPartnerChromeMode } from "@/features/session/chrome";
-import { TAP_FIRST_NAV, primaryShellNavFor, dockNavFor, type WorkspaceNavItem } from "@/features/workspace/registry";
+import { handleFocusedBack } from "@/features/session/focused-back";
+import {
+  TAP_FIRST_NAV,
+  primaryShellNavFor,
+  dockNavFor,
+  resolveWorkspaces,
+  specialtyShellHome,
+  type WorkspaceNavItem,
+} from "@/features/workspace/registry";
 import { usePartnerWorkspaceGrants } from "@/features/workspace/queries";
 
 export default function TabsLayout() {
   const pathname = usePathname();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const signOut = useMobileLogout();
   const chrome = getPartnerChromeMode(pathname);
   const [alertsOpen, setAlertsOpen] = useState(false);
@@ -26,18 +36,29 @@ export default function TabsLayout() {
   const unread = count.isSuccess && count.data !== undefined ? count.data.unread : null;
   const badge = unreadBadgeDisplay(unread);
 
-  const isDarkHero = pathname === "/home" || pathname.startsWith("/work");
+  const specialty = specialtyShellHome(resolveWorkspaces(grants.grants ?? []));
+  const isDarkHero = (pathname === "/home" && (specialty as string) === "work") || pathname.startsWith("/work");
 
   useEffect(() => subscribeOpenAlerts(() => setAlertsOpen(true)), []);
 
   if (chrome === "focused") {
     return (
       <View className="flex-1 bg-canvas">
-        <View className="h-14 flex-row items-center justify-between border-b border-line bg-surface px-3">
+        <View
+          style={{
+            paddingTop: Math.max(insets.top, 16) + 10,
+            elevation: 4,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.06,
+            shadowRadius: 10,
+          }}
+          className="rounded-b-[2.25rem] bg-surface px-4 pb-4 flex-row items-center justify-between"
+        >
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Go back"
-            onPress={() => router.back()}
+            onPress={() => handleFocusedBack(() => router.back())}
             className="h-11 w-11 items-center justify-center rounded-control active:bg-surface-hover"
           >
             <ArrowLeft size={20} color="#071328" />
@@ -56,9 +77,14 @@ export default function TabsLayout() {
   const activeNav = dockNavFor(rawNav);
   const homeItem = activeNav.find((item) => item.href === "/home" || item.label === "Home");
   const sideItems = activeNav.filter((item) => item.href !== "/home" && item.label !== "Home");
-  const midPoint = Math.ceil(sideItems.length / 2);
-  const leftItems = sideItems.slice(0, midPoint);
-  const rightItems = sideItems.slice(midPoint);
+  const isUtilityTab = (item: WorkspaceNavItem) =>
+    item.kind === "notifications" ||
+    item.href === "#notifications" ||
+    item.href === "/me" ||
+    item.label === "Alerts" ||
+    item.label === "Me";
+  const leftItems = sideItems.filter((item) => !isUtilityTab(item));
+  const rightItems = sideItems.filter(isUtilityTab);
 
   const isHomeActive = pathname === "/home";
 
@@ -67,32 +93,45 @@ export default function TabsLayout() {
       {/* Top Header for Full Chrome */}
       {chrome === "full" ? (
         <View
+          style={{
+            paddingTop: Math.max(insets.top, 16) + 14,
+            elevation: isDarkHero ? 0 : 5,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: isDarkHero ? 0 : 0.07,
+            shadowRadius: 14,
+          }}
           className={cn(
-            "min-h-16 flex-row items-center justify-between px-4 py-3",
+            "flex-row items-center justify-between px-6 pb-5 z-30",
             isDarkHero
               ? "bg-[#00112e] border-b border-[#001a4e]"
-              : "bg-surface border-b border-line shadow-xs"
+              : "rounded-b-[2.25rem] bg-surface"
           )}
         >
           <Pressable
             accessibilityRole="link"
             accessibilityLabel="Home"
             onPress={() => router.push("/home")}
-            className="flex-row items-center"
+            className="flex-row items-center active:opacity-80"
           >
             <Logo dark={isDarkHero} />
           </Pressable>
 
-          <Button
-            variant="ghost"
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Sign Out"
             onPress={() => void signOut()}
-            className={cn(
-              "h-9 px-3",
-              isDarkHero ? "text-white/80 active:bg-white/10" : "text-text-secondary active:bg-surface-hover"
-            )}
+            className="py-1.5 px-2 active:opacity-70"
           >
-            Sign Out
-          </Button>
+            <Text
+              className={cn(
+                "text-[15px] font-semibold tracking-tight",
+                isDarkHero ? "text-white/80" : "text-navy-900"
+              )}
+            >
+              Sign Out
+            </Text>
+          </Pressable>
         </View>
       ) : null}
 
@@ -131,7 +170,10 @@ export default function TabsLayout() {
             ) : null}
 
             {/* Main Curved Dock Bar */}
-            <View className="rounded-t-[1.75rem] bg-[#00112e] px-2 pb-6 pt-3 shadow-2xl">
+            <View
+              style={{ paddingBottom: Math.max(insets.bottom, 22) }}
+              className="rounded-t-[1.75rem] bg-[#00112e] px-2 pt-3 shadow-2xl"
+            >
               <View className="flex-row items-end">
                 {/* Left Side Tabs (Work, Money) */}
                 <View className="flex-1 flex-row items-end justify-around">

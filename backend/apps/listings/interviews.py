@@ -29,6 +29,7 @@ _CAN_INTERVIEW = (
     Application.Status.SHORTLISTED,
     Application.Status.INTERVIEW,
     Application.Status.CONTACTED,
+    Application.Status.REJECTED,
 )
 
 

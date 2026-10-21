@@ -81,6 +81,7 @@ export function AddressSheet({
             setLocality("Hyderabad");
             setCity("Hyderabad");
             setMode("add");
+            setLocateError("Automatic address resolution failed. Please verify your address details below.");
             setLocating(false);
           },
         },

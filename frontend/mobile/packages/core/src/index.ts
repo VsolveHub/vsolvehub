@@ -11,6 +11,7 @@ export type { MobileOtpFlow } from "./auth/use-mobile-otp-flow";
 export { useMobileLogout } from "./auth/use-mobile-logout";
 
 export { getApiClient } from "./api/client";
+export type { MobileApiClient, ExtendedHttpMethods } from "./api/client";
 
 export { getMobileQueryClient, bindAppStateFocus, bindNetworkOnline } from "./query/query-client";
 export { MobileQueryProvider } from "./query/provider";

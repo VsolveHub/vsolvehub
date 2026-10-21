@@ -27,6 +27,7 @@ import {
   type StayVisit,
 } from "../model";
 import { createStayVisit, fetchVisitSlots } from "../queries";
+import { THEME_COLORS } from "../theme-colors";
 
 const WEEK = ["M", "T", "W", "T", "F", "S", "S"];
 
@@ -150,7 +151,7 @@ export function StayVisitSheet({
       {requested ? (
         <View className="gap-5 py-3">
           <View className="items-center rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-center">
-            <CheckCircle2 size={40} color="#059669" />
+            <CheckCircle2 size={40} color={THEME_COLORS.emerald600} />
             <Text className="mt-3 text-base font-extrabold text-emerald-950">
               Visit Requested
             </Text>
@@ -164,7 +165,7 @@ export function StayVisitSheet({
 
             <View className="mt-4 w-full rounded-xl bg-white/80 p-3 border border-emerald-200/60">
               <View className="flex-row items-center gap-2">
-                <Phone size={14} color="#059669" />
+                <Phone size={14} color={THEME_COLORS.emerald600} />
                 <Text className="text-xs font-bold text-emerald-950">
                   Confirmation Details
                 </Text>
@@ -196,14 +197,14 @@ export function StayVisitSheet({
         >
           {error ? (
             <View className="flex-row items-center gap-2 rounded-xl bg-danger/10 p-3">
-              <AlertCircle size={16} color="#dc2626" />
+              <AlertCircle size={16} color={THEME_COLORS.red600} />
               <Text className="flex-1 text-xs font-medium text-danger">{error}</Text>
             </View>
           ) : null}
 
           {slotsQuery.isLoading ? (
             <View className="items-center py-8">
-              <ActivityIndicator color="#00112e" />
+              <ActivityIndicator color={THEME_COLORS.navy900} />
               <Text className="mt-2 text-xs text-text-secondary">
                 Loading available visiting slots…
               </Text>
@@ -270,7 +271,7 @@ export function StayVisitSheet({
               <View className="gap-2 rounded-2xl border border-line bg-surface p-3.5">
                 <View className="flex-row items-center justify-between">
                   <View className="flex-row items-center gap-1.5">
-                    <CalendarClock size={14} color="#6B6560" />
+                    <CalendarClock size={14} color={THEME_COLORS.muted} />
                     <Text className="text-xs font-bold text-navy-900">Pick a day</Text>
                   </View>
                   <Text className="text-[11px] font-semibold text-text-muted">
@@ -369,7 +370,7 @@ export function StayVisitSheet({
                         >
                           <Clock
                             size={12}
-                            color={isSelected ? "#ea580c" : "#6B6560"}
+                            color={isSelected ? THEME_COLORS.actionDark : THEME_COLORS.muted}
                           />
                           <Text
                             className={`text-xs font-bold ${
@@ -408,7 +409,7 @@ export function StayVisitSheet({
                 className="mt-2 w-full rounded-xl py-3.5"
               >
                 {mutation.isPending ? (
-                  <ActivityIndicator color="#ffffff" size="small" />
+                  <ActivityIndicator color={THEME_COLORS.white} size="small" />
                 ) : (
                   "Request Visit"
                 )}

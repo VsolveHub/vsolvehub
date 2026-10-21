@@ -36,7 +36,7 @@ export function RazorpayCheckout({
   return (
     <Modal visible animationType="slide" onRequestClose={() => onEnded("dismissed")}>
       <WebView
-        originWhitelist={["*"]}
+        originWhitelist={["about:blank", "https://*.razorpay.com", "https://*.razorpay.com/*", "https://api.razorpay.com/*"]}
         source={{ html }}
         onShouldStartLoadWithRequest={onShouldStart}
         onMessage={(event) => {

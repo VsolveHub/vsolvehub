@@ -218,6 +218,11 @@ class PartnerPayoutAccountView(APIView):
             .first()
         )
         if account is None:
+            if (
+                request.headers.get("X-Accept-Null") == "true"
+                or request.query_params.get("optional") == "1"
+            ):
+                return Response(None, status=status.HTTP_200_OK)
             return Response(
                 {"detail": "No payout account is registered."}, status=status.HTTP_404_NOT_FOUND
             )

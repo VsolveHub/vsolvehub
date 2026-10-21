@@ -49,13 +49,18 @@ export function HandoverPinDialog({
       title="Confirm Handover"
       description={`Handing over ${equipmentTitle} to ${customerName}`}
     >
-      <View className="gap-4 py-2">
+      <ScrollView
+        bounces={false}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerClassName="gap-3 py-1"
+      >
         <Text className="text-xs text-text-secondary leading-relaxed">
           Ask the renter for the 4-digit PIN displayed on their active booking card. This verifies
           that the equipment is in their custody.
         </Text>
 
-        <View className="gap-1.5 items-center my-2">
+        <View className="gap-1.5 items-center my-1">
           <Text className="text-xs font-bold text-navy-900">Customer 4-Digit Handover PIN</Text>
           <TextInput
             value={pin}
@@ -67,7 +72,7 @@ export function HandoverPinDialog({
             placeholderTextColor={COLOR_TOKENS.placeholderText}
             keyboardType="number-pad"
             maxLength={4}
-            className="w-48 rounded-2xl border-2 border-line bg-canvas p-3 text-center text-3xl font-extrabold tracking-widest text-navy-900"
+            className="w-48 rounded-2xl border-2 border-line bg-canvas p-2.5 text-center text-3xl font-extrabold tracking-widest text-navy-900"
           />
         </View>
 
@@ -97,7 +102,7 @@ export function HandoverPinDialog({
             </Text>
           </Button>
         </View>
-      </View>
+      </ScrollView>
     </Dialog>
   );
 }
@@ -387,7 +392,12 @@ export function PartnerCancelDialog({
       title="Cancel Reservation"
       description={`Cancel rental booking for ${equipmentTitle}`}
     >
-      <View className="gap-3 py-2">
+      <ScrollView
+        bounces={false}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerClassName="gap-3 py-1"
+      >
         <Text className="text-xs text-text-secondary leading-relaxed">
           Pre-handover cancellations will automatically refund any payments collected from the
           customer.
@@ -397,7 +407,10 @@ export function PartnerCancelDialog({
           <Text className="text-xs font-bold text-navy-900">Cancellation Reason *</Text>
           <TextInput
             value={reason}
-            onChangeText={setReason}
+            onChangeText={(text) => {
+              setReason(text);
+              if (error) setError(null);
+            }}
             placeholder="e.g. Equipment undergoing maintenance, owner unavailable..."
             placeholderTextColor={COLOR_TOKENS.placeholderText}
             multiline
@@ -428,7 +441,7 @@ export function PartnerCancelDialog({
             </Text>
           </Button>
         </View>
-      </View>
+      </ScrollView>
     </Dialog>
   );
 }

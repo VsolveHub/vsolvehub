@@ -396,6 +396,7 @@ export function StayEnquirySheet({
               <View className="flex-row items-center gap-3">
                 <Pressable
                   disabled={adults <= 1}
+                  hitSlop={10}
                   onPress={() => setAdultCount((curr) => Math.max(1, curr - 1))}
                   className="size-7 items-center justify-center rounded-full border border-line bg-surface active:bg-surface-hover disabled:opacity-40"
                 >
@@ -406,6 +407,7 @@ export function StayEnquirySheet({
                 </Text>
                 <Pressable
                   disabled={adults + children >= maxGuests}
+                  hitSlop={10}
                   onPress={() =>
                     setAdultCount((curr) =>
                       Math.min(curr + 1, maxGuests - children),
@@ -427,6 +429,7 @@ export function StayEnquirySheet({
               <View className="flex-row items-center gap-3">
                 <Pressable
                   disabled={children <= 0}
+                  hitSlop={10}
                   onPress={() => setChildCount((curr) => Math.max(0, curr - 1))}
                   className="size-7 items-center justify-center rounded-full border border-line bg-surface active:bg-surface-hover disabled:opacity-40"
                 >
@@ -437,6 +440,7 @@ export function StayEnquirySheet({
                 </Text>
                 <Pressable
                   disabled={adults + children >= maxGuests}
+                  hitSlop={10}
                   onPress={() =>
                     setChildCount((curr) =>
                       Math.min(curr + 1, maxGuests - adults),

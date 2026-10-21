@@ -1,12 +1,10 @@
 import { Badge, Button, Card, Dialog, Text } from "@vsolve/mobile-ui";
 import { useState } from "react";
-import { Image, ScrollView, View } from "react-native";
+import { Image, Pressable, View } from "react-native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  BedDouble,
-  Camera,
-  Clock,
-  Edit3,
+  ChevronLeft,
+  ChevronRight,
   MapPin,
 } from "lucide-react-native";
 
@@ -38,7 +36,7 @@ function statusNote(property: StayProperty): string | null {
       return "Removed by VSolve. Contact support if you think this is a mistake.";
     default:
       return property.listing_status === "PAUSED"
-        ? "Paused. Guests can't find it or book it; existing bookings go ahead as planned."
+        ? "Paused. Guests cannot find or book it; existing bookings go ahead as planned."
         : null;
   }
 }
@@ -101,92 +99,126 @@ export function PropertyCard({
     (property.moderation_status === "DRAFT" || property.moderation_status === "REJECTED");
   const note = statusNote(property);
 
-  // Photos fallback: building photos first; with none, room photos stand in.
+  // Photos fallback: building photos first; direct image_urls second; room photos third.
+  const directUrls = (property.image_urls ?? [])
+    .filter(Boolean)
+    .map((url, i) => ({ id: `img-${i}`, url }));
+
   const photoSlides: { id: string; url: string }[] =
     media.length > 0
       ? media.filter((m) => Boolean(m.url)).map((m) => ({ id: m.id, url: m.url }))
-      : rooms.flatMap((unit) =>
-          (unit.media ?? []).filter((m) => Boolean(m.url)).map((m) => ({ id: m.id, url: m.url })),
-        );
+      : directUrls.length > 0
+        ? directUrls
+        : rooms.flatMap((unit) =>
+            (unit.media ?? []).filter((m) => Boolean(m.url)).map((m) => ({ id: m.id, url: m.url })),
+          );
+
+  const currentSlide = photoSlides[activePhotoIndex] || photoSlides[0];
+
+  const handlePrev = () => {
+    if (photoSlides.length > 1) {
+      setActivePhotoIndex((prev) => (prev - 1 + photoSlides.length) % photoSlides.length);
+    }
+  };
+
+  const handleNext = () => {
+    if (photoSlides.length > 1) {
+      setActivePhotoIndex((prev) => (prev + 1) % photoSlides.length);
+    }
+  };
 
   return (
     <>
-      <Card className="overflow-hidden border border-line bg-surface p-0 shadow-sm">
+      <Card className="overflow-hidden rounded-2xl border border-line bg-surface p-0 shadow-xs mb-4">
         {/* Photo carousel / header */}
-        <View className="relative h-48 w-full bg-surface-muted">
-          {photoSlides.length > 0 ? (
-            <ScrollView
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              onScroll={(e) => {
-                const width = e.nativeEvent.layoutMeasurement.width;
-                if (width > 0) {
-                  const idx = Math.round(e.nativeEvent.contentOffset.x / width);
-                  setActivePhotoIndex(idx);
-                }
-              }}
-              scrollEventThrottle={16}
-            >
-              {photoSlides.map((slide) => (
-                <Image
-                  key={slide.id}
-                  source={{ uri: slide.url }}
-                  className="h-48 w-full"
-                  style={{ width: 360 }}
-                  resizeMode="cover"
-                />
-              ))}
-            </ScrollView>
+        <View className="relative h-52 w-full bg-surface-sunken">
+          {currentSlide?.url ? (
+            <Image
+              source={{ uri: currentSlide.url }}
+              className="h-52 w-full"
+              resizeMode="cover"
+            />
           ) : (
-            <View className="h-48 w-full items-center justify-center">
+            <View className="h-52 w-full items-center justify-center">
               <Text className="text-3xl">🏢</Text>
               <Text className="mt-1 text-xs text-text-muted">No photos yet</Text>
             </View>
           )}
 
-          {/* Status badge overlay */}
-          <View className="absolute right-3 top-3 z-10">
-            <Badge tone={status.tone}>{status.label}</Badge>
-          </View>
-
-          {/* Carousel dots */}
+          {/* Previous / Next buttons */}
           {photoSlides.length > 1 ? (
-            <View className="absolute bottom-2 left-0 right-0 flex-row justify-center gap-1.5">
-              {photoSlides.map((_, i) => (
-                <View
-                  key={i}
-                  className={`h-1.5 rounded-full transition-all ${
-                    i === activePhotoIndex ? "w-4 bg-white" : "w-1.5 bg-white/60"
-                  }`}
-                />
-              ))}
-            </View>
+            <>
+              <Pressable
+                hitSlop={8}
+                onPress={handlePrev}
+                accessibilityLabel="Previous photo"
+                style={{ transform: [{ translateY: -16 }] }}
+                className="absolute left-2.5 top-1/2 size-8 rounded-full bg-white/90 items-center justify-center shadow-xs z-20 active:bg-white"
+              >
+                <ChevronLeft size={16} color="#071328" strokeWidth={2.5} />
+              </Pressable>
+
+              <Pressable
+                hitSlop={8}
+                onPress={handleNext}
+                accessibilityLabel="Next photo"
+                style={{ transform: [{ translateY: -16 }] }}
+                className="absolute right-2.5 top-1/2 size-8 rounded-full bg-white/90 items-center justify-center shadow-xs z-20 active:bg-white"
+              >
+                <ChevronRight size={16} color="#071328" strokeWidth={2.5} />
+              </Pressable>
+
+              {/* Photo counter pill */}
+              <View className="absolute bottom-2.5 left-2.5 rounded-full bg-black/60 px-2.5 py-0.5 z-20">
+                <Text className="text-[11px] font-semibold text-white">
+                  {activePhotoIndex + 1} / {photoSlides.length}
+                </Text>
+              </View>
+            </>
           ) : null}
+
+          {/* Status badge overlay */}
+          <View className="absolute right-2.5 top-2.5 z-20">
+            {property.listing_status === "PAUSED" ? (
+              <View className="rounded-full bg-black/60 px-2.5 py-1">
+                <Text className="text-xs font-semibold text-white">
+                  Paused — hidden from guests
+                </Text>
+              </View>
+            ) : property.listing_status === "LIVE" ? (
+              <View className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1">
+                <Text className="text-xs font-semibold text-emerald-700">Live</Text>
+              </View>
+            ) : (
+              <Badge tone={status.tone}>{status.label}</Badge>
+            )}
+          </View>
         </View>
 
         {/* Info Content */}
         <View className="p-4 flex-col gap-2">
           <View className="flex-col gap-1">
-            <Text className="text-base font-bold text-text">{property.title}</Text>
+            <Text className="text-base font-bold text-navy-900">{property.title}</Text>
 
             {property.location_text ? (
               <View className="flex-row items-center gap-1">
                 <MapPin size={13} color="#71717a" />
-                <Text className="text-xs text-text-muted" numberOfLines={1}>
+                <Text className="text-xs text-text-secondary font-medium" numberOfLines={1}>
                   {property.location_text}
                 </Text>
               </View>
             ) : null}
 
-            <Text className="text-xs text-text-secondary mt-0.5">
+            <Text className="text-xs text-text-secondary mt-0.5 font-medium">
               {cheapest !== null
                 ? `From ${formatPaise(cheapest)} ${ratePeriodSuffix(property.price_period)} · `
                 : ""}
               {totalAvailableRooms} of {totalRoomUnits} rooms available
             </Text>
 
-            {note ? <Text className="mt-1 text-xs text-text-muted">{note}</Text> : null}
+            {note ? (
+              <Text className="mt-0.5 text-xs text-text-secondary leading-relaxed">{note}</Text>
+            ) : null}
 
             {(property.moderation_status === "REJECTED" ||
               property.moderation_status === "REMOVED") &&
@@ -199,111 +231,103 @@ export function PropertyCard({
             {actionError ? <Text className="text-xs text-rose-600">{actionError}</Text> : null}
           </View>
 
-          {/* Lifecycle Action Buttons */}
-          <View className="mt-2 flex-row flex-wrap gap-2 pt-2 border-t border-line/60">
-            {canPublish ? (
-              <Button
-                variant="primary"
-                size="sm"
-                disabled={act.isPending || activeRooms.length === 0}
-                onPress={() => act.mutate("publish")}
-                className="h-8 px-3"
-              >
-                <Text className="text-xs font-bold text-white">
-                  {act.isPending ? "Publishing…" : "Publish"}
-                </Text>
-              </Button>
-            ) : null}
+          {/* Action Buttons */}
+          <View className="mt-2 flex-col gap-2 pt-2 border-t border-line/60">
+            {/* Row 1: Resume/Pause, Rooms, Edit details */}
+            <View className="flex-row flex-wrap gap-2">
+              {canPublish ? (
+                <Pressable
+                  disabled={act.isPending || activeRooms.length === 0}
+                  onPress={() => act.mutate("publish")}
+                  className="rounded-xl bg-[#f87000] px-4 py-2 items-center justify-center active:opacity-90 shadow-xs"
+                >
+                  <Text className="text-xs font-bold text-white">
+                    {act.isPending ? "Publishing…" : "Publish"}
+                  </Text>
+                </Pressable>
+              ) : null}
 
-            {approved && property.listing_status === "LIVE" ? (
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={act.isPending}
-                onPress={() => setConfirmPauseOpen(true)}
-                className="h-8 px-3"
-              >
-                <Text className="text-xs font-semibold text-text">Pause</Text>
-              </Button>
-            ) : null}
+              {approved && property.listing_status === "LIVE" ? (
+                <Pressable
+                  disabled={act.isPending}
+                  onPress={() => setConfirmPauseOpen(true)}
+                  className="rounded-xl border border-line bg-surface px-4 py-2 items-center justify-center active:bg-surface-hover shadow-xs"
+                >
+                  <Text className="text-xs font-semibold text-navy-900">Pause</Text>
+                </Pressable>
+              ) : null}
 
-            {approved && property.listing_status === "PAUSED" ? (
-              <Button
-                variant="primary"
-                size="sm"
-                disabled={act.isPending}
-                onPress={() => act.mutate("resume")}
-                className="h-8 px-3"
-              >
-                <Text className="text-xs font-bold text-white">Resume</Text>
-              </Button>
-            ) : null}
+              {approved && property.listing_status === "PAUSED" ? (
+                <Pressable
+                  disabled={act.isPending}
+                  onPress={() => act.mutate("resume")}
+                  className="rounded-xl bg-[#f87000] px-4 py-2 items-center justify-center active:opacity-90 shadow-xs"
+                >
+                  <Text className="text-xs font-bold text-white">Resume</Text>
+                </Pressable>
+              ) : null}
 
+              {!archived ? (
+                <>
+                  <Pressable
+                    onPress={() => onManageRooms(property)}
+                    className="rounded-xl border border-line bg-surface px-4 py-2 items-center justify-center active:bg-surface-hover shadow-xs"
+                  >
+                    <Text className="text-xs font-semibold text-navy-900">Rooms</Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() => onEditDetails(property)}
+                    className="rounded-xl border border-line bg-surface px-4 py-2 items-center justify-center active:bg-surface-hover shadow-xs"
+                  >
+                    <Text className="text-xs font-semibold text-navy-900">Edit details</Text>
+                  </Pressable>
+                </>
+              ) : (
+                <Pressable
+                  disabled={act.isPending}
+                  onPress={() => act.mutate("restore")}
+                  className="rounded-xl border border-line bg-surface px-4 py-2 items-center justify-center active:bg-surface-hover shadow-xs"
+                >
+                  <Text className="text-xs font-semibold text-navy-900">Restore</Text>
+                </Pressable>
+              )}
+            </View>
+
+            {/* Row 2: Building photos, Visiting hours */}
             {!archived ? (
-              <>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onPress={() => onManageRooms(property)}
-                  className="h-8 flex-row items-center gap-1 px-2.5"
-                >
-                  <BedDouble size={13} color="#00112e" />
-                  <Text className="text-xs font-semibold text-text">Rooms</Text>
-                </Button>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onPress={() => onEditDetails(property)}
-                  className="h-8 flex-row items-center gap-1 px-2.5"
-                >
-                  <Edit3 size={13} color="#00112e" />
-                  <Text className="text-xs font-semibold text-text">Edit Details</Text>
-                </Button>
-
-                <Button
-                  variant="outline"
-                  size="sm"
+              <View className="flex-row flex-wrap gap-2">
+                <Pressable
                   onPress={() => onManagePhotos?.(property)}
-                  className="h-8 flex-row items-center gap-1 px-2.5"
+                  className="rounded-xl border border-line bg-surface px-4 py-2 items-center justify-center active:bg-surface-hover shadow-xs"
                 >
-                  <Camera size={13} color="#00112e" />
-                  <Text className="text-xs font-semibold text-text">Building photos</Text>
-                </Button>
+                  <Text className="text-xs font-semibold text-navy-900">Building photos</Text>
+                </Pressable>
 
-                <Button
-                  variant="outline"
-                  size="sm"
+                <Pressable
                   onPress={() => onVisitingHours(property)}
-                  className="h-8 flex-row items-center gap-1 px-2.5"
+                  className="rounded-xl border border-line bg-surface px-4 py-2 items-center justify-center active:bg-surface-hover shadow-xs"
                 >
-                  <Clock size={13} color="#00112e" />
-                  <Text className="text-xs font-semibold text-text">Visiting Hours</Text>
-                </Button>
+                  <Text className="text-xs font-semibold text-navy-900">Visiting hours</Text>
+                </Pressable>
+              </View>
+            ) : null}
 
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onPress={() => setConfirmArchiveOpen(true)}
-                  className="h-8 px-2.5 ml-auto"
-                >
-                  <Text className="text-xs font-semibold text-rose-600">Archive</Text>
-                </Button>
-              </>
-            ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={act.isPending}
-                onPress={() => act.mutate("restore")}
-                className="h-8 px-3"
+            {/* Row 3: Archive */}
+            {!archived ? (
+              <Pressable
+                onPress={() => setConfirmArchiveOpen(true)}
+                className="self-start pt-1"
               >
-                <Text className="text-xs font-semibold text-text">Restore</Text>
-              </Button>
-            )}
+                <Text className="text-xs font-semibold text-text-muted active:text-text">
+                  Archive
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
         </View>
       </Card>
+
 
       {/* Two-step confirm: Pause */}
       <Dialog

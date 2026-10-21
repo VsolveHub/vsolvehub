@@ -47,6 +47,7 @@ export default function ApplyLayout() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={`Back to ${back.label}`}
+                hitSlop={8}
                 onPress={() => router.push(back.href as never)}
                 className="h-10 w-10 items-center justify-center rounded-full border border-line bg-surface-sunken active:bg-surface-hover"
               >

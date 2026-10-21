@@ -10,13 +10,13 @@ import type {
 } from "./model";
 
 export async function fetchPartnerListings(): Promise<PartnerListing[]> {
-  const data = await request(() => (getApiClient() as any).GET("/api/v1/partner/listings"));
+  const data = await request(() => getApiClient().GET("/api/v1/partner/listings"));
   return Array.isArray(data) ? (data as PartnerListing[]) : [];
 }
 
 export async function fetchPartnerListing(id: string): Promise<PartnerListing> {
   const data = await request(() =>
-    (getApiClient() as any).GET("/api/v1/partner/listings/{listing_id}", {
+    getApiClient().GET<PartnerListing>("/api/v1/partner/listings/{listing_id}", {
       params: { path: { listing_id: id } },
     }),
   );
@@ -27,8 +27,8 @@ export const fetchPartnerListingDetail = fetchPartnerListing;
 
 export function fetchListingHome(): Promise<ListingHome> {
   return request(() =>
-    (getApiClient() as any).GET("/api/v1/partner/listings/home"),
-  ) as Promise<ListingHome>;
+    getApiClient().GET<ListingHome>("/api/v1/partner/listings/home"),
+  );
 }
 
 export const fetchPartnerListingHome = fetchListingHome;
@@ -44,11 +44,11 @@ export async function createPartnerListing(payload: {
   experience?: string;
   description?: string;
   requirements?: string;
-  structured_fields?: Record<string, any>;
-  [key: string]: any;
+  structured_fields?: Record<string, unknown>;
+  [key: string]: unknown;
 }): Promise<PartnerListing> {
   const data = await request(() =>
-    (getApiClient() as any).POST("/api/v1/partner/listings", {
+    getApiClient().POST<PartnerListing>("/api/v1/partner/listings", {
       body: {
         is_premium: false,
         ...payload,
@@ -63,7 +63,7 @@ export async function updatePartnerListing(
   payload: Partial<PartnerListing>,
 ): Promise<PartnerListing> {
   const data = await request(() =>
-    (getApiClient() as any).PUT("/api/v1/partner/listings/{listing_id}", {
+    getApiClient().PUT<PartnerListing>("/api/v1/partner/listings/{listing_id}", {
       params: { path: { listing_id: listingId } },
       body: payload,
     }),
@@ -75,9 +75,9 @@ export async function runListingAction(
   listingId: string,
   action: "submit" | "publish" | "republish" | "close" | "purchase-premium",
   reason: string = "",
-): Promise<any> {
+): Promise<unknown> {
   const data = await request(() =>
-    (getApiClient() as any).POST("/api/v1/partner/listings/{listing_id}/{action}", {
+    getApiClient().POST("/api/v1/partner/listings/{listing_id}/{action}", {
       params: { path: { listing_id: listingId, action } },
       body: { reason },
     }),
@@ -86,20 +86,27 @@ export async function runListingAction(
 }
 
 export async function fetchListingApplications(listingId: string): Promise<PartnerApplication[]> {
-  const data = await request(() =>
-    (getApiClient() as any).GET("/api/v1/partner/listings/{listing_id}/applications", {
-      params: { path: { listing_id: listingId } },
-    }),
-  );
-  return Array.isArray(data) ? (data as PartnerApplication[]) : [];
+  try {
+    const data = await request(() =>
+      getApiClient().GET("/api/v1/partner/listings/{listing_id}/applications", {
+        params: { path: { listing_id: listingId } },
+      }),
+    );
+    return Array.isArray(data) ? (data as PartnerApplication[]) : [];
+  } catch (err: any) {
+    if (err?.status === 404 || err?.statusCode === 404 || err?.message?.includes("404")) {
+      return [];
+    }
+    throw err;
+  }
 }
 
 export async function updateApplicationStatus(
   applicationId: string,
   status: string,
-): Promise<any> {
+): Promise<unknown> {
   const data = await request(() =>
-    (getApiClient() as any).POST(
+    getApiClient().POST(
       "/api/v1/partner/listing-applications/{application_id}/{action}",
       {
         params: { path: { application_id: applicationId, action: "status" } },
@@ -110,9 +117,9 @@ export async function updateApplicationStatus(
   return data;
 }
 
-export async function revealApplicationContact(applicationId: string): Promise<any> {
+export async function revealApplicationContact(applicationId: string): Promise<unknown> {
   const data = await request(() =>
-    (getApiClient() as any).POST(
+    getApiClient().POST(
       "/api/v1/partner/listing-applications/{application_id}/{action}",
       {
         params: { path: { application_id: applicationId, action: "reveal-contact" } },
@@ -125,33 +132,39 @@ export async function revealApplicationContact(applicationId: string): Promise<a
 
 export function fetchSubscriptionPlans(): Promise<VendorSubscriptionPlan[]> {
   return request(() =>
-    (getApiClient() as any).GET("/api/v1/partner/listing-subscription-plans"),
-  );
+    getApiClient().GET("/api/v1/partner/listing-subscription-plans"),
+  ) as Promise<VendorSubscriptionPlan[]>;
 }
 
 export function purchaseSubscription(planId: string): Promise<VendorSubscription> {
+  const key = createIdempotencyKey();
   return request(() =>
-    (getApiClient() as any).POST(
+    getApiClient().POST(
       "/api/v1/partner/listing-subscription-plans/{plan_id}/purchase",
       {
-        params: { path: { plan_id: planId } },
-        header: { "Idempotency-Key": createIdempotencyKey() } as never,
+        params: {
+          path: { plan_id: planId },
+          header: { "Idempotency-Key": key } as never,
+        },
+        headers: {
+          "Idempotency-Key": key,
+        },
       },
     ),
-  );
+  ) as Promise<VendorSubscription>;
 }
 
 export function fetchCareerServices(): Promise<any[]> {
-  return request(() => (getApiClient() as any).GET("/api/v1/partner/listings/roles"));
+  return request(() => getApiClient().GET("/api/v1/partner/listings/roles")) as Promise<any[]>;
 }
 
 export function reportApplicantApplication(
   applicationId: string,
   reason: string,
   detail: string = "",
-): Promise<any> {
+): Promise<unknown> {
   return request(() =>
-    (getApiClient() as any).POST("/api/v1/applications/{application_id}/reports", {
+    getApiClient().POST("/api/v1/applications/{application_id}/reports", {
       params: { path: { application_id: applicationId } },
       body: { reason, detail },
     }),

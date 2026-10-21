@@ -217,3 +217,240 @@ export function useCreatePrivacyRequest() {
 export function isRequestOpen(privacyRequest: PrivacyRequest): boolean {
   return privacyRequest.status === "RECEIVED" || privacyRequest.status === "IN_REVIEW";
 }
+
+/* -------------------------------------------------------------------------
+   Wallet queries and mutations
+   ------------------------------------------------------------------------- */
+
+export interface WalletAccount {
+  wallet_id: string;
+  currency: string;
+  balance_paise: number;
+  available_balance_paise: number;
+  reserved_paise: number;
+  top_up_policy?: {
+    min_top_up_paise: number;
+    max_top_up_paise: number;
+  };
+}
+
+export interface WalletTransaction {
+  id: string;
+  amount_paise: number;
+  kind: string;
+  status: string;
+  idempotency_key?: string;
+  notes?: string;
+  created_at: string;
+}
+
+export interface WalletTopUpResponse {
+  payment_attempt_id: string;
+  purpose: string;
+  amount_paise: number;
+  currency: string;
+  provider: string;
+  provider_order_id: string;
+  status: string;
+}
+
+export const walletKeys = {
+  detail: ["customer", "wallet"] as const,
+  transactions: ["customer", "wallet", "transactions"] as const,
+};
+
+export function useWallet() {
+  return useQuery({
+    queryKey: walletKeys.detail,
+    queryFn: async () => {
+      const data = await request(() =>
+        getApiClient().GET("/api/v1/customer/wallet/"),
+      );
+      return data as unknown as WalletAccount;
+    },
+    ...SESSION_STATE,
+  });
+}
+
+export function useWalletTransactions() {
+  return useQuery({
+    queryKey: walletKeys.transactions,
+    queryFn: async () => {
+      const data = await request(() =>
+        getApiClient().GET("/api/v1/customer/wallet/transactions/"),
+      );
+      if (Array.isArray(data)) {
+        return data as WalletTransaction[];
+      }
+      const page = data as unknown as { results?: WalletTransaction[] } | null;
+      return page?.results ?? [];
+    },
+    ...SESSION_STATE,
+  });
+}
+
+export function useInitiateWalletTopUp() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: { amount_paise: number }): Promise<WalletTopUpResponse> => {
+      const idempotencyKey = `topup-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+      const attempt = (await request(() =>
+        getApiClient().POST("/api/v1/customer/wallet/top-up/", {
+          body: {
+            amount_paise: input.amount_paise,
+            idempotency_key: idempotencyKey,
+          },
+        }),
+      )) as unknown as WalletTopUpResponse;
+
+      // Settle payment attempt in development/simulated environment so balance updates immediately
+      if (attempt?.payment_attempt_id) {
+        try {
+          await request(() =>
+            getApiClient().POST("/api/v1/payment-attempts/{attempt_id}/simulate-capture/", {
+              params: { path: { attempt_id: attempt.payment_attempt_id } },
+            }),
+          );
+        } catch {
+          // If simulate-capture is unavailable (e.g. production), attempt stays pending until webhook
+        }
+      }
+
+      return attempt;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: walletKeys.detail });
+      void queryClient.invalidateQueries({ queryKey: walletKeys.transactions });
+    },
+  });
+}
+
+/* -------------------------------------------------------------------------
+   V Coins queries
+   ------------------------------------------------------------------------- */
+
+export interface CustomerCoinsSummary {
+  spendable_coins: number;
+  promised_coins: number;
+  locked_coins: number;
+  pending_coins: number;
+  next_pending_available_at: string | null;
+  expiring_soon_coins: number;
+  active_burn_policy?: {
+    max_burn_percent: number;
+    coin_value_paise: number;
+  };
+}
+
+export interface CoinTransaction {
+  id: string;
+  kind: string;
+  status: string;
+  amount: number;
+  notes?: string;
+  created_at: string;
+}
+
+export const coinsKeys = {
+  summary: ["customer", "coins", "summary"] as const,
+  transactions: ["customer", "coins", "transactions"] as const,
+};
+
+export function useCustomerCoins() {
+  return useQuery({
+    queryKey: coinsKeys.summary,
+    queryFn: async () => {
+      const data = await request(() =>
+        getApiClient().GET("/api/v1/customer/coins/"),
+      );
+      return data as unknown as CustomerCoinsSummary;
+    },
+    ...SESSION_STATE,
+  });
+}
+
+export function useCoinTransactions() {
+  return useQuery({
+    queryKey: coinsKeys.transactions,
+    queryFn: async () => {
+      const data = await request(() =>
+        getApiClient().GET("/api/v1/customer/coins/transactions/"),
+      );
+      if (Array.isArray(data)) {
+        return data as CoinTransaction[];
+      }
+      const page = data as unknown as { results?: CoinTransaction[] } | null;
+      return page?.results ?? [];
+    },
+    ...SESSION_STATE,
+  });
+}
+
+/* -------------------------------------------------------------------------
+   Referral queries
+   ------------------------------------------------------------------------- */
+
+export interface CustomerReferralSummary {
+  code: string;
+  referral_code?: string;
+  share_url: string;
+  share_message: string;
+  total_earned_paise: number;
+  total_earned_coins: number;
+  invited_count: number;
+  successful_referral_count: number;
+  pending_referral_count: number;
+  current_tier_min: number | null;
+  next_tier_min: number | null;
+  referrals_to_next_tier: number | null;
+  active_program?: {
+    name?: string;
+    description?: string;
+  };
+}
+
+export interface ReferralAttribution {
+  id: string;
+  referee_display: string;
+  status: string;
+  attributed_at: string;
+  qualified_at: string | null;
+  reward_available_at: string | null;
+  rewarded_at: string | null;
+}
+
+export const referralKeys = {
+  summary: ["customer", "referral", "summary"] as const,
+  attributions: ["customer", "referral", "attributions"] as const,
+};
+
+export function useCustomerReferral() {
+  return useQuery({
+    queryKey: referralKeys.summary,
+    queryFn: async () => {
+      const data = await request(() =>
+        getApiClient().GET("/api/v1/customer/referral/"),
+      );
+      return data as unknown as CustomerReferralSummary;
+    },
+    ...SESSION_STATE,
+  });
+}
+
+export function useReferralAttributions() {
+  return useQuery({
+    queryKey: referralKeys.attributions,
+    queryFn: async () => {
+      const data = await request(() =>
+        getApiClient().GET("/api/v1/customer/referral/attributions/"),
+      );
+      if (Array.isArray(data)) {
+        return data as ReferralAttribution[];
+      }
+      const page = data as unknown as { results?: ReferralAttribution[] } | null;
+      return page?.results ?? [];
+    },
+    ...SESSION_STATE,
+  });
+}

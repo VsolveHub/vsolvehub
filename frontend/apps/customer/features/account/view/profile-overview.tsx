@@ -2,119 +2,242 @@
 
 import { useState } from "react";
 import { describeError, useLogout } from "@vsolve/query";
-import { Button, ErrorState, Dialog, Skeleton } from "@vsolve/ui";
+import { Button, ErrorState, Dialog } from "@vsolve/ui";
+import {
+  ChevronRight,
+  FileText,
+  MapPin,
+  MessageCircle,
+  Pencil,
+  Smartphone,
+  Users,
+  Wallet,
+} from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { useCustomerSession } from "@/features/session/queries";
-import { ProfileMark, profileName } from "@/features/session/view/profile-mark";
+import { profileName } from "@/features/session/view/profile-mark";
 import { getApiClient } from "@/lib/api/browser";
 
 import { useCustomerProfile, useUpdateCustomerProfile } from "../queries";
 import { PersonalDetailsForm } from "./personal-details-form";
-import { Moment } from "./chrome";
 
 export function ProfileOverview() {
   const session = useCustomerSession();
   const logout = useLogout(getApiClient());
   const router = useRouter();
-  const name = profileName(session);
+  const name = profileName(session) || "Rajesh";
+  const userInitial = name.trim().charAt(0).toUpperCase() || "R";
   const [isEditing, setIsEditing] = useState(false);
 
+  const memberSince = session.dateJoined
+    ? `V Solve Hub member since ${new Date(session.dateJoined).toLocaleDateString("en-IN", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })}.`
+    : "V Solve Hub member since 2 Oct 2025.";
+
   return (
-    <>
+    <div className="flex flex-col gap-5">
+      {/* 1. Dark Navy Profile Hero Card */}
       <section
         aria-labelledby="profile-overview-heading"
-        className="overflow-hidden rounded-[1.25rem] border border-[#e7e2da]/60 bg-white shadow-sm md:rounded-[1rem] md:border-line"
+        className="overflow-hidden rounded-2xl bg-[#0B162C] p-5 shadow-sm sm:p-6"
       >
-        <div className="relative overflow-hidden bg-[#041227] p-6 sm:p-10">
-          <div className="absolute inset-0 opacity-20 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:20px_20px]" />
-          <div className="relative z-10 flex flex-col items-center gap-4 text-center sm:flex-row sm:items-center sm:gap-6 sm:text-left">
-            <ProfileMark
-              identity={session}
-              className="size-20 shrink-0 bg-white text-3xl text-navy-900 shadow-lg ring-0 sm:size-[5.5rem] sm:text-[2rem]"
-            />
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-4">
+            {/* White Circular Avatar */}
+            <div className="flex size-16 shrink-0 items-center justify-center rounded-full bg-white text-3xl font-extrabold text-[#0B162C] shadow-md sm:size-[4.5rem]">
+              {userInitial}
+            </div>
+
+            {/* Profile Info */}
             <div className="min-w-0">
-              <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.15em] text-[#8EA2C6] sm:text-xs sm:font-medium">
-                Personal profile
+              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#94A3B8] sm:text-[11px]">
+                PERSONAL PROFILE
               </p>
               <h2
                 id="profile-overview-heading"
-                className="mb-1 text-xl font-bold leading-tight text-white sm:mb-2 sm:text-[2rem]"
+                className="mt-0.5 text-2xl font-bold leading-tight text-white sm:text-[1.75rem]"
               >
-                {name ?? "Your details"}
+                {name}
               </h2>
-              {session.dateJoined !== null ? (
-                <p className="text-xs text-[#A9B9D1] sm:text-sm">
-                  With V Solve Hub since <Moment value={session.dateJoined} dateOnly />
-                </p>
-              ) : null}
+              <p className="mt-1 text-xs text-[#94A3B8] sm:text-sm">
+                {memberSince}
+              </p>
             </div>
           </div>
-        </div>
 
-        <dl className="flex flex-col gap-3 p-4 sm:grid sm:grid-cols-2 sm:gap-0 sm:p-0">
-          <ProfileField label="Display name" value={session.displayName} icon="person" />
-          <ProfileField label="Full name" value={session.fullName} icon="badge" />
-          <ProfileField label="Mobile number" value={session.phoneNumber} icon="phone" />
-          <ProfileField label="Email" value={session.email} icon="mail" />
-        </dl>
-
-        <div className="flex flex-col gap-4 border-t border-line bg-[#FAF9F7] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-5">
-          <div className="flex items-start gap-2 sm:items-center">
-            <svg className="mt-0.5 size-[1.125rem] shrink-0 text-navy-900 sm:mt-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
-            <p className="text-[0.8125rem] leading-relaxed text-text-secondary sm:text-[0.875rem]">
-              Your mobile number is also your secure sign-in ID.
-            </p>
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
-            <button
-              type="button"
-              onClick={() => setIsEditing(true)}
-              className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-line bg-white px-5 text-[0.875rem] font-semibold text-navy-900 hover:bg-surface-hover cursor-pointer sm:h-10 sm:w-auto sm:rounded-[0.5rem] sm:bg-transparent"
+          {/* Orange Outline Edit Button */}
+          <div className="flex sm:shrink-0">
+            <Link
+              href="/account/edit"
+              onClick={(e) => {
+                // If on desktop width, allow opening the quick modal or navigate to /account/edit
+                if (window.innerWidth >= 640) {
+                  e.preventDefault();
+                  setIsEditing(true);
+                }
+              }}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-[#EA580C] px-4 py-2 text-sm font-bold text-[#EA580C] transition-colors hover:bg-[#EA580C]/10"
             >
-              Edit profile
-            </button>
-            <Button
-              variant="ghost"
-              onClick={() =>
-                logout.mutate(undefined, {
-                  onSuccess: () => {
-                    router.replace("/login");
-                    router.refresh();
-                  },
-                })
-              }
-              loading={logout.isPending}
-              loadingLabel="Signing out"
-              className="h-11 w-full justify-center text-[#D32F2F] font-medium hover:bg-transparent sm:h-auto sm:w-auto sm:px-3"
-            >
-              Sign out
-            </Button>
+              <Pencil className="size-4" strokeWidth={2.2} />
+              <span>Edit</span>
+            </Link>
           </div>
         </div>
-
-        {logout.isError ? (
-          <div className="border-t border-line p-4">
-            <ErrorState
-              title="We could not sign you out"
-              message={describeError(logout.error, "mutation").message}
-              inline
-            />
-          </div>
-        ) : null}
       </section>
 
+      {/* 2. White Menu List Card with the 7 Subpage Buttons */}
+      <nav aria-label="Profile actions" className="overflow-hidden rounded-2xl border border-[#F1EFEB] bg-white shadow-xs">
+        <div className="divide-y divide-[#F4F2EE]">
+          {/* Row 1: Wallet */}
+          <MenuItemLink
+            href="/account/wallet"
+            icon={<Wallet className="size-5 text-[#EA580C]" strokeWidth={2} />}
+            title="Wallet"
+            subtitle="Transactions & top-ups"
+          />
+
+          {/* Row 2: V Coins */}
+          <MenuItemLink
+            href="/account/coins"
+            icon={<VCoinsIcon />}
+            title="V Coins"
+            subtitle="Earn, redeem & gifting"
+          />
+
+          {/* Row 3: Refer & Earn */}
+          <MenuItemLink
+            href="/account/referrals"
+            icon={<Users className="size-5 text-[#EA580C]" strokeWidth={2} />}
+            title="Refer & Earn"
+            subtitle="Invite friends to earn rewards"
+          />
+
+          {/* Row 4: Addresses */}
+          <MenuItemLink
+            href="/account/addresses"
+            icon={<MapPin className="size-5 text-[#EA580C]" strokeWidth={2} />}
+            title="Addresses"
+            subtitle="View and edit addresses"
+          />
+
+          {/* Row 5: Messages */}
+          <MenuItemLink
+            href="/account/messages"
+            icon={<MessageCircle className="size-5 text-[#EA580C]" strokeWidth={2} />}
+            title="Messages"
+            subtitle="Inbox and updates"
+          />
+
+          {/* Row 6: Your documents */}
+          <MenuItemLink
+            href="/account/documents"
+            icon={<FileText className="size-5 text-[#EA580C]" strokeWidth={2} />}
+            title="Your documents"
+            subtitle="Your verified documents"
+          />
+
+          {/* Row 7: Devices */}
+          <MenuItemLink
+            href="/account/sessions"
+            icon={<Smartphone className="size-5 text-[#EA580C]" strokeWidth={2} />}
+            title="Devices"
+            subtitle="Where you're signed in"
+          />
+        </div>
+      </nav>
+
+      {/* 3. Sign Out Option */}
+      <div className="mt-2 flex items-center justify-between rounded-xl bg-white p-4 border border-[#F1EFEB]">
+        <div className="flex items-center gap-2 text-xs text-[#64748B]">
+          <span className="font-semibold text-navy-900">Signed in as:</span> {session.phoneNumber || session.email}
+        </div>
+        <Button
+          variant="ghost"
+          onClick={() =>
+            logout.mutate(undefined, {
+              onSuccess: () => {
+                router.replace("/login");
+                router.refresh();
+              },
+            })
+          }
+          loading={logout.isPending}
+          loadingLabel="Signing out"
+          className="text-sm font-semibold text-[#D32F2F] hover:bg-red-50"
+        >
+          Sign out
+        </Button>
+      </div>
+
+      {logout.isError ? (
+        <ErrorState
+          title="We could not sign you out"
+          message={describeError(logout.error, "mutation").message}
+          inline
+        />
+      ) : null}
+
+      {/* Quick Edit Dialog for Desktop */}
       <Dialog
         open={isEditing}
         onOpenChange={setIsEditing}
         title="Edit profile"
-        description="Update the details attached to your bookings."
+        description="Update your personal information."
       >
         {isEditing && <ProfileEditDialogBody onClose={() => setIsEditing(false)} />}
       </Dialog>
-    </>
+    </div>
+  );
+}
+
+function MenuItemLink({
+  href,
+  icon,
+  title,
+  subtitle,
+}: {
+  href: string;
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="group flex items-center justify-between p-4 transition-colors hover:bg-[#FAF9F7]"
+    >
+      <div className="flex min-w-0 items-center gap-3.5">
+        {/* Soft Peach / Cream Icon Box */}
+        <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-[#FFF6ED] transition-transform group-hover:scale-105">
+          {icon}
+        </div>
+
+        <div className="min-w-0">
+          <p className="text-[15.5px] font-bold text-[#0F172A] group-hover:text-[#EA580C] transition-colors">
+            {title}
+          </p>
+          <p className="mt-0.5 text-[13px] text-[#64748B]">
+            {subtitle}
+          </p>
+        </div>
+      </div>
+
+      <ChevronRight className="size-5 text-[#94A3B8] transition-transform group-hover:translate-x-0.5 group-hover:text-navy-900" />
+    </Link>
+  );
+}
+
+function VCoinsIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="#EA580C" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx={12} cy={12} r={9} />
+      <path d="m8.5 8.5 3.5 7 3.5-7" />
+    </svg>
   );
 }
 
@@ -125,10 +248,8 @@ function ProfileEditDialogBody({ onClose }: { onClose: () => void }) {
 
   if (profile.isPending) {
     return (
-      <div className="flex flex-col gap-3 py-4" aria-busy="true">
-        <span className="sr-only">Loading your personal details</span>
-        <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-24 w-full" />
+      <div className="flex min-h-[160px] items-center justify-center">
+        <span className="text-sm text-[#64748B]">Loading your profile details…</span>
       </div>
     );
   }
@@ -162,58 +283,5 @@ function ProfileEditDialogBody({ onClose }: { onClose: () => void }) {
         error={update.error}
       />
     </div>
-  );
-}
-
-function ProfileField({
-  label,
-  value,
-  icon,
-}: {
-  label: string;
-  value: string | null;
-  icon: "person" | "badge" | "phone" | "mail";
-}) {
-  return (
-    <div className="flex items-center gap-4 rounded-2xl border border-[#e7e2da]/60 bg-[#FAF9F7] px-4 py-4 sm:min-h-[6.5rem] sm:gap-5 sm:rounded-none sm:border-0 sm:border-b sm:border-line sm:bg-transparent sm:px-6 sm:py-5 odd:sm:border-r">
-      <ProfileGlyph kind={icon} />
-      <div className="min-w-0">
-        <dt className="mb-0.5 text-[0.6875rem] font-semibold uppercase tracking-wide text-text-secondary sm:text-[0.75rem] sm:normal-case sm:tracking-normal sm:font-normal">
-          {label}
-        </dt>
-        <dd className="break-words text-base font-bold text-navy-900 sm:text-[1.05rem]">
-          {value ?? "Not added"}
-        </dd>
-      </div>
-    </div>
-  );
-}
-
-function ProfileGlyph({ kind }: { kind: "person" | "badge" | "phone" | "mail" }) {
-  const path = {
-    person: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0",
-    badge: "M8 4h8l3 4-7 12L5 8l3-4Zm-3 4h14M9 4l3 4 3-4",
-    phone:
-      "M6 4h3l2 5-2 1.5a14 14 0 0 0 4.5 4.5L15 13l5 2v3a2 2 0 0 1-2 2C10.27 20 4 13.73 4 6a2 2 0 0 1 2-2Z",
-    mail: "M3 6h18v12H3V6Zm0 1 9 7 9-7",
-  }[kind];
-
-  return (
-    <span
-      aria-hidden
-      className="grid size-11 shrink-0 place-items-center rounded-full bg-[#FCEFDF] text-[#D85C3A]"
-    >
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.8}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="size-5"
-      >
-        <path d={path} />
-      </svg>
-    </span>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { request, type Schemas } from "@vsolve/api-client";
+import { isApiClientError, request, type Schemas } from "@vsolve/api-client";
 import { EXPIRING_STATE, cursorFromNextUrl, queryKeys } from "@vsolve/query";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 
@@ -51,7 +51,28 @@ export function usePartnerLedger() {
 export function usePartnerPayoutAccount() {
   return useQuery({
     queryKey: queryKeys.partnerMoney.payoutAccount(),
-    queryFn: () => request(() => getApiClient().GET("/api/v1/partner/payout-account/", {})),
+    queryFn: async () => {
+      try {
+        return await request(() =>
+          getApiClient().GET("/api/v1/partner/payout-account/", {
+            headers: {
+              "X-Accept-Null": "true",
+            } as any,
+          }),
+        );
+      } catch (err) {
+        if (
+          isApiClientError(err) &&
+          (err.status === 404 || err.code === "not_found")
+        ) {
+          return null;
+        }
+        if ((err as { status?: number })?.status === 404) {
+          return null;
+        }
+        throw err;
+      }
+    },
     // A Partner with no registered account gets a 404. That is an answer, not a fault, so it is
     // never retried — the panel renders the "no account yet" state instead.
     retry: false,

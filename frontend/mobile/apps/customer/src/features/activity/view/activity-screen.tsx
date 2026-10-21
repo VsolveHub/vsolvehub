@@ -310,6 +310,7 @@ function BookingsSearchField({ value, onChange }: { value: string; onChange: (va
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Clear search"
+            hitSlop={8}
             onPress={() => onChange("")}
             className="absolute right-2 top-1/2 size-8 -translate-y-1/2 items-center justify-center rounded-control"
           >

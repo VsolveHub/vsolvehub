@@ -231,14 +231,28 @@ export function CustomerLoginForm({
           </View>
 
           {flow.developmentCode ? (
-            <View className="rounded-xl border border-dashed border-line-strong bg-warm-50 px-3.5 py-2.5">
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Fill development code ${flow.developmentCode}`}
+              onPress={() => {
+                if (flow.developmentCode) {
+                  flow.onCodeChange(flow.developmentCode);
+                  setTimeout(() => {
+                    flow.onVerifyCode();
+                  }, 80);
+                }
+              }}
+              hitSlop={6}
+              className="rounded-xl border border-dashed border-line-strong bg-warm-50 px-3.5 py-2 active:bg-warm-100"
+            >
               <Text className="text-xs text-text-secondary">
-                Development delivery is on. Code:{" "}
-                <Text className="font-bold text-navy-900" style={{ letterSpacing: 3 }}>
+                Development code:{" "}
+                <Text className="font-bold text-navy-900" style={{ letterSpacing: 2 }}>
                   {flow.developmentCode}
-                </Text>
+                </Text>{" "}
+                <Text className="text-[11px] font-semibold text-[#EA580C]">(Tap to verify)</Text>
               </Text>
-            </View>
+            </Pressable>
           ) : null}
 
           <View className="gap-1.5">
@@ -248,7 +262,7 @@ export function CustomerLoginForm({
             </View>
             <View
               className={cn(
-                "mt-1 h-[54px] items-center justify-center overflow-hidden rounded-2xl border bg-white",
+                "mt-0.5 h-[52px] items-center justify-center overflow-hidden rounded-2xl border bg-white",
                 flow.codeError ? "border-danger" : "border-[#E2E8F0]",
               )}
             >
@@ -260,13 +274,21 @@ export function CustomerLoginForm({
                 placeholder="••••••"
                 placeholderTextColor="#CBD5E1"
                 value={flow.code}
-                onChangeText={flow.onCodeChange}
-                className="w-full text-center text-xl font-bold tracking-[0.3em] text-navy-900 py-2.5"
+                onChangeText={(text) => {
+                  flow.onCodeChange(text);
+                  const clean = text.replace(/\D/g, "");
+                  if (clean.length === flow.codeLength) {
+                    setTimeout(() => {
+                      flow.onVerifyCode();
+                    }, 80);
+                  }
+                }}
+                className="w-full text-center text-xl font-bold tracking-[0.3em] text-navy-900 py-2"
                 style={{ outlineStyle: "none" } as never}
               />
             </View>
             {flow.codeError ? (
-              <Text className="mt-1 text-xs font-medium text-danger">{flow.codeError}</Text>
+              <Text className="mt-0.5 text-xs font-medium text-danger">{flow.codeError}</Text>
             ) : null}
           </View>
 
@@ -288,7 +310,7 @@ export function CustomerLoginForm({
             disabled={!flow.canVerify || flow.isVerifying}
             onPress={flow.onVerifyCode}
             className={cn(
-              "h-[52px] w-full flex-row items-center justify-center rounded-2xl shadow-xs",
+              "h-[50px] w-full flex-row items-center justify-center rounded-2xl shadow-xs",
               !flow.canVerify
                 ? "bg-[#FF5500]/50"
                 : "bg-[#FF5500] active:bg-[#E04B00] active:scale-[0.99]",
@@ -358,7 +380,10 @@ export function CustomerLoginExperience({
       className={cn(
         "w-full bg-white",
         variant === "page" && "max-w-[400px] rounded-[28px] border border-[#E5E7EB] p-6 sm:p-7 shadow-xl",
-        variant === "modal" && "max-w-[370px] rounded-[28px] border border-black/[0.04] p-6 pb-6 pt-5 shadow-2xl",
+        variant === "modal" && cn(
+          "max-w-[370px] rounded-[28px] border border-black/[0.04] shadow-2xl",
+          flow.phase === "code" ? "p-5 pb-5 pt-4" : "p-6 pb-6 pt-5"
+        ),
       )}
       style={{
         borderRadius: 28,
@@ -386,7 +411,7 @@ export function CustomerLoginExperience({
       </View>
 
       {/* Title & Subtitle */}
-      <View className="mt-5 mb-5">
+      <View className={cn("mt-5 mb-5", flow.phase === "code" && "mt-3 mb-3")}>
         {flow.phase === "phone" ? (
           <>
             <Text className="text-[22px] sm:text-[24px] font-black tracking-tight text-[#071328] leading-[1.2]">

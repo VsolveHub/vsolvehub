@@ -30,6 +30,7 @@ import {
   withdrawApplication,
   type ListingApplication,
 } from "../queries";
+import { THEME_COLORS } from "../theme-colors";
 import { HIRING_STEP_LABELS } from "../seeker-queries";
 import { HiringProgress } from "./hiring-progress";
 
@@ -155,7 +156,7 @@ export function MyApplicationsScreen() {
               onPress={() => setActiveTab(tab.key)}
               className={`rounded-full px-4 py-1.5 border ${
                 isSelected
-                  ? "border-[#00112e] bg-[#00112e]"
+                  ? "border-navy-900 bg-navy-900"
                   : "border-line bg-surface active:bg-surface-sunken"
               }`}
             >
@@ -277,15 +278,15 @@ export function MyApplicationsScreen() {
                 <HiringProgress app={app} />
 
                 {/* Applicant Info Box */}
-                <View className="rounded-xl bg-[#f4f1ec] p-3.5 border border-line/40">
+                <View className="rounded-xl bg-surface-sunken p-3.5 border border-line/40">
                   <Text className="text-xs text-text-secondary font-medium">
                     Applicant: {app.applicant_name || snapshot.name || "Nune Rajesh"}
                   </Text>
                 </View>
 
                 {/* Status Timeline Pill */}
-                <View className="self-start flex-row items-center gap-1.5 rounded-full bg-[#f4f1ec] px-3 py-1 border border-line/40">
-                  <Clock size={12} color="#6B6560" />
+                <View className="self-start flex-row items-center gap-1.5 rounded-full bg-surface-sunken px-3 py-1 border border-line/40">
+                  <Clock size={12} color={THEME_COLORS.muted} />
                   <Text className="text-[11px] font-medium text-text-muted uppercase">
                     SUBMITTED ({formatDate(app.created_at)})
                   </Text>
@@ -294,7 +295,7 @@ export function MyApplicationsScreen() {
                 {/* Withdraw Application section */}
                 {canWithdraw ? (
                   isWithdrawingThis ? (
-                    <View className="flex-row items-center justify-between rounded-xl border border-red-200 bg-[#fef2f2] p-2.5">
+                    <View className="flex-row items-center justify-between rounded-xl border border-red-200 bg-critical-50 p-2.5">
                       <Text className="text-xs font-semibold text-red-800">
                         Withdraw application?
                       </Text>

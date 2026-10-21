@@ -614,9 +614,14 @@ export function BottomTabBar({
 
   const homeItem = dockItems.find((item) => item.href === "/home" || item.label === "Home");
   const sideItems = dockItems.filter((item) => item.href !== "/home" && item.label !== "Home");
-  const midPoint = Math.ceil(sideItems.length / 2);
-  const leftItems = sideItems.slice(0, midPoint);
-  const rightItems = sideItems.slice(midPoint);
+  const isUtilityTab = (item: WorkspaceNavItem) =>
+    item.kind === "notifications" ||
+    item.href === "#notifications" ||
+    item.href === "/me" ||
+    item.label === "Alerts" ||
+    item.label === "Me";
+  const leftItems = sideItems.filter((item) => !isUtilityTab(item));
+  const rightItems = sideItems.filter(isUtilityTab);
 
   function renderTab(item: WorkspaceNavItem) {
     if (item.kind === "notifications") {

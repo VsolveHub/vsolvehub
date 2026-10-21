@@ -8,6 +8,7 @@ import {
   FolderKanban,
   HardHat,
   Home,
+  PlusCircle,
   UserCircle,
   UserCircle2,
   Users,
@@ -104,6 +105,7 @@ export const TAP_FIRST_NAV: readonly WorkspaceNavItem[] = [
 export const LISTING_TAP_FIRST_NAV: readonly WorkspaceNavItem[] = [
   { href: "/home", label: "Home", icon: Home },
   { href: "/listings", label: "Listings", icon: Briefcase, activePrefix: "/listings" },
+  { href: "/listings/post", label: "Post Job", icon: PlusCircle, activePrefix: "/listings/post" },
   { href: "#notifications", label: "Alerts", icon: Bell, kind: "notifications" },
   { href: "/me", label: "Me", icon: UserCircle2 },
 ];

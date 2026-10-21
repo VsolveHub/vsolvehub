@@ -104,6 +104,7 @@ export function OtpForm({
               keyboardType="number-pad"
               autoComplete="tel"
               placeholder="9876543210"
+              maxLength={10}
               value={phone}
               onChangeText={onPhoneChange}
             />

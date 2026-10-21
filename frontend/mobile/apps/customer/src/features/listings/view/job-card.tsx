@@ -58,6 +58,7 @@ export function JobCard({ listing }: { listing: Listing }) {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={isHearted ? "Remove from saved" : "Save job"}
+          hitSlop={8}
           onPress={() => saved.toggle(listing.id)}
           className="size-8 items-center justify-center rounded-full border border-line bg-surface active:bg-surface-sunken"
         >

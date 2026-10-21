@@ -1,4 +1,5 @@
 import { request } from "@vsolve/api-client";
+import { useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 
 import { appKind } from "../config";
@@ -8,6 +9,7 @@ import { readRegisteredPushToken } from "../push/register";
 
 /** Unregister this phone, end the Django session, then leave for home or login. */
 export function useMobileLogout(): () => Promise<void> {
+  const queryClient = useQueryClient();
   return async () => {
     const api = getApiClient();
     const pushToken = await readRegisteredPushToken();
@@ -28,6 +30,7 @@ export function useMobileLogout(): () => Promise<void> {
       // The local token is deleted either way.
     }
     await useAuthStore.getState().signOut();
+    queryClient.clear();
     if (appKind() === "customer") {
       router.replace("/");
     } else {

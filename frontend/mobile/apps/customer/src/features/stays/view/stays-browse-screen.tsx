@@ -3,8 +3,11 @@ import { Button, EmptyState, ErrorState, Skeleton, Text } from "@vsolve/mobile-u
 import { useRouter } from "expo-router";
 import {
   Building2,
+  Check,
+  ChevronDown,
   Coffee,
   FileCheck2,
+  Filter,
   Layers,
   MapPin,
   Search,
@@ -14,6 +17,7 @@ import {
 import { useState } from "react";
 import {
   FlatList,
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -27,6 +31,7 @@ import {
   type StayPropertySummary,
 } from "../model";
 import { fetchStays, fetchStayTaxonomy } from "../queries";
+import { THEME_COLORS } from "../theme-colors";
 import { StayCard } from "./stay-card";
 
 const PRICE_PRESETS: { label: string; min?: number; max?: number }[] = [
@@ -59,6 +64,15 @@ export function StaysBrowseScreen() {
   const [tenantPreference, setTenantPreference] = useState<string | undefined>(undefined);
   const [sort, setSort] = useState<string>("newest");
 
+  // Dropdown Picker Modal states
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
+  const [categorySearch, setCategorySearch] = useState("");
+  const [tenantModalOpen, setTenantModalOpen] = useState(false);
+  const [priceModalOpen, setPriceModalOpen] = useState(false);
+  const [sortModalOpen, setSortModalOpen] = useState(false);
+  const [draftMinStr, setDraftMinStr] = useState("");
+  const [draftMaxStr, setDraftMaxStr] = useState("");
+
   // Pagination
   const [visible, setVisible] = useState(6);
 
@@ -68,9 +82,9 @@ export function StaysBrowseScreen() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const taxonomy = (taxonomyQuery.data as any[]) ?? [];
+  const taxonomy = taxonomyQuery.data ?? [];
   const activeCategory = taxonomy.find((c) => c.slug === selectedCategorySlug);
-  const subServices = (activeCategory?.services as any[]) ?? [];
+  const subServices = activeCategory?.services ?? [];
 
   const staysQuery = useQuery({
     queryKey: [
@@ -149,7 +163,8 @@ export function StaysBrowseScreen() {
     SORT_OPTIONS.find((s) => s.value === sort)?.label ?? "Newest First";
 
   return (
-    <FlatList
+    <>
+      <FlatList
       data={staysQuery.isLoading ? [] : displayedStays}
       keyExtractor={(item) => item.id}
       contentContainerClassName="gap-4 px-4 py-4 pb-16 bg-canvas"
@@ -165,7 +180,7 @@ export function StaysBrowseScreen() {
           <View className="overflow-hidden rounded-3xl bg-navy-900 p-6 shadow-md">
             <View className="gap-2.5">
               <View className="self-start flex-row items-center gap-1.5 rounded-full border border-sky-400/30 bg-sky-500/15 px-3 py-1">
-                <Building2 size={13} color="#93c5fd" />
+                <Building2 size={13} color={THEME_COLORS.blue300} />
                 <Text className="text-[11px] font-bold text-sky-200">
                   Verified Rooms, PG & Short Stays
                 </Text>
@@ -188,7 +203,7 @@ export function StaysBrowseScreen() {
               className="mt-4 flex-row items-center justify-between rounded-xl border border-white/20 bg-white/10 px-4 py-3 active:bg-white/20"
             >
               <View className="flex-row items-center gap-2">
-                <FileCheck2 size={16} color="#ffffff" />
+                <FileCheck2 size={16} color={THEME_COLORS.white} />
                 <Text className="text-xs font-bold text-white">My Enquiries</Text>
               </View>
               <Text className="text-xs font-semibold text-brand">View Status →</Text>
@@ -197,7 +212,7 @@ export function StaysBrowseScreen() {
             {/* Search Form with Submit Action */}
             <View className="mt-5 gap-2 rounded-2xl bg-surface p-2.5 shadow-sm">
               <View className="flex-row items-center rounded-xl border border-line bg-surface-sunken px-3 py-2">
-                <Search size={16} color="#6B6560" />
+                <Search size={16} color={THEME_COLORS.muted} />
                 <TextInput
                   placeholder="Search properties (e.g. Lakeview PG, Executive)"
                   placeholderTextColor="rgba(107,101,96,0.6)"
@@ -209,13 +224,13 @@ export function StaysBrowseScreen() {
                 />
                 {draftQuery ? (
                   <Pressable onPress={() => setDraftQuery("")}>
-                    <X size={14} color="#6B6560" />
+                    <X size={14} color={THEME_COLORS.muted} />
                   </Pressable>
                 ) : null}
               </View>
 
               <View className="flex-row items-center rounded-xl border border-line bg-surface-sunken px-3 py-2">
-                <MapPin size={16} color="#6B6560" />
+                <MapPin size={16} color={THEME_COLORS.muted} />
                 <TextInput
                   placeholder="City or Area (e.g. Hyderabad, Gachibowli)"
                   placeholderTextColor="rgba(107,101,96,0.6)"
@@ -227,7 +242,7 @@ export function StaysBrowseScreen() {
                 />
                 {draftLocation ? (
                   <Pressable onPress={() => setDraftLocation("")}>
-                    <X size={14} color="#6B6560" />
+                    <X size={14} color={THEME_COLORS.muted} />
                   </Pressable>
                 ) : null}
               </View>
@@ -242,60 +257,135 @@ export function StaysBrowseScreen() {
             </View>
           </View>
 
-          {/* Filters Section */}
-          <View className="gap-3">
-            {/* Row 1: Categories + Amenities Quick Chips */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-2">
+          {/* Filters Section: Clean & Professional Dropdown Filter Bar */}
+          <View className="gap-2">
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerClassName="items-center gap-2 py-0.5"
+            >
+              {/* 1. Category Dropdown Button */}
               <Pressable
-                onPress={() => {
-                  setSelectedCategorySlug(undefined);
-                  setSelectedServiceSlug(undefined);
-                  setVisible(6);
-                }}
-                className={`flex-row items-center gap-1.5 rounded-full px-3.5 py-1.5 border ${
-                  isAllCategories
+                accessibilityRole="button"
+                accessibilityLabel="Filter by property type"
+                onPress={() => setCategoryModalOpen(true)}
+                className={`flex-row items-center gap-1.5 rounded-full border px-3.5 py-2 shadow-2xs ${
+                  !isAllCategories
                     ? "border-navy-900 bg-navy-900"
-                    : "border-line bg-surface active:bg-surface-hover"
+                    : "border-line bg-surface active:bg-surface-sunken"
                 }`}
               >
-                <Layers size={13} color={isAllCategories ? "#ffffff" : "#6B6560"} />
+                <Building2
+                  size={13}
+                  color={!isAllCategories ? THEME_COLORS.white : THEME_COLORS.muted}
+                />
                 <Text
+                  numberOfLines={1}
                   className={`text-xs font-bold ${
-                    isAllCategories ? "text-white" : "text-text-secondary"
+                    !isAllCategories ? "text-white" : "text-navy-900"
                   }`}
                 >
-                  All Stays
+                  {activeCategory
+                    ? selectedServiceSlug
+                      ? `${activeCategory.name} • ${subServices.find((s) => s.slug === selectedServiceSlug)?.name || ""}`
+                      : activeCategory.name
+                    : "All Stays"}
                 </Text>
+                <ChevronDown
+                  size={13}
+                  color={!isAllCategories ? THEME_COLORS.white : THEME_COLORS.muted}
+                />
               </Pressable>
 
-              {taxonomy.map((cat: any) => {
-                const isSelected = selectedCategorySlug === cat.slug;
-                return (
-                  <Pressable
-                    key={cat.id || cat.slug}
-                    onPress={() => {
-                      setSelectedCategorySlug(isSelected ? undefined : cat.slug);
-                      setSelectedServiceSlug(undefined);
-                      setVisible(6);
-                    }}
-                    className={`rounded-full px-3.5 py-1.5 border ${
-                      isSelected
-                        ? "border-navy-900 bg-navy-900"
-                        : "border-line bg-surface active:bg-surface-hover"
-                    }`}
-                  >
-                    <Text
-                      className={`text-xs font-bold ${
-                        isSelected ? "text-white" : "text-text-secondary"
-                      }`}
-                    >
-                      {cat.name}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+              {/* 2. Tenant Preference Dropdown Button */}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Filter by tenant preference"
+                onPress={() => setTenantModalOpen(true)}
+                className={`flex-row items-center gap-1.5 rounded-full border px-3.5 py-2 shadow-2xs ${
+                  tenantPreference
+                    ? "border-navy-900 bg-navy-900"
+                    : "border-line bg-surface active:bg-surface-sunken"
+                }`}
+              >
+                <Text
+                  className={`text-xs font-bold ${
+                    tenantPreference ? "text-white" : "text-navy-900"
+                  }`}
+                >
+                  For: {TENANT_PREFERENCES.find((t) => t.value === tenantPreference)?.label || "Anyone"}
+                </Text>
+                <ChevronDown
+                  size={13}
+                  color={tenantPreference ? THEME_COLORS.white : THEME_COLORS.muted}
+                />
+              </Pressable>
 
-              <View className="h-5 w-px bg-line self-center" />
+              {/* 3. Price Range Dropdown Button */}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Filter by price range"
+                onPress={() => {
+                  setDraftMinStr(minPrice !== undefined ? String(Math.round(minPrice / 100)) : "");
+                  setDraftMaxStr(maxPrice !== undefined ? String(Math.round(maxPrice / 100)) : "");
+                  setPriceModalOpen(true);
+                }}
+                className={`flex-row items-center gap-1.5 rounded-full border px-3.5 py-2 shadow-2xs ${
+                  minPrice !== undefined || maxPrice !== undefined
+                    ? "border-brand bg-brand"
+                    : "border-line bg-surface active:bg-surface-sunken"
+                }`}
+              >
+                <Text
+                  className={`text-xs font-bold ${
+                    minPrice !== undefined || maxPrice !== undefined
+                      ? "text-white"
+                      : "text-navy-900"
+                  }`}
+                >
+                  {minPrice !== undefined || maxPrice !== undefined
+                    ? `${minPrice ? `₹${Math.round(minPrice / 100)}` : "₹0"} – ${
+                        maxPrice && maxPrice <= 2_000_000
+                          ? `₹${Math.round(maxPrice / 100)}`
+                          : "₹20k+"
+                      }`
+                    : "Price"}
+                </Text>
+                <ChevronDown
+                  size={13}
+                  color={
+                    minPrice !== undefined || maxPrice !== undefined
+                      ? THEME_COLORS.white
+                      : THEME_COLORS.muted
+                  }
+                />
+              </Pressable>
+
+              {/* 4. Sort Dropdown Button */}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Sort stays"
+                onPress={() => setSortModalOpen(true)}
+                className={`flex-row items-center gap-1.5 rounded-full border px-3.5 py-2 shadow-2xs ${
+                  sort !== "newest"
+                    ? "border-navy-900 bg-navy-900"
+                    : "border-line bg-surface active:bg-surface-sunken"
+                }`}
+              >
+                <Text
+                  className={`text-xs font-bold ${
+                    sort !== "newest" ? "text-white" : "text-navy-900"
+                  }`}
+                >
+                  Sort: {currentSortLabel}
+                </Text>
+                <ChevronDown
+                  size={13}
+                  color={sort !== "newest" ? THEME_COLORS.white : THEME_COLORS.muted}
+                />
+              </Pressable>
+
+              <View className="h-4 w-px bg-line self-center" />
 
               {/* Quick AC chip */}
               <Pressable
@@ -303,17 +393,20 @@ export function StaysBrowseScreen() {
                   setFilterAc((curr) => (curr ? undefined : true));
                   setVisible(6);
                 }}
-                className={`flex-row items-center gap-1.5 rounded-full px-3.5 py-1.5 border ${
+                className={`flex-row items-center gap-1.5 rounded-full px-3.5 py-2 border ${
                   filterAc
                     ? "border-brand bg-brand"
                     : "border-line bg-surface active:bg-surface-hover"
                 }`}
               >
-                <Wind size={13} color={filterAc ? "#ffffff" : "#6B6560"} />
+                <Wind
+                  size={13}
+                  color={filterAc ? THEME_COLORS.white : THEME_COLORS.muted}
+                />
                 <Text
                   className={`text-xs font-bold ${filterAc ? "text-white" : "text-text-secondary"}`}
                 >
-                  AC Included
+                  AC
                 </Text>
               </Pressable>
 
@@ -323,214 +416,34 @@ export function StaysBrowseScreen() {
                   setFilterFood((curr) => (curr ? undefined : true));
                   setVisible(6);
                 }}
-                className={`flex-row items-center gap-1.5 rounded-full px-3.5 py-1.5 border ${
+                className={`flex-row items-center gap-1.5 rounded-full px-3.5 py-2 border ${
                   filterFood
                     ? "border-brand bg-brand"
                     : "border-line bg-surface active:bg-surface-hover"
                 }`}
               >
-                <Coffee size={13} color={filterFood ? "#ffffff" : "#6B6560"} />
+                <Coffee
+                  size={13}
+                  color={filterFood ? THEME_COLORS.white : THEME_COLORS.muted}
+                />
                 <Text
                   className={`text-xs font-bold ${filterFood ? "text-white" : "text-text-secondary"}`}
                 >
-                  Meals Included
+                  Meals
                 </Text>
               </Pressable>
+
+              {/* Reset all button if active */}
+              {hasActiveFilters ? (
+                <Pressable
+                  onPress={clearAllFilters}
+                  className="flex-row items-center gap-1 rounded-full bg-surface-hover px-3 py-2 border border-line/60 active:bg-surface-sunken"
+                >
+                  <X size={12} color={THEME_COLORS.muted} />
+                  <Text className="text-xs font-bold text-text-muted">Reset</Text>
+                </Pressable>
+              ) : null}
             </ScrollView>
-
-            {/* Row 2: Sub-services inside chosen Category (Two-tier taxonomy GAP-S-06) */}
-            {subServices.length > 0 ? (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-2">
-                {subServices.map((svc: any) => {
-                  const isSelected = selectedServiceSlug === svc.slug;
-                  return (
-                    <Pressable
-                      key={svc.id || svc.slug}
-                      onPress={() => {
-                        setSelectedServiceSlug(isSelected ? undefined : svc.slug);
-                        setVisible(6);
-                      }}
-                      className={`rounded-full px-3 py-1 border ${
-                        isSelected
-                          ? "border-brand bg-brand"
-                          : "border-line bg-surface-sunken active:bg-surface-hover"
-                      }`}
-                    >
-                      <Text
-                        className={`text-[11px] font-bold ${
-                          isSelected ? "text-white" : "text-text-secondary"
-                        }`}
-                      >
-                        {svc.name}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            ) : null}
-
-            {/* Row 3: Tenant Preference Chips (GAP-S-05) */}
-            <View className="flex-row items-center gap-2">
-              <Text className="text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                For
-              </Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-2">
-                {TENANT_PREFERENCES.map(({ value, label }) => {
-                  const isSelected = (tenantPreference ?? "") === value;
-                  return (
-                    <Pressable
-                      key={value || "all"}
-                      onPress={() => {
-                        setTenantPreference(value || undefined);
-                        setVisible(6);
-                      }}
-                      className={`rounded-full px-3 py-1 border ${
-                        isSelected
-                          ? "border-navy-900 bg-navy-900"
-                          : "border-line bg-surface active:bg-surface-hover"
-                      }`}
-                    >
-                      <Text
-                        className={`text-[11px] font-bold ${
-                          isSelected ? "text-white" : "text-text-secondary"
-                        }`}
-                      >
-                        {label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            </View>
-
-            {/* Row 4: Price Range Filter (GAP-S-04: presets + min/max inputs, 0-20k/mo in paise) */}
-            <View className="gap-2 rounded-2xl border border-line bg-surface p-3">
-              <View className="flex-row items-center justify-between">
-                <Text className="text-xs font-bold text-navy-900">
-                  Price range / month
-                </Text>
-                <Text className="text-xs font-bold text-brand">
-                  {minPrice ? `₹${Math.round(minPrice / 100)}` : "₹0"} –{" "}
-                  {maxPrice && maxPrice <= 2_000_000 ? `₹${Math.round(maxPrice / 100)}` : "₹20,000+"}
-                </Text>
-              </View>
-
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-2">
-                {PRICE_PRESETS.map((preset) => {
-                  const isSelected =
-                    minPrice === preset.min && maxPrice === preset.max;
-                  return (
-                    <Pressable
-                      key={preset.label}
-                      onPress={() => {
-                        setMinPrice(preset.min);
-                        setMaxPrice(preset.max);
-                        setMinInputStr(preset.min ? String(preset.min / 100) : "");
-                        setMaxInputStr(preset.max ? String(preset.max / 100) : "");
-                        setVisible(6);
-                      }}
-                      className={`rounded-full px-3 py-1 border ${
-                        isSelected
-                          ? "border-brand bg-brand"
-                          : "border-line bg-surface-sunken active:bg-surface-hover"
-                      }`}
-                    >
-                      <Text
-                        className={`text-[11px] font-bold ${
-                          isSelected ? "text-white" : "text-text-secondary"
-                        }`}
-                      >
-                        {preset.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-
-              <View className="flex-row items-center gap-2 pt-1">
-                <View className="flex-1 flex-row items-center rounded-xl border border-line bg-surface-sunken px-2.5 py-1.5">
-                  <Text className="text-xs font-bold text-text-muted mr-1">₹</Text>
-                  <TextInput
-                    placeholder="Min"
-                    placeholderTextColor="rgba(107,101,96,0.6)"
-                    keyboardType="numeric"
-                    value={minInputStr}
-                    onChangeText={setMinInputStr}
-                    onEndEditing={() => {
-                      const val = parseInt(minInputStr, 10);
-                      setMinPrice(!isNaN(val) && val >= 0 ? val * 100 : undefined);
-                      setVisible(6);
-                    }}
-                    className="flex-1 text-xs text-navy-900 p-0"
-                  />
-                </View>
-                <Text className="text-xs text-text-muted">to</Text>
-                <View className="flex-1 flex-row items-center rounded-xl border border-line bg-surface-sunken px-2.5 py-1.5">
-                  <Text className="text-xs font-bold text-text-muted mr-1">₹</Text>
-                  <TextInput
-                    placeholder="Max"
-                    placeholderTextColor="rgba(107,101,96,0.6)"
-                    keyboardType="numeric"
-                    value={maxInputStr}
-                    onChangeText={setMaxInputStr}
-                    onEndEditing={() => {
-                      const val = parseInt(maxInputStr, 10);
-                      setMaxPrice(!isNaN(val) && val > 0 ? val * 100 : undefined);
-                      setVisible(6);
-                    }}
-                    className="flex-1 text-xs text-navy-900 p-0"
-                  />
-                </View>
-                {(minPrice !== undefined || maxPrice !== undefined) ? (
-                  <Pressable
-                    onPress={() => {
-                      setMinPrice(undefined);
-                      setMaxPrice(undefined);
-                      setMinInputStr("");
-                      setMaxInputStr("");
-                      setVisible(6);
-                    }}
-                    className="rounded-lg bg-surface-hover px-2.5 py-1.5"
-                  >
-                    <Text className="text-[10px] font-bold text-text-muted">Reset</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            </View>
-
-            {/* Row 5: Sort Options (GAP-S-05) */}
-            <View className="flex-row items-center gap-2">
-              <Text className="text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                Sort ({currentSortLabel}):
-              </Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-2">
-                {SORT_OPTIONS.map((opt) => {
-                  const isSelected = sort === opt.value;
-                  return (
-                    <Pressable
-                      key={opt.value}
-                      onPress={() => {
-                        setSort(opt.value);
-                        setVisible(6);
-                      }}
-                      className={`rounded-full px-3 py-1 border ${
-                        isSelected
-                          ? "border-navy-900 bg-navy-900"
-                          : "border-line bg-surface active:bg-surface-hover"
-                      }`}
-                    >
-                      <Text
-                        className={`text-[11px] font-bold ${
-                          isSelected ? "text-white" : "text-text-secondary"
-                        }`}
-                      >
-                        {opt.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            </View>
           </View>
 
           {/* Results Summary Header */}
@@ -597,5 +510,406 @@ export function StaysBrowseScreen() {
         )
       }
     />
+
+      {/* 1. Category Selection Modal */}
+      <Modal
+        visible={categoryModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCategoryModalOpen(false)}
+      >
+        <Pressable
+          className="flex-1 bg-black/50 justify-center items-center p-4"
+          onPress={() => setCategoryModalOpen(false)}
+        >
+          <Pressable
+            className="w-full max-w-sm rounded-3xl border border-line bg-surface p-5 shadow-raised max-h-[80%]"
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View className="flex-row items-center justify-between pb-3 border-b border-line">
+              <View className="flex-row items-center gap-2">
+                <Building2 size={18} color={THEME_COLORS.brand} />
+                <Text className="text-base font-bold text-navy-900">
+                  Property Type
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => setCategoryModalOpen(false)}
+                className="rounded-full p-1 active:bg-surface-sunken"
+              >
+                <X size={18} color={THEME_COLORS.muted} />
+              </Pressable>
+            </View>
+
+            {/* Search within categories */}
+            <View className="mt-3 flex-row items-center rounded-xl bg-surface-sunken px-3 py-2 border border-line/40">
+              <Search size={14} color={THEME_COLORS.muted} />
+              <TextInput
+                placeholder="Search categories..."
+                placeholderTextColor="rgba(117,108,94,0.6)"
+                value={categorySearch}
+                onChangeText={setCategorySearch}
+                className="ml-2 flex-1 text-xs text-navy-900 p-0"
+              />
+              {categorySearch ? (
+                <Pressable onPress={() => setCategorySearch("")}>
+                  <X size={14} color={THEME_COLORS.muted} />
+                </Pressable>
+              ) : null}
+            </View>
+
+            <ScrollView className="mt-3" showsVerticalScrollIndicator={false}>
+              {/* All Stays option */}
+              {(!categorySearch || "all stays".includes(categorySearch.toLowerCase())) && (
+                <Pressable
+                  onPress={() => {
+                    setSelectedCategorySlug(undefined);
+                    setSelectedServiceSlug(undefined);
+                    setVisible(6);
+                    setCategoryModalOpen(false);
+                  }}
+                  className={`flex-row items-center justify-between p-3 rounded-xl border mb-1.5 ${
+                    isAllCategories
+                      ? "border-navy-900 bg-navy-900/5"
+                      : "border-transparent active:bg-surface-sunken"
+                  }`}
+                >
+                  <View className="flex-row items-center gap-2.5">
+                    <Layers size={16} color={isAllCategories ? THEME_COLORS.navy : THEME_COLORS.muted} />
+                    <Text className={`text-xs font-bold ${isAllCategories ? "text-navy-900" : "text-text-secondary"}`}>
+                      All Stays
+                    </Text>
+                  </View>
+                  {isAllCategories && <Check size={16} color={THEME_COLORS.navy} />}
+                </Pressable>
+              )}
+
+              {taxonomy
+                .filter((cat) =>
+                  !categorySearch
+                    ? true
+                    : cat.name.toLowerCase().includes(categorySearch.toLowerCase())
+                )
+                .map((cat) => {
+                  const isSelected = selectedCategorySlug === cat.slug;
+                  const catServices = cat.services ?? [];
+                  return (
+                    <View key={cat.id || cat.slug} className="mb-1.5">
+                      <Pressable
+                        onPress={() => {
+                          setSelectedCategorySlug(cat.slug);
+                          setSelectedServiceSlug(undefined);
+                          setVisible(6);
+                          if (catServices.length === 0) {
+                            setCategoryModalOpen(false);
+                          }
+                        }}
+                        className={`flex-row items-center justify-between p-3 rounded-xl border ${
+                          isSelected
+                            ? "border-navy-900 bg-navy-900/5"
+                            : "border-transparent active:bg-surface-sunken"
+                        }`}
+                      >
+                        <Text className={`text-xs font-bold ${isSelected ? "text-navy-900 font-extrabold" : "text-text-secondary"}`}>
+                          {cat.name}
+                        </Text>
+                        {isSelected && <Check size={16} color={THEME_COLORS.navy} />}
+                      </Pressable>
+
+                      {/* If category is selected and has sub-services, show them */}
+                      {isSelected && catServices.length > 0 && (
+                        <View className="ml-4 pl-3 border-l-2 border-line my-1 gap-1">
+                          <Pressable
+                            onPress={() => {
+                              setSelectedServiceSlug(undefined);
+                              setVisible(6);
+                              setCategoryModalOpen(false);
+                            }}
+                            className={`flex-row items-center justify-between py-1.5 px-2 rounded-lg ${
+                              !selectedServiceSlug ? "bg-brand/10" : "active:bg-surface-sunken"
+                            }`}
+                          >
+                            <Text className={`text-[11px] font-bold ${!selectedServiceSlug ? "text-brand" : "text-text-secondary"}`}>
+                              All {cat.name}
+                            </Text>
+                            {!selectedServiceSlug && <Check size={14} color={THEME_COLORS.brand} />}
+                          </Pressable>
+                          {catServices.map((svc) => {
+                            const isSvcSelected = selectedServiceSlug === svc.slug;
+                            return (
+                              <Pressable
+                                key={svc.id || svc.slug}
+                                onPress={() => {
+                                  setSelectedServiceSlug(svc.slug);
+                                  setVisible(6);
+                                  setCategoryModalOpen(false);
+                                }}
+                                className={`flex-row items-center justify-between py-1.5 px-2 rounded-lg ${
+                                  isSvcSelected ? "bg-brand/10" : "active:bg-surface-sunken"
+                                }`}
+                              >
+                                <Text className={`text-[11px] ${isSvcSelected ? "text-brand font-bold" : "text-text-secondary"}`}>
+                                  {svc.name}
+                                </Text>
+                                {isSvcSelected && <Check size={14} color={THEME_COLORS.brand} />}
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* 2. Tenant Preference Modal */}
+      <Modal
+        visible={tenantModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setTenantModalOpen(false)}
+      >
+        <Pressable
+          className="flex-1 bg-black/50 justify-center items-center p-4"
+          onPress={() => setTenantModalOpen(false)}
+        >
+          <Pressable
+            className="w-full max-w-sm rounded-3xl border border-line bg-surface p-5 shadow-raised"
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View className="flex-row items-center justify-between pb-3 border-b border-line">
+              <Text className="text-base font-bold text-navy-900">
+                Tenant Preference
+              </Text>
+              <Pressable
+                onPress={() => setTenantModalOpen(false)}
+                className="rounded-full p-1 active:bg-surface-sunken"
+              >
+                <X size={18} color={THEME_COLORS.muted} />
+              </Pressable>
+            </View>
+
+            <View className="mt-3 gap-1">
+              {TENANT_PREFERENCES.map(({ value, label }) => {
+                const isSelected = (tenantPreference ?? "") === value;
+                return (
+                  <Pressable
+                    key={value || "all"}
+                    onPress={() => {
+                      setTenantPreference(value || undefined);
+                      setVisible(6);
+                      setTenantModalOpen(false);
+                    }}
+                    className={`flex-row items-center justify-between p-3 rounded-xl border ${
+                      isSelected
+                        ? "border-navy-900 bg-navy-900/5"
+                        : "border-transparent active:bg-surface-sunken"
+                    }`}
+                  >
+                    <Text className={`text-xs font-bold ${isSelected ? "text-navy-900" : "text-text-secondary"}`}>
+                      {label}
+                    </Text>
+                    {isSelected && <Check size={16} color={THEME_COLORS.navy} />}
+                  </Pressable>
+                );
+              })}
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* 3. Price Range Modal */}
+      <Modal
+        visible={priceModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPriceModalOpen(false)}
+      >
+        <Pressable
+          className="flex-1 bg-black/50 justify-center items-center p-4"
+          onPress={() => setPriceModalOpen(false)}
+        >
+          <Pressable
+            className="w-full max-w-sm rounded-3xl border border-line bg-surface p-5 shadow-raised"
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View className="flex-row items-center justify-between pb-3 border-b border-line">
+              <Text className="text-base font-bold text-navy-900">
+                Price range / month
+              </Text>
+              <Pressable
+                onPress={() => setPriceModalOpen(false)}
+                className="rounded-full p-1 active:bg-surface-sunken"
+              >
+                <X size={18} color={THEME_COLORS.muted} />
+              </Pressable>
+            </View>
+
+            <Text className="mt-3 text-[11px] font-bold uppercase tracking-wider text-text-muted">
+              Quick Presets
+            </Text>
+            <View className="mt-2 flex-row flex-wrap gap-2">
+              {PRICE_PRESETS.map((preset) => {
+                const isSelected =
+                  minPrice === preset.min && maxPrice === preset.max;
+                return (
+                  <Pressable
+                    key={preset.label}
+                    onPress={() => {
+                      setMinPrice(preset.min);
+                      setMaxPrice(preset.max);
+                      setMinInputStr(preset.min ? String(preset.min / 100) : "");
+                      setMaxInputStr(preset.max ? String(preset.max / 100) : "");
+                      setDraftMinStr(preset.min ? String(preset.min / 100) : "");
+                      setDraftMaxStr(preset.max ? String(preset.max / 100) : "");
+                      setVisible(6);
+                      setPriceModalOpen(false);
+                    }}
+                    className={`rounded-full px-3 py-1.5 border ${
+                      isSelected
+                        ? "border-brand bg-brand"
+                        : "border-line bg-surface-sunken active:bg-surface-hover"
+                    }`}
+                  >
+                    <Text
+                      className={`text-xs font-bold ${
+                        isSelected ? "text-white" : "text-text-secondary"
+                      }`}
+                    >
+                      {preset.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <Text className="mt-4 text-[11px] font-bold uppercase tracking-wider text-text-muted">
+              Custom Range (₹)
+            </Text>
+            <View className="mt-2 flex-row items-center gap-2">
+              <View className="flex-1 flex-row items-center rounded-xl border border-line bg-surface-sunken px-3 py-2">
+                <Text className="text-xs font-bold text-text-muted mr-1">₹</Text>
+                <TextInput
+                  placeholder="Min"
+                  placeholderTextColor="rgba(107,101,96,0.6)"
+                  keyboardType="numeric"
+                  value={draftMinStr}
+                  onChangeText={setDraftMinStr}
+                  className="flex-1 text-xs text-navy-900 p-0"
+                />
+              </View>
+              <Text className="text-xs text-text-muted">to</Text>
+              <View className="flex-1 flex-row items-center rounded-xl border border-line bg-surface-sunken px-3 py-2">
+                <Text className="text-xs font-bold text-text-muted mr-1">₹</Text>
+                <TextInput
+                  placeholder="Max"
+                  placeholderTextColor="rgba(107,101,96,0.6)"
+                  keyboardType="numeric"
+                  value={draftMaxStr}
+                  onChangeText={setDraftMaxStr}
+                  className="flex-1 text-xs text-navy-900 p-0"
+                />
+              </View>
+            </View>
+
+            <View className="mt-5 flex-row items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                className="flex-1"
+                onPress={() => {
+                  setMinPrice(undefined);
+                  setMaxPrice(undefined);
+                  setMinInputStr("");
+                  setMaxInputStr("");
+                  setDraftMinStr("");
+                  setDraftMaxStr("");
+                  setVisible(6);
+                  setPriceModalOpen(false);
+                }}
+              >
+                <Text className="text-xs font-bold text-navy-900">Reset</Text>
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                className="flex-1"
+                onPress={() => {
+                  const minVal = parseInt(draftMinStr, 10);
+                  const maxVal = parseInt(draftMaxStr, 10);
+                  setMinPrice(!isNaN(minVal) && minVal >= 0 ? minVal * 100 : undefined);
+                  setMaxPrice(!isNaN(maxVal) && maxVal > 0 ? maxVal * 100 : undefined);
+                  setMinInputStr(draftMinStr);
+                  setMaxInputStr(draftMaxStr);
+                  setVisible(6);
+                  setPriceModalOpen(false);
+                }}
+              >
+                <Text className="text-xs font-bold text-white">Apply</Text>
+              </Button>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* 4. Sort Options Modal */}
+      <Modal
+        visible={sortModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSortModalOpen(false)}
+      >
+        <Pressable
+          className="flex-1 bg-black/50 justify-center items-center p-4"
+          onPress={() => setSortModalOpen(false)}
+        >
+          <Pressable
+            className="w-full max-w-sm rounded-3xl border border-line bg-surface p-5 shadow-raised"
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View className="flex-row items-center justify-between pb-3 border-b border-line">
+              <Text className="text-base font-bold text-navy-900">
+                Sort Stays By
+              </Text>
+              <Pressable
+                onPress={() => setSortModalOpen(false)}
+                className="rounded-full p-1 active:bg-surface-sunken"
+              >
+                <X size={18} color={THEME_COLORS.muted} />
+              </Pressable>
+            </View>
+
+            <View className="mt-3 gap-1">
+              {SORT_OPTIONS.map((opt) => {
+                const isSelected = sort === opt.value;
+                return (
+                  <Pressable
+                    key={opt.value}
+                    onPress={() => {
+                      setSort(opt.value);
+                      setVisible(6);
+                      setSortModalOpen(false);
+                    }}
+                    className={`flex-row items-center justify-between p-3 rounded-xl border ${
+                      isSelected
+                        ? "border-navy-900 bg-navy-900/5"
+                        : "border-transparent active:bg-surface-sunken"
+                    }`}
+                  >
+                    <Text className={`text-xs font-bold ${isSelected ? "text-navy-900" : "text-text-secondary"}`}>
+                      {opt.label}
+                    </Text>
+                    {isSelected && <Check size={16} color={THEME_COLORS.navy} />}
+                  </Pressable>
+                );
+              })}
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </>
   );
 }

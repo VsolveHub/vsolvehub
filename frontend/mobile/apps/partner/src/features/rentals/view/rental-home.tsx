@@ -405,46 +405,47 @@ function Group({
       ) : (
         <View className="gap-2">
           {rows.map((b) => (
-            <Pressable
+            <Card
               key={b.id}
-              accessibilityRole="button"
-              onPress={() => onSelectBooking(b)}
+              className="flex-row items-center justify-between border border-line bg-surface p-3.5 shadow-xs"
             >
-              <Card className="flex-row items-center justify-between border border-line bg-surface p-3.5 shadow-xs active:bg-surface-hover">
-                <View className="min-w-0 flex-1 pr-2">
-                  <Text className="text-sm font-bold text-navy-900" numberOfLines={1}>
-                    {b.asset?.title ?? "Rental item"}
-                  </Text>
-                  <Text className="mt-0.5 text-xs text-text-secondary" numberOfLines={1}>
-                    {b.customer_name || "Customer"}
-                    {(b.quantity ?? 1) > 1 ? ` · ${b.quantity} pieces` : ""}
-                  </Text>
-                  <View className="mt-1 flex-row items-center gap-1.5">
-                    {late?.(b) ? (
-                      <Badge tone="danger">
-                        <Text className="text-[10px] font-bold text-white">{when(b)}</Text>
-                      </Badge>
-                    ) : (
-                      <Text className="text-xs font-semibold text-navy-900">{when(b)}</Text>
-                    )}
-                  </View>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => onSelectBooking(b)}
+                className="min-w-0 flex-1 pr-2 active:opacity-70"
+              >
+                <Text className="text-sm font-bold text-navy-900" numberOfLines={1}>
+                  {b.asset?.title ?? "Rental item"}
+                </Text>
+                <Text className="mt-0.5 text-xs text-text-secondary" numberOfLines={1}>
+                  {b.customer_name || "Customer"}
+                  {(b.quantity ?? 1) > 1 ? ` · ${b.quantity} pieces` : ""}
+                </Text>
+                <View className="mt-1 flex-row items-center gap-1.5">
+                  {late?.(b) ? (
+                    <Badge tone="danger">
+                      <Text className="text-[10px] font-bold text-white">{when(b)}</Text>
+                    </Badge>
+                  ) : (
+                    <Text className="text-xs font-semibold text-navy-900">{when(b)}</Text>
+                  )}
                 </View>
+              </Pressable>
 
-                {b.customer_phone ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onPress={() => {
-                      void Linking.openURL(`tel:${b.customer_phone}`);
-                    }}
-                    className="h-8 flex-row items-center gap-1 px-3"
-                  >
-                    <Phone size={12} color={COLOR_TOKENS.text} />
-                    <Text className="text-xs font-semibold text-navy-900">Call</Text>
-                  </Button>
-                ) : null}
-              </Card>
-            </Pressable>
+              {b.customer_phone ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onPress={() => {
+                    void Linking.openURL(`tel:${b.customer_phone}`);
+                  }}
+                  className="h-8 flex-row items-center gap-1 px-3"
+                >
+                  <Phone size={12} color={COLOR_TOKENS.text} />
+                  <Text className="text-xs font-semibold text-navy-900">Call</Text>
+                </Button>
+              ) : null}
+            </Card>
           ))}
         </View>
       )}

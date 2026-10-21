@@ -22,6 +22,7 @@ import {
 } from "../jobs-queries";
 import type { CandidateMatch } from "../model";
 import { fetchListingHome } from "../queries";
+import { THEME_COLORS } from "../theme-colors";
 
 const LEVELS = [
   { key: "STRONG", label: "Strong", tone: "success" as const },
@@ -113,7 +114,7 @@ export function JobMatches({
         <Card className="gap-3 border-amber-300 bg-amber-50/70 p-4">
           <View className="flex-row items-start gap-2.5">
             <View className="mt-0.5 size-7 items-center justify-center rounded-full bg-amber-200">
-              <Lock size={14} color="#92400e" />
+              <Lock size={14} color={THEME_COLORS.warning} />
             </View>
             <View className="flex-1">
               <Text className="text-xs font-bold text-amber-950">
@@ -310,6 +311,7 @@ export function JobMatches({
                 </Text>
               </View>
               <Pressable
+                hitSlop={8}
                 onPress={() => setSelectedCandidate(null)}
                 className="size-8 items-center justify-center rounded-full bg-surface-muted"
               >

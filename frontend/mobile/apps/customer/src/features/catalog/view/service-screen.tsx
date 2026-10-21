@@ -227,7 +227,7 @@ function VariantList({ variants }: { variants: ServiceDetail["variants"] }) {
             </Text>
           </View>
           <View className="flex-row items-center justify-between gap-3">
-            <View className="min-w-0">
+            <View className="shrink-0 min-w-0">
               <Text className="text-[0.65rem] font-bold uppercase tracking-wider text-text-muted">Starts at</Text>
               <Text className="mt-0.5 text-[1.1rem] font-bold tabular-nums text-navy-900">
                 {formatMoney(variant.starting_price.amount_paise)}

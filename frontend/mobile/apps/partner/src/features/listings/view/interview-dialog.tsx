@@ -12,6 +12,7 @@ import { Button, Text, TouchDatePicker, TouchTimePicker } from "@vsolve/mobile-u
 import { Calendar, Clock, MapPin, Phone, Video, X } from "lucide-react-native";
 
 import { INTERVIEW_MODES, type InterviewMode } from "../jobs-queries";
+import { THEME_COLORS } from "../theme-colors";
 
 function tomorrowIso(): string {
   const d = new Date();
@@ -86,9 +87,10 @@ export function InterviewDialog({
             <Pressable
               onPress={onClose}
               accessibilityLabel="Close"
+              hitSlop={8}
               className="size-8 items-center justify-center rounded-full bg-surface-muted"
             >
-              <X size={18} color="#00112e" />
+              <X size={18} color={THEME_COLORS.navy900} />
             </Pressable>
           </View>
 

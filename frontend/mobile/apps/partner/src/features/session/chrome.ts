@@ -43,7 +43,7 @@ export function focusedHeaderTitle(pathname: string, titleOverride: string | nul
   else if (pathname.startsWith("/stays/visits")) title = "Scheduled Visits";
   else if (pathname.startsWith("/stays")) title = "Stay Hosting";
   else if (pathname.startsWith("/listings/post")) title = "Post Job Opening";
-  else if (pathname.startsWith("/listings")) title = "Candidate Pipeline";
+  else if (pathname.startsWith("/listings")) title = "Details";
   if (titleOverride !== null) title = titleOverride;
   return title;
 }

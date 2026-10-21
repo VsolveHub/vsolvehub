@@ -7,6 +7,19 @@ export interface StayUnit {
   quantity_available?: number;
 }
 
+export interface StayTaxonomyService {
+  id: string;
+  name: string;
+  slug?: string;
+}
+
+export interface StayTaxonomyCategory {
+  id: string;
+  name: string;
+  slug?: string;
+  services?: StayTaxonomyService[];
+}
+
 export interface StayPartner {
   id?: string;
   full_name?: string;
@@ -19,6 +32,7 @@ export interface StayPropertySummary {
   id: string;
   title: string;
   slug?: string;
+  description?: string;
   location_text?: string;
   price_period?: string;
   room_style?: string;
@@ -32,15 +46,26 @@ export interface StayPropertySummary {
   host_name?: string;
   amenities?: { key: string; label: string }[];
   partner?: StayPartner;
+  structured_fields?: Record<string, unknown>;
+  units?: StayUnit[];
+}
+
+export interface StayReview {
+  id?: string;
+  rating?: number;
+  comment?: string;
+  customer_name?: string;
+  image_urls?: string[];
+  created_at?: string;
 }
 
 export interface StayProperty extends StayPropertySummary {
   description?: string;
   house_rules?: string;
-  structured_fields?: Record<string, any>;
+  structured_fields?: Record<string, unknown>;
   highlights?: { label: string; value: string }[];
   can_review?: boolean;
-  reviews?: any[];
+  reviews?: StayReview[];
   units?: StayUnit[];
   visits_offered?: boolean;
 }
@@ -105,7 +130,21 @@ export interface StayReservation {
   unit_name?: string;
   created_at?: string;
 }
-export type StayQuote = any;
+
+export interface StayQuote {
+  property_id: string;
+  unit_id?: string | null;
+  unit_name?: string;
+  check_out?: string;
+  nights?: number;
+  stay_length?: number;
+  price_period?: string;
+  nightly_rate_paise?: number;
+  total_quote_paise?: number;
+  booking_mode?: string;
+  min_stay_nights?: number;
+  max_guests?: number;
+}
 
 export interface StayFilterParams {
   q?: string;

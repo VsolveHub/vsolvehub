@@ -7,6 +7,7 @@ import { AlertCircle, CheckCircle2, FileText, UserCheck } from "lucide-react-nat
 import { isApiRequestError } from "@vsolve/api-client";
 
 import { quickApply, type JobProfile } from "../seeker-queries";
+import { THEME_COLORS } from "../theme-colors";
 
 const PRESET_NOTES = [
   "I am interested in this job and can join soon.",
@@ -57,7 +58,7 @@ export function QuickApplyCard({
   if (applyMutation.isSuccess) {
     return (
       <View className="rounded-2xl border border-emerald-500/30 bg-emerald-50/50 p-5 items-center text-center">
-        <CheckCircle2 size={36} color="#059669" />
+        <CheckCircle2 size={36} color={THEME_COLORS.success} />
         <Text className="mt-2 text-base font-extrabold text-emerald-950">Application sent</Text>
         <Text className="mt-1 text-xs text-center text-emerald-800">
           {posterName || "The employer"} has your profile. {"You'll be notified when they shortlist you."}
@@ -77,7 +78,7 @@ export function QuickApplyCard({
   if (isDuplicate) {
     return (
       <View className="rounded-2xl border border-amber-500/30 bg-amber-50/50 p-5 items-center text-center">
-        <AlertCircle size={36} color="#d97706" />
+        <AlertCircle size={36} color={THEME_COLORS.action} />
         <Text className="mt-2 text-base font-extrabold text-amber-950">Already Applied</Text>
         <Text className="mt-1 text-xs text-center text-amber-800">
           You have already submitted an application for this role. Track your progress under My Applications.
@@ -100,7 +101,7 @@ export function QuickApplyCard({
   return (
     <View className="rounded-2xl border border-line bg-surface p-4 gap-3 shadow-xs">
       <View className="flex-row items-center gap-2">
-        <UserCheck size={18} color="#f87000" />
+        <UserCheck size={18} color={THEME_COLORS.action} />
         <View className="flex-1">
           <Text className="text-sm font-extrabold text-navy-900">
             Apply with your V Solve Hub profile
@@ -116,7 +117,7 @@ export function QuickApplyCard({
         </Text>
         {profile.resume_name ? (
           <View className="mt-1.5 flex-row items-center gap-1">
-            <FileText size={12} color="#6B6560" />
+            <FileText size={12} color={THEME_COLORS.muted} />
             <Text className="text-[10px] text-text-muted">{profile.resume_name}</Text>
           </View>
         ) : null}

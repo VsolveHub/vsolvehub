@@ -2,8 +2,8 @@ export interface StayTaxonomyVariant {
   id: string;
   slug?: string;
   name?: string;
-  property_schema?: Record<string, unknown>;
-  room_schema?: Record<string, unknown>;
+  property_schema?: { properties?: Record<string, unknown> } & Record<string, unknown>;
+  room_schema?: { properties?: Record<string, unknown> } & Record<string, unknown>;
   amenity_options?: { key: string; label: string }[];
   room_name_suggestions?: string[];
 }
@@ -24,12 +24,12 @@ export type StayPropertyType = {
   group: string;
 };
 
-export function stayPropertyTypes(taxonomy: readonly any[]): StayPropertyType[] {
+export function stayPropertyTypes(taxonomy: readonly StayTaxonomySubcategory[]): StayPropertyType[] {
   const types: StayPropertyType[] = [];
   for (const sub of taxonomy) {
     const services = sub.services ?? [];
-    const variants = services.flatMap((service: any) =>
-      (service.variants ?? []).map((variant: any) => ({ service, variant })),
+    const variants = services.flatMap((service) =>
+      (service.variants ?? []).map((variant) => ({ service, variant })),
     );
     for (const { service, variant } of variants) {
       types.push({
@@ -70,7 +70,7 @@ export interface StayUnit {
   media?: StayUnitMedia[];
   room_numbers?: string[];
   rooms?: StayRoom[];
-  attributes?: Record<string, any>;
+  attributes?: Record<string, unknown>;
 }
 
 export interface StayPropertyMedia {
@@ -112,7 +112,7 @@ export interface StayProperty {
   units?: StayUnit[];
   variant?: StayTaxonomyVariant;
   house_rules?: string;
-  structured_fields?: Record<string, any>;
+  structured_fields?: Record<string, unknown>;
   visits_enabled?: boolean;
   visit_slots?: VisitSlotRow[];
   visit_blocked_dates?: string[];

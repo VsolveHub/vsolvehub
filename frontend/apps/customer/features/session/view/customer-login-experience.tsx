@@ -156,10 +156,12 @@ function CustomerLoginForm({
   flow,
   verifyLabel = "Verify and continue",
   mobileFocused = false,
+  variant = "page",
 }: {
   flow: OtpFlow;
   verifyLabel?: string;
   mobileFocused?: boolean;
+  variant?: "page" | "modal";
 }) {
   const codeInputRef = useRef<HTMLInputElement>(null);
 
@@ -430,7 +432,11 @@ export function CustomerLoginExperience({
         )}
       </div>
 
-      <CustomerLoginForm flow={flow} mobileFocused={mobileFocused} />
+      <CustomerLoginForm
+        flow={flow}
+        mobileFocused={mobileFocused}
+        variant={variant}
+      />
 
       {footer && flow.phase === "phone" ? <div className="mt-4">{footer}</div> : null}
     </section>

@@ -163,6 +163,7 @@ class StayBrowseView(APIView):
             OpenApiParameter("food", OpenApiTypes.BOOL, OpenApiParameter.QUERY),
             OpenApiParameter("min_price", OpenApiTypes.INT, OpenApiParameter.QUERY),
             OpenApiParameter("max_price", OpenApiTypes.INT, OpenApiParameter.QUERY),
+            OpenApiParameter("tenant_preference", OpenApiTypes.STR, OpenApiParameter.QUERY),
             OpenApiParameter("sort", OpenApiTypes.STR, OpenApiParameter.QUERY),
             OpenApiParameter("limit", OpenApiTypes.INT, OpenApiParameter.QUERY),
             OpenApiParameter("offset", OpenApiTypes.INT, OpenApiParameter.QUERY),
@@ -175,6 +176,7 @@ class StayBrowseView(APIView):
         food_param = request.query_params.get("food")
         min_price = request.query_params.get("min_price")
         max_price = request.query_params.get("max_price")
+        tenant_preference = request.query_params.get("tenant_preference", "")
         sort_param = request.query_params.get("sort", "newest")
         limit_raw = request.query_params.get("limit")
         offset_raw = request.query_params.get("offset")
@@ -194,6 +196,7 @@ class StayBrowseView(APIView):
             min_price_paise=int(min_price) if min_price and min_price.isdigit() else None,
             max_price_paise=int(max_price) if max_price and max_price.isdigit() else None,
             variant_code=request.query_params.get("service", ""),
+            tenant_preference=tenant_preference,
             sort=sort_param,
             limit=int(limit_raw) if limit_raw and limit_raw.isdigit() else None,
             offset=int(offset_raw) if offset_raw and offset_raw.isdigit() else 0,

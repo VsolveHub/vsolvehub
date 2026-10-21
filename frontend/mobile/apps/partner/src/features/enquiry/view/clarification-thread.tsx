@@ -45,7 +45,7 @@ export function ClarificationThread({ enquiry, open, onOpenChange }: Clarificati
       <View className="flex-1 bg-canvas">
         <View className="h-16 flex-row items-center justify-between border-b border-line bg-surface px-4">
           <View className="min-w-0 flex-1 flex-row items-center gap-3">
-            <Pressable accessibilityRole="button" accessibilityLabel="Back to enquiry" onPress={() => setIsOpen(false)} className="h-10 w-10 items-center justify-center rounded-full">
+            <Pressable hitSlop={8} accessibilityRole="button" accessibilityLabel="Back to enquiry" onPress={() => setIsOpen(false)} className="h-10 w-10 items-center justify-center rounded-full">
               <ArrowLeft size={20} color="#453f37" />
             </Pressable>
             <View className="h-10 w-10 items-center justify-center rounded-full bg-navy-900">
@@ -56,7 +56,7 @@ export function ClarificationThread({ enquiry, open, onOpenChange }: Clarificati
               <Text numberOfLines={1} className="text-xs font-medium text-text-muted">{enquiry.serviceName ? enquiry.serviceName : "Project Enquiry"}</Text>
             </View>
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel="Close chat" onPress={() => setIsOpen(false)} className="h-9 w-9 items-center justify-center rounded-full">
+          <Pressable hitSlop={8} accessibilityRole="button" accessibilityLabel="Close chat" onPress={() => setIsOpen(false)} className="h-9 w-9 items-center justify-center rounded-full">
             <X size={20} color="#756c5e" />
           </Pressable>
         </View>

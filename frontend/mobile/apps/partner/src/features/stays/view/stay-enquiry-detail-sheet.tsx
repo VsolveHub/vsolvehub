@@ -22,6 +22,7 @@ import {
   getEnquiryStatusBadge,
   stayLengthLabel,
 } from "../model";
+import { THEME_COLORS } from "../theme-colors";
 import { useBookableRooms, type BookableRoomOption } from "./use-bookable-rooms";
 
 const OPEN_STATUSES = new Set(["SUBMITTED", "RESPONDED"]);
@@ -117,7 +118,7 @@ function StayEnquiryDetailSheetContent({
           <View className="flex-row items-center justify-between rounded-xl border border-line bg-surface p-3">
             <View className="flex-row items-center gap-2.5">
               <View className="size-9 items-center justify-center rounded-full bg-surface-muted">
-                <User size={18} color="#00112e" />
+                <User size={18} color={THEME_COLORS.navy900} />
               </View>
               <View>
                 <Text className="text-sm font-bold text-navy-900">
@@ -138,7 +139,7 @@ function StayEnquiryDetailSheetContent({
                 onPress={handleCall}
                 className="h-8 gap-1.5 px-3"
               >
-                <Phone size={13} color="#00112e" />
+                <Phone size={13} color={THEME_COLORS.navy900} />
                 <Text className="text-xs font-bold text-navy-900">Call</Text>
               </Button>
             ) : null}
@@ -151,7 +152,7 @@ function StayEnquiryDetailSheetContent({
             <View className="mt-2.5 flex-col gap-2">
               <View className="flex-row items-center justify-between py-1 border-b border-line/60">
                 <View className="flex-row items-center gap-1.5">
-                  <Home size={13} color="#71717a" />
+                  <Home size={13} color={THEME_COLORS.zinc500} />
                   <Text className="text-xs text-text-muted">Property & Room</Text>
                 </View>
                 <Text className="text-xs font-semibold text-navy-900">
@@ -162,7 +163,7 @@ function StayEnquiryDetailSheetContent({
 
               <View className="flex-row items-center justify-between py-1 border-b border-line/60">
                 <View className="flex-row items-center gap-1.5">
-                  <Calendar size={13} color="#71717a" />
+                  <Calendar size={13} color={THEME_COLORS.zinc500} />
                   <Text className="text-xs text-text-muted">Move-in date</Text>
                 </View>
                 <Text className="text-xs font-semibold text-navy-900">
@@ -172,7 +173,7 @@ function StayEnquiryDetailSheetContent({
 
               <View className="flex-row items-center justify-between py-1 border-b border-line/60">
                 <View className="flex-row items-center gap-1.5">
-                  <Clock size={13} color="#71717a" />
+                  <Clock size={13} color={THEME_COLORS.zinc500} />
                   <Text className="text-xs text-text-muted">Stay duration</Text>
                 </View>
                 <Text className="text-xs font-semibold text-navy-900">{durationStr}</Text>
@@ -191,7 +192,7 @@ function StayEnquiryDetailSheetContent({
           {enquiry.message ? (
             <View className="rounded-xl border border-line bg-surface p-3">
               <View className="flex-row items-center gap-1.5">
-                <MessageSquare size={13} color="#71717a" />
+                <MessageSquare size={13} color={THEME_COLORS.zinc500} />
                 <Text className="text-xs font-bold text-navy-900">Message from Guest</Text>
               </View>
               <Text className="mt-2 text-xs leading-relaxed text-text">
@@ -239,7 +240,7 @@ function StayEnquiryDetailSheetContent({
                         >
                           {room.label}
                         </Text>
-                        {isSelected ? <CheckCircle2 size={14} color="#00112e" /> : null}
+                        {isSelected ? <CheckCircle2 size={14} color={THEME_COLORS.navy900} /> : null}
                       </Pressable>
                     );
                   })}

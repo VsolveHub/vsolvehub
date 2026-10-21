@@ -144,9 +144,10 @@ export function canCancelBooking(status: string): boolean {
 }
 
 /** Submit for moderation when draft or rejected. */
-export function canSubmitAsset(moderationStatus?: string): boolean {
+export function canSubmitAsset(moderationStatus?: string, status?: string): boolean {
   const m = (moderationStatus ?? "").toUpperCase();
-  return m === "DRAFT" || m === "REJECTED";
+  const s = (status ?? "").toUpperCase();
+  return m === "DRAFT" || m === "REJECTED" || s === "DRAFT";
 }
 
 export interface CreateAssetRequest {

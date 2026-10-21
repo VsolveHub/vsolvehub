@@ -159,6 +159,7 @@ export function EstimateDetail({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Back to all estimates"
+              hitSlop={8}
               onPress={() => router.back()}
               className="size-9 shrink-0 items-center justify-center rounded-full border border-line bg-surface shadow-sm active:scale-95"
             >

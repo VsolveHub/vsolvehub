@@ -199,7 +199,7 @@ export function AddressBook() {
                           ) : null}
                         </View>
                         {/* More menu icon */}
-                        <Pressable className="size-8 items-center justify-center rounded-full">
+                        <Pressable hitSlop={8} className="size-8 items-center justify-center rounded-full">
                           <Svg viewBox="0 0 24 24" width={18} height={18} fill="#6B6560">
                             <Circle cx={12} cy={5} r={2} />
                             <Circle cx={12} cy={12} r={2} />

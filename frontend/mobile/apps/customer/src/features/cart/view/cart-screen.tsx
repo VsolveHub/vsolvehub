@@ -95,6 +95,7 @@ function CartItemRow({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`Remove ${item.service_name}`}
+              hitSlop={12}
               onPress={onRemove}
               disabled={isPending}
               className="p-1 rounded-lg active:bg-red-50"
@@ -110,6 +111,7 @@ function CartItemRow({
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Decrease quantity"
+                hitSlop={{ top: 12, bottom: 12, left: 10, right: 10 }}
                 disabled={isPending || item.quantity <= 1}
                 onPress={() => onUpdateQuantity(item.quantity - 1)}
                 className="px-1 disabled:opacity-30"
@@ -122,6 +124,7 @@ function CartItemRow({
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Increase quantity"
+                hitSlop={{ top: 12, bottom: 12, left: 10, right: 10 }}
                 disabled={isPending}
                 onPress={() => onUpdateQuantity(item.quantity + 1)}
                 className="px-1 disabled:opacity-30"
@@ -202,7 +205,7 @@ export function CartScreen() {
           style={{ paddingTop: Math.max(insets.top, 24) + 8 }}
           className="flex-row items-center border-b border-line bg-surface px-4 pb-3"
         >
-          <Pressable onPress={handleBack} className="mr-3 p-1 rounded-full active:bg-surface-sunken">
+          <Pressable hitSlop={8} onPress={handleBack} className="mr-3 p-1 rounded-full active:bg-surface-sunken">
             <BackIcon />
           </Pressable>
           <Text className="text-lg font-bold text-navy-900">Your Cart</Text>
@@ -232,7 +235,7 @@ export function CartScreen() {
         className="flex-row items-center justify-between border-b border-line bg-surface px-4 pb-3"
       >
         <View className="flex-row items-center gap-3">
-          <Pressable onPress={handleBack} className="p-1 rounded-full active:bg-surface-sunken">
+          <Pressable hitSlop={8} onPress={handleBack} className="p-1 rounded-full active:bg-surface-sunken">
             <BackIcon />
           </Pressable>
           <Text className="text-lg font-bold text-navy-900">Your Cart</Text>

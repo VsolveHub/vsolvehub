@@ -412,11 +412,13 @@ export function RentalBookPanel({ asset }: { asset: RentalAsset }) {
       {/* Quantity Stepper if applicable */}
       {maxQty > 1 ? (
         <View className="flex-row items-center justify-between rounded-xl border border-line bg-surface-muted p-3">
-          <View>
+          <View className="flex-1 mr-2 min-w-0">
             <Text className="text-xs font-bold text-navy-900">Quantity</Text>
             <Text className="text-[10px] text-text-muted">Up to {maxQty} units available</Text>
           </View>
           <QuantityStepper
+            hideLabel
+            size="sm"
             label="Quantity"
             decrementLabel="Decrease quantity"
             incrementLabel="Increase quantity"

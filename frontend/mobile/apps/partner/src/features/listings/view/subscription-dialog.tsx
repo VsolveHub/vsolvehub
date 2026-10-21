@@ -71,6 +71,7 @@ export function SubscriptionDialog({
             <Pressable
               onPress={onClose}
               accessibilityLabel="Close"
+              hitSlop={8}
               className="size-8 items-center justify-center rounded-full bg-surface-muted"
             >
               <X size={18} color="#00112e" />

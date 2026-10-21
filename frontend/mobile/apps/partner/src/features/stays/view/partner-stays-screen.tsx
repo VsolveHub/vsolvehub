@@ -28,6 +28,7 @@ import {
   partnerStayVisitAction,
   respondPartnerStayEnquiry,
 } from "../queries";
+import { THEME_COLORS } from "../theme-colors";
 import { PropertyCard } from "./property-card";
 import { EnquiryCard } from "./enquiry-card";
 import { VisitCard } from "./visit-card";
@@ -264,101 +265,107 @@ export function PartnerStaysScreen({
 
   return (
     <View className="flex-1 bg-canvas">
-      {/* Header Tabs */}
-      <View className="border-b border-line bg-surface px-4 pt-3">
-        <View className="flex-row items-center gap-6">
+      <ScrollView
+        className="flex-1"
+        contentContainerClassName="px-4 py-4 pb-32"
+        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
+      >
+        {/* Hero Section */}
+        <View className="mb-4">
+          <Text className="text-xs font-semibold uppercase tracking-[0.18em] text-[#f87000]">
+            STAY LISTINGS
+          </Text>
+          <Text className="mt-1 text-2xl font-black tracking-tight text-navy-900">
+            Your stays dashboard
+          </Text>
+          <Text className="mt-1.5 text-xs font-medium leading-relaxed text-text-secondary">
+            Add a property, add its rooms and prices, then publish. Pause any time to hide it — existing bookings go ahead.
+          </Text>
+          <Pressable
+            onPress={() => {
+              setEditingProperty(null);
+              setPropertySheetOpen(true);
+            }}
+            className="mt-3.5 self-start rounded-xl bg-[#f87000] px-4 py-2.5 shadow-xs active:opacity-90"
+          >
+            <Text className="text-xs font-bold text-white">Add a property</Text>
+          </Pressable>
+        </View>
+
+        {/* Segmented Section Tabs */}
+        <View className="mb-4 flex-row items-center rounded-2xl border border-line/60 bg-surface-sunken p-1">
           <Pressable
             onPress={() => setTab("properties")}
             className={cn(
-              "pb-3 border-b-2",
-              tab === "properties" ? "border-action" : "border-transparent",
+              "flex-1 items-center justify-center rounded-xl py-2 px-3",
+              tab === "properties"
+                ? "bg-surface shadow-xs"
+                : "bg-transparent active:bg-surface-hover/50"
             )}
           >
             <Text
               className={cn(
-                "text-sm font-bold",
-                tab === "properties" ? "text-navy-900" : "text-text-muted",
+                "text-xs",
+                tab === "properties"
+                  ? "font-bold text-navy-900"
+                  : "font-semibold text-text-secondary"
               )}
             >
-              Stays ({properties.length})
+              Properties
             </Text>
           </Pressable>
 
           <Pressable
             onPress={() => setTab("enquiries")}
             className={cn(
-              "pb-3 border-b-2 flex-row items-center gap-1.5",
-              tab === "enquiries" ? "border-action" : "border-transparent",
+              "flex-1 flex-row items-center justify-center gap-1.5 rounded-xl py-2 px-3",
+              tab === "enquiries"
+                ? "bg-surface shadow-xs"
+                : "bg-transparent active:bg-surface-hover/50"
             )}
           >
             <Text
               className={cn(
-                "text-sm font-bold",
-                tab === "enquiries" ? "text-navy-900" : "text-text-muted",
+                "text-xs",
+                tab === "enquiries"
+                  ? "font-bold text-navy-900"
+                  : "font-semibold text-text-secondary"
               )}
             >
               Enquiries
             </Text>
             {openEnquiriesCount > 0 ? (
-              <Badge tone="info">
-                {openEnquiriesCount}
-              </Badge>
+              <View className="rounded-full bg-[#f87000] px-1.5 py-0.2">
+                <Text className="text-[10px] font-bold text-white">{openEnquiriesCount}</Text>
+              </View>
             ) : null}
           </Pressable>
 
           <Pressable
             onPress={() => setTab("visits")}
             className={cn(
-              "pb-3 border-b-2 flex-row items-center gap-1.5",
-              tab === "visits" ? "border-action" : "border-transparent",
+              "flex-1 flex-row items-center justify-center gap-1.5 rounded-xl py-2 px-3",
+              tab === "visits"
+                ? "bg-surface shadow-xs"
+                : "bg-transparent active:bg-surface-hover/50"
             )}
           >
             <Text
               className={cn(
-                "text-sm font-bold",
-                tab === "visits" ? "text-navy-900" : "text-text-muted",
+                "text-xs",
+                tab === "visits"
+                  ? "font-bold text-navy-900"
+                  : "font-semibold text-text-secondary"
               )}
             >
               Visits
             </Text>
             {requestedVisitsCount > 0 ? (
-              <Badge tone="info">
-                {requestedVisitsCount}
-              </Badge>
+              <View className="rounded-full bg-[#f87000] px-1.5 py-0.2">
+                <Text className="text-[10px] font-bold text-white">{requestedVisitsCount}</Text>
+              </View>
             ) : null}
           </Pressable>
-
-          <Pressable
-            onPress={() => setTab("bookings")}
-            className={cn(
-              "pb-3 border-b-2 flex-row items-center gap-1.5",
-              tab === "bookings" ? "border-action" : "border-transparent",
-            )}
-          >
-            <Text
-              className={cn(
-                "text-sm font-bold",
-                tab === "bookings" ? "text-navy-900" : "text-text-muted",
-              )}
-            >
-              Bookings
-            </Text>
-            {confirmedReservationsCount > 0 ? (
-              <Badge tone="info">
-                {confirmedReservationsCount}
-              </Badge>
-            ) : null}
-          </Pressable>
-        </View>
-      </View>
-
-      <ScrollView
-        className="flex-1 px-4 py-4"
-        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
-      >
-        {/* Top Summary Cards (W-026) */}
-        <View className="mb-4">
-          <StaySummaryCards onSelectTab={(t) => setTab(t)} />
         </View>
 
         {actionError ? (
@@ -369,58 +376,9 @@ export function PartnerStaysScreen({
 
         {/* ===================== TAB: PROPERTIES ===================== */}
         {tab === "properties" && (
-          <View className="flex-col gap-4 pb-12">
-            <View className="flex-row items-center justify-between">
-              {/* Filter: Active vs Archived */}
-              <View className="flex-row gap-1.5">
-                <Pressable
-                  onPress={() => setPropertyFilter("active")}
-                  className={`rounded-full px-3 py-1 border ${
-                    propertyFilter === "active"
-                      ? "border-navy-900 bg-navy-900"
-                      : "border-line bg-surface"
-                  }`}
-                >
-                  <Text
-                    className={`text-xs font-semibold ${
-                      propertyFilter === "active" ? "text-white" : "text-text"
-                    }`}
-                  >
-                    Active Stays
-                  </Text>
-                </Pressable>
-
-                <Pressable
-                  onPress={() => setPropertyFilter("archived")}
-                  className={`rounded-full px-3 py-1 border ${
-                    propertyFilter === "archived"
-                      ? "border-navy-900 bg-navy-900"
-                      : "border-line bg-surface"
-                  }`}
-                >
-                  <Text
-                    className={`text-xs font-semibold ${
-                      propertyFilter === "archived" ? "text-white" : "text-text"
-                    }`}
-                  >
-                    Archived
-                  </Text>
-                </Pressable>
-              </View>
-
-              <Button
-                variant="primary"
-                size="sm"
-                onPress={() => {
-                  setEditingProperty(null);
-                  setPropertySheetOpen(true);
-                }}
-                className="h-8 flex-row items-center gap-1.5 px-3"
-              >
-                <Plus size={14} color="#ffffff" />
-                <Text className="text-xs font-bold text-white">Add Property</Text>
-              </Button>
-            </View>
+          <View className="flex-col gap-4">
+            {/* Top Summary Cards */}
+            <StaySummaryCards onSelectTab={(t) => setTab(t)} />
 
             {propertiesQuery.isLoading ? (
               <View className="py-12 items-center">
@@ -442,25 +400,24 @@ export function PartnerStaysScreen({
                 }
                 description={
                   propertyFilter === "archived"
-                    ? "Properties you archive will appear here."
-                    : "List your PG, hostel, or flat to start receiving bookings and visit requests."
+                    ? "Archived stays will appear here."
+                    : "Tap 'Add a property' above to list your PG, room, or hostel."
                 }
                 action={
                   propertyFilter === "active" ? (
                     <Button
-                      variant="primary"
                       onPress={() => {
                         setEditingProperty(null);
                         setPropertySheetOpen(true);
                       }}
                     >
-                      <Text className="font-bold text-white">List Your First Property</Text>
+                      Add a Property
                     </Button>
                   ) : undefined
                 }
               />
             ) : (
-              <View className="flex-col gap-4">
+              <View className="flex-col">
                 {filteredProperties.map((property) => (
                   <PropertyCard
                     key={property.id}
@@ -471,19 +428,33 @@ export function PartnerStaysScreen({
                     }}
                     onManageRooms={(p) => {
                       setUnitProperty(p);
-                      setEditingUnit(null);
                       setUnitSheetOpen(true);
-                    }}
-                    onManagePhotos={(p) => {
-                      setEditingProperty(p);
-                      setPropertySheetOpen(true);
                     }}
                     onVisitingHours={(p) => {
                       setVisitingHoursProperty(p);
                       setVisitingHoursSheetOpen(true);
                     }}
+                    onManagePhotos={(p) => {
+                      setEditingProperty(p);
+                      setPropertySheetOpen(true);
+                    }}
                   />
                 ))}
+
+                {properties.some((p) => p.listing_status === "ARCHIVED") ? (
+                  <Pressable
+                    onPress={() =>
+                      setPropertyFilter((curr) => (curr === "active" ? "archived" : "active"))
+                    }
+                    className="py-3 items-center"
+                  >
+                    <Text className="text-xs font-semibold text-text-muted active:text-text">
+                      {propertyFilter === "archived"
+                        ? "← Show active properties"
+                        : "View archived properties"}
+                    </Text>
+                  </Pressable>
+                ) : null}
               </View>
             )}
           </View>
@@ -618,7 +589,7 @@ export function PartnerStaysScreen({
                     <View key={`${first.visit_date}-${first.start_time}-${first.property?.id || first.property_title}`} className="flex-col gap-2">
                       {/* Slot Header (GAP-S-11) */}
                       <View className="flex-row items-center gap-2 px-1">
-                        <CalendarClock size={15} color="#f87000" />
+                        <CalendarClock size={15} color={THEME_COLORS.action} />
                         <Text className="text-xs font-bold text-text">
                           {dayLabel(first.visit_date)} · {timeWindow}
                           <Text className="font-normal text-text-muted">

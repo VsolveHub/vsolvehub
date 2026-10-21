@@ -92,6 +92,7 @@ export function QuestionInbox({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Close chat"
+              hitSlop={8}
               onPress={() => setIsOpen(false)}
               className="size-9 items-center justify-center rounded-full"
             >

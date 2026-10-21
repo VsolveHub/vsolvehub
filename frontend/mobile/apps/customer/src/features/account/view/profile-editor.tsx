@@ -5,11 +5,13 @@ import { useRouter } from "expo-router";
 import { ChevronLeft } from "lucide-react-native";
 import { useState } from "react";
 import { Pressable, RefreshControl, ScrollView, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useCustomerProfile, useUpdateCustomerProfile } from "@/features/account/queries";
 
 export function ProfileEditor() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const profile = useCustomerProfile();
   const update = useUpdateCustomerProfile();
   const [fullName, setFullName] = useState<string | null>(null);
@@ -57,16 +59,19 @@ export function ProfileEditor() {
     );
   }
   const person = profile.data;
+  const [savedSuccess, setSavedSuccess] = useState(false);
+
   return (
     <ScrollView
-      className="flex-1 bg-canvas"
-      contentContainerClassName="gap-3 px-4 py-6"
+      className="flex-1 bg-[#FAF9F7]"
+      style={{ paddingTop: Math.max(insets.top, 20) }}
+      contentContainerClassName="gap-4 px-4 pb-24 pt-2"
       keyboardShouldPersistTaps="handled"
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} tintColor="#EA580C" />
       }
     >
-      <View className="flex-row items-center gap-2.5">
+      <View className="flex-row items-center gap-3 py-2">
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Back to Profile"
@@ -77,30 +82,68 @@ export function ProfileEditor() {
               router.push("/account");
             }
           }}
-          className="size-9 items-center justify-center rounded-full border border-line bg-surface shadow-2xs active:bg-surface-hover"
+          className="size-9 items-center justify-center rounded-full border border-[#E5E7EB] bg-white shadow-2xs active:bg-[#F2EFE9]"
         >
-          <ChevronLeft size={18} color="#00112e" />
+          <ChevronLeft size={20} color="#0F172A" />
         </Pressable>
-        <Text className="text-2xl font-extrabold text-text">Edit profile</Text>
+        <View className="flex-1 min-w-0">
+          <Text className="text-2xl font-extrabold text-[#0B1B3D]">Edit profile</Text>
+          <Text className="text-xs text-[#64748B]">Update personal details</Text>
+        </View>
       </View>
-      <Input value={fullName ?? person.full_name} onChangeText={setFullName} placeholder="Full name" />
-      <Input value={displayName ?? person.display_name} onChangeText={setDisplayName} placeholder="Display name" />
-      <Input value={email ?? person.email} onChangeText={setEmail} placeholder="Email" keyboardType="email-address" autoCapitalize="none" />
-      <Text className="text-sm text-text-secondary">{person.phone_number}</Text>
-      {update.error ? <Text className="text-sm text-danger-text">{describeError(update.error, "mutation").message}</Text> : null}
-      <Button
-        loading={update.isPending}
-        loadingLabel="Saving"
-        onPress={() =>
-          update.mutate({
-            full_name: fullName ?? person.full_name,
-            display_name: displayName ?? person.display_name,
-            email: email ?? person.email,
-          })
-        }
-      >
-        Save
-      </Button>
+
+      <View className="rounded-2xl border border-[#F1EFEB] bg-white p-5 shadow-xs gap-3.5">
+        <View>
+          <Text className="mb-1 text-xs font-semibold uppercase tracking-wider text-[#64748B]">Full Name</Text>
+          <Input value={fullName ?? person.full_name ?? ""} onChangeText={setFullName} placeholder="Full name" />
+        </View>
+        <View>
+          <Text className="mb-1 text-xs font-semibold uppercase tracking-wider text-[#64748B]">Display Name</Text>
+          <Input value={displayName ?? person.display_name ?? ""} onChangeText={setDisplayName} placeholder="Display name" />
+        </View>
+        <View>
+          <Text className="mb-1 text-xs font-semibold uppercase tracking-wider text-[#64748B]">Email Address</Text>
+          <Input value={email ?? person.email ?? ""} onChangeText={setEmail} placeholder="Email" keyboardType="email-address" autoCapitalize="none" />
+        </View>
+
+        <View className="rounded-xl bg-[#FAF9F7] p-3 border border-[#EAE8E4]">
+          <Text className="text-xs font-semibold text-[#0F172A]">Mobile Number (Sign-in ID)</Text>
+          <Text className="text-sm font-bold text-[#64748B] mt-0.5">{person.phone_number}</Text>
+          <Text className="text-[11px] text-[#94A3B8] mt-0.5">Primary verified phone number cannot be changed here.</Text>
+        </View>
+
+        {savedSuccess ? (
+          <View className="rounded-xl bg-emerald-50 border border-emerald-200 p-2.5">
+            <Text className="text-xs font-semibold text-emerald-800">Profile saved successfully! ✓</Text>
+          </View>
+        ) : null}
+
+        {update.error ? <Text className="text-sm text-danger-text">{describeError(update.error, "mutation").message}</Text> : null}
+
+        <Button
+          loading={update.isPending}
+          loadingLabel="Saving changes…"
+          className="mt-2 bg-[#EA580C]"
+          onPress={() => {
+            setSavedSuccess(false);
+            update.mutate(
+              {
+                full_name: fullName ?? person.full_name,
+                display_name: displayName ?? person.display_name,
+                email: email ?? person.email,
+              },
+              {
+                onSuccess: () => {
+                  setSavedSuccess(true);
+                  setTimeout(() => setSavedSuccess(false), 3000);
+                },
+              }
+            );
+          }}
+        >
+          Save changes
+        </Button>
+      </View>
     </ScrollView>
   );
 }

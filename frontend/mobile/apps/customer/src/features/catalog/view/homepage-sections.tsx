@@ -257,6 +257,7 @@ export function HomepageClientSections() {
       <View className="items-end gap-1">
         <Pressable
           accessibilityRole="button"
+          hitSlop={8}
           disabled={addingSlug === slug || Boolean(cartMerge)}
           onPress={() => handleQuickAdd(slug)}
           className="h-8 items-center justify-center rounded-full bg-action px-5 disabled:opacity-50"
@@ -416,6 +417,7 @@ export function HomepageClientSections() {
                 </View>
                 <Pressable
                   accessibilityRole="button"
+                  hitSlop={8}
                   disabled={addItem.isPending || Boolean(cartMerge)}
                   onPress={() => runAddToCart(variant.id, "variant-picker", () => setVariantPicker(null))}
                   className="h-8 items-center justify-center rounded-full bg-action px-5 disabled:opacity-50"
@@ -510,18 +512,18 @@ function HeroSplitCarousel({
       </View>
       <Image source={{ uri: slide.image }} contentFit="cover" style={{ height: 180, width: "100%" }} />
       <View className="absolute left-4 top-1/2">
-        <Pressable accessibilityRole="button" accessibilityLabel="Previous slide" onPress={onPrev} className="size-9 items-center justify-center rounded-full border border-[#e7e2da]/40 bg-white">
+        <Pressable hitSlop={8} accessibilityRole="button" accessibilityLabel="Previous slide" onPress={onPrev} className="size-9 items-center justify-center rounded-full border border-[#e7e2da]/40 bg-white">
           <Chevron flip />
         </Pressable>
       </View>
       <View className="absolute right-4 top-1/2">
-        <Pressable accessibilityRole="button" accessibilityLabel="Next slide" onPress={onNext} className="size-9 items-center justify-center rounded-full border border-[#e7e2da]/40 bg-white">
+        <Pressable hitSlop={8} accessibilityRole="button" accessibilityLabel="Next slide" onPress={onNext} className="size-9 items-center justify-center rounded-full border border-[#e7e2da]/40 bg-white">
           <Chevron />
         </Pressable>
       </View>
       <View className="absolute bottom-4 left-8 flex-row gap-1.5">
         {CAROUSEL_SLIDES.map((entry, dot) => (
-          <Pressable key={entry.title} accessibilityRole="button" accessibilityLabel={`Go to slide ${dot + 1}`} onPress={() => onSelect(dot)} className={dot === index ? "h-1.5 w-5 rounded-full bg-navy-900" : "size-1.5 rounded-full bg-navy-900/30"} />
+          <Pressable hitSlop={8} key={entry.title} accessibilityRole="button" accessibilityLabel={`Go to slide ${dot + 1}`} onPress={() => onSelect(dot)} className={dot === index ? "h-1.5 w-5 rounded-full bg-navy-900" : "size-1.5 rounded-full bg-navy-900/30"} />
         ))}
       </View>
     </View>

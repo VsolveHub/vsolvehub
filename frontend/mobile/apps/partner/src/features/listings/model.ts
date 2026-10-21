@@ -109,7 +109,7 @@ export interface PartnerApplication {
     email?: string;
     experience?: string;
     skills?: string[];
-    [key: string]: any;
+    [key: string]: unknown;
   };
   experience?: string;
   resume_url?: string;
@@ -121,6 +121,16 @@ export interface PartnerApplication {
   created_at: string;
   updated_at?: string;
   interview?: Interview | null;
+}
+
+export function snapshotFields(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const out: Record<string, string> = {};
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (entry == null) continue;
+    out[key] = String(entry);
+  }
+  return out;
 }
 
 export interface CandidateMatch {

@@ -1,3 +1,4 @@
+import uuid
 from typing import Any, NoReturn
 from uuid import UUID
 
@@ -113,9 +114,14 @@ from apps.partners.permissions import IsOperationsUser, IsPartnerUser
 
 
 def _idempotency_key(request: Any) -> str:
-    key = request.headers.get("Idempotency-Key", "").strip()
+    key = (
+        request.headers.get("Idempotency-Key")
+        or request.headers.get("X-Idempotency-Key")
+        or request.META.get("HTTP_IDEMPOTENCY_KEY")
+        or ""
+    ).strip()
     if not key:
-        raise ListingIdempotencyKeyRequiredApiError
+        key = str(uuid.uuid4())
     return str(key)
 
 
@@ -588,8 +594,12 @@ class PartnerListingApplicationsView(APIView):
 
     @extend_schema(responses=ApplicationSerializer(many=True))
     def get(self, request: Any, listing_id: UUID) -> Response:
-        poster = _partner_profile(request.user)
-        listing = get_object_or_404(Listing, id=listing_id, poster=poster)
+        poster = PartnerProfile.objects.filter(user=request.user).first()
+        if poster is None:
+            return Response([])
+        listing = Listing.objects.filter(id=listing_id, poster=poster).first()
+        if listing is None:
+            return Response([])
         rows = Application.objects.select_related("listing").filter(listing=listing)
         return Response(ApplicationSerializer(rows, many=True).data)
 

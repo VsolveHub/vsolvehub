@@ -15,8 +15,7 @@ const DEFAULT_CHROME_LAYOUT: AppChromeLayout = {
 };
 
 const CART_CHROME_LAYOUT: AppChromeLayout = {
-  contentMinHeightClass:
-    "min-h-[calc(100dvh-7.5rem-env(safe-area-inset-bottom))] md:min-h-[calc(100dvh-4rem)]",
+  contentMinHeightClass: "flex-1",
   hideMobileFooter: true,
   hideMobileChrome: true,
   mobileBackHref: "/catalog",
@@ -24,8 +23,7 @@ const CART_CHROME_LAYOUT: AppChromeLayout = {
 };
 
 const CHECKOUT_CHROME_LAYOUT: AppChromeLayout = {
-  contentMinHeightClass:
-    "min-h-[calc(100dvh-7.5rem-env(safe-area-inset-bottom))] md:min-h-[calc(100dvh-4rem)]",
+  contentMinHeightClass: "flex-1",
   hideMobileFooter: true,
   hideMobileChrome: true,
   mobileBackHref: "/cart",

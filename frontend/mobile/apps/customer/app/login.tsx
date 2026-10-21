@@ -3,8 +3,14 @@ import { safeNextPath } from "@vsolve/query/native";
 import { useAuthStore, useMobileOtpFlow } from "@vsolve/mobile-core";
 import { Text } from "@vsolve/mobile-ui";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
-import { Pressable, RefreshControl, ScrollView, View } from "react-native";
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
 
@@ -74,28 +80,34 @@ export default function LoginScreen() {
         </Pressable>
       </View>
 
-      <ScrollView
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}
         className="flex-1"
-        contentContainerClassName="px-4 py-6 items-center"
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={["#EA580C"]}
-            tintColor="#EA580C"
-          />
-        }
       >
-        <CustomerLoginExperience
-          flow={flow}
-          variant="page"
-          mobileFocused
-          onClose={() => router.replace("/")}
-          onBrowseServices={() => router.push("/catalog" as never)}
-        />
-      </ScrollView>
+        <ScrollView
+          className="flex-1"
+          contentContainerClassName="px-4 py-6 items-center"
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={["#EA580C"]}
+              tintColor="#EA580C"
+            />
+          }
+        >
+          <CustomerLoginExperience
+            flow={flow}
+            variant="page"
+            mobileFocused
+            onClose={() => router.replace("/")}
+            onBrowseServices={() => router.push("/catalog" as never)}
+          />
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }

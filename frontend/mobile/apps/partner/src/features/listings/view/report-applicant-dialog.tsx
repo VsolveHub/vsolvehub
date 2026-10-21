@@ -60,7 +60,7 @@ export function ReportApplicantDialog({
               <Flag size={18} color="#f87000" />
               <Text className="text-base font-bold text-text">Report Candidate</Text>
             </View>
-            <Pressable accessibilityRole="button" onPress={onClose} className="p-1">
+            <Pressable hitSlop={12} accessibilityRole="button" accessibilityLabel="Close report dialog" onPress={onClose} className="p-1">
               <X size={18} color="#6B6560" />
             </Pressable>
           </View>

@@ -567,7 +567,7 @@ function ScopeSection({ draft, error, disabled, onChange }: { draft: CommercialE
 
 function Chip({ on, tone = "success", disabled, onClick, children }: { on: boolean; tone?: "success" | "muted"; disabled: boolean; onClick: () => void; children: string }) {
   return (
-    <Pressable accessibilityRole="button" accessibilityState={{ selected: on, disabled }} disabled={disabled} onPress={onClick} className={cn("min-h-9 items-center justify-center rounded-full border px-3", on ? (tone === "success" ? "border-success-line bg-success-surface" : "border-line-strong bg-surface-sunken") : "border-line bg-surface")}>
+    <Pressable hitSlop={6} accessibilityRole="button" accessibilityState={{ selected: on, disabled }} disabled={disabled} onPress={onClick} className={cn("min-h-9 items-center justify-center rounded-full border px-3", on ? (tone === "success" ? "border-success-line bg-success-surface" : "border-line-strong bg-surface-sunken") : "border-line bg-surface")}>
       <Text className={cn("text-[13px] font-semibold", on ? (tone === "success" ? "text-success-text" : "text-text") : "text-text-secondary")}>{children}</Text>
     </Pressable>
   );

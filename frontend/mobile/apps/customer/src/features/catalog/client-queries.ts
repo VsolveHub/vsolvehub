@@ -66,7 +66,7 @@ export function useServiceDetail(serviceSlug: string | null, enabled = true) {
           params: { path: { service_slug: serviceSlug ?? "" } },
         }),
       ),
-    enabled: enabled && serviceSlug !== null && serviceSlug.length > 0,
+    enabled: Boolean(enabled && serviceSlug && serviceSlug.length > 0),
     ...CATALOG_FRESHNESS,
   });
 }

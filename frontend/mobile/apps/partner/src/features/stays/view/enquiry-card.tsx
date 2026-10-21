@@ -8,6 +8,7 @@ import {
   getEnquiryStatusBadge,
   stayLengthLabel,
 } from "../model";
+import { THEME_COLORS } from "../theme-colors";
 
 const OPEN_STATUSES = new Set(["SUBMITTED", "RESPONDED", "OPEN"]);
 
@@ -43,7 +44,7 @@ export function EnquiryCard({
         {/* Header: Guest Name & Status Badge */}
         <View className="flex-row items-center justify-between">
           <View className="flex-row items-center gap-2">
-            <User size={15} color="#71717a" />
+            <User size={15} color={THEME_COLORS.zinc500} />
             <Text className="text-base font-bold text-text">
               {enquiry.customer_name || "Guest"}
             </Text>
@@ -59,7 +60,7 @@ export function EnquiryCard({
 
         {/* Move-in, duration & guests */}
         <View className="flex-row items-center gap-1.5">
-          <Calendar size={13} color="#71717a" />
+          <Calendar size={13} color={THEME_COLORS.zinc500} />
           <Text className="text-xs text-text-secondary">
             From {enquiry.check_in} · {durationStr} · {guestsStr}
           </Text>
@@ -92,7 +93,7 @@ export function EnquiryCard({
           className="flex-row items-center gap-1"
         >
           <Text className="text-xs font-semibold text-navy-900">Details</Text>
-          <ChevronRight size={13} color="#00112e" />
+          <ChevronRight size={13} color={THEME_COLORS.navy900} />
         </Pressable>
 
         {enquiry.customer_phone && isOpen ? (
@@ -102,7 +103,7 @@ export function EnquiryCard({
             onPress={handleCall}
             className="h-8 flex-row items-center gap-1.5 px-3"
           >
-            <Phone size={12} color="#ffffff" />
+            <Phone size={12} color={THEME_COLORS.white} />
             <Text className="text-xs font-bold text-white">Call</Text>
           </Button>
         ) : null}

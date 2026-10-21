@@ -16,7 +16,7 @@ const DEFAULT_CLASS =
   "h-11 w-full flex-row items-center justify-center rounded-xl bg-navy-900 px-6 shadow-xs active:scale-[0.98] disabled:opacity-50";
 
 const COMPACT_CLASS =
-  "min-h-10 flex-row items-center justify-center rounded-xl bg-navy-900 px-5 shadow-xs active:scale-[0.98] disabled:opacity-50";
+  "min-h-10 shrink-0 flex-row items-center justify-center rounded-xl bg-navy-900 px-5 shadow-xs active:scale-[0.98] disabled:opacity-50";
 
 export function AddToCartButton({ variantId, className, size = "default" }: AddToCartButtonProps) {
   const router = useRouter();
@@ -73,38 +73,62 @@ export function AddToCartButton({ variantId, className, size = "default" }: AddT
   };
 
   if (cartItem) {
-    const quantityShellClass =
-      size === "compact"
-        ? "min-h-10 w-full flex-row items-center justify-between gap-3 rounded-xl border border-line bg-white px-3 shadow-2xs"
-        : "h-11 w-full flex-row items-center justify-between gap-4 rounded-xl border-2 border-line bg-white px-5 shadow-2xs";
+    const isCompact = size === "compact";
+    const quantityShellClass = isCompact
+      ? "min-h-10 shrink-0 flex-row items-center justify-between gap-3 rounded-xl border border-line bg-white px-3 shadow-2xs"
+      : "h-11 w-full flex-row items-center justify-between gap-4 rounded-xl border-2 border-line bg-white px-4 shadow-2xs";
 
     return (
-      <View className={quantityShellClass}>
-        <Pressable accessibilityRole="link" onPress={() => router.push("/cart" as never)} className="flex-row items-center gap-1">
-          <Text className="text-xs font-bold text-action">View Cart</Text>
-          <Svg viewBox="0 0 20 20" width={14} height={14} fill="none">
-            <Path d="m7.5 4.5 5.5 5.5-5.5 5.5" stroke="#f87000" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      <View className={cn(quantityShellClass, className)}>
+        {/* View Cart link */}
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel="View Cart"
+          onPress={() => router.push("/cart" as never)}
+          hitSlop={6}
+          className="flex-row items-center gap-1 active:opacity-75"
+        >
+          <Text className="text-xs font-bold text-[#EA580C]">View Cart</Text>
+          <Svg viewBox="0 0 20 20" width={12} height={12} fill="none">
+            <Path d="m7.5 4.5 5.5 5.5-5.5 5.5" stroke="#EA580C" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
         </Pressable>
-        <View className="flex-row items-center gap-3">
+
+        {/* Quantity Stepper Controller */}
+        <View className="flex-row items-center gap-1.5">
+          {/* Minus Button */}
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Remove one"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             onPress={handleDecrement}
             disabled={isUpdating || isRemoving}
-            className="px-1.5 disabled:opacity-50"
+            className="size-7 items-center justify-center rounded-lg bg-[#FFF6ED] active:bg-[#FFE5D3] disabled:opacity-40"
           >
-            <Text className="text-lg font-extrabold text-action">-</Text>
+            <Svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="#EA580C" strokeWidth={2.5} strokeLinecap="round">
+              <Path d="M5 12h14" />
+            </Svg>
           </Pressable>
-          <Text className="min-w-[18px] text-center text-xs font-black tabular-nums text-navy-900">{cartItem.quantity}</Text>
+
+          {/* Quantity Number */}
+          <View className="min-w-[20px] items-center justify-center">
+            <Text className="text-xs font-black tabular-nums text-navy-900">
+              {cartItem.quantity}
+            </Text>
+          </View>
+
+          {/* Plus Button */}
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Add one"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             onPress={handleIncrement}
             disabled={isUpdating}
-            className="px-1.5 disabled:opacity-50"
+            className="size-7 items-center justify-center rounded-lg bg-[#FFF6ED] active:bg-[#FFE5D3] disabled:opacity-40"
           >
-            <Text className="text-lg font-extrabold text-action">+</Text>
+            <Svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="#EA580C" strokeWidth={2.5} strokeLinecap="round">
+              <Path d="M12 5v14M5 12h14" />
+            </Svg>
           </Pressable>
         </View>
       </View>

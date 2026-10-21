@@ -8,6 +8,7 @@ import {
   stayReservationStatusLabel,
   stayReservationTone,
 } from "../model";
+import { THEME_COLORS } from "../theme-colors";
 
 export function StayReservationCard({
   reservation,
@@ -40,7 +41,7 @@ export function StayReservationCard({
 
         {/* Dates and Amount */}
         <View className="flex-row items-center gap-1.5">
-          <Calendar size={13} color="#71717a" />
+          <Calendar size={13} color={THEME_COLORS.zinc500} />
           <Text className="text-xs text-text-secondary">
             {reservation.check_in} – {reservation.check_out}
             {typeof reservation.total_paise === "number"
@@ -51,7 +52,7 @@ export function StayReservationCard({
 
         {/* Guest Name & Phone */}
         <View className="flex-row items-center gap-1.5">
-          <User size={13} color="#71717a" />
+          <User size={13} color={THEME_COLORS.zinc500} />
           <Text className="text-xs text-text-secondary" numberOfLines={1}>
             Guest: {reservation.customer_name || "—"}
             {reservation.customer_phone ? ` · ${reservation.customer_phone}` : ""}
@@ -66,7 +67,7 @@ export function StayReservationCard({
           className="flex-row items-center gap-1"
         >
           <Text className="text-xs font-semibold text-text-link">View booking</Text>
-          <ChevronRight size={13} color="#071328" />
+          <ChevronRight size={13} color={THEME_COLORS.navy900} />
         </Pressable>
 
         {reservation.customer_phone ? (
@@ -76,8 +77,8 @@ export function StayReservationCard({
             onPress={handleCall}
             className="h-8 flex-row items-center gap-1.5 px-3"
           >
-            <Phone size={12} color="#071328" />
-            <Text className="text-xs font-bold text-[#071328]">Call</Text>
+            <Phone size={12} color={THEME_COLORS.navy900} />
+            <Text className="text-xs font-bold text-navy-900">Call</Text>
           </Button>
         ) : null}
       </View>

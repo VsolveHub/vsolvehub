@@ -41,6 +41,7 @@ import {
   roomOccupancyLabel,
   stayLengthLabel,
   type StayProperty,
+  type StayReview,
   type StayUnit,
 } from "../model";
 import { addDaysIso, todayIso } from "../pickup-time";
@@ -51,6 +52,7 @@ import {
   fetchStayQuote,
   fetchStays,
 } from "../queries";
+import { THEME_COLORS } from "../theme-colors";
 import { getAmenityIcon } from "./amenity-icon";
 import { StayCard } from "./stay-card";
 import { StayReviewSheet } from "./stay-review-sheet";
@@ -385,7 +387,7 @@ function StayDetailLoaded({
           }}
           className="flex-row items-center gap-1.5 self-start py-1"
         >
-          <ArrowLeft size={14} color="#6B6560" />
+          <ArrowLeft size={14} color={THEME_COLORS.muted} />
           <Text className="text-xs font-bold text-text-secondary">
             Back to Stays & PG
           </Text>
@@ -410,19 +412,21 @@ function StayDetailLoaded({
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Previous photo"
+                  hitSlop={8}
                   onPress={prevPhoto}
                   className="absolute left-3 top-1/2 -translate-y-1/2 size-9 items-center justify-center rounded-full border border-line bg-white/90 shadow-xs active:bg-white"
                 >
-                  <ChevronLeft size={16} color="#00112e" />
+                  <ChevronLeft size={16} color={THEME_COLORS.navy900} />
                 </Pressable>
 
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Next photo"
+                  hitSlop={8}
                   onPress={nextPhoto}
                   className="absolute right-3 top-1/2 -translate-y-1/2 size-9 items-center justify-center rounded-full border border-line bg-white/90 shadow-xs active:bg-white"
                 >
-                  <ChevronRight size={16} color="#00112e" />
+                  <ChevronRight size={16} color={THEME_COLORS.navy900} />
                 </Pressable>
 
                 <View className="absolute bottom-3 right-3 rounded-lg border border-line bg-white/90 px-2 py-0.5 backdrop-blur-xs">
@@ -449,7 +453,7 @@ function StayDetailLoaded({
                     onPress={() => setActivePhotoIdx(i)}
                     className={`h-14 w-[4.5rem] overflow-hidden rounded-xl border transition ${
                       selected
-                        ? "border-[#ea580c] ring-2 ring-[#ea580c]/30"
+                        ? "border-brand ring-2 ring-brand/30"
                         : "border-line opacity-80"
                     }`}
                   >
@@ -469,7 +473,7 @@ function StayDetailLoaded({
         <View className="rounded-2xl border border-line bg-surface p-5 shadow-xs">
           {/* Verified host pill badge */}
           <View className="flex-row items-center gap-1 self-start rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5">
-            <ShieldCheck size={12} color="#059669" />
+            <ShieldCheck size={12} color={THEME_COLORS.emerald600} />
             <Text className="text-xs font-semibold text-emerald-700">
               Verified host
             </Text>
@@ -488,7 +492,7 @@ function StayDetailLoaded({
           {/* Average Rating if present */}
           {averageRating ? (
             <View className="mt-1 flex-row items-center gap-1">
-              <Star size={12} color="#f59e0b" fill="#f59e0b" />
+              <Star size={12} color={THEME_COLORS.amber} fill={THEME_COLORS.amber} />
               <Text className="text-xs font-bold text-amber-700">
                 {averageRating}
                 {property.review_count ? ` (${property.review_count} reviews)` : ""}
@@ -499,7 +503,7 @@ function StayDetailLoaded({
           {/* Location with MapPin */}
           {property.location_text ? (
             <View className="mt-2 flex-row items-center gap-1.5">
-              <MapPin size={13} color="#ea580c" />
+              <MapPin size={13} color={THEME_COLORS.action} />
               <Text className="text-xs text-text-secondary">
                 {property.location_text}
               </Text>
@@ -509,7 +513,7 @@ function StayDetailLoaded({
           {/* Minimum stay with Clock */}
           {property.min_stay_nights && property.min_stay_nights > 1 ? (
             <View className="mt-2 flex-row items-center gap-1.5">
-              <Clock size={13} color="#ea580c" />
+              <Clock size={13} color={THEME_COLORS.action} />
               <Text className="text-xs text-text-secondary">
                 Minimum stay: {stayLengthLabel(property.min_stay_nights, period)}
               </Text>
@@ -571,7 +575,7 @@ function StayDetailLoaded({
                     }}
                     className={`flex-row items-center justify-between rounded-xl border p-3.5 ${
                       isSelected
-                        ? "border-[#ea580c] bg-orange-50/40"
+                        ? "border-brand bg-orange-50/40"
                         : "border-line bg-surface-sunken"
                     }`}
                   >
@@ -584,7 +588,7 @@ function StayDetailLoaded({
                       </Text>
                     </View>
                     <View className="items-end">
-                      <Text className="text-base font-extrabold text-[#ea580c]">
+                      <Text className="text-base font-extrabold text-brand">
                         {formatPaise(unit.nightly_rate_paise)}
                       </Text>
                       <Text className="text-[10px] text-text-secondary">
@@ -610,7 +614,7 @@ function StayDetailLoaded({
                       key={amenity.key}
                       className="flex-row items-center gap-2 rounded-xl border border-line bg-surface-sunken px-3 py-2"
                     >
-                      <Icon size={14} color="#ea580c" />
+                      <Icon size={14} color={THEME_COLORS.action} />
                       <Text className="text-xs font-medium text-navy-900">
                         {amenity.label}
                       </Text>
@@ -629,7 +633,7 @@ function StayDetailLoaded({
         {/* How enquiries work Card */}
         <View className="rounded-2xl border border-line bg-surface p-5 shadow-xs gap-2.5">
           <View className="flex-row items-center gap-2">
-            <CheckCircle2 size={16} color="#059669" />
+            <CheckCircle2 size={16} color={THEME_COLORS.emerald600} />
             <Text className="text-sm font-bold text-navy-900">
               How enquiries work
             </Text>
@@ -645,7 +649,7 @@ function StayDetailLoaded({
         {property.house_rules?.trim() ? (
           <View className="rounded-2xl border border-line bg-surface p-5 shadow-xs gap-2.5">
             <View className="flex-row items-center gap-2">
-              <FileText size={16} color="#ea580c" />
+              <FileText size={16} color={THEME_COLORS.action} />
               <Text className="text-sm font-bold text-navy-900">
                 House Rules & Guidelines
               </Text>
@@ -660,7 +664,7 @@ function StayDetailLoaded({
         <View className="rounded-2xl border border-line bg-surface p-5 shadow-xs gap-3">
           <View className="flex-row items-center justify-between border-b border-line pb-3">
             <View className="flex-row items-center gap-2">
-              <Star size={18} color="#f59e0b" fill="#f59e0b" />
+              <Star size={18} color={THEME_COLORS.amber} fill={THEME_COLORS.amber} />
               <Text className="text-sm font-extrabold text-navy-900">
                 {averageRating
                   ? `${averageRating} · ${reviews.length} Review${
@@ -675,7 +679,7 @@ function StayDetailLoaded({
                 onPress={() => setReviewOpen(true)}
                 className="flex-row items-center gap-1.5 rounded-xl border border-line bg-surface-sunken px-3 py-1.5 active:bg-surface-hover"
               >
-                <MessageSquare size={13} color="#00112e" />
+                <MessageSquare size={13} color={THEME_COLORS.navy900} />
                 <Text className="text-xs font-bold text-navy-900">
                   Write a review
                 </Text>
@@ -685,7 +689,7 @@ function StayDetailLoaded({
 
           {reviews.length > 0 ? (
             <View className="gap-4 pt-1">
-              {reviews.map((rev: any, idx: number) => (
+              {reviews.map((rev: StayReview, idx: number) => (
                 <View
                   key={rev.id || idx}
                   className="gap-1.5 border-b border-line/60 pb-3 last:border-b-0 last:pb-0"
@@ -699,8 +703,8 @@ function StayDetailLoaded({
                         <Star
                           key={i}
                           size={12}
-                          color="#f59e0b"
-                          fill="#f59e0b"
+                          color={THEME_COLORS.amber}
+                          fill={THEME_COLORS.amber}
                         />
                       ))}
                     </View>
@@ -745,7 +749,7 @@ function StayDetailLoaded({
             <View className="flex-row items-center justify-between">
               <View className="flex-row items-center gap-2">
                 <View className="size-8 rounded-full bg-emerald-100 items-center justify-center">
-                  <CheckCircle2 size={18} color="#059669" />
+                  <CheckCircle2 size={18} color={THEME_COLORS.emerald600} />
                 </View>
                 <Text className="text-lg font-extrabold text-navy-900">
                   Enquiry Active
@@ -796,13 +800,13 @@ function StayDetailLoaded({
                 </View>
                 <View className="flex-row items-center justify-between border-t border-line/60 pt-2">
                   <Text className="text-xs text-text-secondary">Estimated Total</Text>
-                  <Text className="text-sm font-extrabold text-[#ea580c]">
+                  <Text className="text-sm font-extrabold text-brand">
                     {formatPaise(existingEnquiry.total_quote_paise ?? 0)}
                   </Text>
                 </View>
                 {existingEnquiry.host_name ? (
                   <View className="flex-row items-center gap-1.5 pt-1">
-                    <Phone size={13} color="#059669" />
+                    <Phone size={13} color={THEME_COLORS.emerald600} />
                     <Text className="text-xs text-emerald-800 font-medium">
                       Host: {existingEnquiry.host_name}{" "}
                       {existingEnquiry.host_phone ? `(${existingEnquiry.host_phone})` : ""}
@@ -815,7 +819,7 @@ function StayDetailLoaded({
             <View className="gap-2.5 pt-1">
               <Pressable
                 onPress={() => router.push("/stays/mine" as never)}
-                className="items-center justify-center rounded-xl bg-[#ea580c] py-3.5 shadow-xs active:bg-[#c2410c]"
+                className="items-center justify-center rounded-xl bg-brand py-3.5 shadow-xs active:bg-brand/90"
               >
                 <Text className="text-sm font-bold text-white">
                   View in My Enquiries →
@@ -842,7 +846,7 @@ function StayDetailLoaded({
                 Send an enquiry
               </Text>
               <View className="flex-row items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5">
-                <ShieldCheck size={12} color="#059669" />
+                <ShieldCheck size={12} color={THEME_COLORS.emerald600} />
                 <Text className="text-xs font-semibold text-emerald-700">
                   Verified host
                 </Text>
@@ -886,14 +890,14 @@ function StayDetailLoaded({
                       }}
                       className={`flex-row items-center justify-between rounded-xl border p-3 ${
                         currentUnitId === unit.id
-                          ? "border-[#ea580c] bg-orange-50/40"
+                          ? "border-brand bg-orange-50/40"
                           : "border-line bg-surface-sunken"
                       }`}
                     >
                       <Text className="text-xs font-bold text-navy-900">
                         {unit.name}
                       </Text>
-                      <Text className="text-xs font-extrabold text-[#ea580c]">
+                      <Text className="text-xs font-extrabold text-brand">
                         {formatRate(unit.nightly_rate_paise, period)}
                       </Text>
                     </Pressable>
@@ -907,7 +911,7 @@ function StayDetailLoaded({
               {/* Move-in / Check-in date */}
               <View className="gap-1.5">
                 <View className="flex-row items-center gap-1.5">
-                  <Calendar size={14} color="#6B6560" />
+                  <Calendar size={14} color={THEME_COLORS.muted} />
                   <Text className="text-xs font-bold text-navy-900">
                     {monthly ? "Move-in date" : "Check-in date"}
                   </Text>
@@ -919,7 +923,7 @@ function StayDetailLoaded({
                   <Text className="text-sm font-medium text-navy-900">
                     {formatToIndianDate(checkIn)}
                   </Text>
-                  <Calendar size={16} color="#6B6560" />
+                  <Calendar size={16} color={THEME_COLORS.muted} />
                 </Pressable>
               </View>
 
@@ -948,7 +952,7 @@ function StayDetailLoaded({
             {/* Guests Section */}
             <View className="gap-2">
               <View className="flex-row items-center gap-1.5">
-                <Users size={14} color="#6B6560" />
+                <Users size={14} color={THEME_COLORS.muted} />
                 <Text className="text-xs font-bold text-navy-900">Guests</Text>
               </View>
 
@@ -961,6 +965,7 @@ function StayDetailLoaded({
                 <View className="flex-row items-center gap-3">
                   <Pressable
                     disabled={adultCount <= 1}
+                    hitSlop={10}
                     onPress={() => setAdultCount((n) => Math.max(1, n - 1))}
                     className={`size-7 items-center justify-center rounded-full border border-line bg-surface ${
                       adultCount <= 1 ? "opacity-40" : "active:bg-surface-hover"
@@ -973,6 +978,7 @@ function StayDetailLoaded({
                   </Text>
                   <Pressable
                     disabled={adultCount + childCount >= maxGuests}
+                    hitSlop={10}
                     onPress={() =>
                       setAdultCount((n) => Math.min(n + 1, maxGuests - childCount))
                     }
@@ -996,6 +1002,7 @@ function StayDetailLoaded({
                 <View className="flex-row items-center gap-3">
                   <Pressable
                     disabled={childCount <= 0}
+                    hitSlop={10}
                     onPress={() => setChildCount((n) => Math.max(0, n - 1))}
                     className={`size-7 items-center justify-center rounded-full border border-line bg-surface ${
                       childCount <= 0 ? "opacity-40" : "active:bg-surface-hover"
@@ -1008,6 +1015,7 @@ function StayDetailLoaded({
                   </Text>
                   <Pressable
                     disabled={adultCount + childCount >= maxGuests}
+                    hitSlop={10}
                     onPress={() =>
                       setChildCount((n) => Math.min(n + 1, maxGuests - adultCount))
                     }
@@ -1062,14 +1070,14 @@ function StayDetailLoaded({
                 </Text>
               </View>
               <View className="flex-row items-start gap-1.5 pt-1">
-                <Phone size={13} color="#6B6560" className="mt-0.5" />
+                <Phone size={13} color={THEME_COLORS.muted} className="mt-0.5" />
                 <Text className="flex-1 text-[11px] text-text-secondary leading-tight">
                   Your name and phone number are shared with the host so they can call
                   you.
                 </Text>
               </View>
               <View className="flex-row items-start gap-1.5">
-                <Info size={13} color="#6B6560" className="mt-0.5" />
+                <Info size={13} color={THEME_COLORS.muted} className="mt-0.5" />
                 <Text className="flex-1 text-[11px] text-text-secondary leading-tight">
                   An estimate only — you agree the final price and payment with the
                   host.
@@ -1081,7 +1089,7 @@ function StayDetailLoaded({
             {error || quoteProblem ? (
               <View className="rounded-xl border border-rose-200 bg-rose-50 p-3 gap-2">
                 <View className="flex-row items-center gap-2">
-                  <AlertCircle size={16} color="#e11d48" />
+                  <AlertCircle size={16} color={THEME_COLORS.danger} />
                   <Text className="flex-1 text-xs font-semibold text-rose-800">
                     {error ?? quoteProblem}
                   </Text>
@@ -1106,14 +1114,14 @@ function StayDetailLoaded({
             <Pressable
               disabled={enquiryMutation.isPending || Boolean(quoteProblem)}
               onPress={handleSendEnquiry}
-              className={`items-center justify-center rounded-xl bg-[#ea580c] py-3.5 shadow-xs active:bg-[#c2410c] ${
+              className={`items-center justify-center rounded-xl bg-brand py-3.5 shadow-xs active:bg-brand/90 ${
                 enquiryMutation.isPending || Boolean(quoteProblem)
                   ? "opacity-60"
                   : ""
               }`}
             >
               {enquiryMutation.isPending ? (
-                <ActivityIndicator size="small" color="#ffffff" />
+                <ActivityIndicator size="small" color={THEME_COLORS.white} />
               ) : (
                 <Text className="text-sm font-bold text-white">Send enquiry</Text>
               )}
@@ -1168,7 +1176,7 @@ function StayDetailLoaded({
             onPress={() => setFullscreenPhoto(null)}
             className="absolute top-12 right-6 size-10 items-center justify-center rounded-full bg-white/20 active:bg-white/40 z-10"
           >
-            <X size={20} color="#ffffff" />
+            <X size={20} color={THEME_COLORS.white} />
           </Pressable>
 
           {fullscreenPhoto ? (
@@ -1191,7 +1199,7 @@ function StayDetailLoaded({
         <View className="flex-1 bg-black/60 items-center justify-center p-5">
           <View className="w-full max-w-sm rounded-2xl bg-surface p-6 shadow-raised gap-4">
             <View className="size-12 rounded-full bg-emerald-100 items-center justify-center self-center">
-              <CheckCircle2 size={28} color="#059669" />
+              <CheckCircle2 size={28} color={THEME_COLORS.emerald600} />
             </View>
             <Text className="text-center text-lg font-extrabold text-navy-900">
               Enquiry Sent!
@@ -1206,7 +1214,7 @@ function StayDetailLoaded({
                   setIsSuccess(false);
                   router.push("/stays/mine" as never);
                 }}
-                className="items-center justify-center rounded-xl bg-[#ea580c] py-3 active:bg-[#c2410c]"
+                className="items-center justify-center rounded-xl bg-brand py-3 active:bg-brand/90"
               >
                 <Text className="text-xs font-bold text-white">
                   View My Enquiries
@@ -1264,7 +1272,7 @@ function SimilarStaysSection({
         </View>
 
         <Pressable onPress={() => router.push("/stays" as never)}>
-          <Text className="text-xs font-bold text-[#ea580c]">
+          <Text className="text-xs font-bold text-brand">
             View all stays →
           </Text>
         </Pressable>

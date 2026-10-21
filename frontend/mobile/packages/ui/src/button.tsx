@@ -101,6 +101,7 @@ export function Button({
       accessibilityState={{ disabled: isBlocked, busy: loading }}
       accessibilityLabel={loading ? (loadingLabel ?? "Working") : undefined}
       disabled={isBlocked}
+      hitSlop={props.hitSlop ?? (size === "sm" ? { top: 8, bottom: 8, left: 6, right: 6 } : undefined)}
       onPress={onPress ?? onClick}
       className={cn(buttonStyles({ variant, size, block }), className)}
       {...props}

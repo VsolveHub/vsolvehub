@@ -31,6 +31,11 @@ export function apiBaseUrl(): string {
     rawUrl.includes("127.0.0.1") ||
     /^https?:\/\/(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?(\/.*)?$/.test(rawUrl);
 
+  // In production builds, guard against cleartext LAN/localhost URLs to satisfy ATS and cleartext traffic policies.
+  if (!__DEV__ && isLocalOrLan) {
+    return "https://api.vsolvehub.com";
+  }
+
   if (Platform.OS === "web") {
     if (isLocalOrLan && typeof window !== "undefined" && window.location) {
       const hostname = window.location.hostname;

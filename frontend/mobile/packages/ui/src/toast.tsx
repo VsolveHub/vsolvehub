@@ -56,7 +56,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       <View pointerEvents="box-none" className="absolute inset-x-0 gap-2 px-4" style={{ top: insets.top + 8 }}>
         {toasts.map((toast) => (
-          <Pressable key={toast.id} onPress={() => dismiss(toast.id)} className={cn("rounded-control px-4 py-3", chrome[toast.tone])}>
+          <Pressable
+            key={toast.id}
+            accessibilityRole="alert"
+            accessibilityLabel={`Notification: ${toast.message}`}
+            onPress={() => dismiss(toast.id)}
+            className={cn("rounded-control px-4 py-3", chrome[toast.tone])}
+          >
             <Text className={cn("text-sm font-semibold", ink[toast.tone])}>{toast.message}</Text>
           </Pressable>
         ))}

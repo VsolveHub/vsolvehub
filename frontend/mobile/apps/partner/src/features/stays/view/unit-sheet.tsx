@@ -22,6 +22,7 @@ import {
   updatePartnerStayUnit,
   uploadPartnerStayPhoto,
 } from "../queries";
+import { THEME_COLORS } from "../theme-colors";
 
 export const FALLBACK_ROOM_NAMES = [
   "Single Room",
@@ -419,7 +420,7 @@ function UnitSheetContent({
                         onPress={() => handleRemovePhoto(m.id)}
                         className="absolute right-1 top-1 size-5 items-center justify-center rounded-full bg-white shadow-xs"
                       >
-                        <X size={12} color="#00112e" />
+                        <X size={12} color={THEME_COLORS.navy900} />
                       </Pressable>
                     </View>
                   ))}
@@ -436,7 +437,7 @@ function UnitSheetContent({
                         onPress={() => handleRemovePhoto(index)}
                         className="absolute right-1 top-1 size-5 items-center justify-center rounded-full bg-white shadow-xs"
                       >
-                        <X size={12} color="#00112e" />
+                        <X size={12} color={THEME_COLORS.navy900} />
                       </Pressable>
                     </View>
                   ))}
@@ -447,7 +448,7 @@ function UnitSheetContent({
                   disabled={uploadingPhotos}
                   className="h-20 w-20 items-center justify-center rounded-lg border-2 border-dashed border-line bg-surface-muted"
                 >
-                  <Camera size={20} color="#71717a" />
+                  <Camera size={20} color={THEME_COLORS.zinc500} />
                   <Text className="mt-1 text-[10px] font-semibold text-text-muted">
                     {uploadingPhotos ? "Uploading…" : "Add photo"}
                   </Text>
@@ -464,7 +465,7 @@ function UnitSheetContent({
                     onPress={() => setAddingRoomNum((prev) => !prev)}
                     className="flex-row items-center gap-1"
                   >
-                    <Plus size={13} color="#00112e" />
+                    <Plus size={13} color={THEME_COLORS.navy900} />
                     <Text className="text-xs font-semibold text-navy-900">Add Room</Text>
                   </Pressable>
                 </View>
@@ -530,6 +531,7 @@ function UnitSheetContent({
                           ) : (
                             <>
                               <Pressable
+                                hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
                                 onPress={() => handleToggleRoom(room)}
                                 className={`h-7 px-2.5 rounded-full items-center justify-center border ${
                                   isAvailable
@@ -570,7 +572,7 @@ function UnitSheetContent({
                                   }}
                                   className="size-7 items-center justify-center rounded-full bg-rose-50"
                                 >
-                                  <Trash2 size={12} color="#e11d48" />
+                                  <Trash2 size={12} color={THEME_COLORS.rose600} />
                                 </Pressable>
                               ) : null}
                             </>

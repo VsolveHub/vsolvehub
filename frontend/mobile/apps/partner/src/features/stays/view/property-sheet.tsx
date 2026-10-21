@@ -17,6 +17,7 @@ import {
   updatePartnerStayProperty,
   uploadPartnerStayPhoto,
 } from "../queries";
+import { THEME_COLORS } from "../theme-colors";
 
 const MAX_PHOTOS = 8;
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
@@ -100,7 +101,9 @@ function PropertySheetContent({
     editingProperty ? String(editingProperty.min_stay_nights || 1) : "1",
   );
   const [tenantPreference, setTenantPreference] = useState(
-    (editingProperty?.structured_fields as any)?.tenant_preference ?? "ANY",
+    typeof editingProperty?.structured_fields?.tenant_preference === "string"
+      ? editingProperty.structured_fields.tenant_preference
+      : "ANY",
   );
 
   // Dynamic answers & amenities
@@ -259,7 +262,7 @@ function PropertySheetContent({
     }
   };
 
-  const schemaProps = (selectedType?.variant?.property_schema as any)?.properties ?? {};
+  const schemaProps = selectedType?.variant?.property_schema?.properties ?? {};
   const amenityOptions = selectedType?.variant?.amenity_options ?? [];
 
   return (
@@ -419,7 +422,7 @@ function PropertySheetContent({
                       checked ? "border-navy-900 bg-navy-900" : "border-line bg-surface-muted"
                     }`}
                   >
-                    {checked ? <Check size={11} color="#ffffff" /> : null}
+                    {checked ? <Check size={11} color={THEME_COLORS.white} /> : null}
                     <Text className={`text-xs ${checked ? "text-white font-bold" : "text-text"}`}>
                       {opt.label}
                     </Text>
@@ -458,7 +461,7 @@ function PropertySheetContent({
                   onPress={() => handleRemovePhoto(index)}
                   className="absolute right-1 top-1 size-5 items-center justify-center rounded-full bg-white shadow-xs"
                 >
-                  <X size={12} color="#00112e" />
+                  <X size={12} color={THEME_COLORS.navy900} />
                 </Pressable>
               </View>
             ))}
@@ -468,7 +471,7 @@ function PropertySheetContent({
                 onPress={handlePickPhotos}
                 className="h-20 w-20 items-center justify-center rounded-lg border-2 border-dashed border-line bg-surface-muted"
               >
-                <Camera size={20} color="#71717a" />
+                <Camera size={20} color={THEME_COLORS.zinc500} />
                 <Text className="mt-1 text-[10px] font-semibold text-text-muted">Add photo</Text>
               </Pressable>
             ) : null}

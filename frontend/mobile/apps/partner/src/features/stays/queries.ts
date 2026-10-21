@@ -10,64 +10,51 @@ import type {
   StayReservation,
   StayReservationAction,
   StayRoom,
+  StayTaxonomySubcategory,
   StayUnit,
   StayUnitMedia,
 } from "./model";
 
 export async function fetchPartnerDefaultLocation(): Promise<string> {
-  try {
-    const data = await request(() => (getApiClient() as any).GET("/api/v1/partner/me/"));
-    return (((data as any)?.default_location_text as string) ?? "").trim();
-  } catch {
-    return "";
-  }
+  const data = await request(() =>
+    getApiClient().GET<{ default_location_text?: string }>("/api/v1/partner/me/"),
+  );
+  return (data?.default_location_text ?? "").trim();
 }
 
 export async function fetchPartnerStayProperties(): Promise<StayProperty[]> {
-  try {
-    const data = await request(() => (getApiClient() as any).GET("/api/v1/partner/stays/properties"));
-    return Array.isArray(data) ? (data as StayProperty[]) : [];
-  } catch {
-    return [];
-  }
+  const data = await request(() =>
+    getApiClient().GET<StayProperty[]>("/api/v1/partner/stays/properties"),
+  );
+  return Array.isArray(data) ? data : [];
 }
 
 export async function fetchPartnerStaySummary(): Promise<HostStaySummary | null> {
-  try {
-    const data = await request(() => (getApiClient() as any).GET("/api/v1/partner/stays/summary"));
-    return data as HostStaySummary;
-  } catch {
-    return null;
-  }
+  const data = await request(() =>
+    getApiClient().GET<HostStaySummary>("/api/v1/partner/stays/summary"),
+  );
+  return data ?? null;
 }
 
 export async function fetchPartnerStayEnquiries(): Promise<StayEnquiry[]> {
-  try {
-    const data = await request(() => (getApiClient() as any).GET("/api/v1/partner/stays/enquiries"));
-    return Array.isArray(data) ? (data as StayEnquiry[]) : [];
-  } catch {
-    return [];
-  }
+  const data = await request(() =>
+    getApiClient().GET<StayEnquiry[]>("/api/v1/partner/stays/enquiries"),
+  );
+  return Array.isArray(data) ? data : [];
 }
 
 export async function fetchPartnerStayVisits(): Promise<PartnerStayVisit[]> {
-  try {
-    const data = await request(() => (getApiClient() as any).GET("/api/v1/partner/stays/visits"));
-    return Array.isArray(data) ? (data as PartnerStayVisit[]) : [];
-  } catch {
-    return [];
-  }
+  const data = await request(() =>
+    getApiClient().GET<PartnerStayVisit[]>("/api/v1/partner/stays/visits"),
+  );
+  return Array.isArray(data) ? data : [];
 }
 
 export async function fetchPartnerStayReservations(): Promise<StayReservation[]> {
-  try {
-    const data = await request(() =>
-      (getApiClient() as any).GET("/api/v1/partner/stays/reservations"),
-    );
-    return Array.isArray(data) ? (data as StayReservation[]) : [];
-  } catch {
-    return [];
-  }
+  const data = await request(() =>
+    getApiClient().GET<StayReservation[]>("/api/v1/partner/stays/reservations"),
+  );
+  return Array.isArray(data) ? data : [];
 }
 
 export async function partnerStayReservationAction(
@@ -76,7 +63,7 @@ export async function partnerStayReservationAction(
   reason: string = "",
 ): Promise<StayReservation> {
   const data = await request(() =>
-    (getApiClient() as any).POST(
+    getApiClient().POST<StayReservation>(
       "/api/v1/partner/stays/reservations/{reservation_id}/{action}",
       {
         params: { path: { reservation_id: reservationId, action } },
@@ -84,7 +71,7 @@ export async function partnerStayReservationAction(
       },
     ),
   );
-  return data as StayReservation;
+  return data;
 }
 
 export async function uploadPartnerStayPhoto(
@@ -96,15 +83,15 @@ export async function uploadPartnerStayPhoto(
     uri,
     name: fileName || "stay_photo.jpg",
     type: "image/jpeg",
-  } as any);
+  } as unknown as Blob);
 
   const data = await request(() =>
-    (getApiClient() as any).POST("/api/v1/partner/stays/photos", {
+    getApiClient().POST("/api/v1/partner/stays/photos", {
       body: formData,
       bodySerializer: () => formData,
     }),
   );
-  return data as { upload_id: string; url: string };
+  return data as unknown as { upload_id: string; url: string };
 }
 
 export async function createPartnerStayProperty(payload: {
@@ -117,11 +104,11 @@ export async function createPartnerStayProperty(payload: {
   sharing_count?: number;
   unit_name?: string;
   min_stay_nights?: number;
-  structured_fields?: Record<string, any>;
+  structured_fields?: Record<string, unknown>;
   image_urls?: string[];
 }): Promise<StayProperty> {
   const data = await request(() =>
-    (getApiClient() as any).POST("/api/v1/partner/stays/properties", {
+    getApiClient().POST<StayProperty>("/api/v1/partner/stays/properties", {
       body: {
         variant_id: payload.variant_id,
         title: payload.title,
@@ -137,7 +124,7 @@ export async function createPartnerStayProperty(payload: {
       },
     }),
   );
-  return data as StayProperty;
+  return data;
 }
 
 export async function updatePartnerStayProperty(
@@ -145,12 +132,12 @@ export async function updatePartnerStayProperty(
   payload: Partial<StayProperty>,
 ): Promise<StayProperty> {
   const data = await request(() =>
-    (getApiClient() as any).PATCH("/api/v1/partner/stays/properties/{property_id}", {
+    getApiClient().PATCH<StayProperty>("/api/v1/partner/stays/properties/{property_id}", {
       params: { path: { property_id: propertyId } },
       body: payload,
     }),
   );
-  return data as StayProperty;
+  return data;
 }
 
 export async function partnerStayPropertyAction(
@@ -158,11 +145,11 @@ export async function partnerStayPropertyAction(
   action: StayPropertyAction,
 ): Promise<StayProperty> {
   const data = await request(() =>
-    (getApiClient() as any).POST("/api/v1/partner/stays/properties/{property_id}/{action}", {
+    getApiClient().POST<StayProperty>("/api/v1/partner/stays/properties/{property_id}/{action}", {
       params: { path: { property_id: propertyId, action } },
     }),
   );
-  return data as StayProperty;
+  return data;
 }
 
 export async function addPartnerStayPropertyMedia(
@@ -170,7 +157,7 @@ export async function addPartnerStayPropertyMedia(
   payload: { url: string; caption?: string; display_order?: number },
 ) {
   return request(() =>
-    (getApiClient() as any).POST("/api/v1/partner/stays/properties/{property_id}/media", {
+    getApiClient().POST("/api/v1/partner/stays/properties/{property_id}/media", {
       params: { path: { property_id: propertyId } },
       body: {
         url: payload.url,
@@ -186,7 +173,7 @@ export async function deletePartnerStayPropertyMedia(
   mediaId: string,
 ) {
   return request(() =>
-    (getApiClient() as any).DELETE(
+    getApiClient().DELETE(
       "/api/v1/partner/stays/properties/{property_id}/media/{media_id}",
       {
         params: { path: { property_id: propertyId, media_id: mediaId } },
@@ -196,16 +183,12 @@ export async function deletePartnerStayPropertyMedia(
 }
 
 export async function listPartnerStayUnits(propertyId: string): Promise<StayUnit[]> {
-  try {
-    const data = await request(() =>
-      (getApiClient() as any).GET("/api/v1/partner/stays/properties/{property_id}/units", {
-        params: { path: { property_id: propertyId } },
-      }),
-    );
-    return Array.isArray(data) ? (data as StayUnit[]) : [];
-  } catch {
-    return [];
-  }
+  const data = await request(() =>
+    getApiClient().GET("/api/v1/partner/stays/properties/{property_id}/units", {
+      params: { path: { property_id: propertyId } },
+    }),
+  );
+  return Array.isArray(data) ? (data as StayUnit[]) : [];
 }
 
 export async function createPartnerStayUnit(
@@ -218,11 +201,11 @@ export async function createPartnerStayUnit(
     max_guests?: number;
     room_numbers?: string[];
     image_urls?: string[];
-    attributes?: Record<string, any>;
+    attributes?: Record<string, unknown>;
   },
 ): Promise<StayUnit> {
   const data = await request(() =>
-    (getApiClient() as any).POST("/api/v1/partner/stays/properties/{property_id}/units", {
+    getApiClient().POST<StayUnit>("/api/v1/partner/stays/properties/{property_id}/units", {
       params: { path: { property_id: propertyId } },
       body: {
         name: payload.name,
@@ -236,7 +219,7 @@ export async function createPartnerStayUnit(
       },
     }),
   );
-  return data as StayUnit;
+  return data;
 }
 
 export async function updatePartnerStayUnit(
@@ -244,12 +227,12 @@ export async function updatePartnerStayUnit(
   payload: Partial<StayUnit>,
 ): Promise<StayUnit> {
   const data = await request(() =>
-    (getApiClient() as any).PATCH("/api/v1/partner/stays/units/{unit_id}", {
+    getApiClient().PATCH<StayUnit>("/api/v1/partner/stays/units/{unit_id}", {
       params: { path: { unit_id: unitId } },
       body: payload,
     }),
   );
-  return data as StayUnit;
+  return data;
 }
 
 export async function addPartnerStayUnitMedia(
@@ -257,12 +240,12 @@ export async function addPartnerStayUnitMedia(
   url: string,
 ): Promise<StayUnitMedia> {
   const data = await request(() =>
-    (getApiClient() as any).POST("/api/v1/partner/stays/units/{unit_id}/media", {
+    getApiClient().POST<StayUnitMedia>("/api/v1/partner/stays/units/{unit_id}/media", {
       params: { path: { unit_id: unitId } },
       body: { url },
     }),
   );
-  return data as StayUnitMedia;
+  return data;
 }
 
 export async function deletePartnerStayUnitMedia(
@@ -270,7 +253,7 @@ export async function deletePartnerStayUnitMedia(
   mediaId: string,
 ): Promise<void> {
   await request(() =>
-    (getApiClient() as any).DELETE("/api/v1/partner/stays/units/{unit_id}/media/{media_id}", {
+    getApiClient().DELETE("/api/v1/partner/stays/units/{unit_id}/media/{media_id}", {
       params: { path: { unit_id: unitId, media_id: mediaId } },
     }),
   );
@@ -285,7 +268,7 @@ export async function setPartnerVisitingHours(
   },
 ): Promise<StayProperty> {
   const data = await request(() =>
-    (getApiClient() as any).PUT(
+    getApiClient().PUT<StayProperty>(
       "/api/v1/partner/stays/properties/{property_id}/visiting-hours",
       {
         params: { path: { property_id: propertyId } },
@@ -293,7 +276,7 @@ export async function setPartnerVisitingHours(
       },
     ),
   );
-  return data as StayProperty;
+  return data;
 }
 
 export async function respondPartnerStayEnquiry(
@@ -302,12 +285,12 @@ export async function respondPartnerStayEnquiry(
   decline: boolean = false,
 ): Promise<StayEnquiry> {
   const data = await request(() =>
-    (getApiClient() as any).POST("/api/v1/partner/stays/enquiries/{enquiry_id}/respond", {
+    getApiClient().POST<StayEnquiry>("/api/v1/partner/stays/enquiries/{enquiry_id}/respond", {
       params: { path: { enquiry_id: enquiryId } },
       body: { response: responseMessage, decline },
     }),
   );
-  return data as StayEnquiry;
+  return data;
 }
 
 export async function confirmPartnerStayEnquiry(
@@ -315,23 +298,23 @@ export async function confirmPartnerStayEnquiry(
   roomId?: string | null,
 ): Promise<StayEnquiry> {
   const data = await request(() =>
-    (getApiClient() as any).POST("/api/v1/partner/stays/enquiries/{enquiry_id}/confirm", {
+    getApiClient().POST<StayEnquiry>("/api/v1/partner/stays/enquiries/{enquiry_id}/confirm", {
       params: { path: { enquiry_id: enquiryId } },
       body: { room_id: roomId ?? null },
     }),
   );
-  return data as StayEnquiry;
+  return data;
 }
 
 export async function cancelPartnerStayEnquiry(
   enquiryId: string,
 ): Promise<StayEnquiry> {
   const data = await request(() =>
-    (getApiClient() as any).POST("/api/v1/partner/stays/enquiries/{enquiry_id}/cancel", {
+    getApiClient().POST<StayEnquiry>("/api/v1/partner/stays/enquiries/{enquiry_id}/cancel", {
       params: { path: { enquiry_id: enquiryId } },
     }),
   );
-  return data as StayEnquiry;
+  return data;
 }
 
 export async function addPartnerStayRoom(
@@ -339,12 +322,12 @@ export async function addPartnerStayRoom(
   payload: { number: string },
 ): Promise<StayRoom> {
   const data = await request(() =>
-    (getApiClient() as any).POST("/api/v1/partner/stays/units/{unit_id}/rooms", {
+    getApiClient().POST<StayRoom>("/api/v1/partner/stays/units/{unit_id}/rooms", {
       params: { path: { unit_id: unitId } },
       body: payload,
     }),
   );
-  return data as StayRoom;
+  return data;
 }
 
 export async function updatePartnerStayRoom(
@@ -352,17 +335,17 @@ export async function updatePartnerStayRoom(
   payload: { number?: string; available?: boolean },
 ): Promise<StayRoom> {
   const data = await request(() =>
-    (getApiClient() as any).PATCH("/api/v1/partner/stays/rooms/{room_id}", {
+    getApiClient().PATCH<StayRoom>("/api/v1/partner/stays/rooms/{room_id}", {
       params: { path: { room_id: roomId } },
       body: payload,
     }),
   );
-  return data as StayRoom;
+  return data;
 }
 
 export async function deletePartnerStayRoom(roomId: string): Promise<void> {
   await request(() =>
-    (getApiClient() as any).DELETE("/api/v1/partner/stays/rooms/{room_id}", {
+    getApiClient().DELETE("/api/v1/partner/stays/rooms/{room_id}", {
       params: { path: { room_id: roomId } },
     }),
   );
@@ -374,12 +357,12 @@ export async function partnerStayRoomAction(
   payload?: { occupant_name?: string },
 ): Promise<StayRoom> {
   const data = await request(() =>
-    (getApiClient() as any).POST("/api/v1/partner/stays/rooms/{room_id}/{action}", {
+    getApiClient().POST<StayRoom>("/api/v1/partner/stays/rooms/{room_id}/{action}", {
       params: { path: { room_id: roomId, action } },
       body: payload ?? {},
     }),
   );
-  return data as StayRoom;
+  return data;
 }
 
 export async function partnerStayVisitAction(
@@ -394,20 +377,17 @@ export async function partnerStayVisitAction(
       : { reason: payload ?? "", note: noteParam };
 
   const data = await request(() =>
-    (getApiClient() as any).POST("/api/v1/partner/stays/visits/{visit_id}/{action}", {
+    getApiClient().POST<PartnerStayVisit>("/api/v1/partner/stays/visits/{visit_id}/{action}", {
       params: { path: { visit_id: visitId, action } },
       body,
     }),
   );
-  return data as PartnerStayVisit;
+  return data;
 }
 
-export async function fetchStayTaxonomy(): Promise<any[]> {
-  try {
-    const data = await request(() => (getApiClient() as any).GET("/api/v1/stays/taxonomy"));
-    return Array.isArray(data) ? data : [];
-  } catch {
-    return [];
-  }
+export async function fetchStayTaxonomy(): Promise<StayTaxonomySubcategory[]> {
+  const data = await request(() =>
+    getApiClient().GET<StayTaxonomySubcategory[]>("/api/v1/stays/taxonomy"),
+  );
+  return Array.isArray(data) ? data : [];
 }
-

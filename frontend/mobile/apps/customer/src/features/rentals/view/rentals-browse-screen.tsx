@@ -1,9 +1,26 @@
 import { useQuery } from "@tanstack/react-query";
 import { Button, COLOR_TOKENS, EmptyState, ErrorState, Text } from "@vsolve/mobile-ui";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { FileCheck2, IndianRupee, Layers, MapPin, Search } from "lucide-react-native";
+import {
+  Check,
+  ChevronDown,
+  FileCheck2,
+  Filter,
+  IndianRupee,
+  Layers,
+  MapPin,
+  Search,
+  X,
+} from "lucide-react-native";
 import { useState } from "react";
-import { Pressable, RefreshControl, ScrollView, TextInput, View } from "react-native";
+import {
+  Modal,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  TextInput,
+  View,
+} from "react-native";
 
 import { fetchRentals, fetchRentalTaxonomy } from "../queries";
 import { RentalCard } from "./rental-card";
@@ -260,9 +277,15 @@ export function RentalsBrowseScreen() {
 
   const [minPrice, setMinPrice] = useState<number | undefined>(undefined);
   const [maxPrice, setMaxPrice] = useState<number | undefined>(undefined);
-  const [isPriceSliderOpen, setIsPriceSliderOpen] = useState(false);
 
-  const hasPriceFilter = minPrice !== undefined || maxPrice !== undefined || isPriceSliderOpen;
+  // Dropdown Picker Modal states
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
+  const [categorySearch, setCategorySearch] = useState("");
+  const [priceModalOpen, setPriceModalOpen] = useState(false);
+  const [draftMinPrice, setDraftMinPrice] = useState<number>(SLIDER_MIN_PAISE);
+  const [draftMaxPrice, setDraftMaxPrice] = useState<number>(SLIDER_MAX_PAISE);
+
+  const hasPriceFilter = minPrice !== undefined || maxPrice !== undefined;
 
   const taxonomyQuery = useQuery({
     queryKey: ["rental-taxonomy"],
@@ -312,7 +335,8 @@ export function RentalsBrowseScreen() {
     setSelectedService(null);
     setMinPrice(undefined);
     setMaxPrice(undefined);
-    setIsPriceSliderOpen(false);
+    setDraftMinPrice(SLIDER_MIN_PAISE);
+    setDraftMaxPrice(SLIDER_MAX_PAISE);
   };
 
   const isFiltering =
@@ -324,7 +348,8 @@ export function RentalsBrowseScreen() {
     maxPrice !== undefined;
 
   return (
-    <ScrollView
+    <>
+      <ScrollView
       className="flex-1 bg-canvas"
       contentContainerClassName="gap-5 px-4 py-4 pb-16"
       refreshControl={
@@ -400,7 +425,7 @@ export function RentalsBrowseScreen() {
         </Button>
       </View>
 
-      {/* Taxonomy Category Chips & Daily Rate Toggle (Web W-003, W-004 / GAP-RNT-008) */}
+      {/* Categories & Daily Rate Filters */}
       <View className="gap-2">
         <Text className="text-xs font-bold uppercase tracking-wider text-text-secondary">
           Categories & Filters
@@ -408,141 +433,87 @@ export function RentalsBrowseScreen() {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerClassName="items-center gap-2"
+          contentContainerClassName="items-center gap-2 py-0.5"
         >
-          {/* All Equipment Chip */}
+          {/* 1. Category Dropdown Button */}
           <Pressable
-            onPress={() => {
-              setSelectedSubcategory(null);
-              setSelectedService(null);
-            }}
-            className={`flex-row items-center gap-1.5 rounded-full px-4 py-2 border ${
-              selectedSubcategory === null
+            accessibilityRole="button"
+            accessibilityLabel="Filter by equipment category"
+            onPress={() => setCategoryModalOpen(true)}
+            className={`flex-row items-center gap-1.5 rounded-full border px-3.5 py-2 shadow-2xs ${
+              selectedSubcategory !== null
                 ? "border-navy-900 bg-navy-900"
-                : "border-line bg-surface active:bg-surface-hover"
+                : "border-line bg-surface active:bg-surface-sunken"
             }`}
           >
-            <Layers size={13} color={selectedSubcategory === null ? COLOR_TOKENS.textInverse : COLOR_TOKENS.textMuted} />
+            <Layers
+              size={13}
+              color={selectedSubcategory !== null ? COLOR_TOKENS.textInverse : COLOR_TOKENS.textMuted}
+            />
             <Text
+              numberOfLines={1}
               className={`text-xs font-bold ${
-                selectedSubcategory === null ? "text-white" : "text-text-secondary"
+                selectedSubcategory !== null ? "text-white" : "text-navy-900"
               }`}
             >
-              All Equipment
+              {currentCategory
+                ? selectedService
+                  ? `${currentCategory.name} • ${nestedServices.find((s) => s.slug === selectedService)?.name || ""}`
+                  : currentCategory.name
+                : "All Equipment"}
             </Text>
+            <ChevronDown
+              size={13}
+              color={selectedSubcategory !== null ? COLOR_TOKENS.textInverse : COLOR_TOKENS.textMuted}
+            />
           </Pressable>
 
-          {taxonomy.map((cat) => (
-            <Pressable
-              key={cat.id || cat.slug}
-              onPress={() => {
-                setSelectedSubcategory(cat.slug);
-                setSelectedService(null);
-              }}
-              className={`rounded-full px-4 py-2 border ${
-                selectedSubcategory === cat.slug
-                  ? "border-navy-900 bg-navy-900"
-                  : "border-line bg-surface active:bg-surface-hover"
-              }`}
-            >
-              <Text
-                className={`text-xs font-bold ${
-                  selectedSubcategory === cat.slug ? "text-white" : "text-text-secondary"
-                }`}
-              >
-                {cat.name}
-              </Text>
-            </Pressable>
-          ))}
-
-          {/* Daily Rate Filter Toggle Button (W-003 / GAP-RNT-008) */}
+          {/* 2. Daily Rate Dropdown Button */}
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Filter by daily rate"
             onPress={() => {
-              if (hasPriceFilter) {
-                setMinPrice(undefined);
-                setMaxPrice(undefined);
-                setIsPriceSliderOpen(false);
-              } else {
-                setIsPriceSliderOpen(true);
-                setMinPrice(SLIDER_MIN_PAISE);
-                setMaxPrice(SLIDER_MAX_PAISE);
-              }
+              setDraftMinPrice(minPrice ?? SLIDER_MIN_PAISE);
+              setDraftMaxPrice(maxPrice ?? SLIDER_MAX_PAISE);
+              setPriceModalOpen(true);
             }}
-            className={`flex-row items-center gap-1.5 rounded-full px-4 py-2 border ${
+            className={`flex-row items-center gap-1.5 rounded-full border px-3.5 py-2 shadow-2xs ${
               hasPriceFilter
                 ? "border-brand bg-brand"
-                : "border-line bg-surface active:bg-surface-hover"
+                : "border-line bg-surface active:bg-surface-sunken"
             }`}
           >
-            <IndianRupee size={13} color={hasPriceFilter ? COLOR_TOKENS.textInverse : COLOR_TOKENS.textMuted} />
+            <IndianRupee
+              size={13}
+              color={hasPriceFilter ? COLOR_TOKENS.textInverse : COLOR_TOKENS.textMuted}
+            />
             <Text
               className={`text-xs font-bold ${
-                hasPriceFilter ? "text-white" : "text-text-secondary"
+                hasPriceFilter ? "text-white" : "text-navy-900"
               }`}
             >
-              {hasPriceFilter ? "Daily rate ✕" : "Daily rate"}
+              {hasPriceFilter
+                ? `${paiseToDisplay(minPrice || 0)} – ${paiseToDisplay(maxPrice || SLIDER_MAX_PAISE)}`
+                : "Daily Rate"}
             </Text>
+            <ChevronDown
+              size={13}
+              color={hasPriceFilter ? COLOR_TOKENS.textInverse : COLOR_TOKENS.textMuted}
+            />
           </Pressable>
-        </ScrollView>
 
-        {/* Level 2: Nested Service Chips */}
-        {nestedServices.length > 0 ? (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerClassName="gap-2 pt-1"
-          >
+          {/* Reset Filter Button if active */}
+          {isFiltering ? (
             <Pressable
-              onPress={() => setSelectedService(null)}
-              className={`rounded-full px-3 py-1.5 border ${
-                selectedService === null
-                  ? "border-brand bg-brand/10"
-                  : "border-line bg-surface"
-              }`}
+              onPress={clearFilters}
+              className="flex-row items-center gap-1 rounded-full bg-surface-hover px-3 py-2 border border-line/60 active:bg-surface-sunken"
             >
-              <Text
-                className={`text-[11px] font-bold ${
-                  selectedService === null ? "text-brand" : "text-text-secondary"
-                }`}
-              >
-                All {currentCategory?.name}
-              </Text>
+              <X size={12} color={COLOR_TOKENS.textMuted} />
+              <Text className="text-xs font-bold text-text-muted">Reset</Text>
             </Pressable>
-
-            {nestedServices.map((svc) => (
-              <Pressable
-                key={svc.id || svc.slug}
-                onPress={() => setSelectedService(svc.slug)}
-                className={`rounded-full px-3 py-1.5 border ${
-                  selectedService === svc.slug
-                    ? "border-brand bg-brand/10"
-                    : "border-line bg-surface"
-                }`}
-              >
-                <Text
-                  className={`text-[11px] font-bold ${
-                    selectedService === svc.slug ? "text-brand" : "text-text-secondary"
-                  }`}
-                >
-                  {svc.name}
-                </Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        ) : null}
+          ) : null}
+        </ScrollView>
       </View>
-
-      {/* Dual-Thumb Interactive Price Range Slider (W-003 / GAP-RNT-008) */}
-      {hasPriceFilter ? (
-        <PriceRangeSlider
-          min={minPrice ?? SLIDER_MIN_PAISE}
-          max={maxPrice ?? SLIDER_MAX_PAISE}
-          onChange={(min, max) => {
-            setMinPrice(min > SLIDER_MIN_PAISE ? min : undefined);
-            setMaxPrice(max < SLIDER_MAX_PAISE ? max : undefined);
-          }}
-        />
-      ) : null}
 
       {/* Results Count & Reset Filter */}
       <View className="flex-row items-center justify-between border-t border-line/60 pt-3">
@@ -589,5 +560,261 @@ export function RentalsBrowseScreen() {
         </View>
       )}
     </ScrollView>
+
+      {/* 1. Equipment Category Selection Modal */}
+      <Modal
+        visible={categoryModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCategoryModalOpen(false)}
+      >
+        <Pressable
+          className="flex-1 bg-black/50 justify-center items-center p-4"
+          onPress={() => setCategoryModalOpen(false)}
+        >
+          <Pressable
+            className="w-full max-w-sm rounded-3xl border border-line bg-surface p-5 shadow-raised max-h-[80%]"
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View className="flex-row items-center justify-between pb-3 border-b border-line">
+              <View className="flex-row items-center gap-2">
+                <Layers size={18} color={COLOR_TOKENS.brand} />
+                <Text className="text-base font-bold text-navy-900">
+                  Equipment Category
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => setCategoryModalOpen(false)}
+                className="rounded-full p-1 active:bg-surface-sunken"
+              >
+                <X size={18} color={COLOR_TOKENS.textMuted} />
+              </Pressable>
+            </View>
+
+            {/* Search within categories */}
+            <View className="mt-3 flex-row items-center rounded-xl bg-surface-sunken px-3 py-2 border border-line/40">
+              <Search size={14} color={COLOR_TOKENS.textMuted} />
+              <TextInput
+                placeholder="Search equipment categories..."
+                placeholderTextColor="rgba(117,108,94,0.6)"
+                value={categorySearch}
+                onChangeText={setCategorySearch}
+                className="ml-2 flex-1 text-xs text-navy-900 p-0"
+              />
+              {categorySearch ? (
+                <Pressable onPress={() => setCategorySearch("")}>
+                  <X size={14} color={COLOR_TOKENS.textMuted} />
+                </Pressable>
+              ) : null}
+            </View>
+
+            <ScrollView className="mt-3" showsVerticalScrollIndicator={false}>
+              {/* All Equipment Option */}
+              {(!categorySearch || "all equipment".includes(categorySearch.toLowerCase())) && (
+                <Pressable
+                  onPress={() => {
+                    setSelectedSubcategory(null);
+                    setSelectedService(null);
+                    setCategoryModalOpen(false);
+                  }}
+                  className={`flex-row items-center justify-between p-3 rounded-xl border mb-1.5 ${
+                    selectedSubcategory === null
+                      ? "border-navy-900 bg-navy-900/5"
+                      : "border-transparent active:bg-surface-sunken"
+                  }`}
+                >
+                  <View className="flex-row items-center gap-2.5">
+                    <Layers size={16} color={selectedSubcategory === null ? COLOR_TOKENS.navy : COLOR_TOKENS.textMuted} />
+                    <Text className={`text-xs font-bold ${selectedSubcategory === null ? "text-navy-900" : "text-text-secondary"}`}>
+                      All Equipment
+                    </Text>
+                  </View>
+                  {selectedSubcategory === null && <Check size={16} color={COLOR_TOKENS.navy} />}
+                </Pressable>
+              )}
+
+              {taxonomy
+                .filter((cat) =>
+                  !categorySearch
+                    ? true
+                    : cat.name.toLowerCase().includes(categorySearch.toLowerCase())
+                )
+                .map((cat) => {
+                  const isSelected = selectedSubcategory === cat.slug;
+                  const catServices = cat.services ?? [];
+                  return (
+                    <View key={cat.id || cat.slug} className="mb-1.5">
+                      <Pressable
+                        onPress={() => {
+                          setSelectedSubcategory(cat.slug);
+                          setSelectedService(null);
+                          if (catServices.length === 0) {
+                            setCategoryModalOpen(false);
+                          }
+                        }}
+                        className={`flex-row items-center justify-between p-3 rounded-xl border ${
+                          isSelected
+                            ? "border-navy-900 bg-navy-900/5"
+                            : "border-transparent active:bg-surface-sunken"
+                        }`}
+                      >
+                        <Text className={`text-xs font-bold ${isSelected ? "text-navy-900 font-extrabold" : "text-text-secondary"}`}>
+                          {cat.name}
+                        </Text>
+                        {isSelected && <Check size={16} color={COLOR_TOKENS.navy} />}
+                      </Pressable>
+
+                      {/* If category is selected and has nested sub-services */}
+                      {isSelected && catServices.length > 0 && (
+                        <View className="ml-4 pl-3 border-l-2 border-line my-1 gap-1">
+                          <Pressable
+                            onPress={() => {
+                              setSelectedService(null);
+                              setCategoryModalOpen(false);
+                            }}
+                            className={`flex-row items-center justify-between py-1.5 px-2 rounded-lg ${
+                              selectedService === null ? "bg-brand/10" : "active:bg-surface-sunken"
+                            }`}
+                          >
+                            <Text className={`text-[11px] font-bold ${selectedService === null ? "text-brand" : "text-text-secondary"}`}>
+                              All {cat.name}
+                            </Text>
+                            {selectedService === null && <Check size={14} color={COLOR_TOKENS.brand} />}
+                          </Pressable>
+                          {catServices.map((svc) => {
+                            const isSvcSelected = selectedService === svc.slug;
+                            return (
+                              <Pressable
+                                key={svc.id || svc.slug}
+                                onPress={() => {
+                                  setSelectedService(svc.slug);
+                                  setCategoryModalOpen(false);
+                                }}
+                                className={`flex-row items-center justify-between py-1.5 px-2 rounded-lg ${
+                                  isSvcSelected ? "bg-brand/10" : "active:bg-surface-sunken"
+                                }`}
+                              >
+                                <Text className={`text-[11px] ${isSvcSelected ? "text-brand font-bold" : "text-text-secondary"}`}>
+                                  {svc.name}
+                                </Text>
+                                {isSvcSelected && <Check size={14} color={COLOR_TOKENS.brand} />}
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* 2. Daily Rate Filter Modal */}
+      <Modal
+        visible={priceModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPriceModalOpen(false)}
+      >
+        <Pressable
+          className="flex-1 bg-black/50 justify-center items-center p-4"
+          onPress={() => setPriceModalOpen(false)}
+        >
+          <Pressable
+            className="w-full max-w-sm rounded-3xl border border-line bg-surface p-5 shadow-raised"
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View className="flex-row items-center justify-between pb-3 border-b border-line">
+              <View className="flex-row items-center gap-2">
+                <IndianRupee size={18} color={COLOR_TOKENS.brand} />
+                <Text className="text-base font-bold text-navy-900">
+                  Daily Rate Filter
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => setPriceModalOpen(false)}
+                className="rounded-full p-1 active:bg-surface-sunken"
+              >
+                <X size={18} color={COLOR_TOKENS.textMuted} />
+              </Pressable>
+            </View>
+
+            <Text className="mt-3 text-[11px] font-bold uppercase tracking-wider text-text-muted">
+              Quick Presets
+            </Text>
+            <View className="mt-2 flex-row flex-wrap gap-2">
+              {PRICE_PRESETS.map((preset) => {
+                const isSelected =
+                  draftMinPrice === preset.min && draftMaxPrice === preset.max;
+                return (
+                  <Pressable
+                    key={preset.label}
+                    onPress={() => {
+                      setDraftMinPrice(preset.min);
+                      setDraftMaxPrice(preset.max);
+                    }}
+                    className={`rounded-full px-3 py-1.5 border ${
+                      isSelected
+                        ? "border-brand bg-brand"
+                        : "border-line bg-surface-sunken active:bg-surface-hover"
+                    }`}
+                  >
+                    <Text
+                      className={`text-xs font-bold ${
+                        isSelected ? "text-white" : "text-text-secondary"
+                      }`}
+                    >
+                      {preset.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <View className="mt-4">
+              <PriceRangeSlider
+                min={draftMinPrice}
+                max={draftMaxPrice}
+                onChange={(min, max) => {
+                  setDraftMinPrice(min);
+                  setDraftMaxPrice(max);
+                }}
+              />
+            </View>
+
+            <View className="mt-5 flex-row items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                className="flex-1"
+                onPress={() => {
+                  setMinPrice(undefined);
+                  setMaxPrice(undefined);
+                  setDraftMinPrice(SLIDER_MIN_PAISE);
+                  setDraftMaxPrice(SLIDER_MAX_PAISE);
+                  setPriceModalOpen(false);
+                }}
+              >
+                <Text className="text-xs font-bold text-navy-900">Reset</Text>
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                className="flex-1"
+                onPress={() => {
+                  setMinPrice(draftMinPrice > SLIDER_MIN_PAISE ? draftMinPrice : undefined);
+                  setMaxPrice(draftMaxPrice < SLIDER_MAX_PAISE ? draftMaxPrice : undefined);
+                  setPriceModalOpen(false);
+                }}
+              >
+                <Text className="text-xs font-bold text-white">Apply</Text>
+              </Button>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </>
   );
 }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -34,6 +34,8 @@ import {
   Users,
   X,
 } from "lucide-react-native";
+
+import { setFocusedBackHandler } from "@/features/session/focused-back";
 
 import {
   fetchJobOptions,
@@ -356,6 +358,18 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
     setStep(1);
   }
 
+  useEffect(() => {
+    const handler = () => {
+      if (step === 0 || (editId && step === 1)) {
+        router.back();
+      } else {
+        setStep((s) => s - 1);
+      }
+    };
+    setFocusedBackHandler(handler);
+    return () => setFocusedBackHandler(null);
+  }, [step, editId, router]);
+
   const set = (patch: Partial<Draft>) => {
     setError(null);
     setPreview(null);
@@ -492,31 +506,16 @@ export function PostJobWizard({ editId }: { editId?: string | null }) {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       className="flex-1 bg-canvas"
     >
-      {/* Top Header */}
-      <View className="border-b border-line bg-surface px-4 pb-3 pt-4">
-        <View className="flex-row items-center gap-3">
-          <Pressable
-            onPress={() => {
-              if (step === 0 || (editId && step === 1)) {
-                router.back();
-              } else {
-                setStep(step - 1);
-              }
-            }}
-            accessibilityLabel="Back"
-            className="size-9 items-center justify-center rounded-full bg-surface-muted"
-          >
-            <ArrowLeft size={18} color="#00112e" />
-          </Pressable>
-          <View className="flex-1">
-            <Text className="text-[11px] font-bold uppercase tracking-wider text-amber-600">
-              Step {step + 1} of {STEPS.length} · {STEPS[step]}
-            </Text>
-            <Text className="text-base font-extrabold text-navy-900" numberOfLines={1}>
-              {editId ? "Edit job opening" : "Post a job opening"}
-              {draft.title && step > 0 ? ` · ${draft.title}` : ""}
-            </Text>
-          </View>
+      {/* Wizard Step Header */}
+      <View className="border-b border-line bg-surface px-4 pb-3 pt-3">
+        <View className="gap-0.5">
+          <Text className="text-[11px] font-bold uppercase tracking-wider text-amber-600">
+            Step {step + 1} of {STEPS.length} · {STEPS[step]}
+          </Text>
+          <Text className="text-base font-extrabold text-navy-900" numberOfLines={1}>
+            {editId ? "Edit job opening" : "Post a job opening"}
+            {draft.title && step > 0 ? ` · ${draft.title}` : ""}
+          </Text>
         </View>
 
         {/* Step Progress Indicators */}

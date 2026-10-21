@@ -1,8 +1,8 @@
 // Ported from frontend/apps/partner/features/notifications/view/notification-panel.tsx
-import { Button, EmptyState, Sheet, Text } from "@vsolve/mobile-ui";
+import { Button, EmptyState, Sheet, Text, cn } from "@vsolve/mobile-ui";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Pressable, View } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
 
 import { AsyncSection, asyncStateFrom } from "@/components/async-section";
 
@@ -63,25 +63,39 @@ function NotificationPanelBody({
       open={open}
       onOpenChange={onOpenChange}
       title="Notifications"
+      description="Updates about your bookings, jobs and activity"
       footer={
-        hasUnread ? (
+        <View className="flex-row items-center justify-between w-full">
+          {hasUnread ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              loading={markRead.isPending}
+              loadingLabel="Marking read..."
+              onPress={() => {
+                setDismissedAll(true);
+                markRead.mutate({ all: true });
+              }}
+            >
+              Mark all read
+            </Button>
+          ) : (
+            <View />
+          )}
           <Button
-            variant="ghost"
-            loading={markRead.isPending}
-            loadingLabel="Marking everything read"
-            onPress={() => {
-              setDismissedAll(true);
-              markRead.mutate({ all: true });
-            }}
+            variant="outline"
+            size="sm"
+            onPress={() => onOpenChange(false)}
+            className="px-4"
           >
-            Mark all read
+            Close
           </Button>
-        ) : undefined
+        </View>
       }
     >
-      <View className="gap-3">
+      <View className="flex-1 min-h-0">
         {markRead.isError ? (
-          <Text className="text-sm text-danger-text">We could not mark that as read. It is still unread.</Text>
+          <Text className="mb-2 text-sm text-danger-text">We could not mark that as read. It is still unread.</Text>
         ) : null}
         <AsyncSection
           state={state}
@@ -105,7 +119,12 @@ function NotificationPanelBody({
           {(page) => {
             const visible = dismissedAll ? [] : page.results.filter((item) => !dismissedIds.has(item.id));
             return (
-              <View className="gap-2">
+              <ScrollView
+                className="flex-1"
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ gap: 10, paddingBottom: 12 }}
+                keyboardShouldPersistTaps="handled"
+              >
                 {visible.map((notification) => (
                   <NotificationRow
                     key={notification.id}
@@ -119,11 +138,11 @@ function NotificationPanelBody({
                   />
                 ))}
                 {page.next === null ? null : (
-                  <Text className="text-sm leading-6 text-text-secondary">
+                  <Text className="text-sm leading-6 text-text-secondary mt-1">
                     Only your most recent notices are shown here. Older ones stay on the job they belong to.
                   </Text>
                 )}
-              </View>
+              </ScrollView>
             );
           }}
         </AsyncSection>
@@ -147,25 +166,49 @@ function NotificationRow({
   const href = targetHref(notification.target, workspaceKeys);
   const unread = isUnread(notification);
   return (
-    <View className={unread ? "gap-1 rounded-card border border-line bg-surface p-3" : "gap-1 rounded-card border border-line bg-surface-sunken p-3"}>
-      <Text className="text-sm font-semibold text-text">{notification.title}</Text>
-      <Text className="text-sm text-text-secondary">{notification.body}</Text>
-      {href ? (
-        <Pressable
-          accessibilityRole="link"
-          onPress={() => {
-            if (unread) onMarkRead();
-            onOpened();
-            router.push(href as never);
-          }}
-        >
-          <Text className="text-sm font-semibold text-action">Open</Text>
-        </Pressable>
-      ) : unread ? (
-        <Pressable accessibilityRole="button" onPress={onMarkRead}>
-          <Text className="text-sm font-semibold text-action">Mark read</Text>
-        </Pressable>
-      ) : null}
+    <View
+      className={cn(
+        "gap-1.5 rounded-card border p-3.5",
+        unread
+          ? "border-navy-200 bg-surface shadow-xs"
+          : "border-line bg-surface-sunken opacity-90"
+      )}
+    >
+      <View className="flex-row items-center justify-between">
+        <Text className={cn("text-sm flex-1", unread ? "font-bold text-navy-950" : "font-semibold text-text")}>
+          {notification.title}
+        </Text>
+        {unread ? (
+          <View className="h-2 w-2 rounded-full bg-brand ml-2" />
+        ) : null}
+      </View>
+      <Text className="text-xs text-text-secondary leading-relaxed">{notification.body}</Text>
+      <View className="mt-1 flex-row items-center gap-3">
+        {href ? (
+          <Pressable
+            accessibilityRole="link"
+            hitSlop={8}
+            className="py-1"
+            onPress={() => {
+              if (unread) onMarkRead();
+              onOpened();
+              router.push(href as never);
+            }}
+          >
+            <Text className="text-xs font-bold text-brand">Open</Text>
+          </Pressable>
+        ) : null}
+        {unread ? (
+          <Pressable
+            accessibilityRole="button"
+            hitSlop={8}
+            className="py-1"
+            onPress={onMarkRead}
+          >
+            <Text className="text-xs font-semibold text-text-secondary">Mark read</Text>
+          </Pressable>
+        ) : null}
+      </View>
     </View>
   );
 }

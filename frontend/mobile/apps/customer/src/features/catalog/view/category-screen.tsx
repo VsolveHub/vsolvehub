@@ -197,7 +197,7 @@ function WhatYouCanBookModal({
                 </View>
                 <Text className="text-base font-bold text-navy-900">What you can book</Text>
               </View>
-              <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={onClose} className="size-9 items-center justify-center rounded-full">
+              <Pressable hitSlop={8} accessibilityRole="button" accessibilityLabel="Close" onPress={onClose} className="size-9 items-center justify-center rounded-full">
                 <X color="#756c5e" size={20} />
               </Pressable>
             </View>
@@ -231,7 +231,7 @@ function WhatYouCanBookModal({
                         </View>
                       </View>
                       <View className="flex-row items-center justify-between gap-3 border-t border-line/60 pt-2.5">
-                        <View>
+                        <View className="shrink-0">
                           <Text className="text-[10px] font-bold uppercase tracking-wider text-text-muted">STARTS AT</Text>
                           <Text className="text-base font-extrabold tabular-nums text-navy-900">
                             {formatMoney(variant.starting_price.amount_paise)}
@@ -252,7 +252,7 @@ function WhatYouCanBookModal({
                     </View>
                   </View>
                   <View className="flex-row items-center justify-between gap-3 border-t border-line/60 pt-2.5">
-                    <View>
+                    <View className="shrink-0">
                       <Text className="text-[10px] font-bold uppercase tracking-wider text-text-muted">STARTS AT</Text>
                       <Text className="text-base font-extrabold tabular-nums text-navy-900">{priceLine(service)}</Text>
                     </View>

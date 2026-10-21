@@ -28,7 +28,7 @@ export function EventSummaryCard({
       <View className="flex-row items-center justify-between gap-3 border-b border-line px-3.5 py-2.5">
         <Text className="text-xs font-bold uppercase tracking-[0.1em] text-text-muted">{title}</Text>
         {onChange ? (
-          <Pressable accessibilityRole="button" onPress={onChange} className="min-h-9 justify-center">
+          <Pressable hitSlop={6} accessibilityRole="button" onPress={onChange} className="min-h-9 justify-center">
             <Text className="text-[13px] font-bold text-text-link">{changeLabel}</Text>
           </Pressable>
         ) : null}
