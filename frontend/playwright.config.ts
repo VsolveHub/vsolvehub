@@ -31,7 +31,9 @@ export default defineConfig({
     screenshot: "only-on-failure",
     video: "retain-on-failure",
   },
-  webServer: [
+  webServer: process.env.PLAYWRIGHT_SKIP_WEBSERVER
+    ? undefined
+    : [
     {
       command: "pnpm.cmd start",
       cwd: "./apps/customer",
