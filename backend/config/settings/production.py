@@ -117,6 +117,24 @@ if len(PAYMENT_WEBHOOK_SECRET) < MINIMUM_WEBHOOK_SECRET_LENGTH:
     raise ImproperlyConfigured("PAYMENT_WEBHOOK_SECRET must contain at least 32 characters.")
 if not RAZORPAY_API_BASE_URL.startswith("https://"):
     raise ImproperlyConfigured("RAZORPAY_API_BASE_URL must use HTTPS.")
+
+# Payouts. `unconfigured` is a valid production state (payouts off). The fake never is, and a
+# RazorpayX deployment must be able to verify its webhooks, so an empty secret refuses to boot.
+if PAYOUT_PROVIDER == "fake" or PAYOUTS_ALLOW_FAKE_PROVIDER:
+    raise ImproperlyConfigured("The fake payout provider must stay off in production.")
+if PAYOUT_PROVIDER == "razorpayx":
+    if not (RAZORPAYX_KEY_ID and RAZORPAYX_KEY_SECRET and RAZORPAYX_ACCOUNT_NUMBER):
+        raise ImproperlyConfigured(
+            "RAZORPAYX_KEY_ID, RAZORPAYX_KEY_SECRET and RAZORPAYX_ACCOUNT_NUMBER must be set "
+            "when PAYOUT_PROVIDER is razorpayx."
+        )
+    if len(RAZORPAYX_WEBHOOK_SECRET) < MINIMUM_WEBHOOK_SECRET_LENGTH:
+        raise ImproperlyConfigured("RAZORPAYX_WEBHOOK_SECRET must contain at least 32 characters.")
+    if not RAZORPAYX_API_BASE_URL.startswith("https://"):
+        raise ImproperlyConfigured("RAZORPAYX_API_BASE_URL must use HTTPS.")
+if PAYOUTS_LIVE_ENABLED and PAYOUT_PROVIDER != "razorpayx":
+    raise ImproperlyConfigured("PAYOUTS_LIVE_ENABLED requires PAYOUT_PROVIDER=razorpayx.")
+
 if not PAYMENT_LIVE_COLLECTIONS_APPROVED:
     raise ImproperlyConfigured(
         "PAYMENT_LIVE_COLLECTIONS_APPROVED requires CA/legal approval before live collection."

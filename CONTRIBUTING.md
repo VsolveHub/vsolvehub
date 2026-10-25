@@ -120,6 +120,7 @@ cd C:\dev\vsolve\backend
 .\.venv\Scripts\python.exe manage.py seed_task_catalog
 .\.venv\Scripts\python.exe manage.py seed_trade_partners
 .\.venv\Scripts\python.exe manage.py seed_m2_demo --i-understand-this-is-dev-only
+.\.venv\Scripts\python.exe manage.py load_catalog_dump
 ```
 
 ```bash
@@ -128,6 +129,7 @@ python manage.py seed_console_demo_data
 python manage.py seed_task_catalog
 python manage.py seed_trade_partners
 python manage.py seed_m2_demo --i-understand-this-is-dev-only
+python manage.py load_catalog_dump
 ```
 
 What each one gives you:
@@ -138,6 +140,7 @@ What each one gives you:
 | `seed_task_catalog` | The full ~200-service priced catalog across Technician, Beautician, Home and Pet. Without it you have six services. |
 | `seed_trade_partners` | One approved partner per trade, so the wider catalog can actually be staffed. A service nobody can do prices and schedules and then fails at dispatch. |
 | `seed_m2_demo` | Milestone 2 configuration: the A3 (`/construction-helpers`) and A5 (`/interior-fit-out-project`) services, prices, SLA clocks, a wage floor, and three approved vendors. Every money value it writes is a **placeholder standing in for an owner decision**, marked as such in the database. It refuses to run outside `DEBUG`, which is why the long flag is required. See [`docs/runbooks/m2-demo-seed.md`](docs/runbooks/m2-demo-seed.md). |
+| `load_catalog_dump` | The real artwork: the 3D category icons on the home page and the tile and service photos, all on Cloudflare R2, read from `exports/*/catalog_live.json`. The seeds above only fill stock photos, so **without this the home page shows Unsplash pictures instead of the icons.** It overwrites those stock photos; the seeds never overwrite it back. |
 
 > ### ⚠️ The ordering trap
 >
@@ -147,7 +150,10 @@ What each one gives you:
 > two dead M2 links.
 >
 > **If you ever re-run `seed_console_demo_data` or `seed_technician_catalog`, re-run the other
-> three commands after it, in the order above.**
+> four commands after it, in the order above.**
+>
+> Already seeded and only the icons are missing? `python manage.py restore_r2_images` puts the
+> R2 artwork back without touching anything else.
 
 Every seed command is idempotent — running one twice changes nothing. Run them again freely after
 a `migrate`.

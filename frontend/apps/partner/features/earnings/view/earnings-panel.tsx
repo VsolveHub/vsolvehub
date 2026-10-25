@@ -1,16 +1,12 @@
 "use client";
 
-import { Badge, Button, Card, ErrorState, Spinner, formatMoney , formatDate} from "@vsolve/ui";
+import { Badge, Button, Card, ErrorState, Spinner, formatMoney } from "@vsolve/ui";
 
 import { Pictogram, type PictogramName } from "@/components/pictogram";
 
-import {
-  usePartnerBalance,
-  usePartnerLedger,
-  usePartnerPayoutAccount,
-  usePartnerPerformance,
-} from "../queries";
+import { usePartnerBalance, usePartnerLedger, usePartnerPerformance } from "../queries";
 import { EarningsChart, toDailyEarnings } from "./earnings-chart";
+import { PayoutAccountCard } from "./payout-account-card";
 
 /**
  * What the Partner has earned.
@@ -83,7 +79,6 @@ function BalanceTile({
 export function EarningsPanel() {
   const balance = usePartnerBalance();
   const ledger = usePartnerLedger();
-  const account = usePartnerPayoutAccount();
   const performance = usePartnerPerformance();
 
   if (balance.isPending) {
@@ -220,35 +215,7 @@ export function EarningsPanel() {
         </div>
       </Card>
 
-      {/* Payout method */}
-      <Card className="flex items-center gap-3 p-4">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-info-surface text-info-text">
-          <Pictogram name="money" size="sm" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-text">Payout Method</p>
-          {account.data ? (
-            <p className="text-sm text-text-secondary">
-              Paying into <span data-numeric>••••{account.data.account_last4}</span>
-              {account.data.is_payable_now ? null : (
-                <>
-                  {" — "}
-                  <span className="text-warning-text">
-                    not usable until{" "}
-                    <time dateTime={account.data.effective_from}>
-                      {formatDate(account.data.effective_from)}
-                    </time>
-                  </span>
-                </>
-              )}
-            </p>
-          ) : (
-            <p className="text-sm text-text-secondary">
-              No payout account yet.
-            </p>
-          )}
-        </div>
-      </Card>
+      <PayoutAccountCard />
 
       {/* Recent Activity */}
       <section aria-labelledby="ledger">

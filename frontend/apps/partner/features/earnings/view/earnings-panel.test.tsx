@@ -13,6 +13,11 @@ vi.mock("./earnings-chart", () => ({
   toDailyEarnings: (days: unknown) => days,
 }));
 
+// The account card has its own tests (payout-account-card.test.tsx).
+vi.mock("./payout-account-card", () => ({
+  PayoutAccountCard: () => <div>Payout account</div>,
+}));
+
 import {
   usePartnerBalance,
   usePartnerLedger,

@@ -5,6 +5,7 @@ then `PartnerLedgerEntry`. The reverse order between two concurrent batch operat
 way to deadlock this module, and picking an order is cheaper than detecting one.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
@@ -13,6 +14,7 @@ from uuid import UUID
 from django.db import transaction
 from django.db.models import QuerySet, Sum
 from django.utils import timezone
+from django.utils.text import slugify
 
 from apps.commerce.models import Booking
 from apps.foundation.services import enqueue_outbox_event
@@ -21,6 +23,11 @@ from apps.identity.models import User
 from apps.partners.models import PartnerProfile
 from apps.payouts.exceptions import (
     LedgerEntryNotPayableApiError,
+    PayoutAccountProviderApiError,
+    PayoutAccountRejectedApiError,
+    PayoutAccountReviewInvalidApiError,
+    PayoutAccountSelfReviewApiError,
+    PayoutAccountsUnavailableApiError,
     PayoutBatchConflictApiError,
     PayoutBatchInvalidApiError,
     SelfApprovalDeniedApiError,
@@ -33,7 +40,9 @@ from apps.payouts.models import (
 )
 from apps.payouts.providers import (
     PayoutProviderAmbiguousError,
+    PayoutProviderError,
     PayoutProviderRejectedError,
+    get_payout_account_provider,
     get_payout_provider,
 )
 from apps.rental.models import RentalBooking
@@ -537,6 +546,8 @@ def register_payout_account(
     ifsc: str,
     holder_name: str,
     actor: User | None = None,
+    provider_contact_id: str = "",
+    provider_fund_account_id: str = "",
 ) -> PartnerPayoutAccount:
     """Replace a Partner's account, starting the cooling clock.
 
@@ -554,9 +565,102 @@ def register_payout_account(
         account_last4=account_last4,
         ifsc=ifsc,
         holder_name=holder_name,
+        provider_contact_id=provider_contact_id,
+        provider_fund_account_id=provider_fund_account_id,
         effective_from=timezone.now() + timedelta(hours=ACCOUNT_COOLING_HOURS),
         created_by=actor,
     )
+
+
+def submit_partner_payout_account(
+    *,
+    partner: PartnerProfile,
+    account_number: str,
+    ifsc: str,
+    holder_name: str,
+    actor: User,
+) -> PartnerPayoutAccount:
+    """A Partner adds or changes their bank account. It is `PENDING` until Operations verifies it.
+
+    The provider is called before anything is written, and outside a transaction: a slow
+    provider must not hold row locks, and a refused or unreachable provider leaves nothing
+    behind. The full account number goes to the provider and nowhere else — only its last four
+    digits and the provider's ids are stored.
+
+    Replacing a verified account makes the Partner unpayable until the new one is verified and
+    out of its cooling period. That is the takeover control working, not a side effect.
+    """
+
+    try:
+        provider = get_payout_account_provider()
+    except PayoutProviderError as exc:
+        raise PayoutAccountsUnavailableApiError() from exc
+    try:
+        contact_id = provider.create_contact(name=holder_name, reference_id=str(partner.id))
+        fund_account_id = provider.create_fund_account(
+            contact_id=contact_id,
+            holder_name=holder_name,
+            ifsc=ifsc,
+            account_number=account_number,
+        )
+    except PayoutProviderRejectedError as exc:
+        raise PayoutAccountRejectedApiError() from exc
+    except PayoutProviderAmbiguousError as exc:
+        raise PayoutAccountProviderApiError() from exc
+
+    return register_payout_account(
+        partner_id=partner.id,
+        account_last4=account_number[-4:],
+        ifsc=ifsc,
+        holder_name=holder_name,
+        actor=actor,
+        provider_contact_id=contact_id,
+        provider_fund_account_id=fund_account_id,
+    )
+
+
+def _pending_account_for_review(*, account_id: UUID, actor: User) -> PartnerPayoutAccount:
+    account = PartnerPayoutAccount.objects.select_for_update().get(id=account_id)
+    if account.status != PartnerPayoutAccount.Status.PENDING:
+        raise PayoutAccountReviewInvalidApiError(
+            reason=f"This account is {account.get_status_display().lower()}, not awaiting review."
+        )
+    if account.created_by_id is not None and account.created_by_id == actor.id:
+        raise PayoutAccountSelfReviewApiError()
+    return account
+
+
+@transaction.atomic
+def verify_payout_account(*, account_id: UUID, actor: User) -> PartnerPayoutAccount:
+    """Operations confirms the details. Payable once `effective_from` has also passed.
+
+    Verifying does not shorten the cooling period: it started when the account was registered,
+    and a reviewer agreeing with the details is a separate control from time passing.
+    """
+
+    account = _pending_account_for_review(account_id=account_id, actor=actor)
+    if not account.provider_fund_account_id:
+        raise PayoutAccountReviewInvalidApiError(
+            reason="This account was never registered with the payout provider. "
+            "Ask the Partner to enter their bank details again."
+        )
+    account.status = PartnerPayoutAccount.Status.VERIFIED
+    account.verified_at = timezone.now()
+    account.reviewed_by = actor
+    account.save(update_fields=("status", "verified_at", "reviewed_by", "updated_at"))
+    return account
+
+
+@transaction.atomic
+def reject_payout_account(*, account_id: UUID, actor: User, reason: str) -> PartnerPayoutAccount:
+    """Operations refuses the details. The Partner sees `reason` and can enter them again."""
+
+    account = _pending_account_for_review(account_id=account_id, actor=actor)
+    account.status = PartnerPayoutAccount.Status.REJECTED
+    account.reviewed_by = actor
+    account.rejection_reason = reason
+    account.save(update_fields=("status", "reviewed_by", "rejection_reason", "updated_at"))
+    return account
 
 
 @transaction.atomic
@@ -647,7 +751,9 @@ def apply_payout_result(*, item_id: UUID, status: str, failure_reason: str = "")
 
     entry = PartnerLedgerEntry.objects.select_for_update().get(id=item.ledger_entry_id)
     item.status = target
-    item.failure_code = "" if target == PayoutBatchItem.Status.PAID else (failure_reason or status)
+    item.failure_code = (
+        "" if target == PayoutBatchItem.Status.PAID else _failure_code(failure_reason or status)
+    )
     item.completed_at = timezone.now()
     item.save(update_fields=("status", "failure_code", "completed_at", "updated_at"))
 
@@ -659,6 +765,68 @@ def apply_payout_result(*, item_id: UUID, status: str, failure_reason: str = "")
     entry.save(update_fields=("status", "updated_at"))
     _settle_batch_if_complete(item.batch_id)
     return item
+
+
+def _failure_code(text: str) -> str:
+    """Provider failure text reduced to the 80-character slug `failure_code` holds.
+
+    RazorpayX reports reasons as sentences ("Beneficiary bank is offline, please retry"). Stored
+    as given, a long one is a database error raised while settling a payout.
+    """
+
+    return slugify(text)[:80] or "provider_failed"
+
+
+def _mapping(value: object) -> Mapping[str, object]:
+    return value if isinstance(value, Mapping) else {}
+
+
+def _item_for_provider_payout(*, provider_payout_id: str, reference: str) -> PayoutBatchItem | None:
+    if provider_payout_id:
+        item = PayoutBatchItem.objects.filter(provider_payout_id=provider_payout_id).first()
+        if item is not None:
+            return item
+    # `submit_payout_item` sends "<batch reference>:<item id>". A webhook can arrive before that
+    # submission has committed the provider id, or after an ambiguous submission never learned
+    # it, and the reference still names the item.
+    try:
+        item_id = UUID(reference.rsplit(":", 1)[-1])
+    except ValueError:
+        return None
+    return PayoutBatchItem.objects.filter(id=item_id).first()
+
+
+@transaction.atomic
+def apply_razorpayx_payout_event(event: Mapping[str, object]) -> PayoutBatchItem | None:
+    """Settle an item from a verified RazorpayX `payout.*` webhook.
+
+    Everything else is acknowledged and ignored. Settlement goes through `apply_payout_result`,
+    which is monotonic, so a duplicate or out-of-order delivery cannot un-pay anybody;
+    `reconcile_payouts` remains the backstop for a webhook that never arrives.
+    """
+
+    name = event.get("event")
+    if not isinstance(name, str) or not name.startswith("payout."):
+        return None
+    entity = _mapping(_mapping(_mapping(event.get("payload")).get("payout")).get("entity"))
+    provider_payout_id = str(entity.get("id") or "")
+    status = str(entity.get("status") or "")
+    if not status:
+        return None
+
+    candidate = _item_for_provider_payout(
+        provider_payout_id=provider_payout_id, reference=str(entity.get("reference_id") or "")
+    )
+    if candidate is None:
+        return None
+    item = PayoutBatchItem.objects.select_for_update().get(id=candidate.id)
+    if provider_payout_id and not item.provider_payout_id:
+        item.provider_payout_id = provider_payout_id
+        item.save(update_fields=("provider_payout_id", "updated_at"))
+
+    details = _mapping(entity.get("status_details"))
+    failure_reason = str(entity.get("failure_reason") or details.get("reason") or "")
+    return apply_payout_result(item_id=item.id, status=status, failure_reason=failure_reason)
 
 
 def _settle_batch_if_complete(batch_id: UUID) -> None:

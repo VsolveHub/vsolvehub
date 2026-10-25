@@ -1,5 +1,28 @@
 # API Contract Changelog
 
+## 1.76.0 - Partner bank accounts and payout webhooks
+
+Additive. Partners can now add the bank account they are paid into, and Operations reviews it
+before any money can be sent there.
+
+- `POST /partner/payout-account/` (`PartnerPayoutAccountCreate`):
+  `{holder_name, account_number, confirm_account_number, ifsc}`. Registers the account with the
+  payout provider and returns `PartnerPayoutAccount` with `status: PENDING`. The full account
+  number is write-only; only `account_last4` is ever returned. A new submission replaces the
+  previous account (`REPLACED`) and restarts the 24-hour cooling period. Errors: `400` field
+  errors or `payout_account_rejected`, `429` (10 per hour), `503 payout_accounts_unavailable`
+  (no provider configured) or `payout_account_provider_unavailable` (retryable; nothing saved).
+- `PartnerPayoutAccount` adds `rejection_reason` (empty unless `REJECTED`).
+- `GET /operations/payout-accounts/?status=` (`OperationsPayoutAccountPage`), default `PENDING`.
+  Items carry the Partner's name and phone, the masked account, and
+  `is_registered_with_provider`.
+- `POST /operations/payout-accounts/{account_id}/verify/` and `.../reject/` (`{reason}`). Both
+  need an Operations step-up (`401`/`403` without one). The person who registered an account
+  cannot review it (`403 payout_account_self_review`); a decided account → `409
+  payout_account_review_invalid`. A verified account is payable once `effective_from` passes.
+- `POST /payout-webhooks/razorpayx/`: RazorpayX `payout.*` events, signed with
+  `X-Razorpay-Signature`. Unsigned or forged → `400`. Responds `{accepted, applied}`.
+
 ## 1.75.0 - Closed dates for rental pickups
 
 Additive.

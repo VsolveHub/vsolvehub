@@ -14,6 +14,7 @@ Bank details never appear in either beyond the last four digits. The full number
 provider, which is the only party that needs it.
 """
 
+import re
 from typing import Any
 
 from django.utils import timezone
@@ -96,6 +97,7 @@ class PartnerPayoutAccountSerializer(serializers.ModelSerializer[PartnerPayoutAc
             "verified_at",
             "effective_from",
             "is_payable_now",
+            "rejection_reason",
             "created_at",
         )
         read_only_fields = fields
@@ -106,6 +108,96 @@ class PartnerPayoutAccountSerializer(serializers.ModelSerializer[PartnerPayoutAc
             instance.status == PartnerPayoutAccount.Status.VERIFIED
             and instance.effective_from <= timezone.now()
         )
+
+
+_IFSC = re.compile(r"^[A-Z]{4}0[A-Z0-9]{6}$")
+#: Indian bank account numbers run from 9 to 18 digits.
+_ACCOUNT_NUMBER = re.compile(r"^\d{9,18}$")
+
+
+class PartnerPayoutAccountCreateSerializer(serializers.Serializer[dict[str, str]]):
+    """Bank details as the Partner types them. The full number is write-only: it is passed to the
+    payout provider and never echoed, stored or logged."""
+
+    holder_name = serializers.CharField(min_length=2, max_length=140, trim_whitespace=True)
+    account_number = serializers.CharField(write_only=True, max_length=40)
+    confirm_account_number = serializers.CharField(write_only=True, max_length=40)
+    ifsc = serializers.CharField(max_length=16)
+
+    @staticmethod
+    def _digits(value: str) -> str:
+        return re.sub(r"[\s-]", "", value)
+
+    def validate_account_number(self, value: str) -> str:
+        digits = self._digits(value)
+        if not _ACCOUNT_NUMBER.match(digits):
+            raise serializers.ValidationError("Enter the account number: 9 to 18 digits.")
+        return digits
+
+    def validate_ifsc(self, value: str) -> str:
+        code = value.strip().upper()
+        if not _IFSC.match(code):
+            raise serializers.ValidationError(
+                "Enter the 11-character IFSC, for example SBIN0001234."
+            )
+        return code
+
+    def validate(self, attrs: dict[str, str]) -> dict[str, str]:
+        if self._digits(attrs["confirm_account_number"]) != attrs["account_number"]:
+            raise serializers.ValidationError(
+                {"confirm_account_number": "The two account numbers do not match."}
+            )
+        return attrs
+
+
+class OperationsPayoutAccountSerializer(serializers.ModelSerializer[PartnerPayoutAccount]):
+    """What a reviewer needs to compare the details with the Partner's identity. Still masked."""
+
+    partner_id = serializers.UUIDField(read_only=True)
+    partner_display_name = serializers.CharField(source="partner.display_name", read_only=True)
+    partner_phone_number = serializers.CharField(source="partner.user.phone_number", read_only=True)
+    reviewed_by_id = serializers.UUIDField(read_only=True, allow_null=True)
+    is_registered_with_provider = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PartnerPayoutAccount
+        fields = (
+            "id",
+            "partner_id",
+            "partner_display_name",
+            "partner_phone_number",
+            "status",
+            "account_last4",
+            "ifsc",
+            "holder_name",
+            "is_registered_with_provider",
+            "verified_at",
+            "reviewed_by_id",
+            "rejection_reason",
+            "effective_from",
+            "created_at",
+        )
+        read_only_fields = fields
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_is_registered_with_provider(self, instance: PartnerPayoutAccount) -> bool:
+        return bool(instance.provider_fund_account_id)
+
+
+class OperationsPayoutAccountPageSerializer(serializers.Serializer[dict[str, Any]]):
+    next = serializers.URLField(allow_null=True)
+    previous = serializers.URLField(allow_null=True)
+    results = OperationsPayoutAccountSerializer(many=True)
+
+
+class RejectPayoutAccountRequestSerializer(serializers.Serializer[dict[str, str]]):
+    reason = serializers.CharField(min_length=3, max_length=240, trim_whitespace=True)
+
+
+class PayoutWebhookAcceptedSerializer(serializers.Serializer[dict[str, object]]):
+    accepted = serializers.BooleanField()
+    #: Whether the event settled a payout item. False for events this platform does not act on.
+    applied = serializers.BooleanField()
 
 
 class PayoutBatchItemSerializer(serializers.ModelSerializer[PayoutBatchItem]):
