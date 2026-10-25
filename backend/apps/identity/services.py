@@ -444,6 +444,13 @@ def record_access_event(
     )
 
 
+#: Roles a Firebase sign-in may ask for. Operations is included (contract 1.77.0): a Firebase
+#: phone verification proves possession of the number exactly as an MSG91 code does, and the
+#: role gate admits only numbers that already hold an active grant, so nobody becomes
+#: Operations by signing in. Grants are still made on the server, never requested here.
+FIREBASE_INTENDED_ROLES = ("customer", "partner", "operations")
+
+
 def check_firebase_precheck(
     *,
     phone_number: str,
@@ -467,10 +474,7 @@ def check_firebase_precheck(
         settings.OTP_IP_RATE_LIMIT,
     )
 
-    if intended_role == "operations":
-        raise OtpVerificationError("Firebase auth does not support operations role.")
-
-    if intended_role and intended_role not in ("customer", "partner"):
+    if intended_role and intended_role not in FIREBASE_INTENDED_ROLES:
         raise OtpVerificationError("Invalid intended role for Firebase auth.")
 
     if intended_role and not (

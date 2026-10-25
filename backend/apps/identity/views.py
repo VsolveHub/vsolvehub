@@ -25,7 +25,11 @@ from apps.identity.exceptions import (
     OtpThrottled,
     OtpUnavailableApiError,
 )
-from apps.identity.firebase_auth import verify_firebase_login
+from apps.identity.firebase_auth import (
+    StepUpIdentityMismatchError,
+    verify_firebase_login,
+    verify_firebase_step_up,
+)
 from apps.identity.hashing import keyed_hash
 from apps.identity.models import User, UserSession
 from apps.identity.serializers import (
@@ -37,6 +41,7 @@ from apps.identity.serializers import (
     CsrfTokenSerializer,
     CustomerProfileUpdateSerializer,
     FirebasePrecheckSerializer,
+    FirebaseStepUpSerializer,
     FirebaseVerifySerializer,
     OtpIssuedSerializer,
     OtpRequestSerializer,
@@ -495,6 +500,64 @@ class FinanceStepUpView(APIView):
         session_key = request.session.session_key
         if verified_user.pk != user.pk or not session_key:
             raise PermissionDenied("Step-up verification did not match the current session.")
+        session = mark_session_step_up(user=user, session_key=session_key)
+        return Response({"stepped_up_at": session.stepped_up_at})
+
+
+class FirebaseStepUpView(APIView):
+    """`FinanceStepUpView` for deployments whose codes are sent by Firebase (contract 1.77.0).
+
+    Same outcome, same stamp: the session's `stepped_up_at`, which `HasRecentOperationsStepUp`
+    reads. Only the proof differs — a fresh, single-use Firebase ID token for the signed-in
+    person's own number instead of a Django OTP challenge.
+    """
+
+    permission_classes = (IsAuthenticated,)
+    throttle_classes = (ScopedRateThrottle,)
+    throttle_scope = "firebase_verify"
+
+    @extend_schema(
+        tags=["Authentication"],
+        request=FirebaseStepUpSerializer,
+        responses={
+            200: StepUpSessionSerializer,
+            400: ApiErrorSerializer,
+            403: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="The verified number is not the signed-in person's.",
+            ),
+            404: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="Firebase auth is disabled.",
+            ),
+            429: OpenApiResponse(response=ApiErrorSerializer, description="Rate limit exceeded."),
+        },
+    )
+    def post(self, request: Request) -> Response:
+        if not getattr(settings, "FIREBASE_AUTH_ENABLED", False):
+            raise NotFound("Firebase authentication is disabled.")
+
+        serializer = FirebaseStepUpSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = cast(User, request.user)
+        session_key = request.session.session_key
+        if not session_key:
+            raise PermissionDenied("Step-up verification did not match the current session.")
+
+        try:
+            verify_firebase_step_up(
+                id_token=serializer.validated_data["id_token"],
+                user=user,
+                request_ip=_request_ip(request),
+                request_id=get_request_id() or "",
+            )
+        except StepUpIdentityMismatchError as exc:
+            raise PermissionDenied(
+                "Step-up verification did not match the current session."
+            ) from exc
+        except OtpVerificationError as exc:
+            raise InvalidOtpApiError from exc
+
         session = mark_session_step_up(user=user, session_key=session_key)
         return Response({"stepped_up_at": session.stepped_up_at})
 

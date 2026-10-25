@@ -410,6 +410,30 @@ describe("Firebase Phone Auth", () => {
     expect(result.current.phase).toBe("phone");
   });
 
+  it("asks Django about Operations access and never tells staff to become a Partner", async () => {
+    const stub = createStub();
+    stub.queue("/api/v1/auth/firebase/precheck/", () =>
+      Promise.resolve(apiError(404, "no_account_for_role")),
+    );
+
+    const { result } = renderFlow(stub, { intendedRole: "operations" });
+
+    act(() => {
+      result.current.onPhoneChange("9876543210");
+    });
+    await act(async () => {
+      result.current.onRequestCode();
+    });
+
+    expect(stub.calls[0]?.body).toEqual({
+      phone_number: "+919876543210",
+      intended_role: "operations",
+    });
+    expect(mockSignInWithPhoneNumber).not.toHaveBeenCalled();
+    expect(result.current.failure?.title).toBe("No Operations access");
+    expect(result.current.failure?.message).not.toMatch(/partner/i);
+  });
+
   it("clears and recreates RecaptchaVerifier after send error", async () => {
     const stub = createStub();
     stub.queue(

@@ -32,6 +32,7 @@ import {
   type OtpFlow,
   type OtpFlowOptions,
   type OtpPhase,
+  type SignInRole,
 } from "./otp-flow";
 import { useLogout, type AuthenticatedSession, type SessionState } from "./session";
 import { publishToTabs } from "./use-tab-sync";
@@ -348,7 +349,7 @@ function getRecaptchaContainer(): HTMLElement | null {
 
 export type FirebaseVerifyInput = {
   idToken: string;
-  intendedRole?: string;
+  intendedRole?: SignInRole | "";
   referralCode?: string | null;
   deviceIdentifier?: string;
   deviceLabel?: string;
@@ -371,7 +372,7 @@ export function useVerifyFirebase(
         apiClient.POST("/api/v1/auth/firebase/verify/", {
           body: {
             id_token: input.idToken,
-            intended_role: (input.intendedRole ?? "") as "customer" | "partner" | "",
+            intended_role: input.intendedRole ?? "",
             ...(input.deviceIdentifier ? { device_identifier: input.deviceIdentifier } : {}),
             ...(input.deviceLabel ? { device_label: input.deviceLabel } : {}),
             ...(input.referralCode ? { referral_code: input.referralCode } : {}),
@@ -389,6 +390,54 @@ export function useVerifyFirebase(
     },
     retry: false,
   });
+}
+
+/**
+ * Sends a Firebase verification SMS to `phone` and resolves to the step that
+ * confirms it.
+ *
+ * For proving the person again *inside* a session — the Operations step-up —
+ * where the login flow's session handling would be wrong: the caller exchanges
+ * the ID token at its own endpoint. The returned `confirm` yields a fresh,
+ * single-use ID token and always signs the Firebase client back out, so the
+ * Django session cookie stays the only session. Throws Firebase errors as they
+ * are; `mapFirebaseError` turns them into copy.
+ */
+export async function startFirebasePhoneVerification(
+  phone: string,
+): Promise<(code: string) => Promise<string>> {
+  const auth = getFirebaseAuth();
+  const container = getRecaptchaContainer();
+  if (!auth || !container) {
+    throw new Error("Phone authentication service is not configured.");
+  }
+
+  container.innerHTML = "";
+  const verifier = new RecaptchaVerifier(auth, container, { size: "invisible" });
+  let confirmation: ConfirmationResult;
+  try {
+    confirmation = await signInWithPhoneNumber(auth, formatToE164(phone), verifier);
+  } finally {
+    // Only the send needs reCAPTCHA. A resend builds a new verifier.
+    try {
+      verifier.clear();
+    } catch {
+      // already cleared
+    }
+  }
+
+  return async (code: string) => {
+    try {
+      const credential = await confirmation.confirm(code);
+      return await credential.user.getIdToken();
+    } finally {
+      try {
+        await signOut(auth);
+      } catch {
+        // Ignore signOut errors
+      }
+    }
+  };
 }
 
 /**
@@ -522,7 +571,7 @@ export function useFirebasePhoneFlow(
         apiClient.POST("/api/v1/auth/firebase/precheck/", {
           body: {
             phone_number: canonicalPhone,
-            intended_role: (intendedRole ?? "") as "customer" | "partner" | "",
+            intended_role: intendedRole ?? "",
           },
         }),
       );
@@ -535,7 +584,7 @@ export function useFirebasePhoneFlow(
         setPhoneError(invalidPhone);
         return;
       }
-      setFailure(describeOtpFailure(precheckError));
+      setFailure(describeOtpFailure(precheckError, intendedRole));
       return;
     }
 
@@ -673,7 +722,7 @@ export function useFirebasePhoneFlow(
           "That code is not right, or it has expired. Please request a new code.",
         );
       } else {
-        setFailure(describeOtpFailure(backendError));
+        setFailure(describeOtpFailure(backendError, intendedRole));
       }
     } finally {
       // Always sign out of Firebase auth client so Django session cookie is authoritative

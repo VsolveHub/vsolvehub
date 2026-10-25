@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.76.0)
- * Checksum: 67f68acd4930f0c1
+ * Source:   contracts/openapi/v1.yaml (version 1.77.0)
+ * Checksum: 83f1ab4fcb3afaf8
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -102,6 +102,29 @@ export interface paths {
          *     Note that this is a UX/rate-limit aid and verify is the real gate.
          */
         post: operations["auth_firebase_precheck_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/firebase/step-up/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description `FinanceStepUpView` for deployments whose codes are sent by Firebase (contract 1.77.0).
+         *
+         *     Same outcome, same stamp: the session's `stepped_up_at`, which `HasRecentOperationsStepUp`
+         *     reads. Only the proof differs — a fresh, single-use Firebase ID token for the signed-in
+         *     person's own number instead of a Django OTP challenge.
+         */
+        post: operations["auth_firebase_step_up_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -10941,6 +10964,10 @@ export interface components {
             /** @default  */
             intended_role: components["schemas"]["IntendedRoleEnum"] | components["schemas"]["BlankEnum"];
         };
+        FirebaseStepUpRequest: {
+            /** @description Firebase ID token from a phone verification just completed for the signed-in person's own number. */
+            id_token: string;
+        };
         FirebaseVerifyRequest: {
             /** @description Firebase ID token issued after client-side Phone Auth. */
             id_token: string;
@@ -18677,6 +18704,66 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    auth_firebase_step_up_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FirebaseStepUpRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["FirebaseStepUpRequest"];
+                "multipart/form-data": components["schemas"]["FirebaseStepUpRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StepUpSession"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description The verified number is not the signed-in person's. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Firebase auth is disabled. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Rate limit exceeded. */
             429: {
                 headers: {
                     [name: string]: unknown;

@@ -109,7 +109,7 @@ export {
   sanitizeCodeInput,
   sanitizePhoneInput,
 } from "./otp-flow";
-export type { OtpFailure, OtpFlow, OtpFlowOptions, OtpPhase } from "./otp-flow";
+export type { OtpFailure, OtpFlow, OtpFlowOptions, OtpPhase, SignInRole } from "./otp-flow";
 
 export {
   useFirebasePhoneFlow,
@@ -118,6 +118,7 @@ export {
   getFirebaseApp,
   mapFirebaseError,
   formatToE164,
+  startFirebasePhoneVerification,
 } from "./firebase-phone";
 export type { FirebaseVerifyInput } from "./firebase-phone";
 

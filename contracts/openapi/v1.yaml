@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.76.0
+  version: 1.77.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -284,6 +284,62 @@ paths:
                       request_id: req_example
                   summary: OTP rate limited
           description: ''
+  /api/v1/auth/firebase/step-up/:
+    post:
+      operationId: auth_firebase_step_up_create
+      description: |-
+        `FinanceStepUpView` for deployments whose codes are sent by Firebase (contract 1.77.0).
+
+        Same outcome, same stamp: the session's `stepped_up_at`, which `HasRecentOperationsStepUp`
+        reads. Only the proof differs — a fresh, single-use Firebase ID token for the signed-in
+        person's own number instead of a Django OTP challenge.
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FirebaseStepUpRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FirebaseStepUpRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FirebaseStepUpRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StepUpSession'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The verified number is not the signed-in person's.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Firebase auth is disabled.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Rate limit exceeded.
   /api/v1/auth/firebase/verify/:
     post:
       operationId: auth_firebase_verify_create
@@ -26966,6 +27022,17 @@ components:
           - $ref: '#/components/schemas/BlankEnum'
       required:
       - phone_number
+    FirebaseStepUpRequest:
+      type: object
+      properties:
+        id_token:
+          type: string
+          writeOnly: true
+          minLength: 1
+          description: Firebase ID token from a phone verification just completed
+            for the signed-in person's own number.
+      required:
+      - id_token
     FirebaseVerifyRequest:
       type: object
       properties:

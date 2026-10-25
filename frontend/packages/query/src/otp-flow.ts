@@ -38,6 +38,9 @@ import {
 
 export type OtpPhase = "phone" | "code" | "authenticated";
 
+/** A role whose accounts are never created by signing in, so "no account" is worth saying. */
+export type SignInRole = "partner" | "operations";
+
 /** A failure that belongs in a banner rather than under a field. */
 export interface OtpFailure {
   kind: "rate_limited" | "delivery_unavailable" | "no_account_for_role" | "network" | "unexpected";
@@ -84,9 +87,10 @@ export interface OtpFlowOptions {
    *
    * Omit for self-service sign-in (the Customer app): there, "no account yet"
    * is not a failure, it is the first login. Only pass this where an account
-   * can only exist because someone already applied — today, `"partner"`.
+   * can only exist because someone already applied or was granted it —
+   * `"partner"`, and `"operations"` for the staff console.
    */
-  intendedRole?: "partner";
+  intendedRole?: SignInRole;
   /** Called once Django has established the session cookie. */
   onAuthenticated?: (session: AuthenticatedSession) => void;
   /**
@@ -149,11 +153,26 @@ export function sanitizeCodeInput(value: string, codeLength: number): string {
  * the HTTP status phrase, so the generic path would show a customer the words
  * "Bad Request" during login. Until the contract publishes customer-safe
  * messages (see the handoff note), authentication copy is authored here.
+ *
+ * `role` only changes the "no account" copy: a staff member without access
+ * must not be told to apply to become a Partner.
  */
-export function describeOtpFailure(error: unknown): OtpFailure {
+export function describeOtpFailure(error: unknown, role: SignInRole = "partner"): OtpFailure {
   if (error instanceof ApiRequestError) {
     const code = error.code.toLowerCase();
     const reference = error.requestId;
+
+    if (code === "no_account_for_role" && role === "operations") {
+      return {
+        kind: "no_account_for_role",
+        title: "No Operations access",
+        message:
+          "This number does not have Operations access. Sign in with the number " +
+          "your access was granted to, or ask your team lead.",
+        severity: "error",
+        reference,
+      };
+    }
 
     if (error.status === 429 || code === "throttled") {
       return {
@@ -407,7 +426,7 @@ export function useOtpFlow(apiClient: ApiClient, options: OtpFlowOptions = {}): 
               setPhoneError(invalidPhone);
               return;
             }
-            setFailure(describeOtpFailure(error));
+            setFailure(describeOtpFailure(error, intendedRole));
           },
         },
       );
@@ -526,7 +545,7 @@ export function useOtpFlow(apiClient: ApiClient, options: OtpFlowOptions = {}): 
             );
             return;
           }
-          setFailure(describeOtpFailure(error));
+          setFailure(describeOtpFailure(error, intendedRole));
         },
       },
     );
@@ -537,6 +556,7 @@ export function useOtpFlow(apiClient: ApiClient, options: OtpFlowOptions = {}): 
     deviceIdentifier,
     deviceLabel,
     getReferralCode,
+    intendedRole,
     isExpired,
     phone,
     verifyOtp,

@@ -1,6 +1,6 @@
 "use client";
 
-import { hasRole, useAuthGuard, useLogout, useOtpFlow, useSwitchRole } from "@vsolve/query";
+import { hasRole, useAuthGuard, useLogout, usePhoneAuthFlow, useSwitchRole } from "@vsolve/query";
 import { Button, Card, ErrorState, Logo, OtpForm, Spinner } from "@vsolve/ui";
 import { getApiClient } from "@/lib/api/browser";
 import { useState, useEffect, type ReactNode } from "react";
@@ -35,7 +35,9 @@ export function useTheme() {
 const OPERATIONS_ROLE = "operations";
 
 export function OperationsLogin() {
-  const flow = useOtpFlow(getApiClient());
+  // Firebase or Django's own OTP, whichever NEXT_PUBLIC_PHONE_AUTH_PROVIDER names. The role
+  // asks Django to refuse a number with no Operations grant before any code is sent.
+  const flow = usePhoneAuthFlow(getApiClient(), { intendedRole: "operations" });
 
   return (
     <main className="flex min-h-screen items-center justify-center px-4 py-16">

@@ -1,5 +1,22 @@
 # API Contract Changelog
 
+## 1.77.0 - Operations sign in with Firebase
+
+Additive. Operations can sign in and confirm money-moving actions with Firebase phone
+verification, so the console no longer depends on Django's own OTP provider (MSG91).
+
+- `POST /auth/firebase/precheck/` and `POST /auth/firebase/verify/` now accept
+  `intended_role: "operations"`. It behaves like `"partner"`: a number with no active
+  Operations grant gets `404 no_account_for_role`. Nobody gains Operations by signing in;
+  grants are still made on the server. (Before this release `"operations"` was refused with
+  `400 invalid_otp`.)
+- `POST /auth/firebase/step-up/` (`FirebaseStepUp`): `{id_token}` from a phone verification
+  just completed for the signed-in person's own number. Stamps the session's
+  `stepped_up_at` exactly like `POST /auth/finance/step-up/` and returns `StepUpSession`.
+  Errors: `400 invalid_otp` (invalid, stale or already-used token), `403` (the verified
+  number is not the signed-in person's), `404` (Firebase auth disabled), `429`.
+- Removed: none. Renamed: none.
+
 ## 1.76.0 - Partner bank accounts and payout webhooks
 
 Additive. Partners can now add the bank account they are paid into, and Operations reviews it

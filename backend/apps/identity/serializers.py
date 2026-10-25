@@ -316,6 +316,17 @@ class StepUpSessionSerializer(serializers.Serializer[dict[str, object]]):
     stepped_up_at = serializers.DateTimeField(read_only=True)
 
 
+class FirebaseStepUpSerializer(serializers.Serializer[dict[str, object]]):
+    id_token = serializers.CharField(
+        write_only=True,
+        trim_whitespace=True,
+        help_text=(
+            "Firebase ID token from a phone verification just completed for the signed-in "
+            "person's own number."
+        ),
+    )
+
+
 class ConsentReceiptCreateSerializer(serializers.Serializer[dict[str, object]]):
     purpose = serializers.SlugField(max_length=100)
     policy_version = serializers.CharField(max_length=100)

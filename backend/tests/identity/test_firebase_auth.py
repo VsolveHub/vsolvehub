@@ -3,6 +3,7 @@
 import time
 from collections.abc import Iterator
 from http import HTTPStatus
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -313,34 +314,157 @@ def test_precheck_applies_rate_limits_without_creating_challenge() -> None:
     assert throttled_resp.json()["error"]["code"] == "throttled"
 
 
-def test_operations_intended_role_rejected_with_uniform_400() -> None:
-    client = APIClient()
-    claims = _valid_claims("+919876543210")
-
-    # Precheck rejects intended_role="operations" with uniform 400 invalid_otp
-    precheck_resp = client.post(
-        "/api/v1/auth/firebase/precheck/",
-        {
-            "phone_number": "+919876543210",
-            "intended_role": "operations",
-        },
-        format="json",
+def _operations_grant(phone: str) -> User:
+    user = User.objects.create(phone_number=phone)
+    role, _ = Role.objects.get_or_create(
+        code="operations", defaults={"name": "Operations", "is_system": True}
     )
-    assert precheck_resp.status_code == HTTPStatus.BAD_REQUEST
-    assert precheck_resp.json()["error"]["code"] == "invalid_otp"
+    UserRole.objects.create(user=user, role=role)
+    return user
 
-    # Verify rejects intended_role="operations" with uniform 400 invalid_otp
-    with mock.patch("firebase_admin.auth.verify_id_token", return_value=claims):
-        verify_resp = client.post(
+
+def _signed_in_operator(phone: str) -> APIClient:
+    """An Operations session reached the way the console reaches it: sign in, then switch."""
+    _operations_grant(phone)
+    client = APIClient()
+    with mock.patch("firebase_admin.auth.verify_id_token", return_value=_valid_claims(phone)):
+        signed_in = client.post(
             "/api/v1/auth/firebase/verify/",
-            {
-                "id_token": "token-for-operations",
-                "intended_role": "operations",
-            },
+            {"id_token": f"login-token-{phone}", "intended_role": "operations"},
             format="json",
         )
-    assert verify_resp.status_code == HTTPStatus.BAD_REQUEST
-    assert verify_resp.json()["error"]["code"] == "invalid_otp"
+    assert signed_in.status_code == HTTPStatus.OK
+    switched = client.post("/api/v1/auth/roles/switch/", {"role": "operations"}, format="json")
+    assert switched.status_code == HTTPStatus.OK
+    return client
+
+
+def _step_up(
+    client: APIClient, id_token: str, claims: dict[str, object]
+) -> tuple[int, dict[str, Any]]:
+    with mock.patch("firebase_admin.auth.verify_id_token", return_value=claims):
+        response = client.post(
+            "/api/v1/auth/firebase/step-up/", {"id_token": id_token}, format="json"
+        )
+    return response.status_code, response.json()
+
+
+def test_operations_intended_role_without_a_grant_gets_no_account() -> None:
+    client = APIClient()
+    phone = "+919876543210"
+
+    precheck_resp = client.post(
+        "/api/v1/auth/firebase/precheck/",
+        {"phone_number": phone, "intended_role": "operations"},
+        format="json",
+    )
+    assert precheck_resp.status_code == HTTPStatus.NOT_FOUND
+    assert precheck_resp.json()["error"]["code"] == "no_account_for_role"
+
+    with mock.patch("firebase_admin.auth.verify_id_token", return_value=_valid_claims(phone)):
+        verify_resp = client.post(
+            "/api/v1/auth/firebase/verify/",
+            {"id_token": "token-for-operations", "intended_role": "operations"},
+            format="json",
+        )
+    assert verify_resp.status_code == HTTPStatus.NOT_FOUND
+    assert verify_resp.json()["error"]["code"] == "no_account_for_role"
+    # Signing in never grants the role.
+    assert not UserRole.objects.filter(role__code="operations").exists()
+
+
+def test_operations_grant_signs_in_with_firebase_and_switches_to_operations() -> None:
+    phone = "+919800011122"
+    _operations_grant(phone)
+    client = APIClient()
+
+    precheck_resp = client.post(
+        "/api/v1/auth/firebase/precheck/",
+        {"phone_number": phone, "intended_role": "operations"},
+        format="json",
+    )
+    assert precheck_resp.status_code == HTTPStatus.NO_CONTENT
+
+    with mock.patch("firebase_admin.auth.verify_id_token", return_value=_valid_claims(phone)):
+        verify_resp = client.post(
+            "/api/v1/auth/firebase/verify/",
+            {"id_token": "operations-login-token", "intended_role": "operations"},
+            format="json",
+        )
+    assert verify_resp.status_code == HTTPStatus.OK
+    assert "operations" in verify_resp.json()["user"]["roles"]
+
+    switched = client.post("/api/v1/auth/roles/switch/", {"role": "operations"}, format="json")
+    assert switched.status_code == HTTPStatus.OK
+    assert switched.json()["active_role"] == "operations"
+
+
+def test_operator_steps_up_with_a_fresh_token_for_their_own_number() -> None:
+    phone = "+919800011123"
+    client = _signed_in_operator(phone)
+
+    status, body = _step_up(client, "step-up-token", _valid_claims(phone))
+
+    assert status == HTTPStatus.OK
+    assert body["stepped_up_at"]
+    session = UserSession.objects.get(user__phone_number=phone, revoked_at__isnull=True)
+    assert session.stepped_up_at is not None
+    assert AccessAuditEvent.objects.filter(
+        action="identity.firebase_step_up", decision=AccessAuditEvent.Decision.ALLOWED
+    ).exists()
+
+
+def test_step_up_with_someone_elses_number_is_refused_and_stamps_nothing() -> None:
+    phone = "+919800011124"
+    client = _signed_in_operator(phone)
+
+    status, _ = _step_up(client, "other-number-token", _valid_claims("+919800099999"))
+
+    assert status == HTTPStatus.FORBIDDEN
+    session = UserSession.objects.get(user__phone_number=phone, revoked_at__isnull=True)
+    assert session.stepped_up_at is None
+    assert AccessAuditEvent.objects.filter(
+        action="identity.firebase_step_up",
+        decision=AccessAuditEvent.Decision.DENIED,
+        metadata__reason="phone_mismatch",
+    ).exists()
+
+
+def test_step_up_tokens_are_single_use_and_a_sign_in_token_cannot_step_up() -> None:
+    phone = "+919800011125"
+    client = _signed_in_operator(phone)
+
+    # The token that signed this operator in is already spent.
+    status, body = _step_up(client, f"login-token-{phone}", _valid_claims(phone))
+    assert status == HTTPStatus.BAD_REQUEST
+    assert body["error"]["code"] == "invalid_otp"
+
+    first_status, _ = _step_up(client, "fresh-step-up-token", _valid_claims(phone))
+    assert first_status == HTTPStatus.OK
+    replayed_status, _ = _step_up(client, "fresh-step-up-token", _valid_claims(phone))
+    assert replayed_status == HTTPStatus.BAD_REQUEST
+
+
+def test_stale_token_cannot_step_up() -> None:
+    phone = "+919800011126"
+    client = _signed_in_operator(phone)
+
+    status, _ = _step_up(client, "stale-token", _valid_claims(phone, auth_time_offset=-400))
+
+    assert status == HTTPStatus.BAD_REQUEST
+    session = UserSession.objects.get(user__phone_number=phone, revoked_at__isnull=True)
+    assert session.stepped_up_at is None
+
+
+def test_step_up_needs_a_session_and_firebase_enabled() -> None:
+    anonymous_status, _ = _step_up(APIClient(), "any-token", _valid_claims("+919800011127"))
+    assert anonymous_status in {HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN}
+
+    phone = "+919800011128"
+    client = _signed_in_operator(phone)
+    with override_settings(FIREBASE_AUTH_ENABLED=False):
+        disabled_status, _ = _step_up(client, "token-while-disabled", _valid_claims(phone))
+    assert disabled_status == HTTPStatus.NOT_FOUND
 
 
 def test_token_cannot_be_reused_one_time_token_use() -> None:
