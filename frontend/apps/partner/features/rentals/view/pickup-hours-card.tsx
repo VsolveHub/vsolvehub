@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { friendlyErrorMessage } from "@vsolve/query";
-import { Button, Card, Input, Spinner, cn, useToast } from "@vsolve/ui";
+import { Button, Card, Dialog, Input, Spinner, cn, useToast } from "@vsolve/ui";
 import { Clock, Copy, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -82,16 +82,14 @@ export function hoursOpenText(opensAt: string, closesAt: string): string {
  * The owner's pickup hours: which days they are open, the hours for each day, and the
  * days off on top of that.
  *
- * There are no time slots. Customers pick dates and come any time inside that day's hours,
- * so a Saturday can run 9 AM to 9 PM and a Sunday 9 AM to 6 PM. A day off closes one date
- * whatever its weekday says. New items can't go live until hours are saved.
- *
- * Laid out like stay visiting hours, so an owner who lists both sees one way to set a week.
+ * Rendered as a compact summary banner on the rental workspace. Clicking "Edit hours"
+ * opens the full schedule editor in a focused modal Dialog.
  */
 export function PickupHoursCard({ className }: { className?: string }) {
   const qc = useQueryClient();
   const { notify } = useToast();
   const hours = useQuery({ queryKey: ["partner-rentals", "pickup-hours"], queryFn: fetchPartnerPickupHours });
+  const [open, setOpen] = useState(false);
   const [rows, setRows] = useState<DayRow[]>(() => rowsFrom(undefined));
   const [closedDates, setClosedDates] = useState<string[]>([]);
   const [newClosedDate, setNewClosedDate] = useState("");
@@ -116,6 +114,7 @@ export function PickupHoursCard({ className }: { className?: string }) {
       qc.setQueryData(["partner-rentals", "pickup-hours"], data);
       void qc.invalidateQueries({ queryKey: ["partner-rentals", "assets"] });
       notify("Pickup hours saved.", "success");
+      setOpen(false);
     },
     onError: (err) => setError(friendlyErrorMessage(err)),
   });
@@ -132,33 +131,113 @@ export function PickupHoursCard({ className }: { className?: string }) {
     );
   }
 
-  return (
-    <Card padding="lg" className={cn("flex flex-col gap-4", className)} id="pickup-hours">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="flex items-center gap-2 text-lg font-bold text-navy-900">
-            <Clock className="size-5 text-action" aria-hidden />
-            Pickup hours
-          </h2>
-          <p className="mt-0.5 text-sm text-text-secondary">
-            When customers can collect and return items. They come any time inside these hours —
-            no time slots. Used for all your rental items.
-          </p>
-        </div>
-        {hours.data?.is_set ? null : (
-          <span className="shrink-0 rounded-full bg-warning-surface px-2.5 py-1 text-xs font-bold text-warning-text">
-            Not set
-          </span>
-        )}
-      </div>
+  const isSet = Boolean(hours.data?.is_set);
+  const summaryText = hours.data?.summary || "";
+  const closedCount = closedDates.length;
 
-      {hours.isPending ? (
-        <p className="flex items-center gap-2 text-sm text-text-secondary">
-          <Spinner size="sm" />
-          Loading your hours…
-        </p>
-      ) : (
-        <>
+  return (
+    <>
+      <Card padding="md" className={cn("border-line/80 bg-surface", className)} id="pickup-hours">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-action/10 text-action">
+              <Clock className="size-5" aria-hidden />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-sm font-bold text-navy-900">Pickup hours</h2>
+                {hours.isPending ? (
+                  <span className="flex items-center gap-1.5 text-xs text-text-secondary">
+                    <Spinner size="sm" />
+                    Loading…
+                  </span>
+                ) : isSet ? (
+                  <span className="inline-flex items-center rounded-full bg-selected-surface px-2.5 py-0.5 text-xs font-semibold text-navy-900">
+                    {summaryText}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center rounded-full bg-warning-surface px-2.5 py-0.5 text-xs font-bold text-warning-text">
+                    Not set
+                  </span>
+                )}
+                {closedCount > 0 ? (
+                  <span className="text-xs text-text-secondary">
+                    · {closedCount} {closedCount === 1 ? "day off" : "days off"}
+                  </span>
+                ) : null}
+              </div>
+              <p className="mt-0.5 text-xs text-text-secondary">
+                {isSet
+                  ? "When customers can collect and return items. Click to update days, times, or days off."
+                  : "Customers collect and return items inside these hours. Set hours to activate your ads."}
+              </p>
+            </div>
+          </div>
+
+          <Button
+            type="button"
+            variant={isSet ? "outline" : "primary"}
+            size="sm"
+            onClick={() => {
+              setError(null);
+              if (hours.data) {
+                setRows(rowsFrom(hours.data));
+                setClosedDates(hours.data.closed_dates ?? []);
+              }
+              setOpen(true);
+            }}
+            className="shrink-0 self-start sm:self-center"
+          >
+            <Clock className="size-4" aria-hidden />
+            {isSet ? "Edit pickup hours" : "Set pickup hours"}
+          </Button>
+        </div>
+      </Card>
+
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          if (!next) setError(null);
+          setOpen(next);
+        }}
+        title="Pickup hours"
+        description="When customers can collect and return items. They come any time inside these hours — no time slots. Used for all your rental items."
+        className="max-w-2xl"
+        footer={
+          <div className="flex w-full flex-wrap items-center justify-between gap-3">
+            {summaryText ? (
+              <p className="hidden text-xs text-text-secondary sm:inline">Current: {summaryText}</p>
+            ) : (
+              <span />
+            )}
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={save.isPending}
+                onClick={() => setOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                loading={save.isPending}
+                loadingLabel="Saving…"
+                onClick={() => {
+                  const problem = rowsProblem(rows);
+                  if (problem) return setError(problem);
+                  save.mutate();
+                }}
+              >
+                Save pickup hours
+              </Button>
+            </div>
+          </div>
+        }
+      >
+        <div className="flex flex-col gap-4 py-1">
           <ul className="flex flex-col divide-y divide-line overflow-visible rounded-card border border-line bg-surface">
             {rows.map((row) => {
               const name = DAY_NAMES[row.weekday]!;
@@ -221,7 +300,7 @@ export function PickupHoursCard({ className }: { className?: string }) {
             day&apos;s hours to every day.
           </p>
 
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 pt-2">
             <p className="text-sm font-semibold text-navy-900">Days off</p>
             <p className="text-xs text-text-secondary">
               No pickups or returns on these dates, whatever the weekly hours say. An item already
@@ -268,32 +347,17 @@ export function PickupHoursCard({ className }: { className?: string }) {
               </Button>
             </div>
           </div>
-        </>
-      )}
 
-      {hours.error ? <p className="text-sm text-danger-text">{friendlyErrorMessage(hours.error)}</p> : null}
-      {error ? (
-        <p role="alert" className="text-sm text-danger-text">
-          {error}
-        </p>
-      ) : null}
-      <div className="flex flex-wrap items-center gap-3">
-        <Button
-          disabled={hours.isPending}
-          loading={save.isPending}
-          loadingLabel="Saving…"
-          onClick={() => {
-            const problem = rowsProblem(rows);
-            if (problem) return setError(problem);
-            save.mutate();
-          }}
-        >
-          Save pickup hours
-        </Button>
-        {hours.data?.summary ? (
-          <p className="text-sm text-text-secondary">Now: {hours.data.summary}</p>
-        ) : null}
-      </div>
-    </Card>
+          {hours.error ? (
+            <p className="text-sm text-danger-text">{friendlyErrorMessage(hours.error)}</p>
+          ) : null}
+          {error ? (
+            <p role="alert" className="text-sm text-danger-text">
+              {error}
+            </p>
+          ) : null}
+        </div>
+      </Dialog>
+    </>
   );
 }
