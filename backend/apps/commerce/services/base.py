@@ -12,6 +12,7 @@ from datetime import date
 from uuid import UUID
 
 from django.conf import settings
+from django.db.models import Max
 from django.utils import timezone
 
 from apps.commerce.models import (
@@ -98,6 +99,10 @@ def _document_sequence(*, kind: str, issued_on: date) -> tuple[str, str, int]:
         kind=kind,
         series=series,
     )
+    # Never hand out a number a document in this series already carries, even if the counter row
+    # fell behind (for example after the counter table was reset but the documents were kept).
+    max_existing = TaxDocument.objects.filter(series=series).aggregate(m=Max("sequence"))["m"] or 0
+    sequence.last_sequence = max(sequence.last_sequence, max_existing)
     sequence.last_sequence += 1
     sequence.save(update_fields=("last_sequence",))
     return financial_year, series, sequence.last_sequence
