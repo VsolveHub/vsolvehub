@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useHydrated } from "@vsolve/ui";
-import { useCurrentSession, hasRole } from "@vsolve/query";
+import { useCurrentSession } from "@vsolve/query";
 import { getApiClient } from "@/lib/api/browser";
-import { PARTNER_ROLE } from "@/features/session/partner-shell";
 import { usePartnerProfile } from "@/features/profile/queries";
+import { usePartnerApplication } from "@/features/application/queries";
 
 /** Logged-out CTA — also the SSR/first-paint fallback so hydration matches. */
 function GuestMarketingNavCta() {
@@ -33,13 +33,14 @@ export function MarketingNavCta() {
 
   const session = useCurrentSession(getApiClient(), { enabled: hydrated });
   const profile = usePartnerProfile();
+  const application = usePartnerApplication({ enabled: hydrated && Boolean(session.data?.user) });
 
   if (!hydrated || session.isPending) {
     return <GuestMarketingNavCta />;
   }
 
   const isApprovedPartner =
-    Boolean(session.data?.user && hasRole(session.data.user, PARTNER_ROLE)) ||
+    application.data?.status === "APPROVED" ||
     profile.data?.approval_status === "APPROVED";
 
   const isLoggedIn = Boolean(session.data?.user);

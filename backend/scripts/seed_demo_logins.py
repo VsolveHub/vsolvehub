@@ -312,92 +312,37 @@ def main():
         )
         print(f"✓ M2 Partner {m2_phone}: SERVICES -> APPROVED")
 
-    # 6. Lift suspension and approve ALL Partner Applications in the database
-    print("Unblocking and approving ALL partner applications across the entire database...")
-    all_apps = PartnerApplication.objects.select_related("partner__user").all()
-    unblocked_count = 0
-    for app in all_apps:
-        partner = app.partner
-        u = partner.user
+    # 6. Lift suspension and approve only Trade / Technician demo partners (+91701000xxxx)
+    trade_partners = PartnerProfile.objects.filter(user__phone_number__startswith="+91701000")
+    for tp in trade_partners:
+        setup_partner(
+            phone=tp.user.phone_number,
+            display_name=tp.display_name or "Technician Pro",
+            track=PartnerApplication.Track.SERVICES,
+            role=role,
+            areas=areas,
+            skills=skills,
+            consents=consents,
+            variants=variants,
+        )
+    print(
+        f"✓ Approved and unblocked {trade_partners.count()} Technician demo partners"
+        " (+91701000xxxx)"
+    )
 
-        # Ensure user role
-        UserRole.objects.update_or_create(user=u, role=role, defaults={"revoked_at": None})
-
-        # Ensure profile details
-        if not partner.display_name:
-            partner.display_name = f"Partner {u.phone_number[-4:]}"
-        if not partner.experience_years:
-            partner.experience_years = 5
-        partner.save(update_fields=["display_name", "experience_years"])
-
-        # Status APPROVED
-        app.status = PartnerApplication.Status.APPROVED
-        app.submitted_at = app.submitted_at or now
-        app.reviewed_at = app.reviewed_at or now
-        app.save(update_fields=["status", "submitted_at", "reviewed_at"])
-
-        # Ensure documents approved
-        for kind in ["GOVERNMENT_ID", "ADDRESS_PROOF"]:
-            existing_docs = PartnerDocument.objects.filter(application=app, kind=kind)
-            if existing_docs.exists():
-                existing_docs.update(
-                    status=PartnerDocument.Status.APPROVED,
-                    scan_status=PartnerDocument.ScanStatus.CLEAN,
-                    scanned_at=now,
-                    reviewed_at=now,
-                    review_reason="Seeded verified demo document",
-                )
-            else:
-                PartnerDocument.objects.create(
-                    application=app,
-                    kind=kind,
-                    version=1,
-                    object_key=f"seed/verified/{kind.lower()}.txt",
-                    content_type="text/plain",
-                    size_bytes=1,
-                    sha256="0" * 64,
-                    scan_status=PartnerDocument.ScanStatus.CLEAN,
-                    scanned_at=now,
-                    status=PartnerDocument.Status.APPROVED,
-                    reviewed_at=now,
-                    review_reason="Seeded verified demo document",
-                )
-
-        # Ensure consents
-        for doc in consents:
-            PartnerConsent.objects.update_or_create(
-                partner=partner,
-                purpose=doc.purpose,
-                document_version=doc.document_version,
-                defaults={"document": doc, "withdrawn_at": None},
-            )
-
-        # Ensure skills & areas
-        for skill in skills[:3]:
-            PartnerSkill.objects.update_or_create(partner=partner, skill=skill, defaults={"is_active": True})
-        for area in areas[:3]:
-            PartnerServiceArea.objects.update_or_create(partner=partner, service_area=area, defaults={"is_active": True})
-            for weekday in range(7):
-                PartnerAvailabilityRule.objects.update_or_create(
-                    partner=partner,
-                    service_area=area,
-                    weekday=weekday,
-                    starts_at=DAY_STARTS_AT,
-                    defaults={"ends_at": DAY_ENDS_AT, "ends_next_day": False, "is_active": True},
-                )
-
-        unblocked_count += 1
-
-    print(f"✓ All {unblocked_count} partner applications are now APPROVED with complete verified documents & skills.")
-
-    # 7. Unblock all existing PartnerCapabilities (set status = APPROVED, clear suspension)
+    # 7. Unblock demo PartnerCapabilities for demo partners
     cap_updated = PartnerCapability.objects.filter(
-        status__in=[PartnerCapability.Status.SUSPENDED, PartnerCapability.Status.UNDER_REVIEW, PartnerCapability.Status.REQUESTED]
+        partner__user__phone_number__startswith="+91703000",
+        status__in=[
+            PartnerCapability.Status.SUSPENDED,
+            PartnerCapability.Status.UNDER_REVIEW,
+            PartnerCapability.Status.REQUESTED,
+        ],
     ).update(status=PartnerCapability.Status.APPROVED, suspension_reason_code="")
-    print(f"✓ Unblocked and approved {cap_updated} partner capabilities.")
+    print(f"✓ Unblocked and approved {cap_updated} demo partner capabilities.")
 
     # 8. Customers with funded wallets & V Coins
-    print("Configuring customer profiles and wallets...")
+    print("Configuring demo customer profiles and wallets...")
     customers = [
         ("+919900000055", "Demo Rental Customer"),
         ("+919900000033", "Demo Stay Customer"),
@@ -407,11 +352,10 @@ def main():
     ]
     for c_phone, c_name in customers:
         setup_customer(c_phone, c_name, wallet_balance_inr=5000, coins=500)
-
-    # Also fund wallets and ensure CustomerProfile for ALL users in DB so any login has ₹5,000 wallet & coins
-    for u in User.objects.all():
-        setup_customer(u.phone_number, u.full_name or "Vsolve User", wallet_balance_inr=5000, coins=500)
-    print(f"✓ All {User.objects.count()} users now have active Customer profiles, ₹5,000 wallet balance, and V Coins.")
+        print(
+            f"✓ Customer {c_phone}: Profile active, ₹5,000 Wallet balance, 500 V Coins,"
+            " Referral ready"
+        )
 
     # 9. Operations Admin
     admin_user, _ = User.objects.get_or_create(
@@ -421,7 +365,9 @@ def main():
     admin_user.is_staff = True
     admin_user.is_superuser = True
     admin_user.save()
-    ops_role, _ = Role.objects.get_or_create(code="operations", defaults={"name": "Operations", "is_system": True})
+    ops_role, _ = Role.objects.get_or_create(
+        code="operations", defaults={"name": "Operations", "is_system": True}
+    )
     UserRole.objects.update_or_create(user=admin_user, role=ops_role, defaults={"revoked_at": None})
     print("✓ Operations Admin +918019013032: Staff, Superuser, Operations Role active")
 

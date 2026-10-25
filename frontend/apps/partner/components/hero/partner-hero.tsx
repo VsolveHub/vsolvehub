@@ -8,6 +8,7 @@ import Link from "next/link";
 
 import { useCurrentSession } from "@vsolve/query";
 import { getApiClient } from "@/lib/api/browser";
+import { usePartnerApplication } from "@/features/application/queries";
 import { inr } from "@/lib/format";
 
 /**
@@ -73,6 +74,8 @@ export function PartnerHero() {
   const router = useRouter();
   const session = useCurrentSession(getApiClient());
   const activeUser = session.data?.user ?? null;
+  const application = usePartnerApplication({ enabled: Boolean(activeUser) });
+  const isApproved = application.data?.status === "APPROVED";
   const activePhoneDigits = activeUser?.phone_number
     ? activeUser.phone_number.replace(/\D/g, "").slice(-10)
     : null;
@@ -162,28 +165,26 @@ export function PartnerHero() {
             </p>
           </div>
 
-          {/* Sends people to the real signup rather than authenticating here.
-              Login is one screen, inside `/apply`, where the code, the resend
-              cooldown and the session all live. */}
+          {/* Sends people to the real onboarding flow rather than authenticating here. */}
           <form
             onSubmit={(event) => {
               event.preventDefault();
               const rawPhone = capNationalPhoneDigits(phone);
               if (rawPhone.length >= 10) {
-                // If already signed in with this exact phone, go directly to their dashboard
+                // If already signed in with this exact phone: approved -> /home, unapproved -> /apply
                 if (activePhoneDigits && activePhoneDigits === rawPhone) {
-                  router.push("/home");
+                  router.push(isApproved ? "/home" : "/apply");
                   return;
                 }
-                // If signed in with a DIFFERENT number, take to login to switch accounts
+                // If signed in with a DIFFERENT number, take to login to switch accounts with destination /apply
                 if (activePhoneDigits && activePhoneDigits !== rawPhone) {
-                  router.push(`/login?phone=${encodeURIComponent(rawPhone)}&switch=true`);
+                  router.push(`/login?phone=${encodeURIComponent(rawPhone)}&next=${encodeURIComponent("/apply")}&switch=true`);
                   return;
                 }
-                // If not signed in, take to login to verify OTP and prefill the phone
-                router.push(`/login?phone=${encodeURIComponent(rawPhone)}`);
+                // If not signed in, take to login with next=/apply so OTP lands on application
+                router.push(`/login?phone=${encodeURIComponent(rawPhone)}&next=${encodeURIComponent("/apply")}`);
               } else {
-                router.push(activePhoneDigits ? "/home" : "/login");
+                router.push(activeUser ? (isApproved ? "/home" : "/apply") : "/apply");
               }
             }}
             className="vsh-hero-slideup flex w-full max-w-[460px] flex-col gap-2"
