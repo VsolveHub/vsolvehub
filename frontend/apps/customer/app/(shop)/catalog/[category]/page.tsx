@@ -17,12 +17,14 @@ type PageProps = {
 /**
  * One trade, opened directly on the service list (first tile when none is selected).
  * Career/Jobs (A10) redirects to the listing surface — not area-priced bookables.
+ *
+ * No `generateStaticParams`, on purpose. Even an empty one marks the route static (ISR), and
+ * this page reads `?tile=` from `searchParams`, which only exists per request: a production
+ * build then fails every category with `DYNAMIC_SERVER_USAGE` (a 500) while `next dev`, which
+ * renders everything dynamically, never shows it. The catalog reads stay cached for
+ * `revalidate` seconds through the fetch cache, so rendering per request costs no API calls.
  */
 export const revalidate = 300;
-
-export function generateStaticParams(): { category: string }[] {
-  return [];
-}
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { category: slug } = await params;
