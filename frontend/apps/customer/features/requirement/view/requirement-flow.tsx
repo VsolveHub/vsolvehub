@@ -1,5 +1,6 @@
 "use client";
 
+import { ApiRequestError } from "@vsolve/api-client";
 import { describeError, isLifecycleUnsupported } from "@vsolve/query";
 
 import { BROWSE_HREF, requestHref } from "@/lib/routes";
@@ -460,17 +461,34 @@ function FlowBody({
         const lookup = await requestsQuery.refetch();
         targetId = existingDraftId(lookup.data ?? [], service.slug);
       }
-      const draft =
-        targetId === null
-          ? await createRequirement.mutateAsync({
-              variantId: variant.id,
-              answers,
-              language: "en-IN",
-            })
-          : await saveRequirement.mutateAsync({
-              requirementId: targetId,
-              answers,
-            });
+      let draft;
+      if (targetId === null) {
+        draft = await createRequirement.mutateAsync({
+          variantId: variant.id,
+          answers,
+          language: "en-IN",
+        });
+      } else {
+        try {
+          draft = await saveRequirement.mutateAsync({
+            requirementId: targetId,
+            answers,
+          });
+        } catch (saveError) {
+          // Only a remembered draft that is gone (404) or already sent to vendors (409) is
+          // replaced. A bad answer or a network failure must reach the customer instead of
+          // quietly opening a second request.
+          const draftUnusable =
+            saveError instanceof ApiRequestError && (saveError.status === 404 || saveError.status === 409);
+          if (!draftUnusable) throw saveError;
+          clearPersistedRequirement(service.slug);
+          draft = await createRequirement.mutateAsync({
+            variantId: variant.id,
+            answers,
+            language: "en-IN",
+          });
+        }
+      }
       const verdict = toLifecycleVerdict(draft);
       dispatch({
         type: "APPLY_VERDICT",
