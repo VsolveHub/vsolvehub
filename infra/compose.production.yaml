@@ -1,0 +1,106 @@
+# Production backend for one VPS. Deploy with scripts/deploy-backend.sh, or by hand:
+#   docker compose -f infra/compose.production.yaml --env-file infra/.env.production <command>
+#
+# The backend image is built from backend/Dockerfile and tagged with the git short SHA
+# (APP_VERSION), and also as `current`, so commands run without APP_VERSION still use the
+# deployed image. Only `api` builds it; worker, beat and migrate reuse it and never pull.
+# Only Caddy publishes ports. Postgres and Redis are reachable only on the compose network.
+
+name: vsolvehub
+
+x-backend: &backend
+  image: vsolvehub-backend:${APP_VERSION:-current}
+  pull_policy: never
+  env_file: .env.production
+  restart: unless-stopped
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: vsolve
+      POSTGRES_USER: vsolve
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in infra/.env.production}
+    command: ["postgres", "-c", "max_connections=200"]
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vsolve -d vsolve"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  # One-off: docker compose ... run --rm migrate
+  migrate:
+    <<: *backend
+    profiles: ["release"]
+    command: ["python", "manage.py", "migrate", "--noinput"]
+
+  api:
+    <<: *backend
+    build:
+      context: ../backend
+    command: ["gunicorn", "config.wsgi:application"]
+    healthcheck:
+      # Host and X-Forwarded-Proto mimic Caddy: production settings redirect plain HTTP to
+      # HTTPS and only answer for DJANGO_ALLOWED_HOSTS.
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request as u;
+          u.urlopen(u.Request('http://127.0.0.1:8000/api/v1/health/ready/',
+          headers={'Host': 'api.vsolvehub.com', 'X-Forwarded-Proto': 'https'}), timeout=5)
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  worker:
+    <<: *backend
+    command: ["celery", "-A", "config", "worker", "--loglevel=info", "--concurrency=4"]
+
+  # Exactly one beat instance, ever: it schedules the 46 periodic jobs.
+  beat:
+    <<: *backend
+    command: ["celery", "-A", "config", "beat", "--loglevel=info"]
+
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
+  caddy_data:
+  caddy_config:
