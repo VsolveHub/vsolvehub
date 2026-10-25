@@ -52,7 +52,7 @@ from apps.partners.permissions import (
 )
 from apps.pricing.selectors import current_cancellation_policy
 from common.errors.serializers import ApiErrorSerializer
-from common.pagination import StrictCursorPagination
+from common.pagination import OperationsNewestFirstPagination
 from common.schema import IDEMPOTENCY_KEY_HEADER
 
 RAZORPAY_SIGNATURE_HEADER = OpenApiParameter(
@@ -414,8 +414,8 @@ class RefundDetailView(APIView):
         return Response(RefundSerializer(refund).data)
 
 
-class OperationsRefundCursorPagination(StrictCursorPagination):
-    ordering = ("-created_at", "id")
+class OperationsRefundCursorPagination(OperationsNewestFirstPagination):
+    pass
 
 
 class OperationsRefundListView(APIView):

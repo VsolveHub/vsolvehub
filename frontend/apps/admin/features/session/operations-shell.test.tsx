@@ -126,39 +126,41 @@ describe("the workspaces", () => {
     const hrefs = Array.from(nav.querySelectorAll("a")).map((link) => link.getAttribute("href"));
 
     expect(hrefs).toEqual([
-      // Work
+      // Today
       "/",
-      "/operations/requests",
       "/operations/cases",
-      "/operations/listings",
-      "/operations/work-items",
-      "/operations/rentals",
-      "/operations/stays",
+      // Home services
+      "/operations/visits",
       "/operations/dispatch",
       "/operations/manual-offers",
       "/operations/assisted-checkouts",
-      // People
-      "/operations/partners",
-      "/operations/partners/import",
-      "/operations/crew-documents",
-      "/operations/feedback",
-      "/reviews",
-      "/operations/partner-availability",
-      // Money
-      "/operations/rate-cards",
-      "/operations/vendor-plans",
-      "/operations/payouts",
-      "/operations/loyalty",
-      "/operations/reports",
-      "/finance",
-      // Dashboards
-      "/operations/dashboards/overview",
-      "/operations/dashboards/categories",
-      "/operations/dashboards/customer",
-      "/operations/dashboards/vendor",
-      "/operations/dashboards/booking",
-      // System
       "/operations/compatibility-rules",
+      // Workforce & projects
+      "/operations/requests",
+      "/operations/work-items",
+      "/operations/rate-cards",
+      // Marketplace
+      "/operations/rentals",
+      "/operations/stays",
+      "/operations/listings",
+      // Partners
+      "/reviews",
+      "/operations/partners",
+      "/operations/crew-documents",
+      "/operations/partner-availability",
+      "/operations/vendor-plans",
+      "/operations/partners/import",
+      // Customers
+      "/operations/loyalty",
+      "/operations/feedback",
+      // Money
+      "/finance",
+      "/operations/payouts",
+      "/operations/commercial-policy",
+      "/operations/reports",
+      // Insights
+      "/operations/dashboards/overview",
+      // System
       "/operations/kill-switches",
       "/operations/profile",
     ]);

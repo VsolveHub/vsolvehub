@@ -72,7 +72,11 @@ export default defineConfig({
           // to. Each app keeps its own file because the import is what augments
           // the `Assertion` type inside that app's `tsconfig` — a shared setup
           // would run fine and still fail `typecheck` in the app without one.
-          setupFiles: ["apps/customer/vitest.setup.ts", "apps/partner/vitest.setup.ts"],
+          setupFiles: [
+            "apps/customer/vitest.setup.ts",
+            "apps/partner/vitest.setup.ts",
+            "apps/admin/vitest.setup.ts",
+          ],
           include: ["{apps,packages}/**/*.{test,spec}.tsx"],
           exclude: ["**/node_modules/**", "**/.next/**"],
         },
