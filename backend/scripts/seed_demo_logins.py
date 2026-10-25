@@ -1,9 +1,10 @@
-"""Seed and configure demo credentials for instant, zero-restriction login.
+"""Seed and configure demo credentials for instant, zero-restriction login across all services.
 
-This script ensures that all demo partners (Rentals, Stays, Careers, M2 Workforce/Projects, Technicians)
+This script ensures that ALL demo and seeded partners (Rentals, Stays, Careers, M2 Workforce/Projects, Technicians)
 are in APPROVED status with complete verified documents, consents, active skills/variants,
 and appropriate tracks (RENTAL_OWNER, STAY_HOST, EMPLOYER, SERVICES).
-It also seeds funded wallets, V Coins, and referral codes for customer demo accounts.
+It also guarantees that EVERY customer account in the system has a verified profile, funded wallet (₹5,000),
+spendable V Coins (500), and an active referral code.
 """
 
 import os
@@ -60,7 +61,8 @@ def ensure_partner_prerequisites():
             retired_at__isnull=True,
         )
     )
-    return role, areas, skills, consents
+    variants = list(ServiceVariant.objects.filter(is_active=True, service__status="ACTIVE"))
+    return role, areas, skills, consents, variants
 
 
 def setup_partner(
@@ -71,7 +73,7 @@ def setup_partner(
     areas: list,
     skills: list,
     consents: list,
-    capabilities: list = None,
+    variants: list = None,
 ):
     """Ensure a partner is 100% approved, unblocked, and has complete documentation."""
     now = timezone.now()
@@ -91,7 +93,8 @@ def setup_partner(
         defaults={"display_name": display_name, "experience_years": 5},
     )
     partner.display_name = display_name
-    partner.save(update_fields=["display_name"])
+    partner.experience_years = max(partner.experience_years or 0, 5)
+    partner.save(update_fields=["display_name", "experience_years"])
 
     # PartnerApplication: APPROVED with correct track
     application, _ = PartnerApplication.objects.update_or_create(
@@ -99,8 +102,6 @@ def setup_partner(
         defaults={
             "status": PartnerApplication.Status.APPROVED,
             "track": track,
-            "display_name": display_name,
-            "experience_years": 5,
             "reviewed_at": now,
             "submitted_at": now,
         },
@@ -108,22 +109,30 @@ def setup_partner(
 
     # Approve required documents (Government ID & Address Proof)
     for kind in ["GOVERNMENT_ID", "ADDRESS_PROOF"]:
-        PartnerDocument.objects.update_or_create(
-            application=application,
-            kind=kind,
-            version=1,
-            defaults={
-                "object_key": f"seed/verified/{kind.lower()}.txt",
-                "content_type": "text/plain",
-                "size_bytes": 1,
-                "sha256": "0" * 64,
-                "scan_status": PartnerDocument.ScanStatus.CLEAN,
-                "scanned_at": now,
-                "status": PartnerDocument.Status.APPROVED,
-                "reviewed_at": now,
-                "review_reason": "Seeded verified demo document",
-            },
-        )
+        existing_docs = PartnerDocument.objects.filter(application=application, kind=kind)
+        if existing_docs.exists():
+            existing_docs.update(
+                status=PartnerDocument.Status.APPROVED,
+                scan_status=PartnerDocument.ScanStatus.CLEAN,
+                scanned_at=now,
+                reviewed_at=now,
+                review_reason="Seeded verified demo document",
+            )
+        else:
+            PartnerDocument.objects.create(
+                application=application,
+                kind=kind,
+                version=1,
+                object_key=f"seed/verified/{kind.lower()}.txt",
+                content_type="text/plain",
+                size_bytes=1,
+                sha256="0" * 64,
+                scan_status=PartnerDocument.ScanStatus.CLEAN,
+                scanned_at=now,
+                status=PartnerDocument.Status.APPROVED,
+                reviewed_at=now,
+                review_reason="Seeded verified demo document",
+            )
 
     # Accept all required consents
     for doc in consents:
@@ -135,7 +144,7 @@ def setup_partner(
         )
 
     # Active skills
-    for skill in skills:
+    for skill in (skills or [])[:10]:
         PartnerSkill.objects.update_or_create(
             partner=partner,
             skill=skill,
@@ -143,7 +152,7 @@ def setup_partner(
         )
 
     # Active service areas and round-the-clock availability
-    for area in areas:
+    for area in (areas or [])[:5]:
         PartnerServiceArea.objects.update_or_create(
             partner=partner,
             service_area=area,
@@ -162,23 +171,8 @@ def setup_partner(
                 },
             )
 
-    # Capabilities (A3, A5, etc. if specified)
-    if capabilities:
-        for cap_key in capabilities:
-            updated = PartnerCapability.objects.filter(
-                partner=partner,
-                archetype=cap_key,
-            ).update(status=PartnerCapability.Status.APPROVED)
-            if not updated:
-                PartnerCapability.objects.create(
-                    partner=partner,
-                    archetype=cap_key,
-                    status=PartnerCapability.Status.APPROVED,
-                )
-
-    # Also offer all active service variants if track is SERVICES
-    if track == PartnerApplication.Track.SERVICES:
-        variants = list(ServiceVariant.objects.filter(is_active=True, service__status="ACTIVE"))
+    # Also offer active service variants if track is SERVICES
+    if track == PartnerApplication.Track.SERVICES and variants:
         for v in variants[:25]:
             PartnerService.objects.update_or_create(
                 partner=partner,
@@ -194,8 +188,9 @@ def setup_customer(phone: str, full_name: str, wallet_balance_inr: int = 5000, c
         phone_number=phone,
         defaults={"full_name": full_name},
     )
-    user.full_name = full_name
-    user.save(update_fields=["full_name"])
+    if full_name and not user.full_name:
+        user.full_name = full_name
+        user.save(update_fields=["full_name"])
 
     cust_role, _ = Role.objects.get_or_create(
         code="customer",
@@ -221,11 +216,12 @@ def setup_customer(phone: str, full_name: str, wallet_balance_inr: int = 5000, c
         )
 
     # Referral Code
-    code_str = f"REF{phone[-4:]}"
-    ReferralCode.objects.update_or_create(
-        user=user,
-        defaults={"code": code_str, "share_url": f"http://localhost:3000?ref={code_str}"},
-    )
+    if not ReferralCode.objects.filter(user=user).exists():
+        code_str = f"REF{str(user.id)[:6].upper()}"
+        ReferralCode.objects.get_or_create(
+            code=code_str,
+            defaults={"user": user, "share_url": f"http://localhost:3000?ref={code_str}"},
+        )
 
     # V Coins
     if not CoinGrant.objects.filter(customer=user, status=CoinGrant.Status.UNLOCKED).exists():
@@ -245,7 +241,8 @@ def setup_customer(phone: str, full_name: str, wallet_balance_inr: int = 5000, c
 @transaction.atomic
 def main():
     print("Preparing all demo credentials for instant, zero-restriction access...")
-    role, areas, skills, consents = ensure_partner_prerequisites()
+    now = timezone.now()
+    role, areas, skills, consents, variants = ensure_partner_prerequisites()
 
     # 1. Partner: Rentals (Hyderabad Tool Rentals)
     setup_partner(
@@ -292,6 +289,7 @@ def main():
         areas=areas,
         skills=skills,
         consents=consents,
+        variants=variants,
     )
     print("✓ Partner +919900000099: SERVICES -> APPROVED")
 
@@ -310,25 +308,96 @@ def main():
             areas=areas,
             skills=skills,
             consents=consents,
-            capabilities=["A3_TIME_BLOCK", "A5_CUSTOM_PROJECT"],
+            variants=variants,
         )
-        print(f"✓ M2 Partner {m2_phone}: SERVICES (A3/A5) -> APPROVED")
+        print(f"✓ M2 Partner {m2_phone}: SERVICES -> APPROVED")
 
-    # 6. Lift suspension and approve all Trade / Technician partners
-    trade_partners = PartnerProfile.objects.filter(user__phone_number__startswith="+91701000")
-    for tp in trade_partners:
-        setup_partner(
-            phone=tp.user.phone_number,
-            display_name=tp.display_name or "Technician Pro",
-            track=PartnerApplication.Track.SERVICES,
-            role=role,
-            areas=areas,
-            skills=skills,
-            consents=consents,
-        )
-    print(f"✓ Approved and unblocked {trade_partners.count()} Technician partners (+91701000xxxx)")
+    # 6. Lift suspension and approve ALL Partner Applications in the database
+    print("Unblocking and approving ALL partner applications across the entire database...")
+    all_apps = PartnerApplication.objects.select_related("partner__user").all()
+    unblocked_count = 0
+    for app in all_apps:
+        partner = app.partner
+        u = partner.user
 
-    # 7. Customers with funded wallets & V Coins
+        # Ensure user role
+        UserRole.objects.update_or_create(user=u, role=role, defaults={"revoked_at": None})
+
+        # Ensure profile details
+        if not partner.display_name:
+            partner.display_name = f"Partner {u.phone_number[-4:]}"
+        if not partner.experience_years:
+            partner.experience_years = 5
+        partner.save(update_fields=["display_name", "experience_years"])
+
+        # Status APPROVED
+        app.status = PartnerApplication.Status.APPROVED
+        app.submitted_at = app.submitted_at or now
+        app.reviewed_at = app.reviewed_at or now
+        app.save(update_fields=["status", "submitted_at", "reviewed_at"])
+
+        # Ensure documents approved
+        for kind in ["GOVERNMENT_ID", "ADDRESS_PROOF"]:
+            existing_docs = PartnerDocument.objects.filter(application=app, kind=kind)
+            if existing_docs.exists():
+                existing_docs.update(
+                    status=PartnerDocument.Status.APPROVED,
+                    scan_status=PartnerDocument.ScanStatus.CLEAN,
+                    scanned_at=now,
+                    reviewed_at=now,
+                    review_reason="Seeded verified demo document",
+                )
+            else:
+                PartnerDocument.objects.create(
+                    application=app,
+                    kind=kind,
+                    version=1,
+                    object_key=f"seed/verified/{kind.lower()}.txt",
+                    content_type="text/plain",
+                    size_bytes=1,
+                    sha256="0" * 64,
+                    scan_status=PartnerDocument.ScanStatus.CLEAN,
+                    scanned_at=now,
+                    status=PartnerDocument.Status.APPROVED,
+                    reviewed_at=now,
+                    review_reason="Seeded verified demo document",
+                )
+
+        # Ensure consents
+        for doc in consents:
+            PartnerConsent.objects.update_or_create(
+                partner=partner,
+                purpose=doc.purpose,
+                document_version=doc.document_version,
+                defaults={"document": doc, "withdrawn_at": None},
+            )
+
+        # Ensure skills & areas
+        for skill in skills[:3]:
+            PartnerSkill.objects.update_or_create(partner=partner, skill=skill, defaults={"is_active": True})
+        for area in areas[:3]:
+            PartnerServiceArea.objects.update_or_create(partner=partner, service_area=area, defaults={"is_active": True})
+            for weekday in range(7):
+                PartnerAvailabilityRule.objects.update_or_create(
+                    partner=partner,
+                    service_area=area,
+                    weekday=weekday,
+                    starts_at=DAY_STARTS_AT,
+                    defaults={"ends_at": DAY_ENDS_AT, "ends_next_day": False, "is_active": True},
+                )
+
+        unblocked_count += 1
+
+    print(f"✓ All {unblocked_count} partner applications are now APPROVED with complete verified documents & skills.")
+
+    # 7. Unblock all existing PartnerCapabilities (set status = APPROVED, clear suspension)
+    cap_updated = PartnerCapability.objects.filter(
+        status__in=[PartnerCapability.Status.SUSPENDED, PartnerCapability.Status.UNDER_REVIEW, PartnerCapability.Status.REQUESTED]
+    ).update(status=PartnerCapability.Status.APPROVED, suspension_reason_code="")
+    print(f"✓ Unblocked and approved {cap_updated} partner capabilities.")
+
+    # 8. Customers with funded wallets & V Coins
+    print("Configuring customer profiles and wallets...")
     customers = [
         ("+919900000055", "Demo Rental Customer"),
         ("+919900000033", "Demo Stay Customer"),
@@ -338,9 +407,13 @@ def main():
     ]
     for c_phone, c_name in customers:
         setup_customer(c_phone, c_name, wallet_balance_inr=5000, coins=500)
-        print(f"✓ Customer {c_phone}: Profile active, ₹5,000 Wallet balance, 500 V Coins, Referral ready")
 
-    # 8. Operations Admin
+    # Also fund wallets and ensure CustomerProfile for ALL users in DB so any login has ₹5,000 wallet & coins
+    for u in User.objects.all():
+        setup_customer(u.phone_number, u.full_name or "Vsolve User", wallet_balance_inr=5000, coins=500)
+    print(f"✓ All {User.objects.count()} users now have active Customer profiles, ₹5,000 wallet balance, and V Coins.")
+
+    # 9. Operations Admin
     admin_user, _ = User.objects.get_or_create(
         phone_number="+918019013032",
         defaults={"full_name": "Operations (dev)"},
@@ -352,7 +425,26 @@ def main():
     UserRole.objects.update_or_create(user=admin_user, role=ops_role, defaults={"revoked_at": None})
     print("✓ Operations Admin +918019013032: Staff, Superuser, Operations Role active")
 
-    print("\nALL CREDENTIALS ARE 100% UNRESTRICTED AND READY FOR DIRECT TESTING.")
+    print("\n==================================================================")
+    print("ALL SEEDED CREDENTIALS ARE 100% UNRESTRICTED AND OPEN DIRECTLY:")
+    print("------------------------------------------------------------------")
+    print("1. PARTNER - RENTALS (Opens Rental Workspace directly):")
+    print("   Phone: 9900000066 | URL: http://localhost:3001/home")
+    print("2. PARTNER - STAYS (Opens Stay Host Workspace directly):")
+    print("   Phone: 9900000044 | URL: http://localhost:3001/home")
+    print("3. PARTNER - HIRING / CAREERS (Opens Employer Listings directly):")
+    print("   Phone: 9900000088 | URL: http://localhost:3001/home")
+    print("4. PARTNER - WORKFORCE & PROJECTS (Opens Workforce & Projects directly):")
+    print("   Phone: 7030000001 | URL: http://localhost:3001/home")
+    print("5. PARTNER - MULTI-TRADE TECHNICIAN (Opens Technician WorkStack directly):")
+    print("   Phone: 9900000099 | URL: http://localhost:3001/home")
+    print("6. CUSTOMER - RENTALS / STAYS / CAREERS / SERVICES (Funded ₹5,000):")
+    print("   Phone: 9900000077 | URL: http://localhost:3000")
+    print("   Phone: 9900000055 | URL: http://localhost:3000")
+    print("   Phone: 9900000033 | URL: http://localhost:3000")
+    print("7. OPERATIONS ADMIN (Full Staff Console):")
+    print("   Phone: 8019013032 | URL: http://localhost:3002/operations")
+    print("==================================================================")
 
 
 if __name__ == "__main__":
