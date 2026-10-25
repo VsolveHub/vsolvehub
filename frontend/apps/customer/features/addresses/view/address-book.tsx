@@ -273,6 +273,7 @@ export function AddressBook() {
    * an untouched pin is left alone rather than resent.
    */
   const [repinned, setRepinned] = useState(false);
+  const [formattedAddress, setFormattedAddress] = useState("");
   /** The dialog's two faces: the map, then the fields the pin filled. */
   const [step, setStep] = useState<"pin" | "form">("form");
   const [pendingDelete, setPendingDelete] = useState<Address | null>(null);
@@ -285,6 +286,7 @@ export function AddressBook() {
     setEditing({ mode: "closed" });
     setDraft(EMPTY_DRAFT);
     setPin(null);
+    setFormattedAddress("");
     setRepinned(false);
     setStep("form");
     createAddress.reset();
@@ -300,6 +302,7 @@ export function AddressBook() {
     setEditing({ mode: "create" });
     setDraft({ ...EMPTY_DRAFT, is_default: addresses.length === 0 });
     setPin(null);
+    setFormattedAddress("");
     setRepinned(false);
     setStep("pin");
   }
@@ -312,6 +315,7 @@ export function AddressBook() {
         ? { latitude: address.latitude, longitude: address.longitude }
         : null,
     );
+    setFormattedAddress(formatAddressLine(address));
     setRepinned(false);
     setStep("form");
     updateAddress.reset();
@@ -327,6 +331,7 @@ export function AddressBook() {
   function onPinConfirmed(resolved: ResolvedLocation) {
     setPin({ latitude: resolved.latitude, longitude: resolved.longitude });
     if (editing.mode === "edit") setRepinned(true);
+    setFormattedAddress(resolved.formatted_address || "");
     setDraft((current) => ({
       ...current,
       ...(editing.mode === "create" ? { line1: resolved.line1 } : {}),
@@ -561,6 +566,7 @@ export function AddressBook() {
             hasPin={pin !== null}
             onRepin={() => setStep("pin")}
             showDefaultToggle={addresses.length > 0}
+            formattedAddress={formattedAddress}
           />
         ) : null}
       </Dialog>

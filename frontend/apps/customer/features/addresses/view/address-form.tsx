@@ -1,7 +1,7 @@
 "use client";
 
 import { describeError, isFieldError } from "@vsolve/query";
-import { Badge, Button, Field, Input } from "@vsolve/ui";
+import { Badge, Button, Disclosure, Field, Input } from "@vsolve/ui";
 import { useState, type FormEvent } from "react";
 
 import type { Address, AddressPatch } from "../queries";
@@ -147,6 +147,8 @@ export interface AddressFormProps {
   /** Hidden while this is the only address — the sole address is the default. */
   showDefaultToggle?: boolean;
   formId?: string;
+  /** Geocoder summary text shown when pinned. */
+  formattedAddress?: string;
 }
 
 export function AddressForm({
@@ -162,6 +164,7 @@ export function AddressForm({
   isRepinning = false,
   showDefaultToggle = true,
   formId,
+  formattedAddress,
 }: AddressFormProps) {
   const [touched, setTouched] = useState(false);
   const localErrors = touched ? missingFields(draft) : {};
@@ -181,17 +184,22 @@ export function AddressForm({
   return (
     <form id={formId} onSubmit={handleSubmit} noValidate>
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-line bg-surface-sunken px-3 py-2.5">
-        <div className="flex items-center gap-2">
-          {hasPin ? (
-            <Badge tone="success">Pinned on map</Badge>
-          ) : (
-            <Badge tone="warning">Not pinned</Badge>
-          )}
-          <span className="text-sm text-text-secondary">
-            {hasPin
-              ? "Editing the text below keeps this pin."
-              : "Without a pin we cannot send anyone here."}
-          </span>
+        <div className="flex flex-col gap-0.5">
+          <div className="flex items-center gap-2">
+            {hasPin ? (
+              <Badge tone="success">Pinned on map</Badge>
+            ) : (
+              <Badge tone="warning">Not pinned</Badge>
+            )}
+            <span className="text-sm text-text-secondary">
+              {hasPin
+                ? "Editing the text below keeps this pin."
+                : "Without a pin we cannot send anyone here."}
+            </span>
+          </div>
+          {hasPin && formattedAddress ? (
+            <p className="text-xs text-text">{formattedAddress}</p>
+          ) : null}
         </div>
         {onRepin ? (
           <Button
@@ -241,36 +249,75 @@ export function AddressForm({
             onChange={(event) => set("landmark", event.target.value)}
           />
         </Field>
-        <Field label="Area" required error={fieldErrors.locality}>
+        <Field label="Area" required error={fieldErrors.locality} className="sm:col-span-2">
           <Input
             value={draft.locality}
             maxLength={160}
             onChange={(event) => set("locality", event.target.value)}
           />
         </Field>
-        <Field label="City" required error={fieldErrors.city}>
-          <Input
-            value={draft.city}
-            maxLength={120}
-            onChange={(event) => set("city", event.target.value)}
-          />
-        </Field>
-        <Field label="State" required error={fieldErrors.state}>
-          <Input
-            value={draft.state}
-            maxLength={120}
-            onChange={(event) => set("state", event.target.value)}
-          />
-        </Field>
-        <Field label="PIN code" required error={fieldErrors.postal_code}>
-          <Input
-            value={draft.postal_code}
-            inputMode="numeric"
-            maxLength={12}
-            autoComplete="postal-code"
-            onChange={(event) => set("postal_code", event.target.value)}
-          />
-        </Field>
+        {/* Geocoded fields: collapsed when the pin filled them, expanded for manual entry. */}
+        {hasPin && draft.city && draft.state && draft.postal_code ? (
+          <div className="sm:col-span-2">
+            <Disclosure
+              summary="Edit city, state or PIN code"
+              hint={`${draft.city}, ${draft.state} ${draft.postal_code}`}
+              defaultOpen={Boolean(fieldErrors.city || fieldErrors.state || fieldErrors.postal_code)}
+            >
+              <div className="grid gap-4 pt-1 sm:grid-cols-3">
+                <Field label="City" required error={fieldErrors.city}>
+                  <Input
+                    value={draft.city}
+                    maxLength={120}
+                    onChange={(event) => set("city", event.target.value)}
+                  />
+                </Field>
+                <Field label="State" required error={fieldErrors.state}>
+                  <Input
+                    value={draft.state}
+                    maxLength={120}
+                    onChange={(event) => set("state", event.target.value)}
+                  />
+                </Field>
+                <Field label="PIN code" required error={fieldErrors.postal_code}>
+                  <Input
+                    value={draft.postal_code}
+                    inputMode="numeric"
+                    maxLength={12}
+                    autoComplete="postal-code"
+                    onChange={(event) => set("postal_code", event.target.value)}
+                  />
+                </Field>
+              </div>
+            </Disclosure>
+          </div>
+        ) : (
+          <>
+            <Field label="City" required error={fieldErrors.city}>
+              <Input
+                value={draft.city}
+                maxLength={120}
+                onChange={(event) => set("city", event.target.value)}
+              />
+            </Field>
+            <Field label="State" required error={fieldErrors.state}>
+              <Input
+                value={draft.state}
+                maxLength={120}
+                onChange={(event) => set("state", event.target.value)}
+              />
+            </Field>
+            <Field label="PIN code" required error={fieldErrors.postal_code}>
+              <Input
+                value={draft.postal_code}
+                inputMode="numeric"
+                maxLength={12}
+                autoComplete="postal-code"
+                onChange={(event) => set("postal_code", event.target.value)}
+              />
+            </Field>
+          </>
+        )}
       </div>
 
       {showDefaultToggle ? (

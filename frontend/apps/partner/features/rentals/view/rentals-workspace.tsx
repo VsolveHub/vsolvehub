@@ -6,6 +6,7 @@ import {
   Badge,
   Button,
   Card,
+  Disclosure,
   EmptyState,
   Field,
   Input,
@@ -53,8 +54,10 @@ type PickupAddressForm = {
   city: string;
   pincode: string;
   pin: { latitude: string; longitude: string } | null;
+  /** The one-line summary from the geocoder, shown when a pin exists. */
+  formattedAddress: string;
 };
-const EMPTY_ADDRESS: PickupAddressForm = { line: "", area: "", city: "", pincode: "", pin: null };
+const EMPTY_ADDRESS: PickupAddressForm = { line: "", area: "", city: "", pincode: "", pin: null, formattedAddress: "" };
 const PINCODE = /^[1-9][0-9]{5}$/;
 
 function schemaPropertyMap(
@@ -145,7 +148,7 @@ export function PartnerRentalsWorkspace() {
   useEffect(() => {
     let cancelled = false;
     if (latest) {
-      const fromLatest = {
+      const fromLatest: PickupAddressForm = {
         line: latest.pickup_address_line,
         area: latest.pickup_area,
         city: latest.pickup_city,
@@ -154,6 +157,9 @@ export function PartnerRentalsWorkspace() {
           latest.pickup_latitude && latest.pickup_longitude
             ? { latitude: latest.pickup_latitude, longitude: latest.pickup_longitude }
             : null,
+        formattedAddress: [latest.pickup_area, latest.pickup_city, latest.pickup_pincode]
+          .filter(Boolean)
+          .join(", "),
       };
       setDefaultAddress(fromLatest);
       setAddress((current) => (current.line.trim() ? current : fromLatest));
@@ -593,48 +599,96 @@ export function PartnerRentalsWorkspace() {
                     city: picked.city || current.city,
                     pincode: picked.postal_code.replace(/\D/g, "").slice(0, 6) || current.pincode,
                     pin: { latitude: picked.latitude, longitude: picked.longitude },
+                    formattedAddress: picked.formatted_address || current.formattedAddress,
                   }))
                 }
               />
             </div>
-            <Field label="Address" required>
+            {/* After a pin: show the geocoded address as a read-only summary.
+                The partner only needs to type the shop/building — the rest is from Google. */}
+            {address.pin && address.formattedAddress ? (
+              <div className="flex items-start gap-2 rounded-control border border-success-line bg-success-surface px-3 py-2.5">
+                <MapPin className="mt-0.5 size-4 shrink-0 text-success-text" aria-hidden />
+                <p className="text-sm font-medium text-text">{address.formattedAddress}</p>
+              </div>
+            ) : null}
+            <Field label="Shop / building, street" required>
               <Input
                 id="rental-pickup-line"
                 value={address.line}
                 maxLength={240}
                 onChange={(e) => setAddress((a) => ({ ...a, line: e.target.value }))}
-                placeholder="Shop / building, street"
+                placeholder="e.g. Vishnu Tools, beside SBI ATM"
               />
             </Field>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <Field label="Area" showOptional={false}>
-                <Input
-                  id="rental-pickup-area"
-                  value={address.area}
-                  maxLength={120}
-                  onChange={(e) => setAddress((a) => ({ ...a, area: e.target.value }))}
-                  placeholder="e.g. Kukatpally"
-                />
-              </Field>
-              <Field label="City" required>
-                <Input
-                  id="rental-pickup-city"
-                  value={address.city}
-                  maxLength={120}
-                  onChange={(e) => setAddress((a) => ({ ...a, city: e.target.value }))}
-                  placeholder="e.g. Hyderabad"
-                />
-              </Field>
-              <Field label="Pincode" required>
-                <Input
-                  id="rental-pickup-pincode"
-                  inputMode="numeric"
-                  maxLength={6}
-                  value={address.pincode}
-                  onChange={(e) => setAddress((a) => ({ ...a, pincode: e.target.value.replace(/\D/g, "") }))}
-                />
-              </Field>
-            </div>
+            {/* Geocoded fields: collapsed behind a disclosure when a pin fills them,
+                expanded when the user has not pinned yet (manual entry). */}
+            {address.pin && address.city && address.pincode ? (
+              <Disclosure
+                summary="Edit area, city or pincode"
+                hint={[address.area, address.city, address.pincode].filter(Boolean).join(", ")}
+              >
+                <div className="grid gap-3 pt-1 sm:grid-cols-3">
+                  <Field label="Area" showOptional={false}>
+                    <Input
+                      id="rental-pickup-area"
+                      value={address.area}
+                      maxLength={120}
+                      onChange={(e) => setAddress((a) => ({ ...a, area: e.target.value }))}
+                      placeholder="e.g. Kukatpally"
+                    />
+                  </Field>
+                  <Field label="City" required>
+                    <Input
+                      id="rental-pickup-city"
+                      value={address.city}
+                      maxLength={120}
+                      onChange={(e) => setAddress((a) => ({ ...a, city: e.target.value }))}
+                      placeholder="e.g. Hyderabad"
+                    />
+                  </Field>
+                  <Field label="Pincode" required>
+                    <Input
+                      id="rental-pickup-pincode"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={address.pincode}
+                      onChange={(e) => setAddress((a) => ({ ...a, pincode: e.target.value.replace(/\D/g, "") }))}
+                    />
+                  </Field>
+                </div>
+              </Disclosure>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Field label="Area" showOptional={false}>
+                  <Input
+                    id="rental-pickup-area"
+                    value={address.area}
+                    maxLength={120}
+                    onChange={(e) => setAddress((a) => ({ ...a, area: e.target.value }))}
+                    placeholder="e.g. Kukatpally"
+                  />
+                </Field>
+                <Field label="City" required>
+                  <Input
+                    id="rental-pickup-city"
+                    value={address.city}
+                    maxLength={120}
+                    onChange={(e) => setAddress((a) => ({ ...a, city: e.target.value }))}
+                    placeholder="e.g. Hyderabad"
+                  />
+                </Field>
+                <Field label="Pincode" required>
+                  <Input
+                    id="rental-pickup-pincode"
+                    inputMode="numeric"
+                    maxLength={6}
+                    value={address.pincode}
+                    onChange={(e) => setAddress((a) => ({ ...a, pincode: e.target.value.replace(/\D/g, "") }))}
+                  />
+                </Field>
+              </div>
+            )}
           </section>
 
           <label className="flex items-start gap-3 rounded-control border border-line bg-surface-sunken p-3">

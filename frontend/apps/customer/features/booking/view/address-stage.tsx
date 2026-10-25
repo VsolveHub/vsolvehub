@@ -1,7 +1,7 @@
 "use client";
 
 import type { Schemas } from "@vsolve/api-client";
-import { Badge, Button, Dialog, EmptyState, Field, Input, Spinner, cn } from "@vsolve/ui";
+import { Badge, Button, Dialog, Disclosure, EmptyState, Field, Input, Spinner, cn } from "@vsolve/ui";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 
 import { LocationPicker } from "@/features/addresses/view/location-picker";
@@ -805,37 +805,71 @@ function SelectedAddressForm({
             onChange={(event) => updateDraft("locality", event.target.value)}
           />
         </Field>
-        <Field label="City" required>
-          <Input
-            value={draft.city ?? ""}
-            onChange={(event) => updateDraft("city", event.target.value)}
-          />
-        </Field>
-        <Field label="State" required>
-          <Input
-            value={draft.state ?? ""}
-            onChange={(event) => updateDraft("state", event.target.value)}
-          />
-        </Field>
-        <Field label="PIN code" required>
-          <Input
-            inputMode="numeric"
-            value={draft.postal_code ?? ""}
-            onChange={(event) => updateDraft("postal_code", event.target.value)}
-          />
-        </Field>
-        <Field label="Line 2">
-          <Input
-            value={draft.line2 ?? ""}
-            onChange={(event) => updateDraft("line2", event.target.value)}
-          />
-        </Field>
         <Field label="Landmark">
           <Input
             value={draft.landmark ?? ""}
             onChange={(event) => updateDraft("landmark", event.target.value)}
           />
         </Field>
+        <Field label="Line 2" className="sm:col-span-2">
+          <Input
+            value={draft.line2 ?? ""}
+            onChange={(event) => updateDraft("line2", event.target.value)}
+          />
+        </Field>
+
+        {isGeocoded(selectedAddress) && draft.city && draft.state && draft.postal_code ? (
+          <div className="sm:col-span-2">
+            <Disclosure
+              summary="Edit city, state or PIN code"
+              hint={`${draft.city ?? ""}, ${draft.state ?? ""} ${draft.postal_code ?? ""}`}
+            >
+              <div className="grid gap-4 pt-1 sm:grid-cols-3">
+                <Field label="City" required>
+                  <Input
+                    value={draft.city ?? ""}
+                    onChange={(event) => updateDraft("city", event.target.value)}
+                  />
+                </Field>
+                <Field label="State" required>
+                  <Input
+                    value={draft.state ?? ""}
+                    onChange={(event) => updateDraft("state", event.target.value)}
+                  />
+                </Field>
+                <Field label="PIN code" required>
+                  <Input
+                    inputMode="numeric"
+                    value={draft.postal_code ?? ""}
+                    onChange={(event) => updateDraft("postal_code", event.target.value)}
+                  />
+                </Field>
+              </div>
+            </Disclosure>
+          </div>
+        ) : (
+          <>
+            <Field label="City" required>
+              <Input
+                value={draft.city ?? ""}
+                onChange={(event) => updateDraft("city", event.target.value)}
+              />
+            </Field>
+            <Field label="State" required>
+              <Input
+                value={draft.state ?? ""}
+                onChange={(event) => updateDraft("state", event.target.value)}
+              />
+            </Field>
+            <Field label="PIN code" required>
+              <Input
+                inputMode="numeric"
+                value={draft.postal_code ?? ""}
+                onChange={(event) => updateDraft("postal_code", event.target.value)}
+              />
+            </Field>
+          </>
+        )}
       </div>
 
       {updateError ? (
