@@ -221,6 +221,71 @@ export function useLedgerAdjustment() {
   });
 }
 
+/* -------------------------------------------------------------------------
+   Partner bank accounts (contract 1.73.0)
+   ------------------------------------------------------------------------- */
+
+export type OperationsPayoutAccount = Schemas["OperationsPayoutAccount"];
+export type PayoutAccountStatus = "PENDING" | "VERIFIED" | "REJECTED" | "REPLACED";
+
+/** `403 payout_account_self_review`: the reviewer registered this account themselves. */
+export function isSelfReview(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: string }).code === "payout_account_self_review"
+  );
+}
+
+export function usePayoutAccounts(status: PayoutAccountStatus) {
+  return useInfiniteQuery({
+    queryKey: [...queryKeys.operations.all, "payout-accounts", status],
+    queryFn: async ({ pageParam }) => {
+      const page = await request(() =>
+        getApiClient().GET("/api/v1/operations/payout-accounts/", {
+          params: { query: { status, ...(pageParam ? { cursor: pageParam } : {}) } },
+        }),
+      );
+      cursorFromNextUrl(page.next);
+      return page;
+    },
+    initialPageParam: "" as string,
+    getNextPageParam: (lastPage) => cursorFromNextUrl(lastPage.next),
+  });
+}
+
+/**
+ * Verify or reject an account. Both need a fresh step-up: a verified account is where real
+ * money will be sent. Never retried automatically; the list is re-read either way.
+ */
+export function useReviewPayoutAccount() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (
+      input: { accountId: string; decision: "verify" } | { accountId: string; decision: "reject"; reason: string },
+    ) =>
+      input.decision === "verify"
+        ? request(() =>
+            getApiClient().POST("/api/v1/operations/payout-accounts/{account_id}/verify/", {
+              params: { path: { account_id: input.accountId } },
+            }),
+          )
+        : request(() =>
+            getApiClient().POST("/api/v1/operations/payout-accounts/{account_id}/reject/", {
+              params: { path: { account_id: input.accountId } },
+              body: { reason: input.reason },
+            }),
+          ),
+    onSettled: () => {
+      void queryClient.invalidateQueries({
+        queryKey: [...queryKeys.operations.all, "payout-accounts"],
+      });
+    },
+    retry: false,
+  });
+}
+
 /** `yyyy-mm-dd` from a date input → the start of that day, local time, as ISO. */
 export function dayStartIso(day: string): string {
   return new Date(`${day}T00:00:00`).toISOString();

@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.69.0)
- * Checksum: f34b11378cec29ca
+ * Source:   contracts/openapi/v1.yaml (version 1.73.0)
+ * Checksum: b7c940f2df9b46cb
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -3528,6 +3528,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/payout-accounts/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Bank accounts for review. Defaults to the ones waiting on a decision. */
+        get: operations["operations_payout_accounts_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/payout-accounts/{account_id}/reject/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["operations_payout_account_reject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/payout-accounts/{account_id}/verify/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Confirms where a Partner's money goes. Step-up, because it is a money destination. */
+        post: operations["operations_payout_account_verify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/payout-batches/": {
         parameters: {
             query?: never;
@@ -5934,15 +5984,24 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * @description The Partner's own account, masked.
+         * @description The Partner's own account, masked, and the way to add or change it.
          *
-         *     Read-only here on purpose. Registering or changing an account starts a cooling period and is
-         *     the event an account-takeover investigation begins from, so it goes through the reviewed
-         *     onboarding path rather than a self-service PATCH nobody watches.
+         *     Adding or changing an account starts a cooling period and is the event an account-takeover
+         *     investigation begins from, so a submission is never payable on its own: it is `PENDING` until
+         *     Operations verifies it (`/operations/payout-accounts/`), and payable only once its cooling
+         *     period has also passed. Submissions are rate-limited; reads are not.
          */
         get: operations["partner_payout_account_retrieve"];
         put?: never;
-        post?: never;
+        /**
+         * @description The Partner's own account, masked, and the way to add or change it.
+         *
+         *     Adding or changing an account starts a cooling period and is the event an account-takeover
+         *     investigation begins from, so a submission is never payable on its own: it is `PENDING` until
+         *     Operations verifies it (`/operations/payout-accounts/`), and payable only once its cooling
+         *     period has also passed. Submissions are rate-limited; reads are not.
+         */
+        post: operations["partner_payout_account_submit"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6830,6 +6889,28 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["payment_webhooks_razorpay_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payout-webhooks/razorpayx/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description `payout.*` events from RazorpayX, verified against `RAZORPAYX_WEBHOOK_SECRET`.
+         *
+         *     Applied inline: settling one item is a few row updates. A failure returns 5xx, which
+         *     RazorpayX retries, and `reconcile_payouts` still polls anything left in flight.
+         */
+        post: operations["payout_webhook_razorpayx"];
         delete?: never;
         options?: never;
         head?: never;
@@ -12124,6 +12205,36 @@ export interface components {
             consent_purpose: string;
             consent_document_version: string;
         };
+        /** @description What a reviewer needs to compare the details with the Partner's identity. Still masked. */
+        OperationsPayoutAccount: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly partner_id: string;
+            readonly partner_display_name: string;
+            readonly partner_phone_number: string;
+            readonly status: components["schemas"]["PayoutAccountStatusEnum"];
+            readonly account_last4: string;
+            readonly ifsc: string;
+            readonly holder_name: string;
+            readonly is_registered_with_provider: boolean;
+            /** Format: date-time */
+            readonly verified_at: string | null;
+            /** Format: uuid */
+            readonly reviewed_by_id: string | null;
+            readonly rejection_reason: string;
+            /** Format: date-time */
+            readonly effective_from: string;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        OperationsPayoutAccountPage: {
+            /** Format: uri */
+            next: string | null;
+            /** Format: uri */
+            previous: string | null;
+            results: components["schemas"]["OperationsPayoutAccount"][];
+        };
         /** @description Every safe Operations action takes a reason. `M2-AC-804` requires it. */
         OperationsReasonRequest: {
             reason: string;
@@ -13026,8 +13137,19 @@ export interface components {
             /** Format: date-time */
             readonly effective_from: string;
             readonly is_payable_now: boolean;
+            readonly rejection_reason: string;
             /** Format: date-time */
             readonly created_at: string;
+        };
+        /**
+         * @description Bank details as the Partner types them. The full number is write-only: it is passed to the
+         *     payout provider and never echoed, stored or logged.
+         */
+        PartnerPayoutAccountCreateRequest: {
+            holder_name: string;
+            account_number: string;
+            confirm_account_number: string;
+            ifsc: string;
         };
         /**
          * @description How a Partner is doing, in the periods they think in.
@@ -13818,6 +13940,10 @@ export interface components {
          * @enum {string}
          */
         PayoutBatchStatusEnum: "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "PAYING" | "PAID" | "FAILED" | "CANCELLED";
+        PayoutWebhookAccepted: {
+            accepted: boolean;
+            applied: boolean;
+        };
         /** @description Where a Self Pickup customer collects the item. ``maps_url`` opens Google Maps. */
         PickupAddress: {
             partner_name: string;
@@ -15503,6 +15629,9 @@ export interface components {
          * @enum {string}
          */
         RefundStatusEnum: "REQUESTED" | "SUBMITTED" | "PROCESSING" | "SUCCEEDED" | "FAILED" | "UNDER_REVIEW";
+        RejectPayoutAccountRequestRequest: {
+            reason: string;
+        };
         /**
          * @description * `NON_RESPONSIVE` - Ignored the stated scope
          *     * `NOT_CHOSEN` - Customer chose another vendor
@@ -26150,6 +26279,166 @@ export interface operations {
             };
         };
     };
+    operations_payout_accounts_list: {
+        parameters: {
+            query?: {
+                /** @description Opaque page cursor. */
+                cursor?: string;
+                /** @description PENDING (default), VERIFIED, REJECTED or REPLACED. */
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsPayoutAccountPage"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_payout_account_reject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RejectPayoutAccountRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["RejectPayoutAccountRequestRequest"];
+                "multipart/form-data": components["schemas"]["RejectPayoutAccountRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsPayoutAccount"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_payout_account_verify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsPayoutAccount"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     operations_payout_batches_list: {
         parameters: {
             query?: {
@@ -31876,6 +32165,63 @@ export interface operations {
             };
         };
     };
+    partner_payout_account_submit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PartnerPayoutAccountCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PartnerPayoutAccountCreateRequest"];
+                "multipart/form-data": components["schemas"]["PartnerPayoutAccountCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerPayoutAccount"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     partner_performance_retrieve: {
         parameters: {
             query?: never;
@@ -33542,6 +33888,48 @@ export interface operations {
                 };
             };
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    payout_webhook_razorpayx: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description HMAC-SHA256 of the raw body with the RazorpayX webhook secret. */
+                "X-Razorpay-Signature": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+                "application/x-www-form-urlencoded": {
+                    [key: string]: unknown;
+                };
+                "multipart/form-data": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayoutWebhookAccepted"];
+                };
+            };
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

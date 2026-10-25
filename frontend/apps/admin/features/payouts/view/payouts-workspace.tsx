@@ -7,6 +7,7 @@ import { StepUpGate } from "@/features/finance/view/step-up-gate";
 import { SectionTabs } from "@/features/shared/section-tabs";
 
 import { LedgerAdjustment } from "./ledger-adjustment";
+import { PayoutAccountReview } from "./payout-account-review";
 import { PayoutConsole } from "./payout-console";
 
 /**
@@ -36,6 +37,23 @@ export function PayoutsWorkspace() {
                 }}
               />
               <PayoutConsole />
+            </div>
+          ),
+        },
+        {
+          id: "accounts",
+          label: "Bank accounts",
+          render: () => (
+            <div className="flex flex-col gap-6">
+              <StepUpGate
+                session={session}
+                reason={reason ?? undefined}
+                onSteppedUp={(stepped) => {
+                  setSession(stepped);
+                  setReason(null);
+                }}
+              />
+              <PayoutAccountReview onStepUpRequired={setReason} />
             </div>
           ),
         },

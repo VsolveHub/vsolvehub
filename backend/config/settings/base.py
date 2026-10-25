@@ -273,6 +273,8 @@ REST_FRAMEWORK = {
         # rejection path is here, and it is the one worth naming — it reopens a quote slot each
         # time, so a loop on it churns real vendors' invitations.
         "m2_quote_action": "120/hour",
+        # Each submission creates a RazorpayX contact and fund account and restarts cooling.
+        "payout_account": "10/hour",
     },
 }
 
@@ -385,7 +387,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.69.0",
+    "VERSION": "1.73.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,

@@ -70,6 +70,16 @@ class PartnerPayoutAccount(models.Model):
     ifsc = models.CharField(max_length=16, blank=True)
     holder_name = models.CharField(max_length=140)
     verified_at = models.DateTimeField(null=True, blank=True)
+    #: The Operations user who verified or rejected it. Never the person who registered it.
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="+",
+    )
+    #: Shown to the Partner, so it says what to fix rather than why they were suspected.
+    rejection_reason = models.CharField(max_length=240, blank=True)
     #: Not payable before this instant, even once verified.
     effective_from = models.DateTimeField()
     #: Who registered it. An account change is the event a takeover investigation starts from.

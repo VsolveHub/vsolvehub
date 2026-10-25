@@ -49,6 +49,22 @@ class ProviderPayout:
     failure_reason: str = ""
 
 
+class PayoutAccountProvider(Protocol):
+    """Registering where money goes. Nothing here moves money.
+
+    The full account number is passed straight through to the provider and never returned: the
+    provider's fund-account id is the only handle this codebase keeps.
+    """
+
+    code: str
+
+    def create_contact(self, *, name: str, reference_id: str) -> str: ...
+
+    def create_fund_account(
+        self, *, contact_id: str, holder_name: str, ifsc: str, account_number: str
+    ) -> str: ...
+
+
 class PayoutProvider(Protocol):
     code: str
 
@@ -108,6 +124,21 @@ class FakePayoutProvider:
     def verify_webhook(self, *, body: bytes, signature: str) -> bool:  # noqa: ARG002
         # No signing key to check against; the fixed token is what a test asserts with.
         return signature == "fake-signature"
+
+    def create_contact(self, *, name: str, reference_id: str) -> str:
+        if name.lower().startswith("ambiguous"):
+            raise PayoutProviderAmbiguousError("The fake provider returned no conclusive answer.")
+        return f"fake_contact_{reference_id.replace('-', '')[:20]}"
+
+    def create_fund_account(
+        self, *, contact_id: str, holder_name: str, ifsc: str, account_number: str
+    ) -> str:
+        if holder_name.lower().startswith("reject"):
+            raise PayoutProviderRejectedError("The fake provider rejected these bank details.")
+        # Derived from the details, as RazorpayX de-duplicates them: the same account twice
+        # yields the same id. Hashed so the number itself never appears in the identifier.
+        digest = hashlib.sha256(f"{contact_id}:{ifsc}:{account_number}".encode()).hexdigest()
+        return f"fake_fa_{digest[:16]}"
 
 
 class RazorpayXPayoutProvider:
@@ -212,10 +243,77 @@ class RazorpayXPayoutProvider:
         return self._payout(self._request("GET", f"/payouts/{provider_payout_id}"))
 
     def verify_webhook(self, *, body: bytes, signature: str) -> bool:
-        expected = hmac.new(
-            settings.RAZORPAYX_WEBHOOK_SECRET.encode(), body, hashlib.sha256
-        ).hexdigest()
-        return hmac.compare_digest(expected, signature)
+        return verify_razorpayx_signature(body=body, signature=signature)
+
+    @staticmethod
+    def _identifier(data: dict[str, object], what: str) -> str:
+        identifier = data.get("id")
+        if not isinstance(identifier, str) or not identifier:
+            raise PayoutProviderAmbiguousError(f"RazorpayX omitted the {what} identifier.")
+        return identifier
+
+    def create_contact(self, *, name: str, reference_id: str) -> str:
+        # `reference_id` is the Partner id, so a contact in the RazorpayX dashboard traces back.
+        data = self._request(
+            "POST",
+            "/contacts",
+            payload={"name": name, "type": "vendor", "reference_id": reference_id},
+        )
+        return self._identifier(data, "contact")
+
+    def create_fund_account(
+        self, *, contact_id: str, holder_name: str, ifsc: str, account_number: str
+    ) -> str:
+        data = self._request(
+            "POST",
+            "/fund_accounts",
+            payload={
+                "contact_id": contact_id,
+                "account_type": "bank_account",
+                "bank_account": {
+                    "name": holder_name,
+                    "ifsc": ifsc,
+                    "account_number": account_number,
+                },
+            },
+        )
+        return self._identifier(data, "fund account")
+
+
+def verify_razorpayx_signature(*, body: bytes, signature: str) -> bool:
+    """HMAC-SHA256 of the raw body with `RAZORPAYX_WEBHOOK_SECRET`.
+
+    Refuses outright while the secret is unset. An empty key is a key anyone can sign with, so
+    "not configured" must never compare equal to a forged signature.
+    """
+
+    secret = settings.RAZORPAYX_WEBHOOK_SECRET
+    if not secret or not signature:
+        return False
+    expected = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature)
+
+
+def get_payout_account_provider(*, provider_code: str | None = None) -> PayoutAccountProvider:
+    """The provider that registers bank accounts.
+
+    Deliberately looser than `get_payout_provider`: a contact and a fund account move no money,
+    so credentials are enough and `PAYOUTS_LIVE_ENABLED` is not required. Partners can be
+    onboarded while payouts themselves stay switched off.
+    """
+
+    code = provider_code or settings.PAYOUT_PROVIDER
+    if code == FakePayoutProvider.code:
+        if not settings.DEBUG and not settings.PAYOUTS_ALLOW_FAKE_PROVIDER:
+            raise PayoutProviderError(
+                "The fake payout provider is not permitted outside development."
+            )
+        return FakePayoutProvider()
+    if code == RazorpayXPayoutProvider.code:
+        if not (settings.RAZORPAYX_KEY_ID and settings.RAZORPAYX_KEY_SECRET):
+            raise PayoutProviderError("RazorpayX credentials are not configured.")
+        return RazorpayXPayoutProvider()
+    raise PayoutProviderError("No payout provider is configured for this environment.")
 
 
 def get_payout_provider(*, provider_code: str | None = None) -> PayoutProvider:

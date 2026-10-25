@@ -1,18 +1,19 @@
 "use client";
 
-import { request, type Schemas } from "@vsolve/api-client";
+import { ApiRequestError, request, type Schemas } from "@vsolve/api-client";
 import { EXPIRING_STATE, cursorFromNextUrl, queryKeys } from "@vsolve/query";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getApiClient } from "@/lib/api/browser";
 
 /**
  * The Partner's own earnings (contract 1.17.0).
  *
- * Read-only, and that is the product rather than an omission. M1 pays through a reviewed weekly
- * run — `05-pricing-payments-and-settlement.md` rules out on-demand withdrawal until
+ * No withdrawals, and that is the product rather than an omission. M1 pays through a reviewed
+ * weekly run — `05-pricing-payments-and-settlement.md` rules out on-demand withdrawal until
  * account-change cooling, fraud monitoring and reconciliation are all proven, and two of those
  * three are still open. A withdraw mutation here would promise something that does not exist.
+ * The one write is the bank account itself, which Operations reviews before it is paid into.
  *
  * There is no `partner_id` anywhere: both endpoints resolve the Partner from the session, so
  * there is no identifier for this layer to get wrong.
@@ -54,6 +55,30 @@ export function usePartnerPayoutAccount() {
     queryFn: () => request(() => getApiClient().GET("/api/v1/partner/payout-account/", {})),
     // A Partner with no registered account gets a 404. That is an answer, not a fault, so it is
     // never retried — the panel renders the "no account yet" state instead.
+    retry: false,
+  });
+}
+
+/** A 404 from the account read means "none registered yet", which is a state, not a failure. */
+export function isNoPayoutAccount(error: unknown): boolean {
+  return error instanceof ApiRequestError && error.status === 404;
+}
+
+export type PayoutAccountInput = Schemas["PartnerPayoutAccountCreateRequest"];
+
+/**
+ * Add or replace the bank account (contract 1.73.0). The result is `PENDING`: Operations checks
+ * it before money can be sent there, and a 24-hour cooling period applies on top. Never retried
+ * automatically — each submission registers the details with the payout provider.
+ */
+export function useSubmitPayoutAccount() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: PayoutAccountInput) =>
+      request(() => getApiClient().POST("/api/v1/partner/payout-account/", { body })),
+    onSuccess: (account) => {
+      queryClient.setQueryData(queryKeys.partnerMoney.payoutAccount(), account);
+    },
     retry: false,
   });
 }

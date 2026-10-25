@@ -10,6 +10,9 @@ from django.urls import path
 from apps.payouts.exports import PayoutBatchBankExportView
 from apps.payouts.views import (
     LedgerAdjustmentView,
+    OperationsPayoutAccountListView,
+    OperationsPayoutAccountRejectView,
+    OperationsPayoutAccountVerifyView,
     PartnerEarningsView,
     PartnerLedgerView,
     PartnerPayoutAccountView,
@@ -19,6 +22,7 @@ from apps.payouts.views import (
     PayoutBatchDetailView,
     PayoutBatchListView,
     PayoutBatchPayView,
+    RazorpayXPayoutWebhookView,
     UnpayablePartnersView,
 )
 
@@ -64,6 +68,26 @@ urlpatterns = [
         "operations/unpayable-partners/",
         UnpayablePartnersView.as_view(),
         name="operations-unpayable-partners",
+    ),
+    path(
+        "operations/payout-accounts/",
+        OperationsPayoutAccountListView.as_view(),
+        name="operations-payout-accounts",
+    ),
+    path(
+        "operations/payout-accounts/<uuid:account_id>/verify/",
+        OperationsPayoutAccountVerifyView.as_view(),
+        name="operations-payout-account-verify",
+    ),
+    path(
+        "operations/payout-accounts/<uuid:account_id>/reject/",
+        OperationsPayoutAccountRejectView.as_view(),
+        name="operations-payout-account-reject",
+    ),
+    path(
+        "payout-webhooks/razorpayx/",
+        RazorpayXPayoutWebhookView.as_view(),
+        name="payout-webhook-razorpayx",
     ),
     path(
         "operations/ledger-adjustments/",

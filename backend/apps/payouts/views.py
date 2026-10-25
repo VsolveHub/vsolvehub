@@ -19,18 +19,21 @@ train people to leave batches sitting approved.
 off the Partner booking projection: the safest filter is the one that cannot be supplied.
 """
 
+import json
 from typing import Any, cast
 from uuid import UUID
 
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
+from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied, ValidationError
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.throttling import BaseThrottle, ScopedRateThrottle
 from rest_framework.views import APIView
 
 from apps.foundation.services import ResponseBody, execute_idempotent
@@ -43,28 +46,38 @@ from apps.partners.permissions import (
 )
 from apps.payouts.models import PartnerLedgerEntry, PartnerPayoutAccount, PayoutBatch
 from apps.payouts.performance import partner_performance
+from apps.payouts.providers import verify_razorpayx_signature
 from apps.payouts.serializers import (
     LedgerAdjustmentRequestSerializer,
+    OperationsPayoutAccountPageSerializer,
+    OperationsPayoutAccountSerializer,
     PartnerBalanceSerializer,
     PartnerLedgerEntrySerializer,
     PartnerLedgerPageSerializer,
+    PartnerPayoutAccountCreateSerializer,
     PartnerPayoutAccountSerializer,
     PartnerPerformanceSerializer,
     PayoutBatchListSerializer,
     PayoutBatchPageSerializer,
     PayoutBatchSerializer,
+    PayoutWebhookAcceptedSerializer,
     ProposePayoutBatchRequestSerializer,
+    RejectPayoutAccountRequestSerializer,
     UnpayablePartnerSerializer,
     VersionedBatchCommandSerializer,
 )
 from apps.payouts.services import (
+    apply_razorpayx_payout_event,
     approve_payout_batch,
     cancel_payout_batch,
     partner_balance_paise,
     propose_payout_batch,
     record_adjustment,
+    reject_payout_account,
     start_paying_batch,
+    submit_partner_payout_account,
     unpayable_partner_ids,
+    verify_payout_account,
 )
 from common.errors.serializers import ApiErrorSerializer
 from common.pagination import StrictCursorPagination
@@ -79,6 +92,11 @@ class LedgerCursorPagination(StrictCursorPagination):
 
 
 class PayoutBatchCursorPagination(StrictCursorPagination):
+    page_size = 50
+    ordering = ("-created_at", "-id")
+
+
+class PayoutAccountCursorPagination(StrictCursorPagination):
     page_size = 50
     ordering = ("-created_at", "-id")
 
@@ -191,14 +209,48 @@ class PartnerLedgerView(APIView):
 
 
 class PartnerPayoutAccountView(APIView):
-    """The Partner's own account, masked.
+    """The Partner's own account, masked, and the way to add or change it.
 
-    Read-only here on purpose. Registering or changing an account starts a cooling period and is
-    the event an account-takeover investigation begins from, so it goes through the reviewed
-    onboarding path rather than a self-service PATCH nobody watches.
+    Adding or changing an account starts a cooling period and is the event an account-takeover
+    investigation begins from, so a submission is never payable on its own: it is `PENDING` until
+    Operations verifies it (`/operations/payout-accounts/`), and payable only once its cooling
+    period has also passed. Submissions are rate-limited; reads are not.
     """
 
     permission_classes = (IsAuthenticated, IsPartnerUser)
+    throttle_scope = "payout_account"
+
+    def get_throttles(self) -> list[BaseThrottle]:
+        return [ScopedRateThrottle()] if self.request.method == "POST" else []
+
+    @extend_schema(
+        tags=[PARTNER_TAG],
+        operation_id="partner_payout_account_submit",
+        request=PartnerPayoutAccountCreateSerializer,
+        responses={
+            201: PartnerPayoutAccountSerializer,
+            400: ApiErrorSerializer,
+            403: ApiErrorSerializer,
+            429: ApiErrorSerializer,
+            503: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request) -> Response:
+        user = cast(User, request.user)
+        profile = _partner_profile(user)
+        serializer = PartnerPayoutAccountCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        account = submit_partner_payout_account(
+            partner=profile,
+            account_number=data["account_number"],
+            ifsc=data["ifsc"],
+            holder_name=data["holder_name"],
+            actor=user,
+        )
+        return Response(
+            PartnerPayoutAccountSerializer(account).data, status=status.HTTP_201_CREATED
+        )
 
     @extend_schema(
         tags=[PARTNER_TAG],
@@ -227,6 +279,117 @@ class PartnerPayoutAccountView(APIView):
 # --------------------------------------------------------------------------------------------
 # Operations
 # --------------------------------------------------------------------------------------------
+
+
+class OperationsPayoutAccountListView(APIView):
+    """Bank accounts for review. Defaults to the ones waiting on a decision."""
+
+    permission_classes = (IsAuthenticated, IsOperationsUser)
+
+    @extend_schema(
+        tags=[OPERATIONS_TAG],
+        operation_id="operations_payout_accounts_list",
+        parameters=[
+            OpenApiParameter(
+                "status",
+                str,
+                description="PENDING (default), VERIFIED, REJECTED or REPLACED.",
+            ),
+            OpenApiParameter("cursor", str, description="Opaque page cursor."),
+        ],
+        responses={200: OperationsPayoutAccountPageSerializer, 403: ApiErrorSerializer},
+    )
+    def get(self, request: Request) -> Response:
+        wanted = request.query_params.get("status") or PartnerPayoutAccount.Status.PENDING
+        if wanted not in PartnerPayoutAccount.Status.values:
+            raise ValidationError({"status": ["That is not a payout account status."]})
+        queryset = PartnerPayoutAccount.objects.filter(status=wanted).select_related(
+            "partner__user"
+        )
+        paginator = PayoutAccountCursorPagination()
+        page = paginator.paginate_queryset(queryset, request, self)
+        return paginator.get_paginated_response(
+            OperationsPayoutAccountSerializer(page or [], many=True).data
+        )
+
+
+class OperationsPayoutAccountVerifyView(APIView):
+    """Confirms where a Partner's money goes. Step-up, because it is a money destination."""
+
+    permission_classes = (IsAuthenticated, IsOperationsUser, HasRecentOperationsStepUp)
+
+    @extend_schema(
+        tags=[OPERATIONS_TAG],
+        operation_id="operations_payout_account_verify",
+        request=None,
+        responses={200: OperationsPayoutAccountSerializer, 401: ApiErrorSerializer, **_ERRORS},
+    )
+    def post(self, request: Request, account_id: UUID) -> Response:
+        get_object_or_404(PartnerPayoutAccount, id=account_id)
+        account = verify_payout_account(account_id=account_id, actor=cast(User, request.user))
+        return Response(OperationsPayoutAccountSerializer(account).data)
+
+
+class OperationsPayoutAccountRejectView(APIView):
+    permission_classes = (IsAuthenticated, IsOperationsUser, HasRecentOperationsStepUp)
+
+    @extend_schema(
+        tags=[OPERATIONS_TAG],
+        operation_id="operations_payout_account_reject",
+        request=RejectPayoutAccountRequestSerializer,
+        responses={200: OperationsPayoutAccountSerializer, 401: ApiErrorSerializer, **_ERRORS},
+    )
+    def post(self, request: Request, account_id: UUID) -> Response:
+        get_object_or_404(PartnerPayoutAccount, id=account_id)
+        serializer = RejectPayoutAccountRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        account = reject_payout_account(
+            account_id=account_id,
+            actor=cast(User, request.user),
+            reason=serializer.validated_data["reason"],
+        )
+        return Response(OperationsPayoutAccountSerializer(account).data)
+
+
+class RazorpayXPayoutWebhookView(APIView):
+    """`payout.*` events from RazorpayX, verified against `RAZORPAYX_WEBHOOK_SECRET`.
+
+    Applied inline: settling one item is a few row updates. A failure returns 5xx, which
+    RazorpayX retries, and `reconcile_payouts` still polls anything left in flight.
+    """
+
+    authentication_classes = ()
+    permission_classes = (AllowAny,)
+
+    @extend_schema(
+        tags=["Payout Webhooks"],
+        operation_id="payout_webhook_razorpayx",
+        request=OpenApiTypes.OBJECT,
+        parameters=[
+            OpenApiParameter(
+                "X-Razorpay-Signature",
+                str,
+                location=OpenApiParameter.HEADER,
+                required=True,
+                description="HMAC-SHA256 of the raw body with the RazorpayX webhook secret.",
+            ),
+        ],
+        responses={200: PayoutWebhookAcceptedSerializer, 400: ApiErrorSerializer},
+        auth=[],
+    )
+    def post(self, request: Request) -> Response:
+        raw_body = request._request.body
+        signature = request.headers.get("X-Razorpay-Signature", "")
+        if not verify_razorpayx_signature(body=raw_body, signature=signature):
+            raise ValidationError("Webhook signature is invalid.", code="webhook_signature_invalid")
+        try:
+            decoded = json.loads(raw_body)
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            raise ValidationError("Webhook JSON is invalid.", code="webhook_invalid") from exc
+        if not isinstance(decoded, dict):
+            raise ValidationError("Webhook JSON is invalid.", code="webhook_invalid")
+        item = apply_razorpayx_payout_event(decoded)
+        return Response({"accepted": True, "applied": item is not None})
 
 
 class PayoutBatchListView(APIView):

@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.69.0
+  version: 1.73.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -8564,6 +8564,154 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/operations/payout-accounts/:
+    get:
+      operationId: operations_payout_accounts_list
+      description: Bank accounts for review. Defaults to the ones waiting on a decision.
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor.
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: PENDING (default), VERIFIED, REJECTED or REPLACED.
+      tags:
+      - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsPayoutAccountPage'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/payout-accounts/{account_id}/reject/:
+    post:
+      operationId: operations_payout_account_reject
+      parameters:
+      - in: path
+        name: account_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RejectPayoutAccountRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RejectPayoutAccountRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RejectPayoutAccountRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsPayoutAccount'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/payout-accounts/{account_id}/verify/:
+    post:
+      operationId: operations_payout_account_verify
+      description: Confirms where a Partner's money goes. Step-up, because it is a
+        money destination.
+      parameters:
+      - in: path
+        name: account_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsPayoutAccount'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/operations/payout-batches/:
     get:
       operationId: operations_payout_batches_list
@@ -14480,11 +14628,12 @@ paths:
     get:
       operationId: partner_payout_account_retrieve
       description: |-
-        The Partner's own account, masked.
+        The Partner's own account, masked, and the way to add or change it.
 
-        Read-only here on purpose. Registering or changing an account starts a cooling period and is
-        the event an account-takeover investigation begins from, so it goes through the reviewed
-        onboarding path rather than a self-service PATCH nobody watches.
+        Adding or changing an account starts a cooling period and is the event an account-takeover
+        investigation begins from, so a submission is never payable on its own: it is `PENDING` until
+        Operations verifies it (`/operations/payout-accounts/`), and payable only once its cooling
+        period has also passed. Submissions are rate-limited; reads are not.
       tags:
       - Partner
       security:
@@ -14503,6 +14652,62 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: ''
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+    post:
+      operationId: partner_payout_account_submit
+      description: |-
+        The Partner's own account, masked, and the way to add or change it.
+
+        Adding or changing an account starts a cooling period and is the event an account-takeover
+        investigation begins from, so a submission is never payable on its own: it is `PENDING` until
+        Operations verifies it (`/operations/payout-accounts/`), and payable only once its cooling
+        period has also passed. Submissions are rate-limited; reads are not.
+      tags:
+      - Partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerPayoutAccountCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PartnerPayoutAccountCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PartnerPayoutAccountCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerPayoutAccount'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '503':
           content:
             application/json:
               schema:
@@ -16327,6 +16532,50 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: ''
         '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/payout-webhooks/razorpayx/:
+    post:
+      operationId: payout_webhook_razorpayx
+      description: |-
+        `payout.*` events from RazorpayX, verified against `RAZORPAYX_WEBHOOK_SECRET`.
+
+        Applied inline: settling one item is a few row updates. A failure returns 5xx, which
+        RazorpayX retries, and `reconcile_payouts` still polls anything left in flight.
+      parameters:
+      - in: header
+        name: X-Razorpay-Signature
+        schema:
+          type: string
+        description: HMAC-SHA256 of the raw body with the RazorpayX webhook secret.
+        required: true
+      tags:
+      - Payout Webhooks
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: {}
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              additionalProperties: {}
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutWebhookAccepted'
+          description: ''
+        '400':
           content:
             application/json:
               schema:
@@ -29931,6 +30180,96 @@ components:
       - consent_purpose
       - exceptions
       - rules
+    OperationsPayoutAccount:
+      type: object
+      description: What a reviewer needs to compare the details with the Partner's
+        identity. Still masked.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        partner_id:
+          type: string
+          format: uuid
+          readOnly: true
+        partner_display_name:
+          type: string
+          readOnly: true
+        partner_phone_number:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/PayoutAccountStatusEnum'
+          readOnly: true
+        account_last4:
+          type: string
+          readOnly: true
+        ifsc:
+          type: string
+          readOnly: true
+        holder_name:
+          type: string
+          readOnly: true
+        is_registered_with_provider:
+          type: boolean
+          readOnly: true
+        verified_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        reviewed_by_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        rejection_reason:
+          type: string
+          readOnly: true
+        effective_from:
+          type: string
+          format: date-time
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - account_last4
+      - created_at
+      - effective_from
+      - holder_name
+      - id
+      - ifsc
+      - is_registered_with_provider
+      - partner_display_name
+      - partner_id
+      - partner_phone_number
+      - rejection_reason
+      - reviewed_by_id
+      - status
+      - verified_at
+    OperationsPayoutAccountPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsPayoutAccount'
+      required:
+      - next
+      - previous
+      - results
     OperationsReasonRequest:
       type: object
       description: Every safe Operations action takes a reason. `M2-AC-804` requires
@@ -32357,6 +32696,9 @@ components:
         is_payable_now:
           type: boolean
           readOnly: true
+        rejection_reason:
+          type: string
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -32369,8 +32711,38 @@ components:
       - id
       - ifsc
       - is_payable_now
+      - rejection_reason
       - status
       - verified_at
+    PartnerPayoutAccountCreateRequest:
+      type: object
+      description: |-
+        Bank details as the Partner types them. The full number is write-only: it is passed to the
+        payout provider and never echoed, stored or logged.
+      properties:
+        holder_name:
+          type: string
+          minLength: 2
+          maxLength: 140
+        account_number:
+          type: string
+          writeOnly: true
+          minLength: 1
+          maxLength: 40
+        confirm_account_number:
+          type: string
+          writeOnly: true
+          minLength: 1
+          maxLength: 40
+        ifsc:
+          type: string
+          minLength: 1
+          maxLength: 16
+      required:
+      - account_number
+      - confirm_account_number
+      - holder_name
+      - ifsc
     PartnerPerformance:
       type: object
       description: |-
@@ -34369,6 +34741,16 @@ components:
         * `PAID` - Paid
         * `FAILED` - Failed
         * `CANCELLED` - Cancelled
+    PayoutWebhookAccepted:
+      type: object
+      properties:
+        accepted:
+          type: boolean
+        applied:
+          type: boolean
+      required:
+      - accepted
+      - applied
     PickupAddress:
       type: object
       description: Where a Self Pickup customer collects the item. ``maps_url`` opens
@@ -38596,6 +38978,15 @@ components:
         * `SUCCEEDED` - Succeeded
         * `FAILED` - Failed
         * `UNDER_REVIEW` - Under review
+    RejectPayoutAccountRequestRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 240
+      required:
+      - reason
     RejectionReasonEnum:
       enum:
       - NON_RESPONSIVE
