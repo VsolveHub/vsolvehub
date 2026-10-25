@@ -13,8 +13,8 @@ import {
   useCreateAddress,
   useUpdateAddress,
   type Address,
+  type ResolvedLocation,
 } from "../queries";
-import { usePinLocation } from "../use-pin-location";
 import {
   AddressForm,
   EMPTY_DRAFT,
@@ -22,6 +22,7 @@ import {
   patchFromDraft,
   type AddressDraft,
 } from "./address-form";
+import { LocationPicker } from "./location-picker";
 
 /**
  * The saved address book: list, add, edit, delete.
@@ -246,7 +247,6 @@ export function AddressBook() {
   const createAddress = useCreateAddress();
   const updateAddress = useUpdateAddress();
   const archiveAddress = useArchiveAddress();
-  const pinLocation = usePinLocation();
 
   /**
    * What just happened, announced politely.
@@ -268,6 +268,13 @@ export function AddressBook() {
    * written nowhere else.
    */
   const [pin, setPin] = useState<Pin | null>(null);
+  /**
+   * Whether the pin was moved during this edit. Only then are coordinates sent:
+   * an untouched pin is left alone rather than resent.
+   */
+  const [repinned, setRepinned] = useState(false);
+  /** The dialog's two faces: the map, then the fields the pin filled. */
+  const [step, setStep] = useState<"pin" | "form">("form");
   const [pendingDelete, setPendingDelete] = useState<Address | null>(null);
 
   const addresses = addressesQuery.data ?? [];
@@ -278,31 +285,23 @@ export function AddressBook() {
     setEditing({ mode: "closed" });
     setDraft(EMPTY_DRAFT);
     setPin(null);
-    pinLocation.reset();
+    setRepinned(false);
+    setStep("form");
     createAddress.reset();
     updateAddress.reset();
   }
 
-  async function startCreate() {
+  /**
+   * The map first. Creating an address requires coordinates, so placing the
+   * pin first means the fields arrive filled in rather than being typed and
+   * then thrown away by a re-pin. The map asks the device as it opens.
+   */
+  function startCreate() {
     setEditing({ mode: "create" });
     setDraft({ ...EMPTY_DRAFT, is_default: addresses.length === 0 });
     setPin(null);
-    pinLocation.reset();
-
-    // Offer the pin immediately. Creating an address requires coordinates, so
-    // asking for the fix first means the fields arrive filled in rather than
-    // being typed and then thrown away by a re-pin.
-    const resolved = await pinLocation.pin();
-    if (!resolved) return;
-    setPin({ latitude: resolved.latitude, longitude: resolved.longitude });
-    setDraft((current) => ({
-      ...current,
-      line1: resolved.line1,
-      locality: resolved.locality,
-      city: resolved.city,
-      state: resolved.state,
-      postal_code: resolved.postal_code,
-    }));
+    setRepinned(false);
+    setStep("pin");
   }
 
   function startEdit(address: Address) {
@@ -313,22 +312,30 @@ export function AddressBook() {
         ? { latitude: address.latitude, longitude: address.longitude }
         : null,
     );
-    pinLocation.reset();
+    setRepinned(false);
+    setStep("form");
     updateAddress.reset();
   }
 
-  async function repin() {
-    const resolved = await pinLocation.pin();
-    if (!resolved) return;
+  /**
+   * The confirmed pin fills the area fields.
+   *
+   * On create it fills the first line too, from whatever the geocoder had. On a
+   * re-pin it does not: the flat number was typed by the Customer and a moved
+   * pin is no reason to overwrite it.
+   */
+  function onPinConfirmed(resolved: ResolvedLocation) {
     setPin({ latitude: resolved.latitude, longitude: resolved.longitude });
+    if (editing.mode === "edit") setRepinned(true);
     setDraft((current) => ({
       ...current,
-      line1: resolved.line1,
-      locality: resolved.locality,
-      city: resolved.city,
-      state: resolved.state,
-      postal_code: resolved.postal_code,
+      ...(editing.mode === "create" ? { line1: resolved.line1 } : {}),
+      locality: resolved.locality || current.locality,
+      city: resolved.city || current.city,
+      state: resolved.state || current.state,
+      postal_code: resolved.postal_code || current.postal_code,
     }));
+    setStep("form");
   }
 
   async function save() {
@@ -359,7 +366,7 @@ export function AddressBook() {
           // A re-pin during an edit replaces the coordinates too; without one
           // the pin is left alone rather than resent.
           patch:
-            pin && !isGeocoded(editing.address)
+            pin && (repinned || !isGeocoded(editing.address))
               ? {
                   ...patch,
                   latitude: pin.latitude,
@@ -425,28 +432,22 @@ export function AddressBook() {
       {addresses.length === 0 ? (
         <div className="rounded-[1.25rem] border border-[#ece7e0] bg-white p-4 shadow-xs md:rounded-none md:border-0 md:bg-transparent md:p-0 md:shadow-none">
           <AddressBookHeader
-            onAdd={() => void startCreate()}
-            adding={pinLocation.isPinning && editing.mode === "closed"}
+            onAdd={startCreate}
+            adding={false}
           />
           <EmptyState
             title="No saved addresses"
             description="Save an address and we can send someone to the right door, and check that we cover your area before you book."
             action={
-              <Button
-                onClick={() => void startCreate()}
-                loading={pinLocation.isPinning}
-                loadingLabel="Finding your location"
-              >
-                Add an address
-              </Button>
+              <Button onClick={startCreate}>Add an address</Button>
             }
           />
         </div>
       ) : (
         <div className="rounded-[1.25rem] border border-[#ece7e0] bg-white p-4 shadow-xs md:rounded-none md:border-0 md:bg-transparent md:p-0 md:shadow-none">
           <AddressBookHeader
-            onAdd={() => void startCreate()}
-            adding={pinLocation.isPinning && editing.mode === "closed"}
+            onAdd={startCreate}
+            adding={false}
           />
           <ul className="flex flex-col gap-3">
             {addresses.map((address) => (
@@ -471,8 +472,7 @@ export function AddressBook() {
 
           <button
             type="button"
-            onClick={() => void startCreate()}
-            disabled={pinLocation.isPinning && editing.mode === "closed"}
+            onClick={startCreate}
             aria-label="Add another address"
             className="mt-4 flex w-full items-center gap-3 rounded-2xl border border-[#fde8d4] bg-[#FFF6EE] px-4 py-3.5 text-left transition-colors hover:bg-[#FFEFDF] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:opacity-70 md:hidden"
           >
@@ -489,12 +489,7 @@ export function AddressBook() {
           </button>
 
           <div className="mt-4 hidden md:block">
-            <Button
-              variant="outline"
-              onClick={() => void startCreate()}
-              loading={pinLocation.isPinning && editing.mode === "closed"}
-              loadingLabel="Finding your location"
-            >
+            <Button variant="outline" onClick={startCreate}>
               Add another address
             </Button>
           </div>
@@ -506,42 +501,68 @@ export function AddressBook() {
         onOpenChange={(open) => {
           if (!open && !isSaving) closeEditor();
         }}
-        title={editing.mode === "edit" ? "Edit address" : "Add an address"}
+        title={
+          step === "pin"
+            ? "Set the location"
+            : editing.mode === "edit"
+              ? "Edit address"
+              : "Add an address"
+        }
         description={
-          editing.mode === "edit"
-            ? "Correct the details. The pin stays where it is unless you pin again."
-            : "We use your location to fill this in, then you can correct anything we got wrong."
+          step === "pin"
+            ? "Search, use your location, or drag the map so the pin sits on the door."
+            : editing.mode === "edit"
+              ? "Correct the details. The pin stays where it is unless you pin again."
+              : "We filled this in from the pin. Correct anything we got wrong."
         }
       >
-        {pinLocation.failureMessage ? (
-          <p
-            role="alert"
-            className="mb-4 rounded-control border border-warning-line bg-warning-surface px-3 py-2.5 text-sm text-warning-text"
-          >
-            {pinLocation.failureMessage}
-          </p>
+        {step === "pin" ? (
+          <>
+            <LocationPicker
+              initial={pin}
+              autoLocate={editing.mode === "create" && pin === null}
+              onConfirm={onPinConfirmed}
+            />
+            <div className="mt-2">
+              <Button
+                type="button"
+                variant="ghost"
+                block
+                onClick={
+                  editing.mode === "create" && pin === null ? closeEditor : () => setStep("form")
+                }
+              >
+                {editing.mode === "create" && pin === null
+                  ? "Cancel"
+                  : pin === null
+                    ? "Back to the details"
+                    : "Keep the current pin"}
+              </Button>
+            </div>
+          </>
         ) : null}
 
-        {editing.mode === "create" && !pin ? (
+        {step === "form" && editing.mode === "create" && !pin ? (
           <p className="mb-4 text-sm text-text-secondary">
             An address needs a map pin before it can be saved. Pin your location
             to continue.
           </p>
         ) : null}
 
-        <AddressForm
-          draft={draft}
-          onChange={setDraft}
-          onSubmit={() => void save()}
-          error={saveError}
-          isSaving={isSaving}
-          submitLabel={editing.mode === "edit" ? "Save changes" : "Save address"}
-          onCancel={closeEditor}
-          hasPin={pin !== null}
-          onRepin={() => void repin()}
-          isRepinning={pinLocation.isPinning}
-          showDefaultToggle={addresses.length > 0}
-        />
+        {step === "form" ? (
+          <AddressForm
+            draft={draft}
+            onChange={setDraft}
+            onSubmit={() => void save()}
+            error={saveError}
+            isSaving={isSaving}
+            submitLabel={editing.mode === "edit" ? "Save changes" : "Save address"}
+            onCancel={closeEditor}
+            hasPin={pin !== null}
+            onRepin={() => setStep("pin")}
+            showDefaultToggle={addresses.length > 0}
+          />
+        ) : null}
       </Dialog>
 
       <Dialog

@@ -24,15 +24,32 @@ export function weekdayOf(isoDate: string): number | null {
   return (jsDay + 6) % 7;
 }
 
+/** Has the owner taken this one date off (a holiday)? Checked by the server whatever the hours. */
+export function isClosedDate(hours: PickupHours | null | undefined, isoDate: string): boolean {
+  return Boolean(isoDate) && (hours?.closed_dates ?? []).includes(isoDate);
+}
+
 /**
- * Is the owner open on this date? `true` when they have not set hours yet: the server books
- * those items without a day check, so the screen must not refuse them either.
+ * Is the owner open on this date? A day off always closes it. Otherwise `true` when they have
+ * not set hours yet: the server books those items without a weekday check, so the screen must
+ * not refuse them either.
  */
 export function isOpenOn(hours: PickupHours | null | undefined, isoDate: string): boolean {
+  if (isClosedDate(hours, isoDate)) return false;
   if (!hours?.is_set) return true;
   const weekday = weekdayOf(isoDate);
   if (weekday === null) return true;
   return hours.days.find((d) => d.weekday === weekday)?.is_open ?? false;
+}
+
+/** "Sat 25 Oct", read as a calendar date and never shifted by the browser's time zone. */
+function dateLabel(isoDate: string): string {
+  const [y = 0, m = 1, d = 1] = isoDate.split("-").map(Number);
+  return new Date(y, m - 1, d, 12).toLocaleDateString("en-IN", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
 }
 
 /** "Mon, Tue, Sat" — the days a customer can pick instead. */
@@ -57,6 +74,9 @@ export function closedDayMessage(
   what: "pickup" | "return",
 ): string | null {
   if (!isoDate || isOpenOn(hours, isoDate)) return null;
+  if (isClosedDate(hours, isoDate)) {
+    return `The owner is closed on ${dateLabel(isoDate)}. Choose another ${what} day.`;
+  }
   const weekday = weekdayOf(isoDate);
   const dayName = weekday === null ? "that day" : `${hours?.days[weekday]?.day_name ?? "that day"}s`;
   return `The owner is closed on ${dayName}. Choose a ${what} day they are open: ${openDaysLabel(hours)}.`;

@@ -2,10 +2,11 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { friendlyErrorMessage } from "@vsolve/query";
-import { Button, Card, Select, Spinner, cn, useToast } from "@vsolve/ui";
-import { Clock } from "lucide-react";
+import { Button, Card, Input, Spinner, cn, useToast } from "@vsolve/ui";
+import { Clock, Copy, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { TimePicker } from "@/components/time-picker";
 import {
   fetchPartnerPickupHours,
   savePartnerPickupHours,
@@ -16,20 +17,8 @@ const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Satu
 /** The form starts here for an owner who hasn't saved hours yet. */
 const DEFAULT_OPEN = "09:00";
 const DEFAULT_CLOSE = "21:00";
-
-/** 30-minute steps, 5 AM to 11:30 PM. */
-export const TIME_CHOICES: string[] = Array.from({ length: 38 }, (_, i) => {
-  const minutes = 5 * 60 + i * 30;
-  return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
-});
-
-export function timeLabel(hhmm: string): string {
-  const [h, m] = hhmm.split(":").map(Number);
-  if (h === undefined || m === undefined) return hhmm;
-  const suffix = h >= 12 ? "PM" : "AM";
-  const hour = h % 12 === 0 ? 12 : h % 12;
-  return m === 0 ? `${hour} ${suffix}` : `${hour}:${String(m).padStart(2, "0")} ${suffix}`;
-}
+/** The server accepts only the hour and the half hour. */
+const HALF_HOURS = [0, 30] as const;
 
 export type DayRow = { weekday: number; open: boolean; opensAt: string; closesAt: string };
 
@@ -55,22 +44,64 @@ export function rowsProblem(rows: DayRow[]): string | null {
   return bad ? `On ${DAY_NAMES[bad.weekday]}, closing time must be after opening time.` : null;
 }
 
+/** Today in the owner's own calendar, as `YYYY-MM-DD` — the earliest day worth closing. */
+export function todayIso(now: Date = new Date()): string {
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+/** Adds a closed date, kept sorted and without repeats. Past dates are not worth adding. */
+export function withClosedDate(dates: string[], added: string, today: string): string[] {
+  if (!added || added < today) return dates;
+  return [...new Set([...dates, added])].sort();
+}
+
+/** "Sat 25 Oct". Read as a calendar date, never shifted by the browser's time zone. */
+export function closedDateLabel(iso: string): string {
+  const [y = 0, m = 1, d = 1] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("en-IN", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
+}
+
+/** "12 hr", "9 hr 30 min". */
+export function hoursOpenText(opensAt: string, closesAt: string): string {
+  const [oh = 0, om = 0] = opensAt.split(":").map(Number);
+  const [ch = 0, cm = 0] = closesAt.split(":").map(Number);
+  const minutes = ch * 60 + cm - (oh * 60 + om);
+  if (minutes <= 0) return "";
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return [h ? `${h} hr` : "", m ? `${m} min` : ""].filter(Boolean).join(" ");
+}
+
 /**
- * The owner's pickup hours: which days they are open, and the hours for each day.
+ * The owner's pickup hours: which days they are open, the hours for each day, and the
+ * days off on top of that.
  *
- * There are no time slots. Customers pick dates and come any time inside that day's hours, so
- * a Saturday can run 9 AM to 9 PM and a Sunday 9 AM to 6 PM. New items can't go live until
- * these are saved.
+ * There are no time slots. Customers pick dates and come any time inside that day's hours,
+ * so a Saturday can run 9 AM to 9 PM and a Sunday 9 AM to 6 PM. A day off closes one date
+ * whatever its weekday says. New items can't go live until hours are saved.
+ *
+ * Laid out like stay visiting hours, so an owner who lists both sees one way to set a week.
  */
 export function PickupHoursCard({ className }: { className?: string }) {
   const qc = useQueryClient();
   const { notify } = useToast();
   const hours = useQuery({ queryKey: ["partner-rentals", "pickup-hours"], queryFn: fetchPartnerPickupHours });
   const [rows, setRows] = useState<DayRow[]>(() => rowsFrom(undefined));
+  const [closedDates, setClosedDates] = useState<string[]>([]);
+  const [newClosedDate, setNewClosedDate] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const today = todayIso();
 
   useEffect(() => {
-    if (hours.data) setRows(rowsFrom(hours.data));
+    if (!hours.data) return;
+    setRows(rowsFrom(hours.data));
+    setClosedDates(hours.data.closed_dates ?? []);
   }, [hours.data]);
 
   const save = useMutation({
@@ -79,6 +110,7 @@ export function PickupHoursCard({ className }: { className?: string }) {
         rows
           .filter((r) => r.open)
           .map((r) => ({ weekday: r.weekday, opens_at: r.opensAt, closes_at: r.closesAt })),
+        closedDates,
       ),
     onSuccess: (data) => {
       qc.setQueryData(["partner-rentals", "pickup-hours"], data);
@@ -126,57 +158,117 @@ export function PickupHoursCard({ className }: { className?: string }) {
           Loading your hours…
         </p>
       ) : (
-        <ul className="flex flex-col divide-y divide-line/70">
-          {rows.map((row) => (
-            <li key={row.weekday} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-2.5">
-              <label className="flex w-36 items-center gap-2 text-sm font-semibold text-navy-900">
-                <input
-                  type="checkbox"
-                  className="size-4 accent-[var(--color-action)]"
-                  checked={row.open}
-                  onChange={(e) => patch(row.weekday, { open: e.target.checked })}
-                />
-                {DAY_NAMES[row.weekday]}
-              </label>
-              {row.open ? (
-                <div className="flex items-center gap-2">
-                  <Select
-                    aria-label={`${DAY_NAMES[row.weekday]} opens`}
-                    value={row.opensAt}
-                    onChange={(e) => patch(row.weekday, { opensAt: e.target.value })}
+        <>
+          <ul className="flex flex-col divide-y divide-line overflow-visible rounded-card border border-line bg-surface">
+            {rows.map((row) => {
+              const name = DAY_NAMES[row.weekday]!;
+              return (
+                <li
+                  key={row.weekday}
+                  className="flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-center sm:px-4"
+                >
+                  <label className="flex w-36 shrink-0 cursor-pointer items-center gap-2.5">
+                    <input
+                      type="checkbox"
+                      checked={row.open}
+                      onChange={(e) => patch(row.weekday, { open: e.target.checked })}
+                      className="size-4 accent-[var(--color-navy-900)]"
+                    />
+                    <span className={`text-sm font-bold ${row.open ? "text-navy-900" : "text-text-muted"}`}>
+                      {name}
+                    </span>
+                  </label>
+
+                  {row.open ? (
+                    <div className="flex flex-1 flex-wrap items-center gap-2">
+                      <TimePicker
+                        label={`${name} opens`}
+                        value={row.opensAt}
+                        minutes={HALF_HOURS}
+                        onChange={(value) => patch(row.weekday, { opensAt: value })}
+                      />
+                      <span aria-hidden className="text-text-muted">
+                        –
+                      </span>
+                      <TimePicker
+                        label={`${name} closes`}
+                        value={row.closesAt}
+                        minutes={HALF_HOURS}
+                        onChange={(value) => patch(row.weekday, { closesAt: value })}
+                      />
+                      <span className="hidden text-xs text-text-muted sm:inline">
+                        {hoursOpenText(row.opensAt, row.closesAt)}
+                      </span>
+                      <button
+                        type="button"
+                        aria-label={`Copy ${name} hours to all days`}
+                        title="Copy to all days"
+                        onClick={() => copyToAll(row)}
+                        className="inline-flex size-9 items-center justify-center rounded-full text-text-secondary hover:bg-selected-surface hover:text-navy-900"
+                      >
+                        <Copy className="size-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="flex-1 text-sm text-text-muted">Closed</p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          <p className="-mt-2 text-xs text-text-secondary">
+            Tick a day to open it. <Copy className="inline size-3" aria-hidden /> copies that
+            day&apos;s hours to every day.
+          </p>
+
+          <div className="flex flex-col gap-2">
+            <p className="text-sm font-semibold text-navy-900">Days off</p>
+            <p className="text-xs text-text-secondary">
+              No pickups or returns on these dates, whatever the weekly hours say. An item already
+              out with a customer can stay out across them.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              {closedDates.map((day) => (
+                <span
+                  key={day}
+                  className="inline-flex items-center gap-1 rounded-full border border-line bg-surface px-3 py-1 text-xs font-semibold"
+                >
+                  {closedDateLabel(day)}
+                  <button
+                    type="button"
+                    aria-label={`Remove ${closedDateLabel(day)}`}
+                    onClick={() => {
+                      setError(null);
+                      setClosedDates((current) => current.filter((d) => d !== day));
+                    }}
                   >
-                    {TIME_CHOICES.map((t) => (
-                      <option key={t} value={t}>
-                        {timeLabel(t)}
-                      </option>
-                    ))}
-                  </Select>
-                  <span className="text-sm text-text-secondary">to</span>
-                  <Select
-                    aria-label={`${DAY_NAMES[row.weekday]} closes`}
-                    value={row.closesAt}
-                    onChange={(e) => patch(row.weekday, { closesAt: e.target.value })}
-                  >
-                    {TIME_CHOICES.map((t) => (
-                      <option key={t} value={t}>
-                        {timeLabel(t)}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-              ) : (
-                <span className="text-sm text-text-muted">Closed</span>
-              )}
-              <button
-                type="button"
-                className="ml-auto text-xs font-semibold text-action hover:underline"
-                onClick={() => copyToAll(row)}
+                    <X className="size-3.5" />
+                  </button>
+                </span>
+              ))}
+              <Input
+                type="date"
+                aria-label="Add a day off"
+                min={today}
+                value={newClosedDate}
+                onChange={(event) => setNewClosedDate(event.target.value)}
+                className="w-40"
+              />
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={!newClosedDate || newClosedDate < today}
+                onClick={() => {
+                  setError(null);
+                  setClosedDates((current) => withClosedDate(current, newClosedDate, today));
+                  setNewClosedDate("");
+                }}
               >
-                Copy to all days
-              </button>
-            </li>
-          ))}
-        </ul>
+                Add day off
+              </Button>
+            </div>
+          </div>
+        </>
       )}
 
       {hours.error ? <p className="text-sm text-danger-text">{friendlyErrorMessage(hours.error)}</p> : null}
@@ -187,14 +279,16 @@ export function PickupHoursCard({ className }: { className?: string }) {
       ) : null}
       <div className="flex flex-wrap items-center gap-3">
         <Button
-          disabled={save.isPending || hours.isPending}
+          disabled={hours.isPending}
+          loading={save.isPending}
+          loadingLabel="Saving…"
           onClick={() => {
             const problem = rowsProblem(rows);
             if (problem) return setError(problem);
             save.mutate();
           }}
         >
-          {save.isPending ? "Saving…" : "Save pickup hours"}
+          Save pickup hours
         </Button>
         {hours.data?.summary ? (
           <p className="text-sm text-text-secondary">Now: {hours.data.summary}</p>

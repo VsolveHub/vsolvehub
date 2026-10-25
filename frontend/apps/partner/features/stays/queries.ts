@@ -151,6 +151,8 @@ export async function createPartnerStayProperty(input: {
   cancellation_policy_text?: string;
   house_rules?: string;
   image_urls: string[];
+  /** The host's map pin. Guests only ever see it rounded to an area. */
+  pin?: { latitude: string; longitude: string } | null;
 }): Promise<StayProperty> {
   const body: Schemas["CreatePropertyRequest"] = {
     variant_id: input.variant_id,
@@ -164,6 +166,7 @@ export async function createPartnerStayProperty(input: {
     house_rules: input.house_rules ?? "",
     image_urls: input.image_urls,
     min_stay_nights: input.min_stay_nights ?? 1,
+    ...(input.pin ? { latitude: input.pin.latitude, longitude: input.pin.longitude } : {}),
   };
   // Property-first: only attach a unit when an explicit rate is provided.
   if (input.nightly_rate_paise != null) {

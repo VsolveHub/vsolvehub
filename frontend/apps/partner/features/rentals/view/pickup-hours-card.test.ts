@@ -6,7 +6,8 @@ vi.mock("@/features/rentals/queries", () => ({
   savePartnerPickupHours: vi.fn(),
 }));
 
-const { TIME_CHOICES, rowsFrom, rowsProblem, timeLabel } = await import("./pickup-hours-card");
+const { closedDateLabel, hoursOpenText, rowsFrom, rowsProblem, todayIso, withClosedDate } =
+  await import("./pickup-hours-card");
 
 describe("pickup hours form", () => {
   it("starts every day open 9 AM to 9 PM before hours are saved", () => {
@@ -19,6 +20,7 @@ describe("pickup hours form", () => {
     const rows = rowsFrom({
       is_set: true,
       summary: "Sat 9 AM-9 PM · Sun 9 AM-6 PM",
+      closed_dates: [],
       days: [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({
         weekday,
         day_name: "",
@@ -42,12 +44,31 @@ describe("pickup hours form", () => {
     expect(rowsProblem(rowsFrom(undefined))).toBeNull();
   });
 
-  it("offers half-hour steps from 5 AM to 11:30 PM", () => {
-    expect(TIME_CHOICES[0]).toBe("05:00");
-    expect(TIME_CHOICES.at(-1)).toBe("23:30");
-    expect(TIME_CHOICES).toContain("09:00");
-    expect(TIME_CHOICES).toContain("21:00");
-    expect(timeLabel("21:00")).toBe("9 PM");
-    expect(timeLabel("09:30")).toBe("9:30 AM");
+  it("says how long a day is open", () => {
+    expect(hoursOpenText("09:00", "21:00")).toBe("12 hr");
+    expect(hoursOpenText("09:00", "18:30")).toBe("9 hr 30 min");
+    expect(hoursOpenText("18:00", "09:00")).toBe("");
+  });
+});
+
+describe("days off", () => {
+  const today = "2026-10-25";
+
+  it("keeps them sorted and without repeats", () => {
+    const once = withClosedDate(["2026-11-14"], "2026-10-31", today);
+    expect(once).toEqual(["2026-10-31", "2026-11-14"]);
+    expect(withClosedDate(once, "2026-10-31", today)).toEqual(once);
+  });
+
+  it("does not add a day already past, or nothing at all", () => {
+    expect(withClosedDate([], "2026-10-24", today)).toEqual([]);
+    expect(withClosedDate([], "", today)).toEqual([]);
+    expect(withClosedDate([], today, today)).toEqual([today]);
+  });
+
+  it("reads a date as the calendar day it names", () => {
+    // Midnight UTC would be the previous day in a timezone west of Greenwich.
+    expect(closedDateLabel("2026-10-31")).toContain("31");
+    expect(todayIso(new Date(2026, 0, 5))).toBe("2026-01-05");
   });
 });

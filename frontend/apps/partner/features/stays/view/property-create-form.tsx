@@ -13,6 +13,8 @@ import {
   type StayPropertyType,
 } from "@/features/stays/queries";
 
+import { FindOnMap } from "@/features/location/view/find-on-map";
+
 import { AmenityChecklist } from "./amenity-checklist";
 import { SchemaQuestions } from "./schema-questions";
 import { collectSchemaAnswers, splitBySize } from "./stay-form-helpers";
@@ -57,6 +59,7 @@ export function PropertyCreateForm({
   const [tenantPreference, setTenantPreference] = useState("ANY");
   const [title, setTitle] = useState("");
   const [location, setLocation] = useState(defaultLocation);
+  const [pin, setPin] = useState<{ latitude: string; longitude: string } | null>(null);
   const [description, setDescription] = useState("");
   const [photos, setPhotos] = useState<PhotoDraft[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -160,6 +163,7 @@ export function PropertyCreateForm({
         ...(tenantPreference && tenantPreference !== "ANY" ? { tenant_preference: tenantPreference } : {}),
       },
       image_urls: urls,
+      pin,
     });
   }
 
@@ -250,6 +254,21 @@ export function PropertyCreateForm({
             placeholder="e.g. Madhapur, Hyderabad"
           />
         </Field>
+        <div className="-mt-2">
+          <FindOnMap
+            title="Find the property"
+            pin={pin}
+            onPicked={(picked) => {
+              setPin({ latitude: picked.latitude, longitude: picked.longitude });
+              // This field is "area, city" by definition, so the pin replaces it.
+              const areaAndCity = [picked.locality, picked.city].filter(Boolean).join(", ");
+              if (areaAndCity) setLocation(areaAndCity);
+            }}
+          />
+          <p className="mt-1.5 text-xs text-text-secondary">
+            Guests see the area on a map, never the exact building.
+          </p>
+        </div>
 
         <Field
           label="Building & common area photos"

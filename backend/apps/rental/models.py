@@ -12,6 +12,7 @@ from django.db import models
 from django.db.models import Q, QuerySet
 
 from apps.foundation.slugs import slug_base, unique_slug
+from apps.locations.pins import pin_constraints
 from apps.foundation.storage import private_file_storage
 
 
@@ -64,11 +65,15 @@ class RentalAsset(models.Model):
     daily_rate_paise = models.PositiveIntegerField()
     deposit_paise = models.PositiveIntegerField(default=0)
     location_text = models.CharField(max_length=180, blank=True)
-    #: Where a customer collects the item (Self Pickup). Plain text; no map coordinates yet.
+    #: Where a customer collects the item (Self Pickup).
     pickup_address_line = models.CharField(max_length=240, blank=True, default="")
     pickup_area = models.CharField(max_length=120, blank=True, default="")
     pickup_city = models.CharField(max_length=120, blank=True, default="")
     pickup_pincode = models.CharField(max_length=6, blank=True, default="")
+    #: The owner's map pin for the pickup address. Both or neither; an ad from before pins
+    #: existed has neither, and its link falls back to a search for the address text.
+    pickup_latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    pickup_longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     #: The owner can arrange transport on request and quotes a price for each request.
     delivery_available = models.BooleanField(default=False)
     moderation_status = models.CharField(
@@ -98,6 +103,11 @@ class RentalAsset(models.Model):
                 condition=models.Q(pickup_pincode="")
                 | models.Q(pickup_pincode__regex=r"^[1-9][0-9]{5}$"),
                 name="rental_asset_pickup_pincode_format",
+            ),
+            *pin_constraints(
+                prefix="rental_asset_pickup",
+                latitude="pickup_latitude",
+                longitude="pickup_longitude",
             ),
         ]
 
@@ -357,6 +367,33 @@ class RentalPickupDay(models.Model):
 
     def __str__(self) -> str:
         return f"{self.partner_id}:{self.weekday}"
+
+
+class RentalPickupClosedDate(models.Model):
+    """A date the owner takes no pickups or returns (a holiday), whatever the weekly hours say.
+
+    The rental twin of ``stay.VisitBlockedDate``: one list per owner, used by all their items.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    partner = models.ForeignKey(
+        "partners.PartnerProfile",
+        on_delete=models.CASCADE,
+        related_name="rental_pickup_closed_dates",
+    )
+    date = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("date",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=("partner", "date"), name="rental_pickup_closed_date_unique"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.partner_id}:{self.date}"
 
 
 class RentalPlatformFee(models.Model):

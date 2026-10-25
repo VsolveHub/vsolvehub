@@ -1,5 +1,7 @@
 """Production settings. Every secret and origin must be provided explicitly."""
 
+import os
+
 from django.core.exceptions import ImproperlyConfigured
 
 from config.settings.base import *
@@ -48,10 +50,10 @@ API_DOCS_ENABLED = env.bool("API_DOCS_ENABLED", default=False)
 
 if OTP_PROVIDER == "development" or OTP_DEVELOPMENT_CODE_ENABLED:
     raise ImproperlyConfigured("Development OTP delivery/exposure is forbidden in production.")
-if GEOCODING_PROVIDER == "unconfigured":
-    raise ImproperlyConfigured("GEOCODING_PROVIDER must be configured in production.")
-if "configure-production-contact" in GEOCODING_USER_AGENT:
-    raise ImproperlyConfigured("GEOCODING_USER_AGENT must identify a production contact.")
+if GEOCODING_PROVIDER != "google":
+    raise ImproperlyConfigured("GEOCODING_PROVIDER must be google in production.")
+if not GOOGLE_MAPS_SERVER_KEY:
+    raise ImproperlyConfigured("GOOGLE_MAPS_SERVER_KEY must be configured in production.")
 # Files on a server's own disk vanish when it is replaced: production keeps every file in R2.
 if not R2_PUBLIC_ENABLED:
     raise ImproperlyConfigured(
@@ -64,6 +66,12 @@ if not R2_PRIVATE_ENABLED:
     raise ImproperlyConfigured("R2_PRIVATE_BUCKET must be configured in production.")
 if R2_PRIVATE_BUCKET == R2_PUBLIC_BUCKET:
     raise ImproperlyConfigured("R2_PRIVATE_BUCKET must not be the public photo bucket.")
+# The development scanner marks every KYC upload clean without looking at it. Staging inherits these
+# settings and may use it so onboarding can be tested; production proper never may.
+if DOCUMENT_SCAN_PROVIDER == "development" and (
+    os.environ.get("DJANGO_SETTINGS_MODULE") != "config.settings.staging"
+):
+    raise ImproperlyConfigured("DOCUMENT_SCAN_PROVIDER=development is forbidden in production.")
 if DOCUMENT_STORAGE_PROVIDER not in {"r2", "supabase"}:
     raise ImproperlyConfigured("DOCUMENT_STORAGE_PROVIDER must be r2 or supabase in production.")
 if DOCUMENT_STORAGE_PROVIDER == "supabase" and not SUPABASE_STORAGE_URL.startswith("https://"):

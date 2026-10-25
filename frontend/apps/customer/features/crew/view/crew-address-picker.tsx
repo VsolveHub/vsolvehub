@@ -180,9 +180,6 @@ export function CrewAddressPicker({
       presentation={presentation}
       openSignal={openSignal}
       addNew={{
-        onLocate: locate,
-        isLocating: reverseGeocode.isPending,
-        locateError: locationError,
         onCreate: create,
         isCreating: createAddress.isPending,
         createError:

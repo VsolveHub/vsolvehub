@@ -697,14 +697,9 @@ MSG91_OTP_TEMPLATE_ID = env("MSG91_OTP_TEMPLATE_ID", default="")
 MSG91_API_BASE_URL = env("MSG91_API_BASE_URL", default="https://control.msg91.com/api/v5")
 
 GEOCODING_PROVIDER = env("GEOCODING_PROVIDER", default="unconfigured")
-GEOCODING_NOMINATIM_URL = env(
-    "GEOCODING_NOMINATIM_URL",
-    default="https://nominatim.openstreetmap.org",
-)
-GEOCODING_USER_AGENT = env(
-    "GEOCODING_USER_AGENT",
-    default="VsolveHub/0.1 (configure-production-contact)",
-)
+# Server-only Google key, restricted to the Geocoding API and the servers' IPs. The browser key the
+# frontends use for the map is a different key and never reaches Django.
+GOOGLE_MAPS_SERVER_KEY = env("GOOGLE_MAPS_SERVER_KEY", default="")
 GEOCODING_TIMEOUT_SECONDS = env.float("GEOCODING_TIMEOUT_SECONDS", default=3.0)
 GEOCODING_CACHE_SECONDS = env.int("GEOCODING_CACHE_SECONDS", default=60 * 60 * 24 * 7)
 GEOCODING_CACHE_COORDINATE_PRECISION = env.int(
@@ -715,6 +710,10 @@ GEOCODING_CACHE_COORDINATE_PRECISION = env.int(
 PARTNER_REQUIRED_DOCUMENT_KINDS = ("GOVERNMENT_ID",)
 # "r2" (Cloudflare, uses R2_PRIVATE_BUCKET above), "supabase", or "unconfigured".
 DOCUMENT_STORAGE_PROVIDER = env("DOCUMENT_STORAGE_PROVIDER", default="unconfigured")
+# Malware scanning of uploaded Partner documents; see `apps.partners.scanning`. `unconfigured`
+# leaves every document PENDING (fail closed); `development` marks everything clean and is refused
+# in production.
+DOCUMENT_SCAN_PROVIDER = env("DOCUMENT_SCAN_PROVIDER", default="unconfigured")
 SUPABASE_STORAGE_URL = env("SUPABASE_STORAGE_URL", default="")
 SUPABASE_SERVICE_ROLE_KEY = env("SUPABASE_SERVICE_ROLE_KEY", default="")
 PARTNER_DOCUMENT_BUCKET = env("PARTNER_DOCUMENT_BUCKET", default="partner-kyc")

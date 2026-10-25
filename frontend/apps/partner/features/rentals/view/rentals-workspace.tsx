@@ -26,6 +26,7 @@ import {
   uploadPartnerRentalPhoto,
   type RentalTaxonomySubcategory,
 } from "@/features/rentals/queries";
+import { FindOnMap } from "@/features/location/view/find-on-map";
 import { PickupHoursCard } from "@/features/rentals/view/pickup-hours-card";
 import { RentalFieldInput, fieldLabel, type SchemaProperty } from "@/features/rentals/view/rental-field-input";
 import { RENTAL_SECTIONS } from "@/features/rentals/view/rental-sections";
@@ -41,8 +42,19 @@ type PhotoDraft = {
   error?: string;
 };
 
-type PickupAddressForm = { line: string; area: string; city: string; pincode: string };
-const EMPTY_ADDRESS: PickupAddressForm = { line: "", area: "", city: "", pincode: "" };
+/**
+ * The pickup address, with its map pin when the owner placed one. The pin
+ * travels with the text — prefilled from the last item, reset after posting —
+ * and typing a correction keeps it, as it does on a Customer's address.
+ */
+type PickupAddressForm = {
+  line: string;
+  area: string;
+  city: string;
+  pincode: string;
+  pin: { latitude: string; longitude: string } | null;
+};
+const EMPTY_ADDRESS: PickupAddressForm = { line: "", area: "", city: "", pincode: "", pin: null };
 const PINCODE = /^[1-9][0-9]{5}$/;
 
 function schemaPropertyMap(
@@ -138,6 +150,10 @@ export function PartnerRentalsWorkspace() {
         area: latest.pickup_area,
         city: latest.pickup_city,
         pincode: latest.pickup_pincode,
+        pin:
+          latest.pickup_latitude && latest.pickup_longitude
+            ? { latitude: latest.pickup_latitude, longitude: latest.pickup_longitude }
+            : null,
       };
       setDefaultAddress(fromLatest);
       setAddress((current) => (current.line.trim() ? current : fromLatest));
@@ -309,6 +325,9 @@ export function PartnerRentalsWorkspace() {
       pickup_area: address.area.trim(),
       pickup_city: address.city.trim(),
       pickup_pincode: address.pincode.trim(),
+      ...(address.pin
+        ? { pickup_latitude: address.pin.latitude, pickup_longitude: address.pin.longitude }
+        : {}),
       delivery_available: deliveryAvailable,
       daily_rate_paise: dailyPaise,
       deposit_paise: depositPaise,
@@ -553,12 +572,30 @@ export function PartnerRentalsWorkspace() {
           </section>
 
           <section className="flex flex-col gap-3">
-            <div>
-              <h2 className="text-sm font-bold text-navy-900">Pickup address</h2>
-              <p className="mt-0.5 text-xs text-text-secondary">
-                Customers who choose Self Pickup see this address and a View Location button that
-                opens Google Maps. Prefilled from your last item; edit it if this one is elsewhere.
-              </p>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <h2 className="text-sm font-bold text-navy-900">Pickup address</h2>
+                <p className="mt-0.5 text-xs text-text-secondary">
+                  Customers who choose Self Pickup see this address and a View Location button that
+                  opens Google Maps. Prefilled from your last item; edit it or find it on the map if
+                  this one is elsewhere.
+                </p>
+              </div>
+              <FindOnMap
+                title="Find the pickup location"
+                pin={address.pin}
+                onPicked={(picked) =>
+                  // Area, city and pincode follow the pin. The first line keeps
+                  // what the owner typed — a shop name the map cannot know.
+                  setAddress((current) => ({
+                    line: current.line.trim() ? current.line : picked.line1,
+                    area: picked.locality || current.area,
+                    city: picked.city || current.city,
+                    pincode: picked.postal_code.replace(/\D/g, "").slice(0, 6) || current.pincode,
+                    pin: { latitude: picked.latitude, longitude: picked.longitude },
+                  }))
+                }
+              />
             </div>
             <Field label="Address" required>
               <Input

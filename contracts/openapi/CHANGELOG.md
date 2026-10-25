@@ -1,5 +1,57 @@
 # API Contract Changelog
 
+## 1.75.0 - Closed dates for rental pickups
+
+Additive.
+
+- `PickupHours` adds `closed_dates`: the owner's upcoming dates with no pickups or returns, whatever
+  the weekly hours say (holidays). Past dates are never listed.
+- `PickupHoursUpdateRequest` (`PUT /partner/rentals/pickup-hours`) takes optional `closed_dates`
+  (up to 366). Sent, it replaces the list; past dates in it are dropped. Left out, the existing
+  closed dates are kept.
+- A booking whose pickup or return day is a closed date is refused with `pickup_date_closed` /
+  `return_date_closed`, alongside the existing closed-weekday codes. An item can still be out with
+  the customer across a closed date.
+- Removed: none. Renamed: none.
+
+## 1.74.1 - Approving with no reason
+
+Fix. `OperationsTransitionRequest.reason` now defaults to `""`. Leaving it out of
+`POST /operations/partner-applications/{application_id}/transition/` used to fail with a `500` on
+every decision that does not need a reason (Approve, Start review); it now means "no reason".
+Decisions that require one still refuse a blank reason with `409 partner_transition_not_allowed`.
+
+## 1.74.0 - Directions to the Customer's pin
+
+Additive. Proposal 0028 (B4).
+
+- `PartnerSiteAddress` (enquiry invitations) and `EngagementSiteAddress` add `directions_url`: a
+  Google Maps route to the Customer's pinned address, under the same disclosure gate as the
+  address text. Empty when the address has no pin. The pin is not exposed as separate
+  coordinates.
+- Removed: none. Renamed: none.
+
+## 1.73.0 - Map pins for rental pickup and stay properties
+
+Additive. Proposal 0028 (B1–B3).
+
+- **Rental pickup pin.** `CreateAssetRequest` and `PatchedUpdateAssetRequest` (`POST` / `PATCH`
+  of partner rental assets) take `pickup_latitude` and `pickup_longitude` (six-decimal strings,
+  nullable). Send both or neither: one alone → `400` with `pin_incomplete` on `pickup_latitude`.
+  Two nulls clear the pin; omitting both in a `PATCH` keeps it, including when the address text
+  changes.
+- `RentalAsset` (and every serializer built on it) adds read-only `pickup_latitude` /
+  `pickup_longitude`. `PickupAddress` adds `latitude` / `longitude` (nullable), and its `maps_url`
+  now opens the exact pin when there is one; without a pin it is the address search it was.
+- **Stay property pin.** `CreatePropertyRequest` and `PatchedUpdatePropertyRequest` take
+  `latitude` and `longitude` with the same both-or-neither rule. `PartnerProperty` (the
+  host's own view) returns the exact pin. Guests never see it: `Property` adds read-only
+  `area_latitude` / `area_longitude`, the pin rounded to two decimals (about 1 km), `null` when
+  the host has not pinned the property.
+- **Reverse geocoding** (`POST /geocoding/reverse/`) now answers from Google. The response shape
+  is unchanged; `provider` reads `google`.
+- Removed: none. Renamed: none.
+
 ## 1.72.0 - Referral rewards on their way
 
 Additive. Customers can see what a referral will pay and when, before it lands.

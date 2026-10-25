@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.69.0)
- * Checksum: f34b11378cec29ca
+ * Checksum: 27eaa86783213eac
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -9446,7 +9446,17 @@ export interface components {
          * @enum {string}
          */
         ContentTypeEnum: "image/jpeg" | "image/png" | "application/pdf";
+        /**
+         * @description The owner's map pin for the pickup address.
+         *
+         *     Send ``pickup_latitude`` and ``pickup_longitude`` together. Two nulls clear the pin; leaving
+         *     both out of an edit keeps it. One without the other is a 400 (``pin_incomplete``).
+         */
         CreateAssetRequest: {
+            /** Format: decimal */
+            pickup_latitude?: string | null;
+            /** Format: decimal */
+            pickup_longitude?: string | null;
             /** Format: uuid */
             variant_id: string;
             title: string;
@@ -9514,7 +9524,18 @@ export interface components {
             name: string;
             image_urls?: string[];
         };
+        /**
+         * @description The host's map pin for the property.
+         *
+         *     Send ``latitude`` and ``longitude`` together. Two nulls clear the pin; leaving both out of an
+         *     edit keeps it. One without the other is a 400 (``pin_incomplete``). Guests only ever see it
+         *     rounded to an area (``area_latitude`` / ``area_longitude``).
+         */
         CreatePropertyRequest: {
+            /** Format: decimal */
+            latitude?: string | null;
+            /** Format: decimal */
+            longitude?: string | null;
             /** Format: uuid */
             variant_id: string;
             title: string;
@@ -10564,7 +10585,7 @@ export interface components {
             readonly previous: string | null;
             readonly results: components["schemas"]["Engagement"][];
         };
-        /** @description Where the work is. Same shape as the visit-side disclosure; no coordinates. */
+        /** @description Where the work is. Same shape as the visit-side disclosure: the pin only inside a route. */
         EngagementSiteAddress: {
             readonly line1: string;
             readonly line2: string;
@@ -10573,6 +10594,8 @@ export interface components {
             readonly city: string;
             readonly state: string;
             readonly postal_code: string;
+            /** @description Google Maps route to the Customer's pin. Empty if the address has none. */
+            readonly directions_url: string;
         };
         /**
          * @description One shift-day or one milestone, with its money and its clocks.
@@ -12159,7 +12182,8 @@ export interface components {
         OperationsTransitionRequest: {
             expected_version: number;
             target_status: components["schemas"]["TargetStatusEnum"];
-            reason?: string;
+            /** @default  */
+            reason: string;
         };
         OpsCancelStayReservationRequest: {
             /** @default  */
@@ -13140,8 +13164,16 @@ export interface components {
             readonly highlights: components["schemas"]["StayHighlight"][];
             readonly can_review: boolean;
             readonly visits_offered: boolean;
+            /** Format: decimal */
+            readonly area_latitude: string | null;
+            /** Format: decimal */
+            readonly area_longitude: string | null;
             /** Format: date-time */
             readonly created_at: string;
+            /** Format: decimal */
+            latitude?: string | null;
+            /** Format: decimal */
+            longitude?: string | null;
             moderation_reason?: string;
             listing_status?: components["schemas"]["ListingStatusEnum"];
             visits_enabled?: boolean;
@@ -13217,8 +13249,10 @@ export interface components {
         /**
          * @description The visit destination, disclosed only once the paid visit is genuinely scheduled.
          *
-         *     Customer identity and contact remain absent. Coordinates remain absent too: the Partner needs
-         *     a destination, not a reusable precision-location feed.
+         *     Customer identity and contact remain absent. The Customer's pin travels only inside
+         *     ``directions_url`` — a route to the door, under the same disclosure gate as the address text —
+         *     and never as separate coordinates, which would read as a location feed rather than a
+         *     destination.
          */
         PartnerSiteAddress: {
             line1: string;
@@ -13228,6 +13262,8 @@ export interface components {
             city: string;
             state: string;
             postal_code: string;
+            /** @description Google Maps route to the Customer's pin. Empty if the address has none. */
+            directions_url: string;
         };
         /** @description A code/name pair, for the chips the directory renders. */
         PartnerSkillChip: {
@@ -13594,6 +13630,10 @@ export interface components {
         };
         /** @description Fields the owner can edit on an existing ad. All optional — only sent fields change. */
         PatchedUpdateAssetRequest: {
+            /** Format: decimal */
+            pickup_latitude?: string | null;
+            /** Format: decimal */
+            pickup_longitude?: string | null;
             title?: string;
             description?: string;
             daily_rate_paise?: number;
@@ -13610,7 +13650,18 @@ export interface components {
         PatchedUpdateLookRequest: {
             name?: string;
         };
+        /**
+         * @description The host's map pin for the property.
+         *
+         *     Send ``latitude`` and ``longitude`` together. Two nulls clear the pin; leaving both out of an
+         *     edit keeps it. One without the other is a 400 (``pin_incomplete``). Guests only ever see it
+         *     rounded to an area (``area_latitude`` / ``area_longitude``).
+         */
         PatchedUpdatePropertyRequest: {
+            /** Format: decimal */
+            latitude?: string | null;
+            /** Format: decimal */
+            longitude?: string | null;
             title?: string;
             description?: string;
             location_text?: string;
@@ -13825,7 +13876,17 @@ export interface components {
             area: string;
             city: string;
             pincode: string;
-            /** @description Google Maps search for the address. Empty if none. */
+            /**
+             * Format: decimal
+             * @description The owner's pin, or null.
+             */
+            latitude: string | null;
+            /**
+             * Format: decimal
+             * @description The owner's pin, or null.
+             */
+            longitude: string | null;
+            /** @description Google Maps link: the pin when there is one, else a search for the address. Empty if neither. */
             maps_url: string;
         };
         PickupDay: {
@@ -13851,10 +13912,17 @@ export interface components {
             days: components["schemas"]["PickupDay"][];
             /** @description e.g. "Mon-Sat 9 AM-9 PM · Sun 9 AM-6 PM". */
             summary: string;
+            /** @description Upcoming dates with no pickups or returns, whatever the weekly hours say. */
+            closed_dates: string[];
         };
-        /** @description The open days only. A day left out is closed. */
+        /**
+         * @description The open days only. A day left out is closed.
+         *
+         *     ``closed_dates`` replaces the owner's closed dates when sent; leaving it out keeps them.
+         */
         PickupHoursUpdateRequest: {
             days: components["schemas"]["PickupDayInputRequest"][];
+            closed_dates?: string[];
         };
         PlanQuoteCreateRequest: {
             /** Format: uuid */
@@ -14308,6 +14376,10 @@ export interface components {
             readonly highlights: components["schemas"]["StayHighlight"][];
             readonly can_review: boolean;
             readonly visits_offered: boolean;
+            /** Format: decimal */
+            readonly area_latitude: string | null;
+            /** Format: decimal */
+            readonly area_longitude: string | null;
             /** Format: date-time */
             readonly created_at: string;
         };
@@ -15537,6 +15609,10 @@ export interface components {
             readonly pickup_area: string;
             readonly pickup_city: string;
             readonly pickup_pincode: string;
+            /** Format: decimal */
+            readonly pickup_latitude: string | null;
+            /** Format: decimal */
+            readonly pickup_longitude: string | null;
             readonly pickup_address: components["schemas"]["PickupAddress"];
             readonly delivery_available: boolean;
             /** Format: date-time */
@@ -15566,6 +15642,10 @@ export interface components {
             readonly pickup_area: string;
             readonly pickup_city: string;
             readonly pickup_pincode: string;
+            /** Format: decimal */
+            readonly pickup_latitude: string | null;
+            /** Format: decimal */
+            readonly pickup_longitude: string | null;
             readonly pickup_address: components["schemas"]["PickupAddress"];
             readonly delivery_available: boolean;
             /** Format: date-time */

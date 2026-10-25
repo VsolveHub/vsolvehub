@@ -38,6 +38,7 @@ const DISCLOSED_ADDRESS: Schemas["PartnerSiteAddress"] = {
   city: "Hyderabad",
   state: "Telangana",
   postal_code: "500072",
+  directions_url: "https://www.google.com/maps/dir/?api=1&destination=17.494812,78.399574",
 };
 
 function renderProject(

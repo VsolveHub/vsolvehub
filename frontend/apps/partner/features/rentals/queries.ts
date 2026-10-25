@@ -216,10 +216,18 @@ export async function fetchPartnerPickupHours(): Promise<PickupHours> {
   return request(() => getApiClient().GET("/api/v1/partner/rentals/pickup-hours"));
 }
 
-/** Replace the whole schedule. Days left out are closed. */
-export async function savePartnerPickupHours(days: PickupDayInput[]): Promise<PickupHours> {
+/**
+ * Replace the whole schedule. Days left out are closed; `closed_dates` replaces the
+ * owner's days off (holidays), which no pickup or return can fall on.
+ */
+export async function savePartnerPickupHours(
+  days: PickupDayInput[],
+  closedDates: string[],
+): Promise<PickupHours> {
   return request(() =>
-    getApiClient().PUT("/api/v1/partner/rentals/pickup-hours", { body: { days } }),
+    getApiClient().PUT("/api/v1/partner/rentals/pickup-hours", {
+      body: { days, closed_dates: closedDates },
+    }),
   );
 }
 

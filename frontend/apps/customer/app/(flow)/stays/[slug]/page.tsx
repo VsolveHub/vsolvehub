@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { Badge, Button, Dialog, ErrorState, Skeleton, Textarea } from "@vsolve/ui";
+import { MapEmbed } from "@vsolve/ui/map-embed";
 
 import {
   MAX_PHOTO_BYTES,
@@ -37,6 +38,7 @@ import {
 import { StayCard, StayImageGallery, StayQuotePanel, amenityIcon } from "@/features/stays/view";
 import { LookSwitcher } from "@/features/stays/view/look-switcher";
 import { lookTitle, pickLook, visibleLooks } from "@/features/stays/looks";
+import { GOOGLE_MAPS_KEY } from "@/lib/google-maps";
 import { STAYS_HREF } from "@/lib/routes";
 import { useCanonicalSlug } from "@/lib/use-canonical-slug";
 
@@ -221,6 +223,19 @@ export default function StayDetailPage() {
                 <span>{property.location_text}</span>
               </div>
             )}
+
+            {/* The area only: the server rounds the host's pin to about a kilometre and
+                the map carries no marker, so it never points at the building. */}
+            {property.area_latitude && property.area_longitude ? (
+              <MapEmbed
+                apiKey={GOOGLE_MAPS_KEY}
+                latitude={property.area_latitude}
+                longitude={property.area_longitude}
+                mode="area"
+                title={`Map of the area around ${property.title}`}
+                className="mt-3"
+              />
+            ) : null}
 
             {property.min_stay_nights && property.min_stay_nights > 1 && (
               <div className="mt-2 flex items-center gap-1.5 text-xs text-text-secondary">

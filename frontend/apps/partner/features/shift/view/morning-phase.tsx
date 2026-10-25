@@ -36,7 +36,9 @@ export function addressLine(address: Engagement["site_address"]): string {
     .join(", ");
 }
 
+/** The server's route to the Customer's pin; a search for the text only if it sent none. */
 export function mapsHref(address: Engagement["site_address"]): string {
+  if (address?.directions_url) return address.directions_url;
   const query = [addressLine(address), address?.postal_code ?? ""].filter((part) => part !== "").join(" ");
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 }

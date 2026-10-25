@@ -23213,7 +23213,22 @@ components:
         * `application/pdf` - application/pdf
     CreateAssetRequest:
       type: object
+      description: |-
+        The owner's map pin for the pickup address.
+
+        Send ``pickup_latitude`` and ``pickup_longitude`` together. Two nulls clear the pin; leaving
+        both out of an edit keeps it. One without the other is a 400 (``pin_incomplete``).
       properties:
+        pickup_latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        pickup_longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
         variant_id:
           type: string
           format: uuid
@@ -23366,7 +23381,23 @@ components:
       - name
     CreatePropertyRequest:
       type: object
+      description: |-
+        The host's map pin for the property.
+
+        Send ``latitude`` and ``longitude`` together. Two nulls clear the pin; leaving both out of an
+        edit keeps it. One without the other is a 400 (``pin_incomplete``). Guests only ever see it
+        rounded to an area (``area_latitude`` / ``area_longitude``).
       properties:
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
         variant_id:
           type: string
           format: uuid
@@ -25959,8 +25990,8 @@ components:
       - results
     EngagementSiteAddress:
       type: object
-      description: Where the work is. Same shape as the visit-side disclosure; no
-        coordinates.
+      description: 'Where the work is. Same shape as the visit-side disclosure: the
+        pin only inside a route.'
       properties:
         line1:
           type: string
@@ -25983,8 +26014,14 @@ components:
         postal_code:
           type: string
           readOnly: true
+        directions_url:
+          type: string
+          readOnly: true
+          description: Google Maps route to the Customer's pin. Empty if the address
+            has none.
       required:
       - city
+      - directions_url
       - landmark
       - line1
       - line2
@@ -30014,6 +30051,7 @@ components:
           $ref: '#/components/schemas/TargetStatusEnum'
         reason:
           type: string
+          default: ''
           maxLength: 2000
       required:
       - expected_version
@@ -32637,10 +32675,32 @@ components:
         visits_offered:
           type: boolean
           readOnly: true
+        area_latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          nullable: true
+          readOnly: true
+        area_longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          nullable: true
+          readOnly: true
         created_at:
           type: string
           format: date-time
           readOnly: true
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
         moderation_reason:
           type: string
           maxLength: 480
@@ -32661,6 +32721,8 @@ components:
           readOnly: true
       required:
       - amenities
+      - area_latitude
+      - area_longitude
       - booking_mode
       - can_review
       - created_at
@@ -32885,8 +32947,10 @@ components:
       description: |-
         The visit destination, disclosed only once the paid visit is genuinely scheduled.
 
-        Customer identity and contact remain absent. Coordinates remain absent too: the Partner needs
-        a destination, not a reusable precision-location feed.
+        Customer identity and contact remain absent. The Customer's pin travels only inside
+        ``directions_url`` — a route to the door, under the same disclosure gate as the address text —
+        and never as separate coordinates, which would read as a location feed rather than a
+        destination.
       properties:
         line1:
           type: string
@@ -32902,8 +32966,13 @@ components:
           type: string
         postal_code:
           type: string
+        directions_url:
+          type: string
+          description: Google Maps route to the Customer's pin. Empty if the address
+            has none.
       required:
       - city
+      - directions_url
       - landmark
       - line1
       - line2
@@ -33794,6 +33863,16 @@ components:
       description: Fields the owner can edit on an existing ad. All optional — only
         sent fields change.
       properties:
+        pickup_latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        pickup_longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
         title:
           type: string
           minLength: 1
@@ -33836,7 +33915,23 @@ components:
           maxLength: 60
     PatchedUpdatePropertyRequest:
       type: object
+      description: |-
+        The host's map pin for the property.
+
+        Send ``latitude`` and ``longitude`` together. Two nulls clear the pin; leaving both out of an
+        edit keeps it. One without the other is a 400 (``pin_incomplete``). Guests only ever see it
+        rounded to an area (``area_latitude`` / ``area_longitude``).
       properties:
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
         title:
           type: string
           minLength: 1
@@ -34384,13 +34479,28 @@ components:
           type: string
         pincode:
           type: string
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+          description: The owner's pin, or null.
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          nullable: true
+          description: The owner's pin, or null.
         maps_url:
           type: string
-          description: Google Maps search for the address. Empty if none.
+          description: 'Google Maps link: the pin when there is one, else a search
+            for the address. Empty if neither.'
       required:
       - area
       - city
+      - latitude
       - line
+      - longitude
       - maps_url
       - partner_name
       - pincode
@@ -34451,18 +34561,35 @@ components:
         summary:
           type: string
           description: e.g. "Mon-Sat 9 AM-9 PM · Sun 9 AM-6 PM".
+        closed_dates:
+          type: array
+          items:
+            type: string
+            format: date
+          description: Upcoming dates with no pickups or returns, whatever the weekly
+            hours say.
       required:
+      - closed_dates
       - days
       - is_set
       - summary
     PickupHoursUpdateRequest:
       type: object
-      description: The open days only. A day left out is closed.
+      description: |-
+        The open days only. A day left out is closed.
+
+        ``closed_dates`` replaces the owner's closed dates when sent; leaving it out keeps them.
       properties:
         days:
           type: array
           items:
             $ref: '#/components/schemas/PickupDayInputRequest'
+        closed_dates:
+          type: array
+          items:
+            type: string
+            format: date
+          maxItems: 366
       required:
       - days
     PlanQuoteCreateRequest:
@@ -35560,12 +35687,26 @@ components:
         visits_offered:
           type: boolean
           readOnly: true
+        area_latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          nullable: true
+          readOnly: true
+        area_longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          nullable: true
+          readOnly: true
         created_at:
           type: string
           format: date-time
           readOnly: true
       required:
       - amenities
+      - area_latitude
+      - area_longitude
       - booking_mode
       - can_review
       - created_at
@@ -38685,6 +38826,18 @@ components:
         pickup_pincode:
           type: string
           readOnly: true
+        pickup_latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          readOnly: true
+          nullable: true
+        pickup_longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          readOnly: true
+          nullable: true
         pickup_address:
           allOf:
           - $ref: '#/components/schemas/PickupAddress'
@@ -38713,6 +38866,8 @@ components:
       - pickup_address_line
       - pickup_area
       - pickup_city
+      - pickup_latitude
+      - pickup_longitude
       - pickup_pincode
       - public_state
       - quantity_available
@@ -38791,6 +38946,18 @@ components:
         pickup_pincode:
           type: string
           readOnly: true
+        pickup_latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          readOnly: true
+          nullable: true
+        pickup_longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          readOnly: true
+          nullable: true
         pickup_address:
           allOf:
           - $ref: '#/components/schemas/PickupAddress'
@@ -38824,6 +38991,8 @@ components:
       - pickup_area
       - pickup_city
       - pickup_hours
+      - pickup_latitude
+      - pickup_longitude
       - pickup_pincode
       - public_state
       - quantity_available

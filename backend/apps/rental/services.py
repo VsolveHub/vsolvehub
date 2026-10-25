@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date, timedelta
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
@@ -32,6 +33,7 @@ from apps.rental.models import (
     overlapping_reservations,
     overlapping_reserved_quantity,
 )
+from apps.locations.pins import KeepPin, Pin, apply_pin
 from apps.rental.pickup_address import (
     PickupAddressError,
     clean_pincode,
@@ -230,6 +232,7 @@ def create_asset(
     pickup_area: str = "",
     pickup_city: str = "",
     pickup_pincode: str = "",
+    pickup_pin: tuple[Decimal, Decimal] | None = None,
     delivery_available: bool = False,
 ) -> RentalAsset:
     _require_rental_capability(partner)
@@ -266,6 +269,8 @@ def create_asset(
         pickup_area=(pickup_area or "").strip(),
         pickup_city=(pickup_city or "").strip(),
         pickup_pincode=pincode,
+        pickup_latitude=pickup_pin[0] if pickup_pin else None,
+        pickup_longitude=pickup_pin[1] if pickup_pin else None,
         delivery_available=bool(delivery_available),
         asset_identifier=asset_identifier,
         quantity_available=quantity_available,
@@ -308,6 +313,7 @@ def auto_publish_asset(
     pickup_area: str = "",
     pickup_city: str = "",
     pickup_pincode: str = "",
+    pickup_pin: tuple[Decimal, Decimal] | None = None,
     delivery_available: bool = False,
 ) -> RentalAsset:
     """Create and immediately publish an ad after automatic checks.
@@ -337,6 +343,7 @@ def auto_publish_asset(
         pickup_area=pickup_area,
         pickup_city=pickup_city,
         pickup_pincode=pickup_pincode,
+        pickup_pin=pickup_pin,
         delivery_available=delivery_available,
     )
     # Automatic checks for publish readiness.
@@ -388,6 +395,7 @@ def update_asset(
     pickup_area: str | None = None,
     pickup_city: str | None = None,
     pickup_pincode: str | None = None,
+    pickup_pin: Pin = KeepPin.KEEP,
     delivery_available: bool | None = None,
 ) -> RentalAsset:
     """Edit an existing ad. Only the owner can edit, and only non-REMOVED/RETIRED ads."""
@@ -435,6 +443,10 @@ def update_asset(
     }
     update_fields += _apply_pickup_address(
         asset, address, keep_location_text=location_text is not None
+    )
+    # Independent of the text: a typo fix in the address keeps the pin, as a Customer's does.
+    update_fields += apply_pin(
+        asset, pickup_pin, latitude="pickup_latitude", longitude="pickup_longitude"
     )
     if delivery_available is not None:
         asset.delivery_available = bool(delivery_available)

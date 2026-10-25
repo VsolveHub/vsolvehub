@@ -27,6 +27,7 @@ from apps.partners.models import (
     PartnerDocument,
     PartnerDocumentUpload,
 )
+from apps.partners.scanning import DocumentScanner, get_document_scanner
 from apps.partners.storage import (
     DocumentStorage,
     DocumentStorageError,
@@ -232,7 +233,9 @@ def finalize_partner_document_upload(
         raise PartnerDocumentUploadError(failure_message)
     if document is None:
         raise PartnerDocumentUploadError("The uploaded document could not be finalized.")
-    return document
+    # After the commit, so a scanner that is slow or fails never undoes an accepted upload. A
+    # scanner with no verdict yet leaves the document PENDING, which is the fail-closed state.
+    return scan_partner_document(document.id)
 
 
 @transaction.atomic
@@ -252,6 +255,40 @@ def record_partner_document_scan_result(
         update_fields=("scan_status", "scanned_at", "scan_failure_code"),
     )
     return document
+
+
+def scan_partner_document(
+    document_id: uuid.UUID,
+    *,
+    scanner: DocumentScanner | None = None,
+) -> PartnerDocument:
+    """Run the configured scanner on one document and record its verdict, if it gave one.
+
+    A document that already has a verdict is left alone: a scan result is recorded once.
+    """
+    document = PartnerDocument.objects.get(id=document_id)
+    if document.scan_status != PartnerDocument.ScanStatus.PENDING:
+        return document
+    verdict = (scanner or get_document_scanner()).scan(document)
+    if verdict is None:
+        return document
+    return record_partner_document_scan_result(
+        document_id=document.id,
+        is_clean=verdict.is_clean,
+        failure_code=verdict.failure_code,
+    )
+
+
+def scan_pending_partner_documents(*, scanner: DocumentScanner | None = None) -> int:
+    """Scan every document still ``PENDING``. Returns how many received a verdict."""
+    chosen = scanner or get_document_scanner()
+    scanned = 0
+    pending = PartnerDocument.objects.filter(scan_status=PartnerDocument.ScanStatus.PENDING)
+    for document_id in pending.values_list("id", flat=True):
+        document = scan_partner_document(document_id, scanner=chosen)
+        if document.scan_status != PartnerDocument.ScanStatus.PENDING:
+            scanned += 1
+    return scanned
 
 
 def cleanup_stale_partner_document_uploads(

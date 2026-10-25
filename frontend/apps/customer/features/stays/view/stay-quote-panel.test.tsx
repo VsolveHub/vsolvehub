@@ -50,6 +50,8 @@ function mockProperty(overrides: Partial<Schemas["Property"]> = {}): Schemas["Pr
     highlights: [],
     can_review: false,
     visits_offered: false,
+    area_latitude: null,
+    area_longitude: null,
     public_state: "PUBLISHED",
     media: [],
     reviews: [],

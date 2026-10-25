@@ -100,6 +100,13 @@ def test_a_confirmed_lead_is_told_where_to_go_and_whom_to_ring(world: M2World) -
 
     assert data["site_address"] is not None
     assert data["site_address"]["city"]
+    address = engagement.requirement.address
+    assert data["site_address"]["directions_url"] == (
+        f"https://www.google.com/maps/dir/?api=1&destination={address.latitude},{address.longitude}"
+    )
+    # A route, never a coordinate feed: no bare latitude or longitude alongside it.
+    assert "latitude" not in data["site_address"]
+    assert "longitude" not in data["site_address"]
     assert data["customer_contact"] == {
         "name": world.customer.full_name or "Customer",
         "phone": world.customer.phone_number,

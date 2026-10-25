@@ -4,6 +4,7 @@ from django.conf import settings
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
+from apps.locations.pins import combine_pin, latitude_field, longitude_field
 from apps.rental.models import (
     RentalAsset,
     RentalAssetMedia,
@@ -12,7 +13,7 @@ from apps.rental.models import (
     RentalTransportRequest,
 )
 from apps.rental.pickup_address import pickup_address_payload
-from apps.rental.pickup_hours import payload_from_rows
+from apps.rental.pickup_hours import MAX_CLOSED_DATES, payload_from_rows
 from apps.rental.services import booking_amount_due
 
 
@@ -24,7 +25,34 @@ class PickupAddressSerializer(serializers.Serializer):
     area = serializers.CharField()
     city = serializers.CharField()
     pincode = serializers.CharField()
-    maps_url = serializers.CharField(help_text="Google Maps search for the address. Empty if none.")
+    latitude = serializers.DecimalField(
+        max_digits=9, decimal_places=6, allow_null=True, help_text="The owner's pin, or null."
+    )
+    longitude = serializers.DecimalField(
+        max_digits=9, decimal_places=6, allow_null=True, help_text="The owner's pin, or null."
+    )
+    maps_url = serializers.CharField(
+        help_text="Google Maps link: the pin when there is one, else a search for the address. "
+        "Empty if neither."
+    )
+
+
+class PickupPinFields(serializers.Serializer[dict[str, Any]]):
+    """The owner's map pin for the pickup address.
+
+    Send ``pickup_latitude`` and ``pickup_longitude`` together. Two nulls clear the pin; leaving
+    both out of an edit keeps it. One without the other is a 400 (``pin_incomplete``).
+    """
+
+    pickup_latitude = latitude_field()
+    pickup_longitude = longitude_field()
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        attrs = super().validate(attrs)
+        combine_pin(
+            attrs, latitude="pickup_latitude", longitude="pickup_longitude", into="pickup_pin"
+        )
+        return attrs
 
 
 class PickupDaySerializer(serializers.Serializer):
@@ -39,6 +67,10 @@ class PickupHoursSerializer(serializers.Serializer):
     is_set = serializers.BooleanField(help_text="False until the owner saves their hours.")
     days = PickupDaySerializer(many=True)
     summary = serializers.CharField(help_text='e.g. "Mon-Sat 9 AM-9 PM · Sun 9 AM-6 PM".')
+    closed_dates = serializers.ListField(
+        child=serializers.DateField(),
+        help_text="Upcoming dates with no pickups or returns, whatever the weekly hours say.",
+    )
 
 
 class PickupDayInputSerializer(serializers.Serializer):
@@ -48,13 +80,22 @@ class PickupDayInputSerializer(serializers.Serializer):
 
 
 class PickupHoursUpdateSerializer(serializers.Serializer):
-    """The open days only. A day left out is closed."""
+    """The open days only. A day left out is closed.
+
+    ``closed_dates`` replaces the owner's closed dates when sent; leaving it out keeps them.
+    """
 
     days = PickupDayInputSerializer(many=True)
+    closed_dates = serializers.ListField(
+        child=serializers.DateField(), required=False, max_length=MAX_CLOSED_DATES
+    )
 
 
 def _pickup_hours(asset: RentalAsset) -> dict[str, Any]:
-    return payload_from_rows(list(asset.partner.rental_pickup_days.all()))
+    return payload_from_rows(
+        list(asset.partner.rental_pickup_days.all()),
+        list(asset.partner.rental_pickup_closed_dates.all()),
+    )
 
 
 class RentalAssetMediaSerializer(serializers.ModelSerializer):
@@ -99,6 +140,8 @@ class RentalAssetSerializer(serializers.ModelSerializer):
             "pickup_area",
             "pickup_city",
             "pickup_pincode",
+            "pickup_latitude",
+            "pickup_longitude",
             "pickup_address",
             "delivery_available",
             "created_at",
@@ -126,7 +169,7 @@ class RentalPhotoUploadSerializer(serializers.Serializer):
     original_name = serializers.CharField()
 
 
-class CreateAssetSerializer(serializers.Serializer):
+class CreateAssetSerializer(PickupPinFields):
     variant_id = serializers.UUIDField()
     title = serializers.CharField(max_length=180)
     description = serializers.CharField(required=False, allow_blank=True, default="")
@@ -269,7 +312,7 @@ class PartnerBookingActionSerializer(serializers.Serializer):
     )
 
 
-class UpdateAssetSerializer(serializers.Serializer):
+class UpdateAssetSerializer(PickupPinFields):
     """Fields the owner can edit on an existing ad. All optional — only sent fields change."""
 
     title = serializers.CharField(max_length=180, required=False)

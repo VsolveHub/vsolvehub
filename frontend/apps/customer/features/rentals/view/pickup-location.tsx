@@ -1,5 +1,8 @@
 import { Clock, MapPin } from "lucide-react";
 import { cn } from "@vsolve/ui";
+import { MapEmbed } from "@vsolve/ui/map-embed";
+
+import { GOOGLE_MAPS_KEY } from "@/lib/google-maps";
 
 import { dayHoursLabel, weekdayOf, type PickupAddress, type PickupHours } from "../pickup";
 
@@ -11,17 +14,20 @@ function todayIso(): string {
 /**
  * Where to collect a Self Pickup rental, and when the owner is there.
  *
- * "View Location" opens Google Maps searching for the address the owner typed. The server
- * builds that link; there are no map coordinates yet.
+ * "View Location" opens Google Maps at the owner's pin, or searching for the address they typed
+ * when the ad predates pins. The server builds that link. `showMap` adds a small map of the pin,
+ * for the item's own page rather than for a list of bookings.
  */
 export function PickupLocation({
   address,
   hours,
   className,
+  showMap = false,
 }: {
   address: PickupAddress | null | undefined;
   hours?: PickupHours | null;
   className?: string;
+  showMap?: boolean;
 }) {
   const place = address ? [address.area, address.city].filter((p) => p.trim()).join(", ") : "";
   const today = weekdayOf(todayIso());
@@ -52,6 +58,16 @@ export function PickupLocation({
       ) : (
         <p className="mt-1.5 text-text-secondary">The owner hasn&rsquo;t added the pickup address yet.</p>
       )}
+      {showMap && address?.latitude && address.longitude ? (
+        <MapEmbed
+          apiKey={GOOGLE_MAPS_KEY}
+          latitude={address.latitude}
+          longitude={address.longitude}
+          mode="place"
+          title="Map of the pickup location"
+          className="mt-2 h-40"
+        />
+      ) : null}
       {address?.maps_url ? (
         <a
           href={address.maps_url}

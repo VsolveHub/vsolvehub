@@ -115,7 +115,13 @@ BOOKING_RELATED = (
     "deposit",
     "deposit__payment_attempt",
 )
-BOOKING_PREFETCH = ("lines", "asset__partner__rental_pickup_days", "asset__media", "transport")
+BOOKING_PREFETCH = (
+    "lines",
+    "asset__partner__rental_pickup_days",
+    "asset__partner__rental_pickup_closed_dates",
+    "asset__media",
+    "transport",
+)
 
 
 def _booking_rows() -> Any:
@@ -175,7 +181,9 @@ class RentalDetailView(APIView):
     def get(self, _request: Any, key: str) -> Response:
         """``key`` is the page slug; an old link's asset id still works."""
         asset = get_object_or_404(
-            public_assets().prefetch_related("partner__rental_pickup_days"),
+            public_assets().prefetch_related(
+                "partner__rental_pickup_days", "partner__rental_pickup_closed_dates"
+            ),
             **lookup_by_slug_or_id(key),
         )
         return Response(RentalAssetDetailSerializer(asset).data)
@@ -299,7 +307,11 @@ class PartnerPickupHoursView(APIView):
             for d in ser.validated_data["days"]
         ]
         try:
-            save_pickup_hours(partner=partner, days=days)
+            save_pickup_hours(
+                partner=partner,
+                days=days,
+                closed_dates=ser.validated_data.get("closed_dates"),
+            )
         except PickupHoursError as exc:
             _raise_domain_error(exc)
         return Response(pickup_hours_payload(partner.id))

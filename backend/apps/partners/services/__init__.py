@@ -60,6 +60,8 @@ from .documents import (
     issue_partner_document_upload,
     record_partner_document_scan_result,
     review_partner_document,
+    scan_partner_document,
+    scan_pending_partner_documents,
 )
 from .presence import (
     _assert_operational_eligibility,
@@ -134,6 +136,8 @@ __all__ = [
     "replace_partner_schedule",
     "replace_partner_schedule_for_operations",
     "review_partner_document",
+    "scan_partner_document",
+    "scan_pending_partner_documents",
     "submit_partner_application",
     "transition_partner_application",
     "update_partner_application",

@@ -121,7 +121,10 @@ class OperationsTransitionSerializer(serializers.Serializer[dict[str, object]]):
             PartnerApplication.Status.OFFBOARDED,
         ),
     )
-    reason = serializers.CharField(required=False, allow_blank=True, max_length=2000)
+    # Optional for the decisions that do not need one, so leaving it out means "no reason". The
+    # default matters: the service takes ``reason`` as a required argument, and an omitted field
+    # used to reach it as a missing keyword — a 500 on every Approve with the reason box empty.
+    reason = serializers.CharField(required=False, allow_blank=True, max_length=2000, default="")
 
 
 class OperationsDocumentReviewSerializer(serializers.Serializer[dict[str, object]]):

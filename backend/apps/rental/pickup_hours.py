@@ -7,6 +7,10 @@ and comes any time inside that day's hours.
 No row for a weekday means closed that day. An owner with no rows has not set hours yet, which is
 not the same as closed every day: their items stay bookable, the page says the hours are not set,
 and a new item cannot be published until they are.
+
+On top of the weekly hours an owner can close single dates — a holiday, a wedding in the family.
+No pickup or return is booked on one, whatever the weekday's hours say. Only pickup and return
+days matter: an item can be out with the customer across a closed date.
 """
 
 from __future__ import annotations
@@ -16,8 +20,9 @@ from datetime import date, time
 from typing import Any
 
 from django.db import transaction
+from django.utils import timezone
 
-from apps.rental.models import RentalPickupDay
+from apps.rental.models import RentalPickupClosedDate, RentalPickupDay
 
 DAY_NAMES = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 FULL_DAY_NAMES = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
@@ -25,6 +30,8 @@ FULL_DAY_NAMES = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Satur
 DEFAULT_OPENS_AT = time(9, 0)
 DEFAULT_CLOSES_AT = time(21, 0)
 STEP_MINUTES = 30
+#: A year of holidays is more than anyone sets; the cap keeps one request from writing thousands.
+MAX_CLOSED_DATES = 366
 
 
 class PickupHoursError(ValueError):
@@ -75,9 +82,20 @@ def validate_days(days: list[DayHours]) -> list[DayHours]:
 
 
 @transaction.atomic
-def save_pickup_hours(*, partner: Any, days: list[DayHours]) -> list[RentalPickupDay]:
-    """Replace the owner's whole schedule. Days left out are closed."""
+def save_pickup_hours(
+    *,
+    partner: Any,
+    days: list[DayHours],
+    closed_dates: list[date] | None = None,
+) -> list[RentalPickupDay]:
+    """Replace the owner's whole schedule. Days left out are closed.
+
+    ``closed_dates`` replaces the list of closed dates when given. ``None`` leaves it as it is, so
+    a client that only edits the weekly hours cannot wipe the owner's holidays.
+    """
     clean = validate_days(days)
+    if closed_dates is not None:
+        _replace_closed_dates(partner=partner, closed_dates=closed_dates)
     RentalPickupDay.objects.filter(partner=partner).delete()
     return [
         RentalPickupDay.objects.create(
@@ -85,6 +103,21 @@ def save_pickup_hours(*, partner: Any, days: list[DayHours]) -> list[RentalPicku
         )
         for d in clean
     ]
+
+
+def _replace_closed_dates(*, partner: Any, closed_dates: list[date]) -> None:
+    # Dates already past are dropped rather than refused: they can no longer stop a booking, and a
+    # form opened yesterday that still lists yesterday's holiday should save, not fail.
+    today = timezone.localdate()
+    upcoming = sorted({day for day in closed_dates if day >= today})
+    if len(upcoming) > MAX_CLOSED_DATES:
+        raise PickupHoursError(
+            f"Close at most {MAX_CLOSED_DATES} dates.", code="pickup_closed_dates_too_many"
+        )
+    RentalPickupClosedDate.objects.filter(partner=partner).delete()
+    RentalPickupClosedDate.objects.bulk_create(
+        RentalPickupClosedDate(partner=partner, date=day) for day in upcoming
+    )
 
 
 def _rows(partner_id: Any) -> list[RentalPickupDay]:
@@ -104,11 +137,28 @@ def _closed_day_error(day: date, rows: list[RentalPickupDay], *, what: str, code
     )
 
 
-def check_open_days(*, partner_id: Any, start_date: date, end_date: date) -> None:
-    """Refuse a pickup or return date the owner is closed on.
+def _closed_date_error(day: date, *, what: str, code: str) -> None:
+    raise PickupHoursError(
+        f"The owner is closed on {day.strftime('%a %d %b')}. Choose another {what} day.",
+        code=code,
+    )
 
-    An owner who has not set hours is not checked: their items stay bookable (R-11).
+
+def check_open_days(*, partner_id: Any, start_date: date, end_date: date) -> None:
+    """Refuse a pickup or return date the owner is closed on — a closed date or a closed weekday.
+
+    An owner who has not set hours is not checked against weekdays: their items stay bookable
+    (R-11). A closed date is always honoured.
     """
+    closed = set(
+        RentalPickupClosedDate.objects.filter(
+            partner_id=partner_id, date__in=(start_date, end_date)
+        ).values_list("date", flat=True)
+    )
+    if start_date in closed:
+        _closed_date_error(start_date, what="pickup", code="pickup_date_closed")
+    if end_date in closed:
+        _closed_date_error(end_date, what="return", code="return_date_closed")
     rows = _rows(partner_id)
     if not rows:
         return
@@ -142,13 +192,21 @@ def summary(rows: list[RentalPickupDay]) -> str:
 
 
 def pickup_hours_payload(partner_id: Any) -> dict[str, Any]:
-    """Seven rows, Monday first, for the item page and the owner's form."""
-    return payload_from_rows(_rows(partner_id))
+    """Seven rows, Monday first, and the upcoming closed dates, for the item page and the form."""
+    return payload_from_rows(
+        _rows(partner_id),
+        list(RentalPickupClosedDate.objects.filter(partner_id=partner_id)),
+    )
 
 
-def payload_from_rows(rows: list[RentalPickupDay]) -> dict[str, Any]:
+def payload_from_rows(
+    rows: list[RentalPickupDay],
+    closed: list[RentalPickupClosedDate] | None = None,
+) -> dict[str, Any]:
     """Same as ``pickup_hours_payload`` from rows already loaded (a prefetch)."""
     rows = sorted(rows, key=lambda r: r.weekday)
+    today = timezone.localdate()
+    closed_dates = sorted(c.date for c in closed or [] if c.date >= today)
     by_day = {r.weekday: r for r in rows}
     days = []
     for weekday in range(7):
@@ -162,4 +220,9 @@ def payload_from_rows(rows: list[RentalPickupDay]) -> dict[str, Any]:
                 "closes_at": row.closes_at.strftime("%H:%M") if row else None,
             }
         )
-    return {"is_set": bool(rows), "days": days, "summary": summary(rows)}
+    return {
+        "is_set": bool(rows),
+        "days": days,
+        "summary": summary(rows),
+        "closed_dates": [day.isoformat() for day in closed_dates],
+    }

@@ -72,6 +72,13 @@ that commit is its work, unreviewed, not Claude's.
 - **Codex** keeps `backend/**` and `contracts/openapi/**` unchanged.
 - Antigravity has no active frontend assignment under this directive.
 
+#### Google Maps location — owner directive, October 2026
+
+The owner directed Claude to build the Google Maps location feature (contract proposal 0028) end
+to end, **including** `backend/**`, `contracts/openapi/**` and the backend docs it touches, because
+Codex will not build it. The scope is that feature only: the geocoder swap, the rental and stay
+pins, their contract and their tests. It is not a general transfer of backend ownership.
+
 Both agents are working the same tree concurrently. Two practical rules learned the hard
 way here: never `git add -A` (it swept six of Codex's live backend edits into a frontend
 commit, which had to be split back out), and stage explicit paths only.

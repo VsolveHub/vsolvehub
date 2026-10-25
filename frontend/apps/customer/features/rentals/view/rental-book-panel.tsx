@@ -378,7 +378,7 @@ export function RentalBookPanel({ asset }: RentalBookPanelProps) {
             </Field>
           </div>
         ) : (
-          <PickupLocation address={asset.pickup_address} hours={hours} />
+          <PickupLocation address={asset.pickup_address} hours={hours} showMap />
         )}
 
         {maxQty > 1 ? (

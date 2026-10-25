@@ -24,6 +24,7 @@ describe("SiteAddress", () => {
           city: "Hyderabad",
           state: "Telangana",
           postal_code: "500072",
+          directions_url: "https://www.google.com/maps/dir/?api=1&destination=17.494812,78.399574",
         }}
       />,
     );
@@ -34,4 +35,36 @@ describe("SiteAddress", () => {
     expect(screen.getByText("Near Metro station")).toBeInTheDocument();
     expect(screen.getByText("Kukatpally, Hyderabad, 500072")).toBeInTheDocument();
   });
+
+  it("routes to the Customer's pin, not a search for the text", () => {
+    render(<SiteAddress approximateArea="Kukatpally, Hyderabad" address={PINNED} />);
+
+    expect(screen.getByRole("link", { name: /open route in maps/i })).toHaveAttribute(
+      "href",
+      "https://www.google.com/maps/dir/?api=1&destination=17.494812,78.399574",
+    );
+  });
+
+  it("routes to the typed address only when the server sent no pin", () => {
+    render(
+      <SiteAddress
+        approximateArea="Kukatpally, Hyderabad"
+        address={{ ...PINNED, directions_url: "" }}
+      />,
+    );
+
+    const href = screen.getByRole("link", { name: /open route in maps/i }).getAttribute("href");
+    expect(href).toContain("destination=Plot%2014");
+  });
 });
+
+const PINNED = {
+  line1: "Plot 14",
+  line2: "",
+  landmark: "",
+  locality: "Kukatpally",
+  city: "Hyderabad",
+  state: "Telangana",
+  postal_code: "500072",
+  directions_url: "https://www.google.com/maps/dir/?api=1&destination=17.494812,78.399574",
+};

@@ -5,7 +5,7 @@ from dataclasses import asdict, dataclass
 from decimal import Decimal
 from typing import Protocol, cast
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode, urlparse
+from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from django.conf import settings
@@ -40,26 +40,38 @@ class UnconfiguredReverseGeocoder:
         raise GeocodingError("No reverse-geocoding provider is configured.")
 
 
-class NominatimReverseGeocoder:
+GOOGLE_GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json"
+
+#: Component types whose short name is the useful one ("IN", not "India").
+_SHORT_NAME_TYPES = frozenset({"country"})
+
+
+class GoogleReverseGeocoder:
+    """Google Geocoding API, server side only.
+
+    The key travels in the query string because that is how the API takes it, so the request URL
+    is never logged and failures carry a generic message. Google's own ``error_message`` is not
+    passed on either: it can echo the request.
+
+    The coordinates returned are the ones asked about, not the result's geometry. The caller's pin
+    is the truth; the address text is a description of it.
+    """
+
     def reverse(self, *, latitude: Decimal, longitude: Decimal) -> GeocodedAddress:
+        key = cast(str, settings.GOOGLE_MAPS_SERVER_KEY)
+        if not key:
+            raise GeocodingError("Reverse-geocoding provider key is not configured.")
         query = urlencode(
             {
-                "format": "jsonv2",
-                "lat": str(latitude),
-                "lon": str(longitude),
-                "addressdetails": "1",
+                "latlng": f"{latitude},{longitude}",
+                "key": key,
+                "language": "en",
+                "region": "in",
             },
         )
-        endpoint = cast(str, settings.GEOCODING_NOMINATIM_URL).rstrip("/")
-        if urlparse(endpoint).scheme != "https":
-            raise GeocodingError("Reverse-geocoding endpoint must use HTTPS.")
-        request = Request(  # noqa: S310 - endpoint is trusted server configuration.
-            f"{endpoint}/reverse?{query}",
-            headers={
-                "Accept": "application/json",
-                "Accept-Language": "en",
-                "User-Agent": cast(str, settings.GEOCODING_USER_AGENT),
-            },
+        request = Request(  # noqa: S310 - fixed HTTPS endpoint.
+            f"{GOOGLE_GEOCODE_URL}?{query}",
+            headers={"Accept": "application/json"},
         )
         try:
             with urlopen(request, timeout=settings.GEOCODING_TIMEOUT_SECONDS) as response:  # noqa: S310
@@ -67,21 +79,34 @@ class NominatimReverseGeocoder:
         except (HTTPError, URLError, TimeoutError, json.JSONDecodeError) as exc:
             raise GeocodingError("Reverse-geocoding provider request failed.") from exc
 
-        if not isinstance(payload, dict) or payload.get("error"):
-            raise GeocodingError("Reverse-geocoding provider returned no address.")
-        address = payload.get("address")
-        if not isinstance(address, dict):
+        if not isinstance(payload, dict):
             raise GeocodingError("Reverse-geocoding provider returned malformed data.")
+        status = payload.get("status")
+        if status == "ZERO_RESULTS":
+            raise GeocodingError("Reverse-geocoding provider returned no address.")
+        if status != "OK":
+            raise GeocodingError(f"Reverse-geocoding provider refused the request ({status}).")
 
-        road = _first_text(address, "road", "pedestrian", "residential", "neighbourhood")
-        house_number = _first_text(address, "house_number")
-        line1 = " ".join(value for value in (house_number, road) if value).strip()
-        locality = _first_text(address, "suburb", "neighbourhood", "quarter", "village")
-        city = _first_text(address, "city", "town", "municipality", "county", "village")
-        state = _first_text(address, "state", "state_district")
-        postal_code = _first_text(address, "postcode")
-        country_code = _first_text(address, "country_code").upper() or "IN"
-        formatted = str(payload.get("display_name", "")).strip()
+        result = _best_result(payload.get("results"))
+        components = _components(result.get("address_components"))
+        street = " ".join(
+            value for value in (components.get("street_number"), components.get("route")) if value
+        ).strip()
+        line1 = street or components.get("premise", "")
+        locality = _first_component(
+            components,
+            "sublocality_level_1",
+            "sublocality",
+            "neighborhood",
+            "sublocality_level_2",
+        )
+        city = _first_component(
+            components,
+            "locality",
+            "administrative_area_level_3",
+            "administrative_area_level_2",
+        )
+        formatted = str(result.get("formatted_address", "")).strip()
         if not formatted:
             raise GeocodingError("Reverse-geocoding provider returned no display address.")
 
@@ -90,27 +115,59 @@ class NominatimReverseGeocoder:
             line1=line1 or locality or city,
             locality=locality,
             city=city,
-            state=state,
-            postal_code=postal_code,
-            country_code=country_code,
+            state=components.get("administrative_area_level_1", ""),
+            postal_code=components.get("postal_code", ""),
+            country_code=components.get("country", "").upper() or "IN",
             latitude=latitude,
             longitude=longitude,
-            provider="nominatim",
+            provider="google",
         )
 
 
-def _first_text(mapping: dict[object, object], *keys: str) -> str:
-    for key in keys:
-        value = mapping.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
+def _best_result(results: object) -> dict[str, object]:
+    """The first result describing a place, skipping bare plus codes ("7J9W+2X Hyderabad")."""
+    if not isinstance(results, list):
+        raise GeocodingError("Reverse-geocoding provider returned malformed data.")
+    candidates = [result for result in results if isinstance(result, dict)]
+    for result in candidates:
+        types = result.get("types")
+        if not (isinstance(types, list) and "plus_code" in types):
+            return result
+    raise GeocodingError("Reverse-geocoding provider returned no address.")
+
+
+def _components(raw: object) -> dict[str, str]:
+    """``address_components`` keyed by type; the first component of a type wins."""
+    mapped: dict[str, str] = {}
+    if not isinstance(raw, list):
+        return mapped
+    for component in raw:
+        if not isinstance(component, dict):
+            continue
+        types = component.get("types")
+        if not isinstance(types, list):
+            continue
+        for kind in types:
+            if not isinstance(kind, str) or kind in mapped:
+                continue
+            name = component.get("short_name" if kind in _SHORT_NAME_TYPES else "long_name")
+            if isinstance(name, str) and name.strip():
+                mapped[kind] = name.strip()
+    return mapped
+
+
+def _first_component(components: dict[str, str], *kinds: str) -> str:
+    for kind in kinds:
+        value = components.get(kind)
+        if value:
+            return value
     return ""
 
 
 def get_reverse_geocoder() -> ReverseGeocoder:
     provider = cast(str, settings.GEOCODING_PROVIDER).lower()
-    if provider == "nominatim":
-        return NominatimReverseGeocoder()
+    if provider == "google":
+        return GoogleReverseGeocoder()
     return UnconfiguredReverseGeocoder()
 
 

@@ -16,6 +16,7 @@ from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
+from apps.locations.pins import directions_url
 from apps.partners.photos import partner_photo_url
 from apps.requirements import crew_brief, crew_mix, financials, proposals
 from apps.requirements.models import (
@@ -524,8 +525,10 @@ class VendorAttachmentListSerializer(serializers.Serializer[dict[str, Any]]):
 class PartnerSiteAddressSerializer(serializers.Serializer[dict[str, Any]]):
     """The visit destination, disclosed only once the paid visit is genuinely scheduled.
 
-    Customer identity and contact remain absent. Coordinates remain absent too: the Partner needs
-    a destination, not a reusable precision-location feed.
+    Customer identity and contact remain absent. The Customer's pin travels only inside
+    ``directions_url`` — a route to the door, under the same disclosure gate as the address text —
+    and never as separate coordinates, which would read as a location feed rather than a
+    destination.
     """
 
     line1 = serializers.CharField()
@@ -535,6 +538,9 @@ class PartnerSiteAddressSerializer(serializers.Serializer[dict[str, Any]]):
     city = serializers.CharField()
     state = serializers.CharField()
     postal_code = serializers.CharField()
+    directions_url = serializers.CharField(
+        help_text="Google Maps route to the Customer's pin. Empty if the address has none."
+    )
 
 
 _SITE_ADDRESS_DISCLOSED_STATUSES = (
@@ -659,6 +665,7 @@ class EnquiryDetailSerializer(EnquirySummarySerializer):
             "city": address.city,
             "state": address.state,
             "postal_code": address.postal_code,
+            "directions_url": directions_url(address.latitude, address.longitude),
         }
 
     @staticmethod

@@ -61,7 +61,7 @@ function booking(
       delivered_at: null,
       ...transport,
     },
-    pickup_hours: { is_set: false, days: [], summary: "" },
+    pickup_hours: { is_set: false, days: [], summary: "", closed_dates: [] },
     notes: "",
     asset: {} as Schemas["RentalAsset"],
     deposit: {} as Schemas["RentalDeposit"],

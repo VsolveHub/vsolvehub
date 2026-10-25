@@ -95,7 +95,9 @@ function addressText(address: NonNullable<Engagement["site_address"]>): string {
     .join(", ");
 }
 
+/** The server's route to the Customer's pin; a search for the text only if it sent none. */
 function mapHref(address: NonNullable<Engagement["site_address"]>): string {
+  if (address.directions_url) return address.directions_url;
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressText(address))}`;
 }
 

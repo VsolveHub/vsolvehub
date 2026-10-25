@@ -6,7 +6,7 @@ import { Button, Input } from "@vsolve/ui";
 import { Copy, Plus, Trash2, X } from "lucide-react";
 import { useState } from "react";
 
-import { TimePicker, clockText } from "./time-picker";
+import { TimePicker, clockText } from "@/components/time-picker";
 
 import {
   WEEKDAY_NAMES,

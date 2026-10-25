@@ -10,6 +10,7 @@ from django.conf import settings
 from django.db import models
 
 from apps.foundation.slugs import slug_base, unique_slug
+from apps.locations.pins import pin_constraints
 from apps.foundation.storage_paths import (
     stay_ad_upload_to as _unified_stay_ad_upload_to,
 )
@@ -58,6 +59,11 @@ class Property(models.Model):
     slug = models.SlugField(max_length=100, unique=True, editable=False)
     description = models.TextField(blank=True)
     location_text = models.CharField(max_length=180, blank=True)
+    #: The host's map pin. Both or neither; a property from before pins existed has neither.
+    #: Guests see it only rounded to an area (`apps.locations.pins.AREA_DECIMALS`): the public
+    #: listing names the area and city, never the building.
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     moderation_status = models.CharField(
         max_length=16, choices=ModerationStatus.choices, default=ModerationStatus.DRAFT
     )
@@ -80,6 +86,9 @@ class Property(models.Model):
     class Meta:
         ordering = ("-created_at",)
         verbose_name_plural = "properties"
+        constraints = [
+            *pin_constraints(prefix="stay_property", latitude="latitude", longitude="longitude"),
+        ]
 
     def __str__(self) -> str:
         return self.title

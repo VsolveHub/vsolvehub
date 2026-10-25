@@ -62,12 +62,16 @@ function mockAsset(overrides: Partial<Schemas["RentalAsset"]> = {}): Schemas["Re
     pickup_area: "Koramangala",
     pickup_city: "Bengaluru",
     pickup_pincode: "560034",
+    pickup_latitude: null,
+    pickup_longitude: null,
     pickup_address: {
       partner_name: "Tool Master Rentals",
       line: "Shop 4, Main Road",
       area: "Koramangala",
       city: "Bengaluru",
       pincode: "560034",
+      latitude: null,
+      longitude: null,
       maps_url: "https://www.google.com/maps/search/?api=1&query=Shop%204%2C%20Main%20Road",
     },
     delivery_available: false,
@@ -91,7 +95,7 @@ function mockBooking(overrides: Partial<Schemas["RentalBooking"]> = {}): Schemas
     transport_fee_paise: 0,
     amount_due_paise: 300000,
     transport: null,
-    pickup_hours: { is_set: false, days: [], summary: "" },
+    pickup_hours: { is_set: false, days: [], summary: "", closed_dates: [] },
     notes: "",
     asset: mockAsset(),
     deposit: {
@@ -261,7 +265,7 @@ describe("RentalBookPanel", () => {
     }));
     render(
       <RentalBookPanel
-        asset={{ ...mockAsset(), pickup_hours: { is_set: true, days, summary: "" } }}
+        asset={{ ...mockAsset(), pickup_hours: { is_set: true, days, summary: "", closed_dates: [] } }}
       />,
       { wrapper },
     );

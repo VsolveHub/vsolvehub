@@ -1,5 +1,6 @@
 "use client";
 
+import { describeError } from "@vsolve/query";
 import { Badge, Button, Card, ErrorState, Field, Spinner, Textarea } from "@vsolve/ui";
 import { useState } from "react";
 
@@ -9,6 +10,7 @@ import {
   type ReviewAction,
 } from "../model/decisions";
 import {
+  isClaimedElsewhere,
   isSelfReview,
   isVersionConflict,
   useApplicationDetail,
@@ -135,7 +137,7 @@ export function ReviewDetail({ applicationId }: { applicationId: string | null }
             title={
               isSelfReview(claim.error)
                 ? "You cannot claim your own record"
-                : isVersionConflict(claim.error)
+                : isClaimedElsewhere(claim.error)
                   ? "Someone else claimed it first"
                   : "We could not claim it"
             }
@@ -188,9 +190,12 @@ export function ReviewDetail({ applicationId }: { applicationId: string | null }
                   : "We could not record that decision"
               }
               message={
+                // The server's own reason — "Approve the latest required documents
+                // before approving this application" — is customer-safe by
+                // contract and is the only thing that tells a reviewer what to fix.
                 isSelfReview(transition.error)
                   ? "Someone else has to review this one."
-                  : "Nothing was changed. Try again in a moment."
+                  : describeError(transition.error, "mutation").message
               }
             />
           ) : null}

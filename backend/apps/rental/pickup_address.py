@@ -1,13 +1,15 @@
 """The Self Pickup address of a rental item, and its Google Maps link.
 
-The owner types the address (line, area, city, pincode). There is no map picker and no stored
-latitude/longitude yet, so the link is a Google Maps *search* for the address text. The Maps URLs
-API needs no key. The server builds the link so every app opens the same place.
+The owner types the address (line, area, city, pincode) and may drop a map pin for it. With a pin
+the link opens that exact point; without one — every ad from before pins existed — it is a Google
+Maps *search* for the address text. The Maps URLs API needs no key. The server builds the link so
+every app opens the same place.
 """
 
 from __future__ import annotations
 
 import re
+from decimal import Decimal
 from typing import Any
 from urllib.parse import quote
 
@@ -47,9 +49,22 @@ def missing_parts(asset: RentalAsset) -> list[str]:
     return missing
 
 
-def maps_url(*, line: str, area: str, city: str, pincode: str) -> str:
-    """Address only. The business name is left out: a shop Google doesn't know by name would
-    send the search somewhere else."""
+def maps_url(
+    *,
+    line: str,
+    area: str,
+    city: str,
+    pincode: str,
+    latitude: Decimal | None = None,
+    longitude: Decimal | None = None,
+) -> str:
+    """The pin when there is one, else the address text.
+
+    Address only, never the business name: a shop Google doesn't know by name would send the
+    search somewhere else.
+    """
+    if latitude is not None and longitude is not None:
+        return f"{MAPS_SEARCH_URL}{latitude},{longitude}"
     query = ", ".join(p.strip() for p in (line, area, city, pincode) if p and p.strip())
     return f"{MAPS_SEARCH_URL}{quote(query, safe='')}" if query else ""
 
@@ -63,10 +78,14 @@ def pickup_address_payload(asset: RentalAsset) -> dict[str, Any]:
         "area": asset.pickup_area,
         "city": asset.pickup_city,
         "pincode": asset.pickup_pincode,
+        "latitude": asset.pickup_latitude,
+        "longitude": asset.pickup_longitude,
         "maps_url": maps_url(
             line=line,
             area=asset.pickup_area,
             city=asset.pickup_city,
             pincode=asset.pickup_pincode,
+            latitude=asset.pickup_latitude,
+            longitude=asset.pickup_longitude,
         ),
     }

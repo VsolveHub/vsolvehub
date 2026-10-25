@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 from typing import Any
 
 from django.utils import timezone
@@ -6,6 +7,7 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.catalog.models import A9VariantConfiguration
+from apps.locations.pins import area_of, combine_pin, latitude_field, longitude_field
 from apps.stay.models import (
     Property,
     PropertyMedia,
@@ -270,6 +272,14 @@ class PropertySummarySerializer(serializers.ModelSerializer):
         return round(sum(r.rating for r in items) / len(items), 1)
 
 
+AREA_COORDINATE = serializers.DecimalField(max_digits=5, decimal_places=2, allow_null=True)
+
+
+def _area_text(value: Decimal | None) -> str | None:
+    area = area_of(value)
+    return None if area is None else f"{area:.2f}"
+
+
 class PropertySerializer(serializers.ModelSerializer):
     public_state = serializers.CharField(read_only=True)
     host_name = serializers.CharField(source="host.display_name", read_only=True)
@@ -285,6 +295,10 @@ class PropertySerializer(serializers.ModelSerializer):
     can_review = serializers.SerializerMethodField()
     #: Whether guests can "Schedule a visit": the host switched visits on and set slots.
     visits_offered = serializers.SerializerMethodField()
+    #: The host's pin rounded to an area (about 1 km), for a map of where the property is.
+    #: Null when the host has not pinned it. The exact pin is the host's only.
+    area_latitude = serializers.SerializerMethodField()
+    area_longitude = serializers.SerializerMethodField()
 
     class Meta:
         model = Property
@@ -312,6 +326,8 @@ class PropertySerializer(serializers.ModelSerializer):
             "highlights",
             "can_review",
             "visits_offered",
+            "area_latitude",
+            "area_longitude",
             "created_at",
         )
 
@@ -344,6 +360,14 @@ class PropertySerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         return customer_can_review(customer=getattr(request, "user", None), prop=obj)
 
+    @extend_schema_field(AREA_COORDINATE)
+    def get_area_latitude(self, obj: Property) -> str | None:
+        return _area_text(obj.latitude)
+
+    @extend_schema_field(AREA_COORDINATE)
+    def get_area_longitude(self, obj: Property) -> str | None:
+        return _area_text(obj.longitude)
+
     def get_visits_offered(self, obj: Property) -> bool:
         from apps.stay.visits import visits_offered  # noqa: PLC0415
 
@@ -354,6 +378,23 @@ class StayVisitSlotSerializer(serializers.ModelSerializer[VisitSlot]):
     class Meta:
         model = VisitSlot
         fields = ("id", "weekday", "start_time", "end_time")
+
+
+class PropertyPinFields(serializers.Serializer[dict[str, Any]]):
+    """The host's map pin for the property.
+
+    Send ``latitude`` and ``longitude`` together. Two nulls clear the pin; leaving both out of an
+    edit keeps it. One without the other is a 400 (``pin_incomplete``). Guests only ever see it
+    rounded to an area (``area_latitude`` / ``area_longitude``).
+    """
+
+    latitude = latitude_field()
+    longitude = longitude_field()
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        attrs = super().validate(attrs)
+        combine_pin(attrs, latitude="latitude", longitude="longitude", into="pin")
+        return attrs
 
 
 class PartnerPropertySerializer(PropertySerializer):
@@ -369,6 +410,9 @@ class PartnerPropertySerializer(PropertySerializer):
     class Meta(PropertySerializer.Meta):
         fields = (
             *PropertySerializer.Meta.fields,
+            # The exact pin, for the host only. Guests get `area_latitude`/`area_longitude`.
+            "latitude",
+            "longitude",
             "moderation_reason",
             "listing_status",
             "visits_enabled",
@@ -431,7 +475,7 @@ class StayTaxonomySubcategorySerializer(serializers.Serializer):
     services = StayTaxonomyServiceSerializer(many=True)
 
 
-class CreatePropertySerializer(serializers.Serializer):
+class CreatePropertySerializer(PropertyPinFields):
     variant_id = serializers.UUIDField()
     title = serializers.CharField(max_length=180)
     description = serializers.CharField(required=False, allow_blank=True, default="")
@@ -454,7 +498,7 @@ class CreatePropertySerializer(serializers.Serializer):
     )
 
 
-class UpdatePropertySerializer(serializers.Serializer):
+class UpdatePropertySerializer(PropertyPinFields):
     title = serializers.CharField(max_length=180, required=False)
     description = serializers.CharField(required=False, allow_blank=True)
     location_text = serializers.CharField(max_length=180, required=False)

@@ -60,3 +60,4 @@ The generated OpenAPI document and generated TypeScript client are never manuall
 | 0025 | Stays & Rentals UX MVP (property-first, stock, PIN, dispute) | Published |
 | 0026 | M3 QA financial integrity (deposit gateway refunds, per-booking PIN, Ops refunds, stay expiry, listing_plan_cap, full-refund cancel+ledger) | Published |
 | 0027 | Partner booking detail: invoice document read and customer contact on enquiries and rental bookings | Proposed |
+| 0028 | Google Maps location: geocoder swap, pinned rental and stay locations | Published |

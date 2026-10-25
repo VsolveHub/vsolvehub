@@ -1,6 +1,7 @@
 import calendar
 import logging
 from datetime import date, timedelta
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
@@ -17,6 +18,7 @@ from apps.commerce.services.base import PAYMENT_FINAL_STATES, _open_exception
 from apps.commerce.services.payments import initiate_standalone_payment_attempt
 from apps.foundation.models import OutboxEvent
 from apps.foundation.storage import public_stored_name
+from apps.locations.pins import KeepPin, Pin, apply_pin
 from apps.notifications.models import NotificationIntent
 from apps.notifications.services import request_notification
 from apps.partners.capabilities import is_approved_stay_host
@@ -601,6 +603,7 @@ def create_property(
     min_stay_nights: int = 1,
     media: list[dict[str, Any]] | None = None,
     image_urls: list[str] | None = None,
+    pin: tuple[Decimal, Decimal] | None = None,
 ) -> Property:
     """Create a property. Units are optional — pass ``nightly_rate_paise`` to seed one."""
     _require_stay_capability(host)
@@ -627,6 +630,8 @@ def create_property(
         title=title.strip(),
         description=description,
         location_text=resolved_location,
+        latitude=pin[0] if pin else None,
+        longitude=pin[1] if pin else None,
         moderation_status=Property.ModerationStatus.DRAFT,
         structured_fields=fields,
         cancellation_policy_text=cancellation_policy_text,
@@ -821,6 +826,7 @@ def update_property_ad(
     cancellation_policy_text: str | None = None,
     house_rules: str | None = None,
     min_stay_nights: int | None = None,
+    pin: Pin = KeepPin.KEEP,
 ) -> Property:
     """Partner updates the published/draft Ad in place (no live event sync)."""
     _require_stay_capability(host)
@@ -841,6 +847,7 @@ def update_property_ad(
             raise StayStateError("Property location is required.", code="location_required")
         prop.location_text = location_text.strip()
         updates.append("location_text")
+    updates += apply_pin(prop, pin, latitude="latitude", longitude="longitude")
     if structured_fields is not None:
         property_schema, _room_schema, _names = split_stay_schema(config.property_schema)
         _validate_against(property_schema, structured_fields, label="structured fields")

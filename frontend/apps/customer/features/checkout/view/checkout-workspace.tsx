@@ -602,9 +602,6 @@ export function CheckoutWorkspace() {
           }
           isUpdatingAddress={updateAddress.isPending}
           addNew={{
-            onLocate: locate,
-            isLocating: reverseGeocode.isPending,
-            locateError: locationError,
             onCreate: create,
             isCreating: createAddress.isPending,
             createError:

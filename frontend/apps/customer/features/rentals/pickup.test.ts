@@ -12,10 +12,11 @@ import {
 
 const NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
-function hours(open: number[]): PickupHours {
+function hours(open: number[], closed: string[] = []): PickupHours {
   return {
     is_set: true,
     summary: "",
+    closed_dates: closed,
     days: NAMES.map((day_name, weekday) => ({
       weekday,
       day_name,
@@ -40,7 +41,7 @@ describe("pickup helpers", () => {
   });
 
   it("treats an owner without hours as open every day", () => {
-    expect(isOpenOn({ is_set: false, days: [], summary: "" }, "2026-10-18")).toBe(true);
+    expect(isOpenOn({ is_set: false, days: [], summary: "", closed_dates: [] }, "2026-10-18")).toBe(true);
     expect(isOpenOn(undefined, "2026-10-18")).toBe(true);
   });
 
@@ -54,6 +55,22 @@ describe("pickup helpers", () => {
     expect(closedDayMessage(monToSat, "2026-10-17", "pickup")).toBeNull();
   });
 
+  it("refuses a day off even on a weekday the owner is open", () => {
+    const openDaily = hours([0, 1, 2, 3, 4, 5, 6], ["2026-10-24"]);
+
+    expect(isOpenOn(openDaily, "2026-10-24")).toBe(false);
+    expect(isOpenOn(openDaily, "2026-10-25")).toBe(true);
+    const message = closedDayMessage(openDaily, "2026-10-24", "pickup");
+    expect(message).toContain("24 Oct");
+    expect(message).toContain("Choose another pickup day.");
+  });
+
+  it("honours a day off before the weekly hours are set, as the server does", () => {
+    expect(
+      isOpenOn({ is_set: false, days: [], summary: "", closed_dates: ["2026-10-24"] }, "2026-10-24"),
+    ).toBe(false);
+  });
+
   it("joins an address on one line", () => {
     expect(
       addressLine({
@@ -62,6 +79,8 @@ describe("pickup helpers", () => {
         area: "Kukatpally",
         city: "Hyderabad",
         pincode: "500072",
+        latitude: null,
+        longitude: null,
         maps_url: "",
       }),
     ).toBe("Plot 12, Kukatpally, Hyderabad 500072");

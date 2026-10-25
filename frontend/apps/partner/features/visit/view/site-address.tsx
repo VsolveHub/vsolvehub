@@ -47,9 +47,10 @@ export function SiteAddress({ address, approximateArea }: SiteAddressProps) {
     .filter((part) => part.trim() !== "")
     .join(", ");
 
-  // The universal directions URL: on a phone it opens the installed maps app
-  // straight into a route to the destination, on desktop the maps site. Built
-  // from the disclosed address only — never a coordinate feed.
+  // The server builds the route to the Customer's pin, under the same gate as
+  // the address text: on a phone it opens the installed maps app, on desktop
+  // the maps site. The pin is never sent as bare coordinates. Typed text is the
+  // destination only when the server had no pin to route to.
   const destination = [
     address.line1,
     address.line2,
@@ -60,7 +61,9 @@ export function SiteAddress({ address, approximateArea }: SiteAddressProps) {
   ]
     .filter((part) => part.trim() !== "")
     .join(", ");
-  const mapsHref = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
+  const mapsHref =
+    address.directions_url ||
+    `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
 
   return (
     <Card className="flex items-start gap-3 border-success-line p-4">

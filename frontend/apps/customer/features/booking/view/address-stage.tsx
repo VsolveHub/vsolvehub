@@ -4,6 +4,8 @@ import type { Schemas } from "@vsolve/api-client";
 import { Badge, Button, Dialog, EmptyState, Field, Input, Spinner, cn } from "@vsolve/ui";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 
+import { LocationPicker } from "@/features/addresses/view/location-picker";
+
 import { AddressForm, EMPTY_DRAFT, draftFromLocated, type Draft } from "./address-form";
 import { ChoiceCard } from "./choice-card";
 
@@ -83,13 +85,10 @@ export interface AddressStageProps {
    *
    * Optional, and omitting it leaves the dialog as a saved list plus "use my
    * current location". Callers that pass it get **Use my location** and **Add a
-   * new address** on the picker; locating fills the form, typing opens it blank.
+   * new address**; both open the map picker (the first also asks the device),
+   * and the confirmed pin fills the form.
    */
   addNew?: {
-    /** Resolves the device's position into fields. Must not save. */
-    onLocate: () => Promise<Schemas["ReverseGeocodeResponse"] | null>;
-    isLocating: boolean;
-    locateError: string | null;
     /** Writes the address and returns it, or null if the write failed. */
     onCreate: (draft: Schemas["AddressRequest"]) => Promise<Address | null>;
     isCreating: boolean;
@@ -143,13 +142,13 @@ export function AddressStage({
     addresses.find((address) => address.id === selectedAddressId) ?? null;
   const [pickerOpen, setPickerOpen] = useState(false);
   /**
-   * Which of the dialog's three faces is showing.
+   * Which of the dialog's faces is showing.
    *
-   * One piece of state rather than two booleans, because "editing" and "adding"
-   * are mutually exclusive and a pair of flags can represent a fourth state that
-   * means nothing.
+   * One piece of state rather than several booleans, because they are mutually
+   * exclusive and a set of flags can represent states that mean nothing.
+   * `pin` is the map; `add` is the form the confirmed pin fills.
    */
-  const [mode, setMode] = useState<"list" | "add" | "edit">("list");
+  const [mode, setMode] = useState<Mode>("list");
   /**
    * The row the Customer has highlighted, which is **not** yet their answer.
    *
@@ -170,9 +169,9 @@ export function AddressStage({
    * an in-progress draft when the Customer presses Back.
    */
   const [addDraft, setAddDraft] = useState<Draft>(EMPTY_DRAFT);
-  const [addFromLocation, setAddFromLocation] = useState(false);
   const [addFormKey, setAddFormKey] = useState(0);
-  const [isFindingLocation, setIsFindingLocation] = useState(false);
+  /** Whether the map should ask the device as it opens (**Use my location**). */
+  const [pinAutoLocate, setPinAutoLocate] = useState(false);
   const editingAddress =
     addresses.find((address) => address.id === pendingAddressId) ?? selectedAddress;
   const draft =
@@ -206,32 +205,23 @@ export function AddressStage({
     setMode("list");
     setPendingAddressId(null);
     setAddDraft(EMPTY_DRAFT);
-    setAddFromLocation(false);
     setAddFormKey((key) => key + 1);
-    setIsFindingLocation(false);
+    setPinAutoLocate(false);
+  }
+
+  function openMap(autoLocate: boolean) {
+    setPinAutoLocate(autoLocate);
+    setMode("pin");
   }
 
   /**
-   * Device fix → reverse geocode → the add form, with street/city/pin filled
-   * and the flat left empty. Failures stay on this list so the Customer can
-   * retry or type the address instead.
+   * The confirmed pin → the add form, with street/city/pincode filled and the
+   * flat left empty. A fresh key, because a new pin is a new draft.
    */
-  async function handleUseMyLocation() {
-    if (!addNew) {
-      onUseCurrentLocation();
-      return;
-    }
-    setIsFindingLocation(true);
-    try {
-      const resolved = await addNew.onLocate();
-      if (resolved === null) return;
-      setAddDraft(draftFromLocated(resolved));
-      setAddFromLocation(true);
-      setAddFormKey((key) => key + 1);
-      setMode("add");
-    } finally {
-      setIsFindingLocation(false);
-    }
+  function handlePinConfirmed(resolved: Schemas["ReverseGeocodeResponse"]) {
+    setAddDraft(draftFromLocated(resolved));
+    setAddFormKey((key) => key + 1);
+    setMode("add");
   }
 
   function commitSelection() {
@@ -335,7 +325,11 @@ export function AddressStage({
         title={DIALOG_TITLES[mode]}
         description={DIALOG_DESCRIPTIONS[mode]}
         footer={
-          mode === "add" ? (
+          mode === "pin" ? (
+            <Button variant="ghost" onClick={() => setMode("list")}>
+              Back to saved addresses
+            </Button>
+          ) : mode === "add" ? (
             <>
               <Button variant="ghost" onClick={() => setMode("list")}>
                 Back to saved addresses
@@ -366,6 +360,8 @@ export function AddressStage({
             <Spinner />
             <span>Loading your saved addresses...</span>
           </div>
+        ) : mode === "pin" && addNew ? (
+          <LocationPicker autoLocate={pinAutoLocate} onConfirm={handlePinConfirmed} />
         ) : mode === "edit" && editingAddress ? (
           <SelectedAddressForm
             selectedAddress={editingAddress}
@@ -378,7 +374,7 @@ export function AddressStage({
           />
         ) : (
           <>
-            <div hidden={mode === "add"}>
+            <div hidden={mode === "add" || mode === "pin"}>
               {addresses.length === 0 ? (
                 <EmptyState
                   compact
@@ -391,10 +387,8 @@ export function AddressStage({
                   action={
                     addNew ? (
                       <AddAddressActions
-                        onUseMyLocation={() => void handleUseMyLocation()}
-                        onAddNew={() => setMode("add")}
-                        isFindingLocation={isFindingLocation || addNew.isLocating}
-                        locateError={addNew.locateError}
+                        onUseMyLocation={() => openMap(true)}
+                        onAddNew={() => openMap(false)}
                       />
                     ) : (
                       locationAction
@@ -414,10 +408,8 @@ export function AddressStage({
                   addActions={
                     addNew
                       ? {
-                          onUseMyLocation: () => void handleUseMyLocation(),
-                          onAddNew: () => setMode("add"),
-                          isFindingLocation: isFindingLocation || addNew.isLocating,
-                          locateError: addNew.locateError,
+                          onUseMyLocation: () => openMap(true),
+                          onAddNew: () => openMap(false),
                         }
                       : null
                   }
@@ -430,7 +422,7 @@ export function AddressStage({
                   key={addFormKey}
                   formId={ADD_FORM_ID}
                   initial={addDraft}
-                  showPinnedBanner={addFromLocation}
+                  showPinnedBanner
                   onSubmit={(request) => void handleCreate(request)}
                   saveError={addNew.createError}
                   onPostalCodeChange={addNew.onPostalCodeChange}
@@ -453,14 +445,18 @@ export function AddressStage({
  * the Customer opened it to answer, which is also what a screen reader announces
  * when focus lands inside.
  */
-const DIALOG_TITLES: Record<"list" | "add" | "edit", string> = {
+type Mode = "list" | "pin" | "add" | "edit";
+
+const DIALOG_TITLES: Record<Mode, string> = {
   list: "Where is the work?",
+  pin: "Set the location",
   add: "Add a new address",
   edit: "Edit this address",
 };
 
-const DIALOG_DESCRIPTIONS: Record<"list" | "add" | "edit", string> = {
+const DIALOG_DESCRIPTIONS: Record<Mode, string> = {
   list: "Pick a saved address or add a new one.",
+  pin: "Search, use your location, or drag the map so the pin sits on the door.",
   add: "Saved to your account, so you only type it once.",
   edit: "Text changes keep the existing pin. Re-pin if the location itself is wrong.",
 };
@@ -649,33 +645,18 @@ function ServiceabilityStatus({
 function AddAddressActions({
   onUseMyLocation,
   onAddNew,
-  isFindingLocation,
-  locateError,
 }: {
   onUseMyLocation: () => void;
   onAddNew: () => void;
-  isFindingLocation: boolean;
-  locateError: string | null;
 }) {
   return (
     <div className="flex w-full min-w-[16rem] flex-col gap-2">
-      <Button
-        type="button"
-        block
-        onClick={onUseMyLocation}
-        loading={isFindingLocation}
-        loadingLabel="Finding your location"
-      >
+      <Button type="button" block onClick={onUseMyLocation}>
         Use my location
       </Button>
-      <Button type="button" variant="outline" block onClick={onAddNew} disabled={isFindingLocation}>
+      <Button type="button" variant="outline" block onClick={onAddNew}>
         Add a new address
       </Button>
-      {locateError ? (
-        <p role="alert" className="text-sm font-medium text-danger-text">
-          {locateError}
-        </p>
-      ) : null}
     </div>
   );
 }
@@ -705,8 +686,6 @@ function AddressPickerDialogBody({
   addActions: {
     onUseMyLocation: () => void;
     onAddNew: () => void;
-    isFindingLocation: boolean;
-    locateError: string | null;
   } | null;
 }) {
   return (
@@ -761,8 +740,6 @@ function AddressPickerDialogBody({
         <AddAddressActions
           onUseMyLocation={addActions.onUseMyLocation}
           onAddNew={addActions.onAddNew}
-          isFindingLocation={addActions.isFindingLocation}
-          locateError={addActions.locateError}
         />
       ) : (
         <div className="rounded-card border border-line bg-surface p-4">

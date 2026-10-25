@@ -292,3 +292,130 @@ def test_item_page_shows_the_hours(rental_world, client):
     page = client.get(f"/api/v1/rentals/{asset.slug}")
     assert page.status_code == status.HTTP_200_OK
     assert page.json()["pickup_hours"]["summary"] == "Mon-Sat 9 AM-9 PM · Sun 9 AM-6 PM"
+
+
+# --- days off --------------------------------------------------------------------------------
+
+
+def _every_day(partner, *, closed_dates=None):
+    return save_pickup_hours(
+        partner=partner,
+        days=[DayHours(weekday=d, opens_at=NINE, closes_at=NINE_PM) for d in range(7)],
+        closed_dates=closed_dates,
+    )
+
+
+def test_a_day_off_refuses_a_pickup_on_an_open_weekday(rental_world):
+    holiday = timezone.localdate() + timedelta(days=3)
+    _every_day(rental_world["partner"], closed_dates=[holiday])
+    asset = _live_asset(rental_world)
+
+    with pytest.raises(RentalStateError) as refused:
+        create_booking(
+            customer=rental_world["customer"],
+            asset_id=asset.id,
+            start_date=holiday,
+            end_date=holiday + timedelta(days=1),
+            hold_deposit_for_demo=True,
+        )
+
+    assert refused.value.code == "pickup_date_closed"
+
+
+def test_a_day_off_refuses_a_return(rental_world):
+    holiday = timezone.localdate() + timedelta(days=4)
+    _every_day(rental_world["partner"], closed_dates=[holiday])
+    asset = _live_asset(rental_world)
+
+    with pytest.raises(RentalStateError) as refused:
+        create_booking(
+            customer=rental_world["customer"],
+            asset_id=asset.id,
+            start_date=holiday - timedelta(days=1),
+            end_date=holiday,
+            hold_deposit_for_demo=True,
+        )
+
+    assert refused.value.code == "return_date_closed"
+
+
+def test_an_item_can_be_out_across_a_day_off(rental_world):
+    holiday = timezone.localdate() + timedelta(days=4)
+    _every_day(rental_world["partner"], closed_dates=[holiday])
+    asset = _live_asset(rental_world)
+
+    booking = create_booking(
+        customer=rental_world["customer"],
+        asset_id=asset.id,
+        start_date=holiday - timedelta(days=1),
+        end_date=holiday + timedelta(days=1),
+        hold_deposit_for_demo=True,
+    )
+
+    assert booking.start_date < holiday < booking.end_date
+
+
+def test_saving_hours_without_days_off_keeps_them(rental_world):
+    partner = rental_world["partner"]
+    holiday = timezone.localdate() + timedelta(days=5)
+    _every_day(partner, closed_dates=[holiday])
+
+    _every_day(partner)  # an older client that only edits the weekly hours
+
+    assert pickup_hours_payload(partner.id)["closed_dates"] == [holiday.isoformat()]
+
+
+def test_days_off_are_replaced_sorted_and_past_ones_dropped(rental_world):
+    partner = rental_world["partner"]
+    today = timezone.localdate()
+    later, sooner = today + timedelta(days=9), today + timedelta(days=2)
+
+    _every_day(partner, closed_dates=[later, today - timedelta(days=1), sooner, later])
+
+    assert pickup_hours_payload(partner.id)["closed_dates"] == [
+        sooner.isoformat(),
+        later.isoformat(),
+    ]
+    _every_day(partner, closed_dates=[])
+    assert pickup_hours_payload(partner.id)["closed_dates"] == []
+
+
+def test_a_day_off_is_honoured_before_weekly_hours_are_set(rental_world):
+    # Mirrors the customer screen: hours "not set" skips the weekday check, never a day off.
+    partner = rental_world["partner"]
+    holiday = timezone.localdate() + timedelta(days=3)
+    _every_day(partner, closed_dates=[holiday])
+    RentalPickupDay.objects.filter(partner=partner).delete()
+
+    with pytest.raises(PickupHoursError) as refused:
+        check_open_days(partner_id=partner.id, start_date=holiday, end_date=holiday)
+
+    assert refused.value.code == "pickup_date_closed"
+
+
+def test_partner_api_saves_and_returns_days_off(rental_world):
+    client = role_client(rental_world["owner"], "partner")
+    holiday = (timezone.localdate() + timedelta(days=6)).isoformat()
+
+    saved = client.put(
+        "/api/v1/partner/rentals/pickup-hours",
+        {
+            "days": [{"weekday": 5, "opens_at": "09:00", "closes_at": "21:00"}],
+            "closed_dates": [holiday],
+        },
+        format="json",
+    )
+
+    assert saved.status_code == status.HTTP_200_OK, saved.json()
+    assert saved.json()["closed_dates"] == [holiday]
+    assert client.get("/api/v1/partner/rentals/pickup-hours").json()["closed_dates"] == [holiday]
+
+
+def test_item_page_lists_days_off(rental_world, client):
+    holiday = timezone.localdate() + timedelta(days=3)
+    _every_day(rental_world["partner"], closed_dates=[holiday])
+    asset = _live_asset(rental_world)
+
+    page = client.get(f"/api/v1/rentals/{asset.slug}")
+
+    assert page.json()["pickup_hours"]["closed_dates"] == [holiday.isoformat()]

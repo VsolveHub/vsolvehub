@@ -7,6 +7,8 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./location-picker": "./src/location-picker/index.ts",
+    "./map-embed": "./src/location-picker/map-embed.tsx",
     "./tokens.css": "./src/tokens.css"
   },
   "scripts": {
@@ -17,6 +19,7 @@
     "react-dom": "^19.0.0"
   },
   "dependencies": {
+    "@vis.gl/react-google-maps": "1.10.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.4",
     "lucide-react": "^0.469.0"
@@ -24,6 +27,7 @@
   "devDependencies": {
     "@testing-library/jest-dom": "6.9.1",
     "@testing-library/react": "^16.3.2",
+    "@types/google.maps": "3.66.5",
     "@types/node": "^22.20.0",
     "@types/react": "^19.0.2",
     "typescript": "^5.7.2"

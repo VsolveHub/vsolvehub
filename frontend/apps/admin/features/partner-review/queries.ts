@@ -25,8 +25,26 @@ import { getApiClient } from "@/lib/api/browser";
 
 type Application = Schemas["PartnerApplication"];
 
+/**
+ * Two reviewers acted on the same version: the only refusal a refetch fixes.
+ *
+ * By code, not by status. Every domain refusal on this endpoint is a 409 —
+ * documents not yet approved, an incomplete application, a review claimed by
+ * someone else — and reading them all as "someone else acted first" told a
+ * reviewer to wait out a problem only they could fix.
+ */
 export function isVersionConflict(error: unknown): boolean {
-  return error instanceof ApiRequestError && error.status === 409;
+  return (
+    error instanceof ApiRequestError && error.code === "partner_application_version_conflict"
+  );
+}
+
+/** Someone else holds the review. Shown as "claimed first", like a version conflict. */
+export function isClaimedElsewhere(error: unknown): boolean {
+  return (
+    isVersionConflict(error) ||
+    (error instanceof ApiRequestError && error.code === "partner_review_ownership_conflict")
+  );
 }
 
 /** A reviewer's decision has been refused because they lack the permission. */
@@ -191,7 +209,9 @@ export function useTransitionApplication() {
             body: {
               expected_version: input.expectedVersion,
               target_status: input.targetStatus,
-              ...(input.reason ? { reason: input.reason } : {}),
+              // Always sent: an empty string is "no reason", which the decisions
+              // that need one refuse on the server with a message to read.
+              reason: input.reason ?? "",
             },
           },
         ),

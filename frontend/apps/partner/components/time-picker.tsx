@@ -4,7 +4,7 @@ import { Clock } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 
 const HOURS = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
-const MINUTES = [0, 15, 30, 45];
+const QUARTER_HOURS = [0, 15, 30, 45];
 
 function parts(value: string): { hour12: number; minute: number; pm: boolean } {
   const [h = 10, m = 0] = value.split(":").map(Number);
@@ -25,15 +25,20 @@ export function clockText(value: string): string {
 /**
  * A compact time chip: "10:00 AM". Tapping it opens a small panel — hour, minutes,
  * AM/PM — instead of a long list of every quarter hour.
+ *
+ * Shared by stay visiting hours (quarter hours) and rental pickup hours, whose server
+ * accepts only the hour and half hour — so the minutes on offer are the caller's.
  */
 export function TimePicker({
   value,
   onChange,
   label,
+  minutes = QUARTER_HOURS,
 }: {
   value: string;
   onChange: (value: string) => void;
   label: string;
+  minutes?: readonly number[];
 }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
@@ -96,8 +101,11 @@ export function TimePicker({
           </div>
 
           <p className="mt-3 text-[11px] font-bold uppercase tracking-wider text-text-muted">Minutes</p>
-          <div className="mt-1.5 grid grid-cols-4 gap-1.5">
-            {MINUTES.map((m) => (
+          <div
+            className="mt-1.5 grid gap-1.5"
+            style={{ gridTemplateColumns: `repeat(${minutes.length}, minmax(0, 1fr))` }}
+          >
+            {minutes.map((m) => (
               <button key={m} type="button" className={cell(m === minute)} onClick={() => onChange(toValue(hour12, m, pm))}>
                 :{String(m).padStart(2, "0")}
               </button>
