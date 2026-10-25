@@ -1,6 +1,6 @@
 "use client";
 
-import { safeNextPath, useAuthGuard, useOtpFlow } from "@vsolve/query";
+import { safeNextPath, useAuthGuard, usePhoneAuthFlow } from "@vsolve/query";
 import { ErrorState, Spinner } from "@vsolve/ui";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
@@ -39,7 +39,7 @@ export function LoginScreen() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const guard = useAuthGuard(getApiClient());
-  const flow = useOtpFlow(getApiClient(), { getReferralCode: readPendingReferral });
+  const flow = usePhoneAuthFlow(getApiClient(), { getReferralCode: readPendingReferral });
 
   const isAuthenticated = guard.status === "authenticated";
   const next = safeNextPath(searchParams.get("next"));

@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.72.0)
- * Checksum: b82b25d9faf70e34
+ * Source:   contracts/openapi/v1.yaml (version 1.69.0)
+ * Checksum: f34b11378cec29ca
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -81,6 +81,44 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["auth_finance_step_up_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/firebase/precheck/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Pre-check rate limits and intended role gate before requesting Firebase SMS.
+         *
+         *     Note that this is a UX/rate-limit aid and verify is the real gate.
+         */
+        post: operations["auth_firebase_precheck_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/firebase/verify/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Verify Firebase ID token, provision the user session, and issue auth cookies. */
+        post: operations["auth_firebase_verify_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2234,7 +2272,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["me_rentals_retrieve"];
+        get: operations["me_rentals_list"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4074,7 +4112,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get dashboard aggregates */
+        /**
+         * Get dashboard aggregates
+         * @description Totals for the range. The overview and customer kinds add `series`, one point per day (or per week past 62 days, capped at 366 days; the last 30 days when no range is given), with `series_granularity` saying which.
+         */
         get: operations["ops_dashboards_retrieve"];
         put?: never;
         post?: never;
@@ -4320,7 +4361,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["ops_rentals_retrieve"];
+        get: operations["ops_rentals_list"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4339,28 +4380,6 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["ops_rentals_moderate_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/ops/rentals/bookings": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * @description Every rental booking, so Operations can see delivery requests, payments and cancellations.
-         *
-         *     `?status=` narrows to one `RentalBooking.Status`; `?q=` matches the customer's name or phone,
-         *     the owner's name, the equipment title, or a booking id.
-         */
-        get: operations["ops_rentals_bookings_retrieve"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -6131,7 +6150,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["partner_rentals_bookings_retrieve"];
+        get: operations["partner_rentals_bookings_list"];
         put?: never;
         post?: never;
         delete?: never;
@@ -10813,6 +10832,21 @@ export interface components {
         ExpectedVersionRequest: {
             expected_version: number;
         };
+        FirebasePrecheckRequest: {
+            phone_number: string;
+            /** @default  */
+            intended_role: components["schemas"]["IntendedRoleEnum"] | components["schemas"]["BlankEnum"];
+        };
+        FirebaseVerifyRequest: {
+            /** @description Firebase ID token issued after client-side Phone Auth. */
+            id_token: string;
+            /** @default  */
+            intended_role: components["schemas"]["IntendedRoleEnum"] | components["schemas"]["BlankEnum"];
+            /** @description Applied only when this verification creates a new account. */
+            referral_code?: string;
+            device_identifier?: string;
+            device_label?: string;
+        };
         FulfilmentPlan: {
             /** Format: uuid */
             readonly id: string;
@@ -11109,10 +11143,12 @@ export interface components {
          */
         IconKeyEnum: "service" | "electrical" | "plumbing" | "carpentry" | "air-conditioning" | "water-purifier" | "internet-wifi" | "gas-stove" | "computer" | "mobile" | "security-camera" | "locksmith" | "home-automation" | "fire-safety" | "face-care" | "beauty-treatment" | "waxing" | "threading" | "hair-care" | "nail-care" | "makeup" | "mehendi" | "body-care" | "skin-care" | "home-cleaning" | "sofa-carpet" | "pest-control" | "water-tank" | "septic-tank" | "laundry" | "gardening" | "swimming-pool" | "chimney-exhaust" | "home-organization" | "home-inspection" | "home-maintenance" | "pet-grooming" | "veterinary" | "pet-walking" | "pet-sitting" | "pet-training" | "pet-photography" | "workforce" | "custom-project";
         /**
-         * @description * `partner` - partner
+         * @description * `customer` - customer
+         *     * `partner` - partner
+         *     * `operations` - operations
          * @enum {string}
          */
-        IntendedRoleEnum: "partner";
+        IntendedRoleEnum: "customer" | "partner" | "operations";
         Interview: {
             /** Format: uuid */
             readonly id: string;
@@ -12125,10 +12161,6 @@ export interface components {
             target_status: components["schemas"]["TargetStatusEnum"];
             reason?: string;
         };
-        /** @description Operations says why. The reason is kept on the booking. */
-        OpsCancelRentalBookingRequest: {
-            reason: string;
-        };
         OpsCancelStayReservationRequest: {
             /** @default  */
             reason: string;
@@ -12254,50 +12286,6 @@ export interface components {
             coins_amount?: number;
             /** Format: date-time */
             readonly paid_at: string;
-        };
-        /** @description Operations' view of a booking: both parties, so a cancel or a dispute call has a name. */
-        OpsRentalBooking: {
-            /** Format: uuid */
-            readonly id: string;
-            status?: components["schemas"]["RentalBookingStatusEnum"];
-            /** Format: date */
-            start_date: string;
-            /** Format: date */
-            end_date: string;
-            readonly quantity: number;
-            price_paise: number;
-            platform_fee_percent?: number;
-            platform_fee_paise?: number;
-            pickup_or_delivery_mode?: components["schemas"]["RentalBookingModeEnum"];
-            delivery_address?: unknown;
-            transport_paise?: number;
-            transport_fee_percent?: number;
-            transport_fee_paise?: number;
-            readonly amount_due_paise: number;
-            readonly transport: components["schemas"]["RentalTransport"] | null;
-            readonly pickup_hours: components["schemas"]["PickupHours"];
-            notes?: string;
-            readonly asset: components["schemas"]["RentalAsset"];
-            readonly deposit: components["schemas"]["RentalDeposit"];
-            /** @description Plaintext PIN for the customer only, once the booking is paid/active. */
-            readonly handover_pin: string | null;
-            /** Format: date-time */
-            cancelled_at?: string | null;
-            cancellation_reason?: string;
-            /** Format: date-time */
-            readonly created_at: string;
-            readonly customer_name: string;
-            readonly customer_phone: string | null;
-            /** Format: uuid */
-            readonly partner_id: string;
-            readonly partner_name: string;
-        };
-        OpsRentalBookingPage: {
-            /** Format: uri */
-            next: string | null;
-            /** Format: uri */
-            previous: string | null;
-            results: components["schemas"]["OpsRentalBooking"][];
         };
         OpsReportCatalogItem: {
             id: string;
@@ -13202,19 +13190,9 @@ export interface components {
             /** @description Plaintext PIN for the customer only, once the booking is paid/active. */
             readonly handover_pin: string | null;
             /** Format: date-time */
-            cancelled_at?: string | null;
-            cancellation_reason?: string;
-            /** Format: date-time */
             readonly created_at: string;
             readonly customer_name: string;
             readonly customer_phone: string | null;
-        };
-        PartnerRentalBookingPage: {
-            /** Format: uri */
-            next: string | null;
-            /** Format: uri */
-            previous: string | null;
-            results: components["schemas"]["PartnerRentalBooking"][];
         };
         PartnerReservationActionRequest: {
             /** @default  */
@@ -15616,13 +15594,6 @@ export interface components {
          * @enum {string}
          */
         RentalAssetModerationStatusEnum: "DRAFT" | "PENDING" | "APPROVED" | "REJECTED" | "REMOVED" | "PAUSED";
-        RentalAssetPage: {
-            /** Format: uri */
-            next: string | null;
-            /** Format: uri */
-            previous: string | null;
-            results: components["schemas"]["RentalAsset"][];
-        };
         RentalBooking: {
             /** Format: uuid */
             readonly id: string;
@@ -15649,9 +15620,6 @@ export interface components {
             /** @description Plaintext PIN for the customer only, once the booking is paid/active. */
             readonly handover_pin: string | null;
             /** Format: date-time */
-            cancelled_at?: string | null;
-            cancellation_reason?: string;
-            /** Format: date-time */
             readonly created_at: string;
         };
         /**
@@ -15660,13 +15628,6 @@ export interface components {
          * @enum {string}
          */
         RentalBookingModeEnum: "PICKUP" | "DELIVERY";
-        RentalBookingPage: {
-            /** Format: uri */
-            next: string | null;
-            /** Format: uri */
-            previous: string | null;
-            results: components["schemas"]["RentalBooking"][];
-        };
         /**
          * @description * `AWAITING_TRANSPORT_QUOTE` - Awaiting transport quote
          *     * `PENDING_PAYMENT` - Pending payment
@@ -18464,6 +18425,106 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StepUpSession"];
+                };
+            };
+        };
+    };
+    auth_firebase_precheck_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FirebasePrecheckRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["FirebasePrecheckRequest"];
+                "multipart/form-data": components["schemas"]["FirebasePrecheckRequest"];
+            };
+        };
+        responses: {
+            /** @description Precheck allowed; client may proceed with Firebase SMS. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Firebase auth is disabled or `intended_role` was set and this number holds no such account. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    auth_firebase_verify_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FirebaseVerifyRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["FirebaseVerifyRequest"];
+                "multipart/form-data": components["schemas"]["FirebaseVerifyRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthenticatedSession"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Firebase auth is disabled or `intended_role` was set and this number holds no such account. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Rate limit exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
                 };
             };
         };
@@ -23105,14 +23166,9 @@ export interface operations {
             };
         };
     };
-    me_rentals_retrieve: {
+    me_rentals_list: {
         parameters: {
-            query?: {
-                /** @description Opaque page cursor from `next`. */
-                cursor?: string;
-                /** @description One state, or several separated by commas. */
-                status?: string;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -23124,7 +23180,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RentalBookingPage"];
+                    "application/json": components["schemas"]["RentalBooking"][];
                 };
             };
         };
@@ -27545,7 +27601,12 @@ export interface operations {
     };
     ops_dashboards_retrieve: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Inclusive. */
+                date_end?: string;
+                /** @description Inclusive. */
+                date_start?: string;
+            };
             header?: never;
             path: {
                 kind: string;
@@ -28023,14 +28084,9 @@ export interface operations {
             };
         };
     };
-    ops_rentals_retrieve: {
+    ops_rentals_list: {
         parameters: {
-            query?: {
-                /** @description Opaque page cursor from `next`. */
-                cursor?: string;
-                /** @description e.g. PENDING for the review queue. */
-                moderation_status?: string;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -28042,7 +28098,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RentalAssetPage"];
+                    "application/json": components["schemas"]["RentalAsset"][];
                 };
             };
         };
@@ -28074,31 +28130,6 @@ export interface operations {
             };
         };
     };
-    ops_rentals_bookings_retrieve: {
-        parameters: {
-            query?: {
-                /** @description Opaque page cursor from `next`. */
-                cursor?: string;
-                q?: string;
-                /** @description One state, or several separated by commas. */
-                status?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OpsRentalBookingPage"];
-                };
-            };
-        };
-    };
     ops_rentals_bookings_cancel_create: {
         parameters: {
             query?: never;
@@ -28108,13 +28139,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["OpsCancelRentalBookingRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["OpsCancelRentalBookingRequest"];
-                "multipart/form-data": components["schemas"]["OpsCancelRentalBookingRequest"];
-            };
-        };
+        requestBody?: never;
         responses: {
             200: {
                 headers: {
@@ -32295,12 +32320,9 @@ export interface operations {
             };
         };
     };
-    partner_rentals_bookings_retrieve: {
+    partner_rentals_bookings_list: {
         parameters: {
             query?: {
-                /** @description Opaque page cursor from `next`. */
-                cursor?: string;
-                /** @description One state, or several separated by commas. */
                 status?: string;
             };
             header?: never;
@@ -32314,7 +32336,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PartnerRentalBookingPage"];
+                    "application/json": components["schemas"]["PartnerRentalBooking"][];
                 };
             };
         };
@@ -34157,14 +34179,10 @@ export interface operations {
             query?: {
                 category?: string;
                 end_date?: string;
-                /** @description Rows to return. Default 24, at most 60. */
-                limit?: number;
                 location?: string;
                 max_deposit?: number;
                 max_price?: number;
                 min_price?: number;
-                /** @description Rows to skip. Default 0. */
-                offset?: number;
                 q?: string;
                 service?: string;
                 start_date?: string;

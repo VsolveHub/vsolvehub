@@ -35,7 +35,7 @@ class OtpRequestSerializer(serializers.Serializer[dict[str, object]]):
     # there — but the Partner app does, since a Partner account only ever exists because
     # someone applied, so "no account" is worth saying before a code is sent for nothing.
     intended_role = serializers.ChoiceField(
-        choices=["partner"],
+        choices=["customer", "partner", "operations"],
         required=False,
         allow_blank=True,
         default="",
@@ -107,6 +107,51 @@ class OtpVerifySerializer(serializers.Serializer[dict[str, object]]):
                 code="invalid_otp_format",
             )
         return value
+
+
+class FirebasePrecheckSerializer(serializers.Serializer[dict[str, object]]):
+    phone_number = PhoneNumberField(max_length=32, trim_whitespace=True)
+    intended_role = serializers.ChoiceField(
+        choices=["customer", "partner", "operations"],
+        required=False,
+        allow_blank=True,
+        default="",
+        write_only=True,
+    )
+
+
+class FirebaseVerifySerializer(serializers.Serializer[dict[str, object]]):
+    id_token = serializers.CharField(
+        write_only=True,
+        trim_whitespace=True,
+        help_text="Firebase ID token issued after client-side Phone Auth.",
+    )
+    intended_role = serializers.ChoiceField(
+        choices=["customer", "partner", "operations"],
+        required=False,
+        allow_blank=True,
+        default="",
+        write_only=True,
+    )
+    referral_code = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=32,
+        write_only=True,
+        help_text="Applied only when this verification creates a new account.",
+    )
+    device_identifier = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=128,
+        write_only=True,
+    )
+    device_label = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=100,
+        write_only=True,
+    )
 
 
 class UserSerializer(serializers.ModelSerializer[User]):

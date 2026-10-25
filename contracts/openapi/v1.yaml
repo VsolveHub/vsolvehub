@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.72.0
+  version: 1.69.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -227,6 +227,125 @@ paths:
               schema:
                 $ref: '#/components/schemas/StepUpSession'
           description: ''
+  /api/v1/auth/firebase/precheck/:
+    post:
+      operationId: auth_firebase_precheck_create
+      description: |-
+        Pre-check rate limits and intended role gate before requesting Firebase SMS.
+
+        Note that this is a UX/rate-limit aid and verify is the real gate.
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FirebasePrecheckRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FirebasePrecheckRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FirebasePrecheckRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '204':
+          description: Precheck allowed; client may proceed with Firebase SMS.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Firebase auth is disabled or `intended_role` was set and this
+            number holds no such account.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+              examples:
+                OTPRateLimited:
+                  value:
+                    error:
+                      code: throttled
+                      message: Too many code requests. Try again when the countdown
+                        ends.
+                      details:
+                        retry_after_seconds: 47
+                      retryable: true
+                      request_id: req_example
+                  summary: OTP rate limited
+          description: ''
+  /api/v1/auth/firebase/verify/:
+    post:
+      operationId: auth_firebase_verify_create
+      description: Verify Firebase ID token, provision the user session, and issue
+        auth cookies.
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FirebaseVerifyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FirebaseVerifyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FirebaseVerifyRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticatedSession'
+              examples:
+                AuthenticatedCustomer:
+                  value:
+                    user:
+                      id: f26419bd-c768-4ddb-bff3-4cc405fdbf52
+                      phone_number: '+919876543210'
+                      display_name: Gopal Rao
+                      full_name: ''
+                      email: ''
+                      date_joined: '2026-08-19T12:00:00Z'
+                      roles:
+                      - customer
+                    active_role: customer
+                    session_expires_at: '2026-09-01T12:00:00Z'
+                  summary: Authenticated customer
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Firebase auth is disabled or `intended_role` was set and this
+            number holds no such account.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Rate limit exceeded.
   /api/v1/auth/logout/:
     post:
       operationId: auth_logout_create
@@ -5299,18 +5418,7 @@ paths:
           description: ''
   /api/v1/me/rentals:
     get:
-      operationId: me_rentals_retrieve
-      parameters:
-      - in: query
-        name: cursor
-        schema:
-          type: string
-        description: Opaque page cursor from `next`.
-      - in: query
-        name: status
-        schema:
-          type: string
-        description: One state, or several separated by commas.
+      operationId: me_rentals_list
       tags:
       - me
       security:
@@ -5320,7 +5428,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RentalBookingPage'
+                type: array
+                items:
+                  $ref: '#/components/schemas/RentalBooking'
           description: ''
   /api/v1/me/rentals/{booking_id}/cancel:
     post:
@@ -9954,8 +10064,23 @@ paths:
   /api/v1/ops/dashboards/{kind}/:
     get:
       operationId: ops_dashboards_retrieve
+      description: Totals for the range. The overview and customer kinds add `series`,
+        one point per day (or per week past 62 days, capped at 366 days; the last
+        30 days when no range is given), with `series_granularity` saying which.
       summary: Get dashboard aggregates
       parameters:
+      - in: query
+        name: date_end
+        schema:
+          type: string
+          format: date
+        description: Inclusive.
+      - in: query
+        name: date_start
+        schema:
+          type: string
+          format: date
+        description: Inclusive.
       - in: path
         name: kind
         schema:
@@ -10464,18 +10589,7 @@ paths:
           description: ''
   /api/v1/ops/rentals:
     get:
-      operationId: ops_rentals_retrieve
-      parameters:
-      - in: query
-        name: cursor
-        schema:
-          type: string
-        description: Opaque page cursor from `next`.
-      - in: query
-        name: moderation_status
-        schema:
-          type: string
-        description: e.g. PENDING for the review queue.
+      operationId: ops_rentals_list
       tags:
       - ops
       security:
@@ -10485,7 +10599,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RentalAssetPage'
+                type: array
+                items:
+                  $ref: '#/components/schemas/RentalAsset'
           description: ''
   /api/v1/ops/rentals/{asset_id}/moderate:
     post:
@@ -10520,40 +10636,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/RentalAsset'
           description: ''
-  /api/v1/ops/rentals/bookings:
-    get:
-      operationId: ops_rentals_bookings_retrieve
-      description: |-
-        Every rental booking, so Operations can see delivery requests, payments and cancellations.
-
-        `?status=` narrows to one `RentalBooking.Status`; `?q=` matches the customer's name or phone,
-        the owner's name, the equipment title, or a booking id.
-      parameters:
-      - in: query
-        name: cursor
-        schema:
-          type: string
-        description: Opaque page cursor from `next`.
-      - in: query
-        name: q
-        schema:
-          type: string
-      - in: query
-        name: status
-        schema:
-          type: string
-        description: One state, or several separated by commas.
-      tags:
-      - ops
-      security:
-      - cookieAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OpsRentalBookingPage'
-          description: ''
   /api/v1/ops/rentals/bookings/{booking_id}/cancel:
     post:
       operationId: ops_rentals_bookings_cancel_create
@@ -10566,18 +10648,6 @@ paths:
         required: true
       tags:
       - ops
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/OpsCancelRentalBookingRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/OpsCancelRentalBookingRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/OpsCancelRentalBookingRequest'
-        required: true
       security:
       - cookieAuth: []
       responses:
@@ -14889,18 +14959,12 @@ paths:
           description: No response body
   /api/v1/partner/rentals/bookings:
     get:
-      operationId: partner_rentals_bookings_retrieve
+      operationId: partner_rentals_bookings_list
       parameters:
-      - in: query
-        name: cursor
-        schema:
-          type: string
-        description: Opaque page cursor from `next`.
       - in: query
         name: status
         schema:
           type: string
-        description: One state, or several separated by commas.
       tags:
       - partner
       security:
@@ -14910,7 +14974,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PartnerRentalBookingPage'
+                type: array
+                items:
+                  $ref: '#/components/schemas/PartnerRentalBooking'
           description: ''
   /api/v1/partner/rentals/bookings/{booking_id}/{action}:
     post:
@@ -16969,11 +17035,6 @@ paths:
           type: string
           format: date
       - in: query
-        name: limit
-        schema:
-          type: integer
-        description: Rows to return. Default 24, at most 60.
-      - in: query
         name: location
         schema:
           type: string
@@ -16989,11 +17050,6 @@ paths:
         name: min_price
         schema:
           type: integer
-      - in: query
-        name: offset
-        schema:
-          type: integer
-        description: Rows to skip. Default 0.
       - in: query
         name: q
         schema:
@@ -26609,6 +26665,50 @@ components:
           minimum: 1
       required:
       - expected_version
+    FirebasePrecheckRequest:
+      type: object
+      properties:
+        phone_number:
+          type: string
+          minLength: 1
+          maxLength: 32
+        intended_role:
+          writeOnly: true
+          default: ''
+          oneOf:
+          - $ref: '#/components/schemas/IntendedRoleEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+      required:
+      - phone_number
+    FirebaseVerifyRequest:
+      type: object
+      properties:
+        id_token:
+          type: string
+          writeOnly: true
+          minLength: 1
+          description: Firebase ID token issued after client-side Phone Auth.
+        intended_role:
+          writeOnly: true
+          default: ''
+          oneOf:
+          - $ref: '#/components/schemas/IntendedRoleEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        referral_code:
+          type: string
+          writeOnly: true
+          description: Applied only when this verification creates a new account.
+          maxLength: 32
+        device_identifier:
+          type: string
+          writeOnly: true
+          maxLength: 128
+        device_label:
+          type: string
+          writeOnly: true
+          maxLength: 100
+      required:
+      - id_token
     FulfilmentPlan:
       type: object
       properties:
@@ -27366,9 +27466,14 @@ components:
         * `custom-project` - Custom project
     IntendedRoleEnum:
       enum:
+      - customer
       - partner
+      - operations
       type: string
-      description: '* `partner` - partner'
+      description: |-
+        * `customer` - customer
+        * `partner` - partner
+        * `operations` - operations
     Interview:
       type: object
       properties:
@@ -29913,16 +30018,6 @@ components:
       required:
       - expected_version
       - target_status
-    OpsCancelRentalBookingRequest:
-      type: object
-      description: Operations says why. The reason is kept on the booking.
-      properties:
-        reason:
-          type: string
-          minLength: 1
-          maxLength: 480
-      required:
-      - reason
     OpsCancelStayReservationRequest:
       type: object
       properties:
@@ -30259,141 +30354,6 @@ components:
       - paid_at
       - payout_sequence_n
       - reward_side
-    OpsRentalBooking:
-      type: object
-      description: 'Operations'' view of a booking: both parties, so a cancel or a
-        dispute call has a name.'
-      properties:
-        id:
-          type: string
-          format: uuid
-          readOnly: true
-        status:
-          $ref: '#/components/schemas/RentalBookingStatusEnum'
-        start_date:
-          type: string
-          format: date
-        end_date:
-          type: string
-          format: date
-        quantity:
-          type: integer
-          readOnly: true
-        price_paise:
-          type: integer
-          maximum: 2147483647
-          minimum: 0
-        platform_fee_percent:
-          type: integer
-          maximum: 32767
-          minimum: 0
-        platform_fee_paise:
-          type: integer
-          maximum: 2147483647
-          minimum: 0
-        pickup_or_delivery_mode:
-          $ref: '#/components/schemas/RentalBookingModeEnum'
-        delivery_address: {}
-        transport_paise:
-          type: integer
-          maximum: 2147483647
-          minimum: 0
-        transport_fee_percent:
-          type: integer
-          maximum: 32767
-          minimum: 0
-        transport_fee_paise:
-          type: integer
-          maximum: 2147483647
-          minimum: 0
-        amount_due_paise:
-          type: integer
-          readOnly: true
-        transport:
-          allOf:
-          - $ref: '#/components/schemas/RentalTransport'
-          nullable: true
-          readOnly: true
-        pickup_hours:
-          allOf:
-          - $ref: '#/components/schemas/PickupHours'
-          readOnly: true
-        notes:
-          type: string
-        asset:
-          allOf:
-          - $ref: '#/components/schemas/RentalAsset'
-          readOnly: true
-        deposit:
-          allOf:
-          - $ref: '#/components/schemas/RentalDeposit'
-          readOnly: true
-        handover_pin:
-          type: string
-          nullable: true
-          description: Plaintext PIN for the customer only, once the booking is paid/active.
-          readOnly: true
-        cancelled_at:
-          type: string
-          format: date-time
-          nullable: true
-        cancellation_reason:
-          type: string
-          maxLength: 480
-        created_at:
-          type: string
-          format: date-time
-          readOnly: true
-        customer_name:
-          type: string
-          readOnly: true
-        customer_phone:
-          type: string
-          nullable: true
-          readOnly: true
-        partner_id:
-          type: string
-          format: uuid
-          readOnly: true
-        partner_name:
-          type: string
-          readOnly: true
-      required:
-      - amount_due_paise
-      - asset
-      - created_at
-      - customer_name
-      - customer_phone
-      - deposit
-      - end_date
-      - handover_pin
-      - id
-      - partner_id
-      - partner_name
-      - pickup_hours
-      - price_paise
-      - quantity
-      - start_date
-      - transport
-    OpsRentalBookingPage:
-      type: object
-      properties:
-        next:
-          type: string
-          format: uri
-          nullable: true
-        previous:
-          type: string
-          format: uri
-          nullable: true
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/OpsRentalBooking'
-      required:
-      - next
-      - previous
-      - results
     OpsReportCatalogItem:
       type: object
       properties:
@@ -32831,13 +32791,6 @@ components:
           nullable: true
           description: Plaintext PIN for the customer only, once the booking is paid/active.
           readOnly: true
-        cancelled_at:
-          type: string
-          format: date-time
-          nullable: true
-        cancellation_reason:
-          type: string
-          maxLength: 480
         created_at:
           type: string
           format: date-time
@@ -32864,25 +32817,6 @@ components:
       - quantity
       - start_date
       - transport
-    PartnerRentalBookingPage:
-      type: object
-      properties:
-        next:
-          type: string
-          format: uri
-          nullable: true
-        previous:
-          type: string
-          format: uri
-          nullable: true
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/PartnerRentalBooking'
-      required:
-      - next
-      - previous
-      - results
     PartnerReservationActionRequest:
       type: object
       properties:
@@ -38947,25 +38881,6 @@ components:
         * `REJECTED` - Rejected
         * `REMOVED` - Removed
         * `PAUSED` - Paused
-    RentalAssetPage:
-      type: object
-      properties:
-        next:
-          type: string
-          format: uri
-          nullable: true
-        previous:
-          type: string
-          format: uri
-          nullable: true
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/RentalAsset'
-      required:
-      - next
-      - previous
-      - results
     RentalBooking:
       type: object
       properties:
@@ -39038,13 +38953,6 @@ components:
           nullable: true
           description: Plaintext PIN for the customer only, once the booking is paid/active.
           readOnly: true
-        cancelled_at:
-          type: string
-          format: date-time
-          nullable: true
-        cancellation_reason:
-          type: string
-          maxLength: 480
         created_at:
           type: string
           format: date-time
@@ -39070,25 +38978,6 @@ components:
       description: |-
         * `PICKUP` - Self pickup
         * `DELIVERY` - Partner-arranged delivery
-    RentalBookingPage:
-      type: object
-      properties:
-        next:
-          type: string
-          format: uri
-          nullable: true
-        previous:
-          type: string
-          format: uri
-          nullable: true
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/RentalBooking'
-      required:
-      - next
-      - previous
-      - results
     RentalBookingStatusEnum:
       enum:
       - AWAITING_TRANSPORT_QUOTE

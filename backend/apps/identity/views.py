@@ -14,6 +14,7 @@ from rest_framework.exceptions import AuthenticationFailed, NotFound, Permission
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from apps.identity.auth_cookies import mark_auth_cookies_for_clearing
@@ -24,6 +25,7 @@ from apps.identity.exceptions import (
     OtpThrottled,
     OtpUnavailableApiError,
 )
+from apps.identity.firebase_auth import verify_firebase_login
 from apps.identity.hashing import keyed_hash
 from apps.identity.models import User, UserSession
 from apps.identity.serializers import (
@@ -34,6 +36,8 @@ from apps.identity.serializers import (
     ConsentReceiptSerializer,
     CsrfTokenSerializer,
     CustomerProfileUpdateSerializer,
+    FirebasePrecheckSerializer,
+    FirebaseVerifySerializer,
     OtpIssuedSerializer,
     OtpRequestSerializer,
     OtpVerifySerializer,
@@ -49,6 +53,7 @@ from apps.identity.services import (
     NoAccountForRoleError,
     OtpRateLimitError,
     OtpVerificationError,
+    check_firebase_precheck,
     create_authenticated_session,
     create_privacy_request,
     issue_login_otp,
@@ -61,6 +66,7 @@ from apps.identity.services import (
     verify_login_otp,
 )
 from common.errors.serializers import ApiErrorSerializer
+from common.observability.context import get_request_id
 from common.schema import OTP_RATE_LIMIT_EXAMPLE, SESSION_EXPIRED_EXAMPLE
 
 
@@ -153,6 +159,122 @@ class OtpVerifyView(APIView):
                 code=data["code"],
                 referral_code=data.get("referral_code", ""),
             )
+        except OtpVerificationError as exc:
+            raise InvalidOtpApiError from exc
+
+        session = create_authenticated_session(
+            request=request._request,
+            user=user,
+            device_identifier=data.get("device_identifier", ""),
+            device_label=data.get("device_label", ""),
+        )
+        response_data = {
+            "user": UserSerializer(user).data,
+            "active_role": session.active_role.code if session.active_role else None,
+            "session_expires_at": session.expires_at,
+        }
+        return Response(response_data)
+
+
+class FirebasePrecheckView(APIView):
+    """Pre-check rate limits and intended role gate before requesting Firebase SMS.
+
+    Note that this is a UX/rate-limit aid and verify is the real gate.
+    """
+
+    authentication_classes = ()
+    permission_classes = (AllowAny,)
+
+    @extend_schema(
+        tags=["Authentication"],
+        request=FirebasePrecheckSerializer,
+        responses={
+            204: OpenApiResponse(
+                description="Precheck allowed; client may proceed with Firebase SMS.",
+            ),
+            400: ApiErrorSerializer,
+            404: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description=(
+                    "Firebase auth is disabled or `intended_role` was set and this number "
+                    "holds no such account."
+                ),
+            ),
+            429: OpenApiResponse(
+                response=ApiErrorSerializer,
+                examples=[OTP_RATE_LIMIT_EXAMPLE],
+            ),
+        },
+    )
+    def post(self, request: Request) -> Response:
+        if not getattr(settings, "FIREBASE_AUTH_ENABLED", False):
+            raise NotFound("Firebase authentication is disabled.")
+
+        serializer = FirebasePrecheckSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        try:
+            check_firebase_precheck(
+                phone_number=data["phone_number"],
+                request_ip=_request_ip(request),
+                intended_role=data.get("intended_role", ""),
+            )
+        except OtpRateLimitError as exc:
+            raise OtpThrottled(wait=exc.retry_after_seconds) from exc
+        except NoAccountForRoleError as exc:
+            raise NoAccountForRoleApiError from exc
+        except OtpVerificationError as exc:
+            raise InvalidOtpApiError from exc
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class FirebaseVerifyView(APIView):
+    """Verify Firebase ID token, provision the user session, and issue auth cookies."""
+
+    authentication_classes = ()
+    permission_classes = (AllowAny,)
+    throttle_classes = (ScopedRateThrottle,)
+    throttle_scope = "firebase_verify"
+
+    @extend_schema(
+        tags=["Authentication"],
+        request=FirebaseVerifySerializer,
+        responses={
+            200: AuthenticatedSessionSerializer,
+            400: ApiErrorSerializer,
+            404: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description=(
+                    "Firebase auth is disabled or `intended_role` was set and this number "
+                    "holds no such account."
+                ),
+            ),
+            429: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="Rate limit exceeded.",
+            ),
+        },
+    )
+    def post(self, request: Request) -> Response:
+        if not getattr(settings, "FIREBASE_AUTH_ENABLED", False):
+            raise NotFound("Firebase authentication is disabled.")
+
+        serializer = FirebaseVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        try:
+            user = verify_firebase_login(
+                id_token=data["id_token"],
+                intended_role=data.get("intended_role", ""),
+                referral_code=data.get("referral_code", ""),
+                request_ip=_request_ip(request),
+                request_id=get_request_id() or "",
+            )
+        except NoAccountForRoleError as exc:
+            raise NoAccountForRoleApiError from exc
         except OtpVerificationError as exc:
             raise InvalidOtpApiError from exc
 

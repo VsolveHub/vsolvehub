@@ -179,29 +179,45 @@ def verify_login_otp(
             challenge.consumed_at = timezone.now()
             challenge.save(update_fields=("consumed_at",))
 
-            user, user_created = User.objects.get_or_create(phone_number=canonical_phone)
-            CustomerProfile.objects.get_or_create(user=user)
-            customer_role, _created = Role.objects.get_or_create(
-                code="customer",
-                defaults={"name": "Customer", "is_system": True},
+            user, _user_created = provision_login_user(
+                canonical_phone=canonical_phone,
+                referral_code=referral_code,
             )
-            UserRole.objects.get_or_create(
-                user=user,
-                role=customer_role,
-                revoked_at__isnull=True,
-            )
-            if user_created:
-                # Referral codes are accepted only here, in the request that creates the
-                # account, and signup coin campaigns fire exactly once.
-                from apps.loyalty.services.signup import on_customer_signup  # noqa: PLC0415
-
-                on_customer_signup(user=user, referral_code=referral_code)
             return user
 
     if verification_failed:
         raise OtpVerificationError("The code is invalid or expired.")
 
     raise RuntimeError("OTP verification reached an impossible state.")
+
+
+def provision_login_user(
+    *,
+    canonical_phone: str,
+    referral_code: str = "",
+) -> tuple[User, bool]:
+    """Ensure a User, CustomerProfile, and default customer role exist for canonical_phone.
+
+    If the user account is newly created, fires the loyalty on_customer_signup hook.
+    """
+    user, user_created = User.objects.get_or_create(phone_number=canonical_phone)
+    CustomerProfile.objects.get_or_create(user=user)
+    customer_role, _created = Role.objects.get_or_create(
+        code="customer",
+        defaults={"name": "Customer", "is_system": True},
+    )
+    UserRole.objects.get_or_create(
+        user=user,
+        role=customer_role,
+        revoked_at__isnull=True,
+    )
+    if user_created:
+        # Referral codes are accepted only here, in the request that creates the
+        # account, and signup coin campaigns fire exactly once.
+        from apps.loyalty.services.signup import on_customer_signup  # noqa: PLC0415
+
+        on_customer_signup(user=user, referral_code=referral_code)
+    return user, user_created
 
 
 def create_authenticated_session(
@@ -425,4 +441,63 @@ def record_access_event(
         decision=decision,
         request_id=request_id,
         metadata=metadata or {},
+    )
+
+
+def check_firebase_precheck(
+    *,
+    phone_number: str,
+    request_ip: str,
+    intended_role: str = "",
+) -> None:
+    """Pre-check rate limits and intended role gate before client requests Firebase SMS.
+
+    Note that this is a UX/rate-limit aid; verify_firebase_login is the real gate.
+    """
+    canonical_phone = normalize_phone_number(phone_number)
+    phone_hash = keyed_hash(canonical_phone)
+    ip_hash = keyed_hash(request_ip)
+
+    _increment_rate_counter(
+        f"otp:phone:{phone_hash}",
+        settings.OTP_PHONE_RATE_LIMIT,
+    )
+    _increment_rate_counter(
+        f"otp:ip:{ip_hash}",
+        settings.OTP_IP_RATE_LIMIT,
+    )
+
+    if intended_role == "operations":
+        raise OtpVerificationError("Firebase auth does not support operations role.")
+
+    if intended_role and intended_role not in ("customer", "partner"):
+        raise OtpVerificationError("Invalid intended role for Firebase auth.")
+
+    if intended_role and not (
+        UserRole.objects.filter(
+            user__phone_number=canonical_phone,
+            role__code=intended_role,
+            revoked_at__isnull=True,
+        ).exists()
+    ):
+        raise NoAccountForRoleError(intended_role)
+
+
+def verify_firebase_login(
+    *,
+    id_token: str,
+    intended_role: str = "",
+    referral_code: str = "",
+    request_ip: str = "",
+    request_id: str = "",
+) -> User:
+    """Verify a Firebase ID token, delegate to firebase_auth service."""
+    import apps.identity.firebase_auth as _firebase_auth  # noqa: PLC0415
+
+    return _firebase_auth.verify_firebase_login(
+        id_token=id_token,
+        intended_role=intended_role,
+        referral_code=referral_code,
+        request_ip=request_ip,
+        request_id=request_id,
     )

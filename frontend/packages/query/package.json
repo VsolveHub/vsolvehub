@@ -18,7 +18,8 @@
   "dependencies": {
     "@tanstack/react-query": "^5.62.7",
     "@tanstack/react-query-devtools": "^5.62.7",
-    "@vsolve/api-client": "workspace:*"
+    "@vsolve/api-client": "workspace:*",
+    "firebase": "^13.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.20.0",

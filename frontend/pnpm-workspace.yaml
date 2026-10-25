@@ -16,10 +16,12 @@ autoInstallPeers: true
 strictPeerDependencies: false
 
 allowBuilds:
+  '@firebase/util': true
   esbuild: true
   # msw's postinstall only prints a CLI notice. The browser service worker is
   # created per-app with `msw init <app>/public`, so no build step is needed.
   msw: false
+  protobufjs: true
   sharp: true
   # eslint-import-resolver-typescript uses this N-API package; its postinstall
   # selects and verifies the platform-specific resolver binding.

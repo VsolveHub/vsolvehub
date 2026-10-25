@@ -330,11 +330,11 @@ export function useOtpFlow(apiClient: ApiClient, options: OtpFlowOptions = {}): 
    * Verify button disabled on a complete one.
    */
   const [issuedCodeLength, setIssuedCodeLength] = useState<number | null>(null);
-  const [phone, setPhone] = useState(initialPhone);
+  const [phone, setPhone] = useState(sanitizePhoneInput(initialPhone));
 
   useEffect(() => {
     if (initialPhone && phase === "phone") {
-      setPhone((current) => current || initialPhone);
+      setPhone((current) => current || sanitizePhoneInput(initialPhone));
     }
   }, [initialPhone, phase]);
   const [code, setCode] = useState("");

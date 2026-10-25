@@ -229,6 +229,7 @@ REST_FRAMEWORK = {
     "EXCEPTION_HANDLER": "common.errors.handler.api_exception_handler",
     "NON_FIELD_ERRORS_KEY": "non_field_errors",
     "DEFAULT_THROTTLE_RATES": {
+        "firebase_verify": "30/minute",
         "geocoding": "30/min",
         "serviceability": "60/min",
         # M2 abuse controls (`M2-BE-803`), enforced by `common.throttling.ScopedWriteThrottle`
@@ -645,6 +646,11 @@ OTP_IP_RATE_LIMIT = 20
 OTP_PROVIDER = env("OTP_PROVIDER", default="unconfigured")
 OTP_DEVELOPMENT_CODE_ENABLED = env.bool("OTP_DEVELOPMENT_CODE_ENABLED", default=False)
 OPERATIONS_STEP_UP_TTL_SECONDS = env.int("OPERATIONS_STEP_UP_TTL_SECONDS", default=10 * 60)
+
+FIREBASE_PROJECT_ID = env("FIREBASE_PROJECT_ID", default="")
+FIREBASE_CREDENTIALS_JSON = env("FIREBASE_CREDENTIALS_JSON", default="")
+FIREBASE_AUTH_ENABLED = env.bool("FIREBASE_AUTH_ENABLED", default=False)
+FIREBASE_TOKEN_MAX_AGE_SECONDS = env.int("FIREBASE_TOKEN_MAX_AGE_SECONDS", default=300)
 
 PAYMENT_PROVIDER = env("PAYMENT_PROVIDER", default="unconfigured")
 PAYMENT_WEBHOOK_SECRET = env("PAYMENT_WEBHOOK_SECRET", default="")

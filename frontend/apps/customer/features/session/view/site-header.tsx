@@ -4,7 +4,7 @@
 // and the test runner's JSX transform resolves elements through the `React` binding.
 import * as React from "react";
 import { useState, useEffect } from "react";
-import { useLogout, useAuthGuard, useOtpFlow } from "@vsolve/query";
+import { useLogout, useAuthGuard, usePhoneAuthFlow } from "@vsolve/query";
 import { Button, Logo, Dialog, OtpForm, cn, useHydrated } from "@vsolve/ui";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -34,7 +34,7 @@ export function SiteHeader() {
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const hydrated = useHydrated();
   const guard = useAuthGuard(getApiClient());
-  const flow = useOtpFlow(getApiClient(), {
+  const flow = usePhoneAuthFlow(getApiClient(), {
     getReferralCode: readPendingReferral,
     onAuthenticated: () => {
       setIsLoginOpen(false);
