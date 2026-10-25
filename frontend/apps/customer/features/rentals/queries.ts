@@ -1,6 +1,7 @@
 "use client";
 
 import { request, type Schemas } from "@vsolve/api-client";
+import type { Page } from "@vsolve/query";
 
 import { getApiClient } from "@/lib/api/browser";
 import type { RentalFilterParams } from "./model";
@@ -43,6 +44,21 @@ export function fetchRentalAsset(key: string) {
 
 export function fetchMyRentals() {
   return request(() => getApiClient().GET("/api/v1/me/rentals"));
+}
+
+/**
+ * The endpoint returns every booking in one array and takes no filters, so the tab's statuses
+ * (comma-separated) are applied here and there is never a next page.
+ */
+export async function fetchMyRentalsPage(statuses?: string): Promise<Page<RentalBooking>> {
+  const bookings = await fetchMyRentals();
+  const wanted = statuses ? new Set(statuses.split(",")) : null;
+  return {
+    results: wanted
+      ? bookings.filter((booking) => booking.status !== undefined && wanted.has(booking.status))
+      : bookings,
+    next: null,
+  };
 }
 
 export function fetchRentalTaxonomy() {

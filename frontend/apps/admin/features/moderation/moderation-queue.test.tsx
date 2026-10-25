@@ -40,18 +40,15 @@ describe("operations moderation queue", () => {
       <MarketplaceQueue
         heading="Rental assets"
         queryKey="ops-rentals-test"
-        loadPage={async () => ({
-          next: null,
-          results: [
-            {
-              id: "asset-1",
-              title: "Drill",
-              public_state: "PENDING_REVIEW",
-              partyName: "Host",
-              moderation_status: "PENDING",
-            },
-          ],
-        })}
+        load={async () => [
+          {
+            id: "asset-1",
+            title: "Drill",
+            public_state: "PENDING_REVIEW",
+            partyName: "Host",
+            moderation_status: "PENDING",
+          },
+        ]}
         moderate={async () => undefined}
       />,
       { wrapper },
@@ -68,12 +65,12 @@ describe("operations moderation queue", () => {
 
   it("does not mount a second operations shell on rentals or stays", async () => {
     const { unmount } = render(<OpsRentalsPage />, { wrapper });
-    expect(await screen.findByRole("heading", { name: "Rentals" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Rental assets" })).toBeInTheDocument();
     expect(screen.queryByText("Checking your access")).not.toBeInTheDocument();
     unmount();
 
     render(<OpsStaysPage />, { wrapper });
-    expect(await screen.findByRole("heading", { name: "Stays" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Stay properties" })).toBeInTheDocument();
     expect(screen.queryByText("Checking your access")).not.toBeInTheDocument();
   });
 });

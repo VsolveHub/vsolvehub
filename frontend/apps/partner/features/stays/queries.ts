@@ -1,4 +1,5 @@
 import { request, type Schemas } from "@vsolve/api-client";
+import type { Page } from "@vsolve/query";
 
 import { getApiClient } from "@/lib/api/browser";
 
@@ -111,6 +112,15 @@ export async function fetchPartnerStayProperties(): Promise<StayProperty[]> {
 export async function fetchPartnerStayEnquiries(): Promise<StayEnquiry[]> {
   const data = await request(() => getApiClient().GET("/api/v1/partner/stays/enquiries"));
   return Array.isArray(data) ? data : [];
+}
+
+/** `statuses` may name several, comma-separated; the server keeps rows in any of them. */
+export function fetchPartnerStayEnquiriesPage(cursor?: string, statuses?: string) {
+  return request(() =>
+    getApiClient().GET("/api/v1/partner/stays/enquiries", {
+      params: { query: { cursor, status: statuses } },
+    }),
+  );
 }
 
 export async function uploadPartnerStayPhoto(file: File): Promise<StayPhotoUpload> {
@@ -304,6 +314,21 @@ export async function fetchPartnerStayReservations(): Promise<StayReservation[]>
   return Array.isArray(data) ? (data as StayReservation[]) : [];
 }
 
+/** `statuses` may name several, comma-separated; the server keeps rows in any of them. */
+export async function fetchPartnerStayReservationsPage(
+  cursor?: string,
+  statuses?: string,
+): Promise<Page<StayReservation>> {
+  const page = await request(() =>
+    getApiClient().GET("/api/v1/partner/stays/reservations", {
+      params: { query: { cursor, status: statuses } },
+    }),
+  );
+  // The schema marks `status` optional only because the serializer gives it a default for
+  // writes; every response carries it, which is what the local type records.
+  return { ...page, results: page.results as StayReservation[] };
+}
+
 export type StayReservationAction = "check_in" | "check_out" | "no_show" | "cancel";
 
 export async function partnerStayReservationAction(
@@ -471,6 +496,15 @@ export async function setPartnerVisitingHours(
 export async function fetchPartnerStayVisits(): Promise<PartnerStayVisit[]> {
   const data = await request(() => getApiClient().GET("/api/v1/partner/stays/visits"));
   return Array.isArray(data) ? data : [];
+}
+
+/** `statuses` may name several, comma-separated; the server keeps rows in any of them. */
+export function fetchPartnerStayVisitsPage(cursor?: string, statuses?: string) {
+  return request(() =>
+    getApiClient().GET("/api/v1/partner/stays/visits", {
+      params: { query: { cursor, status: statuses } },
+    }),
+  );
 }
 
 export type VisitDeclineReason = "ROOM_UNAVAILABLE" | "DATE_MISMATCH" | "ALREADY_OCCUPIED" | "OTHER";

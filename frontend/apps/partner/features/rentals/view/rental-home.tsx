@@ -35,8 +35,8 @@ export function RentalHome() {
   const bookings = useQuery({
     queryKey: ["partner-rentals", "bookings", "home"],
     queryFn: () =>
-      fetchAllPages((cursor) =>
-        fetchPartnerRentalBookingsPage(cursor, "AWAITING_TRANSPORT_QUOTE,CONFIRMED,HANDOVER"),
+      fetchAllPages(() =>
+        fetchPartnerRentalBookingsPage("AWAITING_TRANSPORT_QUOTE,CONFIRMED,HANDOVER"),
       ),
   });
   const assets = useQuery({ queryKey: ["partner-rentals", "assets"], queryFn: fetchPartnerRentalAssets });
