@@ -18,19 +18,23 @@ from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from apps.cases.models import OperationsCase
 from apps.cases.selectors import case_queue_summary
 from apps.cases.serializers import (
+    CONTACT_TOPICS,
     CaseAppealDecisionRequestSerializer,
     CaseNoteRequestSerializer,
     CaseOverrideRequestSerializer,
     CaseQueueSummarySerializer,
     CaseResponseDeadlineRequestSerializer,
+    ContactMessageAcceptedSerializer,
+    ContactMessageRequestSerializer,
     EscalateCaseRequestSerializer,
     OpenCaseRequestSerializer,
     OperationsCaseListSerializer,
@@ -491,3 +495,53 @@ class OperationsCaseOverrideView(_CaseCommandView):
             note=data["note"],
             actor=actor,
         )
+
+
+class ContactMessageView(APIView):
+    """The public Contact form: one message becomes one `CONTACT` case (contract 1.78.0).
+
+    Open to everyone, signed in or not — most people who write have no account yet. When the sender
+    is signed in the case records who they are, so support need not ask again. Throttled per
+    client, and a filled honeypot gets the same success answer while creating nothing, so a
+    script learns nothing from the response.
+    """
+
+    permission_classes = (AllowAny,)
+    throttle_classes = (ScopedRateThrottle,)
+    throttle_scope = "contact_message"
+
+    @extend_schema(
+        tags=["Support"],
+        request=ContactMessageRequestSerializer,
+        responses={201: ContactMessageAcceptedSerializer, 400: ApiErrorSerializer},
+    )
+    def post(self, request: Request) -> Response:
+        serializer = ContactMessageRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        if data["website"]:
+            return Response({"reference": "received"}, status=status.HTTP_201_CREATED)
+
+        sender = request.user if isinstance(request.user, User) else None
+        topic = CONTACT_TOPICS[data["topic"]]
+        lines = [
+            f"From: {data['name']}",
+            f"Phone: {data['phone_number'] or '-'}",
+            f"Email: {data['email'] or '-'}",
+        ]
+        if sender is not None:
+            lines.append(f"Signed in as: {sender.phone_number}")
+        lines += [f"Topic: {topic}", "", data["message"]]
+
+        case = open_case(
+            kind=OperationsCase.Kind.CONTACT,
+            summary=f"Contact form · {topic} · {data['name']}"[:240],
+            detail="\n".join(lines),
+            opened_by=sender,
+        )
+        return Response({"reference": contact_reference(case)}, status=status.HTTP_201_CREATED)
+
+
+def contact_reference(case: OperationsCase) -> str:
+    """`C-1A2B3C4D`: the first eight characters of the case id, for a person to read out."""
+    return f"C-{str(case.id)[:8].upper()}"

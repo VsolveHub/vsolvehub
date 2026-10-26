@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.77.0)
- * Checksum: 83f1ab4fcb3afaf8
+ * Source:   contracts/openapi/v1.yaml (version 1.78.0)
+ * Checksum: 5ffe0e9e52e2cbbd
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -2079,6 +2079,52 @@ export interface paths {
         };
         /** @description Job templates by category plus every option list the job forms tap from. */
         get: operations["jobs_options_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/legal/cancellation-policy/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The cancellation fees a booking made today is given, for the public policy page.
+         *
+         *     Read from the same `current_cancellation_policy` checkout uses, so the page and the quote can
+         *     never disagree about what a cancellation costs.
+         */
+        get: operations["legal_cancellation_policy_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/legal/sample-receipt/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description A booking receipt filled with invented values, watermarked SAMPLE.
+         *
+         *     For reviewers who must see the document before anyone has booked — Razorpay's activation
+         *     asks for one. Built by `sample_booking_receipt_spec` through the same renderer and issuer
+         *     settings as a real receipt, so it shows exactly what a customer would get. Opens in the
+         *     browser rather than downloading, because it is usually followed as a link.
+         */
+        get: operations["sample_receipt_download"];
         put?: never;
         post?: never;
         delete?: never;
@@ -8262,6 +8308,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/support/contact/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description The public Contact form: one message becomes one `CONTACT` case (contract 1.78.0).
+         *
+         *     Open to everyone, signed in or not — most people who write have no account yet. When the sender
+         *     is signed in the case records who they are, so support need not ask again. Throttled per
+         *     client, and a filled honeypot gets the same success answer while creating nothing, so a
+         *     script learns nothing from the response.
+         */
+        post: operations["support_contact_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tax-documents/{document_id}/": {
         parameters: {
             query?: never;
@@ -9542,6 +9612,29 @@ export interface components {
         ConsentReceiptCreateRequest: {
             purpose: string;
             policy_version: string;
+        };
+        ContactMessageAccepted: {
+            readonly reference: string;
+        };
+        /**
+         * @description A message from the public Contact form (contract 1.78.0).
+         *
+         *     At least one way to reply is required: a message nobody can answer is not a case anyone can
+         *     close. `website` is a honeypot — invisible to people, filled by form-spamming scripts.
+         */
+        ContactMessageRequestRequest: {
+            name: string;
+            /** @default  */
+            phone_number: string;
+            /**
+             * Format: email
+             * @default
+             */
+            email: string;
+            topic: components["schemas"]["TopicEnum"];
+            message: string;
+            /** @default  */
+            website: string;
         };
         /**
          * @description * `image/jpeg` - image/jpeg
@@ -12090,9 +12183,10 @@ export interface components {
          *     * `CHARGEBACK` - Chargeback on a platform fee
          *     * `LISTING_ABUSE` - Listing abuse
          *     * `APPLICATION_ABUSE` - Application abuse
+         *     * `CONTACT` - Contact form message
          * @enum {string}
          */
-        OperationsCaseKindEnum: "ASSIGNMENT" | "LATE_NO_SHOW" | "CUSTOMER_UNAVAILABLE" | "PARTIAL_WORK" | "QUALITY" | "SAFETY" | "PAYMENT" | "REFUND" | "PAYOUT" | "CANCELLATION_CONFLICT" | "ATTENDANCE" | "STAGE" | "OFF_PLATFORM" | "CHARGEBACK" | "LISTING_ABUSE" | "APPLICATION_ABUSE";
+        OperationsCaseKindEnum: "ASSIGNMENT" | "LATE_NO_SHOW" | "CUSTOMER_UNAVAILABLE" | "PARTIAL_WORK" | "QUALITY" | "SAFETY" | "PAYMENT" | "REFUND" | "PAYOUT" | "CANCELLATION_CONFLICT" | "ATTENDANCE" | "STAGE" | "OFF_PLATFORM" | "CHARGEBACK" | "LISTING_ABUSE" | "APPLICATION_ABUSE" | "CONTACT";
         /**
          * @description The queue row. No events and no detail — a list of two hundred cases should not carry
          *     two hundred audit trails, and the body of a safety report is not queue-scanning material.
@@ -15107,6 +15201,27 @@ export interface components {
             /** Format: date-time */
             period_end: string;
         };
+        PublishedCancellationBand: {
+            readonly code: string;
+            readonly condition_text: string;
+            readonly fee: components["schemas"]["Money"];
+        };
+        /**
+         * @description The cancellation ladder a booking made today is given (contract 1.78.0).
+         *
+         *     For the public Refund & Cancellation page, so the page states the live amounts rather than a
+         *     copy that goes stale. A booking keeps the version frozen onto its quote; this is what new
+         *     bookings get.
+         */
+        PublishedCancellationPolicy: {
+            readonly code: string;
+            readonly version: number;
+            /** Format: date-time */
+            readonly effective_from: string;
+            readonly bands: components["schemas"]["PublishedCancellationBand"][];
+            readonly reschedule_free_notice_hours: number;
+            readonly quality_dispute_window_hours: number;
+        };
         /**
          * @description * `BOOKING_GROUP` - Booking group
          *     * `SCOPE_AMENDMENT_REVISION` - Scope amendment revision
@@ -17610,6 +17725,7 @@ export interface components {
             /** Format: uuid */
             readonly id: string;
             readonly kind: components["schemas"]["TaxDocumentKindEnum"];
+            readonly title: string;
             readonly number: string;
             readonly legal_entity_code: string;
             readonly financial_year: string;
@@ -17661,6 +17777,15 @@ export interface components {
          * @enum {string}
          */
         ToArchetypeEnum: "A3_TIME_BLOCK" | "A5_CUSTOM_PROJECT";
+        /**
+         * @description * `booking` - booking
+         *     * `payment` - payment
+         *     * `partner` - partner
+         *     * `feedback` - feedback
+         *     * `other` - other
+         * @enum {string}
+         */
+        TopicEnum: "booking" | "payment" | "partner" | "feedback" | "other";
         TouchActionCount: {
             action: string;
             count: number;
@@ -23103,6 +23228,52 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobOptions"];
+                };
+            };
+        };
+    };
+    legal_cancellation_policy_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishedCancellationPolicy"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    sample_receipt_download: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
                 };
             };
         };
@@ -37371,6 +37542,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StayVisit"];
+                };
+            };
+        };
+    };
+    support_contact_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContactMessageRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ContactMessageRequestRequest"];
+                "multipart/form-data": components["schemas"]["ContactMessageRequestRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContactMessageAccepted"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
                 };
             };
         };

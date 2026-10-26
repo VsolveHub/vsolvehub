@@ -15,6 +15,7 @@ from django.utils import timezone
 from apps.cases.models import (
     ALLOWED_RESOLUTIONS,
     DEFAULT_TEAM,
+    SUBJECTLESS_KINDS,
     TERMINAL_CASE_STATUSES,
     OperationsCase,
     OperationsCaseEvent,
@@ -98,7 +99,10 @@ def open_case(
         )
         if value is not None
     ]
-    if len(subjects) != 1:
+    if kind in SUBJECTLESS_KINDS:
+        if subjects:
+            raise CaseInvalidApiError(reason="A Contact form message is not about a record.")
+    elif len(subjects) != 1:
         raise CaseInvalidApiError(
             reason="A case is about exactly one subject.",
         )

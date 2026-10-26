@@ -8,19 +8,18 @@ import { useState } from "react";
 import { useBookingGroup } from "@/features/bookings/queries";
 import { Money } from "@/features/checkout/view/money";
 import { PUBLIC_API_BASE_URL } from "@/lib/api/config";
+import { SUPPORT } from "@/lib/support";
 
 import { useOrder, type Order, type TaxDocument } from "../queries";
 
 /**
- * Full-screen formal Tax Invoice & Receipt document view.
- * Includes Vsolve Hub logo, company GSTIN details, itemized service table,
- * payment summary, and a dedicated Download Receipt trigger.
+ * The receipt for a paid booking: itemised visits, the documents issued for it, and the PDF.
+ *
+ * What a document is called comes from the server (`TaxDocument.title`, contract 1.78.0): a
+ * payment receipt until V Solve Hub's GSTIN is configured, a tax invoice after. This screen never
+ * names the issuer's legal entity, address or GSTIN itself — the downloaded PDF is the formal
+ * document and carries exactly what the backend is configured to state.
  */
-
-const DOCUMENT_LABELS: Record<TaxDocument["kind"], string> = {
-  INVOICE: "Invoice",
-  CREDIT_NOTE: "Credit note",
-};
 
 const ORDER_STATUS_LABELS: Record<Order["status"], string> = {
   CONFIRMED: "Paid",
@@ -34,7 +33,7 @@ function TaxDocumentCard({ document }: { document: TaxDocument }) {
     <div className="rounded-lg border border-line bg-surface p-4 text-xs">
       <div className="flex items-start justify-between gap-2 border-b border-line pb-2">
         <div className="min-w-0 font-semibold text-text">
-          {DOCUMENT_LABELS[document.kind]}{" "}
+          {document.title}{" "}
           <span className="break-all font-mono text-text-secondary">{document.number}</span>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -74,6 +73,7 @@ function TaxDocumentCard({ document }: { document: TaxDocument }) {
 
 function DownloadInvoiceButton({ document }: { document: TaxDocument }) {
   const [state, setState] = useState<"idle" | "working" | "failed">("idle");
+  const name = document.title.toLowerCase();
 
   async function download() {
     setState("working");
@@ -87,7 +87,7 @@ function DownloadInvoiceButton({ document }: { document: TaxDocument }) {
       const url = URL.createObjectURL(blob);
       const anchor = window.document.createElement("a");
       anchor.href = url;
-      anchor.download = `invoice-${document.number}.pdf`;
+      anchor.download = `${name.replaceAll(" ", "-")}-${document.number}.pdf`;
       window.document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
@@ -108,11 +108,11 @@ function DownloadInvoiceButton({ document }: { document: TaxDocument }) {
         className="h-11 max-w-full px-3 text-center leading-tight whitespace-normal md:px-5"
       >
         <span className="md:hidden">
-          Download invoice
+          Download {name}
           <br />
           PDF
         </span>
-        <span className="hidden md:inline">Download invoice PDF</span>
+        <span className="hidden md:inline">Download {name} PDF</span>
       </Button>
       {state === "failed" ? (
         <p className="mt-1 text-xs text-danger-text" role="alert">
@@ -205,27 +205,29 @@ export function Receipt({ groupId }: { groupId: string }) {
         </div>
       </div>
 
-      {/* Official Tax Invoice & Receipt Paper Document */}
+      {/* Receipt paper: what the customer paid for, and the documents issued for it */}
       <div className="box-border w-full max-w-full space-y-8 overflow-x-hidden rounded-xl border border-line bg-surface p-4 shadow-sm print:border-none print:p-0 print:shadow-none sm:p-6 lg:p-10">
-        
-        {/* Document Header: Logo & Invoice Metadata */}
+
+        {/* Document Header: Logo & Receipt Metadata */}
         <div className="flex flex-col items-start justify-between gap-6 border-b border-line pb-6 md:flex-row">
           <div className="min-w-0">
             <Logo className="h-8 w-auto max-w-full md:h-10" />
             <div className="mt-3 space-y-0.5 text-xs wrap-anywhere text-text-secondary">
-              <p className="font-semibold text-text">Vsolve Hub Services India Pvt. Ltd.</p>
+              <p className="font-semibold text-text">V Solve Hub</p>
               <p>Home services and project marketplace</p>
-              <p>Plot 12, Hitech City Road, Madhapur, Hyderabad, Telangana 500081</p>
-              <p>Support: support@vsolvehub.com | www.vsolvehub.com</p>
+              <p>
+                Support: {SUPPORT.email}
+                {SUPPORT.phone ? ` | ${SUPPORT.phone.display}` : ""} | www.vsolvehub.com
+              </p>
             </div>
           </div>
 
           <div className="min-w-0 space-y-1 text-left md:text-right">
             <h1 className="text-xl font-bold tracking-tight text-text uppercase md:text-2xl">
-              Payment Receipt & Invoice
+              {invoice?.title ?? "Payment receipt"}
             </h1>
             <p className="text-xs text-text-secondary">
-              Tax Invoice for Booking Reference{" "}
+              Booking reference{" "}
               <span className="break-all font-mono font-medium text-text">{group.id}</span>
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-2 md:justify-end">
@@ -322,7 +324,7 @@ export function Receipt({ groupId }: { groupId: string }) {
             {order.tax_documents.length > 0 ? (
               <div>
                 <p className="mb-2 text-xs font-bold tracking-wider text-text-secondary uppercase">
-                  Tax Documents
+                  Documents
                 </p>
                 <div className="space-y-2">
                   {order.tax_documents.map((doc) => (
@@ -334,27 +336,21 @@ export function Receipt({ groupId }: { groupId: string }) {
           </div>
 
           <div className="w-full min-w-0 space-y-3 rounded-lg border border-line bg-surface-sunken p-4 lg:w-80 lg:shrink-0">
-            <div className="flex justify-between gap-3 text-sm text-text-secondary">
-              <span>Subtotal</span>
-              <Money value={order.total} className="shrink-0 font-mono tabular-nums text-text" />
-            </div>
-            <div className="flex justify-between gap-3 text-xs text-text-secondary">
-              <span>Applicable Taxes & GST</span>
-              <span className="shrink-0">Included</span>
-            </div>
-            <div className="flex items-baseline justify-between gap-3 border-t border-line pt-3">
+            <div className="flex items-baseline justify-between gap-3">
               <span className="text-base font-bold text-text">Total Paid</span>
               <Money value={order.total} className="shrink-0 text-2xl font-bold tabular-nums text-text" />
             </div>
           </div>
         </div>
 
-        {/* Document Footer Sign-off */}
+        {/* Document Footer Sign-off: says what this is, never more than the PDF states */}
         <div className="space-y-1 border-t border-line pt-6 text-center text-xs text-text-secondary">
           <p className="text-pretty font-medium text-text">
-            This is an official computer-generated tax invoice issued by Vsolve Hub Services India Pvt. Ltd.
+            {invoice?.title === "Tax invoice"
+              ? "This is a computer-generated tax invoice. The downloadable PDF is the formal copy."
+              : "This is a receipt for your payment to V Solve Hub. It is not a tax invoice."}
           </p>
-          <p className="text-pretty">Thank you for choosing Vsolve Hub for your home service needs!</p>
+          <p className="text-pretty">Thank you for choosing V Solve Hub for your home service needs!</p>
         </div>
 
       </div>

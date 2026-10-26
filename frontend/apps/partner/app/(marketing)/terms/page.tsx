@@ -75,10 +75,12 @@ export default function TermsPage() {
             <>
               <p>
                 Customer charges, platform commission, and your payout share are shown in the
-                partner app and may be updated from time to time. Payouts are made to the bank
-                or UPI details you provide. You are responsible for the accuracy of your payout
-                information. V Solve Hub is not liable for payouts delayed or misdirected due to
-                incorrect details supplied by you.
+                partner app and may be updated from time to time. Earnings are paid by bank
+                transfer to the bank account you add in the partner app, after our team has
+                verified it; a new or changed account is paid into only after a short cooling
+                period. You are responsible for the accuracy of your payout information.
+                V Solve Hub is not liable for payouts delayed or misdirected due to incorrect
+                details supplied by you.
               </p>
             </>
           ),

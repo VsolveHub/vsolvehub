@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/features/workspace/queries", () => ({
   usePartnerWorkspaceGrants: vi.fn(),
+  // MeHome reads the specialty home to decide whether Money shows; none means "show it".
+  useSpecialtyHome: () => ({ isPending: false, home: null }),
 }));
 vi.mock("@vsolve/query", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@vsolve/query")>()),

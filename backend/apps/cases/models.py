@@ -66,6 +66,15 @@ def _exactly_one_subject() -> models.Q:
     return condition
 
 
+def _no_subject() -> models.Q:
+    return models.Q(**{f"{field}__isnull": True for field in CASE_SUBJECT_FIELDS})
+
+
+#: The one kind that is about no record at all: a message from the public Contact form, from
+#: someone who may not even have an account. Every other kind keeps exactly one subject.
+SUBJECTLESS_KINDS: tuple[str, ...] = ("CONTACT",)
+
+
 class OperationsCase(models.Model):
     """One piece of work owned by a named Operations team, with a deadline it is measured on."""
 
@@ -96,6 +105,9 @@ class OperationsCase(models.Model):
         #: moderation outcome, not a fulfilment result.
         LISTING_ABUSE = "LISTING_ABUSE", "Listing abuse"
         APPLICATION_ABUSE = "APPLICATION_ABUSE", "Application abuse"
+        #: A message sent through the public Contact form (contract 1.78.0). The queue *is* the
+        #: monitored inbox: owned, timed and closed with an outcome like any other case.
+        CONTACT = "CONTACT", "Contact form message"
 
     class Severity(models.TextChoices):
         LOW = "LOW", "Low"
@@ -242,9 +254,11 @@ class OperationsCase(models.Model):
         constraints = [
             models.CheckConstraint(
                 # A case about nothing cannot be worked, and a case about everything cannot be
-                # owned. Exactly one subject, derived from `CASE_SUBJECT_FIELDS`.
-                condition=_exactly_one_subject(),
-                name="cases_exactly_one_subject",
+                # owned. Exactly one subject, derived from `CASE_SUBJECT_FIELDS` — except a
+                # Contact form message, which is about no record and must name none.
+                condition=(models.Q(kind__in=SUBJECTLESS_KINDS) & _no_subject())
+                | (~models.Q(kind__in=SUBJECTLESS_KINDS) & _exactly_one_subject()),
+                name="cases_subject_matches_kind",
             ),
             models.CheckConstraint(
                 condition=~models.Q(status="RESOLVED") | ~models.Q(resolution=""),
@@ -299,6 +313,7 @@ DEFAULT_TEAM: dict[str, str] = {
     OperationsCase.Kind.CHARGEBACK: OperationsCase.Team.FINANCE,
     OperationsCase.Kind.LISTING_ABUSE: OperationsCase.Team.SAFETY,
     OperationsCase.Kind.APPLICATION_ABUSE: OperationsCase.Team.SAFETY,
+    OperationsCase.Kind.CONTACT: OperationsCase.Team.BOOKING_SUPPORT,
 }
 
 #: Response SLA per severity. A due time is what makes "cases may not close merely because a
@@ -349,6 +364,9 @@ ALLOWED_RESOLUTIONS: dict[str, frozenset[str]] = {
     OperationsCase.Kind.APPLICATION_ABUSE: frozenset(
         {"APPLICATION_REMOVED", "REPORT_DISMISSED", "APPLICANT_WARNED"}
     ),
+    # A message ends when the person has an answer. The other two exist so a duplicate or junk
+    # message can close honestly rather than being marked "answered".
+    OperationsCase.Kind.CONTACT: frozenset({"ANSWERED", "DUPLICATE", "SPAM"}),
 }
 
 

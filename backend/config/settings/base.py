@@ -230,6 +230,9 @@ REST_FRAMEWORK = {
     "NON_FIELD_ERRORS_KEY": "non_field_errors",
     "DEFAULT_THROTTLE_RATES": {
         "firebase_verify": "30/minute",
+        # The public Contact form opens an Operations case per message. A person writes a few;
+        # a script writes hundreds. Keyed per IP, since most senders are signed out.
+        "contact_message": "5/hour",
         "geocoding": "30/min",
         "serviceability": "60/min",
         # M2 abuse controls (`M2-BE-803`), enforced by `common.throttling.ScopedWriteThrottle`
@@ -387,7 +390,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.77.0",
+    "VERSION": "1.78.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -673,6 +676,19 @@ PAYMENT_PROVIDER_READ_TIMEOUT_SECONDS = env.float(
 )
 PAYMENT_LEGAL_ENTITY_CODE = env("PAYMENT_LEGAL_ENTITY_CODE", default="vsolve")
 PAYMENT_LIVE_COLLECTIONS_APPROVED = env.bool("PAYMENT_LIVE_COLLECTIONS_APPROVED", default=False)
+
+# Who issues customer documents (receipts, credit notes). Empty means "not registered yet", never a
+# placeholder: an unset address is left off the page, and without a GSTIN a booking document is a
+# **payment receipt** that claims no tax. Setting DOCUMENT_ISSUER_GSTIN after GST registration turns
+# the same document into a tax invoice carrying the number. Set the legal name and registered
+# address exactly as on the registration certificate.
+DOCUMENT_ISSUER_NAME = env("DOCUMENT_ISSUER_NAME", default="V Solve Hub")
+DOCUMENT_ISSUER_ADDRESS = env("DOCUMENT_ISSUER_ADDRESS", default="")
+DOCUMENT_ISSUER_GSTIN = env("DOCUMENT_ISSUER_GSTIN", default="")
+DOCUMENT_ISSUER_CONTACT = env(
+    "DOCUMENT_ISSUER_CONTACT",
+    default="support@vsolvehub.com · +91 733 076 4634 · www.vsolvehub.com",
+)
 
 # Outbound payouts. Separate credentials from collections on purpose: the key that can move
 # money *out* is the more dangerous of the two, and sharing one secret between them means a

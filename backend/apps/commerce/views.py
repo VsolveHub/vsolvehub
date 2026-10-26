@@ -19,7 +19,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.commerce.documents import order_invoice_spec, render_pdf
+from apps.commerce.documents import order_invoice_spec, render_pdf, sample_booking_receipt_spec
 from apps.commerce.exceptions import PaymentConflictError, PaymentProviderUnavailableError
 from apps.commerce.models import Order, PaymentAttempt, Refund, TaxDocument
 from apps.commerce.providers import PaymentProviderError, get_payment_provider
@@ -27,6 +27,7 @@ from apps.commerce.serializers import (
     OrderSerializer,
     PaymentAttemptCreateSerializer,
     PaymentAttemptSerializer,
+    PublishedCancellationPolicySerializer,
     RefundCreateSerializer,
     RefundPageSerializer,
     RefundSerializer,
@@ -49,6 +50,7 @@ from apps.partners.permissions import (
     IsOperationsUser,
     has_active_session_role,
 )
+from apps.pricing.selectors import current_cancellation_policy
 from common.errors.serializers import ApiErrorSerializer
 from common.pagination import StrictCursorPagination
 from common.schema import IDEMPOTENCY_KEY_HEADER
@@ -560,3 +562,71 @@ def _pdf_response(pdf: bytes, *, filename: str) -> HttpResponse:
     # A financial document is per-Customer and must never be held by a shared cache.
     response["Cache-Control"] = "private, no-store"
     return response
+
+
+#: The ladder checkout freezes onto every new quote (`carts.services.checkout`). One code today;
+#: when a second policy exists the page will need to say which bookings each applies to.
+PUBLISHED_CANCELLATION_POLICY_CODE = "m1-scheduled-today"
+
+
+class PublishedCancellationPolicyView(APIView):
+    """The cancellation fees a booking made today is given, for the public policy page.
+
+    Read from the same `current_cancellation_policy` checkout uses, so the page and the quote can
+    never disagree about what a cancellation costs.
+    """
+
+    authentication_classes = ()
+    permission_classes = (AllowAny,)
+
+    @extend_schema(
+        tags=["Legal"],
+        responses={200: PublishedCancellationPolicySerializer, 404: ApiErrorSerializer},
+    )
+    def get(self, _request: Request) -> Response:
+        policy = current_cancellation_policy(code=PUBLISHED_CANCELLATION_POLICY_CODE)
+        if policy is None:
+            raise NotFound("No cancellation policy is published right now.")
+        return Response(
+            {
+                "code": policy.code,
+                "version": policy.version,
+                "effective_from": policy.effective_from,
+                "bands": [
+                    {
+                        "code": band.code,
+                        "condition_text": band.condition_text,
+                        "fee": {"amount_paise": band.fee_paise, "currency": "INR"},
+                    }
+                    for band in sorted(policy.bands.all(), key=lambda row: row.display_order)
+                ],
+                "reschedule_free_notice_hours": settings.M1_RESCHEDULE_FREE_NOTICE_HOURS,
+                "quality_dispute_window_hours": settings.M1_QUALITY_DISPUTE_WINDOW_HOURS,
+            }
+        )
+
+
+class SampleReceiptView(APIView):
+    """A booking receipt filled with invented values, watermarked SAMPLE.
+
+    For reviewers who must see the document before anyone has booked — Razorpay's activation
+    asks for one. Built by `sample_booking_receipt_spec` through the same renderer and issuer
+    settings as a real receipt, so it shows exactly what a customer would get. Opens in the
+    browser rather than downloading, because it is usually followed as a link.
+    """
+
+    authentication_classes = ()
+    permission_classes = (AllowAny,)
+
+    @extend_schema(
+        tags=["Legal"],
+        operation_id="sample_receipt_download",
+        responses={(200, "application/pdf"): OpenApiTypes.BINARY},
+    )
+    def get(self, _request: Request) -> HttpResponse:
+        pdf = render_pdf(sample_booking_receipt_spec())
+        response = HttpResponse(pdf, content_type="application/pdf")
+        response["Content-Disposition"] = 'inline; filename="vsolvehub-sample-receipt.pdf"'
+        response["Content-Length"] = str(len(pdf))
+        response["Cache-Control"] = "public, max-age=3600"
+        return response

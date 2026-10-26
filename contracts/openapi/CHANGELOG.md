@@ -1,5 +1,27 @@
 # API Contract Changelog
 
+## 1.78.0 - Contact form, published cancellation policy, honest receipts
+
+Additive.
+
+- `POST /support/contact/` (`ContactMessageRequest`, public, `5/hour` per client):
+  `{name, phone_number?, email?, topic, message}`, where `topic` is `booking | payment | partner |
+  feedback | other` and at least one of phone or email is required. Opens an Operations case of the
+  new kind `CONTACT` (owned by Booking support) and answers `201 {reference}`, e.g. `C-1A2B3C4D`.
+  A signed-in sender is recorded on the case.
+- `OperationsCase.kind` gains `CONTACT`, the one kind with **no subject** (every subject id is
+  `null`); it resolves as `ANSWERED`, `DUPLICATE` or `SPAM`. Every other kind still has exactly one
+  subject.
+- `GET /legal/cancellation-policy/` (`PublishedCancellationPolicy`, public): the cancellation ladder
+  new bookings get today, `{code, version, effective_from, bands[{code, condition_text, fee}],
+  reschedule_free_notice_hours, quality_dispute_window_hours}`. `404` when none is published.
+- `GET /legal/sample-receipt/` (public): the booking receipt PDF filled with invented values and
+  watermarked SAMPLE, served inline.
+- `TaxDocument` adds `title`: `"Payment receipt"` until the issuer's GSTIN is configured, then
+  `"Tax invoice"`; `"Credit note"` for a credit note. The downloaded PDF uses the same title and,
+  without a GSTIN, no longer itemises tax or prints a placeholder address.
+- Removed: none. Renamed: none.
+
 ## 1.77.0 - Operations sign in with Firebase
 
 Additive. Operations can sign in and confirm money-moving actions with Firebase phone

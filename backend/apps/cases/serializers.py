@@ -20,6 +20,7 @@ from apps.cases.models import (
     OperationsCaseEvent,
     OperationsCaseEvidence,
 )
+from apps.identity.serializers import PhoneNumberField
 
 #: The request-body names of the subject columns, derived from the model's own tuple rather than
 #: retyped — RULES §3(a) applied to a validator instead of a constraint. The model gained two
@@ -316,3 +317,44 @@ class CaseQueueSummarySerializer(serializers.Serializer[dict[str, Any]]):
     mine_due_soon = serializers.IntegerField()
     holding_payout = serializers.IntegerField()
     teams = TeamQueueSerializer(many=True)
+
+
+#: What the Contact form asks about. The label is what the Operations queue reads.
+CONTACT_TOPICS: dict[str, str] = {
+    "booking": "A booking or visit",
+    "payment": "Payment or refund",
+    "partner": "Working as a professional",
+    "feedback": "Feedback or a complaint",
+    "other": "Something else",
+}
+
+
+class ContactMessageRequestSerializer(serializers.Serializer[dict[str, object]]):
+    """A message from the public Contact form (contract 1.78.0).
+
+    At least one way to reply is required: a message nobody can answer is not a case anyone can
+    close. `website` is a honeypot — invisible to people, filled by form-spamming scripts.
+    """
+
+    name = serializers.CharField(max_length=120, trim_whitespace=True)
+    phone_number = PhoneNumberField(
+        max_length=32, trim_whitespace=True, required=False, allow_blank=True, default=""
+    )
+    email = serializers.EmailField(max_length=254, required=False, allow_blank=True, default="")
+    topic = serializers.ChoiceField(choices=list(CONTACT_TOPICS))
+    message = serializers.CharField(min_length=10, max_length=2000, trim_whitespace=True)
+    website = serializers.CharField(
+        required=False, allow_blank=True, default="", write_only=True, max_length=200
+    )
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        if not attrs.get("phone_number") and not attrs.get("email"):
+            raise serializers.ValidationError(
+                {"phone_number": ["Give a phone number or an email address so we can reply."]}
+            )
+        return attrs
+
+
+class ContactMessageAcceptedSerializer(serializers.Serializer[dict[str, object]]):
+    #: Quote this when following up. Short and readable on purpose; it is not an id to look up.
+    reference = serializers.CharField(read_only=True)

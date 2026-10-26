@@ -1,141 +1,235 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { LegalDocument, type LegalSection } from "@/features/legal/legal-document";
+import { grievanceOfficerLabel, SUPPORT } from "@/lib/support";
+
 export const metadata: Metadata = {
   title: "Terms of Service | V Solve Hub",
-  description: "Read the V Solve Hub terms and conditions for users and booking domestic services.",
+  description:
+    "The terms for using V Solve Hub to book home services, projects, crews, rentals and stays with verified professionals.",
+  alternates: { canonical: "/terms" },
 };
 
-const SECTIONS = [
+const UPDATED = "26 October 2026";
+
+const SECTIONS: LegalSection[] = [
   {
-    id: "acceptance",
-    num: "01",
-    title: "Acceptance of Terms",
-    content: "By accessing or using V Solve Hub, you agree to comply with and be bound by these Terms of Service. If you do not agree to these terms, please do not use our platform or book services.",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-5">
-        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-        <polyline points="22 4 12 14.01 9 11.01" />
-      </svg>
-    )
+    id: "about",
+    title: "About V Solve Hub and these terms",
+    body: (
+      <>
+        <p>
+          V Solve Hub (&ldquo;we&rdquo;, &ldquo;us&rdquo;) runs the website www.vsolvehub.com and
+          its apps, a marketplace that connects customers with independent, verified professionals
+          for home services, custom projects, crews and day hire, equipment rentals, stays and job
+          listings.
+        </p>
+        <p>
+          By creating an account or making a booking you agree to these terms, our{" "}
+          <Link href="/privacy">Privacy Policy</Link> and our{" "}
+          <Link href="/refund-policy">Refund &amp; Cancellation Policy</Link>. If you do not agree,
+          please do not use the platform.
+        </p>
+      </>
+    ),
   },
   {
-    id: "services",
-    num: "02",
-    title: "Services & Bookings",
-    content: "V Solve Hub connects customers with independent, vetted service professionals. We make reasonable efforts to vet professionals, but we are not responsible for the performance or quality of work completed, which remains the direct responsibility of the service professional.",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-5">
-        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-        <line x1="9" y1="9" x2="15" y2="9" />
-        <line x1="9" y1="13" x2="15" y2="13" />
-        <line x1="9" y1="17" x2="15" y2="17" />
-      </svg>
-    )
+    id: "account",
+    title: "Your account",
+    body: (
+      <ul>
+        <li>You sign in with your mobile number and a one-time code. There is no password.</li>
+        <li>You must be at least 18 years old to book.</li>
+        <li>
+          Keep your details accurate, especially your phone number and service address, and keep
+          your phone secure: you are responsible for bookings made from your account.
+        </li>
+      </ul>
+    ),
+  },
+  {
+    id: "booking",
+    title: "How booking works",
+    body: (
+      <>
+        <ul>
+          <li>
+            Prices are shown before you book. Depending on the service, that is a fixed price per
+            task, a visit plan, a booking fee, or quotes from professionals. The platform fee, where
+            one applies, is shown separately.
+          </li>
+          <li>
+            Checking out does not charge you. Your request goes to verified professionals, and you
+            pay once a professional has accepted every visit in your booking. If nobody accepts,
+            nothing is charged.
+          </li>
+          <li>
+            The professional who accepts carries out the work. Anything outside the booked scope is
+            added only if you approve it in the app, at the published rate.
+          </li>
+          <li>
+            A booking is confirmed only when the app shows it as confirmed. We may decline or cancel
+            a request we cannot serve, in which case you are not charged or are refunded in full.
+          </li>
+        </ul>
+      </>
+    ),
   },
   {
     id: "payments",
-    num: "03",
-    title: "Payments & Billing",
-    content: "You agree to pay the fees for booked services at the rates presented. All transactions are handled securely through our payment processors. Charges are authorized when a professional commits to your request, and captured once the service is completed.",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-5">
-        <line x1="12" y1="1" x2="12" y2="23" />
-        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-      </svg>
-    )
+    title: "Payments",
+    body: (
+      <ul>
+        <li>
+          Payments are processed securely by our payment partner, Razorpay. We never see or store
+          your full card number or UPI PIN.
+        </li>
+        <li>All prices are in Indian rupees and include the platform fee shown at checkout.</li>
+        <li>A receipt for every payment is available from your booking.</li>
+        <li>
+          For crew and day hire, daily wages are paid by you directly to the crew lead. Those
+          payments are between you and the crew; V Solve Hub does not collect or hold them.
+        </li>
+        <li>
+          Please do not pay a professional outside the app for work booked through it. Off-platform
+          payments are not covered by our refunds, support or dispute process.
+        </li>
+      </ul>
+    ),
   },
   {
-    id: "cancellation",
-    num: "04",
-    title: "Cancellation & Refunds",
-    content: "Cancellations may be subject to a fee depending on how close to the scheduled start time they are requested. Refund requests are subject to review by our support team in accordance with our billing policies.",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-5">
-        <circle cx="12" cy="12" r="10" />
-        <line x1="15" y1="9" x2="9" y2="15" />
-        <line x1="9" y1="9" x2="15" y2="15" />
-      </svg>
-    )
-  }
+    id: "cancellations",
+    title: "Cancellations, rescheduling and refunds",
+    body: (
+      <p>
+        What cancelling costs, when rescheduling is free and how refunds are paid are set out in
+        our <Link href="/refund-policy">Refund &amp; Cancellation Policy</Link>, which forms part
+        of these terms. The app always shows the exact fee and refund before you confirm a
+        cancellation.
+      </p>
+    ),
+  },
+  {
+    id: "your-responsibilities",
+    title: "Your responsibilities",
+    body: (
+      <ul>
+        <li>Give safe access to the service address at the booked time, or arrange someone to.</li>
+        <li>Describe the job accurately; the price and the professional depend on it.</li>
+        <li>Treat professionals with respect. Harassment or unsafe conduct ends access to the platform.</li>
+        <li>Do not use the platform for anything unlawful or to book work that is unsafe.</li>
+      </ul>
+    ),
+  },
+  {
+    id: "professionals",
+    title: "Professionals and the quality of work",
+    body: (
+      <>
+        <p>
+          Professionals are independent and are not our employees. Before they can accept work
+          they complete identity and document checks, and their work is rated by customers.
+        </p>
+        <p>
+          If something is wrong with the work, report it from your booking or through{" "}
+          <Link href="/contact">Contact us</Link> within 72 hours of completion. We review every
+          report and may arrange a revisit or a refund under our Refund &amp; Cancellation Policy.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: "reviews",
+    title: "Ratings and reviews",
+    body: (
+      <p>
+        Ratings help other customers and help us keep standards high, so please keep them honest
+        and about the job. We may remove reviews that are abusive, off-topic or not based on a real
+        booking.
+      </p>
+    ),
+  },
+  {
+    id: "liability",
+    title: "Our responsibility to you",
+    body: (
+      <>
+        <p>
+          We work hard to keep the platform available and accurate, but it is provided &ldquo;as
+          is&rdquo;. To the extent the law allows, our total liability for any booking is limited to
+          the amount you paid through the platform for that booking, and we are not liable for
+          indirect or consequential loss.
+        </p>
+        <p>
+          Nothing in these terms limits any right you have under the Consumer Protection Act, 2019
+          or any liability that cannot be limited by law.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: "suspension",
+    title: "Suspending or closing an account",
+    body: (
+      <p>
+        We may suspend or close an account involved in fraud, abuse, unsafe behaviour or repeated
+        non-payment. You can stop using the platform at any time, and ask us to close your account
+        by writing to <a href={`mailto:${SUPPORT.email}`}>{SUPPORT.email}</a>; bookings already in
+        progress are completed or settled first.
+      </p>
+    ),
+  },
+  {
+    id: "changes",
+    title: "Changes to these terms",
+    body: (
+      <p>
+        We may update these terms. We will tell you about material changes in the app or by
+        message before they take effect. Bookings already made keep the terms and prices that
+        applied when you booked.
+      </p>
+    ),
+  },
+  {
+    id: "law-and-grievances",
+    title: "Governing law and grievances",
+    body: (
+      <>
+        <p>
+          These terms are governed by the laws of India, and the courts at Hyderabad, Telangana
+          have exclusive jurisdiction.
+        </p>
+        <p>
+          For any complaint, write to {grievanceOfficerLabel()} at{" "}
+          <a href={`mailto:${SUPPORT.email}?subject=Grievance`}>{SUPPORT.email}</a>
+          {SUPPORT.phone ? (
+            <>
+              {" "}
+              or call <a href={SUPPORT.phone.telHref}>{SUPPORT.phone.display}</a>
+            </>
+          ) : null}
+          . We acknowledge a grievance within 48 hours and aim to resolve it within one month, as
+          the Consumer Protection (E-Commerce) Rules, 2020 require.
+        </p>
+      </>
+    ),
+  },
 ];
 
 export default function TermsPage() {
   return (
-    <main className="bg-[#FAF9F7] min-h-screen pb-16">
-      {/* Hero Banner Section */}
-      <div className="bg-[#041227] text-white py-16 px-4 sm:px-6 relative overflow-hidden">
-        <div className="absolute inset-0 opacity-15 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:24px_24px]" />
-        <div className="mx-auto max-w-[1216px] relative z-10 flex flex-col items-center text-center">
-          <Link href="/" className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-[#8EA2C6] hover:text-white transition-colors mb-6 group">
-            <svg viewBox="0 0 20 20" fill="none" className="size-3.5 rotate-180 transition-transform group-hover:-translate-x-0.5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M4 10h11m-4-4 4 4-4 4" />
-            </svg>
-            Back to Home
-          </Link>
-          <span className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#EA580C] bg-[#EA580C]/10 px-3 py-1 rounded-full border border-[#EA580C]/20 mb-3">
-            Legal & Compliance
-          </span>
-          <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-white mb-3">
-            Terms of Service
-          </h1>
-          <p className="text-xs text-[#A9B9D1] font-medium">
-            Last updated: August 23, 2026
-          </p>
-        </div>
-      </div>
-
-      {/* Main Content split layout */}
-      <div className="mx-auto max-w-[1216px] px-4 py-12 sm:px-6 lg:px-8">
-        <div className="flex flex-col lg:flex-row gap-10 items-start">
-          
-          {/* Left Table of Contents */}
-          <aside className="w-full lg:w-3/12 lg:sticky lg:top-24 flex flex-col gap-4 bg-white border border-[#e7e2da] rounded-2xl p-5 shadow-2xs">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-navy-900 border-b border-navy-900/10 pb-2.5">
-              Sections
-            </h3>
-            <nav className="flex flex-col gap-1.5">
-              {SECTIONS.map((sec) => (
-                <a
-                  key={sec.id}
-                  href={`#${sec.id}`}
-                  className="flex items-center justify-between px-3 py-2 text-xs font-semibold text-text-secondary hover:text-[#EA580C] hover:bg-navy-50/50 rounded-lg transition-colors"
-                >
-                  <span>{sec.title}</span>
-                  <span className="text-[10px] text-text-secondary/50 font-bold font-mono">{sec.num}</span>
-                </a>
-              ))}
-            </nav>
-          </aside>
-
-          {/* Right Cards Content */}
-          <div className="w-full lg:w-9/12 flex flex-col gap-6">
-            {SECTIONS.map((sec) => (
-              <section
-                key={sec.id}
-                id={sec.id}
-                className="scroll-mt-24 bg-white border border-[#e7e2da] rounded-2xl p-6 sm:p-8 shadow-card flex flex-col gap-4 hover:shadow-raised transition-shadow"
-              >
-                <div className="flex items-center gap-4 border-b border-navy-900/5 pb-4">
-                  <span className="grid size-10 shrink-0 place-items-center rounded-full bg-[#EBF0FE] text-[#2563EB] shadow-2xs">
-                    {sec.icon}
-                  </span>
-                  <div>
-                    <span className="text-[9px] font-bold font-mono text-[#2563EB] uppercase tracking-wider">Section {sec.num}</span>
-                    <h2 className="text-lg font-extrabold text-[#00112e] leading-none mt-0.5">
-                      {sec.title}
-                    </h2>
-                  </div>
-                </div>
-                <p className="text-sm leading-relaxed text-text-secondary font-medium">
-                  {sec.content}
-                </p>
-              </section>
-            ))}
-          </div>
-
-        </div>
-      </div>
-    </main>
+    <LegalDocument
+      title="Terms of Service"
+      updated={UPDATED}
+      intro={
+        <p>
+          These terms explain how V Solve Hub works and what you and we can expect of each other
+          when you book through the platform. Professionals who offer services on V Solve Hub agree
+          to separate partner terms.
+        </p>
+      }
+      sections={SECTIONS}
+    />
   );
 }

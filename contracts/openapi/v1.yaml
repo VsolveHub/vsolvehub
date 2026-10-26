@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.77.0
+  version: 1.78.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -5083,6 +5083,53 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/JobOptions'
+          description: ''
+  /api/v1/legal/cancellation-policy/:
+    get:
+      operationId: legal_cancellation_policy_retrieve
+      description: |-
+        The cancellation fees a booking made today is given, for the public policy page.
+
+        Read from the same `current_cancellation_policy` checkout uses, so the page and the quote can
+        never disagree about what a cancellation costs.
+      tags:
+      - Legal
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublishedCancellationPolicy'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/legal/sample-receipt/:
+    get:
+      operationId: sample_receipt_download
+      description: |-
+        A booking receipt filled with invented values, watermarked SAMPLE.
+
+        For reviewers who must see the document before anyone has booked — Razorpay's activation
+        asks for one. Built by `sample_booking_receipt_spec` through the same renderer and issuer
+        settings as a real receipt, so it shows exactly what a customer would get. Opens in the
+        browser rather than downloading, because it is usually followed as a link.
+      tags:
+      - Legal
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
           description: ''
   /api/v1/listings:
     get:
@@ -20329,6 +20376,46 @@ paths:
               schema:
                 $ref: '#/components/schemas/StayVisit'
           description: ''
+  /api/v1/support/contact/:
+    post:
+      operationId: support_contact_create
+      description: |-
+        The public Contact form: one message becomes one `CONTACT` case (contract 1.78.0).
+
+        Open to everyone, signed in or not — most people who write have no account yet. When the sender
+        is signed in the case records who they are, so support need not ask again. Throttled per
+        client, and a filled honeypot gets the same success answer while creating nothing, so a
+        script learns nothing from the response.
+      tags:
+      - Support
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContactMessageRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ContactMessageRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ContactMessageRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactMessageAccepted'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/tax-documents/{document_id}/:
     get:
       operationId: tax_documents_retrieve
@@ -23506,6 +23593,50 @@ components:
       required:
       - policy_version
       - purpose
+    ContactMessageAccepted:
+      type: object
+      properties:
+        reference:
+          type: string
+          readOnly: true
+      required:
+      - reference
+    ContactMessageRequestRequest:
+      type: object
+      description: |-
+        A message from the public Contact form (contract 1.78.0).
+
+        At least one way to reply is required: a message nobody can answer is not a case anyone can
+        close. `website` is a honeypot — invisible to people, filled by form-spamming scripts.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        phone_number:
+          type: string
+          default: ''
+          maxLength: 32
+        email:
+          type: string
+          format: email
+          default: ''
+          maxLength: 254
+        topic:
+          $ref: '#/components/schemas/TopicEnum'
+        message:
+          type: string
+          minLength: 10
+          maxLength: 2000
+        website:
+          type: string
+          writeOnly: true
+          default: ''
+          maxLength: 200
+      required:
+      - message
+      - name
+      - topic
     ContentTypeEnum:
       enum:
       - image/jpeg
@@ -29856,6 +29987,7 @@ components:
       - CHARGEBACK
       - LISTING_ABUSE
       - APPLICATION_ABUSE
+      - CONTACT
       type: string
       description: |-
         * `ASSIGNMENT` - Assignment or recovery
@@ -29874,6 +30006,7 @@ components:
         * `CHARGEBACK` - Chargeback on a platform fee
         * `LISTING_ABUSE` - Listing abuse
         * `APPLICATION_ABUSE` - Application abuse
+        * `CONTACT` - Contact form message
     OperationsCaseList:
       type: object
       description: |-
@@ -37631,6 +37764,60 @@ components:
       - period_end
       - period_start
       - reference
+    PublishedCancellationBand:
+      type: object
+      properties:
+        code:
+          type: string
+          readOnly: true
+        condition_text:
+          type: string
+          readOnly: true
+        fee:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          readOnly: true
+      required:
+      - code
+      - condition_text
+      - fee
+    PublishedCancellationPolicy:
+      type: object
+      description: |-
+        The cancellation ladder a booking made today is given (contract 1.78.0).
+
+        For the public Refund & Cancellation page, so the page states the live amounts rather than a
+        copy that goes stale. A booking keeps the version frozen onto its quote; this is what new
+        bookings get.
+      properties:
+        code:
+          type: string
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        effective_from:
+          type: string
+          format: date-time
+          readOnly: true
+        bands:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublishedCancellationBand'
+          readOnly: true
+        reschedule_free_notice_hours:
+          type: integer
+          readOnly: true
+        quality_dispute_window_hours:
+          type: integer
+          readOnly: true
+      required:
+      - bands
+      - code
+      - effective_from
+      - quality_dispute_window_hours
+      - reschedule_free_notice_hours
+      - version
     PurposeEnum:
       enum:
       - BOOKING_GROUP
@@ -43747,6 +43934,9 @@ components:
           allOf:
           - $ref: '#/components/schemas/TaxDocumentKindEnum'
           readOnly: true
+        title:
+          type: string
+          readOnly: true
         number:
           type: string
           readOnly: true
@@ -43786,6 +43976,7 @@ components:
       - lines
       - number
       - tax_snapshot
+      - title
       - total
     TaxDocumentKindEnum:
       enum:
@@ -43874,6 +44065,20 @@ components:
       description: |-
         * `A3_TIME_BLOCK` - Workforce
         * `A5_CUSTOM_PROJECT` - Project
+    TopicEnum:
+      enum:
+      - booking
+      - payment
+      - partner
+      - feedback
+      - other
+      type: string
+      description: |-
+        * `booking` - booking
+        * `payment` - payment
+        * `partner` - partner
+        * `feedback` - feedback
+        * `other` - other
     TouchActionCount:
       type: object
       properties:

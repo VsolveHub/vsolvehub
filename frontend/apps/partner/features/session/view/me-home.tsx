@@ -6,6 +6,11 @@ import { ChevronRight, Globe, Phone, Power, ShieldCheck, User, Users, Wallet, ty
 import Link from "next/link";
 
 import { PartnerPresence } from "@/features/presence/view/partner-presence";
+import {
+  PARTNER_SUPPORT_HOURS,
+  PARTNER_SUPPORT_PHONE,
+  PARTNER_SUPPORT_PHONE_DISPLAY,
+} from "@/features/support/contact";
 import { usePartnerProfile } from "@/features/profile/queries";
 import { usePartnerWorkspaceGrants, useSpecialtyHome } from "@/features/workspace/queries";
 import {
@@ -105,7 +110,7 @@ export function MeHome() {
           </p>
           <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-xs">
             <a
-              href="tel:+918008765832"
+              href={`tel:${PARTNER_SUPPORT_PHONE}`}
               className="flex items-center justify-between p-3.5 transition-colors hover:bg-surface-sunken focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
             >
               <div className="flex items-center gap-3.5 min-w-0">
@@ -113,8 +118,10 @@ export function MeHome() {
                   <Phone className="h-5 w-5" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-bold text-navy-900 leading-tight">24/7 Partner Helpline</p>
-                  <p className="text-xs text-text-secondary mt-0.5">+91 (800) 876-5832 • Dedicated Assistance</p>
+                  <p className="text-sm font-bold text-navy-900 leading-tight">Partner Helpline</p>
+                  <p className="text-xs text-text-secondary mt-0.5">
+                    {PARTNER_SUPPORT_PHONE_DISPLAY} • {PARTNER_SUPPORT_HOURS}
+                  </p>
                 </div>
               </div>
               <ChevronRight className="h-5 w-5 shrink-0 text-text-muted" aria-hidden />

@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { useCancelBooking, useConfirmCrewArrival, useRateCardState, useReportCrewNoShow } from "@/features/crew/queries";
 import { CashDemandReport } from "@/features/shift-day/view/cash-demand-report";
+import { SUPPORT } from "@/lib/support";
 
 /**
  * The hub's Problem button — screen 8. Tiles: nobody came (day-1 no-show),
@@ -25,7 +26,9 @@ export interface ProblemSheetProps {
 
 type Tile = "nobody_came" | "cash" | "safety" | "cancel" | null;
 
-const SUPPORT_PHONE = "+917330764634";
+/** Call when a support line is configured; otherwise write, which is the channel that exists. */
+const SUPPORT_HREF = SUPPORT.phone ? SUPPORT.phone.telHref : `mailto:${SUPPORT.email}`;
+const SUPPORT_LABEL = SUPPORT.phone ? "Call support" : "Email support";
 
 export function ProblemSheet({
   open,
@@ -64,10 +67,10 @@ export function ProblemSheet({
           <TileButton label="Safety issue" onClick={() => setTile("safety")} />
           <TileButton label="Cancel booking" onClick={() => setTile("cancel")} />
           <a
-            href={`tel:${SUPPORT_PHONE}`}
+            href={SUPPORT_HREF}
             className="flex min-h-14 items-center rounded-card border border-line bg-surface px-4 py-3 text-sm font-semibold text-text hover:bg-surface-hover"
           >
-            Call support
+            {SUPPORT_LABEL}
           </a>
         </div>
       ) : tile === "nobody_came" ? (
@@ -109,16 +112,19 @@ export function ProblemSheet({
       ) : tile === "safety" ? (
         <div className="flex flex-col gap-3 pb-2">
           <p className="text-sm leading-6 text-text-secondary">
-            Call us now and we will deal with it directly — this is not something to
-            report in the app.
+            {SUPPORT.phone
+              ? "Call us now and we will deal with it directly — this is not something to report in the app."
+              : "Write to us now with your booking reference and we will deal with it directly."}
           </p>
           <a
-            href={`tel:${SUPPORT_PHONE}`}
+            href={SUPPORT_HREF}
             className="flex min-h-11 items-center justify-center rounded-control bg-action px-4 text-sm font-semibold text-action-text"
           >
-            Call support
+            {SUPPORT_LABEL}
           </a>
-          <p className="text-xs text-text-muted">For immediate danger, contact local emergency services first.</p>
+          <p className="text-xs text-text-muted">
+            For immediate danger, call 112 (emergency services) first.
+          </p>
         </div>
       ) : (
         <div className="flex flex-col gap-3 pb-2">

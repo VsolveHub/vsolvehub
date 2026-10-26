@@ -147,9 +147,9 @@ export default function PrivacyPage() {
             <>
               <p>
                 For privacy questions or grievances, contact our grievance officer at{" "}
-                <a href="mailto:privacy@vsolvehub.com">privacy@vsolvehub.com</a>. We aim to
-                acknowledge and address requests within the timelines prescribed by applicable
-                law.
+                <a href="mailto:support@vsolvehub.com?subject=Grievance">support@vsolvehub.com</a>{" "}
+                with &ldquo;Grievance&rdquo; in the subject. We aim to acknowledge and address
+                requests within the timelines prescribed by applicable law.
               </p>
             </>
           ),

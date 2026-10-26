@@ -1,142 +1,196 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { LegalDocument, type LegalSection } from "@/features/legal/legal-document";
+import { grievanceOfficerLabel, SUPPORT } from "@/lib/support";
+
 export const metadata: Metadata = {
   title: "Privacy Policy | V Solve Hub",
-  description: "Learn how V Solve Hub collects, uses, and protects your personal data.",
+  description:
+    "What personal data V Solve Hub collects, why, who it is shared with, and your rights under India's Digital Personal Data Protection Act, 2023.",
+  alternates: { canonical: "/privacy" },
 };
 
-const SECTIONS = [
+const UPDATED = "26 October 2026";
+
+const SECTIONS: LegalSection[] = [
   {
-    id: "info",
-    num: "01",
-    title: "Information We Collect",
-    content: "We collect information to provide better services to all our users. This includes information you provide to us (such as name, email address, phone number, and billing information) when creating an account or booking a service, as well as information collected automatically (such as device information, location data, and usage details).",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-5">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-        <polyline points="14 2 14 8 20 8" />
-        <line x1="16" y1="13" x2="8" y2="13" />
-        <line x1="16" y1="17" x2="8" y2="17" />
-        <polyline points="10 9 9 9 8 9" />
-      </svg>
-    )
+    id: "collect",
+    title: "What we collect",
+    body: (
+      <ul>
+        <li>
+          <strong>Account details:</strong> your mobile number, and your name and email if you
+          add them.
+        </li>
+        <li>
+          <strong>Addresses and location:</strong> the service addresses you save and the map pin
+          you place, so we can check we serve the area and send a professional to the right door.
+        </li>
+        <li>
+          <strong>Booking details:</strong> what you book, your answers about the job, photos you
+          upload, scheduled times, and ratings and feedback you give.
+        </li>
+        <li>
+          <strong>Payments:</strong> amounts, payment status and references. Card and UPI details
+          are handled by Razorpay; we never receive your full card number or UPI PIN.
+        </li>
+        <li>
+          <strong>Messages:</strong> what you send our support team, including through the contact
+          form.
+        </li>
+        <li>
+          <strong>Technical data:</strong> sign-in session cookies, device and browser type, and
+          logs needed to keep the service secure and working.
+        </li>
+      </ul>
+    ),
   },
   {
     id: "use",
-    num: "02",
-    title: "How We Use Your Information",
-    content: "We use the collected data to process bookings, match you with service professionals, communicate with you regarding your service requests, improve our platform, and send marketing communications (where permitted). We never sell your personal information to third parties.",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-5">
-        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-        <circle cx="9" cy="7" r="4" />
-        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-      </svg>
-    )
+    title: "How we use it",
+    body: (
+      <ul>
+        <li>To provide what you book: matching you with a professional, scheduling and the visit itself.</li>
+        <li>To take payments, issue receipts and process refunds.</li>
+        <li>To answer you when you contact support and to resolve complaints and disputes.</li>
+        <li>To keep the platform safe, prevent fraud and enforce our terms.</li>
+        <li>To meet legal obligations such as tax and accounting records.</li>
+        <li>
+          To send service messages about your bookings. We send promotional messages only with your
+          consent, and you can withdraw it at any time.
+        </li>
+      </ul>
+    ),
+  },
+  {
+    id: "share",
+    title: "Who we share it with",
+    body: (
+      <>
+        <ul>
+          <li>
+            <strong>The professional on your booking</strong> sees what they need to do the job:
+            your name, the service address and the job details, and can contact you about the visit.
+          </li>
+          <li>
+            <strong>Service providers who run parts of the platform for us:</strong> Razorpay
+            (payments and refunds), Google Firebase (sending sign-in codes), Google Maps (finding
+            addresses from a map pin), Cloudflare (secure file storage) and our hosting provider.
+            They may use your data only to provide their service to us.
+          </li>
+          <li>
+            <strong>Authorities</strong>, when the law requires it or to protect someone&apos;s
+            safety.
+          </li>
+        </ul>
+        <p>We do not sell your personal data.</p>
+      </>
+    ),
+  },
+  {
+    id: "retention",
+    title: "How long we keep it",
+    body: (
+      <p>
+        We keep your data while your account is active and for as long as we need it for the
+        purposes above. Booking, payment and invoice records are kept for as long as tax and
+        accounting law requires. Everything else is deleted or anonymised once it is no longer
+        needed.
+      </p>
+    ),
   },
   {
     id: "security",
-    num: "03",
-    title: "Data Security",
-    content: "We implement advanced technical and organizational security measures to protect your personal information against unauthorized access, alteration, disclosure, or destruction. However, no internet transmission is ever completely secure, and we cannot guarantee absolute security.",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-5">
-        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-      </svg>
-    )
+    title: "How we protect it",
+    body: (
+      <p>
+        Data travels over encrypted connections. Uploaded documents are stored privately and opened
+        only through short-lived links, access inside our team is limited to the people who need it,
+        and sensitive actions such as refunds need an extra confirmation. No system is perfectly
+        secure, and we will tell you and the authorities about a breach as the law requires.
+      </p>
+    ),
   },
   {
     id: "rights",
-    num: "04",
-    title: "Your Rights",
-    content: "Depending on your location, you may have rights under local laws regarding your personal information, including the right to access, correct, delete, or restrict the use of your data. To exercise these rights, please contact our support team.",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-5">
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-      </svg>
-    )
-  }
+    title: "Your rights",
+    body: (
+      <>
+        <p>Under the Digital Personal Data Protection Act, 2023 you can:</p>
+        <ul>
+          <li>ask what personal data we hold about you and how we use it;</li>
+          <li>ask us to correct, complete or update it;</li>
+          <li>ask us to erase it, unless we must keep it by law;</li>
+          <li>withdraw consent you have given, for the future;</li>
+          <li>nominate someone to exercise these rights for you; and</li>
+          <li>raise a grievance with us, and then with the Data Protection Board of India.</li>
+        </ul>
+        <p>
+          Write to{" "}
+          <a href={`mailto:${SUPPORT.email}?subject=Privacy%20request`}>{SUPPORT.email}</a> with
+          &ldquo;Privacy request&rdquo; in the subject, from the email or phone number on your
+          account so we can verify it is you.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: "children",
+    title: "Children",
+    body: (
+      <p>
+        V Solve Hub is for adults. You must be 18 or over to create an account, and we do not
+        knowingly collect data about children.
+      </p>
+    ),
+  },
+  {
+    id: "cookies",
+    title: "Cookies",
+    body: (
+      <p>
+        We use cookies that are needed for the site to work: to keep you signed in and to protect
+        your session and forms against misuse. We do not use them to show you advertising.
+      </p>
+    ),
+  },
+  {
+    id: "changes",
+    title: "Changes to this policy",
+    body: (
+      <p>
+        We will update this page when our practices change and tell you about material changes in
+        the app or by message.
+      </p>
+    ),
+  },
+  {
+    id: "grievances",
+    title: "Contact and grievances",
+    body: (
+      <p>
+        For privacy questions, requests or grievances, write to {grievanceOfficerLabel()} at{" "}
+        <a href={`mailto:${SUPPORT.email}?subject=Grievance`}>{SUPPORT.email}</a>. We respond within
+        the time the law allows. For anything else, see <Link href="/contact">Contact us</Link>.
+      </p>
+    ),
+  },
 ];
 
 export default function PrivacyPage() {
   return (
-    <main className="bg-[#FAF9F7] min-h-screen pb-16">
-      {/* Hero Banner Section */}
-      <div className="bg-[#041227] text-white py-16 px-4 sm:px-6 relative overflow-hidden">
-        <div className="absolute inset-0 opacity-15 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:24px_24px]" />
-        <div className="mx-auto max-w-[1216px] relative z-10 flex flex-col items-center text-center">
-          <Link href="/" className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-[#8EA2C6] hover:text-white transition-colors mb-6 group">
-            <svg viewBox="0 0 20 20" fill="none" className="size-3.5 rotate-180 transition-transform group-hover:-translate-x-0.5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M4 10h11m-4-4 4 4-4 4" />
-            </svg>
-            Back to Home
-          </Link>
-          <span className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#EA580C] bg-[#EA580C]/10 px-3 py-1 rounded-full border border-[#EA580C]/20 mb-3">
-            Legal & Compliance
-          </span>
-          <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-white mb-3">
-            Privacy Policy
-          </h1>
-          <p className="text-xs text-[#A9B9D1] font-medium">
-            Last updated: August 23, 2026
-          </p>
-        </div>
-      </div>
-
-      {/* Main Content split layout */}
-      <div className="mx-auto max-w-[1216px] px-4 py-12 sm:px-6 lg:px-8">
-        <div className="flex flex-col lg:flex-row gap-10 items-start">
-          
-          {/* Left Table of Contents */}
-          <aside className="w-full lg:w-3/12 lg:sticky lg:top-24 flex flex-col gap-4 bg-white border border-[#e7e2da] rounded-2xl p-5 shadow-2xs">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-navy-900 border-b border-navy-900/10 pb-2.5">
-              Sections
-            </h3>
-            <nav className="flex flex-col gap-1.5">
-              {SECTIONS.map((sec) => (
-                <a
-                  key={sec.id}
-                  href={`#${sec.id}`}
-                  className="flex items-center justify-between px-3 py-2 text-xs font-semibold text-text-secondary hover:text-[#EA580C] hover:bg-navy-50/50 rounded-lg transition-colors"
-                >
-                  <span>{sec.title}</span>
-                  <span className="text-[10px] text-text-secondary/50 font-bold font-mono">{sec.num}</span>
-                </a>
-              ))}
-            </nav>
-          </aside>
-
-          {/* Right Cards Content */}
-          <div className="w-full lg:w-9/12 flex flex-col gap-6">
-            {SECTIONS.map((sec) => (
-              <section
-                key={sec.id}
-                id={sec.id}
-                className="scroll-mt-24 bg-white border border-[#e7e2da] rounded-2xl p-6 sm:p-8 shadow-card flex flex-col gap-4 hover:shadow-raised transition-shadow"
-              >
-                <div className="flex items-center gap-4 border-b border-navy-900/5 pb-4">
-                  <span className="grid size-10 shrink-0 place-items-center rounded-full bg-[#EBF0FE] text-[#2563EB] shadow-2xs">
-                    {sec.icon}
-                  </span>
-                  <div>
-                    <span className="text-[9px] font-bold font-mono text-[#2563EB] uppercase tracking-wider">Section {sec.num}</span>
-                    <h2 className="text-lg font-extrabold text-[#00112e] leading-none mt-0.5">
-                      {sec.title}
-                    </h2>
-                  </div>
-                </div>
-                <p className="text-sm leading-relaxed text-text-secondary font-medium">
-                  {sec.content}
-                </p>
-              </section>
-            ))}
-          </div>
-
-        </div>
-      </div>
-    </main>
+    <LegalDocument
+      title="Privacy Policy"
+      updated={UPDATED}
+      intro={
+        <p>
+          This policy explains what personal data V Solve Hub collects when you use our website and
+          apps as a customer, why we collect it, who we share it with and the rights you have.
+          Professionals using the partner app are covered by the partner privacy policy.
+        </p>
+      }
+      sections={SECTIONS}
+    />
   );
 }
