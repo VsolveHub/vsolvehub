@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Wallet, Clock, LineChart, Headset, ArrowRight, ShieldCheck, CheckCircle2, Sparkles, Users, Award, Zap, TrendingUp, Smartphone, CalendarClock, Banknote, Wrench, Hammer, Wind, Droplets, ShieldAlert, Scissors, Flame, Star } from "lucide-react";
+import { Wallet, Clock, LineChart, Headset, ArrowRight, ShieldCheck, CheckCircle2, Sparkles, Award, Zap, Smartphone, CalendarClock, Banknote, Wrench, Hammer, Wind, Droplets, ShieldAlert, Scissors, Flame } from "lucide-react";
 
 import { type Tone } from "@/components/graphics";
 import { Faq, faqJsonLd } from "@/components/faq";
@@ -99,10 +99,10 @@ const HIGH_DEMAND_TRADES = [
 ];
 
 const STATS = [
-  { value: "5,000+", label: "Verified Partners", icon: Users, tone: "sky" as Tone },
-  { value: "₹45,000+", label: "Avg. Monthly Earnings", icon: TrendingUp, tone: "green" as Tone },
-  { value: "100%", label: "Weekly Bank Payouts", icon: Wallet, tone: "brand" as Tone },
-  { value: "< 24 Hrs", label: "Fast Verification", icon: Zap, tone: "amber" as Tone },
+  { value: "Weekly", label: "Direct Bank Payouts", icon: Wallet, tone: "brand" as Tone },
+  { value: "Your Hours", label: "Choose Shifts & Area", icon: Clock, tone: "green" as Tone },
+  { value: "Upfront Rates", label: "Job Price Before Accepting", icon: LineChart, tone: "sky" as Tone },
+  { value: "Hyderabad", label: "Now Onboarding Partners", icon: ShieldCheck, tone: "amber" as Tone },
 ];
 
 const HOW_IT_WORKS_STEPS = [
@@ -163,7 +163,7 @@ const HOME_FAQS = [
   },
   {
     q: "How much can I earn as an active partner?",
-    a: "Full-time active partners in high-demand trades (e.g. AC repair, electrician, plumbing) typically earn between ₹35,000 to ₹65,000+ per month depending on working hours and locations covered.",
+    a: "Earnings depend on your trade, the hours you choose to work, and the service areas you cover. You see the earnings for each job upfront before choosing to accept it.",
   },
   {
     q: "What documents do I need to register?",
@@ -214,44 +214,6 @@ const FEATURES = [
   },
 ];
 
-const TESTIMONIALS = [
-  {
-    quote:
-      "V Solve Hub changed how I manage my electrical repair work. The weekly payouts are always on time, and I get steady customer bookings right around Kukatpally and Madhapur.",
-    name: "Rajesh Kumar",
-    trade: "Electrician",
-    city: "Hyderabad",
-    tenure: "3 Yrs Partner",
-    rating: 5,
-    earnings: "₹52,000 / mo",
-    verified: true,
-    color: "from-amber-500 to-orange-500",
-  },
-  {
-    quote:
-      "Earlier I spent hours hunting for plumbing jobs and haggling over rates. Now bookings come directly on my phone with clear prices and navigation. Best decision for my family's income.",
-    name: "Suresh V.",
-    trade: "Master Plumber",
-    city: "Warangal",
-    tenure: "2 Yrs Partner",
-    rating: 5,
-    earnings: "₹46,000 / mo",
-    verified: true,
-    color: "from-blue-500 to-cyan-500",
-  },
-  {
-    quote:
-      "As an AC technician, summers were busy but winters were dead. With V Solve Hub, I get consistent appliance maintenance contracts and commercial crew jobs all year round.",
-    name: "Ananya Reddy",
-    trade: "HVAC Specialist",
-    city: "Nizamabad",
-    tenure: "2.5 Yrs Partner",
-    rating: 5,
-    earnings: "₹58,000 / mo",
-    verified: true,
-    color: "from-sky-500 to-indigo-500",
-  },
-];
 
 export default function LandingPage() {
   return (
@@ -355,15 +317,10 @@ export default function LandingPage() {
 
           {/* Bottom Action CTA */}
           <div className="mt-14 text-center">
-            <Link href="/apply">
-              <button
-                type="button"
-                className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-signal-500 via-amber-500 to-signal-400 px-8 py-3.5 text-sm font-extrabold text-[#00112e] shadow-lg shadow-signal-500/25 hover:from-signal-400 hover:to-amber-300 transition-all hover:scale-[1.02] active:scale-[0.98]"
-              >
+            <Link href="/apply" className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-signal-500 via-amber-500 to-signal-400 px-8 py-3.5 text-sm font-extrabold text-[#00112e] shadow-lg shadow-signal-500/25 hover:from-signal-400 hover:to-amber-300 transition-all hover:scale-[1.02] active:scale-[0.98]">
                 <span>Start Your Partner Application</span>
                 <ArrowRight className="h-4 w-4" />
-              </button>
-            </Link>
+              </Link>
           </div>
         </div>
       </section>
@@ -522,99 +479,13 @@ export default function LandingPage() {
                 Register complete work teams for daily workforce dispatch, commercial renovations, and high-volume corporate contracts.
               </p>
             </div>
-            <Link href="/apply/capabilities" className="shrink-0">
-              <button
-                type="button"
-                className="rounded-full bg-white px-5 py-2.5 text-xs font-bold text-[#00112e] hover:bg-navy-50 transition-colors shadow-md"
-              >
+            <Link href="/apply/capabilities" className="inline-block shrink-0 rounded-full bg-white px-5 py-2.5 text-xs font-bold text-[#00112e] hover:bg-navy-50 transition-colors shadow-md text-center">
                 Apply for Specialist Work →
-              </button>
-            </Link>
+              </Link>
           </div>
         </div>
       </section>
 
-      {/* Testimonials */}
-      <section id="testimonials" className="relative border-t border-line bg-surface-sunken/40 px-4 py-24 sm:px-6 overflow-hidden">
-        {/* Ambient lighting */}
-        <div className="pointer-events-none absolute left-1/2 top-0 -translate-x-1/2 h-[400px] w-[800px] bg-emerald-500/5 blur-3xl -z-0" />
-
-        <div className="relative z-10 mx-auto max-w-6xl">
-          <div className="text-center max-w-2xl mx-auto">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3.5 py-1 text-xs font-extrabold text-emerald-800 border border-emerald-200 shadow-xs">
-              <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" /> Verified Partner Stories
-            </span>
-            <h2 className="mt-4 text-3xl font-extrabold tracking-tight text-navy-900 sm:text-4xl">
-              Trusted by 5,000+ Skilled Professionals
-            </h2>
-            <p className="mt-3 text-sm sm:text-base text-text-secondary leading-relaxed">
-              Real stories, verified partner reviews, and reliable weekly earnings across Telangana.
-            </p>
-
-            {/* Satisfaction Rating Summary Pill */}
-            <div className="mt-5 inline-flex items-center gap-2 rounded-full bg-white px-4 py-1.5 text-xs font-bold text-navy-900 border border-line shadow-xs">
-              <div className="flex text-amber-400">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                ))}
-              </div>
-              <span>4.9 / 5 Average Partner Satisfaction (12,000+ Reviews)</span>
-            </div>
-          </div>
-
-          <div className="mt-12 flex gap-4 sm:gap-6 overflow-x-auto pb-4 sm:pb-0 sm:grid sm:grid-cols-3 -mx-4 px-4 sm:mx-0 sm:px-0 snap-x snap-mandatory">
-            {TESTIMONIALS.map((t) => (
-              <figure
-                key={t.name}
-                className="group relative flex flex-col justify-between rounded-3xl border border-line bg-white p-6 sm:p-7 shadow-xs transition-all duration-300 hover:-translate-y-1.5 hover:border-emerald-400 hover:shadow-xl shrink-0 w-[85%] sm:w-auto snap-center"
-              >
-                <div>
-                  {/* Top Row: Stars + Earnings Pill */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex text-amber-400">
-                      {[...Array(t.rating)].map((_, i) => (
-                        <Star key={i} className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                      ))}
-                    </div>
-                    <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-extrabold text-emerald-800 border border-emerald-200 shadow-xs">
-                      {t.earnings}
-                    </span>
-                  </div>
-
-                  {/* Quote text */}
-                  <blockquote className="mt-5 text-sm sm:text-base leading-relaxed text-navy-950 font-medium">
-                    &ldquo;{t.quote}&rdquo;
-                  </blockquote>
-                </div>
-
-                {/* Bottom Author Row */}
-                <figcaption className="mt-7 pt-5 border-t border-line flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br ${t.color} text-sm font-black text-white shadow-xs`}
-                    >
-                      {t.name.charAt(0)}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-sm font-extrabold text-navy-900">{t.name}</span>
-                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                      </div>
-                      <span className="text-xs text-text-secondary font-medium block">
-                        {t.trade} • {t.city}
-                      </span>
-                    </div>
-                  </div>
-
-                  <span className="text-[11px] font-bold text-text-muted bg-surface-sunken px-2.5 py-1 rounded-full border border-line">
-                    {t.tenure}
-                  </span>
-                </figcaption>
-              </figure>
-            ))}
-          </div>
-        </div>
-      </section>
 
       {/* FAQ Section */}
       <section id="faq" className="border-t border-line bg-surface px-4 py-24 sm:px-6">
@@ -642,7 +513,7 @@ export default function LandingPage() {
           <div className="mt-10 rounded-2xl border border-line bg-surface-sunken p-5 text-center">
             <p className="text-sm font-bold text-navy-900">Have a specific question not covered here?</p>
             <p className="mt-1 text-xs text-text-secondary">
-              Our partner helpdesk is available 24/7 to guide you through registration and verification.
+              Our partner helpdesk is available 9am–9pm every day (+91 733 076 4634) to guide you through registration and verification.
             </p>
             <Link
               href="/contact"
@@ -664,26 +535,16 @@ export default function LandingPage() {
             Ready to Build a High-Earning Service Business?
           </h2>
           <p className="mx-auto mt-3 max-w-lg text-sm sm:text-base leading-relaxed text-navy-200">
-            Join 5,000+ happy technicians across Telangana. Zero upfront cost, weekly automatic payouts, and instant local job offers.
+            Start earning as a verified partner in Hyderabad. Zero upfront cost, weekly bank payouts, and upfront job pricing.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-4">
-            <Link href="/apply">
-              <button
-                type="button"
-                className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-signal-500 via-amber-500 to-signal-400 px-7 py-3.5 text-sm font-extrabold text-[#00112e] shadow-xl shadow-signal-500/30 hover:from-signal-400 hover:to-amber-300 transition-all hover:scale-[1.02] active:scale-[0.98]"
-              >
+            <Link href="/apply" className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-signal-500 via-amber-500 to-signal-400 px-7 py-3.5 text-sm font-extrabold text-[#00112e] shadow-xl shadow-signal-500/30 hover:from-signal-400 hover:to-amber-300 transition-all hover:scale-[1.02] active:scale-[0.98]">
                 <span>Register as a Partner Now</span>
                 <ArrowRight className="h-4 w-4" />
-              </button>
-            </Link>
-            <Link href="/contact">
-              <button
-                type="button"
-                className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-7 py-3.5 text-sm font-bold text-white hover:bg-white/20 transition-all"
-              >
+              </Link>
+            <Link href="/contact" className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-7 py-3.5 text-sm font-bold text-white hover:bg-white/20 transition-all">
                 <span>Contact Support</span>
-              </button>
-            </Link>
+              </Link>
           </div>
         </div>
       </section>

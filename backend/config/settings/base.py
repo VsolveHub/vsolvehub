@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     "apps.wallet",
     "apps.loyalty",
     "apps.ops_reports",
+    "apps.stories",
 ]
 
 MIDDLEWARE = [

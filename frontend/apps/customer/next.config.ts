@@ -88,12 +88,21 @@ const nextConfig: NextConfig = {
       { source: "/bookings", destination: "/activity?tab=booked", permanent: false },
       { source: "/bookings/workforce", destination: "/activity?tab=booked", permanent: false },
       { source: "/projects", destination: "/activity?tab=projects", permanent: false },
+      // These two pages only call redirect(). Under the root loading.tsx that runs after the
+      // shell has streamed, so the browser got a 200 with a meta refresh and the site's
+      // default title instead of a real redirect. Answering here gives search engines a 308.
+      { source: "/catalog/all", destination: "/catalog", permanent: true },
+      { source: "/account/referral", destination: "/account/referrals", permanent: true },
     ];
   },
   async rewrites() {
     if (!isDev) return [];
     return [
-      { source: "/api/:path*", destination: `${apiProxyTarget}/api/:path*/` },
+      // Forward the path exactly as the client wrote it. `:path*` drops a trailing
+      // slash, so the slashed form needs its own rule — and appending one to every
+      // call 404s the Django routes that have none (`/api/v1/stays`, `/api/v1/rentals`).
+      { source: "/api/:path*/", destination: `${apiProxyTarget}/api/:path*/` },
+      { source: "/api/:path*", destination: `${apiProxyTarget}/api/:path*` },
       // Uploaded evidence and attachments are served by Django in development.
       { source: "/media/:path*", destination: `${apiProxyTarget}/media/:path*` },
     ];

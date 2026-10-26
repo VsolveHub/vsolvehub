@@ -2,6 +2,8 @@
 
 import { describeError } from "@vsolve/query";
 import { Card, useToast } from "@vsolve/ui";
+import { ArrowLeft } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 
 import { asyncStateFrom } from "@/components/async-section";
@@ -100,6 +102,15 @@ function CrewRosterPanel() {
 
   return (
     <>
+      <div className="mb-2">
+        <Link
+          href="/me"
+          className="inline-flex min-h-11 items-center gap-1.5 text-xs font-semibold text-text-secondary hover:text-navy-900 transition-colors"
+        >
+          <ArrowLeft size={16} aria-hidden />
+          Back to Account
+        </Link>
+      </div>
       <h1 className="text-xl font-semibold text-text">Your crew</h1>
       <p className="text-sm leading-6 text-text-secondary">
         The people you send to work. We check nobody is booked twice on the same day, including

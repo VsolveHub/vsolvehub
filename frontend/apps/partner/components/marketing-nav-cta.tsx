@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useHydrated } from "@vsolve/ui";
-import { useCurrentSession } from "@vsolve/query";
+import { useCurrentSession, hasRole } from "@vsolve/query";
 import { getApiClient } from "@/lib/api/browser";
+import { PARTNER_ROLE } from "@/features/session/partner-shell";
 import { usePartnerProfile } from "@/features/profile/queries";
 import { usePartnerApplication } from "@/features/application/queries";
 
@@ -32,7 +33,11 @@ export function MarketingNavCta() {
   const hydrated = useHydrated();
 
   const session = useCurrentSession(getApiClient(), { enabled: hydrated });
-  const profile = usePartnerProfile();
+  // Only someone holding the role can read a profile; asking for anyone else
+  // is a guaranteed 403.
+  const profile = usePartnerProfile({
+    enabled: Boolean(session.data?.user && hasRole(session.data.user, PARTNER_ROLE)),
+  });
   const application = usePartnerApplication({ enabled: hydrated && Boolean(session.data?.user) });
 
   if (!hydrated || session.isPending) {
@@ -40,6 +45,7 @@ export function MarketingNavCta() {
   }
 
   const isApprovedPartner =
+    Boolean(session.data?.user && hasRole(session.data.user, PARTNER_ROLE)) ||
     application.data?.status === "APPROVED" ||
     profile.data?.approval_status === "APPROVED";
 

@@ -1,8 +1,10 @@
 "use client";
 
-import { Button, formatMoney } from "@vsolve/ui";
+import { Button, formatMoney, ProgressiveImage } from "@vsolve/ui";
 import Link from "next/link";
 
+import { ServicePhoto } from "@/features/catalog/components/category-artwork";
+import { isServiceCoverUrl } from "@/features/catalog/service-cover";
 import type { ServiceCard } from "../queries";
 
 /**
@@ -62,24 +64,49 @@ export function CartSuggestions({
       {/* Scrolls inside itself. A horizontal strip that widens the page body is
           the classic way a phone layout starts scrolling sideways. */}
       <ul className="mt-4 flex gap-3 overflow-x-auto pb-2" data-testid="cart-suggestions">
-        {suggestions.map((card) => (
-          <li
-            key={card.slug}
-            className="flex w-56 shrink-0 flex-col rounded-card border border-line bg-surface p-4"
-          >
-            <Link
-              href={`/catalog/${card.category_slug}/${card.slug}`}
-              className="group min-w-0"
-            >
-              <h3 className="text-balance text-sm font-semibold text-text group-hover:text-text-link">
-                {card.name}
-              </h3>
-              <p className="mt-1 line-clamp-2 text-xs text-text-secondary">
-                {card.short_description}
-              </p>
-            </Link>
+        {suggestions.map((card) => {
+          const imageUrl = card.cover?.url ?? "";
+          const isCoverIcon = imageUrl
+            ? isServiceCoverUrl(imageUrl) || imageUrl.includes("/catalog/tiles/")
+            : false;
 
-            <div className="mt-auto pt-3">
+          return (
+            <li
+              key={card.slug}
+              className="flex w-56 shrink-0 flex-col rounded-card border border-line bg-surface p-3 sm:p-4"
+            >
+              <Link
+                href={`/catalog/${card.category_slug}/${card.slug}`}
+                className="group min-w-0 flex flex-col flex-1"
+              >
+                <div className="relative aspect-[16/10] w-full overflow-hidden rounded-xl bg-[#F4F1EC] mb-3">
+                  {imageUrl ? (
+                    <ProgressiveImage
+                      src={imageUrl}
+                      alt={card.cover?.alt_text || card.name}
+                      containerClassName="size-full"
+                      className={
+                        isCoverIcon
+                          ? "size-full object-contain p-3 transition-transform duration-300 group-hover:scale-105"
+                          : "size-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      }
+                    />
+                  ) : (
+                    <div className="size-full bg-surface-sunken grid place-items-center text-text-secondary">
+                      <ServicePhoto imageUrl="" iconKey={card.icon_key} className="size-full rounded-none shadow-none" />
+                    </div>
+                  )}
+                </div>
+
+                <h3 className="text-balance text-sm font-semibold text-text group-hover:text-text-link">
+                  {card.name}
+                </h3>
+                <p className="mt-1 line-clamp-2 text-xs text-text-secondary">
+                  {card.short_description}
+                </p>
+              </Link>
+
+              <div className="mt-auto pt-3">
               {/*
                 Suggestions come from a rate-gated selector, so a card here always has a price —
                 `public_services_by_id` deliberately kept the rate gate the catalog listing dropped,
@@ -121,8 +148,9 @@ export function CartSuggestions({
               )}
             </div>
           </li>
-        ))}
-      </ul>
+        );
+      })}
+    </ul>
     </section>
   );
 }

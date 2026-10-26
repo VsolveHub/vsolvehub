@@ -1,6 +1,5 @@
 "use client";
 
-import { ApiRequestError } from "@vsolve/api-client";
 import { describeError, isLifecycleUnsupported } from "@vsolve/query";
 
 import { BROWSE_HREF, requestHref } from "@/lib/routes";
@@ -55,6 +54,7 @@ import {
   useRequirement as useRequirementRecord,
   useSaveRequirement,
   useSubmitRequirement,
+  isDraftUnusable,
   isRequirementExpired,
   isSubmitInProgress,
   type SaveRequirementInput,
@@ -478,9 +478,7 @@ function FlowBody({
           // Only a remembered draft that is gone (404) or already sent to vendors (409) is
           // replaced. A bad answer or a network failure must reach the customer instead of
           // quietly opening a second request.
-          const draftUnusable =
-            saveError instanceof ApiRequestError && (saveError.status === 404 || saveError.status === 409);
-          if (!draftUnusable) throw saveError;
+          if (!isDraftUnusable(saveError)) throw saveError;
           clearPersistedRequirement(service.slug);
           draft = await createRequirement.mutateAsync({
             variantId: variant.id,

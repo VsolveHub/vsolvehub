@@ -46,12 +46,28 @@ export function usePartnerApplication({ enabled = true }: { enabled?: boolean } 
     // ("you have not started"), not an error to retry.
     retry: (failureCount, error) =>
       error instanceof ApiRequestError && error.status === 404 ? false : failureCount < 2,
+    // Nor is it a reason to ask again every time a component mounts. A failed
+    // query is always stale, so each new observer refetched the 404 — and a
+    // refetch puts a data-less query back into `pending`, which made
+    // `ListingStepGuard` unmount and remount the editor (a new observer) on
+    // every response: `/apply/work` sent ~100 requests a second. A real start
+    // writes the cache through `writeBack`, and focus still refetches.
+    refetchOnMount: (query) =>
+      !(query.state.error instanceof ApiRequestError && query.state.error.status === 404),
   });
 }
 
 /** True when the failure was a version conflict rather than anything else. */
 export function isVersionConflict(error: unknown): boolean {
-  return error instanceof ApiRequestError && error.status === 409;
+  // The code, not the status: Django also answers 409 for an incomplete
+  // application and a disallowed transition, and treating those as a conflict
+  // told a first-time applicant that "someone else changed" an application
+  // only they had ever touched — and refetched it, discarding nothing useful.
+  return (
+    error instanceof ApiRequestError &&
+    error.status === 409 &&
+    error.code === "partner_application_version_conflict"
+  );
 }
 
 /**

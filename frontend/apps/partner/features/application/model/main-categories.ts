@@ -153,3 +153,49 @@ export function toggleCategorySelection(
     serviceVariantIds: Array.from(new Set([...selectedVariantIds, ...variantIds])),
   };
 }
+
+/**
+ * Keeps the skills a selected job type needs on the application.
+ *
+ * A main category maps to one skill (Technician to `carpenter`), but the job
+ * types under it each name their own — CCTV installation needs
+ * `cctv-technician`. Ticking a job type used to leave that skill off, and Django
+ * refused the save with "Select the required skills for: cctv-technician",
+ * which the applicant had no control on this screen to fix.
+ *
+ * A job type's skill is added when it is selected and removed again when the
+ * last job type needing it goes, unless it is some category's own skill — that
+ * one belongs to the category checkbox. Codes Django does not offer are never
+ * added; the screen flags those instead.
+ */
+export function syncRequiredSkills({
+  skillCodes,
+  previousVariantIds,
+  nextVariantIds,
+  services,
+  skills,
+  categorySkillCodes,
+}: {
+  skillCodes: readonly string[];
+  previousVariantIds: readonly string[];
+  nextVariantIds: readonly string[];
+  services: readonly { variantId: string; requiredSkillCode: string }[];
+  skills: readonly PartnerSkill[];
+  categorySkillCodes: readonly string[];
+}): string[] {
+  const offered = new Set(skills.map((skill) => skill.code));
+  const requiredBy = (ids: readonly string[]) =>
+    new Set(
+      services
+        .filter((service) => ids.includes(service.variantId))
+        .map((service) => service.requiredSkillCode)
+        .filter((code) => code.length > 0 && offered.has(code)),
+    );
+
+  const before = requiredBy(previousVariantIds);
+  const after = requiredBy(nextVariantIds);
+  const kept = skillCodes.filter(
+    (code) => !before.has(code) || after.has(code) || categorySkillCodes.includes(code),
+  );
+  return Array.from(new Set([...kept, ...after]));
+}

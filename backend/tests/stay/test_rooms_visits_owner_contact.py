@@ -165,7 +165,7 @@ def test_enquiry_response_carries_the_owners_name_and_number(world):
         format="json",
     )
 
-    assert response.status_code == 201  # noqa: PLR2004
+    assert response.status_code == 201
     assert response.data["host_name"] == "Sri Sai PG"
     assert response.data["host_phone"] == HOST_PHONE
     assert response.data["property_slug"] == prop.slug
@@ -367,7 +367,7 @@ def test_changing_the_count_adds_or_removes_free_rooms_only(world):
 
     update_unit(unit=unit, host=world["host"], quantity=5)
     unit.refresh_from_db()
-    assert unit.quantity == 5  # noqa: PLR2004
+    assert unit.quantity == 5
     assert unit.available_count == THREE_ROOMS
 
 
@@ -438,7 +438,7 @@ def test_overlapping_slots_on_the_same_day_are_refused(world):
             {"weekday": 6, "start_time": time(10, 30), "end_time": time(11, 30)},
         ],
     )
-    assert prop.visit_slots.count() == 3  # noqa: PLR2004
+    assert prop.visit_slots.count() == 3
 
 
 @pytest.mark.django_db
@@ -469,7 +469,7 @@ def test_availability_lists_only_slot_days_and_skips_blocked_ones(world):
     assert day in offered
     assert day + timedelta(days=7) not in offered
     assert all(row["date"].weekday() == day.weekday() for row in days)
-    assert len(days[0]["slots"]) == 2  # noqa: PLR2004
+    assert len(days[0]["slots"]) == 2
 
 
 @pytest.mark.django_db
@@ -500,7 +500,7 @@ def test_two_guests_may_pick_the_same_slot_but_not_twice_the_same_day(world):
 
     assert first.start_time == time(17)
     assert second.status == StayVisit.Status.REQUESTED
-    assert NotificationIntent.objects.filter(template_code="stay_visit_requested").count() == 2  # noqa: PLR2004
+    assert NotificationIntent.objects.filter(template_code="stay_visit_requested").count() == 2
     with pytest.raises(StayStateError) as exc:
         request_visit(
             customer=world["guest"], property_id=prop.id, slot_id=evening.id, visit_date=day
@@ -671,7 +671,7 @@ def test_owner_api_sets_hours_manages_rooms_and_answers_visits(world):
         },
         format="json",
     )
-    assert hours.status_code == 200  # noqa: PLR2004
+    assert hours.status_code == 200
     assert len(hours.data["visit_slots"]) == 1
 
     room_id = _room(unit, "101").id
@@ -684,7 +684,7 @@ def test_owner_api_sets_hours_manages_rooms_and_answers_visits(world):
     )
     assert off.data["status"] == "UNAVAILABLE"
     added = owner.post(f"/api/v1/partner/stays/units/{unit.id}/rooms", {"number": "104"})
-    assert added.status_code == 201  # noqa: PLR2004
+    assert added.status_code == 201
 
     summary = owner.get("/api/v1/partner/stays/summary").data
     assert summary["booked_rooms"] == 1
@@ -701,7 +701,7 @@ def test_owner_api_sets_hours_manages_rooms_and_answers_visits(world):
         },
         format="json",
     )
-    assert created.status_code == 201  # noqa: PLR2004
+    assert created.status_code == 201
 
     declined = owner.post(
         f"/api/v1/partner/stays/visits/{created.data['id']}/decline",

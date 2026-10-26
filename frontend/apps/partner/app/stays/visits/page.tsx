@@ -6,7 +6,7 @@ import { PartnerStayVisitsWorkspace } from "@/features/stays/view/stay-visits-wo
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Visit requests | Vsolve Partners",
+  title: "Visit requests",
   description: "Guests asking to visit your stay properties",
   robots: { index: false, follow: false },
 };

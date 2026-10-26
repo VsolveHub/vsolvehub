@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { cn } from "@vsolve/ui";
+import { cn, useHydrated } from "@vsolve/ui";
 
 import {
   useAddCartItem,
@@ -40,7 +40,11 @@ export function TileCatalogAddButton({
   const opensPanel = Boolean(onNeedChoice) && variantId == null;
 
   const resolvedVariantId = variantId ?? service.bookable_variant_id;
-  const cart = cartQuery.data;
+  // The server renders with no cart; the browser may already hold one in the query cache.
+  // Reading it before hydration drew a quantity stepper where the server drew "Add" and React
+  // threw a hydration mismatch. Until hydrated, render exactly what the server did.
+  const hydrated = useHydrated();
+  const cart = hydrated ? cartQuery.data : undefined;
   const cartItem = cart?.items.find((item) => item.variant_id === resolvedVariantId);
   const cartUnavailable = cartQuery.isLoading || cart === undefined;
   const isAdding = addItem.isPending;
@@ -112,25 +116,25 @@ export function TileCatalogAddButton({
         aria-label="Quantity in cart"
         className={cn(
           "inline-flex shrink-0 items-center justify-between gap-3 border border-line bg-white shadow-2xs",
-          isPanel ? "h-11 rounded-xl px-3.5 min-w-[10rem]" : "h-9 rounded-lg px-2.5",
+          isPanel ? "h-11 rounded-xl pl-3.5 pr-1 min-w-[10rem]" : "h-9 rounded-lg pl-2.5 pr-0",
         )}
       >
         <Link
           href="/cart"
-          className="inline-flex items-center gap-1 font-bold text-action hover:underline text-xs sm:text-sm"
+          className="inline-flex min-h-9 items-center gap-1 font-bold text-action hover:underline text-xs sm:text-sm"
         >
           View Cart
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={2} className="size-3.5" aria-hidden>
             <path strokeLinecap="round" strokeLinejoin="round" d="m7.5 4.5 5.5 5.5-5.5 5.5" />
           </svg>
         </Link>
-        <div className="flex items-center gap-2 border-l border-line/60 pl-2">
+        <div className="flex items-center gap-0.5 border-l border-line/60 pl-1">
           <button
             type="button"
             onClick={handleDecrement}
             disabled={isUpdating || isRemoving}
             aria-label="Remove one"
-            className="text-action font-extrabold text-base px-1 hover:text-[#C2410C] disabled:opacity-50 cursor-pointer"
+            className="inline-flex size-9 items-center justify-center rounded-full text-action font-extrabold text-base hover:bg-[#FFF0E5] hover:text-[#C2410C] disabled:opacity-50 cursor-pointer"
           >
             −
           </button>
@@ -148,7 +152,7 @@ export function TileCatalogAddButton({
             onClick={handleIncrement}
             disabled={isUpdating}
             aria-label="Add one"
-            className="text-action font-extrabold text-base px-1 hover:text-[#C2410C] disabled:opacity-50 cursor-pointer"
+            className="inline-flex size-9 items-center justify-center rounded-full text-action font-extrabold text-base hover:bg-[#FFF0E5] hover:text-[#C2410C] disabled:opacity-50 cursor-pointer"
           >
             +
           </button>

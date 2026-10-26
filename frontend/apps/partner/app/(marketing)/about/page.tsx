@@ -5,7 +5,7 @@ import { Building2, ShieldCheck, Award, ArrowRight, Sparkles, HeartHandshake, Tr
 export const dynamic = "force-static";
 
 export const metadata: Metadata = {
-  title: "About V Solve Hub - Our Mission for Trade Professionals",
+  title: "About Us: Our Mission for Trade Professionals",
   description:
     "V Solve Hub is empowering local technicians, electricians, plumbers, and home service professionals across Telangana with dignity, modern technology, and sustainable income.",
   alternates: { canonical: "/about" },
@@ -30,15 +30,15 @@ const VALUES = [
   {
     icon: HeartHandshake,
     title: "Safety & Community Support",
-    desc: "From accidental insurance to a dedicated 24/7 partner helpline, our platform stands firmly behind every professional on duty.",
+    desc: "From safety guidance to a dedicated partner helpline, our platform stands firmly behind every professional on duty.",
   },
 ];
 
 const MILESTONES = [
-  { value: "5,000+", label: "Verified Skilled Partners" },
-  { value: "₹45,000+", label: "Average Monthly Partner Earnings" },
-  { value: "100%", label: "On-Time Weekly Settlements" },
-  { value: "5 Cities", label: "Active Across Telangana" },
+  { value: "Verified", label: "ID & Document Checks" },
+  { value: "Upfront", label: "Job Pricing Before Acceptance" },
+  { value: "Weekly", label: "Direct Bank Settlements" },
+  { value: "Hyderabad", label: "Now Onboarding Partners" },
 ];
 
 export default function AboutPage() {
@@ -57,23 +57,13 @@ export default function AboutPage() {
         </p>
 
         <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-          <Link href="/apply">
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-signal-500 via-amber-500 to-signal-400 px-8 py-3.5 text-sm font-extrabold text-[#00112e] shadow-lg shadow-signal-500/25 hover:from-signal-400 hover:to-amber-300 transition-all hover:scale-[1.02] active:scale-[0.98]"
-            >
+          <Link href="/apply" className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-signal-500 via-amber-500 to-signal-400 px-8 py-3.5 text-sm font-extrabold text-[#00112e] shadow-lg shadow-signal-500/25 hover:from-signal-400 hover:to-amber-300 transition-all hover:scale-[1.02] active:scale-[0.98]">
               <span>Join as a Partner</span>
               <ArrowRight className="h-4 w-4" />
-            </button>
-          </Link>
-          <Link href="/contact">
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-full bg-surface border border-line-strong px-6 py-3.5 text-sm font-bold text-navy-900 hover:bg-surface-sunken transition-colors shadow-xs"
-            >
+            </Link>
+          <Link href="/contact" className="inline-flex items-center gap-2 rounded-full bg-surface border border-line-strong px-6 py-3.5 text-sm font-bold text-navy-900 hover:bg-surface-sunken transition-colors shadow-xs">
               <span>Contact Our Team</span>
-            </button>
-          </Link>
+            </Link>
         </div>
       </section>
 

@@ -17,7 +17,8 @@ export interface ActiveRentalFilters {
 interface RentalFiltersProps {
   activeFilters: ActiveRentalFilters;
   onChangeFilter: (filters: ActiveRentalFilters) => void;
-  count: number;
+  /** `null` while the list is still loading. */
+  count: number | null;
 }
 
 interface TaxonomyCategory {
@@ -152,12 +153,14 @@ export function RentalFilters({ activeFilters, onChangeFilter, count }: RentalFi
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-3">
         {/* Row 1: Categories */}
-        <div className="flex flex-wrap items-center gap-2">
+        {/* One swipeable row on phones: wrapped, a dozen categories became six rows of
+            chips above the first listing. Wraps as before from `sm` up. */}
+        <div className="-mx-4 flex flex-nowrap items-center gap-2 overflow-x-auto px-4 pb-1 no-scrollbar sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0 [&>*]:shrink-0 [&>button]:whitespace-nowrap">
           <button
             type="button"
             onClick={() => setCategory(undefined)}
             className={cn(
-              "inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition",
+              "inline-flex min-h-11 items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition",
               isAll
                 ? "bg-action text-white shadow-xs"
                 : "bg-surface border border-line text-text-secondary hover:border-line-strong hover:text-text",
@@ -169,7 +172,7 @@ export function RentalFilters({ activeFilters, onChangeFilter, count }: RentalFi
 
           {isLoading ? (
             Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="h-[34px] w-24 rounded-full" />
+              <Skeleton key={i} className="h-11 w-24 rounded-full" />
             ))
           ) : (
             (taxonomy as TaxonomyCategory[]).map((cat) => (
@@ -178,7 +181,7 @@ export function RentalFilters({ activeFilters, onChangeFilter, count }: RentalFi
                 type="button"
                 onClick={() => setCategory(cat.slug)}
                 className={cn(
-                  "inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition",
+                  "inline-flex min-h-11 items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition",
                   activeFilters.categorySlug === cat.slug
                     ? "bg-action text-white shadow-xs"
                     : "bg-surface border border-line text-text-secondary hover:border-line-strong hover:text-text",
@@ -204,7 +207,7 @@ export function RentalFilters({ activeFilters, onChangeFilter, count }: RentalFi
                   })
             }
             className={cn(
-              "inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition",
+              "inline-flex min-h-11 items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition",
               hasPriceFilter
                 ? "bg-action text-white shadow-xs"
                 : "bg-surface border border-line text-text-secondary hover:border-line-strong hover:text-text",
@@ -239,7 +242,7 @@ export function RentalFilters({ activeFilters, onChangeFilter, count }: RentalFi
                 type="button"
                 onClick={() => setService(svc.slug)}
                 className={cn(
-                  "inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold transition",
+                  "inline-flex min-h-11 items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold transition",
                   activeFilters.serviceSlug === svc.slug
                     ? "bg-text text-surface shadow-xs"
                     : "bg-surface-sunken border border-line text-text-secondary hover:border-line-strong hover:text-text",
@@ -253,10 +256,15 @@ export function RentalFilters({ activeFilters, onChangeFilter, count }: RentalFi
       </div>
 
       <div className="flex items-center justify-between text-xs text-text-secondary font-medium px-1">
-        <span>
-          Showing <strong className="text-text font-bold">{count}</strong> rental item
-          {count === 1 ? "" : "s"}
-        </span>
+        {/* `null` while the list loads: "Showing 0 rental items" read as "none exist". */}
+        {count === null ? (
+          <span>Loading equipment…</span>
+        ) : (
+          <span>
+            Showing <strong className="text-text font-bold">{count}</strong> rental item
+            {count === 1 ? "" : "s"}
+          </span>
+        )}
         <span>Standard Indian daily rental cycle (24h)</span>
       </div>
     </div>

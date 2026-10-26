@@ -1,7 +1,10 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader, Button } from "@vsolve/ui";
 
 import { PartnersWorkspace } from "@/features/partners/view/partners-workspace";
+
+export const metadata: Metadata = { title: "All partners" };
 
 export default function PartnersPage() {
   return (

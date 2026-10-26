@@ -1,7 +1,8 @@
 import type { MetadataRoute } from "next";
 
 import { getCategories, getCategoryServices } from "@/features/catalog/queries";
-import { catalogCategoryHref, isCareerJobsCategory, LISTINGS_HREF } from "@/lib/routes";
+import { catalogCategoryHref, isCareerJobsCategory, LISTINGS_HREF, RENTALS_HREF, STAYS_HREF } from "@/lib/routes";
+import { SITE_URL } from "@/lib/site";
 
 /**
  * Sitemap for the public catalog.
@@ -19,8 +20,6 @@ import { catalogCategoryHref, isCareerJobsCategory, LISTINGS_HREF } from "@/lib/
 
 export const revalidate = 3600;
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://vsolvehub.com";
-
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
 
@@ -28,6 +27,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${SITE_URL}/`, lastModified: now, changeFrequency: "weekly", priority: 1 },
     { url: `${SITE_URL}/catalog`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
     { url: `${SITE_URL}${LISTINGS_HREF}`, lastModified: now, changeFrequency: "daily", priority: 0.85 },
+    { url: `${SITE_URL}${RENTALS_HREF}`, lastModified: now, changeFrequency: "daily", priority: 0.7 },
+    { url: `${SITE_URL}${STAYS_HREF}`, lastModified: now, changeFrequency: "daily", priority: 0.7 },
+    { url: `${SITE_URL}/join-pro`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
     { url: `${SITE_URL}/contact`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
     { url: `${SITE_URL}/refund-policy`, lastModified: now, changeFrequency: "monthly", priority: 0.4 },
     { url: `${SITE_URL}/terms`, lastModified: now, changeFrequency: "yearly", priority: 0.3 },

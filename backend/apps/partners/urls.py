@@ -37,6 +37,7 @@ from apps.partners.views import (
     PartnerSkillListView,
     RequiredPartnerConsentListView,
 )
+from apps.partners.views.operations import PartnerImportView
 
 urlpatterns = [
     path("service-areas/", ApplicantServiceAreaListView.as_view(), name="partner-service-areas"),
@@ -180,8 +181,6 @@ urlpatterns = [
         name="operations-partner-tax-profile-verify",
     ),
 ]
-
-from apps.partners.views.operations import PartnerImportView
 
 urlpatterns += [
     path(

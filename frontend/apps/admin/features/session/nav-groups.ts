@@ -16,6 +16,7 @@ import {
   Percent,
   RotateCcw,
   Search,
+  ShieldCheck,
   ShoppingCart,
   Sliders,
   Tag,
@@ -95,6 +96,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Customers",
     links: [
+      { href: "/operations/stories", label: "Safety stories", icon: ShieldCheck },
       { href: "/operations/loyalty", label: "Wallet and rewards", icon: Coins },
       { href: "/operations/feedback", label: "Service feedback", icon: MessageSquareHeart },
     ],

@@ -44,7 +44,7 @@ const GALLERY_VISITS = SAMPLE_VISITS.map((visit) => ({
       : `${visit.day} · ${visit.window}`,
 }));
 
-export const metadata = { robots: { index: false, follow: false } };
+export const metadata = { title: "Choose visits — M2", robots: { index: false, follow: false } };
 
 export default function ChooseVisitsGalleryPage() {
 

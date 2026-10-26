@@ -27,12 +27,16 @@ export function SiteHeader() {
   const pathname = usePathname();
   const router = useRouter();
 
+  const hydrated = useHydrated();
   const cartQuery = useCart();
-  const cartCount = cartQuery.data?.items.reduce((sum, item) => sum + item.quantity, 0) ?? 0;
+  // Zero until hydrated: the server has no cart, so a badge on the first client render
+  // would not match the server's HTML.
+  const cartCount = hydrated
+    ? (cartQuery.data?.items.reduce((sum, item) => sum + item.quantity, 0) ?? 0)
+    : 0;
 
   // Global login dialog state
   const [isLoginOpen, setIsLoginOpen] = useState(false);
-  const hydrated = useHydrated();
   const guard = useAuthGuard(getApiClient());
   const flow = usePhoneAuthFlow(getApiClient(), {
     getReferralCode: readPendingReferral,
@@ -108,6 +112,17 @@ export function SiteHeader() {
 
         {/* Right side actions on desktop */}
         <div className="flex items-center gap-3">
+          {/* Desktop had no way to search from anywhere but the catalogue page itself. */}
+          <Link
+            href="/catalog?search=1"
+            aria-label="Search services"
+            className="flex size-10 items-center justify-center rounded-full text-text-secondary hover:bg-surface-hover hover:text-text transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className="size-4.5" aria-hidden>
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
+          </Link>
           {/* Cart Icon Link */}
           <Link
             href="/cart"
@@ -188,7 +203,8 @@ export function SiteHeader() {
           <Link
             href="/cart"
             aria-label="View basket"
-            className="relative flex size-8 items-center justify-center rounded-full text-text-secondary hover:bg-surface-hover hover:text-text transition-colors"
+            // 44px: the thumb-sized minimum; this is the only way to the cart on a phone.
+            className="relative flex size-11 items-center justify-center rounded-full text-text-secondary hover:bg-surface-hover hover:text-text transition-colors"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className="size-4.5">
               <circle cx="8" cy="21" r="1" />
@@ -207,7 +223,7 @@ export function SiteHeader() {
               <Link
                 href="/account"
                 aria-label="Open profile"
-                className="rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                className="flex size-11 items-center justify-center rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
               >
                 <ProfileMark identity={session} className="size-8.5 text-xs" />
               </Link>
@@ -215,7 +231,7 @@ export function SiteHeader() {
           ) : (
             <button
               onClick={() => setIsLoginOpen(true)}
-              className="text-xs font-bold text-[#EA580C] hover:text-[#C2410C] cursor-pointer bg-transparent border-none p-0 focus:outline-none"
+              className="inline-flex min-h-11 items-center rounded-full border border-[#EA580C]/40 px-4 text-sm font-bold text-[#EA580C] hover:text-[#C2410C] cursor-pointer bg-transparent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#EA580C]"
             >
               Log in
             </button>

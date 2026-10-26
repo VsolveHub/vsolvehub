@@ -34,7 +34,12 @@ from apps.commerce.providers import (
 )
 from apps.foundation.services import enqueue_outbox_event
 
-from .base import PAYMENT_FINAL_STATES, _issue_document, _open_exception
+from .base import (
+    PAYMENT_FINAL_STATES,
+    _cancel_domain_booking_on_refund,
+    _issue_document,
+    _open_exception,
+)
 
 
 @transaction.atomic
@@ -366,8 +371,6 @@ def _apply_refund_provider_result(
                     },
                 )
             if refunded_total == attempt.amount_paise:
-                from .base import _cancel_domain_booking_on_refund
-
                 _cancel_domain_booking_on_refund(attempt=attempt, refund=refund)
     elif normalized in ("failed", "rejected"):
         refund.status = Refund.Status.FAILED

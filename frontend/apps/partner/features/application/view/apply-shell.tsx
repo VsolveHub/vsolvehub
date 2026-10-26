@@ -179,8 +179,8 @@ function ApplyHeader({
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600" />
                 </span>
-                <span className="text-text-secondary font-medium">Daily Bookings:</span>
-                <span className="text-navy-900 font-bold">1,400+ Active</span>
+                <span className="text-text-secondary font-medium">Now onboarding:</span>
+                <span className="text-navy-900 font-bold">Hyderabad</span>
               </div>
             </div>
 
@@ -202,7 +202,7 @@ function ApplyHeader({
               <button
                 type="button"
                 onClick={() => setOpen(true)}
-                className="hidden sm:inline-flex h-8 items-center gap-1.5 rounded-full bg-surface-sunken border border-line-strong px-3 text-xs font-bold text-navy-900 hover:bg-surface transition-colors shadow-xs"
+                className="inline-flex min-h-11 sm:min-h-8 sm:h-8 items-center gap-1.5 rounded-full bg-surface-sunken border border-line-strong px-2.5 sm:px-3 text-xs font-bold text-navy-900 hover:bg-surface transition-colors shadow-xs"
               >
                 <ListChecks size={14} aria-hidden />
                 <span>Steps</span>

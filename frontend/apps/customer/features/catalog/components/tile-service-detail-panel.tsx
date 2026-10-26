@@ -6,45 +6,11 @@ import { cn, formatMoney } from "@vsolve/ui";
 import { Clock, ShieldCheck, Ban, X } from "lucide-react";
 
 import { useServiceDetail, type ServiceCard, type ServiceDetail } from "../client-queries";
-import { displayRating } from "./tile-desktop-rating";
+import { durationLabel, policyTexts, warrantyText } from "../service-facts";
 import { TileCatalogAddButton } from "./tile-catalog-add-button";
 import { ServicePhoto } from "./category-artwork";
 
 type BookableVariant = ServiceDetail["variants"][number];
-
-const FALLBACK_INCLUDED = [
-  "Professional visit and inspection",
-  "On-site diagnosis",
-  "Workmanship as described for the job",
-];
-
-const FALLBACK_DETAILS = {
-  duration: "60–90 mins",
-  cancellation: "Free up to 2 hrs before",
-  warranty: "30 days service warranty",
-} as const;
-
-function policyText(
-  policies: { kind: string; title: string; text: string }[] | undefined,
-  kind: string,
-): string[] {
-  return (policies ?? [])
-    .filter((policy) => policy.kind === kind)
-    .map((policy) => policy.text)
-    .filter((text) => text.trim() !== "");
-}
-
-function detailField(
-  policies: { title: string; text: string }[] | undefined,
-  needles: string[],
-  fallback: string,
-): string {
-  const match = (policies ?? []).find((policy) => {
-    const haystack = `${policy.title} ${policy.text}`.toLowerCase();
-    return needles.some((needle) => haystack.includes(needle));
-  });
-  return match?.text || fallback;
-}
 
 function variantThumbnailUrl(variant: BookableVariant, fallbackUrls: string[] = []): string {
   if (variant.image_url.trim() !== "") return variant.image_url;
@@ -190,27 +156,22 @@ export function TileServiceDetailPanel({
 }) {
   const detailQuery = useServiceDetail(service.slug);
   const detail = detailQuery.data;
-  const rating = displayRating(service.slug);
-  const included = policyText(detail?.policies, "INCLUDED");
-  const includedItems = included.length > 0 ? included : FALLBACK_INCLUDED;
+  // Only what the service publishes. An empty list hides the section rather than
+  // borrowing generic lines that may not describe this job.
+  const includedItems = policyTexts(detail?.policies, "INCLUDED");
   const imageUrl = detail?.cover?.url ?? service.cover?.url ?? "";
   const about =
     (detail?.description && detail.description.trim() !== ""
       ? detail.description
       : null) ?? service.short_description;
-  const duration = detailField(detail?.policies, ["duration", "mins", "minutes"], FALLBACK_DETAILS.duration);
-  const cancellation = detailField(
-    detail?.policies,
-    ["cancel"],
-    FALLBACK_DETAILS.cancellation,
-  );
-  const warranty = detailField(detail?.policies, ["warrant"], FALLBACK_DETAILS.warranty);
+  const warranty = warrantyText(detail?.policies);
   const bookableVariants = detail?.variants ?? [];
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
   const selectedVariant =
     bookableVariants.find((variant) => variant.id === selectedVariantId) ??
     bookableVariants[0] ??
     null;
+  const duration = selectedVariant ? durationLabel(selectedVariant) : null;
   const pricePaise =
     selectedVariant?.starting_price.amount_paise ?? service.starting_price?.amount_paise ?? null;
   const showVariantPicker = selectedVariant !== null;
@@ -225,7 +186,7 @@ export function TileServiceDetailPanel({
 
   return (
     <aside
-      className="flex h-full min-h-0 w-[400px] shrink-0 flex-col overflow-hidden rounded-[1.25rem] border border-[#e7e2da] bg-white shadow-sm"
+      className="flex h-full min-h-0 w-[400px] shrink-0 flex-col overflow-hidden rounded-[1.25rem] border border-[#e7e2da] bg-white shadow-xl xl:shadow-sm"
       aria-labelledby="tile-detail-heading"
     >
       <div className="flex shrink-0 items-start justify-between gap-3 px-5 pb-2 pt-5">
@@ -236,15 +197,6 @@ export function TileServiceDetailPanel({
           >
             {service.name}
           </h2>
-          <p className="mt-1 flex items-center gap-1 text-[12px] font-semibold text-navy-900">
-            <span className="text-[#F5A524]" aria-hidden>
-              ★
-            </span>
-            <span>
-              {rating.score}{" "}
-              <span className="font-medium text-text-secondary">({rating.count})</span>
-            </span>
-          </p>
         </div>
         <button
           type="button"
@@ -289,6 +241,7 @@ export function TileServiceDetailPanel({
           </p>
         </section>
 
+        {includedItems.length > 0 ? (
         <section className="mt-5">
           <h3 className="text-[15px] font-extrabold text-navy-900">What&apos;s included</h3>
           <ul className="mt-2.5 flex flex-col gap-2">
@@ -310,31 +263,37 @@ export function TileServiceDetailPanel({
             ))}
           </ul>
         </section>
+        ) : null}
 
         <section className="mt-5">
           <h3 className="text-[15px] font-extrabold text-navy-900">Service details</h3>
           <dl className="mt-3 flex flex-col gap-3">
-            <div className="flex items-center justify-between gap-3 text-[13px]">
-              <dt className="flex items-center gap-2 font-medium text-text-secondary">
-                <Clock className="size-4 shrink-0" strokeWidth={1.8} />
-                Duration
-              </dt>
-              <dd className="font-semibold text-navy-900">{duration}</dd>
-            </div>
+            {duration ? (
+              <div className="flex items-center justify-between gap-3 text-[13px]">
+                <dt className="flex items-center gap-2 font-medium text-text-secondary">
+                  <Clock className="size-4 shrink-0" strokeWidth={1.8} />
+                  Duration
+                </dt>
+                <dd className="font-semibold text-navy-900">{duration}</dd>
+              </div>
+            ) : null}
             <div className="flex items-center justify-between gap-3 text-[13px]">
               <dt className="flex items-center gap-2 font-medium text-text-secondary">
                 <Ban className="size-4 shrink-0" strokeWidth={1.8} />
                 Cancellation
               </dt>
-              <dd className="text-right font-semibold text-navy-900">{cancellation}</dd>
+              {/* The terms depend on the slot and are priced by the server at checkout. */}
+              <dd className="text-right font-semibold text-navy-900">Shown before you pay</dd>
             </div>
-            <div className="flex items-center justify-between gap-3 text-[13px]">
-              <dt className="flex items-center gap-2 font-medium text-text-secondary">
-                <ShieldCheck className="size-4 shrink-0" strokeWidth={1.8} />
-                Warranty
-              </dt>
-              <dd className="text-right font-semibold text-navy-900">{warranty}</dd>
-            </div>
+            {warranty ? (
+              <div className="flex items-center justify-between gap-3 text-[13px]">
+                <dt className="flex items-center gap-2 font-medium text-text-secondary">
+                  <ShieldCheck className="size-4 shrink-0" strokeWidth={1.8} />
+                  Warranty
+                </dt>
+                <dd className="text-right font-semibold text-navy-900">{warranty}</dd>
+              </div>
+            ) : null}
           </dl>
         </section>
       </div>

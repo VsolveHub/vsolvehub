@@ -36,7 +36,7 @@ function ProfessionalBlock({ unit, isPaid }: { unit: FulfilmentUnit; isPaid: boo
   }
 
   if (unit.professional || unit.status === "HELD" || unit.status === "PAYMENT_PENDING") {
-    return <MockProfessionalCard serviceName={unit.lines[0]?.label} />;
+    return <MockProfessionalCard professional={unit.professional} />;
   }
 
   return null;

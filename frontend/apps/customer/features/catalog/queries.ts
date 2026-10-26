@@ -39,6 +39,7 @@ export type ServiceVariantConfiguration = Schemas["ServiceVariantConfiguration"]
 export type IconKey = Schemas["IconKeyEnum"];
 /** One row of the compact catalogue: identity, ordering and an icon key. No media. */
 export type ServiceIndexItem = Schemas["ServiceIndexItem"];
+export type PromoBanner = Schemas["PromoBanner"];
 
 const catalogPolicy = (tags: string[]) => ({
   revalidate: CATALOG_REVALIDATE_SECONDS,
@@ -149,6 +150,26 @@ export const getServiceConfiguration = cache(
 );
 
 /** Finds a category by slug from the already-cached list, avoiding a second call. */
+/**
+ * Live promotional banners for a category's service pages (site-wide ones included).
+ *
+ * The one catalogue read that may fail quietly: a banner is marketing, and a page that
+ * renders without one tells the customer nothing false — unlike an empty service list.
+ * Revalidated every minute so Operations switching a banner off takes effect quickly.
+ */
+export const getPromoBanners = cache(async (categorySlug: string): Promise<PromoBanner[]> => {
+  const api = createPublicApi({ revalidate: 60, tags: [CACHE_TAGS.catalog] });
+  try {
+    return await readCatalog(() =>
+      request(() =>
+        api.GET("/api/v1/promo-banners/", { params: { query: { category: categorySlug } } }),
+      ),
+    );
+  } catch {
+    return [];
+  }
+});
+
 export const getCategory = cache(async (slug: string): Promise<Category | null> => {
   const categories = await getCategories();
   return categories.find((category) => category.slug === slug) ?? null;

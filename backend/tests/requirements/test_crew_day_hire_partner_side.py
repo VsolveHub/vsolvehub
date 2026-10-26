@@ -1,4 +1,3 @@
-# ruff: noqa: PLR2004 - the figures are the snapshot the test wrote three lines above.
 """The lead's side of an A3 crew booking, contract 1.49.0.
 
 Before this the crew wave wrote invitation rows and told nobody, a confirmed lead had no field

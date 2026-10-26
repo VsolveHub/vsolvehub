@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import secrets
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any
@@ -11,12 +12,22 @@ from uuid import UUID
 import jsonschema
 from django.conf import settings
 from django.db import models, transaction
+from django.db.models import F, IntegerField, OuterRef, Subquery, Sum, Value
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 
 from apps.catalog.models import A7VariantConfiguration, Category, Service, Subcategory
-from apps.commerce.models import PaymentAttempt
+from apps.commerce.models import FinancialException, PaymentAttempt
+from apps.commerce.services import _request_automatic_refund
+from apps.commerce.services.base import PAYMENT_FINAL_STATES, _open_exception
+from apps.commerce.services.payments import initiate_standalone_payment_attempt
+from apps.foundation.models import OutboxEvent
 from apps.foundation.storage import public_stored_name
+from apps.notifications.models import NotificationIntent
+from apps.notifications.services import request_notification
+from apps.payouts.models import PartnerLedgerEntry
+from apps.payouts.services import record_adjustment, release_payout_hold, settle_rental_earning
 from apps.rental.field_options import with_suggestions
 from apps.rental.models import (
     AssetReservation,
@@ -51,6 +62,11 @@ class RentalStateError(ValueError):
         self.code = code
 
 
+HANDOVER_PIN_LENGTH = 4
+#: The longest magic number checked below (PNG's 8-byte signature).
+IMAGE_SIGNATURE_BYTES = 8
+
+
 def ensure_customer_handover_pin(*, user: Any) -> str:
     """DEPRECATED: PIN is now generated per-booking.
 
@@ -58,14 +74,12 @@ def ensure_customer_handover_pin(*, user: Any) -> str:
     New code should use booking.handover_pin_hash directly.
     """
     existing = (getattr(user, "rental_handover_pin_hash", "") or "").strip()
-    if existing and len(existing) == 4 and existing.isdigit():
+    if existing and len(existing) == HANDOVER_PIN_LENGTH and existing.isdigit():
         return existing
     return "0000"
 
 
 def verify_handover_pin(*, booking: Any, pin: str) -> bool:
-    import secrets
-
     expected = (getattr(booking, "handover_pin_hash", "") or "").strip()
     provided = str(pin or "").strip()
     if not expected or not provided:
@@ -134,7 +148,6 @@ def _validate_image_header(upload: Any) -> None:
     then live on our CDN with an image extension. This check looks at
     what the file actually starts with.
     """
-    import io
 
     position = upload.tell() if hasattr(upload, "tell") else 0
     header = upload.read(32)
@@ -143,7 +156,7 @@ def _validate_image_header(upload: Any) -> None:
 
     if isinstance(header, str):
         header = header.encode("latin-1")
-    if len(header) < 8:
+    if len(header) < IMAGE_SIGNATURE_BYTES:
         raise RentalStateError("File is too small to be an image.")
 
     # JPEG: FF D8 FF
@@ -245,7 +258,7 @@ def create_asset(
         try:
             jsonschema.validate(instance=structured_fields, schema=config.asset_schema)
         except JsonSchemaValidationError as e:
-            raise RentalStateError(f"Invalid structured fields: {e.message}")
+            raise RentalStateError(f"Invalid structured fields: {e.message}") from e
     deposit = deposit_paise if deposit_paise > 0 else config.default_deposit_paise
     try:
         pincode = clean_pincode(pickup_pincode)
@@ -380,7 +393,7 @@ def auto_publish_asset(
     return asset
 
 
-def update_asset(
+def update_asset(  # noqa: PLR0912
     *,
     asset: RentalAsset,
     partner: Any,
@@ -464,12 +477,13 @@ def _apply_pickup_address(
     for field, value in address.items():
         if value is None:
             continue
+        cleaned = value
         if field == "pickup_pincode":
             try:
-                value = clean_pincode(value)
+                cleaned = clean_pincode(value)
             except PickupAddressError as exc:
                 raise RentalStateError(str(exc), code=exc.code) from exc
-        setattr(asset, field, value.strip())
+        setattr(asset, field, cleaned.strip())
         changed.append(field)
     if changed and not keep_location_text:
         # The short public place name follows the address unless the owner set one.
@@ -536,9 +550,6 @@ def _notify_rental(
 ) -> None:
     """Fire an in-app rental notification. Best-effort: never breaks the caller."""
     try:
-        from apps.notifications.models import NotificationIntent
-        from apps.notifications.services import request_notification
-
         request_notification(
             recipient_id=recipient_id,
             purpose=purpose,
@@ -793,8 +804,6 @@ def create_booking(
     days = _check_bookable(asset, start_date, end_date, is_delivery=is_delivery)
     _check_stock(asset, start_date, end_date, quantity)
 
-    import secrets
-
     handover_pin = f"{secrets.randbelow(10000):04d}"
 
     reservation = AssetReservation.objects.create(
@@ -951,9 +960,6 @@ def _refund_deposit_residual(
     refunds an explicit residual so the rental-fee portion of a combined
     fee+deposit charge is retained after a completed rental.
     """
-    from apps.commerce.models import PaymentAttempt
-    from apps.commerce.services import _request_automatic_refund
-    from apps.commerce.services.base import PAYMENT_FINAL_STATES
 
     if residual_paise <= 0:
         return
@@ -984,7 +990,6 @@ def _record_deposit_consume_claim(
     """Ledger ADJUSTMENT claiming withheld deposit after Operations approves it."""
     if consume_paise <= 0:
         return
-    from apps.payouts.services import record_adjustment
 
     if actor is None:
         return
@@ -1042,8 +1047,6 @@ def dispute_deposit(
     deposit.save(update_fields=("requested_consume_paise", "provider_note", "updated_at"))
     booking.status = RentalBooking.Status.DISPUTED
     booking.save(update_fields=("status", "updated_at"))
-
-    from apps.payouts.models import PartnerLedgerEntry
 
     PartnerLedgerEntry.objects.filter(
         rental_booking=booking, kind=PartnerLedgerEntry.Kind.EARNING
@@ -1124,16 +1127,12 @@ def decide_deposit_dispute(
     else:
         raise RentalStateError("Decision must approve or reject the dispute.")
 
-    from apps.payouts.services import release_payout_hold
-
     release_payout_hold(rental_booking_id=booking.id)
     return booking
 
 
 @transaction.atomic
 def return_booking(*, booking: RentalBooking, partner: Any) -> RentalBooking:
-    from apps.foundation.models import OutboxEvent
-
     _require_rental_capability(partner)
     if booking.asset.partner_id != partner.id:
         raise PermissionError("Not your booking.")
@@ -1168,7 +1167,6 @@ def return_booking(*, booking: RentalBooking, partner: Any) -> RentalBooking:
 
     # Record the partner's earning in the payout ledger. The rental fee minus
     # the platform fee is what the owner is owed; the deposit is excluded.
-    from apps.payouts.services import settle_rental_earning
 
     settle_rental_earning(rental_booking_id=booking.id)
 
@@ -1215,7 +1213,8 @@ def cancel_booking(
     customer: Any = None,
     partner: Any = None,
     is_ops: bool = False,
-    reason: str = "",
+    # Accepted from every caller, not stored: migration 0020 dropped the cancellation columns.
+    reason: str = "",  # noqa: ARG001
 ) -> RentalBooking:
     """Customer, Partner or Ops cancels a rental booking before equipment handover.
 
@@ -1227,9 +1226,6 @@ def cancel_booking(
     any held deposit is marked RELEASED. Uncaptured pending attempts are left
     alone (nothing settled to reverse).
     """
-    from apps.commerce.models import PaymentAttempt
-    from apps.commerce.services import _request_automatic_refund
-    from apps.commerce.services.base import PAYMENT_FINAL_STATES
 
     if not is_ops:
         if customer is not None:
@@ -1385,8 +1381,6 @@ def public_assets(
     qs = qs.filter(quantity_available__gte=1)
     if start_date is not None and end_date is not None and end_date > start_date:
         # Hide only when overlapping reserved quantity already fills stock.
-        from django.db.models import F, IntegerField, OuterRef, Subquery, Sum, Value
-        from django.db.models.functions import Coalesce
 
         reserved = (
             RentalBookingLine.objects.filter(
@@ -1436,8 +1430,6 @@ def booking_amount_due(booking: RentalBooking) -> int:
 
 
 def initiate_rental_booking_payment(*, booking: RentalBooking) -> Any:
-    from apps.commerce.services.payments import initiate_standalone_payment_attempt
-
     amount_paise = booking_amount_due(booking)
     # A delivery booking is charged once per accepted quote, so the key carries the quote
     # number: a re-quote after an abandoned payment gets a fresh attempt.
@@ -1538,9 +1530,6 @@ def cancel_booking_on_refund(*, payment_attempt_id: UUID) -> None:
         RentalBooking.Status.PENDING_PAYMENT,
         RentalBooking.Status.CONFIRMED,
     ):
-        from apps.commerce.models import FinancialException, PaymentAttempt
-        from apps.commerce.services.base import _open_exception
-
         attempt = PaymentAttempt.objects.filter(id=payment_attempt_id).first()
         _open_exception(
             kind=FinancialException.Kind.REFUND_FAILED,

@@ -155,6 +155,9 @@ class Unit(models.Model):
             ),
         ]
 
+    def __str__(self) -> str:
+        return self.name
+
 
 class RoomLook(models.Model):
     """A look of a room type: the photos some of its rooms share.
@@ -283,6 +286,9 @@ class StayEnquiry(models.Model):
         ordering = ("-created_at",)
         verbose_name_plural = "stay enquiries"
         indexes = [models.Index(fields=("-created_at",), name="stay_enquiry_created_idx")]
+
+    def __str__(self) -> str:
+        return f"stay-enquiry:{self.pk}"
 
 
 class VisitSlot(models.Model):
@@ -429,6 +435,9 @@ class StayModerationEvent(models.Model):
     reason = models.CharField(max_length=480, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    def __str__(self) -> str:
+        return f"stay-moderation:{self.property_id}:{self.pk}"
+
 
 class PropertyMedia(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -440,6 +449,9 @@ class PropertyMedia(models.Model):
 
     class Meta:
         ordering = ("display_order", "created_at")
+
+    def __str__(self) -> str:
+        return self.caption or f"media:{self.pk}"
 
     @builtins.property
     def image_url(self) -> str:
@@ -541,15 +553,15 @@ class StayReview(models.Model):
             ),
         ]
 
+    def __str__(self) -> str:
+        return str(self.id)
+
     def save(self, *args: Any, **kwargs: Any) -> None:
         if not self.body and self.comment:
             self.body = self.comment
         elif not self.comment and self.body:
             self.comment = self.body
         super().save(*args, **kwargs)
-
-    def __str__(self) -> str:
-        return str(self.id)
 
 
 class UnitReservation(models.Model):

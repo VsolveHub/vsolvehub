@@ -1,10 +1,13 @@
 """Rental quantity stock, handover PIN, deposit dispute, and booking status filter."""
 
+import importlib
 from datetime import timedelta
 
 import pytest
+from django.apps import apps as django_apps
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import IntegrityError, connection
 from django.utils import timezone
 from rest_framework import status
 
@@ -32,6 +35,7 @@ from apps.rental.services import (
     return_booking,
     store_rental_dispute_photo,
     submit_asset,
+    verify_handover_pin,
 )
 from tests.helpers import force_role_client
 
@@ -39,7 +43,7 @@ User = get_user_model()
 
 
 @pytest.fixture
-def rental_world(db):
+def rental_world(db):  # noqa: ARG001 - requested so the test database exists
     category = Category.objects.create(slug="rental-qty-test", name="Rental Qty Test")
     sub = Subcategory.objects.create(category=category, slug="cameras", name="Cameras")
     service = Service.objects.create(
@@ -287,12 +291,6 @@ def test_ops_lists_dispute_photos_and_approves_the_claim(rental_world):
 @pytest.mark.django_db
 def test_backfill_handover_pin_hash_for_in_flight_bookings(rental_world):
     """0006 blank default left in-flight rows without a PIN; 0007 must restore handover."""
-    import importlib
-
-    from django.apps import apps as django_apps
-
-    from apps.rental.services import verify_handover_pin
-
     backfill_mod = importlib.import_module("apps.rental.migrations.0007_backfill_handover_pin_hash")
     backfill_handover_pin_hashes = backfill_mod.backfill_handover_pin_hashes
 
@@ -470,7 +468,6 @@ def test_dispute_explicit_zero_consume_paise(rental_world):
 @pytest.mark.django_db
 def test_zero_quantity_available_is_not_bookable(rental_world):
     """Fail closed: create_asset rejects qty < 1; DB CheckConstraint blocks qty=0 rows."""
-    from django.db import IntegrityError, connection
 
     with pytest.raises(RentalStateError, match="at least 1"):
         create_asset(

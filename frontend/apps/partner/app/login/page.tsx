@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Spinner } from "@vsolve/ui";
 import { Suspense } from "react";
 
 import { LoginScreen } from "@/features/session/view/login-screen";
@@ -23,9 +24,12 @@ export default function LoginPage() {
        the fallback is a page rather than a hole inside one. */
     <Suspense
       fallback={
+        // Same words and spinner as the screen's own first state, so the
+        // hand-over from this fallback to `LoginScreen` does not flicker.
         <div className="min-h-screen bg-canvas text-text relative">
           <main className="mx-auto flex w-full max-w-md items-center justify-center gap-2 px-4 py-32 text-text-secondary">
-            Loading…
+            <Spinner size="sm" />
+            Checking your session…
           </main>
         </div>
       }

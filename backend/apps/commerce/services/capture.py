@@ -298,7 +298,7 @@ def _validate_payment_amount(*, attempt: PaymentAttempt, payment: ProviderPaymen
 
 
 @transaction.atomic
-def apply_provider_payment(
+def apply_provider_payment(  # noqa: PLR0911, PLR0912
     *, payment: ProviderPayment, provider_code: str | None = None
 ) -> Order | None:
     attempts = PaymentAttempt.objects.filter(provider_order_id=payment.provider_order_id)

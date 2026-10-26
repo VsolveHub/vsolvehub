@@ -51,7 +51,7 @@ def test_request_then_verify_start_otp_starts_work_and_materializes_tasks() -> N
         booking_id=booking.id, customer_id=booked.customer.id, expected_version=booking.version
     )
     assert issued.development_code is not None
-    assert len(issued.development_code) == 6  # noqa: PLR2004
+    assert len(issued.development_code) == 6
 
     started = verify_start_otp(
         booking_id=booking.id,

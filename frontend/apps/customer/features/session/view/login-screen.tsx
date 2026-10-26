@@ -95,7 +95,7 @@ export function LoginScreen() {
             New here?{" "}
             <a
               href="/catalog"
-              className="font-semibold text-info-text underline-offset-4 hover:underline"
+              className="py-3 font-semibold text-info-text underline-offset-4 hover:underline"
             >
               Browse services
             </a>{" "}

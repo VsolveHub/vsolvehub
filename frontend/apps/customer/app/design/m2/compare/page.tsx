@@ -9,7 +9,7 @@ import { SAMPLE_ESTIMATES } from "@/lib/design-gallery/sample";
  * would have to be invented. Nothing on this route reads a session, and the
  * screen itself fetches nothing — see `lib/design-gallery/sample`.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const metadata = { title: "Compare quotes — M2", robots: { index: false, follow: false } };
 
 export default function EstimatesComparePage() {
   return (

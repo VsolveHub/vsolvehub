@@ -16,7 +16,9 @@ import {
 import { announceHeartbeat, claimRecurringHeartbeat } from "../model/heartbeat-lease";
 import {
   clearStoredSession,
+  readStoredAreaId,
   readStoredSession,
+  writeStoredAreaId,
   writeStoredSession,
 } from "../model/stored-session";
 import { prepareBookingAlertsFromGesture } from "@/features/notifications/view/booking-alert-audio";
@@ -127,6 +129,20 @@ export function PresencePanel({
   const heartbeat = useHeartbeat();
 
   const [areaId, setAreaId] = useState("");
+  /**
+   * Restored once, after mount: reading storage during the initial render
+   * would disagree with the server pass, which has none. A field defaulting
+   * in a frame after paint is a non-issue — unlike `storedSession` above,
+   * nothing here is asserted as true before the Partner acts on it.
+   */
+  useEffect(() => {
+    const stored = readStoredAreaId();
+    if (stored) setAreaId((current) => current || stored);
+  }, []);
+  const chooseArea = useCallback((value: string) => {
+    setAreaId(value);
+    writeStoredAreaId(value);
+  }, []);
   const [openAreaModal, setOpenAreaModal] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [lastBeatAt, setLastBeatAt] = useState<number | null>(null);
@@ -341,7 +357,7 @@ export function PresencePanel({
           isRestoring={isRestoring}
           sessionId={sessionId}
           areaId={areaId}
-          setAreaId={setAreaId}
+          setAreaId={chooseArea}
           openAreaModal={openAreaModal}
           setOpenAreaModal={setOpenAreaModal}
           canGoOnline={canGoOnline}
@@ -356,7 +372,7 @@ export function PresencePanel({
           onOpenChange={setOpenAreaModal}
           areas={reference.serviceAreas}
           selectedId={areaId}
-          onSelect={setAreaId}
+          onSelect={chooseArea}
         />
       </>
     );
@@ -464,7 +480,7 @@ export function PresencePanel({
         onOpenChange={setOpenAreaModal}
         areas={reference.serviceAreas}
         selectedId={areaId}
-        onSelect={setAreaId}
+        onSelect={chooseArea}
       />
     </>
   );

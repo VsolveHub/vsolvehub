@@ -86,6 +86,12 @@ export interface OtpFormProps {
   verifyLabel?: string;
   /** Rendered under the form: consent text, a support link, a "why we ask" note. */
   footer?: ReactNode;
+  /**
+   * Digits a complete number has. When given, a part-typed number says how many
+   * are left, because "Send code" stays disabled until then and a disabled
+   * button on its own does not say why.
+   */
+  phoneDigits?: number;
   className?: string;
 }
 
@@ -119,10 +125,14 @@ export function OtpForm({
   description,
   verifyLabel = "Verify and continue",
   footer,
+  phoneDigits,
   className,
 }: OtpFormProps) {
   const Heading = `h${headingLevel}` as "h1" | "h2" | "h3";
   const codeInputRef = useRef<HTMLInputElement>(null);
+  const typedDigits = (phone.match(/\d/g) ?? []).length;
+  const digitsLeft =
+    phoneDigits !== undefined && typedDigits > 0 ? phoneDigits - typedDigits : 0;
 
   // Focus follows the step. Without this, someone using a keyboard or a screen
   // reader is left on the "Send code" button after the screen has moved on.
@@ -183,7 +193,11 @@ export function OtpForm({
           <Field
             required
             label="Mobile number"
-            description={`We will send a ${codeLength}-digit code by SMS.`}
+            description={
+              digitsLeft > 0
+                ? `${digitsLeft} more ${digitsLeft === 1 ? "digit" : "digits"} to go.`
+                : `We will send a ${codeLength}-digit code by SMS.`
+            }
             error={phoneError ?? undefined}
           >
             <Input
@@ -224,7 +238,10 @@ export function OtpForm({
                 {phone}
               </span>
             </p>
-            <Button variant="ghost" size="sm" className="px-0" onClick={onChangeNumber}>
+            {/* `px-0!`, not `px-0`: `cn` does not merge, so the size's own
+                `px-3.5` used to win and indent this under the line it belongs to.
+                `min-h-11` lifts the 36px `sm` button to a phone-sized target. */}
+            <Button variant="ghost" size="sm" className="min-h-11 px-0!" onClick={onChangeNumber}>
               Change number
             </Button>
           </div>
@@ -288,7 +305,7 @@ export function OtpForm({
 
           <div className="flex justify-center">
             {resendInSeconds > 0 ? (
-              <Button variant="ghost" size="sm" disabled>
+              <Button variant="ghost" size="sm" className="min-h-11" disabled>
                 <span aria-hidden>Resend code in {formatDuration(resendInSeconds * 1000)}</span>
                 <span className="sr-only">
                   Resend code, available in {resendInSeconds} seconds
@@ -298,6 +315,7 @@ export function OtpForm({
               <Button
                 variant="ghost"
                 size="sm"
+                className="min-h-11"
                 onClick={onResendCode}
                 loading={isRequesting}
                 loadingLabel="Sending a new code"

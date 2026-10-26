@@ -5,7 +5,7 @@ import { Zap, Wrench, Hammer, Wind, Droplets, Sparkles, ShieldAlert, Scissors, F
 export const dynamic = "force-static";
 
 export const metadata: Metadata = {
-  title: "Supported Trades & Services - V Solve Hub",
+  title: "Supported Trades & Services",
   description:
     "Explore high-demand trades on V Solve Hub including Electrician, Plumber, Carpenter, AC Technician, Cleaning, and Salon services.",
   alternates: { canonical: "/trades" },
@@ -126,15 +126,10 @@ export default function TradesPage() {
         </p>
 
         <div className="mt-8">
-          <Link href="/apply">
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-signal-500 via-amber-500 to-signal-400 px-8 py-3.5 text-sm font-extrabold text-[#00112e] shadow-lg shadow-signal-500/25 hover:from-signal-400 hover:to-amber-300 transition-all hover:scale-[1.02] active:scale-[0.98]"
-            >
+          <Link href="/apply" className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-signal-500 via-amber-500 to-signal-400 px-8 py-3.5 text-sm font-extrabold text-[#00112e] shadow-lg shadow-signal-500/25 hover:from-signal-400 hover:to-amber-300 transition-all hover:scale-[1.02] active:scale-[0.98]">
               <span>Apply for Any Trade</span>
               <ArrowRight className="h-4 w-4" />
-            </button>
-          </Link>
+            </Link>
         </div>
       </section>
 
@@ -194,15 +189,10 @@ export default function TradesPage() {
                     <span>Instant Booking Dispatch</span>
                   </span>
 
-                  <Link href="/apply">
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1.5 rounded-full bg-navy-900 hover:bg-navy-950 text-white px-4 py-2 text-xs font-bold transition-all"
-                    >
+                  <Link href="/apply" className="inline-flex items-center gap-1.5 rounded-full bg-navy-900 hover:bg-navy-950 text-white px-4 py-2 text-xs font-bold transition-all">
                       <span>Apply Now</span>
                       <ArrowRight className="h-3.5 w-3.5" />
-                    </button>
-                  </Link>
+                    </Link>
                 </div>
               </div>
             );
@@ -225,14 +215,9 @@ export default function TradesPage() {
             </p>
           </div>
 
-          <Link href="/apply/capabilities" className="shrink-0">
-            <button
-              type="button"
-              className="rounded-full bg-white px-6 py-3.5 text-sm font-extrabold text-[#00112e] hover:bg-navy-50 transition-colors shadow-lg"
-            >
+          <Link href="/apply/capabilities" className="inline-block shrink-0 rounded-full bg-white px-6 py-3.5 text-sm font-extrabold text-[#00112e] hover:bg-navy-50 transition-colors shadow-lg text-center">
               <span>Register Contractor Crew →</span>
-            </button>
-          </Link>
+            </Link>
         </div>
       </section>
     </main>

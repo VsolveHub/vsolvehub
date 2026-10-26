@@ -1,7 +1,8 @@
 "use client";
 
-import { Button, Card, ErrorState, Skeleton , formatDate} from "@vsolve/ui";
+import { Button, buttonStyles, Card, ErrorState, formatDate, Skeleton } from "@vsolve/ui";
 import { friendlyErrorMessage } from "@vsolve/query";
+import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
 import { Pictogram, type PictogramName } from "@/components/pictogram";
@@ -134,6 +135,16 @@ export function ProfilePanel() {
 
   return (
     <Page>
+      <div>
+        <Link
+          href="/me"
+          className="inline-flex min-h-11 items-center gap-1.5 text-xs font-semibold text-text-secondary hover:text-navy-900 transition-colors"
+        >
+          <ArrowLeft size={16} aria-hidden />
+          Back to Account
+        </Link>
+      </div>
+
       {/*
         The same navy identity band `/me` opens with, so the hop between the two
         does not read as a hop between two different apps.
@@ -259,21 +270,15 @@ export function ProfilePanel() {
       <Card className="p-5">
         <h2 className="text-base font-bold text-text">Manage</h2>
         <div className="mt-3 flex flex-col gap-2">
-          <Link href="/work/all" className="w-full">
-            <Button variant="outline" className="w-full justify-start">
+          <Link href="/work/all" className={buttonStyles({ variant: "outline", className: "w-full w-full justify-start" })}>
               My bookings
-            </Button>
-          </Link>
-          <Link href="/apply" className="w-full">
-            <Button variant="outline" className="w-full justify-start">
+            </Link>
+          <Link href="/apply" className={buttonStyles({ variant: "outline", className: "w-full w-full justify-start" })}>
               My application and documents
-            </Button>
-          </Link>
-          <Link href="/money" className="w-full">
-            <Button variant="outline" className="w-full justify-start">
+            </Link>
+          <Link href="/money" className={buttonStyles({ variant: "outline", className: "w-full w-full justify-start" })}>
               My money
-            </Button>
-          </Link>
+            </Link>
         </div>
       </Card>
     </Page>

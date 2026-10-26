@@ -5,7 +5,7 @@ import { LegalDocument, type LegalSection } from "@/features/legal/legal-documen
 import { grievanceOfficerLabel, SUPPORT } from "@/lib/support";
 
 export const metadata: Metadata = {
-  title: "Terms of Service | V Solve Hub",
+  title: "Terms of Service",
   description:
     "The terms for using V Solve Hub to book home services, projects, crews, rentals and stays with verified professionals.",
   alternates: { canonical: "/terms" },

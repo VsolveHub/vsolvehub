@@ -2,13 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ShieldCheck, Zap, LineChart, ArrowRight, Check } from "lucide-react";
 import { PARTNER_CATEGORIES } from "@vsolve/config";
-import { Button } from "@vsolve/ui";
+import { Button, buttonStyles } from "@vsolve/ui";
 import { Medallion } from "@/components/graphics";
 
 export const dynamic = "force-static";
 
 export const metadata: Metadata = {
-  title: "Start earning as a V Solve Hub partner",
+  title: "Start Earning as a Service Partner",
   description:
     "Join V Solve Hub as a Technician, Beauty & Wellness, Home Services or Pet Services professional. More categories coming soon.",
   alternates: { canonical: "/solutions" },
@@ -57,9 +57,7 @@ export default function SolutionsPage() {
                       Coming soon
                     </Button>
                   ) : (
-                    <Link href={`/login?category=${cat.id}`} className="mt-5">
-                      <Button className="w-full">Get started</Button>
-                    </Link>
+                    <Link href={`/login?category=${cat.id}`} className={buttonStyles({ className: "mt-5 w-full" })}>Get started</Link>
                   )}
                 </div>
               );
@@ -89,11 +87,9 @@ export default function SolutionsPage() {
                 </li>
               ))}
             </ul>
-            <Link href="/login" className="mt-8 inline-block">
-              <Button size="lg">
+            <Link href="/login" className={buttonStyles({ size: "lg", className: "mt-8" })}>
                 Start your application <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
+              </Link>
           </div>
           <div className="relative mx-auto grid h-64 w-full max-w-sm place-items-center overflow-hidden rounded-3xl bg-gradient-to-br from-brand-600 to-brand-900">
             <div className="pointer-events-none absolute -left-8 -top-8 h-40 w-40 rounded-full bg-accent-500/20 blur-2xl" />

@@ -20,7 +20,8 @@ export interface ActiveFilters {
 interface StayFiltersProps {
   activeFilters: ActiveFilters;
   onChangeFilter: (filters: ActiveFilters) => void;
-  count: number;
+  /** `null` while the list is still loading. */
+  count: number | null;
 }
 
 /** Paise range constants for the slider. 0 – ₹20,000/mo */
@@ -151,12 +152,14 @@ export function StayFilters({ activeFilters, onChangeFilter, count }: StayFilter
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-3">
         {/* Row 1: Categories + Amenity quick-filters */}
-        <div className="flex flex-wrap items-center gap-2">
+        {/* One swipeable row on phones: wrapped, a dozen categories became six rows of
+            chips above the first listing. Wraps as before from `sm` up. */}
+        <div className="-mx-4 flex flex-nowrap items-center gap-2 overflow-x-auto px-4 pb-1 no-scrollbar sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0 [&>*]:shrink-0 [&>button]:whitespace-nowrap">
           <button
             type="button"
             onClick={() => setCategory(undefined)}
             className={cn(
-              "inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition",
+              "inline-flex min-h-11 items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition",
               isAll
                 ? "bg-action text-white shadow-xs"
                 : "bg-surface border border-line text-text-secondary hover:border-line-strong hover:text-text",
@@ -168,7 +171,7 @@ export function StayFilters({ activeFilters, onChangeFilter, count }: StayFilter
 
           {isLoading ? (
             Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="h-[34px] w-24 rounded-full" />
+              <Skeleton key={i} className="h-11 w-24 rounded-full" />
             ))
           ) : (
             taxonomy.map((cat) => (
@@ -177,7 +180,7 @@ export function StayFilters({ activeFilters, onChangeFilter, count }: StayFilter
                 type="button"
                 onClick={() => setCategory(cat.slug)}
                 className={cn(
-                  "inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition",
+                  "inline-flex min-h-11 items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition",
                   activeFilters.categorySlug === cat.slug
                     ? "bg-action text-white shadow-xs"
                     : "bg-surface border border-line text-text-secondary hover:border-line-strong hover:text-text",
@@ -194,7 +197,7 @@ export function StayFilters({ activeFilters, onChangeFilter, count }: StayFilter
             type="button"
             onClick={toggleAc}
             className={cn(
-              "inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition",
+              "inline-flex min-h-11 items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition",
               activeFilters.ac
                 ? "bg-action text-white shadow-xs"
                 : "bg-surface border border-line text-text-secondary hover:border-line-strong hover:text-text",
@@ -208,7 +211,7 @@ export function StayFilters({ activeFilters, onChangeFilter, count }: StayFilter
             type="button"
             onClick={toggleFood}
             className={cn(
-              "inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition",
+              "inline-flex min-h-11 items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition",
               activeFilters.food
                 ? "bg-action text-white shadow-xs"
                 : "bg-surface border border-line text-text-secondary hover:border-line-strong hover:text-text",
@@ -231,7 +234,7 @@ export function StayFilters({ activeFilters, onChangeFilter, count }: StayFilter
                   })
             }
             className={cn(
-              "inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition",
+              "inline-flex min-h-11 items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition",
               hasPriceFilter
                 ? "bg-action text-white shadow-xs"
                 : "bg-surface border border-line text-text-secondary hover:border-line-strong hover:text-text",
@@ -262,7 +265,7 @@ export function StayFilters({ activeFilters, onChangeFilter, count }: StayFilter
                 })
               }
               className={cn(
-                "inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold transition",
+                "inline-flex min-h-11 items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold transition",
                 (activeFilters.tenantPreference ?? "") === value
                   ? "bg-navy-900 text-warm-0 shadow-xs"
                   : "bg-surface border border-line text-text-secondary hover:border-line-strong hover:text-text",
@@ -297,7 +300,7 @@ export function StayFilters({ activeFilters, onChangeFilter, count }: StayFilter
                 type="button"
                 onClick={() => setService(svc.slug)}
                 className={cn(
-                  "inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold transition",
+                  "inline-flex min-h-11 items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold transition",
                   activeFilters.serviceSlug === svc.slug
                     ? "bg-text text-surface shadow-xs"
                     : "bg-surface-sunken border border-line text-text-secondary hover:border-line-strong hover:text-text",
@@ -311,10 +314,15 @@ export function StayFilters({ activeFilters, onChangeFilter, count }: StayFilter
       </div>
 
       <div className="flex items-center justify-between text-xs text-text-secondary font-medium px-1">
-        <span>
-          Showing <strong className="text-text font-bold">{count}</strong> verified propert
-          {count === 1 ? "y" : "ies"}
-        </span>
+        {/* `null` while the list loads: "Showing 0" read as "nothing here". */}
+        {count === null ? (
+          <span>Loading stays…</span>
+        ) : (
+          <span>
+            Showing <strong className="text-text font-bold">{count}</strong> verified propert
+            {count === 1 ? "y" : "ies"}
+          </span>
+        )}
         <span>Transparent date quotes · Direct host communication</span>
       </div>
     </div>

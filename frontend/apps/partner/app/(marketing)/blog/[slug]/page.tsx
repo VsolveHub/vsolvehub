@@ -6,9 +6,11 @@ import { getAllPosts, getPost, formatBlogDate, readingMinutes } from "@/lib/blog
 import { Markdown } from "@/components/markdown";
 import { Faq, faqJsonLd } from "@/components/faq";
 
+import { SITE_URL } from "@/lib/site";
+
 export const dynamic = "force-static";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://vsolvehub.com";
+const siteUrl = SITE_URL;
 
 export function generateStaticParams() {
   return getAllPosts().map((p) => ({ slug: p.slug }));

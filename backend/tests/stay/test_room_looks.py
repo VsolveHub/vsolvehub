@@ -127,7 +127,7 @@ def test_look_names_are_unique_within_a_type(bhk, world):
 def test_add_room_reusing_a_look(bhk, world):
     room = add_room(unit=bhk["unit"], host=world["host"], number="106", look_id=bhk["balcony"].id)
     assert room.look_id == bhk["balcony"].id
-    assert RoomLook.objects.filter(unit=bhk["unit"]).count() == 2  # noqa: PLR2004
+    assert RoomLook.objects.filter(unit=bhk["unit"]).count() == 2
 
 
 @pytest.mark.django_db
@@ -141,7 +141,7 @@ def test_add_room_with_a_new_look_and_photos(bhk, world):
     )
     look = room.look
     assert look.name == "Corner room"
-    assert look.display_order == 2  # noqa: PLR2004
+    assert look.display_order == 2
     assert list(look.media.values_list("url", flat=True)) == [PHOTO + "?corner"]
 
 

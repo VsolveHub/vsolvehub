@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.79.0)
- * Checksum: 7245ed42908e0582
+ * Checksum: 73fe1d1f8a00ec30
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -4770,6 +4770,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ops/stories/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List all safety stories (Operations)
+         * @description Filter stories by status: active, expired, draft, or all.
+         */
+        get: operations["ops_stories_list"];
+        put?: never;
+        /**
+         * Upload and publish a safety story
+         * @description Operations/Admin endpoint: list, filter, and upload safety stories.
+         */
+        post: operations["ops_stories_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/stories/{story_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Retrieve a safety story
+         * @description Operations/Admin endpoint: retrieve, update, and delete a safety story.
+         */
+        get: operations["ops_stories_retrieve"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a safety story
+         * @description Operations/Admin endpoint: retrieve, update, and delete a safety story.
+         */
+        delete: operations["ops_stories_destroy"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a safety story
+         * @description Operations/Admin endpoint: retrieve, update, and delete a safety story.
+         */
+        patch: operations["ops_stories_partial_update"];
+        trace?: never;
+    };
     "/api/v1/ops/vendor-subscription-plans": {
         parameters: {
             query?: never;
@@ -7088,6 +7140,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/promo-banners/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Display-only promotional banners for service pages. Never read by pricing. */
+        get: operations["promo_banners_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/proposals/": {
         parameters: {
             query?: never;
@@ -7919,6 +7988,26 @@ export interface paths {
         put?: never;
         /** @description Answer a question a professional asked about this request. Since 1.26.0 clarification runs both ways, so this route answers **the vendor's** questions only: a Customer's own question is answered by the vendor at `POST /api/v1/partner/questions/{question_id}/answer/`. */
         post: operations["m2_requirement_question_answer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety-stories/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List active safety stories
+         * @description Returns all active, published safety stories that have not expired.
+         */
+        get: operations["safety_stories_list"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -11847,6 +11936,12 @@ export interface components {
          */
         MaterialFulfilmentModeEnum: "NOT_APPLICABLE" | "CUSTOMER_PROCURES" | "PARTNER_TURNKEY";
         /**
+         * @description * `IMAGE` - Image
+         *     * `VIDEO` - Video
+         * @enum {string}
+         */
+        MediaTypeEnum: "IMAGE" | "VIDEO";
+        /**
          * @description * `IN_PERSON` - In person
          *     * `PHONE` - Phone call
          *     * `VIDEO` - Video call
@@ -12645,6 +12740,42 @@ export interface components {
                 [key: string]: unknown;
             }[];
             total_rows_count: number;
+        };
+        OpsSafetyStory: {
+            /** Format: uuid */
+            readonly id: string;
+            title?: string;
+            caption?: string;
+            readonly media_type: components["schemas"]["MediaTypeEnum"];
+            readonly media_url: string;
+            readonly original_name: string;
+            readonly content_type: string;
+            readonly size_bytes: number;
+            display_order?: number;
+            is_published?: boolean;
+            readonly is_active: boolean;
+            readonly created_by_name: string;
+            /** Format: date-time */
+            readonly published_at: string;
+            /** Format: date-time */
+            readonly expires_at: string;
+            readonly time_remaining_seconds: number;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        OpsSafetyStoryCreateRequest: {
+            /** Format: binary */
+            file: string;
+            /** @default  */
+            title: string;
+            /** @default  */
+            caption: string;
+            /** @default 0 */
+            display_order: number;
+            /** @default true */
+            is_published: boolean;
         };
         OpsStayEnquiryPage: {
             /** Format: uri */
@@ -13865,6 +13996,12 @@ export interface components {
             /** @description Allow-list of columns */
             columns_json?: unknown;
         };
+        PatchedOpsSafetyStoryUpdateRequest: {
+            title?: string;
+            caption?: string;
+            display_order?: number;
+            is_published?: boolean;
+        };
         PatchedOpsUpdateStaySubscriptionPlanRequest: {
             name?: string;
             /** Format: int64 */
@@ -14667,6 +14804,16 @@ export interface components {
          * @enum {string}
          */
         ProjectTransferStatusEnum: "PROPOSED" | "ACCEPTED" | "DECLINED" | "EXPIRED";
+        PromoBanner: {
+            /** Format: uuid */
+            readonly id: string;
+            title: string;
+            subtitle?: string;
+            terms?: string;
+            /** Format: uri */
+            image_url?: string;
+            readonly category_slug: string | null;
+        };
         Property: {
             /** Format: uuid */
             readonly id: string;
@@ -15270,6 +15417,21 @@ export interface components {
             period_start: string;
             /** Format: date-time */
             period_end: string;
+        };
+        PublicSafetyStory: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly title: string;
+            readonly caption: string;
+            readonly media_type: components["schemas"]["MediaTypeEnum"];
+            readonly media_url: string;
+            readonly content_type: string;
+            readonly display_order: number;
+            /** Format: date-time */
+            readonly published_at: string;
+            /** Format: date-time */
+            readonly expires_at: string;
+            readonly time_remaining_seconds: number;
         };
         PublishedCancellationBand: {
             readonly code: string;
@@ -29395,6 +29557,118 @@ export interface operations {
             };
         };
     };
+    ops_stories_list: {
+        parameters: {
+            query?: {
+                /** @description Status filter: all, active, expired, draft */
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpsSafetyStory"][];
+                };
+            };
+        };
+    };
+    ops_stories_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["OpsSafetyStoryCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpsSafetyStory"];
+                };
+            };
+        };
+    };
+    ops_stories_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                story_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpsSafetyStory"];
+                };
+            };
+        };
+    };
+    ops_stories_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                story_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ops_stories_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                story_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedOpsSafetyStoryUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedOpsSafetyStoryUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpsSafetyStory"];
+                };
+            };
+        };
+    };
     ops_vendor_subscription_plans_retrieve: {
         parameters: {
             query?: never;
@@ -34550,6 +34824,28 @@ export interface operations {
             };
         };
     };
+    promo_banners_list: {
+        parameters: {
+            query?: {
+                /** @description Category slug; adds that category's banners to the site-wide ones. */
+                category?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromoBanner"][];
+                };
+            };
+        };
+    };
     m2_proposal_list: {
         parameters: {
             query?: {
@@ -36847,6 +37143,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    safety_stories_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicSafetyStory"][];
                 };
             };
         };

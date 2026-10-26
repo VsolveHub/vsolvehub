@@ -1,17 +1,23 @@
+from typing import cast
 from unittest.mock import patch
 
 from rest_framework import status
+from rest_framework.request import Request
 from rest_framework.test import APITestCase
 
 from apps.identity.models import Role, User, UserRole
+from apps.ops_reports.exports import _pdf_total_label_and_amount
+from apps.ops_reports.reports import SettlementReport, get_report
 
 from .models import OpsReportSettings
 
 
 class OpsReportsTests(APITestCase):
-    def setUp(self):
-        def mock_has_role(*, request, role_code):
-            return UserRole.objects.filter(user=request.user, role__code=role_code).exists()
+    def setUp(self) -> None:
+        def mock_has_role(*, request: Request, role_code: str) -> bool:
+            return UserRole.objects.filter(
+                user=cast(User, request.user), role__code=role_code
+            ).exists()
 
         self.patcher = patch(
             "apps.partners.permissions.has_active_session_role", side_effect=mock_has_role
@@ -31,10 +37,10 @@ class OpsReportsTests(APITestCase):
 
         OpsReportSettings.objects.create(tds_rate_percent=1.0)
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         self.patcher.stop()
 
-    def test_catalog_access(self):
+    def test_catalog_access(self) -> None:
         self.client.force_authenticate(user=self.normal_user)
         response = self.client.get("/api/v1/ops/reports/")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
@@ -44,19 +50,19 @@ class OpsReportsTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(len(response.data) > 0)
 
-    def test_preview_report(self):
+    def test_preview_report(self) -> None:
         self.client.force_authenticate(user=self.ops_user)
         response = self.client.get("/api/v1/ops/reports/bookings/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("rows", response.data)
 
-    def test_export_report_csv(self):
+    def test_export_report_csv(self) -> None:
         self.client.force_authenticate(user=self.ops_user)
         response = self.client.get("/api/v1/ops/reports/payments.csv")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response["Content-Type"], "text/csv")
 
-    def test_export_report_xlsx(self):
+    def test_export_report_xlsx(self) -> None:
         self.client.force_authenticate(user=self.ops_user)
         response = self.client.get("/api/v1/ops/reports/settlement.xlsx")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -65,35 +71,31 @@ class OpsReportsTests(APITestCase):
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
-    def test_export_report_pdf(self):
+    def test_export_report_pdf(self) -> None:
         self.client.force_authenticate(user=self.ops_user)
         response = self.client.get("/api/v1/ops/reports/wallet.pdf")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response["Content-Type"], "application/pdf")
 
-    def test_presets_url(self):
+    def test_presets_url(self) -> None:
         self.client.force_authenticate(user=self.ops_user)
         response = self.client.get("/api/v1/ops/reports/presets/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-    def test_dashboard_kinds(self):
+    def test_dashboard_kinds(self) -> None:
         self.client.force_authenticate(user=self.ops_user)
         for kind in ["overview", "categories"]:
             response = self.client.get(f"/api/v1/ops/dashboards/{kind}/")
             self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-    def test_settlement_execute_does_not_mutate_shared_columns(self):
-        from apps.ops_reports.reports import SettlementReport, get_report
-
+    def test_settlement_execute_does_not_mutate_shared_columns(self) -> None:
         report = get_report("settlement")
         original = list(report.columns)
         report.execute({})
         self.assertEqual(list(report.columns), original)
         self.assertIsInstance(report, SettlementReport)
 
-    def test_pdf_footer_prefers_net_paise_over_row_count(self):
-        from apps.ops_reports.exports import _pdf_total_label_and_amount
-
+    def test_pdf_footer_prefers_net_paise_over_row_count(self) -> None:
         label, amount = _pdf_total_label_and_amount(
             ["id", "net_paise", "tds_paise"],
             [{"id": "1", "net_paise": 10000, "tds_paise": 100}],

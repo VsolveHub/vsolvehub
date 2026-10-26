@@ -3,7 +3,10 @@ import { FileText } from "lucide-react";
 import { LegalPage } from "@/components/legal-page";
 
 export const dynamic = "force-static";
-export const metadata: Metadata = { title: "Terms of Service" };
+export const metadata: Metadata = {
+  title: "Terms of Service",
+  description: "The terms that apply to service partners who join and take work on V Solve Hub.",
+};
 
 export default function TermsPage() {
   return (

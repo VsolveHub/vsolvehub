@@ -96,7 +96,7 @@ const SELECTED_DAY_ID =
 const SELECTED_WINDOW_ID =
   GALLERY_WINDOWS.find((slot) => slot.label === OPEN_VISIT.window)?.id ?? null;
 
-export const metadata = { robots: { index: false, follow: false } };
+export const metadata = { title: "Pick a slot — M2", robots: { index: false, follow: false } };
 
 export default function SlotSheetGalleryPage() {
 

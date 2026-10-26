@@ -11452,6 +11452,126 @@ paths:
               schema:
                 $ref: '#/components/schemas/StayReservation'
           description: ''
+  /api/v1/ops/stories/:
+    get:
+      operationId: ops_stories_list
+      description: 'Filter stories by status: active, expired, draft, or all.'
+      summary: List all safety stories (Operations)
+      parameters:
+      - in: query
+        name: status
+        schema:
+          type: string
+          default: all
+        description: 'Status filter: all, active, expired, draft'
+      tags:
+      - operations-safety-stories
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OpsSafetyStory'
+          description: ''
+    post:
+      operationId: ops_stories_create
+      description: 'Operations/Admin endpoint: list, filter, and upload safety stories.'
+      summary: Upload and publish a safety story
+      tags:
+      - operations-safety-stories
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OpsSafetyStoryCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsSafetyStory'
+          description: ''
+  /api/v1/ops/stories/{story_id}/:
+    get:
+      operationId: ops_stories_retrieve
+      description: 'Operations/Admin endpoint: retrieve, update, and delete a safety
+        story.'
+      summary: Retrieve a safety story
+      parameters:
+      - in: path
+        name: story_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - operations-safety-stories
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsSafetyStory'
+          description: ''
+    patch:
+      operationId: ops_stories_partial_update
+      description: 'Operations/Admin endpoint: retrieve, update, and delete a safety
+        story.'
+      summary: Update a safety story
+      parameters:
+      - in: path
+        name: story_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - operations-safety-stories
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOpsSafetyStoryUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedOpsSafetyStoryUpdateRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsSafetyStory'
+          description: ''
+    delete:
+      operationId: ops_stories_destroy
+      description: 'Operations/Admin endpoint: retrieve, update, and delete a safety
+        story.'
+      summary: Delete a safety story
+      parameters:
+      - in: path
+        name: story_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - operations-safety-stories
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/v1/ops/vendor-subscription-plans:
     get:
       operationId: ops_vendor_subscription_plans_retrieve
@@ -16926,6 +17046,31 @@ paths:
           description: '`m2_amendment_not_actionable` when the transfer is decided,
             expired or the unfinished work changed after it was priced; `m2_stage_disputed`
             when a milestone was disputed in between.'
+  /api/v1/promo-banners/:
+    get:
+      operationId: promo_banners_list
+      description: Display-only promotional banners for service pages. Never read
+        by pricing.
+      parameters:
+      - in: query
+        name: category
+        schema:
+          type: string
+        description: Category slug; adds that category's banners to the site-wide
+          ones.
+      tags:
+      - Catalog
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PromoBanner'
+          description: ''
   /api/v1/proposals/:
     get:
       operationId: m2_proposal_list
@@ -19517,6 +19662,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/safety-stories/:
+    get:
+      operationId: safety_stories_list
+      description: Returns all active, published safety stories that have not expired.
+      summary: List active safety stories
+      tags:
+      - safety-stories
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PublicSafetyStory'
           description: ''
   /api/v1/scope-amendments/{amendment_id}/approve/:
     post:
@@ -29165,6 +29329,14 @@ components:
         * `NOT_APPLICABLE` - Not applicable
         * `CUSTOMER_PROCURES` - Customer procures
         * `PARTNER_TURNKEY` - Partner supplies turnkey
+    MediaTypeEnum:
+      enum:
+      - IMAGE
+      - VIDEO
+      type: string
+      description: |-
+        * `IMAGE` - Image
+        * `VIDEO` - Video
     Mode074Enum:
       enum:
       - IN_PERSON
@@ -31224,6 +31396,104 @@ components:
       - rows
       - total_rows_count
       - totals
+    OpsSafetyStory:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        title:
+          type: string
+          maxLength: 120
+        caption:
+          type: string
+          maxLength: 280
+        media_type:
+          allOf:
+          - $ref: '#/components/schemas/MediaTypeEnum'
+          readOnly: true
+        media_url:
+          type: string
+          readOnly: true
+        original_name:
+          type: string
+          readOnly: true
+        content_type:
+          type: string
+          readOnly: true
+        size_bytes:
+          type: integer
+          readOnly: true
+        display_order:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        is_published:
+          type: boolean
+        is_active:
+          type: boolean
+          readOnly: true
+        created_by_name:
+          type: string
+          readOnly: true
+        published_at:
+          type: string
+          format: date-time
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+        time_remaining_seconds:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - content_type
+      - created_at
+      - created_by_name
+      - expires_at
+      - id
+      - is_active
+      - media_type
+      - media_url
+      - original_name
+      - published_at
+      - size_bytes
+      - time_remaining_seconds
+      - updated_at
+    OpsSafetyStoryCreateRequest:
+      type: object
+      properties:
+        file:
+          type: string
+          format: binary
+          writeOnly: true
+        title:
+          type: string
+          default: ''
+          maxLength: 120
+        caption:
+          type: string
+          default: ''
+          maxLength: 280
+        display_order:
+          type: integer
+          minimum: 0
+          default: 0
+        is_published:
+          type: boolean
+          default: true
+      required:
+      - file
     OpsStayEnquiryPage:
       type: object
       properties:
@@ -34474,6 +34744,20 @@ components:
         filters_json: {}
         columns_json:
           description: Allow-list of columns
+    PatchedOpsSafetyStoryUpdateRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 120
+        caption:
+          type: string
+          maxLength: 280
+        display_order:
+          type: integer
+          minimum: 0
+        is_published:
+          type: boolean
     PatchedOpsUpdateStaySubscriptionPlanRequest:
       type: object
       properties:
@@ -36404,6 +36688,34 @@ components:
         * `ACCEPTED` - Accepted and applied
         * `DECLINED` - Declined by the Customer
         * `EXPIRED` - Not answered in time
+    PromoBanner:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        title:
+          type: string
+          maxLength: 80
+        subtitle:
+          type: string
+          maxLength: 160
+        terms:
+          type: string
+          maxLength: 160
+        image_url:
+          type: string
+          format: uri
+          maxLength: 500
+        category_slug:
+          type: string
+          readOnly: true
+          nullable: true
+      required:
+      - category_slug
+      - id
+      - title
     Property:
       type: object
       properties:
@@ -37978,6 +38290,54 @@ components:
       - period_end
       - period_start
       - reference
+    PublicSafetyStory:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+        caption:
+          type: string
+          readOnly: true
+        media_type:
+          allOf:
+          - $ref: '#/components/schemas/MediaTypeEnum'
+          readOnly: true
+        media_url:
+          type: string
+          readOnly: true
+        content_type:
+          type: string
+          readOnly: true
+        display_order:
+          type: integer
+          readOnly: true
+        published_at:
+          type: string
+          format: date-time
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+        time_remaining_seconds:
+          type: integer
+          readOnly: true
+      required:
+      - caption
+      - content_type
+      - display_order
+      - expires_at
+      - id
+      - media_type
+      - media_url
+      - published_at
+      - time_remaining_seconds
+      - title
     PublishedCancellationBand:
       type: object
       properties:

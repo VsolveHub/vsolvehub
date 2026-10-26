@@ -109,7 +109,7 @@ export function transportStepLabel(status: string | undefined): string {
     case "DELIVERED":
       return "Delivered";
     case "DECLINED":
-      return "The owner can't deliver this one";
+      return "The owner can’t deliver this one";
     case "EXPIRED":
       return "Delivery request expired";
     case "CANCELLED":

@@ -1,7 +1,5 @@
 """Unit and API tests for V Coins engine, burn math, and unlock triggers (ADR-0010)."""
 
-# ruff: noqa: PLR2004
-
 from datetime import timedelta
 from http import HTTPStatus
 

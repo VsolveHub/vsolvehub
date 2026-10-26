@@ -1,7 +1,5 @@
 """What a customer sees while a referral reward is on its way (contract 1.72.0)."""
 
-# ruff: noqa: PLR2004
-
 from datetime import timedelta
 
 import pytest

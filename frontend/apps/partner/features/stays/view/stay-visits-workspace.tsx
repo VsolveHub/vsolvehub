@@ -189,7 +189,7 @@ export function PartnerStayVisitsWorkspace() {
                           (visit.status === "REQUESTED" || visit.status === "ACCEPTED") ? (
                             <a
                               href={`tel:${visit.customer_phone}`}
-                              className="inline-flex h-9 items-center gap-2 rounded-control border border-line px-3.5 text-xs font-bold text-text hover:border-line-strong"
+                              className="inline-flex min-h-11 items-center gap-2 rounded-control border border-line px-4 text-xs font-bold text-text hover:border-line-strong"
                             >
                               <Phone className="size-4" aria-hidden />
                               Call

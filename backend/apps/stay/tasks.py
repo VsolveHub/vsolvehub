@@ -19,5 +19,3 @@ def expire_stale_stay_visits() -> int:
 def process_stay_subscription_expiries() -> int:
     """Move ACTIVE -> GRACE, and GRACE -> EXPIRED (pausing live properties)."""
     return expire_stay_subscriptions()
-
-

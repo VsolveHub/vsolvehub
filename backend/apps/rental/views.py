@@ -17,7 +17,13 @@ from apps.partners.models import PartnerProfile
 from apps.partners.permissions import IsOperationsUser, IsPartnerUser
 from apps.rental import transport as transport_service
 from apps.rental.exceptions import RentalStateApiError
-from apps.rental.models import RentalAsset, RentalBooking, RentalDeposit
+from apps.rental.models import (
+    RentalAsset,
+    RentalBooking,
+    RentalDeposit,
+    RentalDisputePhoto,
+    RentalPhotoUpload,
+)
 from apps.rental.pickup_hours import (
     DayHours,
     PickupHoursError,
@@ -351,6 +357,7 @@ class PartnerRentalPhotoUploadView(APIView):
             raise ValidationError({"file": "Attach a photo file."})
         partner = _partner(request.user)
         kind = str(request.data.get("kind") or "").strip().lower()
+        row: RentalDisputePhoto | RentalPhotoUpload
         try:
             if kind == "dispute":
                 row = store_rental_dispute_photo(partner=partner, upload=upload)

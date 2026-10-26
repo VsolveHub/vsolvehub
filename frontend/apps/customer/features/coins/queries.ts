@@ -16,9 +16,11 @@ export const coinsKeys = {
   transactions: ["customer", "coins", "transactions"] as const,
 };
 
-export function useCustomerCoins() {
+/** `enabled: false` for a page a guest can see — the endpoint is customer-only. */
+export function useCustomerCoins({ enabled = true }: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: coinsKeys.summary,
+    enabled,
     queryFn: () =>
       request(() =>
         getApiClient().GET("/api/v1/customer/coins/"),

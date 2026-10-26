@@ -6,7 +6,7 @@ import { Faq, faqJsonLd } from "@/components/faq";
 export const dynamic = "force-static";
 
 export const metadata: Metadata = {
-  title: "Partner Payout Rates & Commission Structure - V Solve Hub",
+  title: "Partner Payout Rates & Commission",
   description:
     "Transparent partner payout rates, weekly settlement schedule, 0% joining fees, and fair platform commission structure on V Solve Hub.",
   alternates: { canonical: "/pricing" },
@@ -99,15 +99,10 @@ export default function PricingPage() {
         </p>
 
         <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-          <Link href="/apply">
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-signal-500 via-amber-500 to-signal-400 px-8 py-3.5 text-sm font-extrabold text-[#00112e] shadow-lg shadow-signal-500/25 hover:from-signal-400 hover:to-amber-300 transition-all hover:scale-[1.02] active:scale-[0.98]"
-            >
+          <Link href="/apply" className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-signal-500 via-amber-500 to-signal-400 px-8 py-3.5 text-sm font-extrabold text-[#00112e] shadow-lg shadow-signal-500/25 hover:from-signal-400 hover:to-amber-300 transition-all hover:scale-[1.02] active:scale-[0.98]">
               <span>Join as a Partner</span>
               <ArrowRight className="h-4 w-4" />
-            </button>
-          </Link>
+            </Link>
         </div>
       </section>
 
@@ -150,14 +145,9 @@ export default function PricingPage() {
               </div>
 
               <div className="mt-8 pt-4 border-t border-line">
-                <Link href="/apply">
-                  <button
-                    type="button"
-                    className="w-full rounded-full bg-surface-sunken hover:bg-navy-900 hover:text-white border border-line-strong py-2.5 text-xs font-bold text-navy-900 transition-all shadow-xs"
-                  >
+                <Link href="/apply" className="block w-full rounded-full bg-surface-sunken hover:bg-navy-900 hover:text-white border border-line-strong py-2.5 text-xs font-bold text-navy-900 transition-all shadow-xs text-center">
                     Apply for {tier.trade} →
-                  </button>
-                </Link>
+                  </Link>
               </div>
             </div>
           ))}

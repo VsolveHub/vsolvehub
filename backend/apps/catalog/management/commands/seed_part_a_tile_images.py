@@ -12,7 +12,7 @@ class Command(BaseCommand):
     Sets image_url to /catalog/tiles/<slug>.png only if the field is currently blank.
     """)
 
-    def handle(self, *args, **options):
+    def handle(self, *args: object, **options: object) -> None:
         # Define target categories and their specific subcategories (or None for all)
         targets = {
             "career-jobs": None,  # None means all subcategories

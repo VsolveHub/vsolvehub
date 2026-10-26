@@ -230,7 +230,7 @@ function ProfessionalBlock({
     unit !== null &&
     (unit.professional || unit.status === "HELD" || unit.status === "PAYMENT_PENDING")
   ) {
-    return <MockProfessionalCard serviceName={unit.lines[0]?.label} />;
+    return <MockProfessionalCard professional={unit.professional} />;
   }
 
   if (partnerDisplayName) {

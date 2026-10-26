@@ -10,6 +10,8 @@ from django.utils import timezone
 from apps.commerce.models import PaymentAttempt, Refund
 from apps.commerce.services import reconcile_payment_attempt, reconcile_refund
 from apps.commerce.services.loyalty_funding import release_checkout_funding
+from apps.rental.services import release_booking_for_expired_payment
+from apps.stay.services import release_reservation_for_expired_payment
 
 
 @shared_task
@@ -114,12 +116,8 @@ def expire_abandoned_payment_attempts() -> int:
             attempt.version += 1
             attempt.save(update_fields=("status", "failure_code", "version", "updated_at"))
             if attempt.purpose == PaymentAttempt.Purpose.A7_RENTAL_BOOKING:
-                from apps.rental.services import release_booking_for_expired_payment
-
                 release_booking_for_expired_payment(payment_attempt_id=attempt.id)
             elif attempt.purpose == PaymentAttempt.Purpose.A9_STAY_RESERVATION:
-                from apps.stay.services import release_reservation_for_expired_payment
-
                 release_reservation_for_expired_payment(payment_attempt_id=attempt.id)
             expired += 1
     return expired

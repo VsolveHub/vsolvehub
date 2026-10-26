@@ -1,7 +1,7 @@
 "use client";
 
 import { useServerCountdown } from "@vsolve/query";
-import { Button } from "@vsolve/ui";
+import { buttonStyles } from "@vsolve/ui";
 import Link from "next/link";
 
 /**
@@ -87,12 +87,8 @@ export function RequirementSent({
       )}
 
       <div className="mt-2 flex flex-wrap items-center gap-3">
-        <Link href={requestHref}>
-          <Button>Follow this request</Button>
-        </Link>
-        <Link href={browseHref}>
-          <Button variant="secondary">Back to services</Button>
-        </Link>
+        <Link href={requestHref} className={buttonStyles()}>Follow this request</Link>
+        <Link href={browseHref} className={buttonStyles({ variant: "secondary" })}>Back to services</Link>
       </div>
 
       <p className="text-xs text-text-secondary">
