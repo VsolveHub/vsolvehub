@@ -246,6 +246,9 @@ export function SiteHeader() {
         onOpenChange={handleOpenChange}
         title="Log in to V Solve Hub"
         description="Verify your mobile number to view bookings and checkout"
+        // Firebase phone login can raise a reCAPTCHA picture challenge, which
+        // has to sit above this dialog to be solved.
+        topLayer={false}
       >
         <div className="py-2 flex flex-col gap-4">
           <Logo className="h-8 w-auto self-start" />

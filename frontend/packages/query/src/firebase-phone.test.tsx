@@ -7,6 +7,7 @@ import { RecaptchaVerifier } from "firebase/auth";
 import {
   formatToE164,
   mapFirebaseError,
+  startFirebasePhoneVerification,
   useFirebasePhoneFlow,
 } from "./firebase-phone";
 import type { OtpFlowOptions } from "./otp-flow";
@@ -16,6 +17,27 @@ const mockSignOut = vi.fn().mockResolvedValue(undefined);
 const mockSignInWithPhoneNumber = vi.fn();
 const mockRecaptchaClear = vi.fn();
 let recaptchaInstanceCount = 0;
+/** The element each RecaptchaVerifier was given, in creation order. */
+let recaptchaHosts: HTMLElement[] = [];
+
+/**
+ * Sends the way real reCAPTCHA does: an element can host one widget for the
+ * life of the page. Emptying it or clearing its verifier does not free it.
+ */
+function sendLikeRecaptcha(firstSend: () => Promise<unknown>) {
+  const rendered = new WeakSet<HTMLElement>();
+  let sends = 0;
+  mockSignInWithPhoneNumber.mockImplementation(
+    async (_auth: unknown, _phone: string, verifier: { host: HTMLElement }) => {
+      if (rendered.has(verifier.host)) {
+        throw new Error("reCAPTCHA has already been rendered in this element");
+      }
+      rendered.add(verifier.host);
+      sends += 1;
+      return sends === 1 ? firstSend() : { confirm: vi.fn() };
+    },
+  );
+}
 
 vi.mock("firebase/app", () => ({
   initializeApp: vi.fn(() => ({})),
@@ -30,8 +52,11 @@ vi.mock("firebase/app-check", () => ({
 
 vi.mock("firebase/auth", () => {
   class MockRecaptchaVerifier {
-    constructor() {
+    host: HTMLElement;
+    constructor(_auth: unknown, host: HTMLElement) {
       recaptchaInstanceCount += 1;
+      recaptchaHosts.push(host);
+      this.host = host;
     }
     clear = mockRecaptchaClear;
     render = vi.fn().mockResolvedValue(1);
@@ -137,7 +162,9 @@ function renderFlow(stub: Stub, options: OtpFlowOptions = {}) {
 describe("Firebase Phone Auth", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSignInWithPhoneNumber.mockReset();
     recaptchaInstanceCount = 0;
+    recaptchaHosts = [];
     process.env.NEXT_PUBLIC_FIREBASE_API_KEY = "test-api-key";
     process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN = "test.firebaseapp.com";
     process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID = "test-project";
@@ -476,6 +503,102 @@ describe("Firebase Phone Auth", () => {
     expect(result.current.phase).toBe("code");
   });
 
+  it("can send again after a failed send without reloading the page", async () => {
+    // The production bug: the retry rendered into the element the first try had
+    // used, reCAPTCHA refused, and the code-less error showed as "Something went
+    // wrong" on every attempt until a reload.
+    const stub = createStub();
+    stub.queue("/api/v1/auth/firebase/precheck/", () => Promise.resolve(ok(null, 204)));
+    sendLikeRecaptcha(() => Promise.reject({ code: "auth/too-many-requests" }));
+
+    const { result } = renderFlow(stub);
+    act(() => {
+      result.current.onPhoneChange("9876543210");
+    });
+
+    await act(async () => {
+      result.current.onRequestCode();
+    });
+    expect(result.current.failure?.kind).toBe("rate_limited");
+
+    await act(async () => {
+      result.current.onRequestCode();
+    });
+
+    expect(result.current.failure).toBeNull();
+    expect(result.current.phase).toBe("code");
+    expect(recaptchaHosts).toHaveLength(2);
+    expect(recaptchaHosts[1]).not.toBe(recaptchaHosts[0]);
+    // The discarded widget's element leaves the page with it.
+    expect(recaptchaHosts[0]?.isConnected).toBe(false);
+    expect(recaptchaHosts[1]?.isConnected).toBe(true);
+  });
+
+  it("can send again after the dialog is closed and reopened", async () => {
+    const stub = createStub();
+    stub.queue("/api/v1/auth/firebase/precheck/", () => Promise.resolve(ok(null, 204)));
+    // A send that never settles: a picture challenge nobody solved.
+    sendLikeRecaptcha(() => new Promise(() => {}));
+
+    const { result } = renderFlow(stub);
+    act(() => {
+      result.current.onPhoneChange("9876543210");
+    });
+    await act(async () => {
+      result.current.onRequestCode();
+    });
+    await vi.waitFor(() => expect(recaptchaHosts).toHaveLength(1));
+    expect(result.current.isRequesting).toBe(true);
+
+    // Closing the login dialog resets the flow; the stuck send is abandoned.
+    act(() => {
+      result.current.reset();
+      result.current.onPhoneChange("9876543210");
+    });
+    expect(result.current.isRequesting).toBe(false);
+    expect(result.current.canRequest).toBe(true);
+
+    await act(async () => {
+      result.current.onRequestCode();
+    });
+
+    expect(result.current.failure).toBeNull();
+    expect(result.current.phase).toBe("code");
+    expect(recaptchaHosts[1]).not.toBe(recaptchaHosts[0]);
+    expect(recaptchaHosts[0]?.isConnected).toBe(false);
+  });
+
+  it("keeps the verifier for Resend after a successful send", async () => {
+    const stub = createStub();
+    stub.queue("/api/v1/auth/firebase/precheck/", () => Promise.resolve(ok(null, 204)));
+    mockSignInWithPhoneNumber.mockResolvedValue({ confirm: vi.fn() });
+
+    const { result } = renderFlow(stub);
+    act(() => {
+      result.current.onPhoneChange("9876543210");
+    });
+    await act(async () => {
+      result.current.onRequestCode();
+    });
+
+    expect(recaptchaInstanceCount).toBe(1);
+    expect(recaptchaHosts[0]?.isConnected).toBe(true);
+    expect(mockRecaptchaClear).not.toHaveBeenCalled();
+  });
+
+  it("gives every Operations step-up its own reCAPTCHA element", async () => {
+    sendLikeRecaptcha(() => Promise.resolve({ confirm: vi.fn() }));
+
+    await startFirebasePhoneVerification("9876543210");
+    await startFirebasePhoneVerification("9876543210");
+
+    expect(mockSignInWithPhoneNumber).toHaveBeenCalledTimes(2);
+    expect(recaptchaHosts).toHaveLength(2);
+    expect(recaptchaHosts[1]).not.toBe(recaptchaHosts[0]);
+    // Only the send needs reCAPTCHA, so neither element outlives it.
+    expect(recaptchaHosts.every((host) => !host.isConnected)).toBe(true);
+  });
+
   it("cleans up RecaptchaVerifier on unmount", async () => {
     const stub = createStub();
     stub.queue("/api/v1/auth/firebase/precheck/", () => Promise.resolve(ok(null, 204)));
@@ -558,34 +681,31 @@ describe("Firebase Phone Auth", () => {
     expect(stub.calls.filter((c) => c.path === "/api/v1/auth/firebase/verify/").length).toBe(1);
   });
 
-  it("ensures no phone number, OTP, or id_token is logged outside development", () => {
+  it("logs the Firebase error code in every environment, and never the phone, OTP or token", () => {
     const originalEnv = process.env.NODE_ENV;
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const error = {
+      code: "auth/invalid-verification-code",
+      message: "Secret phone 9876543210 and OTP 123456 token eyJhbGciOi...",
+    };
 
     try {
-      // In production mode:
-      process.env.NODE_ENV = "production";
-      mapFirebaseError({
-        code: "auth/invalid-verification-code",
-        message: "Secret phone 9876543210 and OTP 123456 token eyJhbGciOi...",
-      });
-      expect(consoleSpy).not.toHaveBeenCalled();
+      for (const env of ["production", "development"]) {
+        consoleSpy.mockClear();
+        process.env.NODE_ENV = env;
+        mapFirebaseError(error);
 
-      // In development mode:
-      process.env.NODE_ENV = "development";
-      mapFirebaseError({
-        code: "auth/invalid-verification-code",
-        message: "Secret phone 9876543210 and OTP 123456 token eyJhbGciOi...",
-      });
-      expect(consoleSpy).toHaveBeenCalledWith(
-        "[Firebase Auth error]",
-        "auth/invalid-verification-code",
-      );
-      // Ensure no raw PII/tokens in logged arguments
-      const loggedArgs = consoleSpy.mock.calls.flat().join(" ");
-      expect(loggedArgs).not.toContain("9876543210");
-      expect(loggedArgs).not.toContain("123456");
-      expect(loggedArgs).not.toContain("eyJ");
+        // Production shows customers generic copy, so this is the only record
+        // of why a send failed.
+        expect(consoleSpy).toHaveBeenCalledWith(
+          "[Firebase Auth error]",
+          "auth/invalid-verification-code",
+        );
+        const loggedArgs = consoleSpy.mock.calls.flat().join(" ");
+        expect(loggedArgs).not.toContain("9876543210");
+        expect(loggedArgs).not.toContain("123456");
+        expect(loggedArgs).not.toContain("eyJ");
+      }
     } finally {
       process.env.NODE_ENV = originalEnv;
       consoleSpy.mockRestore();

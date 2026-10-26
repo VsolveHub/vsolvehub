@@ -129,10 +129,10 @@ export function mapFirebaseError(
       : ""
   ).toLowerCase();
 
-  if (process.env.NODE_ENV !== "production") {
-    // Console log the error code only in development. Never log raw phone numbers, OTPs, or tokens.
-    console.error("[Firebase Auth error]", code || "unknown");
-  }
+  // The code alone, in every environment: production shows customers generic
+  // copy, so this line is the only record of why a send failed. Never log the
+  // error's message, which can carry the phone number, nor OTPs or tokens.
+  console.error("[Firebase Auth error]", code || "unknown");
 
   if (code.includes("invalid-phone-number")) {
     return { target: "phone", message: "Enter a valid mobile number" };
@@ -335,16 +335,32 @@ export function getFirebaseAuth(): Auth | null {
   return authInstance;
 }
 
-function getRecaptchaContainer(): HTMLElement | null {
+/**
+ * A brand-new element for one RecaptchaVerifier to render into.
+ *
+ * Never reuse one. reCAPTCHA remembers every element it has rendered into, and
+ * `clear()` on an invisible verifier leaves its widget registered, so rendering
+ * into the same element again throws "reCAPTCHA has already been rendered in
+ * this element" — even after emptying it. That error carries no Firebase code,
+ * so every send after the first failed as "Something went wrong" until the page
+ * was reloaded.
+ */
+function createRecaptchaHost(): HTMLElement | null {
   if (typeof document === "undefined") return null;
-  const containerId = "vsolve-firebase-recaptcha";
-  let el = document.getElementById(containerId);
-  if (!el) {
-    el = document.createElement("div");
-    el.id = containerId;
-    document.body.appendChild(el);
+  const host = document.createElement("div");
+  host.setAttribute("data-vsolve-recaptcha", "");
+  document.body.appendChild(host);
+  return host;
+}
+
+/** Clears a verifier and removes the element it was rendered into. */
+function discardRecaptcha(verifier: RecaptchaVerifier, host: HTMLElement) {
+  try {
+    verifier.clear();
+  } catch {
+    // already cleared
   }
-  return el;
+  host.remove();
 }
 
 export type FirebaseVerifyInput = {
@@ -407,23 +423,18 @@ export async function startFirebasePhoneVerification(
   phone: string,
 ): Promise<(code: string) => Promise<string>> {
   const auth = getFirebaseAuth();
-  const container = getRecaptchaContainer();
-  if (!auth || !container) {
+  const host = auth ? createRecaptchaHost() : null;
+  if (!auth || !host) {
     throw new Error("Phone authentication service is not configured.");
   }
 
-  container.innerHTML = "";
-  const verifier = new RecaptchaVerifier(auth, container, { size: "invisible" });
+  const verifier = new RecaptchaVerifier(auth, host, { size: "invisible" });
   let confirmation: ConfirmationResult;
   try {
     confirmation = await signInWithPhoneNumber(auth, formatToE164(phone), verifier);
   } finally {
     // Only the send needs reCAPTCHA. A resend builds a new verifier.
-    try {
-      verifier.clear();
-    } catch {
-      // already cleared
-    }
+    discardRecaptcha(verifier, host);
   }
 
   return async (code: string) => {
@@ -476,8 +487,16 @@ export function useFirebasePhoneFlow(
   const [expiryDeadlineMs, setExpiryDeadlineMs] = useState<number | null>(null);
 
   const cooldownPhoneRef = useRef<string | null>(null);
-  const verifierRef = useRef<RecaptchaVerifier | null>(null);
+  const verifierRef = useRef<{ verifier: RecaptchaVerifier; host: HTMLElement } | null>(null);
   const confirmationResultRef = useRef<ConfirmationResult | null>(null);
+  /**
+   * Bumped by `reset` and `onChangeNumber` to abandon a send still in flight.
+   *
+   * A send can wait forever — on a reCAPTCHA picture challenge nobody solves —
+   * and the login dialog's flow outlives the dialog. Without this, closing and
+   * reopening it left `isRequesting` stuck and Send silently did nothing.
+   */
+  const sendAttemptRef = useRef(0);
 
   const onAuthenticatedRef = useRef(onAuthenticated);
   useEffect(() => {
@@ -492,11 +511,7 @@ export function useFirebasePhoneFlow(
 
   const clearVerifier = useCallback(() => {
     if (verifierRef.current) {
-      try {
-        verifierRef.current.clear();
-      } catch {
-        // verifier might already be cleared
-      }
+      discardRecaptcha(verifierRef.current.verifier, verifierRef.current.host);
       verifierRef.current = null;
     }
   }, []);
@@ -563,6 +578,8 @@ export function useFirebasePhoneFlow(
     setCodeError(null);
     setIsRequesting(true);
 
+    const attempt = ++sendAttemptRef.current;
+    const abandoned = () => attempt !== sendAttemptRef.current;
     const canonicalPhone = formatToE164(phone);
 
     // 1. Backend precheck
@@ -576,6 +593,7 @@ export function useFirebasePhoneFlow(
         }),
       );
     } catch (precheckError) {
+      if (abandoned()) return;
       clearVerifier();
       setIsRequesting(false);
 
@@ -587,23 +605,29 @@ export function useFirebasePhoneFlow(
       setFailure(describeOtpFailure(precheckError, intendedRole));
       return;
     }
+    if (abandoned()) return;
 
     // 2. Firebase Phone Auth with invisible RecaptchaVerifier
     try {
-      let verifier = verifierRef.current;
-      if (!verifier) {
-        const container = getRecaptchaContainer();
-        if (!container) {
+      // A verifier is kept after a successful send so Resend can reuse it;
+      // anything that discards it also discards its element.
+      if (!verifierRef.current) {
+        const host = createRecaptchaHost();
+        if (!host) {
           throw new Error("Unable to create Recaptcha container");
         }
-        container.innerHTML = "";
-        verifier = new RecaptchaVerifier(auth, container, {
-          size: "invisible",
-        });
-        verifierRef.current = verifier;
+        verifierRef.current = {
+          verifier: new RecaptchaVerifier(auth, host, { size: "invisible" }),
+          host,
+        };
       }
 
-      const result = await signInWithPhoneNumber(auth, canonicalPhone, verifier);
+      const result = await signInWithPhoneNumber(
+        auth,
+        canonicalPhone,
+        verifierRef.current.verifier,
+      );
+      if (abandoned()) return;
       confirmationResultRef.current = result;
       setHasVerificationInProgress(true);
 
@@ -614,6 +638,9 @@ export function useFirebasePhoneFlow(
       setCode("");
       setPhase("code");
     } catch (firebaseError) {
+      // An abandoned send's verifier is already gone; clearing here would
+      // discard the one a newer attempt is using.
+      if (abandoned()) return;
       clearVerifier();
       const mapped = mapFirebaseError(firebaseError);
       if (mapped.target === "phone") {
@@ -630,7 +657,7 @@ export function useFirebasePhoneFlow(
         );
       }
     } finally {
-      setIsRequesting(false);
+      if (!abandoned()) setIsRequesting(false);
     }
   }, [
     apiClient,
@@ -755,6 +782,8 @@ export function useFirebasePhoneFlow(
     setExpiryDeadlineMs(null);
     confirmationResultRef.current = null;
     setHasVerificationInProgress(false);
+    sendAttemptRef.current += 1;
+    setIsRequesting(false);
     clearVerifier();
   }, [clearVerifier]);
 
@@ -771,6 +800,8 @@ export function useFirebasePhoneFlow(
     cooldownPhoneRef.current = null;
     confirmationResultRef.current = null;
     setHasVerificationInProgress(false);
+    sendAttemptRef.current += 1;
+    setIsRequesting(false);
     clearVerifier();
   }, [clearVerifier]);
 
